@@ -28,11 +28,11 @@ struct CreatedPipelineLayout{
 };
 
 struct PipelineBindingState{
-    BindingLayoutVector m_bindingLayoutsAtCreation;
-    Array<u32, s_MaxBindingLayouts> m_bindingLayoutSetIndicesAtCreation{};
-    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    u32 m_pushConstantByteSize = 0;
-    b8 m_ownsPipelineLayout = false;
+    BindingLayoutVector bindingLayoutsAtCreation;
+    Array<u32, s_MaxBindingLayouts> bindingLayoutSetIndicesAtCreation{};
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    u32 pushConstantByteSize = 0;
+    b8 ownsPipelineLayout = false;
 };
 
 
@@ -46,7 +46,7 @@ namespace VulkanDetail{
 
 
 inline void DestroyPipelineResource(const VulkanContext& context, PipelineBindingState& state, VkPipeline& pipeline){
-    DestroyPipelineAndOwnedLayout(context, pipeline, state.m_pipelineLayout, state.m_ownsPipelineLayout);
+    DestroyPipelineAndOwnedLayout(context, pipeline, state.pipelineLayout, state.ownsPipelineLayout);
 }
 
 inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectType objectType)noexcept{
@@ -57,13 +57,13 @@ inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectTyp
 
 inline void AttachPipelineBindingState(VkComputePipelineCreateInfo& pipelineInfo, const PipelineBindingState& bindingState, const void* next = nullptr)noexcept{
     pipelineInfo.pNext = next;
-    pipelineInfo.layout = bindingState.m_pipelineLayout;
+    pipelineInfo.layout = bindingState.pipelineLayout;
     pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
 
 inline void AttachPipelineBindingState(VkGraphicsPipelineCreateInfo& pipelineInfo, const PipelineBindingState& bindingState, const void* next = nullptr)noexcept{
     pipelineInfo.pNext = next;
-    pipelineInfo.layout = bindingState.m_pipelineLayout;
+    pipelineInfo.layout = bindingState.pipelineLayout;
     pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 }
 

@@ -40,7 +40,6 @@ public:
     {
         m_buffers.clear();
     }
-    MeshSkinningStateBufferCollector(MeshSkinningStateBufferCollector&&) = delete;
 
 
 public:

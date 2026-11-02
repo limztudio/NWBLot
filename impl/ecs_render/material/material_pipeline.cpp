@@ -4,6 +4,7 @@
 
 #include "material_system.h"
 
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/material/material_shader_variants_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
@@ -61,9 +62,8 @@ namespace __hidden_material_pipeline{
 
     defineAssignments[defineAssignmentCount++] = { s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment };
     defineAssignments[defineAssignmentCount++] = { s_CsgIntervalSampleEnabledDefineName, s_CsgIntervalSampleEnabledDefineAssignment };
-    if(!projectEvaluatorModuleAssignment.empty()){
+    if(!projectEvaluatorModuleAssignment.empty())
         defineAssignments[defineAssignmentCount++] = { s_CsgProjectEvaluatorModuleDefineName, projectEvaluatorModuleAssignment };
-    }
 
     return ECSRenderMaterialShaderVariants::BuildCsgClipShaderVariantName(arena, baseVariant, Span<const ShaderVariantDefineAssignment>(defineAssignments.data(), defineAssignmentCount));
 }
@@ -161,12 +161,13 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         }
         csgProjectEvaluatorModuleAssignment = __hidden_material_pipeline::BuildCsgProjectEvaluatorModuleAssignment(m_arena, AStringView(*csgProjectEvaluatorModuleInclude));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
-            const auto existingEvaluatorModuleAssignment = ECSRenderMaterialShaderVariants::FindVariantDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName);
-            if(existingEvaluatorModuleAssignment && *existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
+            AStringView existingEvaluatorModuleAssignment;
+            const b8 hasExistingEvaluatorModuleAssignment = TryFindVariantDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName, Core::ShaderArchive::s_DefaultVariant, existingEvaluatorModuleAssignment);
+            if(hasExistingEvaluatorModuleAssignment && existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), ConvertString(materialKey.resolvedText()));
                 return failMaterialPipeline();
             }
-            if(!existingEvaluatorModuleAssignment)
+            if(!hasExistingEvaluatorModuleAssignment)
                 materialProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
             avboitProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
         }
@@ -311,22 +312,13 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         NWB_ASSERT(m_materialState.m_computeBindingLayout);
         NWB_ASSERT(m_materialState.m_emulationVertexShader);
         NWB_ASSERT(m_materialState.m_emulationInputLayout);
-        const Name& meshComputeArchiveStageName = s_MeshComputeArchiveStageName;
+        const Name& meshComputeArchiveStageName = ShaderBinaryPayload::s_MeshComputeArchiveStageName;
         if(!m_shaderSystem.loadShader<ComputeShader>(materialInfo.meshShader.name(), meshShaderVariant, s_RendererCsDebugName, &meshComputeArchiveStageName, resources.computeShader))
             return false;
         if(!loadPassPixelShader())
             return false;
-        Core::ComputePipelineDesc computeDesc;
-        computeDesc.setComputeShader(resources.computeShader);
-        computeDesc.addBindingLayout(m_materialState.m_computeBindingLayout);
         // The compute-emulation mesh stage shares the mesh-shader source-stream runtime, so it needs the persistent tables too.
-        computeDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto computePipelineResult = device.createComputePipeline(computeDesc);
-        if(computePipelineResult)
-            resources.computePipeline = Move(*computePipelineResult);
-        else
-            resources.computePipeline.reset();
-        if(!computePipelineResult){
+        if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, resources.computeShader, m_materialState.m_computeBindingLayout, false, resources.computePipeline)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), ConvertString(materialKey.resolvedText()));
             return false;
         }

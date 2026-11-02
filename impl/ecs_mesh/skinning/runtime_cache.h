@@ -109,7 +109,9 @@ public:
     void prepareResources(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
     void clear()noexcept;
 
-    [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)noexcept;
+    [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(const RuntimeMeshHandle handle)noexcept{
+        return const_cast<MeshSkinningRuntimeInstance*>(static_cast<const MeshSkinningRuntimeCache&>(*this).findInstance(handle));
+    }
     [[nodiscard]] const MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)const noexcept;
 
 

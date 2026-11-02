@@ -14,17 +14,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchArena = Core::Alloc::ScratchArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges){
+void CsgDeformCapBuilder::CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, const Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges){
     outEdges.clear();
     if(triangles.empty())
         return;
-    HashMap<u64, u32, ScratchArena, CsgDeformEdgeSplitKeyHash, EqualTo<u64>> edgeUses(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
+    HashMap<u64, u32, Core::Alloc::ScratchArena, CsgDeformEdgeSplitKeyHash, EqualTo<u64>> edgeUses(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
     edgeUses.reserve(triangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
     for(const CsgDeformTriangle& triangle : triangles){
         const Array<u64, s_TriangleCornerCount> edges = {{
@@ -53,12 +47,12 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const
     // Deterministic boundary order: traversal input matches emitted triangle order.
 }
 
-b8 CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Span<const CsgDeformCutLoopEdge> edges, Vector<u32, ScratchArena>& outLoop){
+b8 CsgDeformCapBuilder::OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, const Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop){
     outLoop.clear();
     if(edges.empty())
         return true;
     // Boundary edges keep source-triangle winding, so consecutive edges meet head-to-tail or tail-to-tail. Walk them undirected for one closed ring.
-    Vector<CsgDeformCutLoopEdge, ScratchArena> remaining(scratchArena);
+    Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena> remaining(scratchArena);
     remaining.assign(edges.begin(), edges.end());
     u32 start = remaining.front().first;
     u32 cursor = start;
@@ -98,7 +92,7 @@ b8 CsgDeformCapBuilder::OrderBoundaryLoop(ScratchArena& scratchArena, const Span
     }
     if(cursor != start || !remaining.empty())
         return false;
-    HashSet<u32, ScratchArena, Hasher<u32>, EqualTo<u32>> seenLoopVertices(0u, Hasher<u32>(), EqualTo<u32>(), scratchArena);
+    HashSet<u32, Core::Alloc::ScratchArena, Hasher<u32>, EqualTo<u32>> seenLoopVertices(0u, Hasher<u32>(), EqualTo<u32>(), scratchArena);
     seenLoopVertices.reserve(outLoop.size() + s_ReserveSlack);
     for(const u32 loopVertex : outLoop){
         if(!seenLoopVertices.insert(loopVertex).second)
@@ -114,7 +108,7 @@ Expected<SIMDVectorSingleResult> CsgDeformCapBuilder::CapNormal(const SIMDVector
     return SIMDVectorSingleResult{ VectorSelect(normalized, s_SIMDIdentityR1, s_SIMDMaskW) };
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, const Span<const u32> loop, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles){
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, const Span<const u32> loop, CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices, CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles){
     u32 capTriangles = 0u;
     if(loop.size() < s_MinLoopVertices)
         return MakeUnexpected(Failure{});
@@ -160,17 +154,22 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormal
     return capTriangles;
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, Vector<CsgDeformCutLoopEdge, ScratchArena>& scratchEdges, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles){
+Expected<u32> CsgDeformCapBuilder::FillCutCaps(
+    Core::Alloc::ScratchArena& scratchArena,
+    Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges,
+    CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
+){
     u32 capTriangles = 0u;
     CsgDeformCapBuilder::CollectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
         return capTriangles;
     // Peel one closed loop at a time from the boundary set; open chains stay cap-free while a closed but degenerate loop fails viability.
-    Vector<CsgDeformCutLoopEdge, ScratchArena> remaining(scratchArena);
+    Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena> remaining(scratchArena);
     remaining = scratchEdges;
-    Vector<CsgDeformCutLoopEdge, ScratchArena> loopEdges(scratchArena);
-    Vector<u32, ScratchArena> loop(scratchArena);
-    HashSet<u32, ScratchArena, Hasher<u32>, EqualTo<u32>> loopMembers(0u, Hasher<u32>(), EqualTo<u32>(), scratchArena);
+    Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena> loopEdges(scratchArena);
+    Vector<u32, Core::Alloc::ScratchArena> loop(scratchArena);
+    HashSet<u32, Core::Alloc::ScratchArena, Hasher<u32>, EqualTo<u32>> loopMembers(0u, Hasher<u32>(), EqualTo<u32>(), scratchArena);
     loopEdges.reserve(scratchEdges.size());
     loop.reserve(scratchEdges.size());
     loopMembers.reserve(scratchEdges.size() + s_ReserveSlack);

@@ -226,13 +226,13 @@ b8 Texture::loadBinary(const Span<const u8> binary){
             return false;
         }
 
-        mipLevels.push_back(BuildTextureMipLevel(
+        mipLevels.push_back(TextureMipLevel(
+            mipBinary.offsetBytes,
+            mipBinary.sizeBytes,
             mipBinary.width,
             mipBinary.height,
             mipBinary.blockCountX,
             mipBinary.blockCountY,
-            mipBinary.offsetBytes,
-            mipBinary.sizeBytes,
             mipBinary.sliceCount
         ));
     }

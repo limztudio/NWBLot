@@ -3,7 +3,6 @@
 
 
 #include "volume_staging.h"
-#include "volume_staging_detail.h"
 #include "volume_storage_detail.h"
 
 #include <core/alloc/scratch.h>
@@ -191,16 +190,22 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
     }
 }
 
-b8 PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
     if(segmentCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), ConvertString(volumeName));
         return false;
     }
-    const auto existingSegmentCount = CountExistingVolumeSegments(outputDirectory, volumeName, scratchArena);
+    const auto existingSegmentCount = FilesystemVolumeStagingDetail::CountExistingVolumeSegments(outputDirectory, volumeName, scratchArena);
     if(!existingSegmentCount)
         return false;
 
-    Vector<VolumeSegmentMove, Alloc::ScratchArena> moves(scratchArena);
+    Vector<FilesystemVolumeStagingDetail::VolumeSegmentMove, Alloc::ScratchArena> moves(scratchArena);
     moves.reserve(AddSize(*existingSegmentCount, segmentCount));
     // Release prepared paths in reverse construction order before the shared scratch plan storage.
     ScopeExit releaseMovePaths([&]()noexcept{
@@ -231,7 +236,7 @@ b8 PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outp
     {
         ScopeExit rollbackMoves([&]()noexcept{
             while(movedCount != 0u){
-                const VolumeSegmentMove& move = moves[--movedCount];
+                const FilesystemVolumeStagingDetail::VolumeSegmentMove& move = moves[--movedCount];
                 if(movedCount < *existingSegmentCount){
                     if(const auto restored = RenamePath(move.destinationPath, move.sourcePath); !restored){
                         rollbackComplete = false;
@@ -249,7 +254,7 @@ b8 PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outp
                 }
             }
         });
-        for(const VolumeSegmentMove& move : moves){
+        for(const FilesystemVolumeStagingDetail::VolumeSegmentMove& move : moves){
             if(const auto operation = RenamePath(move.sourcePath, move.destinationPath); !operation){
                 const ErrorCode errorCode = operation.error();
                 const AStringView action = movedCount < *existingSegmentCount ? "back up existing" : "promote staged";
@@ -266,20 +271,10 @@ b8 PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outp
         }
     }
     if(promoted || rollbackComplete){
-        CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, s_BackupDirectoryLabel);
-        CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, s_StageDirectoryLabel);
+        CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_BackupDirectoryLabel);
+        CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_StageDirectoryLabel);
     }
     return promoted;
-}
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena){
-    return FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount, scratchArena);
 }
 
 b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){

@@ -46,7 +46,7 @@ struct AvboitMaterialUploadInputs{
     Core::GpuGraphResourceId csgCutters;
     Core::GpuGraphResourceId csgClipContextSlots;
     Core::GpuTaskId uploadTask;
-    AvboitMaterialUploadPhase::Enum phase = AvboitMaterialUploadPhase::Occupancy;
+    AvboitGeometryPhase::Enum phase = AvboitGeometryPhase::Occupancy;
 };
 
 

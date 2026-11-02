@@ -431,11 +431,9 @@ private:
             return static_cast<f32>(randomState >> 8u);
         };
         const auto overlaps = [](const ComplexSceneBox& a, const ComplexSceneBox& b)noexcept -> b8{
-            const SIMDVectorSingle verticalCenters = VectorSet(a.position.y, b.position.y, 0.0f, 0.0f);
-            const SIMDVectorSingle verticalHalfExtents = VectorScale(VectorSet(a.scale.y, b.scale.y, 0.0f, 0.0f), 0.5f);
-            const SIMDVectorSingle verticalUpper = VectorAdd(verticalCenters, verticalHalfExtents);
-            const SIMDVectorSingle verticalLower = VectorSwizzle<1, 0, 2, 3>(VectorSubtract(verticalCenters, verticalHalfExtents));
-            if((VectorMoveMask(VectorLessOrEqual(verticalUpper, verticalLower)) & VectorComponentMask::s_XY) != 0u)
+            const f32 aHalfY = a.scale.y * 0.5f;
+            const f32 bHalfY = b.scale.y * 0.5f;
+            if(a.position.y + aHalfY <= b.position.y - bHalfY || b.position.y + bHalfY <= a.position.y - aHalfY)
                 return false;
             const SIMDVectorSingle angles = VectorScale(VectorSet(a.yawDegrees, b.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f);
             SIMDVectorSingle sine;
@@ -465,17 +463,14 @@ private:
             const f32 x = VectorGetX(footprint);
             const f32 z = VectorGetY(footprint);
             const b8 frontRow = z < -1.8f;
-            const SIMDVectorSingle unitRandom = VectorScale(VectorSet(heightRandom, shadeRandom, 0.0f, 0.0f), 1.0f / 16777216.0f);
-            const SIMDVectorSingle heightShade = VectorMultiplyAddExpression(VectorSet(frontRow ? 0.34f : 0.68f, 0.32f, 0.0f, 0.0f), unitRandom, VectorSet(frontRow ? 0.22f : 0.30f, 0.62f, 0.0f, 0.0f));
+            const f32 height = (frontRow ? 0.22f : 0.30f) + (frontRow ? 0.34f : 0.68f) * (heightRandom / 16777216.0f);
+            const f32 shade = 0.62f + 0.32f * (shadeRandom / 16777216.0f);
             // Truncate equals a u32 cast here because the scaled value is in 0..7.
             const f32 yawSteps = (static_cast<f32>(static_cast<u32>((yawRandom / 16777216.0f) * 7.0f)) - 3.0f) * 15.0f;
             const f32 width = VectorGetZ(footprint);
             const f32 depth = VectorGetW(footprint);
-            const f32 height = VectorGetX(heightShade);
-            const f32 shade = VectorGetY(heightShade);
             const f32 yawDegrees = yawSteps;
-            Float4 position;
-            StoreFloat(VectorMultiply(VectorPermute<0, 4, 1, 6>(footprint, heightShade), VectorSet(1.0f, 0.5f, 1.0f, 1.0f)), position);
+            const Float4 position(x, height * 0.5f, z, 0.0f);
             const ComplexSceneBox body{ position, Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
             // Leave the line from the camera through the front doorway clear.
             if(z < -1.8f && Abs(x) < 0.72f)

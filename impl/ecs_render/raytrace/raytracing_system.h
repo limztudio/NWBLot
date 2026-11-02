@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/refraction/statistics_readback.h>
 #include <impl/ecs_render/shadow/soft_shadow_wavelet.h>
 #include <impl/ecs_render/caustic/settings.adhd.h>
@@ -66,7 +67,6 @@ class ShadowMaterialSampledTextureCollector;
 class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererMaterialSystem;
-class RendererRayTracingState;
 class RendererOpticalVolumeSelection;
 class CsgShapeRegistry;
 struct MaterialSurfaceInfo;
@@ -160,7 +160,7 @@ public:
     void logCapabilityOnce();
 
     [[nodiscard]] b8 prepareRefractionResources();
-    void setRefractionHardwareTracingEnabled(b8 enabled)noexcept;
+    void setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{ m_rayTracingState.m_refractionHardwareTracingEnabled = enabled; }
     void setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{ m_refractionDiagnosticsEnabled = enabled; }
     void pollRefractionStatistics(){ m_refractionStatistics.pollCompleted(); }
     [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept{ return m_refractionStatistics.latestStatistics(); }
@@ -370,7 +370,7 @@ public:
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
-    void confirmCausticAccumulatorBootstrapClear()noexcept;
+    void confirmCausticAccumulatorBootstrapClear()noexcept{ m_rayTracingState.m_causticAccumulatorInitialized = true; }
     // A warm accumulator decays in its own task before the photon producer, sharing its packet; the compiler owns the UAV handoff.
     [[nodiscard]] Expected<Core::GpuTaskId> declareCausticAccumulatorDecayTask(
         Core::GpuTaskGraph& graph,
@@ -457,14 +457,14 @@ public:
     void dispatchCausticResolveUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] b8 hasHwCausticWork()const noexcept;
     [[nodiscard]] b8 hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
-    [[nodiscard]] b8 hasSurfelWork()const noexcept;
-    [[nodiscard]] b8 needsSurfelResourceInitialization()const noexcept;
+    [[nodiscard]] b8 hasSurfelWork()const noexcept{ return m_rayTracingState.m_surfelEnabled; }
+    [[nodiscard]] b8 needsSurfelResourceInitialization()const noexcept{ return hasSurfelWork() && m_rayTracingState.m_surfelResourcesNeedClear; }
     // Typed clear primitives own the buffer writes. This task only records and publishes CPU lifecycle after the producer packet accepts.
     [[nodiscard]] Expected<Core::GpuTaskId> declareSurfelResourceInitializationLifecycleTask(Core::GpuTaskGraph& graph, const Core::GpuTaskDesc& desc);
     [[nodiscard]] b8 recordSurfelResourceInitializationLifecycle()noexcept;
     // The initialization mirror commits only after the typed-clear producer packet accepts.
     void finalizeSurfelResourceInitialization()noexcept;
-    void discardSurfelResourceInitialization()noexcept;
+    void discardSurfelResourceInitialization()noexcept{ m_rayTracingState.m_surfelResourcesClearPending = false; }
     // Persistent surfel storage survives resize.
     [[nodiscard]] b8 ensureSurfelResources();
     [[nodiscard]] b8 ensureSurfelSpawnPipeline();
@@ -479,8 +479,8 @@ public:
     [[nodiscard]] b8 ensureSurfelTraceBuildArgsPipeline();
     // The graph schedules the small diagnostic readback as a late copy task and publishes its token.
     [[nodiscard]] b8 shouldCaptureSurfelCountReadback()const noexcept;
-    void markSurfelCountReadbackScheduled()noexcept;
-    [[nodiscard]] b8 softTransparentShadowReady()const noexcept;
+    void markSurfelCountReadbackScheduled()noexcept{ m_rayTracingState.m_surfelCountReadbackFrame = m_rayTracingState.m_surfelFrameIndex; }
+    [[nodiscard]] b8 softTransparentShadowReady()const noexcept{ return m_rayTracingState.m_softTransparentReady; }
     // Commit soft-shadow history only after ordered submission accepts.
     void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept;
     void discardSoftShadowTemporalHistory()noexcept;
@@ -555,7 +555,6 @@ private:
     }
     [[nodiscard]] b8 capturePreparedShadowMaterialContextCacheReuse(u64 hash, usize instanceMaterialCount, usize instanceCount, usize materialTypedByteCount)noexcept;
     void clearPreparedShadowMaterialContext()noexcept;
-    [[nodiscard]] b8 appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector);
     void clearPreparedShadowTraceMaterialSampledTextures()noexcept{ m_preparedShadowTraceMaterialSampledTextures.clear(); }
     [[nodiscard]] b8 capturePreparedSceneBvh(b8 staticScene, u64 staticSceneHash, Span<const NwbBvhNodeGpu> nodes, Span<const SceneSwBvhInstanceGpu> instances);
     [[nodiscard]] b8 capturePreparedSceneBvhCacheReuse(u64 staticSceneHash, u32 instanceCount)noexcept;
@@ -578,8 +577,6 @@ private:
     [[nodiscard]] b8 ensureShadowPipeline();
     // Hardware soft trace feeds the shared software denoise chain.
     [[nodiscard]] b8 ensureShadowSoftPipeline();
-    // Hardware shadow layouts are push-only; resources come from heap sets.
-    void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     [[nodiscard]] b8 ensureSwShadowPipeline();
     [[nodiscard]] b8 ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember, const NameText<char> debugLabel);
     [[nodiscard]] b8 ensureSoftwareTransparentSamplingPipeline();
@@ -590,13 +587,10 @@ private:
     [[nodiscard]] b8 ensureSoftCombinedUpsamplePipeline();
     [[nodiscard]] b8 ensureSoftCombinedWaveletPipeline();
     [[nodiscard]] b8 ensureSoftCombinedTemporalPipeline();
-
-
     [[nodiscard]] b8 prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets);
     void releaseHardwareTransparentShadowResources();
     [[nodiscard]] b8 hardwareTransparentShadowReady()const noexcept;
     void dispatchHardwareTransparentShadow(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex);
-
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(
         Core::CommandList& commandList,
@@ -671,11 +665,26 @@ private:
     [[nodiscard]] b8 ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
     [[nodiscard]] b8 meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
     [[nodiscard]] b8 buildMeshSwBvhPrepared(
-        u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const Float3Int& aabbMin, const Float3Int& aabbMax,
-        Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, Core::CommandList& commandList, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer
+        u32 positionHeapSlot,
+        u32 triangleIndexHeapSlot,
+        u32 primitiveCount,
+        const Float3Int& aabbMin,
+        const Float3Int& aabbMax,
+        Core::GpuDescriptorHandle nodeHeapHandle,
+        Core::GpuDescriptorHandle parentHeapHandle,
+        Core::CommandList& commandList,
+        Core::BufferHandle& nodeBuffer,
+        Core::BufferHandle& parentBuffer
     );
     [[nodiscard]] b8 refitMeshSwBvhPrepared(
-        u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, Core::CommandList& commandList, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer
+        u32 positionHeapSlot,
+        u32 triangleIndexHeapSlot,
+        u32 primitiveCount,
+        Core::GpuDescriptorHandle nodeHeapHandle,
+        Core::GpuDescriptorHandle parentHeapHandle,
+        Core::CommandList& commandList,
+        Core::BufferHandle& nodeBuffer,
+        Core::BufferHandle& parentBuffer
     );
     void preflightLightSpaceShadowResources();
     [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(Span<const SceneLightGpuData> lights)const noexcept;

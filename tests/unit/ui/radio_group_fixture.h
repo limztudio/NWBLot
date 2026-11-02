@@ -98,19 +98,6 @@ private:
     mutable Array<char, 4u> m_label{};
 };
 
-struct RadioAcceptedFrame{
-    Array<HitTarget, 128u> targets{};
-    usize count = 0u;
-    usize popupCount = 0u;
-    u64 generation = 0u;
-    WidgetId focus;
-    WidgetId capture;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RadioGroupFixture : public WidgetFixture{
 protected:
     using WidgetFixture::press;
@@ -126,8 +113,10 @@ protected:
     [[nodiscard]] WidgetId host()const;
     [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 keyValue, const RadioGroupState& state)const noexcept;
     [[nodiscard]] Point choicePoint(u64 keyValue)const noexcept;
-    [[nodiscard]] RadioAcceptedFrame accepted()const noexcept;
-    void expectAccepted(const RadioAcceptedFrame& saved, b8 focus = true, b8 popupScopes = true)const;
+    [[nodiscard]] AcceptedInputState<128u> accepted()const noexcept{ return CaptureAcceptedInput<128u>(m_context.input()); }
+    void expectAccepted(const AcceptedInputState<128u>& saved, const b8 focus = true, const b8 popupScopes = true)const{
+        ExpectAcceptedInput(m_context.input(), saved, false, focus, popupScopes, true);
+    }
     [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept;
 
 

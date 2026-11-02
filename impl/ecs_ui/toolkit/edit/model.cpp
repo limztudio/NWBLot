@@ -7,6 +7,7 @@
 #include "multiline_text.h"
 
 #include <global/atomic_identity.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,9 +71,7 @@ b8 EditModel::setText(const AStringView value){
     cancelComposition();
     if(changed)
         advanceRevision();
-    if(m_externalRevision == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_externalRevision;
+    AdvanceRevision(m_externalRevision);
     return true;
 }
 
@@ -92,6 +91,107 @@ b8 EditModel::eraseSurrounding(const usize beforeBytes, const usize afterBytes){
     if(beforeBytes == 0u && afterBytes == 0u)
         return true;
     return replaceRange(m_caret - beforeBytes, m_caret + afterBytes, {});
+}
+
+b8 EditModel::eraseAroundSelection(const usize beforeBytes, const usize afterBytes){
+    const usize start = selectionStart();
+    const usize end = selectionEnd();
+    if(beforeBytes > start || afterBytes > m_text.size() - end)
+        return false;
+    if(beforeBytes == 0u && afterBytes == 0u)
+        return true;
+    const usize prefixEnd = start - beforeBytes;
+    const usize suffixStart = end + afterBytes;
+    if(!isBoundary(prefixEnd) || !isBoundary(suffixStart))
+        return false;
+
+    AString<Core::Alloc::GlobalArena> candidate(m_arena);
+    candidate.reserve(m_text.size() - beforeBytes - afterBytes);
+    candidate.append(m_text.data(), prefixEnd);
+    candidate.append(m_text.data() + start, end - start);
+    candidate.append(m_text.data() + suffixStart, m_text.size() - suffixStart);
+    const AStringView after(candidate.data(), candidate.size());
+    auto boundaries = buildBoundaries(after);
+    if(!boundaries)
+        return false;
+    const usize anchor = m_anchor - beforeBytes;
+    const usize caret = m_caret - beforeBytes;
+    const auto anchorBoundary = LowerBound(boundaries->begin(), boundaries->end(), anchor);
+    const auto caretBoundary = LowerBound(boundaries->begin(), boundaries->end(), caret);
+    if(anchorBoundary == boundaries->end() || *anchorBoundary != anchor || caretBoundary == boundaries->end() || *caretBoundary != caret)
+        return false;
+
+    recordHistory(text(), m_anchor, m_caret, after, anchor, caret);
+    m_text = Move(candidate);
+    m_boundaries = Move(*boundaries);
+    m_anchor = anchor;
+    m_caret = caret;
+    advanceSelectionGeneration();
+    cancelComposition();
+    advanceRevision();
+    return true;
+}
+
+b8 EditModel::undo(){
+    if(!canUndo())
+        return false;
+    const HistoryRecord& record = m_history[m_historyCursor - 1u];
+    return restoreHistoryState({ record.before.data(), record.before.size() }, record.beforeAnchor, record.beforeCaret, -1);
+}
+
+b8 EditModel::redo(){
+    if(!canRedo())
+        return false;
+    const HistoryRecord& record = m_history[m_historyCursor];
+    return restoreHistoryState({ record.after.data(), record.after.size() }, record.afterAnchor, record.afterCaret, 1);
+}
+
+b8 EditModel::beginComposition()noexcept{
+    if(m_compositionActive)
+        return true;
+    m_compositionAnchor = m_anchor;
+    m_compositionCaret = m_caret;
+    m_preedit.clear();
+    m_preeditAnchor = 0u;
+    m_preeditCaret = 0u;
+    m_compositionActive = true;
+    advanceCompositionGeneration();
+    return true;
+}
+
+b8 EditModel::updateComposition(const AStringView value, const usize anchor, const usize caret){
+    if(!m_compositionActive || value.size() > m_limits.maxBytes || !validateText(value))
+        return false;
+    if(!IsUtf8ScalarBoundary(value, anchor) || !IsUtf8ScalarBoundary(value, caret))
+        return false;
+    const usize retainedBytes = m_text.size() - (Max(m_compositionAnchor, m_compositionCaret) - Min(m_compositionAnchor, m_compositionCaret));
+    if(retainedBytes > m_limits.maxBytes - value.size())
+        return false;
+    AString<Core::Alloc::GlobalArena> candidate(m_arena);
+    if(!value.empty())
+        candidate.assign(value.data(), value.size());
+    m_preedit = Move(candidate);
+    m_preeditAnchor = anchor;
+    m_preeditCaret = caret;
+    advanceCompositionGeneration();
+    return true;
+}
+
+b8 EditModel::commitComposition(const AStringView value){
+    if(!m_compositionActive)
+        return false;
+    return replaceRange(Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), value);
+}
+
+void EditModel::cancelComposition()noexcept{
+    if(m_compositionActive)
+        advanceCompositionGeneration();
+    m_preedit.clear();
+    m_preeditAnchor = 0u;
+    m_preeditCaret = 0u;
+    m_compositionAnchor = 0u;
+    m_compositionCaret = 0u;
+    m_compositionActive = false;
 }
 
 b8 EditModel::replaceRange(const usize begin, const usize end, const AStringView replacement){
@@ -142,21 +242,56 @@ Expected<Vector<usize, Core::Alloc::GlobalArena>> EditModel::buildBoundaries(con
     return GraphemeSegmentation::Build(m_arena, value, m_textMode == EditTextMode::SingleLine);
 }
 
+b8 EditModel::restoreHistoryState(const AStringView value, const usize anchor, const usize caret, const isize cursorDelta){
+    auto boundaries = buildBoundaries(value);
+    if(!boundaries)
+        return false;
+    m_text.assign(value.data(), value.size());
+    m_boundaries = Move(*boundaries);
+    m_anchor = anchor;
+    m_caret = caret;
+    advanceSelectionGeneration();
+    m_historyCursor = static_cast<usize>(static_cast<isize>(m_historyCursor) + cursorDelta);
+    cancelComposition();
+    advanceRevision();
+    return true;
+}
+
+void EditModel::recordHistory(const AStringView before, const usize beforeAnchor, const usize beforeCaret, const AStringView after, const usize afterAnchor, const usize afterCaret){
+    const usize cost = before.size() + after.size();
+    if(m_limits.maxHistoryRecords == 0u || cost > m_limits.maxHistoryBytes){
+        clearHistory();
+        return;
+    }
+    HistoryRecord candidate(m_arena);
+    if(!before.empty())
+        candidate.before.assign(before.data(), before.size());
+    if(!after.empty())
+        candidate.after.assign(after.data(), after.size());
+    candidate.beforeAnchor = beforeAnchor;
+    candidate.beforeCaret = beforeCaret;
+    candidate.afterAnchor = afterAnchor;
+    candidate.afterCaret = afterCaret;
+    while(m_history.size() > m_historyCursor){
+        const HistoryRecord& discarded = m_history.back();
+        m_historyBytes -= discarded.before.size() + discarded.after.size();
+        m_history.pop_back();
+    }
+    while(!m_history.empty() && (m_history.size() >= m_limits.maxHistoryRecords || m_historyBytes > m_limits.maxHistoryBytes - cost)){
+        const HistoryRecord& discarded = m_history.front();
+        m_historyBytes -= discarded.before.size() + discarded.after.size();
+        m_history.erase(m_history.begin());
+        --m_historyCursor;
+    }
+    m_history.push_back(Move(candidate));
+    m_historyBytes += cost;
+    m_historyCursor = m_history.size();
+}
+
 void EditModel::clearHistory()noexcept{
     m_history.clear();
     m_historyCursor = 0u;
     m_historyBytes = 0u;
-}
-
-void EditModel::advanceRevision()noexcept{
-    if(m_revision != Limit<u64>::s_Max)
-        ++m_revision;
-}
-
-void EditModel::advanceSelectionGeneration()noexcept{
-    if(m_selectionGeneration == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_selectionGeneration;
 }
 
 

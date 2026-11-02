@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <core/graphics/backend_selection/texture_contract_types.h>
+
 #include "texture_resource_detail.h"
 
 
@@ -22,15 +24,6 @@ namespace VulkanTextureDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace TextureCopyQueueRequirement{
-    static constexpr u8 s_TextureCopyQueueRequirementTransferBase = 0u;
-    enum Enum : u8{
-        Transfer = s_TextureCopyQueueRequirementTransferBase,
-        ComputeOrGraphics,
-        Graphics,
-    };
-};
 
 struct TextureCopyContract{
     TextureSlice sourceSlice;

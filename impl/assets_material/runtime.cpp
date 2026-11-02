@@ -408,10 +408,8 @@ b8 Material::loadBinary(const Span<const u8> binary){
     if(!extinctionShader)
         return false;
     candidate.m_avboitExtinctionPixelShader = *extinctionShader;
-    if(!HasValidMaterialAvboitPixelShaderContract(candidate.m_transparent, candidate.m_avboitAccumulatePixelShader, candidate.m_avboitOccupancyPixelShader, candidate.m_avboitExtinctionPixelShader)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT pixel shaders must be present if and only if the material is transparent"));
+    if(!candidate.validatePayload(__hidden_assets_material_runtime::s_MaterialLoadBinaryContext))
         return false;
-    }
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: trailing bytes detected"));
@@ -419,6 +417,50 @@ b8 Material::loadBinary(const Span<const u8> binary){
     }
 
     *this = Move(candidate);
+    return true;
+}
+
+b8 Material::validatePayload(const TStringView failureContext)const{
+    if(!checkVirtualPath(failureContext))
+        return false;
+    if(m_stageShaderCount == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material has no shader stages"), failureContext);
+        return false;
+    }
+    if(!m_materialInterface){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material interface is required"), failureContext);
+        return false;
+    }
+    if(m_shaderVariant.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: shader variant is empty"), failureContext);
+        return false;
+    }
+    if(!HasValidMaterialAvboitPixelShaderContract(m_transparent, m_avboitAccumulatePixelShader, m_avboitOccupancyPixelShader, m_avboitExtinctionPixelShader)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: AVBOIT pixel shaders must be present if and only if the material is transparent"), failureContext);
+        return false;
+    }
+    if(m_typedLayoutHash == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: interface material is missing typed layout data"), failureContext);
+        return false;
+    }
+    if(m_typedLayoutBlocks.size() > Limit<u32>::s_Max || m_typedLayoutFields.size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout count exceeds u32 range"), failureContext);
+        return false;
+    }
+    if(m_typedBlockBytes.size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte count exceeds u32 range"), failureContext);
+        return false;
+    }
+    if(m_resourceReferences.size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material resource reference count exceeds u32 range"), failureContext);
+        return false;
+    }
+    if(!__hidden_assets_material_runtime::LogAndValidateMaterialTypedLayout(m_typedLayoutHash, m_typedLayoutBlocks, m_typedLayoutFields, m_typedBlockBytes, failureContext))
+        return false;
+    if(!ValidateMaterialResourceReferences(m_typedLayoutBlocks, m_typedLayoutFields, m_resourceReferences)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material resource references do not match typed layout"), failureContext);
+        return false;
+    }
     return true;
 }
 

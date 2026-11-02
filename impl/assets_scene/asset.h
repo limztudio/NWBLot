@@ -33,19 +33,27 @@ class SceneAsset;
 
 inline constexpr TStringView s_ProjectAssetKindLabel = NWB_TEXT("project");
 inline constexpr TStringView s_ProjectLoadBinaryContext = NWB_TEXT("ProjectAsset::loadBinary");
+#if defined(NWB_COOK)
 inline constexpr TStringView s_ProjectSerializeContext = NWB_TEXT("ProjectAssetCodec::serialize");
+#endif
 
 inline constexpr TStringView s_ComponentLoadBinaryContext = NWB_TEXT("IComponent::loadBinary");
+#if defined(NWB_COOK)
 inline constexpr TStringView s_ComponentSerializeContext = NWB_TEXT("ComponentAssetCodec::serialize");
+#endif
 
 inline constexpr TStringView s_EntityAssetKindLabel = NWB_TEXT("entity");
 inline constexpr TStringView s_EntityLoadBinaryContext = NWB_TEXT("EntityAsset::loadBinary");
+#if defined(NWB_COOK)
 inline constexpr TStringView s_EntitySerializeContext = NWB_TEXT("EntityAssetCodec::serialize");
+#endif
 inline constexpr TStringView s_EntityComponentsPayloadLabel = NWB_TEXT("entity components");
 
 inline constexpr TStringView s_SceneAssetKindLabel = NWB_TEXT("scene");
 inline constexpr TStringView s_SceneLoadBinaryContext = NWB_TEXT("SceneAsset::loadBinary");
+#if defined(NWB_COOK)
 inline constexpr TStringView s_SceneSerializeContext = NWB_TEXT("SceneAssetCodec::serialize");
+#endif
 inline constexpr TStringView s_SceneSubsystemsPayloadLabel = NWB_TEXT("scene subsystems");
 inline constexpr TStringView s_SceneEntitiesPayloadLabel = NWB_TEXT("scene entities");
 inline constexpr TStringView s_SceneAssetsPayloadLabel = NWB_TEXT("scene referenced assets");

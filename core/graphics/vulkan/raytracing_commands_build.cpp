@@ -77,39 +77,9 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     VulkanDetail::OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
     AccelStructGeometryBuildSignatureVector geometrySignatures(numGeometries, scratchArena);
 
-    usize totalOpacityMicromapUsageCount = 0u;
     b8 hasOpacityMicromap = false;
-    for(usize i = 0u; i < numGeometries; ++i){
-        opacityMicromapUsageOffsets[i] = Limit<usize>::s_Max;
-        if(geometries[i].geometryType != RayTracingGeometryType::Triangles)
-            continue;
-
-        const RayTracingGeometryTriangles& triangles = geometries[i].geometryData.triangles;
-        if(!triangles.opacityMicromap){
-            if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u || triangles.ommUsageCounts || triangles.numOmmUsageCounts != 0u || triangles.ommIndexFormat != Format::UNKNOWN){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM metadata requires an opacity micromap"));
-                return;
-            }
-            continue;
-        }
-        if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM geometry requires VK_EXT_opacity_micromap"));
-            return;
-        }
-        if(triangles.numOmmUsageCounts != 0u && !triangles.ommUsageCounts){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM usage counts are null"));
-            return;
-        }
-        if(totalOpacityMicromapUsageCount > Limit<usize>::s_Max - triangles.numOmmUsageCounts){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM usage-count storage overflows"));
-            return;
-        }
-
-        hasOpacityMicromap = true;
-        opacityMicromapUsageOffsets[i] = totalOpacityMicromapUsageCount;
-        totalOpacityMicromapUsageCount += triangles.numOmmUsageCounts;
-    }
-    opacityMicromapUsageCounts.resize(totalOpacityMicromapUsageCount);
+    if(!VulkanDetail::PrepareBlasOpacityMicromapUsageOffsets(m_context, geometries, numGeometries, s_BuildBlasOperation, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, hasOpacityMicromap))
+        return;
 
     const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> b8{
         if(!buffer)
@@ -148,14 +118,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         const auto geometry = VulkanDetail::FillBlasGeometryForSizeQuery(m_context, geometries[i], s_BuildBlasOperation, true);
         if(!geometry)
             return;
-        blasScratch.geometries[i] = geometry->geometry;
-        blasScratch.spheresData[i] = geometry->spheresData;
-        blasScratch.lssData[i] = geometry->lssData;
-        blasScratch.primitiveCounts[i] = geometry->primitiveCount;
-        if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_SPHERES_NV)
-            blasScratch.geometries[i].pNext = &blasScratch.spheresData[i];
-        else if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV)
-            blasScratch.geometries[i].pNext = &blasScratch.lssData[i];
+        blasScratch.assignGeometry(i, *geometry);
         if(geometries[i].geometryType == RayTracingGeometryType::Triangles && geometries[i].geometryData.triangles.opacityMicromap){
             const RayTracingGeometryTriangles& triangles = geometries[i].geometryData.triangles;
             OpacityMicromap* const opacityMicromap = triangles.opacityMicromap;
@@ -173,30 +136,14 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap storage is not ready"));
                 return;
             }
-            const BufferDesc& micromapStorageDesc = micromapStorage->getCreationDescription();
-            if(!micromapStorageDesc.isAccelStructStorage || opacityMicromap->m_micromap == VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap is invalid"));
-                return;
-            }
 
-            VkIndexType ommIndexType = VK_INDEX_TYPE_NONE_KHR;
-            u64 ommIndexStride = 0u;
-            if(triangles.ommIndexFormat == Format::UNKNOWN){
-                if(triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: implicit triangle OMM indices cannot specify a buffer"));
-                    return;
-                }
-            }
-            else if(triangles.ommIndexFormat == Format::R16_UINT){
-                ommIndexType = VK_INDEX_TYPE_UINT16;
-                ommIndexStride = sizeof(u16);
-            }
-            else if(triangles.ommIndexFormat == Format::R32_UINT){
-                ommIndexType = VK_INDEX_TYPE_UINT32;
-                ommIndexStride = sizeof(u32);
-            }
-            else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM index format must be UNKNOWN, R16_UINT, or R32_UINT"));
+            const auto ommIndexFormat = VulkanDetail::ResolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_BuildBlasOperation);
+            if(!ommIndexFormat)
+                return;
+            const VkIndexType ommIndexType = ommIndexFormat->indexType;
+            const u64 ommIndexStride = ommIndexFormat->indexStride;
+            if(ommIndexType == VK_INDEX_TYPE_NONE_KHR && (triangles.ommIndexBuffer || triangles.ommIndexBufferOffset != 0u)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: implicit triangle OMM indices cannot specify a buffer"));
                 return;
             }
 
@@ -233,38 +180,18 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 }
             }
 
-            const usize usageOffset = opacityMicromapUsageOffsets[i];
-            for(u32 usageIndex = 0u; usageIndex < triangles.numOmmUsageCounts; ++usageIndex){
-                const RayTracingOpacityMicromapUsageCount& usage = triangles.ommUsageCounts[usageIndex];
-                VkOpacityMicromapFormatEXT format = VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR;
-                if(usage.format == OpacityMicromapFormat::OC1_2_State)
-                    format = VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;
-                else if(usage.format == OpacityMicromapFormat::OC1_4_State)
-                    format = VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT;
-                else{
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM usage count has an invalid format"));
-                    return;
-                }
-                const u32 maxSubdivisionLevel = format == VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT ? opacityMicromap->m_maxOpacity2StateSubdivisionLevel : opacityMicromap->m_maxOpacity4StateSubdivisionLevel;
-                if(usage.subdivisionLevel > maxSubdivisionLevel){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle OMM subdivision level {} exceeds device limit {}"), usage.subdivisionLevel, maxSubdivisionLevel);
-                    return;
-                }
-
-                VkMicromapUsageEXT& vkUsage = opacityMicromapUsageCounts[usageOffset + usageIndex];
-                vkUsage.count = usage.count;
-                vkUsage.subdivisionLevel = usage.subdivisionLevel;
-                vkUsage.format = format;
+            if(!VulkanDetail::ValidateOpacityMicromapStorageAndFillUsages(
+                triangles,
+                ommIndexType,
+                ommIndexStride,
+                ommIndexAddress,
+                opacityMicromapUsageOffsets[i],
+                s_BuildBlasOperation,
+                opacityMicromapUsageCounts,
+                opacityMicromapGeometries[i]
+            )){
+                return;
             }
-
-            VkAccelerationStructureTrianglesOpacityMicromapEXT& ommGeometry = opacityMicromapGeometries[i];
-            ommGeometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureTrianglesOpacityMicromapEXT>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT);
-            ommGeometry.indexType = ommIndexType;
-            ommGeometry.indexBuffer.deviceAddress = ommIndexAddress;
-            ommGeometry.indexStride = ommIndexStride;
-            ommGeometry.baseTriangle = 0u;
-            ommGeometry.usageCountsCount = triangles.numOmmUsageCounts;
-            ommGeometry.micromap = opacityMicromap->m_micromap;
         }
         if(geometries[i].useTransform){
             if(geometries[i].geometryType != RayTracingGeometryType::Triangles){
@@ -296,15 +223,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     const b8 hasPriorBuild = *hasPriorBuildResult;
 
-    for(usize i = 0u; i < numGeometries; ++i){
-        if(opacityMicromapUsageOffsets[i] == Limit<usize>::s_Max)
-            continue;
-
-        VkAccelerationStructureTrianglesOpacityMicromapEXT& ommGeometry = opacityMicromapGeometries[i];
-        const u32 usageCount = geometries[i].geometryData.triangles.numOmmUsageCounts;
-        ommGeometry.pUsageCounts = usageCount != 0u ? opacityMicromapUsageCounts.data() + opacityMicromapUsageOffsets[i] : nullptr;
-        blasScratch.geometries[i].geometry.triangles.pNext = &ommGeometry;
-    }
+    VulkanDetail::AttachBlasOpacityMicromapGeometries(geometries, numGeometries, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, opacityMicromapGeometries, blasScratch);
 
     VkDeviceAddress transformBaseAddress = 0;
     if(transformCount > 0){

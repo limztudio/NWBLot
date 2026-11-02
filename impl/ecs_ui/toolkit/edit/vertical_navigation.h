@@ -47,7 +47,7 @@ public:
 
 
 private:
-    void advanceGeneration()noexcept;
+    void advanceGeneration()noexcept{ AdvanceRevision(m_generation); }
 
 
 private:

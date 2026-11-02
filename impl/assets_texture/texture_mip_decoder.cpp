@@ -55,7 +55,7 @@ static_assert(s_TextureRgba16FloatAlphaByteOffset == static_cast<u32>(sizeof(bas
         return MakeUnexpected(Failure{});
     }
 
-    return MakePrimaryUastcSlice(
+    return PrimaryUastcSlice(
         Span<const u8>(textureAsset.payloadBytes().data() + static_cast<usize>(sourceOffsetBytes), static_cast<usize>(layout.byteCount)),
         layout.blockCount
     );

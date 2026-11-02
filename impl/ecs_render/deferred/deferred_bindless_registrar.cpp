@@ -4,8 +4,8 @@
 
 #include "deferred_bindless_registrar.h"
 
-#include <impl/ecs_render/deferred/deferred_descriptor_register.h>
 #include <impl/ecs_render/caustic/rt_caustic_state.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/shadow/rt_shadow_state.h>
 
@@ -19,24 +19,100 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace DeferredDescriptorRegisterDetail{
+namespace __hidden_deferred_bindless_registrar{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::GpuDescriptorHandle> RegisterDescriptor(Core::GpuDescriptorHeap& heap, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item){
-    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(descriptorClass);
-    if(!allocated)
-        return MakeUnexpected(allocated.error());
-    const Core::GpuDescriptorHandle handle = *allocated;
-    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
+[[nodiscard]] static b8 AssignSampled2D(
+    Core::GpuDescriptorHeap& heap,
+    const Core::TextureHandle& texture,
+    const Core::Format::Enum format,
+    Core::GpuDescriptorHandle& outHandle
+){
+    return RendererDescriptorRegisterDetail::AssignSampledTexture(
+        heap,
+        Core::GpuDescriptorClass::SampledImage,
+        texture,
+        format,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D,
+        outHandle
+    );
+}
 
-    if(heap.write(handle, item)){
-        retireUnpublished.release();
-        return handle;
-    }
-    return MakeUnexpected(Failure{});
+[[nodiscard]] static b8 AssignStorage2D(
+    Core::GpuDescriptorHeap& heap,
+    const Core::TextureHandle& texture,
+    const Core::Format::Enum format,
+    Core::GpuDescriptorHandle& outHandle
+){
+    return RendererDescriptorRegisterDetail::AssignStorageTexture(heap, texture, format, Core::TextureDimension::Texture2D, outHandle);
+}
+
+[[nodiscard]] static b8 AssignSampledAndStorage2D(
+    Core::GpuDescriptorHeap& heap,
+    const Core::TextureHandle& texture,
+    const Core::Format::Enum format,
+    Core::GpuDescriptorHandle& outSampledHandle,
+    Core::GpuDescriptorHandle& outStorageHandle
+){
+    return AssignSampled2D(heap, texture, format, outSampledHandle) && AssignStorage2D(heap, texture, format, outStorageHandle);
+}
+
+[[nodiscard]] static b8 AssignStorage2DArray(
+    Core::GpuDescriptorHeap& heap,
+    const Core::TextureHandle& texture,
+    const Core::Format::Enum format,
+    Core::GpuDescriptorHandle& outHandle
+){
+    return RendererDescriptorRegisterDetail::AssignStorageTexture(heap, texture, format, Core::TextureDimension::Texture2DArray, outHandle);
+}
+
+[[nodiscard]] static b8 AssignSampledAndStorageShadowArray(
+    Core::GpuDescriptorHeap& heap,
+    const Core::TextureHandle& texture,
+    const Core::Format::Enum format,
+    Core::GpuDescriptorHandle& outSampledHandle,
+    Core::GpuDescriptorHandle& outStorageHandle
+){
+    return
+        RendererDescriptorRegisterDetail::AssignSampledTexture(
+            heap,
+            Core::GpuDescriptorClass::SampledImage2DArray,
+            texture,
+            format,
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::TextureDimension::Texture2DArray,
+            outSampledHandle
+        )
+        && AssignStorage2DArray(heap, texture, format, outStorageHandle)
+    ;
+}
+
+[[nodiscard]] static b8 AssignSampler(Core::GpuDescriptorHeap& heap, Core::Sampler& sampler, Core::GpuDescriptorHandle& outHandle){
+    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterSampler(heap, sampler);
+    if(!descriptor)
+        return false;
+    outHandle = *descriptor;
+    return true;
+}
+
+[[nodiscard]] static b8 AssignConstantBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle){
+    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterConstantBuffer(heap, buffer);
+    if(!descriptor)
+        return false;
+    outHandle = *descriptor;
+    return true;
+}
+
+[[nodiscard]] static b8 AssignStructuredBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle){
+    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterStructuredBuffer(heap, buffer);
+    if(!descriptor)
+        return false;
+    outHandle = *descriptor;
+    return true;
 }
 
 
@@ -56,614 +132,122 @@ Expected<void> DeferredBindlessDescriptorRegistrar::registerAll(){
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerLightingTargets(){
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.albedo,
-        m_targets.albedoFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.gbufferBaseColor = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.normal,
-        m_targets.normalFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.gbufferNormal = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.worldPosition,
-        m_targets.worldPositionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.gbufferWorldPosition = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.specularRoughness,
-        m_targets.specularRoughnessFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.gbufferSpecularRoughness = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.depth,
-        m_targets.depthFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.gbufferDepth = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.shadowVisibility,
-        m_targets.shadowVisibilityFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.shadowVisibility = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowVisibility, m_targets.shadowVisibilityFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowVisibilityStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.causticIrradiance,
-        m_targets.causticIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.causticIrradiance = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.causticIrradiance, m_targets.causticIrradianceFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.causticIrradianceStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.surfelIrradiance,
-        m_targets.surfelIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.surfelIrradiance = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.surfelIrradiance, m_targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.surfelIrradianceStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.surfelIrradianceHalf,
-        m_targets.surfelIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.surfelIrradianceHalf = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.surfelIrradianceHalf, m_targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.surfelIrradianceHalfStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampler(m_heap, m_sources.sampler); descriptor)
-        m_bindless.sampler = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.opaqueColor,
-        m_targets.opaqueColorFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.opaqueColor = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.opaqueColor, m_targets.opaqueColorFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.opaqueColorStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.compositeColor,
-        m_targets.compositeColorFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.compositeColor = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.compositeColor, m_targets.compositeColorFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.compositeColorStorage = *descriptor;
-    else
+    using namespace __hidden_deferred_bindless_registrar;
+    if(
+        !AssignSampled2D(m_heap, m_targets.albedo, m_targets.albedoFormat, m_bindless.gbufferBaseColor)
+        || !AssignSampled2D(m_heap, m_targets.normal, m_targets.normalFormat, m_bindless.gbufferNormal)
+        || !AssignSampled2D(m_heap, m_targets.worldPosition, m_targets.worldPositionFormat, m_bindless.gbufferWorldPosition)
+        || !AssignSampled2D(m_heap, m_targets.specularRoughness, m_targets.specularRoughnessFormat, m_bindless.gbufferSpecularRoughness)
+        || !AssignSampled2D(m_heap, m_targets.depth, m_targets.depthFormat, m_bindless.gbufferDepth)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.shadowVisibility, m_targets.shadowVisibilityFormat, m_bindless.shadowVisibility, m_bindless.shadowVisibilityStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.causticIrradiance, m_targets.causticIrradianceFormat, m_bindless.causticIrradiance, m_bindless.causticIrradianceStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.surfelIrradiance, m_targets.surfelIrradianceFormat, m_bindless.surfelIrradiance, m_bindless.surfelIrradianceStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.surfelIrradianceHalf, m_targets.surfelIrradianceFormat, m_bindless.surfelIrradianceHalf, m_bindless.surfelIrradianceHalfStorage)
+        || !AssignSampler(m_heap, m_sources.sampler, m_bindless.sampler)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.opaqueColor, m_targets.opaqueColorFormat, m_bindless.opaqueColor, m_bindless.opaqueColorStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.compositeColor, m_targets.compositeColorFormat, m_bindless.compositeColor, m_bindless.compositeColorStorage)
+    )
         return MakeUnexpected(Failure{});
     return {};
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerTransparencyTargets(){
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.accumColor,
-        m_targets.avboit.accumColorFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.avboitAccumColor = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.accumExtinction,
-        m_targets.avboit.accumExtinctionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.avboitAccumExtinction = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.refractionDepth,
-        m_targets.depthFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.refractionDepth = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.refractionNormalIor,
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.refractionNormalIor = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.refractionTintCoverage,
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.refractionTintCoverage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.refractionInstance,
-        Core::Format::RG32_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.refractionInstance = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.refractionSpecularRoughness,
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.refractionSpecularRoughness = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.refractionResolve,
-        Core::Format::RGBA16_FLOAT,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.refractionResolve = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.foregroundAccumColor,
-        m_targets.avboit.accumColorFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.avboitForegroundColor = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.avboit.foregroundAccumExtinction,
-        m_targets.avboit.accumExtinctionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.avboitForegroundExtinction = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.avboit.refractionResolve, Core::Format::RGBA16_FLOAT, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.refractionResolveStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage3D,
-        m_targets.avboit.transmittanceTexture,
-        m_targets.avboit.transmittanceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture3D
-    ); descriptor)
-        m_bindless.avboitTransmittance = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampler(m_heap, m_sources.avboitLinearSampler); descriptor)
-        m_bindless.avboitLinearSampler = *descriptor;
-    else
+    using namespace __hidden_deferred_bindless_registrar;
+    if(
+        !AssignSampled2D(m_heap, m_targets.avboit.accumColor, m_targets.avboit.accumColorFormat, m_bindless.avboitAccumColor)
+        || !AssignSampled2D(m_heap, m_targets.avboit.accumExtinction, m_targets.avboit.accumExtinctionFormat, m_bindless.avboitAccumExtinction)
+        || !AssignSampled2D(m_heap, m_targets.avboit.refractionDepth, m_targets.depthFormat, m_bindless.refractionDepth)
+        || !AssignSampled2D(m_heap, m_targets.avboit.refractionNormalIor, Core::Format::RGBA16_FLOAT, m_bindless.refractionNormalIor)
+        || !AssignSampled2D(m_heap, m_targets.avboit.refractionTintCoverage, Core::Format::RGBA16_FLOAT, m_bindless.refractionTintCoverage)
+        || !AssignSampled2D(m_heap, m_targets.avboit.refractionInstance, Core::Format::RG32_FLOAT, m_bindless.refractionInstance)
+        || !AssignSampled2D(m_heap, m_targets.avboit.refractionSpecularRoughness, Core::Format::RGBA16_FLOAT, m_bindless.refractionSpecularRoughness)
+        || !AssignSampled2D(m_heap, m_targets.avboit.refractionResolve, Core::Format::RGBA16_FLOAT, m_bindless.refractionResolve)
+        || !AssignSampled2D(m_heap, m_targets.avboit.foregroundAccumColor, m_targets.avboit.accumColorFormat, m_bindless.avboitForegroundColor)
+        || !AssignSampled2D(m_heap, m_targets.avboit.foregroundAccumExtinction, m_targets.avboit.accumExtinctionFormat, m_bindless.avboitForegroundExtinction)
+        || !AssignStorage2D(m_heap, m_targets.avboit.refractionResolve, Core::Format::RGBA16_FLOAT, m_bindless.refractionResolveStorage)
+        || !RendererDescriptorRegisterDetail::AssignSampledTexture(
+            m_heap,
+            Core::GpuDescriptorClass::SampledImage3D,
+            m_targets.avboit.transmittanceTexture,
+            m_targets.avboit.transmittanceFormat,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::TextureDimension::Texture3D,
+            m_bindless.avboitTransmittance
+        )
+        || !AssignSampler(m_heap, m_sources.avboitLinearSampler, m_bindless.avboitLinearSampler)
+    )
         return MakeUnexpected(Failure{});
     return {};
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerSceneBuffers(){
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterConstantBuffer(m_heap, m_sources.sceneShadingBuffer); descriptor)
-        m_bindless.sceneShading = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStructuredBuffer(m_heap, m_sources.lightBuffer); descriptor)
-        m_bindless.lightList = *descriptor;
-    else
+    using namespace __hidden_deferred_bindless_registrar;
+    if(
+        !AssignConstantBuffer(m_heap, m_sources.sceneShadingBuffer, m_bindless.sceneShading)
+        || !AssignStructuredBuffer(m_heap, m_sources.lightBuffer, m_bindless.lightList)
+    )
         return MakeUnexpected(Failure{});
     return {};
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerCsgIntervalTargets(){
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgCapBackNormal, m_targets.csgCapNormalFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgCapBackNormal = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgIntervalDepth, m_targets.csgIntervalDepthFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgIntervalDepth = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgIntervalId, m_targets.csgIntervalIdFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgIntervalId = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgReceiverEventData, m_targets.csgReceiverEventDataFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgReceiverEventData = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgReceiverEventCount, m_targets.csgReceiverEventCountFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgReceiverEventCount = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgReceiverSpanData, m_targets.csgReceiverSpanDataFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgReceiverSpanData = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgReceiverSpanCount, m_targets.csgReceiverSpanCountFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgReceiverSpanCount = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgRemovedIntervalDepth, m_targets.csgRemovedIntervalDepthFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgRemovedIntervalDepth = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgRemovedIntervalCapNormal, m_targets.csgRemovedIntervalCapNormalFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgRemovedIntervalCapNormal = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgRemovedIntervalData, m_targets.csgRemovedIntervalDataFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgRemovedIntervalData = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.csgRemovedIntervalCount, m_targets.csgRemovedIntervalCountFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.csgRemovedIntervalCount = *descriptor;
-    else
+    using namespace __hidden_deferred_bindless_registrar;
+    if(
+        !AssignStorage2DArray(m_heap, m_targets.csgCapBackNormal, m_targets.csgCapNormalFormat, m_bindless.csgCapBackNormal)
+        || !AssignStorage2DArray(m_heap, m_targets.csgIntervalDepth, m_targets.csgIntervalDepthFormat, m_bindless.csgIntervalDepth)
+        || !AssignStorage2DArray(m_heap, m_targets.csgIntervalId, m_targets.csgIntervalIdFormat, m_bindless.csgIntervalId)
+        || !AssignStorage2DArray(m_heap, m_targets.csgReceiverEventData, m_targets.csgReceiverEventDataFormat, m_bindless.csgReceiverEventData)
+        || !AssignStorage2DArray(m_heap, m_targets.csgReceiverEventCount, m_targets.csgReceiverEventCountFormat, m_bindless.csgReceiverEventCount)
+        || !AssignStorage2DArray(m_heap, m_targets.csgReceiverSpanData, m_targets.csgReceiverSpanDataFormat, m_bindless.csgReceiverSpanData)
+        || !AssignStorage2DArray(m_heap, m_targets.csgReceiverSpanCount, m_targets.csgReceiverSpanCountFormat, m_bindless.csgReceiverSpanCount)
+        || !AssignStorage2DArray(m_heap, m_targets.csgRemovedIntervalDepth, m_targets.csgRemovedIntervalDepthFormat, m_bindless.csgRemovedIntervalDepth)
+        || !AssignStorage2DArray(m_heap, m_targets.csgRemovedIntervalCapNormal, m_targets.csgRemovedIntervalCapNormalFormat, m_bindless.csgRemovedIntervalCapNormal)
+        || !AssignStorage2DArray(m_heap, m_targets.csgRemovedIntervalData, m_targets.csgRemovedIntervalDataFormat, m_bindless.csgRemovedIntervalData)
+        || !AssignStorage2DArray(m_heap, m_targets.csgRemovedIntervalCount, m_targets.csgRemovedIntervalCountFormat, m_bindless.csgRemovedIntervalCount)
+    )
         return MakeUnexpected(Failure{});
     return {};
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerCausticResolveTargets(){
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArrayUint,
-        m_targets.causticAccumulator,
-        m_targets.causticAccumulatorFormat,
-        ECSRenderDetail::s_CausticAccumulatorSubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.causticAccumulator = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.causticAccumulator, m_targets.causticAccumulatorFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.causticAccumulatorStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.causticHistory,
-        m_targets.causticHistoryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.causticHistory = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.causticHistory, m_targets.causticHistoryFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.causticHistoryStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.causticResolveHalf,
-        m_targets.causticHistoryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.causticResolveHalf = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.causticResolveHalf, m_targets.causticHistoryFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.causticResolveHalfStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.causticResolveGeometry,
-        m_targets.causticHistoryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.causticResolveGeometry = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.causticResolveGeometry, m_targets.causticHistoryFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.causticResolveGeometryStorage = *descriptor;
-    else
+    using namespace __hidden_deferred_bindless_registrar;
+    if(
+        !RendererDescriptorRegisterDetail::AssignSampledTexture(
+            m_heap,
+            Core::GpuDescriptorClass::SampledImage2DArrayUint,
+            m_targets.causticAccumulator,
+            m_targets.causticAccumulatorFormat,
+            ECSRenderDetail::s_CausticAccumulatorSubresources,
+            Core::TextureDimension::Texture2DArray,
+            m_bindless.causticAccumulator
+        )
+        || !AssignStorage2DArray(m_heap, m_targets.causticAccumulator, m_targets.causticAccumulatorFormat, m_bindless.causticAccumulatorStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.causticHistory, m_targets.causticHistoryFormat, m_bindless.causticHistory, m_bindless.causticHistoryStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.causticResolveHalf, m_targets.causticHistoryFormat, m_bindless.causticResolveHalf, m_bindless.causticResolveHalfStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.causticResolveGeometry, m_targets.causticHistoryFormat, m_bindless.causticResolveGeometry, m_bindless.causticResolveGeometryStorage)
+    )
         return MakeUnexpected(Failure{});
     return {};
 }
 
 Expected<void> DeferredBindlessDescriptorRegistrar::registerSoftShadowTargets(){
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowCoarseTransmittance, m_targets.shadowCoarseTransmittanceFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowCoarseTransmittanceStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.shadowSoftGeometry,
-        m_targets.shadowSoftGeometryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.shadowSoftGeometry = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowSoftGeometry, m_targets.shadowSoftGeometryFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.shadowSoftGeometryStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage,
-        m_targets.shadowSoftGeometryPrev,
-        m_targets.shadowSoftGeometryFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ); descriptor)
-        m_bindless.shadowSoftGeometryPrev = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowSoftGeometryPrev, m_targets.shadowSoftGeometryFormat, Core::TextureDimension::Texture2D); descriptor)
-        m_bindless.shadowSoftGeometryPrevStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.shadowSoftHalfA,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.shadowSoftHalfA = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowSoftHalfA, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowSoftHalfAStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.shadowSoftHalfB,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.shadowSoftHalfB = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowSoftHalfB, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowSoftHalfBStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.shadowHistA,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.shadowHistA = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowHistA, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowHistAStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.shadowHistB,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.shadowHistB = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowHistB, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowHistBStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.shadowMomentsA,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.shadowMomentsA = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowMomentsA, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowMomentsAStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.shadowMomentsB,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.shadowMomentsB = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.shadowMomentsB, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.shadowMomentsBStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.transparentSoftHalf,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.transparentSoftHalf = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.transparentSoftHalf, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.transparentSoftHalfStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.transparentHistA,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.transparentHistA = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.transparentHistA, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.transparentHistAStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.transparentHistB,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.transparentHistB = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.transparentHistB, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.transparentHistBStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.transparentMomentsA,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.transparentMomentsA = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.transparentMomentsA, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.transparentMomentsAStorage = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
-        m_heap,
-        Core::GpuDescriptorClass::SampledImage2DArray,
-        m_targets.transparentMomentsB,
-        m_targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ); descriptor)
-        m_bindless.transparentMomentsB = *descriptor;
-    else
-        return MakeUnexpected(Failure{});
-    if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterStorageTexture(m_heap, m_targets.transparentMomentsB, m_targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray); descriptor)
-        m_bindless.transparentMomentsBStorage = *descriptor;
-    else
+    using namespace __hidden_deferred_bindless_registrar;
+    if(
+        !AssignStorage2DArray(m_heap, m_targets.shadowCoarseTransmittance, m_targets.shadowCoarseTransmittanceFormat, m_bindless.shadowCoarseTransmittanceStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.shadowSoftGeometry, m_targets.shadowSoftGeometryFormat, m_bindless.shadowSoftGeometry, m_bindless.shadowSoftGeometryStorage)
+        || !AssignSampledAndStorage2D(m_heap, m_targets.shadowSoftGeometryPrev, m_targets.shadowSoftGeometryFormat, m_bindless.shadowSoftGeometryPrev, m_bindless.shadowSoftGeometryPrevStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.shadowSoftHalfA, m_targets.shadowSoftFormat, m_bindless.shadowSoftHalfA, m_bindless.shadowSoftHalfAStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.shadowSoftHalfB, m_targets.shadowSoftFormat, m_bindless.shadowSoftHalfB, m_bindless.shadowSoftHalfBStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.shadowHistA, m_targets.shadowSoftFormat, m_bindless.shadowHistA, m_bindless.shadowHistAStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.shadowHistB, m_targets.shadowSoftFormat, m_bindless.shadowHistB, m_bindless.shadowHistBStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.shadowMomentsA, m_targets.shadowSoftFormat, m_bindless.shadowMomentsA, m_bindless.shadowMomentsAStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.shadowMomentsB, m_targets.shadowSoftFormat, m_bindless.shadowMomentsB, m_bindless.shadowMomentsBStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.transparentSoftHalf, m_targets.shadowSoftFormat, m_bindless.transparentSoftHalf, m_bindless.transparentSoftHalfStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.transparentHistA, m_targets.shadowSoftFormat, m_bindless.transparentHistA, m_bindless.transparentHistAStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.transparentHistB, m_targets.shadowSoftFormat, m_bindless.transparentHistB, m_bindless.transparentHistBStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.transparentMomentsA, m_targets.shadowSoftFormat, m_bindless.transparentMomentsA, m_bindless.transparentMomentsAStorage)
+        || !AssignSampledAndStorageShadowArray(m_heap, m_targets.transparentMomentsB, m_targets.shadowSoftFormat, m_bindless.transparentMomentsB, m_bindless.transparentMomentsBStorage)
+    )
         return MakeUnexpected(Failure{});
     return {};
 }

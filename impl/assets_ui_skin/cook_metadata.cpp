@@ -124,9 +124,9 @@ template<usize Count>
     if(!minimumSizeResult)
         return MakeUnexpected(Failure{});
 
-    region.rectangle = MakeUiSkinRect((*rectangleResult)[0u], (*rectangleResult)[1u], (*rectangleResult)[2u], (*rectangleResult)[3u]);
-    region.sliceInsets = MakeUiSkinSliceInsets((*sliceResult)[0u], (*sliceResult)[1u], (*sliceResult)[2u], (*sliceResult)[3u]);
-    region.padding = MakeUiSkinInsets((*paddingResult)[0u], (*paddingResult)[1u], (*paddingResult)[2u], (*paddingResult)[3u]);
+    region.rectangle = UiSkinRect((*rectangleResult)[0u], (*rectangleResult)[1u], (*rectangleResult)[2u], (*rectangleResult)[3u]);
+    region.sliceInsets = UiSkinSliceInsets((*sliceResult)[0u], (*sliceResult)[1u], (*sliceResult)[2u], (*sliceResult)[3u]);
+    region.padding = UiSkinInsets((*paddingResult)[0u], (*paddingResult)[1u], (*paddingResult)[2u], (*paddingResult)[3u]);
     region.minimumWidth = (*minimumSizeResult)[0u];
     region.minimumHeight = (*minimumSizeResult)[1u];
     return region;
@@ -172,7 +172,7 @@ template<usize Count>
                 return MakeUnexpected(Failure{});
             }
         }
-        palette.colors[role] = MakeUiSkinColor(components[0u], components[1u], components[2u], components[3u]);
+        palette.colors[role] = UiSkinColor(components[0u], components[1u], components[2u], components[3u]);
         seen[role] = true;
     }
     return palette;
@@ -273,13 +273,8 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Name virtualPath, const 
         parsed.regions.push_back(*regionResult);
     }
 
-    UiSkin candidate(arena, parsed.virtualPath);
-    candidate.setAtlas(parsed.texture, parsed.atlasWidth, parsed.atlasHeight, parsed.referenceDensity, Move(parsed.regions));
-    candidate.setPalette(parsed.palette);
-    candidate.setTypography(parsed.typography);
-    if(parsed.completeToolkitSkin ? !ValidateUiSkinToolkitContract(candidate) : !candidate.validatePayload())
+    if(!BuildUiSkinAsset(parsed, arena))
         return MakeUnexpected(Failure{});
-    parsed.regions = candidate.takeRegions();
     return parsed;
 }
 

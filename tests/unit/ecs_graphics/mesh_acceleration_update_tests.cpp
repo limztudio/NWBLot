@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
 
 #include <gtest/gtest.h>
 

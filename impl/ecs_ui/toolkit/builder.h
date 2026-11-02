@@ -94,24 +94,45 @@ public:
     void setSkin(const UiSkin& skin)noexcept;
     // One explicit left-to-right script/language policy applies to every widget declaration and its deferred paint.
     [[nodiscard]] b8 setTextShaping(u32 scriptTag, StringView language);
-    [[nodiscard]] WidgetStyle& style()noexcept;
-    [[nodiscard]] ScrollbarStyle& scrollbarStyle()noexcept;
-    [[nodiscard]] EditBoxStyle& editStyle()noexcept;
-    [[nodiscard]] PopupStyle& popupStyle()noexcept;
-    [[nodiscard]] ListStyle& listStyle()noexcept;
-    [[nodiscard]] RadioGroupStyle& radioGroupStyle()noexcept;
-    [[nodiscard]] SliderStyle& sliderStyle()noexcept;
-    [[nodiscard]] ProgressStyle& progressStyle()noexcept;
-    [[nodiscard]] ComboStyle& comboStyle()noexcept;
-    [[nodiscard]] TooltipStyle& tooltipStyle()noexcept;
-    void setEditHost(IEditBoxHost* host)noexcept;
-    void setDeltaSeconds(f32 delta)noexcept;
-    void setPointerBusy(b8 busy)noexcept;
+    [[nodiscard]] WidgetStyle& style()noexcept{ return accessStyle(m_style); }
+    [[nodiscard]] ScrollbarStyle& scrollbarStyle()noexcept{ return accessStyle(m_scrollbarStyle); }
+    [[nodiscard]] EditBoxStyle& editStyle()noexcept{ return accessStyle(m_editStyle); }
+    [[nodiscard]] PopupStyle& popupStyle()noexcept{ return accessStyle(m_popupStyle); }
+    [[nodiscard]] ListStyle& listStyle()noexcept{ return accessStyle(m_listStyle); }
+    [[nodiscard]] RadioGroupStyle& radioGroupStyle()noexcept{ return accessStyle(m_radioGroupStyle); }
+    [[nodiscard]] SliderStyle& sliderStyle()noexcept{ return accessStyle(m_sliderStyle); }
+    [[nodiscard]] ProgressStyle& progressStyle()noexcept{ return accessStyle(m_progressStyle); }
+    [[nodiscard]] ComboStyle& comboStyle()noexcept{ return accessStyle(m_comboStyle); }
+    [[nodiscard]] TooltipStyle& tooltipStyle()noexcept{ return accessStyle(m_tooltipStyle); }
+    void setEditHost(IEditBoxHost* const host)noexcept{
+        if(declarationBlocked())
+            m_context.fail();
+        else
+            m_editHost = host;
+    }
+    void setDeltaSeconds(const f32 delta)noexcept{
+        if(declarationBlocked())
+            m_context.fail();
+        else
+            m_deltaSeconds = delta;
+    }
+    void setPointerBusy(const b8 busy)noexcept{
+        if(declarationBlocked())
+            m_context.fail();
+        else
+            m_pointerBusy = busy;
+    }
     // Valid while a window scope is open, including a collapsed window.
     [[nodiscard]] const WindowMetrics& windowMetrics()const noexcept{ return m_scope->m_window.metrics; }
 
 
 private:
+    template<typename StyleT>
+    [[nodiscard]] StyleT& accessStyle(StyleT& target)noexcept{
+        if(declarationBlocked())
+            m_context.fail();
+        return target;
+    }
     [[nodiscard]] b8 declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
     [[nodiscard]] b8 panelDeclarationBlocked()const noexcept{ return declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed(); }
     [[nodiscard]] b8 itemDeclarationBlocked()const noexcept{ return panelDeclarationBlocked() || m_scope->m_items.size() >= s_LayoutMaxNodes; }
@@ -131,6 +152,8 @@ private:
     [[nodiscard]] b8 paintItems();
     [[nodiscard]] b8 paintItem(const Item& item, const LayoutBox& box);
     [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr, FloatEditFrame* floatFrame = nullptr);
+    template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
+    [[nodiscard]] NumericEditBoxResult declareNumericEdit(AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, ValidateBoundsF validateBounds, FrameListT& frames);
     [[nodiscard]] b8 paintTextArea(const Item& item, const LayoutBox& box);
     [[nodiscard]] b8 applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
     [[nodiscard]] b8 paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
@@ -145,7 +168,7 @@ private:
     }
     [[nodiscard]] b8 numericEditMatches(const Item& item)const noexcept;
     [[nodiscard]] b8 numericStateAvailable(const EditBoxState& state)const noexcept;
-    [[nodiscard]] SIMDVectorSingle loadEditMinimumSize()const noexcept;
+    [[nodiscard]] Point loadEditMinimumSize()const noexcept;
     void resolveEditIntrinsicSize(const Item& item, Point& outSize)const noexcept;
     [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
     [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);

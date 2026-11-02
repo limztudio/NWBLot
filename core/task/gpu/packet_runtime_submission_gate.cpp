@@ -23,24 +23,38 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_gpu_packet_runtime_submission_gate{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline Atomic<u64> s_NextAcceptanceRevision{ 1u };
+inline constexpr u32 s_WriterBit = 1u << 31u;
+inline constexpr u32 s_ReaderMask = s_WriterBit - 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace GpuPacketRuntimeDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Atomic<u64> s_NextAcceptanceRevision{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 u64 AllocateAcceptanceRevision()noexcept{
-    u64 nextRevision = s_NextAcceptanceRevision.load(MemoryOrder::relaxed);
+    u64 nextRevision = __hidden_gpu_packet_runtime_submission_gate::s_NextAcceptanceRevision.load(MemoryOrder::relaxed);
     for(;;){
         if(nextRevision == 0u || nextRevision == Limit<u64>::s_Max)
             NWB_FATAL_ASSERT_MSG(false, "GPU task graph acceptance revision identity exhausted");
-        if(s_NextAcceptanceRevision.compare_exchange_weak(nextRevision, nextRevision + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
+        if(__hidden_gpu_packet_runtime_submission_gate::s_NextAcceptanceRevision.compare_exchange_weak(nextRevision, nextRevision + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return nextRevision;
     }
 }
@@ -96,25 +110,6 @@ void GpuGraphSubmissionTransaction::SubmissionWriterReservation::reset()noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_packet_runtime_submission_gate{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_WriterBit = 1u << 31u;
-inline constexpr u32 s_ReaderMask = s_WriterBit - 1u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_ActiveOperation = nullptr;
 
 
@@ -122,8 +117,6 @@ thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmiss
 
 
 GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const GpuGraphSubmissionTransaction& transaction, const SubmissionOperationMode::Enum mode, const GpuRecordedGraph::ArtifactOperation* const borrowedArtifact)noexcept{
-    constexpr u32 s_SubmissionGateWriterBit = __hidden_gpu_packet_runtime_submission_gate::s_WriterBit;
-    constexpr u32 s_SubmissionGateReaderMask = __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask;
     // Any reentry, for the same or another transaction, is a prompt rejection regardless of target availability.
     // An exception finalizer can therefore run after its local gates unwind without retaining an unrelated transaction gate on this thread.
     if(s_ActiveOperation)
@@ -148,7 +141,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
             return;
 
         u32 expectedState = 0u;
-        while(!transaction.m_submissionGateState.compare_exchange_strong(expectedState, s_SubmissionGateWriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire)){
+        while(!transaction.m_submissionGateState.compare_exchange_strong(expectedState, __hidden_gpu_packet_runtime_submission_gate::s_WriterBit, MemoryOrder::acq_rel, MemoryOrder::acquire)){
             if(tryWriter){
                 m_writerReservation.reset();
                 return;
@@ -165,18 +158,18 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
                 continue;
             }
             u32 operationState = transaction.m_submissionGateState.load(MemoryOrder::acquire);
-            if((operationState & s_SubmissionGateWriterBit) != 0u){
+            if((operationState & __hidden_gpu_packet_runtime_submission_gate::s_WriterBit) != 0u){
                 transaction.m_submissionGateState.wait(operationState, MemoryOrder::acquire);
                 continue;
             }
-            if((operationState & s_SubmissionGateReaderMask) == s_SubmissionGateReaderMask)
+            if((operationState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask)
                 NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership overflowed");
             if(!transaction.m_submissionGateState.compare_exchange_weak(operationState, operationState + 1u, MemoryOrder::acq_rel, MemoryOrder::acquire))
                 continue;
             if(transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire) == 0u)
                 break;
             const u32 previousState = transaction.m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
-            if((previousState & s_SubmissionGateReaderMask) == 1u)
+            if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 1u)
                 transaction.m_submissionGateState.notify_all();
         }
     }
@@ -189,9 +182,9 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(const Gp
         }
         else{
             const u32 previousState = transaction.m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
-            if((previousState & s_SubmissionGateReaderMask) == 0u)
+            if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 0u)
                 TerminateInvariant();
-            if((previousState & s_SubmissionGateReaderMask) == 1u)
+            if((previousState & __hidden_gpu_packet_runtime_submission_gate::s_ReaderMask) == 1u)
                 transaction.m_submissionGateState.notify_all();
         }
         return;

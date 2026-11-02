@@ -110,13 +110,13 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const u32 taskAssignmentIndex = assignmentIndicesByTask[task.id.index];
     const b8 taskExcluded = taskAssignmentIndex >= ignoredAssignmentOffset && taskAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount;
     const GpuTaskQueueAssignment* const ownAssignment = FindQueueAssignment(assignments, assignmentIndicesByTask, task.id);
-    const u64 ownCost = ownAssignment && !taskExcluded ? scoringData.m_taskCosts[task.id.index] : 0u;
+    const u64 ownCost = ownAssignment && !taskExcluded ? scoringData.taskCosts[task.id.index] : 0u;
     if(ownAssignment && ownAssignment->queue == candidate.id)
         queueLoad -= ownCost;
 
     u64 overlap = 0u;
     if(ignoredAssignmentCount <= 1u && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing && schedulingReachability.mayContainIndependentTasks()){
-        u64 otherQueueCost = scoringData.m_totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
+        u64 otherQueueCost = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
         if(ownAssignment && ownAssignment->queue != candidate.id)
             otherQueueCost -= ownCost;
         if(analysis.schedulingEdges().empty())
@@ -127,7 +127,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
             if(ignoredAssignmentCount == 1u){
                 const GpuTaskQueueAssignment& excluded = assignments[ignoredAssignmentOffset];
                 if(excluded.queue != candidate.id && schedulingReachability.transitivelyIndependent(task.id, excluded.task))
-                    overlap -= scoringData.m_taskCosts[excluded.task.index];
+                    overlap -= scoringData.taskCosts[excluded.task.index];
             }
         }
     }
@@ -162,8 +162,8 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     score.outgoingCrossings = SaturateQueueScoreTerm(outgoingCrossings);
 
     u64 ownershipTransfers = 0u;
-    for(usize edgeIndex = scoringData.m_ownershipEdgeOffsets[task.id.index]; edgeIndex < scoringData.m_ownershipEdgeOffsets[task.id.index + 1u]; ++edgeIndex){
-        const GpuTaskDependencyEdge& edge = *scoringData.m_ownershipEdges[edgeIndex];
+    for(usize edgeIndex = scoringData.ownershipEdgeOffsets[task.id.index]; edgeIndex < scoringData.ownershipEdgeOffsets[task.id.index + 1u]; ++edgeIndex){
+        const GpuTaskDependencyEdge& edge = *scoringData.ownershipEdges[edgeIndex];
         const u32 producerAssignmentIndex = assignmentIndicesByTask[edge.producer.index];
         const u32 consumerAssignmentIndex = assignmentIndicesByTask[edge.consumer.index];
         if(

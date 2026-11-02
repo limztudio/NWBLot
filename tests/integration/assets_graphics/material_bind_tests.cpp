@@ -105,7 +105,7 @@ TEST(AssetsGraphics, DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutati
     material.typedLayoutHash = 0xF091u;
     material.typedBlockBytes.push_back(0x2Au);
 
-    EXPECT_FALSE(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, scratchArena, materialEntries));
+    EXPECT_FALSE(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("Material bind interface 'project/material_interfaces/test_surface' is duplicated")));
     EXPECT_EQ(material.typedLayoutHash, 0xF091u);
     ASSERT_EQ(material.typedBlockBytes.size(), 1u);

@@ -74,6 +74,24 @@ b8 PaintBuilder::popClip()noexcept{
     return true;
 }
 
+b8 PaintBuilder::beginOverlay(const u32 layer){
+    if(!m_recording || layer == 0u || m_overlayDepth == s_PaintMaxOverlayDepth)
+        return false;
+    const DisplayMetrics& display = m_snapshot.m_displayMetrics;
+    m_overlays[m_overlayDepth++] = { m_clips.size(), m_layer };
+    m_clips.push_back({ 0.0f, 0.0f, display.logicalWidth, display.logicalHeight });
+    m_layer = layer;
+    return true;
+}
+
+b8 PaintBuilder::endOverlay()noexcept{
+    if(!m_recording || m_overlayDepth == 0u || m_clips.size() != m_overlays[m_overlayDepth - 1u].clipDepth + 1u)
+        return false;
+    m_clips.pop_back();
+    m_layer = m_overlays[--m_overlayDepth].layer;
+    return true;
+}
+
 b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
     NWB_ASSERT(m_recording);
     const auto region = FindIf(m_regions.begin(), m_regions.end(), [&regionName](const UiSkinRegion& value)noexcept{
@@ -205,8 +223,7 @@ void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectang
     const f32 atlasHeight = static_cast<f32>(binding.atlasHeight);
     for(u32 row = 0u; row < s_PaintNineSliceAxisCells; ++row){
         for(u32 column = 0u; column < s_PaintNineSliceAxisCells; ++column){
-            const SIMDVectorSingle targetSize = VectorSubtract(VectorSet(x[column + 1u], y[row + 1u], x[column + 1u], y[row + 1u]), VectorSet(x[column], y[row], x[column], y[row]));
-            const Rect target{ x[column], y[row], VectorGetX(targetSize), VectorGetY(targetSize) };
+            const Rect target{ x[column], y[row], x[column + 1u] - x[column], y[row + 1u] - y[row] };
             const SIMDVectorSingle textureSize = VectorSubtract(VectorSet(u[column + 1u], v[row + 1u], u[column + 1u], v[row + 1u]), VectorSet(u[column], v[row], u[column], v[row]));
             const SIMDVectorSingle textureCoordinates = VectorPermute<0, 1, 4, 5>(VectorSet(u[column], v[row], 0.0f, 0.0f), textureSize);
             const SIMDVectorSingle normalized = VectorDivide(textureCoordinates, VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));

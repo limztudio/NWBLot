@@ -158,8 +158,7 @@ Expected<Core::GpuTaskId> FrameGraphAvboitStage::declare(Core::Alloc::ScratchAre
         FrameGraphAvboitPassPhaseDesc{
             .framebuffer = *inputs.targets.avboit.lowFramebuffer,
             .pass = MaterialPipelinePass::AvboitOccupancy,
-            .geometryPhase = AvboitGeometryPhase::Occupancy,
-            .uploadPhase = AvboitMaterialUploadPhase::Occupancy,
+            .phase = AvboitGeometryPhase::Occupancy,
         },
         FrameGraphAvboitPassUploadInputs{
             .targets = inputs.targets,
@@ -286,8 +285,7 @@ b8 FrameGraphAvboitStage::declareExtinction(
         FrameGraphAvboitPassPhaseDesc{
             .framebuffer = *inputs.targets.avboit.lowFramebuffer,
             .pass = MaterialPipelinePass::AvboitExtinction,
-            .geometryPhase = AvboitGeometryPhase::Extinction,
-            .uploadPhase = AvboitMaterialUploadPhase::Extinction,
+            .phase = AvboitGeometryPhase::Extinction,
         },
         FrameGraphAvboitPassUploadInputs{
             .targets = inputs.targets,
@@ -379,8 +377,7 @@ b8 FrameGraphAvboitStage::declareAccumulation(
         FrameGraphAvboitPassPhaseDesc{
             .framebuffer = *inputs.targets.avboit.accumulationFramebuffer,
             .pass = MaterialPipelinePass::AvboitAccumulate,
-            .geometryPhase = AvboitGeometryPhase::Accumulation,
-            .uploadPhase = AvboitMaterialUploadPhase::Accumulation,
+            .phase = AvboitGeometryPhase::Accumulation,
         },
         FrameGraphAvboitPassUploadInputs{
             .targets = inputs.targets,

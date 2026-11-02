@@ -14,20 +14,11 @@ namespace EcsUiPopupInputTestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextInputAdmission::Enum FakeTextInput::startNativeSession(const TextInputSessionToken, const TextInputSessionDesc&)noexcept{
-    ++starts;
-    return TextInputAdmission::Accepted;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 UiPopupInputTests::UiPopupInputTests()
     : m_arena(Name("tests/ecs_ui/popup_input"))
     , m_context(m_arena)
     , m_textInput(m_arena)
-    , m_clipboard(m_arena)
+    , m_clipboard(m_arena, true)
     , m_host(m_arena, m_context, m_textInput, m_clipboard)
     , m_baseModel(m_arena)
     , m_popupModel(m_arena)

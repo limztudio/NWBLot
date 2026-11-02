@@ -4,7 +4,6 @@
 
 #include "frame_execute_recovery.h"
 
-#include <impl/ecs_render/execute/frame_execute_cpu_restore.h>
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <core/task/gpu/scheduler.h>

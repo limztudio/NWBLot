@@ -83,10 +83,6 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Core::Telemetry::FrameGraphNodePayload& node, Array<char, NameDetail::s_DebugHashTextLength + 1u>& outIdentityText){
-    return FormatNameIdentityText(node.name, outIdentityText);
-}
-
 [[nodiscard]] AStringView FrameGraphNodeShape(const Core::Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
     case Core::Telemetry::FrameGraphNodeKind::Resource:
@@ -209,7 +205,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendFrameGraphPhysicalQueueDot(AString<Core::Telemetry::TelemetryArena>& out, const AStringView prefix, const Core::Telemetry::FrameGraphPhysicalQueueId& queue){
+void AppendFrameGraphPhysicalQueueDot(const AStringView prefix, const Core::Telemetry::FrameGraphPhysicalQueueId& queue, AString<Core::Telemetry::TelemetryArena>& out){
     if(!queue.valid()){
         StringAppendFormat(out, ", {}_index=\"none\", {}_device_generation=\"none\"", prefix, prefix);
         return;
@@ -218,17 +214,17 @@ void AppendFrameGraphPhysicalQueueDot(AString<Core::Telemetry::TelemetryArena>& 
     StringAppendFormat(out, ", {}_index={}, {}_device_generation={}", prefix, queue.index, prefix, queue.deviceGeneration);
 }
 
-void AppendFrameGraphQueueAssignmentDot(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::FrameGraphQueueAssignment& assignment){
+void AppendFrameGraphQueueAssignmentDot(const Core::Telemetry::FrameGraphQueueAssignment& assignment, AString<Core::Telemetry::TelemetryArena>& out){
     if(!assignment.present){
         out += ", queue_assignment=\"none\"";
         return;
     }
 
     out += ", queue_assignment=\"present\"";
-    AppendFrameGraphPhysicalQueueDot(out, "queue_initial", assignment.initialQueue);
-    AppendFrameGraphPhysicalQueueDot(out, "queue_planned", assignment.plannedQueue);
-    AppendFrameGraphPhysicalQueueDot(out, "queue_accepted", assignment.acceptedQueue);
-    AppendFrameGraphPhysicalQueueDot(out, "queue_previous_accepted", assignment.previousAcceptedQueue);
+    AppendFrameGraphPhysicalQueueDot("queue_initial", assignment.initialQueue, out);
+    AppendFrameGraphPhysicalQueueDot("queue_planned", assignment.plannedQueue, out);
+    AppendFrameGraphPhysicalQueueDot("queue_accepted", assignment.acceptedQueue, out);
+    AppendFrameGraphPhysicalQueueDot("queue_previous_accepted", assignment.previousAcceptedQueue, out);
     out += ", queue_class=";
     AppendDotQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
     out += ", queue_reason=";
@@ -250,7 +246,7 @@ void AppendFrameGraphQueueAssignmentDot(AString<Core::Telemetry::TelemetryArena>
     );
 }
 
-void AppendFrameGraphCompiledTaskDot(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::FrameGraphCompiledTask& compiledTask){
+void AppendFrameGraphCompiledTaskDot(const Core::Telemetry::FrameGraphCompiledTask& compiledTask, AString<Core::Telemetry::TelemetryArena>& out){
     if(!compiledTask.present){
         out += ", compiled_task=\"none\"";
         return;
@@ -262,12 +258,12 @@ void AppendFrameGraphCompiledTaskDot(AString<Core::Telemetry::TelemetryArena>& o
 }
 
 void AppendFrameGraphRuntimeStatisticsDot(
-    AString<Core::Telemetry::TelemetryArena>& out,
     const Core::Telemetry::FrameGraphRuntimeStatistics& statistics,
     const usize physicalQueueRuntimeStatisticsCount,
     const usize packetSubmissionStatisticsCount,
     const b8 physicalQueueRuntimeStatisticsPresent,
-    const b8 packetSubmissionStatisticsPresent
+    const b8 packetSubmissionStatisticsPresent,
+    AString<Core::Telemetry::TelemetryArena>& out
 ){
     if(!statistics.present){
         out += ", runtime_statistics=\"none\"";
@@ -295,7 +291,7 @@ void AppendFrameGraphRuntimeStatisticsDot(
 
 // Join timing by exact frame and scope Name; retain every graph, stable identity, and opaque producer flag.
 // Timing and graph streams may differ.
-void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGraphReportRecord& record, const usize graphIndex, const GraphTimingMap& timing, AString<Core::Telemetry::TelemetryArena>& out){
+void AppendTimedGraphDot(const FrameGraphReportRecord& record, const usize graphIndex, const GraphTimingMap& timing, Core::Alloc::ScratchArena& scratchArena, AString<Core::Telemetry::TelemetryArena>& out){
     const Core::Telemetry::FrameGraphPayload& graph = record.payload;
     StringAppendFormat(out, "digraph frame_graph_{}_{}_{} {{\n", graph.frameIndex, record.streamId, graphIndex);
     StringAppendFormat(out, "  graph [label=\"Frame {} stream {}\"];\n", graph.frameIndex, record.streamId);
@@ -306,8 +302,8 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
     FrameGraphOwnerStatisticsRange ownerRange;
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Core::Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
-        Array<char, NameDetail::s_DebugHashTextLength + 1u> identityText;
-        const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
+        Array<char, s_DebugHashTextLength + 1u> identityText;
+        const AStringView identity = FormatNameIdentityText(node.name, identityText);
 
         const GraphTimingKey timingKey{ graph.frameIndex, node.name };
         const auto timed = timing.find(timingKey);
@@ -329,12 +325,12 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
         out += ", kind=";
         AppendDotQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
         StringAppendFormat(out, ", flags={}", static_cast<u32>(node.flags));
-        AppendFrameGraphQueueAssignmentDot(out, node.queueAssignment);
-        AppendFrameGraphCompiledTaskDot(out, node.compiledTask);
+        AppendFrameGraphQueueAssignmentDot(node.queueAssignment, out);
+        AppendFrameGraphCompiledTaskDot(node.compiledTask, out);
         ownerRange.advance(graph, static_cast<u32>(i));
         const usize physicalQueueRuntimeStatisticsCount = ownerRange.physicalQueueEnd - ownerRange.physicalQueueBegin;
         const usize packetSubmissionStatisticsCount = ownerRange.packetSubmissionEnd - ownerRange.packetSubmissionBegin;
-        AppendFrameGraphRuntimeStatisticsDot(out, node.runtimeStatistics, physicalQueueRuntimeStatisticsCount, packetSubmissionStatisticsCount, physicalQueueRuntimeStatisticsCount != 0u, graph.packetSubmissionStatisticsPresent);
+        AppendFrameGraphRuntimeStatisticsDot(node.runtimeStatistics, physicalQueueRuntimeStatisticsCount, packetSubmissionStatisticsCount, physicalQueueRuntimeStatisticsCount != 0u, graph.packetSubmissionStatisticsPresent, out);
         out += "];\n";
     }
 
@@ -351,7 +347,7 @@ void BuildTimedGraphsDot(const Span<const FrameGraphReportRecord> graphs, const 
     out.clear();
     out.reserve(EstimateTimedGraphsDotReserve(graphs));
     for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex){
-        AppendTimedGraphDot(scratchArena, graphs[graphIndex], graphIndex, timing, out);
+        AppendTimedGraphDot(graphs[graphIndex], graphIndex, timing, scratchArena, out);
         if(graphIndex + 1u != graphs.size())
             out += '\n';
     }

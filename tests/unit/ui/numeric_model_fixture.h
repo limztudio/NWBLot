@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "multiline_fixture.h"
+
 #include <impl/ecs_ui/toolkit/edit/float_model.h>
 #include <impl/ecs_ui/toolkit/edit/integer_model.h>
 
@@ -27,29 +29,7 @@ namespace UiNumericTests{
 
 
 using namespace Impl::Ui;
-
-class DraftSnapshot final{
-public:
-    DraftSnapshot(Core::Alloc::GlobalArena& arena, const EditModel& draft);
-
-
-public:
-    void expectUnchanged(const EditModel& draft)const;
-
-
-private:
-    AString<Core::Alloc::GlobalArena> m_text;
-    AString<Core::Alloc::GlobalArena> m_preedit;
-    EditCompositionView m_composition;
-    u64 m_generation = 0u;
-    u64 m_revision = 0u;
-    u64 m_external = 0u;
-    u64 m_compositionGeneration = 0u;
-    usize m_anchor = 0u;
-    usize m_caret = 0u;
-    b8 m_undo = false;
-    b8 m_redo = false;
-};
+using DraftSnapshot = UiMultilineTests::MultilineSnapshot;
 
 template<typename Model>
 class NumericModelFixture : public testing::Test{

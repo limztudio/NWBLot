@@ -6,8 +6,6 @@
 
 #include "atlas.h"
 
-#include <impl/ecs_ui/toolkit/layout/rectangle.h>
-
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
 
@@ -45,19 +43,25 @@ namespace __hidden_ui_glyph_visibility{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const BakedFontAtlas* TextGlyphVisibility::SelectAtlas(const PlacedGlyph& glyph, const f32 physicalSize)noexcept{
+namespace TextGlyphVisibility{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const BakedFontAtlas* SelectAtlas(const PlacedGlyph& glyph, const f32 physicalSize)noexcept{
     if(!glyph.face || !glyph.face->valid() || !IsFinite(physicalSize) || physicalSize <= 0.0f)
         return nullptr;
     const SharedBakedFontAtlas& atlas = glyph.face->bakedAtlas();
     if(!atlas || !atlas->valid())
         return nullptr;
-    const SIMDVectorSingle sizeRange = VectorScale(VectorSet(s_BakedFontAtlasMinScale, s_BakedFontAtlasMaxScale, 0.0f, 0.0f), static_cast<f32>(atlas->bakePpem()));
-    if(physicalSize < VectorGetX(sizeRange) || physicalSize > VectorGetY(sizeRange) || !atlas->glyph(glyph.glyphId))
+    const f32 bakePpem = static_cast<f32>(atlas->bakePpem());
+    if(physicalSize < bakePpem * s_BakedFontAtlasMinScale || physicalSize > bakePpem * s_BakedFontAtlasMaxScale || !atlas->glyph(glyph.glyphId))
         return nullptr;
     return atlas.get();
 }
 
-TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& glyph, const BakedFontAtlas* const selectedAtlas, const f32 fontSize, const f32 physicalSize, const Point& topLeft, const Rect& clip, const Point pixelScale)noexcept{
+TextGlyphIntersection::Enum Candidate(const PlacedGlyph& glyph, const BakedFontAtlas* const selectedAtlas, const f32 fontSize, const f32 physicalSize, const Point& topLeft, const Rect& clip, const Point pixelScale)noexcept{
     using namespace __hidden_ui_glyph_visibility;
     if(
         !ValidLocation(glyph, topLeft) || !IsValidTextFontSize(fontSize) || !IsFinite(physicalSize)
@@ -85,19 +89,15 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
         if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
             return TextGlyphIntersection::Visible;
     }
-    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(
-        VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleReplicate(s_TextHalfPixel))),
-        VectorDoubleReplicate(s_TextFixedPointScaleF64)
-    );
-    const SIMDVectorDouble scaleNumerators = VectorDoubleSet(glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize), physicalSize, glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize), 0.0);
-    const SIMDVectorDouble scaleDenominators = VectorDoubleSelect(VectorDoubleSet(1.0, fontSize, glyph.coverage.known ? 1.0 : static_cast<f64>(glyph.face->unitsPerEm()), 1.0), shapedSizeValue, glyph.coverage.known ? VectorDoubleZero() : s_DoubleSIMDMaskX);
-    const SIMDVectorDouble scales = VectorDoubleDivide(scaleNumerators, scaleDenominators);
-    const SIMDVectorDouble correction = VectorDoubleSplatX(scales);
+    const f64 fontSizeF64 = static_cast<f64>(fontSize);
+    const f64 shapedSize = Floor((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel) / s_TextFixedPointScaleF64;
+    const f64 correctionScalar = glyph.coverage.known ? 1.0 : fontSizeF64 / shapedSize;
+    const f64 rasterScale = static_cast<f64>(physicalSize) / fontSizeF64;
+    const f64 outlineAllowance = glyph.coverage.known ? 0.0 : fontSizeF64 / static_cast<f64>(glyph.face->unitsPerEm());
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
-    const SIMDVectorDouble rasterMarginValue = VectorDoubleAdd(
-        VectorDoubleAdd(VectorDoubleDivide(VectorDoubleMax(VectorDoubleSplatOne(), correction), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleDivide(VectorDoubleReplicate(s_TextRasterMarginPixels), VectorDoubleSplatY(scales))),
-        VectorDoubleSplatZ(scales)
-    );
+    const f64 rasterMarginScalar = ((Max(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
+    const SIMDVectorDouble correction = VectorDoubleReplicate(correctionScalar);
+    const SIMDVectorDouble rasterMarginValue = VectorDoubleReplicate(rasterMarginScalar);
     const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0);
     const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleAndInt(rasterMarginValue, s_DoubleSIMDMaskXY), VectorDoubleDivide(VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0), pixelScaleVector));
     const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
@@ -113,7 +113,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
     return IntersectBounds(leftTop, rightBottom, clip);
 }
 
-Expected<SIMDVectorDoubleResult> TextGlyphVisibility::LoadAtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
+Expected<SIMDVectorDoubleResult> LoadAtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
     using namespace __hidden_ui_glyph_visibility;
     if(!ValidLocation(glyph, topLeft) || !IsValidTextFontSize(fontSize) || !atlas.valid() || atlas.unitsPerEm() == 0u)
         return MakeUnexpected(Failure{});
@@ -147,14 +147,14 @@ Expected<SIMDVectorDoubleResult> TextGlyphVisibility::LoadAtlasRectangle(const P
     return SIMDVectorDoubleResult{ ConvertVectorSingleToDouble(rounded) };
 }
 
-Expected<Rect> TextGlyphVisibility::AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
+Expected<Rect> AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
     const auto rectangle = LoadAtlasRectangle(glyph, atlas, fontSize, topLeft);
     if(!rectangle)
         return MakeUnexpected(rectangle.error());
     return Rect{ static_cast<f32>(VectorDoubleGetX(rectangle->value)), static_cast<f32>(VectorDoubleGetY(rectangle->value)), static_cast<f32>(VectorDoubleGetZ(rectangle->value)), static_cast<f32>(VectorDoubleGetW(rectangle->value)) };
 }
 
-Expected<Rect> TextGlyphVisibility::CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale)noexcept{
+Expected<Rect> CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale)noexcept{
     using namespace __hidden_ui_glyph_visibility;
     if(!ValidLocation(glyph, topLeft) || !IsFinite(rasterScale) || rasterScale <= 0.0f || !IsValidUiRect(record.pixels) || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f)
         return MakeUnexpected(Failure{});
@@ -171,12 +171,17 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(const PlacedGlyph& glyph, 
     const SIMDVectorDouble biased = VectorDoubleMultiplyAddExpression(position, pixelScaleVector, VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0));
     const SIMDVectorDouble aligned = VectorDoubleDivide(VectorDoubleFloor(biased), VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0));
     const SIMDVectorDouble size = VectorDoubleDivide(VectorDoubleSet(record.pixels.width, record.pixels.height, 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(rasterScale)));
-    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(aligned, size));
+    Rect candidate;
+    if(!TryMakeUiRect(VectorDoubleGetX(aligned), VectorDoubleGetY(aligned), VectorDoubleGetX(size), VectorDoubleGetY(size), UiRectPrecision::BoundedEndpoints, candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
-TextGlyphIntersection::Enum TextGlyphVisibility::Intersect(const Rect& rectangle, const Rect& clip)noexcept{
-    return TryIntersectTextRects(rectangle, clip);
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

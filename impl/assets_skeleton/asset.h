@@ -59,14 +59,20 @@ public:
 
 
 public:
-    void setJoints(JointVector&& joints, JointIndexMap&& jointIndices)noexcept;
+    void setJoints(JointVector&& joints, JointIndexMap&& jointIndices)noexcept{
+        m_joints = Move(joints);
+        m_jointIndices = Move(jointIndices);
+    }
 
 
 public:
     [[nodiscard]] const JointVector& joints()const noexcept{ return m_joints; }
     [[nodiscard]] const JointIndexMap& jointIndices()const noexcept{ return m_jointIndices; }
     [[nodiscard]] u32 jointCount()const noexcept{ return static_cast<u32>(m_joints.size()); }
-    [[nodiscard]] u32 findJointIndex(Name jointName)const noexcept;
+    [[nodiscard]] u32 findJointIndex(const Name jointName)const noexcept{
+        const auto foundJoint = m_jointIndices.find(jointName);
+        return foundJoint != m_jointIndices.end() ? foundJoint.value() : s_SkeletonInvalidJointIndex;
+    }
 
 
 public:

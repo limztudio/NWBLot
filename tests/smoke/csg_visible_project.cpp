@@ -64,7 +64,6 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 static constexpr f32 s_CubeRotationSpeed = 0.25f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
-static constexpr f32 s_ShapeGridCenterY = s_CameraTargetY;
 static constexpr Float2U s_ShapeGridHalfSpacing = Float2U(1.55f, 1.05f);
 static constexpr f32 s_ReceiverBaseScale = 0.72f;
 static constexpr f32 s_ReceiverScale = 1.08f;
@@ -143,8 +142,8 @@ static void ApplyCubeRotation(const NWB::Core::ECS::EntityID entity, const SIMDV
 [[nodiscard]] static SIMDVectorSingle CsgVisibleShapePosition(const usize shapeSlot)noexcept{
     // Move only lane Y.
     const SIMDVectorSingle offsetY = VectorSet(0.0f, s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
-    const SIMDVectorSingle left = VectorSet(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY, 0.0f, 0.0f);
-    const SIMDVectorSingle right = VectorSet(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY, 0.0f, 0.0f);
+    const SIMDVectorSingle left = VectorSet(-s_ShapeGridHalfSpacing.x, s_CameraTargetY, 0.0f, 0.0f);
+    const SIMDVectorSingle right = VectorSet(s_ShapeGridHalfSpacing.x, s_CameraTargetY, 0.0f, 0.0f);
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane: return VectorAdd(left, offsetY);
     case CsgVisibleShapeSlot::Box: return VectorAdd(right, offsetY);

@@ -19,17 +19,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 PreparedSceneTlasBuild::StorageReady(const RendererRayTracingState& state, const usize instanceCount)noexcept{
+    return
+        state.m_tlas
+        && state.m_tlas->getBackingBufferHandle()
+        && state.m_tlasMaxInstances >= instanceCount
+        && state.m_tlasHeapHandle.valid()
+        && state.m_tlasHeapHandle.descriptorClass() == Core::GpuDescriptorClass::AccelStruct
+    ;
+}
+
 b8 PreparedSceneTlasBuild::capture(const RendererRayTracingState& state, const b8 staticScene, const u64 staticSceneHash, const Span<const Core::RayTracingInstanceDesc> instances, const Span<const Core::RayTracingAccelStructHandle> instanceBlases){
     clear();
-    if(
-        instances.empty()
-        || instances.size() != instanceBlases.size()
-        || !state.m_tlas
-        || !state.m_tlas->getBackingBufferHandle()
-        || state.m_tlasMaxInstances < instances.size()
-        || !state.m_tlasHeapHandle.valid()
-        || state.m_tlasHeapHandle.descriptorClass() != Core::GpuDescriptorClass::AccelStruct
-    )
+    if(instances.empty() || instances.size() != instanceBlases.size() || !StorageReady(state, instances.size()))
         return false;
 
     m_instances.reserve(instances.size());
@@ -54,18 +56,7 @@ b8 PreparedSceneTlasBuild::capture(const RendererRayTracingState& state, const b
 }
 
 b8 PreparedSceneTlasBuild::record(RendererRayTracingState& state, Core::CommandList& commandList){
-    if(
-        !m_ready
-        || m_instances.empty()
-        || m_instances.size() != m_blases.size()
-        || state.m_tlas.get() != m_tlas.get()
-        || !state.m_tlas
-        || state.m_tlas->getBackingBufferHandle().get() != m_backingBuffer.get()
-        || state.m_tlasMaxInstances != m_maxInstances
-        || state.m_tlasHeapHandle != m_heapHandle
-        || !state.m_tlasHeapHandle.valid()
-        || state.m_tlasHeapHandle.descriptorClass() != Core::GpuDescriptorClass::AccelStruct
-    ){
+    if(!m_ready || m_instances.empty() || m_instances.size() != m_blases.size() || !storageMatches(state) || !StorageReady(state, m_instances.size())){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
         return false;
     }
@@ -84,7 +75,7 @@ void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
     if(!m_ready)
         return;
 
-    const b8 preparedTlasMatchesCurrent = state.m_tlas.get() == m_tlas.get() && state.m_tlas && state.m_tlas->getBackingBufferHandle().get() == m_backingBuffer.get() && state.m_tlasMaxInstances == m_maxInstances && state.m_tlasHeapHandle == m_heapHandle;
+    const b8 preparedTlasMatchesCurrent = storageMatches(state);
     if(preparedTlasMatchesCurrent && m_static){
         state.m_tlasStaticSceneHash = m_staticSceneHash;
         state.m_tlasStaticSceneHashValid = true;
@@ -107,6 +98,16 @@ void PreparedSceneTlasBuild::clear()noexcept{
     m_staticSceneHash = 0u;
     m_static = false;
     m_ready = false;
+}
+
+b8 PreparedSceneTlasBuild::storageMatches(const RendererRayTracingState& state)const noexcept{
+    return
+        state.m_tlas
+        && state.m_tlas.get() == m_tlas.get()
+        && state.m_tlas->getBackingBufferHandle().get() == m_backingBuffer.get()
+        && state.m_tlasMaxInstances == m_maxInstances
+        && state.m_tlasHeapHandle == m_heapHandle
+    ;
 }
 
 

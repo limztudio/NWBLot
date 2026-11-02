@@ -27,6 +27,46 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     commandList.clearTextureFloat(*targets.shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
+RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotShadowVisibilityGraphPlan(const b8 hardwareShadowSupported)const noexcept{
+    const auto& state = m_rayTracingState;
+    const b8 hardwareTransparentTrace = hardwareShadowSupported && state.m_softTransparentReady && hardwareTransparentShadowReady();
+    const b8 transparentSceneReady = hardwareTransparentTrace ? state.m_tlas && state.m_tlasHeapHandle.valid() : state.m_sceneBvhNodeBuffer && state.m_sceneInstanceBuffer;
+    const b8 softTransparentFoldReady =
+        state.m_softShadowReady
+        && state.m_softShadowSlotMask != 0u
+        && softTransparentShadowReady()
+        && transparentSceneReady
+        && state.m_shadowInstanceMaterialBuffer
+        && state.m_shadowMaterialTypedBuffer
+        && state.m_shadowInstanceBuffer
+    ;
+    GraphOwnedAdaptiveShadowPlan adaptivePlan;
+    if(!softTransparentShadowReady() && !hardwareShadowSupported && shadowVisibilitySoftwareResourcesPreflighted() && state.m_swShadowEdgeCounterBuffer){
+        adaptivePlan.enabled = true;
+        adaptivePlan.compact = true;
+    }
+
+    return RayTracingShadowVisibilityGraphPlanSnapshot{
+        .lightSpace = lightSpaceShadowSnapshot(),
+        .adaptivePlan = adaptivePlan,
+        .hardwareTransparentTrace = hardwareTransparentTrace,
+        .softTransparentFoldReady = softTransparentFoldReady,
+        .combinedSoftUpsample = softTransparentFoldReady
+            && state.m_softShadowResolve.m_combinedUpsample.m_pipeline
+            && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u,
+        .combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline
+            && state.m_softShadowTemporalReady && state.m_softTransparentTemporalReady,
+        .combinedSoftTemporalReady = static_cast<b8>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline),
+        .softShadowHistoryReadable =
+            state.m_softShadowTemporalReady
+            && state.m_prevWorldToClipValid
+            && state.m_softShadowTemporalSeeded,
+        .opaqueTemporalMergeReady = state.m_softShadowTemporalReady,
+        .transparentTemporalMergeReady = state.m_softTransparentTemporalReady,
+        .historyFrontIsA = state.m_softShadowHistoryFrontIsA != 0u,
+    };
+}
+
 Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -280,10 +320,6 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     return producedFrameIndex;
 }
 
-b8 RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
-    return m_rayTracingState.m_softTransparentReady;
-}
-
 Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -294,12 +330,6 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return MakeUnexpected(Failure{});
     return renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, nullptr, lightSpace);
-}
-
-void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
-    // Trace layouts are push-only; resources come from the global heap.
-    static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
-    layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqSoftPushConstants)));
 }
 
 void RendererRayTracingSystem::enableSoftShadowResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets){

@@ -111,7 +111,7 @@ TEST(AssetsGraphics, DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwr
     NWB::Tests::CapturingLogger logger;
     const NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/borrowed_index"));
-    using ShaderArchive = NWB::Core::ShaderArchive;
+    namespace ShaderArchive = NWB::Core::ShaderArchive;
     NWB::Core::GraphicsVector<ShaderArchive::Record> records(testArena.arena);
     ShaderArchive::Record& record = records.emplace_back(testArena.arena);
     record.shaderName = Name("project/shaders/borrowed_index");

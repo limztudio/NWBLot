@@ -9,7 +9,6 @@
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
-#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -160,13 +159,46 @@ void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
     m_frameDelta.clear();
     abandonPendingFrame(true);
-    const SIMDVectorSingle logicalSize = VectorDivide(VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height)), VectorSet(scaleX, scaleY, scaleX, scaleY));
-    m_display = { VectorGetX(logicalSize), VectorGetY(logicalSize), scaleX, scaleY };
+    m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
 }
 
 b8 UiLayerSystem::setInputBindings(const Span<const Ui::InputKeyBinding> bindings){
     synchronizeNativeInput();
     return m_context.input().setBindings(bindings);
+}
+
+b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
+    if(m_fontsReady)
+        return true;
+    const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems ? m_activeSceneSubsystems->findSubsystem<UiSubsystem>() : nullptr;
+    if(!uiSubsystem)
+        return false;
+    const usize fontCount = uiSubsystem->basicFonts.size();
+    if(fontCount == 0u || fontCount > Ui::s_TextMaxFontSources){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: the font stack requires between one and eight font assets"));
+        return false;
+    }
+    Array<UniquePtr<Font>, Ui::s_TextMaxFontSources> assets;
+    Array<UniquePtr<FontAtlas>, Ui::s_TextMaxFontSources> atlasAssets;
+    Vector<Ui::FontSource, Core::Alloc::ScratchArena> sources(scratchArena);
+    sources.reserve(fontCount);
+    for(usize index = 0u; index < fontCount; ++index){
+        const Core::Assets::AssetRef<FontAtlas>& atlasRef = uiSubsystem->basicFonts[index];
+        auto loadedAtlas = m_assetManager.loadTypedSync<FontAtlas>(atlasRef.name(), s_UiLayerSystemOwnerName);
+        if(!loadedAtlas)
+            return false;
+        atlasAssets[index] = Move(*loadedAtlas);
+        const FontAtlas& atlas = *atlasAssets[index];
+        const Core::Assets::AssetRef<Font>& fontRef = atlas.payload().font;
+        auto font = m_assetManager.loadTypedSync<Font>(fontRef.name(), s_UiLayerSystemOwnerName);
+        if(!font)
+            return false;
+        assets[index] = Move(*font);
+        sources.push_back({ fontRef, *assets[index], 1u, &atlas });
+    }
+    // TextService owns the exact font bytes and immutable baked atlas versions; loaded asset objects can be released here.
+    m_fontsReady = m_text.setFonts(scratchArena, sources);
+    return m_fontsReady;
 }
 
 void UiLayerSystem::abandonPendingFrame(const b8 resetUi)noexcept{

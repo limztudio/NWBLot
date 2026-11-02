@@ -143,10 +143,7 @@ b8 IsValidSliderOptions(in SliderOptions options){
     return IsValidSliderRange(options.minimum, options.maximum)
         && isFinite(options.keyStep)
         && options.keyStep >= 0.0
-        && options.width.policy <= LayoutSizePolicy::Stretch
-        && isFinite(options.width.value)
-        && options.width.value >= 0.0f
-        && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f)
+        && IsValidLayoutSize(options.width)
         && isFinite(options.height)
         && options.height >= 0.0f;
 }

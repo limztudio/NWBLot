@@ -186,7 +186,7 @@ TEST(UiScrollbarLayoutTests, MinimumThumbIsClampedToEachTrackEvenWithRemainingSc
     UiPaintAssertions::ExpectRect(placement.vertical.thumb, placement.vertical.track);
     EXPECT_GT(placement.horizontal.maximum, 0.0);
     EXPECT_GT(placement.vertical.maximum, 0.0);
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ Limit<f32>::s_Max, Limit<f32>::s_Max }, placement));
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ Limit<f32>::s_Max, Limit<f32>::s_Max }, placement));
     UiPaintAssertions::ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
     UiPaintAssertions::ExpectRect(placement.vertical.thumb, placement.vertical.track);
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, placement.horizontal.maximum);
@@ -216,7 +216,7 @@ TEST(UiScrollbarLayoutTests, ZeroThicknessKeepsFullViewportWhileRetainingScrolla
     EXPECT_DOUBLE_EQ(placement.vertical.maximum, 120.0);
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 300.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 100.0);
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 40.0f, 50.0f }, placement));
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ 40.0f, 50.0f }, placement));
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 40.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 50.0);
     UiPaintAssertions::ExpectRect(placement.horizontal.thumb, {});
@@ -284,7 +284,7 @@ TEST(UiScrollbarLayoutTests, TinyBoundsClampBarThicknessAndKeepZeroLengthTracksH
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 100.0);
     EXPECT_DOUBLE_EQ(placement.vertical.maximum, 100.0);
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 1000.0f, 1000.0f }, placement));
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ 1000.0f, 1000.0f }, placement));
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 100.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 100.0);
 }
@@ -324,11 +324,11 @@ TEST(UiScrollbarLayoutTests, OverscrollUpdatesClampBothThumbsAndRestoreExactStar
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     const ScrollViewportPlacement initial = placement;
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 1000.0f, 1000.0f }, placement));
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({ 1000.0f, 1000.0f }, placement));
     ExpectReservedGeometry(placement, initial);
     UiPaintAssertions::ExpectRect(placement.horizontal.thumb, { 85.0f, 120.0f, 25.0f, 12.0f });
     UiPaintAssertions::ExpectRect(placement.vertical.thumb, { 110.0f, 95.0f, 12.0f, 25.0f });
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({}, placement));
+    ASSERT_TRUE(TryUpdateScrollViewportOffsets({}, placement));
     ExpectPlacement(placement, initial);
 }
 
@@ -382,7 +382,7 @@ TEST(UiScrollbarLayoutTests, InvalidOffsetRequestsPreserveBothAxesAndGeometry){
     const Array<Point, 4> inputs = { Point{ -1.0f, 0.0f }, Point{ 0.0f, -1.0f }, Point{ Limit<f32>::s_QuietNaN, 0.0f }, Point{ 0.0f, Limit<f32>::s_Infinity } };
     for(const Point& input : inputs){
         ScrollViewportPlacement placement = previous;
-        EXPECT_FALSE(ScrollbarLayout::UpdateOffsets(input, placement));
+        EXPECT_FALSE(TryUpdateScrollViewportOffsets(input, placement));
         ExpectPlacement(placement, previous);
     }
 }
@@ -395,7 +395,7 @@ TEST(UiScrollbarLayoutTests, InvalidOwnedProjectionRejectsOffsetUpdateAtomically
     previous = *previousResult;
     const auto reject = [](ScrollViewportPlacement& placement){
         const ScrollViewportPlacement expected = placement;
-        EXPECT_FALSE(ScrollbarLayout::UpdateOffsets({ 40.0f, 50.0f }, placement));
+        EXPECT_FALSE(TryUpdateScrollViewportOffsets({ 40.0f, 50.0f }, placement));
         ExpectPlacement(placement, expected);
     };
     ScrollViewportPlacement placement = previous;

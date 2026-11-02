@@ -5,6 +5,7 @@
 #include "csg_system.h"
 
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_csg/module.h>
 
@@ -59,49 +60,16 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static Expected<Core::GpuDescriptorHandle> AcquireCsgBufferHeapHandle(const Core::GpuDescriptorClass::Enum descriptorClass, Core::Device& device, Core::Buffer& buffer){
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return MakeUnexpected(Failure{});
-
-    NWB_ASSERT(descriptorClass == Core::GpuDescriptorClass::StorageBuffer || descriptorClass == Core::GpuDescriptorClass::UniformBuffer);
-    const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer);
-    const Expected<Core::GpuDescriptorHandle> acquired = heap.allocate(descriptorClass);
-    if(!acquired)
-        return MakeUnexpected(acquired.error());
-    if(!heap.write(*acquired, descriptorWrite)){
-        heap.free(*acquired);
-        return MakeUnexpected(Failure{});
-    }
-
-    return *acquired;
-}
-
 [[nodiscard]] static b8 ReplaceCsgStorageBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
-    const auto acquired = AcquireCsgBufferHeapHandle(Core::GpuDescriptorClass::StorageBuffer, device, buffer);
-    if(!acquired){
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized() || !RayTracingDetail::ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, buffer, inOutHandle)){
         // The buffer was replaced; drop the stale handle for a later retry.
-        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-        if(inOutHandle.valid() && heap.isInitialized())
-            heap.free(inOutHandle);
-        inOutHandle = Core::GpuDescriptorHandle::Invalid();
+        if(heap.isInitialized())
+            RayTracingDetail::RetireHeapHandle(heap, inOutHandle);
+        else
+            inOutHandle = Core::GpuDescriptorHandle::Invalid();
         return false;
     }
-
-    // Replacements take a fresh slot; the old one retires after quarantine.
-    if(inOutHandle.valid())
-        device.getDescriptorHeap().free(inOutHandle);
-    inOutHandle = *acquired;
-    return true;
-}
-
-[[nodiscard]] static b8 EnsureCsgBufferHeapHandle(const Core::GpuDescriptorClass::Enum descriptorClass, Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
-    if(inOutHandle.valid())
-        return inOutHandle.descriptorClass() == descriptorClass;
-    const auto acquired = AcquireCsgBufferHeapHandle(descriptorClass, device, buffer);
-    if(!acquired)
-        return false;
-    inOutHandle = *acquired;
     return true;
 }
 
@@ -203,21 +171,9 @@ void RendererCsgSystem::invalidateResources(){
 
 b8 RendererCsgSystem::createCsgClipResources(){
     auto& device = m_graphics.getDevice();
-    if(!m_csgState.m_clipBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
-        // Push-only layout for the cap-fill path.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShaderDrivenPushConstants)));
-
-        auto clipBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
-        if(clipBindingLayoutResult)
-            m_csgState.m_clipBindingLayout = Move(*clipBindingLayoutResult);
-        else
-            m_csgState.m_clipBindingLayout.reset();
-        if(!clipBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip binding layout"));
-            return false;
-        }
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(ShaderDrivenPushConstants), Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel, m_csgState.m_clipBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip binding layout"));
+        return false;
     }
 
     if(!createCsgIntervalSampleStateBuffer())
@@ -235,9 +191,11 @@ b8 RendererCsgSystem::createCsgClipResources(){
             return false;
         }
     }
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
-        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::UniformBuffer, device, *m_csgState.m_clipContextSlotsBuffer.get(), m_csgState.m_clipContextSlotsHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::UniformBuffer, device, *m_csgState.m_intervalSampleStateBuffer.get(), m_csgState.m_intervalSampleStateHeapHandle)
+        !heap.isInitialized()
+        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_csgState.m_clipContextSlotsBuffer.get(), m_csgState.m_clipContextSlotsHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_csgState.m_intervalSampleStateBuffer.get(), m_csgState.m_intervalSampleStateHeapHandle)
     )
         return false;
 
@@ -279,9 +237,11 @@ b8 RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, c
     NWB_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(!reserveCsgReceiverRangeBufferCapacity(receiverRangeCount) || !reserveCsgCutterBufferCapacity(cutterCount))
         return false;
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
-        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::StorageBuffer, m_graphics.getDevice(), *m_csgState.m_receiverRangeBuffer.get(), m_csgState.m_receiverRangeBufferHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::StorageBuffer, m_graphics.getDevice(), *m_csgState.m_cutterBuffer.get(), m_csgState.m_cutterBufferHeapHandle)
+        !heap.isInitialized()
+        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_csgState.m_receiverRangeBuffer.get(), m_csgState.m_receiverRangeBufferHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *m_csgState.m_cutterBuffer.get(), m_csgState.m_cutterBufferHeapHandle)
         || !m_csgState.m_clipContextSlotsBuffer || !m_csgState.m_clipContextSlotsHeapHandle.valid()
         || !m_csgState.m_intervalSampleStateBuffer || !m_csgState.m_intervalSampleStateHeapHandle.valid()
     ){

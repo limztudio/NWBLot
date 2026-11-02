@@ -95,8 +95,6 @@ inline constexpr f32 s_DefaultRasterLineWidth = 1.0f;
 inline constexpr usize s_MeshletPipelineStageReserveCount = 3;
 
 // CPU-side parallel tuning for Vulkan helper paths.
-inline constexpr usize s_CopyHostMemoryParallelThreshold = 1024 * 1024;
-inline constexpr usize s_CopyHostMemoryChunkSize = 256 * 1024;
 inline constexpr usize s_ParallelAdapterThreshold = 4;
 inline constexpr usize s_ParallelCoopVecThreshold = 128;
 inline constexpr usize s_ParallelSpecializationThreshold = 256;

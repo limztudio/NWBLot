@@ -113,7 +113,7 @@ b8 UiProgressSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect
     ProgressOptions options;
     if(!ui.progress("frozen", fraction, options))
         return false;
-    m_declared.rectangles[8u] = StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 32.0f, -16.0f, 32.0f)));
+    m_declared.rectangles[8u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 32.0f, -16.0f, 32.0f)));
     fraction = m_phase ? 0.25 : 0.75;
     m_declared.bits[1u] = BitCast<u64>(fraction);
     options.height = 70.0f;
@@ -129,8 +129,8 @@ b8 UiProgressSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl
     using namespace Impl::Ui;
     auto& ui = context.ui;
     const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 32.0f));
-    m_declared.rectangles[9u] = StoreSmokeRect(content);
-    const Rect clip = StoreSmokeRect(VectorMultiply(content, VectorSet(1.0f, 1.0f, 0.5f, 1.0f)));
+    m_declared.rectangles[9u] = Impl::Ui::StoreRect(content);
+    const Rect clip = Impl::Ui::StoreRect(VectorMultiply(content, VectorSet(1.0f, 1.0f, 0.5f, 1.0f)));
     m_declared.rectangles[10u] = clip;
     context.paint.fillRect(bounds, { 0.07f, 0.13f, 0.2f, 1.0f });
     context.paint.pushClip(clip);
@@ -166,11 +166,11 @@ b8 UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
         return false;
     const Rect& parentBounds = m_parent.placement().bounds;
     m_declared.rectangles[13u] = parentBounds;
-    m_declared.rectangles[11u] = StoreSmokeRect(VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 32.0f)));
+    m_declared.rectangles[11u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 32.0f)));
     if(m_child.isOpen()){
         const Rect& childBounds = m_child.placement().bounds;
         m_declared.rectangles[14u] = childBounds;
-        m_declared.rectangles[12u] = StoreSmokeRect(VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 32.0f)));
+        m_declared.rectangles[12u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 32.0f)));
     }
     return true;
 }

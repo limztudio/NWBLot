@@ -64,7 +64,7 @@ static b8 RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& regis
 
 
 static b8 ExtractEntityDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto entityEntry = ParseCookDependencyEntry<EntityCookEntry, &ParseEntityCookMetadata>(context, s_EntityDiagnosticPrefix);
+    const auto entityEntry = Core::Assets::ParseCookDependencyEntry<EntityCookEntry, &ParseEntityCookMetadata>(context, s_EntityDiagnosticPrefix);
     if(!entityEntry)
         return false;
 
@@ -79,12 +79,13 @@ static b8 RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<EntityCookEntry, EntityAsset, EntityAssetCodec>(
         s_EntityAssetKindLabel,
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return ParseCookMetadataDocument<EntityCookEntry, &ParseEntityCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_EntityDiagnosticPrefix, context.cookArena, context.scratchArena);
+            return Core::Assets::ParseCookMetadataDocument<EntityCookEntry, &ParseEntityCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_EntityDiagnosticPrefix, context.cookArena, context.scratchArena);
         },
         [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
             return ParseEntityCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildEntityAsset,
+        true,
         registry
     );
 }
@@ -94,7 +95,7 @@ static b8 RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
 
 
 static b8 ExtractProjectDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto projectEntry = ParseCookDependencyEntry<ProjectCookEntry, &ParseProjectCookMetadata>(context, s_ProjectDiagnosticPrefix);
+    const auto projectEntry = Core::Assets::ParseCookDependencyEntry<ProjectCookEntry, &ParseProjectCookMetadata>(context, s_ProjectDiagnosticPrefix);
     if(!projectEntry)
         return false;
     return collector.addAssetDependency(projectEntry->startScene.name(), SceneAsset::AssetTypeName());
@@ -104,12 +105,13 @@ static b8 RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ProjectCookEntry, ProjectAsset, ProjectAssetCodec>(
         s_ProjectAssetKindLabel,
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return ParseCookMetadataDocument<ProjectCookEntry, &ParseProjectCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_ProjectDiagnosticPrefix, context.cookArena, context.scratchArena);
+            return Core::Assets::ParseCookMetadataDocument<ProjectCookEntry, &ParseProjectCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_ProjectDiagnosticPrefix, context.cookArena, context.scratchArena);
         },
         [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
             return ParseProjectCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildProjectAsset,
+        true,
         registry
     );
 }
@@ -119,7 +121,7 @@ static b8 RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
 
 
 static b8 ExtractSceneDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto sceneEntry = ParseCookDependencyEntry<SceneCookEntry, &ParseSceneCookMetadata>(context, s_SceneDiagnosticPrefix);
+    const auto sceneEntry = Core::Assets::ParseCookDependencyEntry<SceneCookEntry, &ParseSceneCookMetadata>(context, s_SceneDiagnosticPrefix);
     if(!sceneEntry)
         return false;
 
@@ -153,12 +155,13 @@ static b8 RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SceneCookEntry, SceneAsset, SceneAssetCodec>(
         s_SceneAssetKindLabel,
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return ParseCookMetadataDocument<SceneCookEntry, &ParseSceneCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_SceneDiagnosticPrefix, context.cookArena, context.scratchArena);
+            return Core::Assets::ParseCookMetadataDocument<SceneCookEntry, &ParseSceneCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_SceneDiagnosticPrefix, context.cookArena, context.scratchArena);
         },
         [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
             return ParseSceneCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildSceneAsset,
+        true,
         registry
     );
 }

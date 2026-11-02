@@ -6,7 +6,6 @@
 
 
 #include "asset.h"
-#include "meshlet_triangle_visit.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +36,9 @@ static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 
     Span<const Float2U> uv0Stream,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] inline Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
+    return BuildMeshletTriangleAttributes(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletAttributeRefDeltas(), payload.meshletPrimitiveIndices(), payload.normalStream(), payload.uv0Stream(), scratchArena);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

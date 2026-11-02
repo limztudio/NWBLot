@@ -134,22 +134,8 @@ public:
 
 // Diagnostic counter reuse has an explicit physical-queue contract across frame rejection.
 // Keep ordinary resolve scheduling unchanged when diagnostics are disabled.
-struct RefractionDiagnosticResolveGraphTask{
-    using Payload = RefractionResolveGraphTask::Payload;
-
-
-public:
+struct RefractionDiagnosticResolveGraphTask : RefractionResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute, true };
-
-
-public:
-    static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RefractionResolveGraphTask::Record(payload, commandList, context);
-    }
-
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        RefractionResolveGraphTask::Accepted(payload, token);
-    }
 };
 
 

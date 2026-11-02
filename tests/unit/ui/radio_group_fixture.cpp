@@ -249,28 +249,6 @@ Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcept{
     return item ? UiWidgetTests::Center(item->rectangle) : Point{};
 }
 
-RadioAcceptedFrame RadioGroupFixture::accepted()const noexcept{
-    RadioAcceptedFrame saved;
-    saved.count = m_context.input().targets().size();
-    saved.popupCount = m_context.input().popupCount();
-    saved.generation = m_context.input().layoutGeneration();
-    saved.focus = m_context.input().focus();
-    saved.capture = m_context.input().capture();
-    for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
-        saved.targets[index] = m_context.input().targets()[index];
-    return saved;
-}
-
-void RadioGroupFixture::expectAccepted(const RadioAcceptedFrame& saved, const b8 focus, const b8 popupScopes)const{
-    EXPECT_EQ(m_context.input().layoutGeneration(), saved.generation);
-    if(popupScopes)
-        EXPECT_EQ(m_context.input().popupCount(), saved.popupCount);
-    if(focus)
-        EXPECT_EQ(m_context.input().focus(), saved.focus);
-    EXPECT_EQ(m_context.input().capture(), saved.capture);
-    ExpectAcceptedTargets(m_context.input(), saved.targets, saved.count);
-}
-
 usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept{
     const UiSkinRegion* region = m_skin.findRegion(name);
     if(!region)

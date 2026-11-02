@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/deferred/deferred_graph_private.h>
 #include <impl/ecs_render/deferred/presentation_settings.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
@@ -79,36 +80,14 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!m_deferredState.m_compositeComputeBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(DeferredCompositePushConstants)));
-
-        auto compositeComputeBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
-        if(compositeComputeBindingLayoutResult)
-            m_deferredState.m_compositeComputeBindingLayout = Move(*compositeComputeBindingLayoutResult);
-        else
-            m_deferredState.m_compositeComputeBindingLayout.reset();
-        if(!compositeComputeBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
-            return false;
-        }
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredCompositePushConstants), Core::ShaderType::Compute, m_deferredState.m_compositeComputeBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
+        return false;
     }
 
-    if(!m_deferredState.m_presentBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(DeferredPresentPushConstants)));
-
-        auto presentBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
-        if(presentBindingLayoutResult)
-            m_deferredState.m_presentBindingLayout = Move(*presentBindingLayoutResult);
-        else
-            m_deferredState.m_presentBindingLayout.reset();
-        if(!presentBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
-            return false;
-        }
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredPresentPushConstants), Core::ShaderType::Pixel, m_deferredState.m_presentBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
+        return false;
     }
 
     if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
@@ -135,17 +114,7 @@ b8 RendererDeferredSystem::createDeferredCompositePipeline(){
     if(m_deferredState.m_compositeComputePipeline)
         return true;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_deferredState.m_compositeComputeShader).addBindingLayout(m_deferredState.m_compositeComputeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-
-    auto compositeComputePipelineResult = device.createComputePipeline(pipelineDesc);
-    if(compositeComputePipelineResult)
-        m_deferredState.m_compositeComputePipeline = Move(*compositeComputePipelineResult);
-    else
-        m_deferredState.m_compositeComputePipeline.reset();
-    if(!compositeComputePipelineResult){
+    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), m_deferredState.m_compositeComputeShader, m_deferredState.m_compositeComputeBindingLayout, false, m_deferredState.m_compositeComputePipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute pipeline"));
         return false;
     }

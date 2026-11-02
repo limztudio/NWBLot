@@ -4,8 +4,6 @@
 
 #include "edit_box.h"
 
-
-#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -74,9 +72,8 @@ b8 EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin
                     break;
                 }
                 if(segment->width > 0.0f){
-                    const SIMDVectorSingle segmentOrigin = VectorAdd(VectorSet(segment->x, segment->y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
-                    segment->x = VectorGetX(segmentOrigin);
-                    segment->y = VectorGetY(segmentOrigin);
+                    segment->x += placement.textOrigin.x;
+                    segment->y += placement.textOrigin.y;
                     paint.fillRect(*segment, selection);
                 }
             }
@@ -91,11 +88,7 @@ b8 EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin
                 break;
             }
             if(segment->width > 0.0f){
-                const f32 thickness = Min(placement.caret.width, segment->height);
-                const f32 verticalOffset = placement.textOrigin.y + Max(0.0f, segment->height - thickness);
-                segment->x += placement.textOrigin.x;
-                segment->y += verticalOffset;
-                segment->height = thickness;
+                PlaceEditPreeditUnderline(placement.textOrigin, placement.caret.width, *segment);
                 paint.fillRect(*segment, style.preedit);
             }
         }

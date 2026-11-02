@@ -38,23 +38,18 @@ static_assert(IsTriviallyCopyable_V<MaterialTypedValueData>, "MaterialTypedValue
 
 
 // Parses typed material parameter text such as `float3(1, 0, 0)` into packed component words plus key-hash and type metadata.
-class MaterialTypedValueParser final : NoCopy{
-private:
-    [[nodiscard]] static Expected<f32> ParseMaterialParameterF32Token(AStringView token)noexcept;
-    [[nodiscard]] static Expected<u32> ParseMaterialParameterSignedToken(AStringView token, i64 minValue, i64 maxValue, u32 storageMask)noexcept;
-    [[nodiscard]] static Expected<u32> ParseMaterialParameterUnsignedToken(AStringView token, u64 maxValue)noexcept;
-    [[nodiscard]] static Expected<u32> ParseMaterialParameterToken(AStringView token, MaterialParameterValueType::Enum type)noexcept;
-    template<typename ValueType>
-    [[nodiscard]] static b8 StoreMaterialTypedValueScalar(u32 componentIndex, u32 value, MaterialTypedValueData& outParameter)noexcept(IsArithmetic_V<ValueType>);
-    [[nodiscard]] static b8 StoreMaterialTypedValueComponent(MaterialParameterValueType::Enum valueType, u32 componentIndex, u32 value, MaterialTypedValueData& outParameter)noexcept;
+namespace MaterialTypedValueParser{
 
 
-public:
-    [[nodiscard]] static Expected<MaterialTypedValueData> Parse(AStringView key, AStringView value)noexcept;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-public:
-    MaterialTypedValueParser() = delete;
+[[nodiscard]] Expected<MaterialTypedValueData> Parse(AStringView key, AStringView value)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

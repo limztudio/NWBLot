@@ -25,7 +25,9 @@ NWB_IMPL_BEGIN
 
 inline constexpr TStringView s_SubsystemAssetKindLabel = NWB_TEXT("subsystem");
 inline constexpr TStringView s_SubsystemLoadBinaryContext = NWB_TEXT("ISubsystem::loadBinary");
+#if defined(NWB_COOK)
 inline constexpr TStringView s_SubsystemSerializeContext = NWB_TEXT("SubsystemAssetCodec::serialize");
+#endif
 inline constexpr TStringView s_SubsystemDepsPayloadLabel = NWB_TEXT("subsystems");
 inline constexpr TStringView s_SubsystemFieldCountsPayloadLabel = NWB_TEXT("field_counts");
 inline constexpr TStringView s_SubsystemAssetsPayloadLabel = NWB_TEXT("assets");
@@ -205,7 +207,7 @@ public:
     [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(const usize index)const noexcept override{
         const auto descriptors = FieldDescriptors();
         NWB_ASSERT(index < descriptors.size());
-        return MakeSubsystemFieldValueDescriptor(descriptors[index].fieldName, descriptors[index].expectedAssetType, descriptors[index].isArray);
+        return SubsystemFieldValueDescriptor(descriptors[index].fieldName, descriptors[index].expectedAssetType, descriptors[index].isArray);
     }
 
     [[nodiscard]] virtual usize fieldValueCount(const usize index)const noexcept override{
@@ -242,8 +244,6 @@ TypedSubsystem<SubsystemT>::~TypedSubsystem()noexcept = default;
 
 using SubsystemInstanceFactory = Core::Assets::PolymorphicAssetInstanceFactory<ISubsystem>;
 using SubsystemTypeAutoRegistrar = Core::Assets::PolymorphicAssetTypeAutoRegistrar<ISubsystem>;
-
-[[nodiscard]] const ISubsystem* CastSubsystem(const Core::Assets::IAsset* asset)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/components.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 
 
@@ -39,72 +40,6 @@ class RayTracingOpticalInstanceGpu{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class OpticalWorldBoundsData{
-    public f32x4 minimum(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 maximum(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
-b8 TryComputeOpticalWorldBounds(in f32x4 row0, in f32x4 row1, in f32x4 row2, in f32x4 localMin, in f32x4 localMax, mut OpticalWorldBoundsData outBounds){
-    outBounds = OpticalWorldBoundsData();
-    b8 valid = false;
-    native(in row0, in row1, in row2, in localMin, in localMax, mut outBounds, mut valid){
-        constexpr f64 s_UnitRoundoff = 0x1p-24;
-        constexpr f64 s_TransformError = (8.0 * s_UnitRoundoff) / (1.0 - 8.0 * s_UnitRoundoff);
-        constexpr f64 s_UnderflowMargin = 8.0 * 0x1p-126;
-        const SIMDVectorSingle localMinVec = VectorAndInt(LoadFloat(localMin), s_SIMDMask3);
-        const SIMDVectorSingle localMaxVec = VectorAndInt(LoadFloat(localMax), s_SIMDMask3);
-        if(VectorIsFinite(localMinVec, VectorComponentMask::s_XYZ) && VectorIsFinite(localMaxVec, VectorComponentMask::s_XYZ) && Vector3LessOrEqual(localMinVec, localMaxVec)){
-            const SIMDVectorSingle row0Vec = LoadFloat(row0);
-            const SIMDVectorSingle row1Vec = LoadFloat(row1);
-            const SIMDVectorSingle row2Vec = LoadFloat(row2);
-            if(VectorIsFinite(row0Vec, VectorComponentMask::s_XYZW) && VectorIsFinite(row1Vec, VectorComponentMask::s_XYZW) && VectorIsFinite(row2Vec, VectorComponentMask::s_XYZW)){
-                const SIMDMatrix columns = MatrixTranspose(SIMDMatrix{ .v = { row0Vec, row1Vec, row2Vec, VectorZero() } });
-                SIMDVectorSingle laneMin = VectorReplicate(Limit<f32>::s_Infinity);
-                SIMDVectorSingle laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
-                SIMDVectorSingle laneMagnitude = VectorZero();
-                constexpr u32 s_BoxCornerCount = 8u;
-                constexpr u32 s_CornerMaxXBit = 1u;
-                constexpr u32 s_CornerMaxYBit = 2u;
-                constexpr u32 s_CornerMaxZBit = 4u;
-                b8 cornersFinite = true;
-                for(u32 corner = 0u; corner < s_BoxCornerCount; ++corner){
-                    const SIMDVectorSingle selectX = ((corner & s_CornerMaxXBit) != 0u) ? localMaxVec : localMinVec;
-                    const SIMDVectorSingle selectY = ((corner & s_CornerMaxYBit) != 0u) ? localMaxVec : localMinVec;
-                    const SIMDVectorSingle selectZ = ((corner & s_CornerMaxZBit) != 0u) ? localMaxVec : localMinVec;
-                    SIMDVectorSingle point = VectorSelect(selectX, selectY, s_SIMDMaskY);
-                    point = VectorSelect(point, selectZ, s_SIMDMaskZ);
-                    const SIMDVectorSingle x = VectorSplatX(point);
-                    const SIMDVectorSingle y = VectorSplatY(point);
-                    const SIMDVectorSingle z = VectorSplatZ(point);
-                    SIMDVectorSingle cornerVec = VectorMultiply(columns.v[0], x);
-                    cornerVec = VectorMultiplyAdd(columns.v[1], y, cornerVec);
-                    cornerVec = VectorMultiplyAdd(columns.v[2], z, cornerVec);
-                    cornerVec = VectorAdd(cornerVec, columns.v[3]);
-                    if(!VectorIsFinite(cornerVec, VectorComponentMask::s_XYZ)){
-                        cornersFinite = false;
-                        break;
-                    }
-                    laneMin = VectorMin(laneMin, cornerVec);
-                    laneMax = VectorMax(laneMax, cornerVec);
-                    laneMagnitude = VectorMax(laneMagnitude, VectorAbs(cornerVec));
-                }
-                if(cornersFinite){
-                    const SIMDVectorSingle magnitudeSum = VectorAdd(VectorAdd(VectorSplatX(laneMagnitude), VectorSplatY(laneMagnitude)), VectorSplatZ(laneMagnitude));
-                    const SIMDVectorSingle marginVec = VectorAdd(VectorMultiply(VectorReplicate(static_cast<f32>(s_TransformError)), magnitudeSum), VectorReplicate(static_cast<f32>(s_UnderflowMargin)));
-                    const SIMDVectorSingle minimum = VectorSubtract(laneMin, marginVec);
-                    const SIMDVectorSingle maximum = VectorAdd(laneMax, marginVec);
-                    if(VectorIsFinite(minimum, VectorComponentMask::s_XYZ) && VectorIsFinite(maximum, VectorComponentMask::s_XYZ)){
-                        StoreFloat(VectorAndInt(minimum, s_SIMDMask3), outBounds.minimum);
-                        StoreFloat(VectorAndInt(maximum, s_SIMDMask3), outBounds.maximum);
-                        valid = true;
-                    }
-                }
-            }
-        }
-    }
-    return valid;
-}
-
 const usize s_OpticalBoundsUseCapacity = 8u;
 
 [serialize]
@@ -136,13 +71,67 @@ OpticalBoundsFinalizePushConstants ResolveOpticalBoundsFinalizePushConstants(
     return push;
 }
 
+const usize s_MinCoincidentCandidateCount = 2u;
+
+// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
+class CoincidentOpticalVolumeCandidate{
+    public AssetRef<Mesh> mesh;
+    public AssetRef<Material> material;
+    public f32x4 position = f32x4(0.f, 0.f, 0.f, 0.f);
+    public f32x4 rotation = f32x4(0.f, 0.f, 0.f, 1.f);
+    public f32x4 scale = f32x4(1.f, 1.f, 1.f, 0.f);
+    public Span<u8> mutableTypedBytes;
+    public Name group = s_NameNone;
+    public EntityID entity = s_InvalidEntityId;
+    public i32 priority = 0;
+    // Identical-material grouping also requires the same authored medium semantics.
+    public u32 boundaryMode = 0u;
+    public i32 mediumPriority = 0;
+}
+
+b8 ValidCoincidentOpticalVolumeCandidateLanes(in f32x4 position, in f32x4 rotation, in f32x4 scale){
+    if(
+        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
+        || !isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w)
+        || !isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z)
+    )
+        return false;
+    const b8 scaleNonzero = scale.x != 0.f && scale.y != 0.f && scale.z != 0.f;
+    const b8 rotationNonzero = rotation.x != 0.f || rotation.y != 0.f || rotation.z != 0.f || rotation.w != 0.f;
+    return scaleNonzero && rotationNonzero;
+}
+
+b8 ValidCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate candidate){
+    if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
+        return false;
+    return ValidCoincidentOpticalVolumeCandidateLanes(candidate.position, candidate.rotation, candidate.scale);
+}
+
+b8 RendererComponentOpticalVolumeMergingEnabled(in RendererComponent renderer){
+    return
+        renderer.visible
+        && (
+            renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial
+            || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone)
+        )
+    ;
+}
+
+b8 OpticalBoundaryModeIsClosed(in OpticalBoundaryMode mode){
+    return mode == OpticalBoundaryMode::ClosedNested || mode == OpticalBoundaryMode::ClosedPriority;
+}
+
+b8 CoincidentOpticalVolumeCandidateOutranks(in CoincidentOpticalVolumeCandidate candidate, in CoincidentOpticalVolumeCandidate previous){
+    return candidate.priority > previous.priority || (candidate.priority == previous.priority && candidate.entity.id < previous.entity.id);
+}
+
 b8 CoincidentOpticalVolumeTransformsEqual(
-    in f32x3u lhsPosition,
-    in f32x4u lhsRotation,
-    in f32x3u lhsScale,
-    in f32x3u rhsPosition,
-    in f32x4u rhsRotation,
-    in f32x3u rhsScale
+    in f32x4 lhsPosition,
+    in f32x4 lhsRotation,
+    in f32x4 lhsScale,
+    in f32x4 rhsPosition,
+    in f32x4 rhsRotation,
+    in f32x4 rhsScale
 ){
     return
         lhsPosition.x == rhsPosition.x

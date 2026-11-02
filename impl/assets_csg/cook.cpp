@@ -10,8 +10,6 @@
 
 #include "cook.h"
 
-#include <impl/assets_csg/shape_id.adhd.h>
-
 #include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
@@ -46,34 +44,17 @@ using Core::Assets::ScratchString;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<AStringView> ParseOptionalStringField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView fieldName){
-    AStringView text;
-    b8 present = false;
-    auto textResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, fieldName, false);
+[[nodiscard]] static Expected<AStringView> ParseStringField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView fieldName, const b8 required){
+    auto textResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, fieldName, required);
     if(!textResult)
         return MakeUnexpected(Failure{});
-    text = textResult->text;
-    present = textResult->present;
-    if(!present)
+    if(!textResult->present)
         return AStringView{};
-    if(TrimView(text).empty()){
+    if(TrimView(textResult->text).empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
-    return text;
-}
-
-[[nodiscard]] static Expected<AStringView> ParseRequiredStringField(const Path& nwbFilePath, const Metascript::Value& asset, const AStringView fieldName){
-    AStringView text;
-    auto textResultValue = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, fieldName, true);
-    if(!textResultValue)
-        return MakeUnexpected(Failure{});
-    text = textResultValue->text;
-    if(TrimView(text).empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    return text;
+    return textResult->text;
 }
 
 [[nodiscard]] static b8 ValidateIncludePath(const Path& nwbFilePath, const AStringView fieldName, const AStringView includePath, ScratchArena& scratchArena){
@@ -219,11 +200,11 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
     if(!shaderModuleResult)
         return MakeUnexpected(Failure{});
     entry.shaderModule = *shaderModuleResult;
-    const auto evalInclude = ParseRequiredStringField(nwbFilePath, asset, s_CsgEvalField);
+    const auto evalInclude = ParseStringField(nwbFilePath, asset, s_CsgEvalField, true);
     if(!evalInclude)
         return MakeUnexpected(Failure{});
     entry.evalInclude = *evalInclude;
-    const auto moduleInclude = ParseOptionalStringField(nwbFilePath, asset, s_CsgModuleIncludeField);
+    const auto moduleInclude = ParseStringField(nwbFilePath, asset, s_CsgModuleIncludeField, false);
     if(!moduleInclude)
         return MakeUnexpected(Failure{});
     entry.moduleInclude = *moduleInclude;

@@ -88,7 +88,7 @@ inline constexpr char s_JsonRecordClose = '}';
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Telemetry::PerfMemoryPayload& payload)noexcept{
+void AddTelemetryMemorySummary(const Core::Telemetry::PerfMemoryPayload& payload, TelemetryReportSummary& summary)noexcept{
     const usize sourceIndex = static_cast<usize>(payload.snapshot.source);
     NWB_ASSERT(sourceIndex < s_TelemetryMemorySourceCount);
 
@@ -108,7 +108,7 @@ void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Tele
     }
 }
 
-void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& out, const TelemetryReportSummary& summary){
+void AppendTelemetryMemorySourcesJson(const TelemetryReportSummary& summary, AString<Core::Telemetry::TelemetryArena>& out){
     out += __hidden_memory_report::s_MemorySourcesSectionHeader;
     for(usize sourceIndex = 0u; sourceIndex < s_TelemetryMemorySourceCount; ++sourceIndex){
         const auto memorySource = static_cast<Core::Perf::MemorySource::Enum>(sourceIndex);
@@ -128,14 +128,14 @@ void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& 
     out += __hidden_memory_report::s_MemorySourcesSectionFooter;
 }
 
-void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, const Core::Telemetry::PerfMemoryPayload& payload, const u32 streamId){
+void AppendTelemetryMemoryRecordJson(const Core::Telemetry::PerfMemoryPayload& payload, const u32 streamId, AString<Core::Alloc::ScratchArena>& out){
     if(!out.empty())
         out += __hidden_memory_report::s_MemoryRecordSeparator;
     out += __hidden_memory_report::s_MemoryRecordOpen;
     AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(payload.snapshot.source));
     out += __hidden_memory_report::s_MemoryRecordPeakBasisKey;
     AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(payload.snapshot.source));
-    Array<char, NameDetail::s_DebugHashTextLength + 1u> identityText;
+    Array<char, s_DebugHashTextLength + 1u> identityText;
     const AStringView identity = TelemetryReportDetail::FormatNameIdentityText(payload.scopeName, identityText);
     Array<char, Core::Common::NameSymbols::s_MaxResolvedTextLength> resolvedText;
     AStringView scopeText = payload.scopeText;

@@ -319,7 +319,7 @@ b8 TextureAssetLoader::Load(const Core::Assets::AssetRef<Texture>& textureAsset,
     return Create(*loadedTexture, debugName, ownerName, graphics, outResource);
 }
 
-void TextureAssetLoader::Release(TextureGpuResource& inOutResource, Core::GraphicsRuntime& graphics){
+void TextureAssetLoader::Release(Core::GraphicsRuntime& graphics, TextureGpuResource& inOutResource){
     if(inOutResource.sampledImageHeapHandle.valid()){
         Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
         if(heap.isInitialized())

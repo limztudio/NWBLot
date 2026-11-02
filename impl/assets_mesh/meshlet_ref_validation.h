@@ -47,26 +47,31 @@ consteval b8 AttributeSkinsIsNothrow()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshMeshletRefValidation final : NoCopy{
-public:
-    template<
-        typename AttributeSkinContainer,
-        typename ConflictHandler,
-        typename UnreferencedHandler
-    >
-    [[nodiscard]] static b8 ResolveMeshletAttributeSkins(
-        Span<const MeshletDesc> meshlets,
-        Span<const MeshletPositionStreamRef> positionRefs,
-        Span<const MeshletLocalVertexRef> localVertexRefs,
-        const usize attributeCount,
-        ConflictHandler onConflict,
-        UnreferencedHandler onUnreferenced,
-        AttributeSkinContainer& outAttributeSkins
-    )noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, ConflictHandler, UnreferencedHandler>());
+namespace MeshMeshletRefValidation{
 
 
-public:
-    MeshMeshletRefValidation() = delete;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<
+    typename AttributeSkinContainer,
+    typename ConflictHandler,
+    typename UnreferencedHandler
+>
+[[nodiscard]] b8 ResolveMeshletAttributeSkins(
+    Span<const MeshletDesc> meshlets,
+    Span<const MeshletPositionStreamRef> positionRefs,
+    Span<const MeshletLocalVertexRef> localVertexRefs,
+    usize attributeCount,
+    ConflictHandler onConflict,
+    UnreferencedHandler onUnreferenced,
+    AttributeSkinContainer& outAttributeSkins
+)noexcept(MeshletRefValidationExceptionDetail::AttributeSkinsIsNothrow<AttributeSkinContainer, ConflictHandler, UnreferencedHandler>());
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

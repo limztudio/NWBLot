@@ -6,13 +6,40 @@
 
 
 #include "edit_box_state.h"
-#include "text_area_scroll_state.h"
+#include "scrollbar.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Owns copied scroll admission, separate from preferred-column navigation and the application model.
+class TextAreaScrollState final{
+    friend class Builder;
+    friend class TextAreaState;
+
+
+private:
+    [[nodiscard]] ControlToken prepare(const WidgetState& widget, const PopupToken& popup, u64 stateGeneration, u64 stateRevision, const EditModel& model, b8 enabled, b8 readOnly, const ScrollViewportPlacement& placement, Point step)noexcept;
+    void retire()noexcept;
+
+
+private:
+    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
+
+
+private:
+    TextAreaScrollSnapshot m_snapshot;
+    ScrollViewportPlacement m_placement;
+    Point m_step;
+    u64 m_revision = 1u;
+    b8 m_prepared = false;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,7 +79,7 @@ public:
 
 
 private:
-    void advanceRevision()noexcept;
+    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
 
 
 private:

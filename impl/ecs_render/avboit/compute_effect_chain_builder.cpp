@@ -23,34 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-}
-
-void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->discardRecording(payload.timingAttribution);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_avboit_compute_effect_chain_builder{
 
 
@@ -87,7 +59,7 @@ namespace __hidden_avboit_compute_effect_chain_builder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDepthWarp(const AvboitDepthWarpStageInputs& inputs){
+Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDepthWarp(const AvboitDepthWarpStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
     AvboitDepthWarpStageResult result{};
 
@@ -139,7 +111,7 @@ namespace __hidden_avboit_compute_effect_chain_builder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationStageInputs& inputs){
+b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
 
     if(!inputs.extinctionTask.valid())

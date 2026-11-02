@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <gtest/gtest.h>
 

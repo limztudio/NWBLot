@@ -37,16 +37,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAsse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Skeleton::setJoints(JointVector&& joints, JointIndexMap&& jointIndices)noexcept{
-    m_joints = Move(joints);
-    m_jointIndices = Move(jointIndices);
-}
-
-u32 Skeleton::findJointIndex(const Name jointName)const noexcept{
-    const auto foundJoint = m_jointIndices.find(jointName);
-    return foundJoint != m_jointIndices.end() ? foundJoint.value() : s_SkeletonInvalidJointIndex;
-}
-
 b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;

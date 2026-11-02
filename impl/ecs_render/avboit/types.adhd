@@ -21,12 +21,6 @@ enum<u8> AvboitGeometryPhase{
     Accumulation = 2u
 }
 
-enum<u8> AvboitMaterialUploadPhase{
-    Occupancy = 0u,
-    Extinction = 1u,
-    Accumulation = 2u
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -75,40 +69,6 @@ class AvboitRasterRecordPhaseDesc{
     public Name rasterIdentity = s_NameNone;
     public StringView rasterLabel = "";
     public usize resourceBaseCapacity = s_AvboitResourceBaseCount;
-}
-
-AvboitRasterRecordPhaseDesc MakeAvboitRasterRecordPhaseDesc(
-    in Name regularOutputSetIdentity,
-    in StringView regularOutputSetLabel,
-    in Name csgOutputSetIdentity,
-    in StringView csgOutputSetLabel,
-    in StringView sharedOutputLabel,
-    in Name regularComputeEmulationIdentity,
-    in StringView regularComputeEmulationLabel,
-    in Name csgComputeEmulationIdentity,
-    in StringView csgComputeEmulationLabel,
-    in Span<Name> sharedPhaseIdentities,
-    in Span<StringView> sharedPhaseLabels,
-    in Name rasterIdentity,
-    in StringView rasterLabel,
-    in usize resourceBaseCapacity
-){
-    AvboitRasterRecordPhaseDesc desc;
-    desc.regularOutputSetIdentity = regularOutputSetIdentity;
-    desc.regularOutputSetLabel = regularOutputSetLabel;
-    desc.csgOutputSetIdentity = csgOutputSetIdentity;
-    desc.csgOutputSetLabel = csgOutputSetLabel;
-    desc.sharedOutputLabel = sharedOutputLabel;
-    desc.regularComputeEmulationIdentity = regularComputeEmulationIdentity;
-    desc.regularComputeEmulationLabel = regularComputeEmulationLabel;
-    desc.csgComputeEmulationIdentity = csgComputeEmulationIdentity;
-    desc.csgComputeEmulationLabel = csgComputeEmulationLabel;
-    desc.sharedPhaseIdentities = sharedPhaseIdentities;
-    desc.sharedPhaseLabels = sharedPhaseLabels;
-    desc.rasterIdentity = rasterIdentity;
-    desc.rasterLabel = rasterLabel;
-    desc.resourceBaseCapacity = resourceBaseCapacity;
-    return desc;
 }
 
 const u32 s_AvboitResolutionBucketPixels = 64u;
@@ -314,10 +274,10 @@ const StringView s_AvboitOccupancyCutterUploadLabel = "AVBOIT Occupancy CSG Cutt
 const Name s_AvboitOccupancyClipUploadIdentity = "render.avboit.occupancy.csg_clip_context_slots_upload";
 const StringView s_AvboitOccupancyClipUploadLabel = "AVBOIT Occupancy CSG Clip Context Slots Upload";
 
-AvboitMaterialUploadIdentities ResolveAvboitMaterialUploadIdentities(in AvboitMaterialUploadPhase phase){
+AvboitMaterialUploadIdentities ResolveAvboitMaterialUploadIdentities(in AvboitGeometryPhase phase){
     AvboitMaterialUploadIdentities identities;
     switch(phase){
-    case AvboitMaterialUploadPhase::Extinction:
+    case AvboitGeometryPhase::Extinction:
         identities.instanceIdentity = s_AvboitExtinctionInstanceUploadIdentity;
         identities.instanceLabel = s_AvboitExtinctionInstanceUploadLabel;
         identities.typedIdentity = s_AvboitExtinctionTypedUploadIdentity;
@@ -329,7 +289,7 @@ AvboitMaterialUploadIdentities ResolveAvboitMaterialUploadIdentities(in AvboitMa
         identities.clipIdentity = s_AvboitExtinctionClipUploadIdentity;
         identities.clipLabel = s_AvboitExtinctionClipUploadLabel;
         return identities;
-    case AvboitMaterialUploadPhase::Accumulation:
+    case AvboitGeometryPhase::Accumulation:
         identities.instanceIdentity = s_AvboitAccumulationInstanceUploadIdentity;
         identities.instanceLabel = s_AvboitAccumulationInstanceUploadLabel;
         identities.typedIdentity = s_AvboitAccumulationTypedUploadIdentity;
@@ -341,7 +301,7 @@ AvboitMaterialUploadIdentities ResolveAvboitMaterialUploadIdentities(in AvboitMa
         identities.clipIdentity = s_AvboitAccumulationClipUploadIdentity;
         identities.clipLabel = s_AvboitAccumulationClipUploadLabel;
         return identities;
-    case AvboitMaterialUploadPhase::Occupancy:
+    case AvboitGeometryPhase::Occupancy:
     default:
         identities.instanceIdentity = s_AvboitOccupancyInstanceUploadIdentity;
         identities.instanceLabel = s_AvboitOccupancyInstanceUploadLabel;

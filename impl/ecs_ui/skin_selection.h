@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_ui/components.adhd.h>
+#include <impl/ecs_ui/skin_selection.adhd.h>
 
 #include <core/assets/ref.h>
 
@@ -43,34 +43,6 @@ template<typename TTryBind>
         return UiSkinSelectionResult::Failed;
     state.selected = basicSkin;
     return UiSkinSelectionResult::DefaultFallback;
-}
-
-template<typename TTryBind>
-[[nodiscard]] UiSkinChangeResult::Enum ApplyUiSkinSelectionChangeIfReady(
-    UiSkinSelectionState& state,
-    const b8 resourcesReady,
-    const b8 gpuFramePending,
-    const b8 layoutPending,
-    const Core::Assets::AssetRef<UiSkin>& basicSkin,
-    TTryBind&& tryBind
-)noexcept(noexcept(static_cast<b8>(!tryBind(basicSkin, DeclVal<const u64&>())))){
-    if(!state.changePending || !resourcesReady || gpuFramePending || layoutPending)
-        return UiSkinChangeResult::Deferred;
-    state.changePending = false;
-    const Core::Assets::AssetRef<UiSkin> candidate = state.requestedChange.valid() ? state.requestedChange : basicSkin;
-    if(!state.selected.valid() || !candidate.valid() || state.generation == Limit<u64>::s_Max){
-        state.changeFailed = true;
-        return UiSkinChangeResult::Failed;
-    }
-    const u64 nextGeneration = state.generation + 1u;
-    if(!tryBind(candidate, nextGeneration)){
-        state.changeFailed = true;
-        return UiSkinChangeResult::Failed;
-    }
-    state.selected = candidate;
-    state.generation = nextGeneration;
-    state.changeFailed = false;
-    return UiSkinChangeResult::Applied;
 }
 
 

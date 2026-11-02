@@ -79,38 +79,29 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
         const Name& preferred = !item.enabled ? item.style.buttonDisabled : pressed ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
         const UiSkinRegion* skinRegion = region(preferred, item.style.button);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, box.rectangle);
-        const SIMDVectorSingle content = InsetRectValue(LoadRect(box.rectangle), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
-        textClip = StoreRect(content);
-        const SIMDVectorSingle remaining = VectorScale(VectorSubtract(VectorSwizzle<2, 3, 2, 3>(content), VectorSet(measured.x, measured.y, 0.0f, 0.0f)), 0.5f);
-        const SIMDVectorSingle centered = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
-        const SIMDVectorSingle textOrigin = VectorAdd(content, centered);
-        origin = { VectorGetX(textOrigin), VectorGetY(textOrigin) };
+        textClip = StoreRect(InsetRectValue(LoadRect(box.rectangle), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom)));
+        origin = ResolveCenteredTextOrigin(textClip, Max(0.0f, (textClip.width - measured.x) * s_RectCenterFraction), measured.y);
     }
     else if(item.state.kind == WidgetKind::Checkbox){
         const Name& preferred = !item.enabled ? item.style.checkboxDisabled : item.checked ? item.style.checkboxChecked : hover ? item.style.checkboxHover : item.style.checkbox;
         const UiSkinRegion* skinRegion = region(preferred, item.style.checkbox);
-        const SIMDVectorSingle centered = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorReplicate(box.rectangle.height), VectorSet(item.checkboxExtent, measured.y, 0.0f, 0.0f)), s_RectCenterFraction));
-        const SIMDVectorSingle squareOrigin = VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorAndInt(VectorSplatX(centered), s_SIMDMaskY));
-        const Rect square{ VectorGetX(squareOrigin), VectorGetY(squareOrigin), item.checkboxExtent, item.checkboxExtent };
+        const f32 squareOffsetY = Max(0.0f, (box.rectangle.height - item.checkboxExtent) * s_RectCenterFraction);
+        const Rect square{ origin.x, origin.y + squareOffsetY, item.checkboxExtent, item.checkboxExtent };
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, square);
         if(painted && item.checked && m_skin->findRegion(item.style.checkboxMark)){
-            const SIMDVectorSingle inset = VectorScale(VectorReplicate(item.checkboxExtent), s_CheckmarkInsetFraction);
+            const f32 inset = item.checkboxExtent * s_CheckmarkInsetFraction;
             const Color tint = item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha };
-            const SIMDVectorSingle markOrigin = VectorAdd(VectorSet(square.x, square.y, 0.0f, 0.0f), inset);
-            const SIMDVectorSingle markSize = VectorNegativeMultiplySubtractExpression(VectorReplicate(s_CheckmarkInsetSides), inset, VectorSet(square.width, square.height, square.width, square.height));
-            const SIMDVectorSingle mark = VectorPermute<0, 1, 4, 5>(markOrigin, markSize);
-            painted = m_paint.drawRegion(item.style.checkboxMark, StoreRect(mark), tint);
+            const f32 markExtent = item.checkboxExtent - (s_CheckmarkInsetSides * inset);
+            painted = m_paint.drawRegion(item.style.checkboxMark, { square.x + inset, square.y + inset, markExtent, markExtent }, tint);
         }
-        const SIMDVectorSingle textOffset = VectorAdd(VectorSelect(centered, VectorReplicate(item.checkboxExtent), s_SIMDMaskX), VectorSet(item.style.gap, 0.0f, 0.0f, 0.0f));
-        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), textOffset);
-        origin = { VectorGetX(textOrigin), VectorGetY(textOrigin) };
-        const f32 clipWidth = Max(0.0f, box.rectangle.width - VectorGetX(textOffset));
+        const f32 textOffsetX = item.checkboxExtent + item.style.gap;
+        origin = ResolveCenteredTextOrigin(box.rectangle, textOffsetX, measured.y);
+        const f32 clipWidth = Max(0.0f, box.rectangle.width - textOffsetX);
         textClip = { origin.x, box.rectangle.y, clipWidth, box.rectangle.height };
     }
     if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
         painted = m_paint.drawRegion(item.style.focus, box.rectangle);
-    const SIMDVectorSingle alignedOrigin = VectorSubtract(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(item.textBounds.x, item.textBounds.y, 0.0f, 0.0f));
-    origin = { VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
+    origin = { origin.x - item.textBounds.x, origin.y - item.textBounds.y };
     m_paint.pushClip(textClip);
     if(painted)
         painted = m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);

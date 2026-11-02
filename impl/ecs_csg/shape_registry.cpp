@@ -59,13 +59,6 @@ namespace __hidden_shape_registry{
     return ValidShaderModuleInclude(desc);
 }
 
-[[nodiscard]] b8 ValidBoundsVectors(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const b8 finiteBounds)noexcept{
-    if(!finiteBounds)
-        return true;
-
-    return AabbTests::Valid(minBounds, maxBounds);
-}
-
 [[nodiscard]] Expected<Span<const u8>> ResolveShapeParameterBytes(const CsgShapeTypeInfo& shapeType, Span<const u8> parameterBytes)noexcept{
     if(parameterBytes.empty() && !parameterBytes.data() && !shapeType.desc.defaultParameterBytes.empty())
         parameterBytes = Span<const u8>(shapeType.desc.defaultParameterBytes.data(), shapeType.desc.defaultParameterBytes.size());
@@ -81,7 +74,7 @@ namespace __hidden_shape_registry{
         return MakeUnexpected(Failure{});
 
     auto bounds = shapeType.desc.boundsCallback(shapeToWorld, *resolvedBytes);
-    if(!bounds || !ValidBoundsVectors(bounds->minBounds, bounds->maxBounds, bounds->finiteBounds))
+    if(!bounds || (bounds->finiteBounds && !AabbTests::Valid(bounds->minBounds, bounds->maxBounds)))
         return MakeUnexpected(Failure{});
     return bounds;
 }
@@ -94,7 +87,10 @@ namespace __hidden_shape_registry{
     if(!resolvedBytes)
         return MakeUnexpected(Failure{});
 
-    return shapeType.desc.signedDistanceCallback(shapePosition, *resolvedBytes);
+    Float4 shapePositionFloat4;
+    StoreFloat(shapePosition, shapePositionFloat4);
+    const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(*resolvedBytes);
+    return shapeType.desc.signedDistanceCallback(shapePositionFloat4, parameters);
 }
 
 
@@ -106,13 +102,6 @@ namespace __hidden_shape_registry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName)noexcept{
-    CsgShapeTypeId typeId = s_InvalidCsgShapeTypeId;
-    if(!TryResolveCsgShapeTypeIdFromName(shapeName, typeId))
-        return MakeUnexpected(Failure{});
-    return typeId;
-}
 
 Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
     if(!localBounds.finiteBounds)
@@ -134,12 +123,11 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
     if(!__hidden_shape_registry::ValidShapeTypeDesc(desc))
         return MakeUnexpected(Failure{});
 
-    const Expected<CsgShapeTypeId> canonicalIdResult = CsgShapeTypeIdFromName(desc.name);
-    if(!canonicalIdResult){
+    CsgShapeTypeId canonicalId = s_InvalidCsgShapeTypeId;
+    if(!TryResolveCsgShapeTypeIdFromName(desc.name, canonicalId)){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id"), ConvertString(desc.name.resolvedText()));
         return MakeUnexpected(Failure{});
     }
-    const CsgShapeTypeId canonicalId = *canonicalIdResult;
 
     ScopedLock lock(m_mutex);
 
@@ -308,5 +296,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

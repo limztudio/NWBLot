@@ -18,14 +18,14 @@ NWB_CORE_BEGIN
 
 u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u32& previous)noexcept{
     previous = TaskHandle::s_InvalidIndex;
-    if(m_nodes[m_ready[queue].head].scope == &wait.m_scope)
+    if(m_nodes[m_ready[queue].head].scope == &wait.scope)
         return m_ready[queue].head;
-    if(wait.m_publicationGeneration != m_scopePublicationGeneration){
-        for(TaskHandle& anchor : wait.m_unrelatedAnchors)
+    if(wait.publicationGeneration != m_scopePublicationGeneration){
+        for(TaskHandle& anchor : wait.unrelatedAnchors)
             anchor = {};
-        wait.m_publicationGeneration = m_scopePublicationGeneration;
+        wait.publicationGeneration = m_scopePublicationGeneration;
     }
-    TaskHandle& anchor = wait.m_unrelatedAnchors[queue];
+    TaskHandle& anchor = wait.unrelatedAnchors[queue];
     if(const TaskNode* const node = resolveLocked(anchor)){
         if(node->state == TaskState::Ready && QueueIndex(node->options) == queue)
             previous = anchor.index;
@@ -53,10 +53,10 @@ void CpuTaskScheduler::invalidateScopeSearchLocked(const b8 publication)noexcept
 }
 
 b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
-    if(m_nodes[index].scope == &wait.m_scope)
+    if(m_nodes[index].scope == &wait.scope)
         return true;
-    if(m_scopeSearchIdentity != wait.m_scopeIdentity){
-        m_scopeSearchIdentity = wait.m_scopeIdentity;
+    if(m_scopeSearchIdentity != wait.scopeIdentity){
+        m_scopeSearchIdentity = wait.scopeIdentity;
         invalidateScopeSearchLocked(false);
     }
     // Downstream completion still waits for this live prerequisite, so retirement cannot invalidate a proven path.
@@ -76,7 +76,7 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
     for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
         const u32 current = m_searchStack[cursor];
         const TaskNode& node = m_nodes[current];
-        if(node.scope == &wait.m_scope || m_scopeContributionVisits[current] == positiveStamp){
+        if(node.scope == &wait.scope || m_scopeContributionVisits[current] == positiveStamp){
             m_scopeContributionVisits[current] = positiveStamp;
             const auto positive = [this, positiveStamp](const TaskHandle handle)noexcept{
                 return resolveLocked(handle) && m_scopeContributionVisits[handle.index] == positiveStamp;
@@ -85,7 +85,7 @@ b8 CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& 
             for(usize previous = cursor; previous != 0u;){
                 const u32 ancestorIndex = m_searchStack[--previous];
                 const TaskNode& ancestor = m_nodes[ancestorIndex];
-                if(ancestor.scope == &wait.m_scope || positive(ancestor.parent)){
+                if(ancestor.scope == &wait.scope || positive(ancestor.parent)){
                     m_scopeContributionVisits[ancestorIndex] = positiveStamp;
                     continue;
                 }

@@ -4,6 +4,7 @@
 
 #include "feedback_resources.h"
 
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -19,17 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(const u32 width, const u32 height)noexcept{
-    ReflectionFeedbackExtent extent;
-    if(!TryComputeReflectionFeedbackExtent(width, height, extent))
-        return MakeUnexpected(Failure{});
-    return extent;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererReflectionFeedback::invalidateResources(){
     if(m_control)
         m_control->reset(0u);
@@ -39,12 +29,11 @@ void RendererReflectionFeedback::invalidateResources(){
 }
 
 b8 RendererReflectionFeedback::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings, const b8 enabled){
-    const Expected<ReflectionFeedbackExtent> extentResult = ComputeReflectionFeedbackExtent(width, height);
-    if(!extentResult){
+    ReflectionFeedbackExtent extent;
+    if(!TryComputeReflectionFeedbackExtent(width, height, extent)){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
         return false;
     }
-    const ReflectionFeedbackExtent& extent = *extentResult;
     auto& device = m_graphics.getDevice();
     const u16 deviceGeneration = device.getDeviceGeneration();
     if(!m_control){
@@ -118,19 +107,12 @@ Expected<ReflectionFeedbackBinding> RendererReflectionFeedback::prepareBank(cons
         return MakeUnexpected(Failure{});
     }
     Core::BufferHandle buffer = Move(*bufferResult);
-    const Expected<Core::GpuDescriptorHandle> descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()));
     if(!descriptor){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to register storage buffer"));
         return MakeUnexpected(Failure{});
     }
-    Core::GpuDescriptorRetirementGuard retireDescriptor(heap, *descriptor);
-    if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to register storage buffer"));
-        return MakeUnexpected(Failure{});
-    }
-    ReflectionFeedbackBinding bank{Move(buffer), *descriptor};
-    retireDescriptor.release();
-    return bank;
+    return ReflectionFeedbackBinding{Move(buffer), *descriptor};
 }
 
 

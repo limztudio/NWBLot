@@ -146,11 +146,11 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     region.extent = { contract->destinationSlice.width, contract->destinationSlice.height, contract->destinationSlice.depth, };
 
     switch(contract->queueRequirement){
-    case VulkanTextureDetail::TextureCopyQueueRequirement::Graphics:
+    case TextureCopyQueueRequirement::Graphics:
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
         break;
-    case VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics:
+    case TextureCopyQueueRequirement::ComputeOrGraphics:
         if(!recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, s_OperationName))
             return;
         break;
@@ -268,11 +268,6 @@ b8 CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, con
     retainResource(&dest);
     retainStagingBuffer(stagingBuffer);
     return true;
-}
-
-void CommandList::writeTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect){
-    if(!tryWriteTexture(dest, arraySlice, mipLevel, data, rowPitch, depthPitch, aspect))
-        return;
 }
 
 void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dstSubresources, Texture& src, const TextureSubresourceSet& srcSubresources){

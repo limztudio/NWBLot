@@ -50,17 +50,7 @@ Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(const Core::ECS::EntityID 
         mesh.localBoundsBuffer = instance->localBoundsBuffer;
         mesh.meshletLocalBoundsBuffer = instance->meshletLocalBoundsBuffer;
     }
-    mesh.positionBuffer = instance->skinnedPositionBuffer;
-    mesh.normalBuffer = instance->skinnedNormalBuffer;
-    mesh.tangentBuffer = instance->skinnedTangentBuffer;
-    mesh.uv0Buffer = instance->uv0Buffer;
-    mesh.colorBuffer = instance->colorBuffer;
-    mesh.meshletDescBuffer = instance->meshletDescBuffer;
-    mesh.meshletBoundsBuffer = instance->meshletBoundsBuffer;
-    mesh.meshletPositionRefDeltaBuffer = instance->meshletPositionRefDeltaBuffer;
-    mesh.meshletAttributeRefDeltaBuffer = instance->meshletAttributeRefDeltaBuffer;
-    mesh.meshletLocalVertexRefBuffer = instance->meshletLocalVertexRefBuffer;
-    mesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
+    static_cast<RuntimeMeshBuffers&>(mesh) = instance->runtimeMeshBuffers();
     mesh.triangleIndexBuffer = instance->triangleIndexBuffer;
     mesh.attributeBuffer = instance->attributeBuffer;
     mesh.solidTriangleWords = instance->solidTriangleWords;

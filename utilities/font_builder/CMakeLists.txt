@@ -5,8 +5,6 @@ target_sources(nwb_font_builder_bake PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/sdf_raster.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/atlas_*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset_*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/prepared_font.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/source_input.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.hh"
     "${CMAKE_CURRENT_LIST_DIR}/*.hxx"

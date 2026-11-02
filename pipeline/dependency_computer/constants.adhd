@@ -3,7 +3,6 @@
 
 
 const StringView s_DiagnosticPrefix = "DependencyComputer";
-const StringView s_DefaultRepoRoot = ".";
 const Name s_DependencyComputerArena = "pipeline/dependency_computer";
 const usize s_LineFeedReserveBytes = 1u;
 const usize s_InvalidProviderIndex = ~cast<usize>(0u);

@@ -36,9 +36,6 @@ public:
 
 // First discovery retains the same physical provider and root ownership as AssetBuilder.
 class DependencyProviderCatalog final : NoCopy{
-    friend Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-
-
 public:
     explicit DependencyProviderCatalog(Core::Assets::AssetArena& arena)noexcept
         : m_arena(arena)
@@ -62,9 +59,12 @@ public:
         const Name& virtualPath,
         const Name& assetType,
         AStringView virtualPathTextHint,
-        Core::Alloc::ScratchArena& scratchArena,
-        const Core::Assets::CookDependencyRegistry* dependencyRegistry = nullptr
+        const Core::Assets::CookDependencyRegistry* dependencyRegistry,
+        Core::Alloc::ScratchArena& scratchArena
     )const;
+
+    [[nodiscard]] const Core::Assets::DiscoveredNwbFileVector& files()const noexcept{ return m_files; }
+    [[nodiscard]] const Core::Assets::AssetVector<Name>& virtualPaths()const noexcept{ return m_virtualPaths; }
 
 
 private:

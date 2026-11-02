@@ -34,20 +34,10 @@ b8 RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredF
     auto& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout())
         return false;
-    if(!state.m_bindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(HardwareTransparentShadowPushConstants)));
-        auto bindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(bindingLayoutResult)
-            state.m_bindingLayout = Move(*bindingLayoutResult);
-        else
-            state.m_bindingLayout.reset();
-        if(!bindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
-            state.m_pipelineFailed = true;
-            return false;
-        }
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
+        state.m_pipelineFailed = true;
+        return false;
     }
     const Array<const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::*, 3u> shaderMembers = {
         &ShadowSubsystem::hardwareTransparentGatherCs,
@@ -61,14 +51,7 @@ b8 RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredF
             state.m_pipelineFailed = true;
             return false;
         }
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc.setComputeShader(state.m_shaders[i]).addBindingLayout(state.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
-        auto pipelinesResult = device.createComputePipeline(pipelineDesc);
-        if(pipelinesResult)
-            state.m_pipelines[i] = Move(*pipelinesResult);
-        else
-            state.m_pipelines[i].reset();
-        if(!pipelinesResult){
+        if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, state.m_shaders[i], state.m_bindingLayout, true, state.m_pipelines[i])){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
             state.m_pipelineFailed = true;
             return false;

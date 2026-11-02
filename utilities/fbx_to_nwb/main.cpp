@@ -52,17 +52,6 @@ int Run(const int argc, char** argv){
     return result;
 }
 
-int EntryPoint(const isize argc, char** argv, void*){
-    return Run(static_cast<int>(argc), argv);
-}
-
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
-int EntryPoint(const isize argc, wchar** argv, void*){
-    return NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, Run);
-}
-#endif
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -72,7 +61,7 @@ int EntryPoint(const isize argc, wchar** argv, void*){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_APPLICATION_ENTRY_POINT(__hidden_fbx_to_nwb_main::EntryPoint)
+NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(__hidden_fbx_to_nwb_main::Run)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

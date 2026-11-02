@@ -40,10 +40,6 @@ inline constexpr Name s_ScratchArena("tests/csg/scratch");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static NWB::Impl::CsgFrameState BuildTestCsgFrameState(NWB::Core::Alloc::ScratchArena& scratchArena, TestWorld& testWorld, const NWB::Impl::CsgFrameBuildDesc& desc = NWB::Impl::CsgFrameBuildDesc{}){
-    return NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
-}
-
 static Expected<NWB::Impl::CsgReceiverDrawState> ResolveTestCsgReceiverDrawState(const NWB::Core::ECS::EntityID entity, const NWB::Impl::CsgReceiverPass::Enum receiverPass, NWB::Core::Alloc::ScratchArena& scratchArena, TestWorld& testWorld){
     const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
     return receiverLookup.resolveReceiverDrawState(entity, receiverPass);
@@ -66,19 +62,20 @@ static b8 TestCsgReceiverVisible(
 
 TEST(Csg, ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName){
     using namespace NWB::Impl;
-    EXPECT_FALSE(CsgShapeTypeIdFromName(Name{}));
-    const auto plane = CsgShapeTypeIdFromName(s_CsgPlaneShapeName);
-    const auto box = CsgShapeTypeIdFromName(s_CsgBoxShapeName);
-    const auto sphere = CsgShapeTypeIdFromName(s_CsgSphereShapeName);
-    const auto capsule = CsgShapeTypeIdFromName(s_CsgCapsuleShapeName);
+    CsgShapeTypeId invalid = s_InvalidCsgShapeTypeId, plane = s_InvalidCsgShapeTypeId, box = s_InvalidCsgShapeTypeId, sphere = s_InvalidCsgShapeTypeId, capsule = s_InvalidCsgShapeTypeId;
+    EXPECT_FALSE(TryResolveCsgShapeTypeIdFromName(Name{}, invalid));
+    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgPlaneShapeName, plane));
+    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgBoxShapeName, box));
+    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgSphereShapeName, sphere));
+    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgCapsuleShapeName, capsule));
     ASSERT_TRUE(plane);
     ASSERT_TRUE(box);
     ASSERT_TRUE(sphere);
     ASSERT_TRUE(capsule);
-    EXPECT_EQ(*plane, 0x92f0021au);
-    EXPECT_EQ(*box, 0xb957a584u);
-    EXPECT_EQ(*sphere, 0x56176cbfu);
-    EXPECT_EQ(*capsule, 0xe0e38c7bu);
+    EXPECT_EQ(plane, 0x92f0021au);
+    EXPECT_EQ(box, 0xb957a584u);
+    EXPECT_EQ(sphere, 0x56176cbfu);
+    EXPECT_EQ(capsule, 0xe0e38c7bu);
 }
 
 TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
@@ -86,7 +83,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
     {
         TestWorld testWorld;
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -103,7 +100,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         cutter.shapeType = Name(s_EngineCsgBox);
 
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -119,7 +116,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         receiver.receiverGroup = Name(s_ProjectCsgGroupA);
 
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -150,7 +147,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         cutter.shapeType = Name(s_EngineCsgBox);
 
         EXPECT_TRUE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld);
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -182,7 +179,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         desc.receiverVisible = &TestCsgReceiverVisible;
         desc.receiverVisibleUserData = &filter;
 
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld, desc);
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
 
         EXPECT_FALSE(state.empty());
         EXPECT_EQ(state.receiverCount, 1u);
@@ -205,7 +202,7 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         NWB::Impl::CsgFrameBuildDesc desc;
         desc.includeOpaquePass = false;
 
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(scratchArena, testWorld, desc);
+        const NWB::Impl::CsgFrameState state = NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
 
         EXPECT_TRUE(state.empty());
         EXPECT_FALSE(state.hasAnyWork);
@@ -598,5 +595,4 @@ TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

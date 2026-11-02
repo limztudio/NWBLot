@@ -24,51 +24,56 @@ NWB_IMPL_BEGIN
 
 
 // One isolated temporary directory per compiler invocation, plus the BOM-stripped source overlay the compiler reads when inputs carry a UTF-8 BOM.
-class SlangCompilerWorkspace final : NoCopy{
+namespace SlangCompilerWorkspace{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+using ScratchString = Core::Assets::ScratchString;
+template<typename T>
+using ScratchVector = Core::Assets::ScratchVector<T>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The common path allocates the source path last, so it is declared last to be released first from scratch.
+struct CompilerInputs final{
+    ScratchVector<ScratchPath> includeDirectories;
+    ScratchPath sourcePath;
+};
+
+// Removes the work directory when the invocation ends; a cleanup failure is reported, not returned.
+class ScopedDirectoryCleanupGuard final : NoCopy{
 public:
-    using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
-    using ScratchString = Core::Assets::ScratchString;
-    template<typename T>
-    using ScratchVector = Core::Assets::ScratchVector<T>;
-
-
-public:
-    // The common path allocates the source path last, so it is declared last to be released first from scratch.
-    struct CompilerInputs final{
-        ScratchVector<ScratchPath> includeDirectories;
-        ScratchPath sourcePath;
-    };
-
-    // Removes the work directory when the invocation ends; a cleanup failure is reported, not returned.
-    class ScopedDirectoryCleanupGuard final : NoCopy{
-    public:
-        explicit ScopedDirectoryCleanupGuard(const ScratchPath& path)noexcept
-            : m_path(path)
-        {}
-        ~ScopedDirectoryCleanupGuard()noexcept;
-
-
-    private:
-        const ScratchPath& m_path;
-    };
-
-
-public:
-    [[nodiscard]] static Expected<ScratchPath> CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<usize> CompilerPathTextCapacity(const ScratchPath& path);
-    [[nodiscard]] static Expected<ScratchString> BuildCompilerPathText(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena);
-    // Each absolute root gets its own encoded overlay directory so nested relative includes keep resolving within that root.
-    [[nodiscard]] static Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static b8 IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
-    [[nodiscard]] static Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena);
+    explicit ScopedDirectoryCleanupGuard(const ScratchPath& path)noexcept
+        : m_path(path)
+    {}
+    ~ScopedDirectoryCleanupGuard()noexcept;
 
 
 private:
-    [[nodiscard]] static b8 WriteBomStrippedCompilerInput(const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, ScratchString& source, Core::Alloc::ScratchArena& scratchArena);
+    const ScratchPath& m_path;
+};
 
 
-public:
-    SlangCompilerWorkspace() = delete;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<ScratchPath> CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<usize> CompilerPathTextCapacity(const ScratchPath& path);
+[[nodiscard]] Expected<ScratchString> BuildCompilerPathText(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena);
+// Each absolute root gets its own encoded overlay directory so nested relative includes keep resolving within that root.
+[[nodiscard]] Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
+[[nodiscard]] Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

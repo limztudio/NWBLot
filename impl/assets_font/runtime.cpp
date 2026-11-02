@@ -63,14 +63,6 @@ b8 Font::loadBinary(const Span<const u8> binary){
     return true;
 }
 
-b8 Font::validatePayload()const{
-    return checkVirtualPath(NWB_TEXT("Font::validatePayload")) && ValidateFontSource(m_fontBytes, m_faceIndex);
-}
-
-void Font::setFontBytes(Core::Assets::AssetBytes&& bytes, const u32 faceIndex)noexcept{
-    m_fontBytes = Move(bytes);
-    m_faceIndex = faceIndex;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -24,12 +24,20 @@ namespace __hidden_ui_edit_box_hit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Ui::Point LocalEditTextPosition(const UiEditBoxGeometry& geometry, const Ui::Point position)noexcept{
-    const SIMDVectorSingle localPosition = VectorSubtract(
-        VectorSet(position.x, position.y, position.x, position.y),
-        VectorSet(geometry.placement.textOrigin.x, geometry.placement.textOrigin.y, geometry.placement.textOrigin.x, geometry.placement.textOrigin.y)
-    );
-    return { VectorGetX(localPosition), VectorGetY(localPosition) };
+[[nodiscard]] static Expected<Ui::Point> ResolveLocalEditTextPosition(
+    const UiEditBoxGeometry& geometry,
+    const UiTextEditOwner& owner,
+    const Ui::PopupToken& popup,
+    const Ui::Point position
+)noexcept{
+    if(
+        geometry.generation == 0u || geometry.stops.empty() || geometry.lines.empty()
+        || geometry.modelGeneration != owner.modelGeneration || geometry.popup != popup
+        || (geometry.textMode != Ui::EditTextMode::SingleLine && geometry.textMode != Ui::EditTextMode::Multiline)
+        || (geometry.textMode == Ui::EditTextMode::SingleLine && geometry.lines.size() != 1u)
+    )
+        return MakeUnexpected(Failure{});
+    return Ui::Point{ position.x - geometry.placement.textOrigin.x, position.y - geometry.placement.textOrigin.y };
 }
 
 
@@ -55,47 +63,17 @@ Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry
 }
 
 Expected<usize> UiEditBoxHost::hit(const Entry& entry, const Ui::Point position)const noexcept{
-    const UiEditBoxGeometry& geometry = entry.displayed;
-    if(
-        geometry.generation == 0u || geometry.stops.empty() || geometry.lines.empty()
-        || geometry.modelGeneration != entry.owner.modelGeneration || geometry.popup != entry.popup
-        || (geometry.textMode != Ui::EditTextMode::SingleLine && geometry.textMode != Ui::EditTextMode::Multiline)
-        || (geometry.textMode == Ui::EditTextMode::SingleLine && geometry.lines.size() != 1u)
-    )
+    const auto local = __hidden_ui_edit_box_hit::ResolveLocalEditTextPosition(entry.displayed, entry.owner, entry.popup, position);
+    if(!local)
         return MakeUnexpected(Failure{});
-    const Ui::Point local = __hidden_ui_edit_box_hit::LocalEditTextPosition(geometry, position);
-    return Ui::HitEditCaretGeometry(geometry.lines, geometry.stops, local);
+    return Ui::HitEditCaretGeometry(entry.displayed.lines, entry.displayed.stops, *local);
 }
 
 Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position)const noexcept{
-    const auto byte = hit(entry, position);
-    if(!byte)
-        return MakeUnexpected(byte.error());
-    const UiEditBoxGeometry& geometry = entry.displayed;
-    const Ui::Point local = __hidden_ui_edit_box_hit::LocalEditTextPosition(geometry, position);
-    u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
-    for(u32 index = 0u; index < geometry.lines.size(); ++index){
-        if(local.y < geometry.lines[index].top + geometry.lines[index].height){
-            lineIndex = index;
-            break;
-        }
-    }
-    const Ui::EditCaretLine& line = geometry.lines[lineIndex];
-    if(line.stopCount < s_UiEditMinInterpolatedStops)
-        return *byte;
-    const usize first = line.firstStop;
-    const usize end = first + line.stopCount;
-    usize selected = first;
-    for(usize index = first + 1u; index < end; ++index){
-        if(geometry.stops[index].lineIndex != lineIndex || geometry.stops[index].x < geometry.stops[index - 1u].x)
-            return MakeUnexpected(Failure{});
-        if(local.x < geometry.stops[index].x)
-            break;
-        selected = index;
-    }
-    if(selected + 1u == end)
-        --selected;
-    return geometry.stops[selected].committedByte;
+    const auto local = __hidden_ui_edit_box_hit::ResolveLocalEditTextPosition(entry.displayed, entry.owner, entry.popup, position);
+    if(!local)
+        return MakeUnexpected(Failure{});
+    return Ui::HitEditWordCaretGeometry(entry.displayed.lines, entry.displayed.stops, *local);
 }
 
 

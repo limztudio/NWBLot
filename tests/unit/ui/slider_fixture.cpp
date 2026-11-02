@@ -5,7 +5,6 @@
 #include "slider_fixture.h"
 #include "widget_id_assertion.h"
 
-#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -158,36 +157,14 @@ WidgetId SliderFixture::thumb()const{
 
 Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const noexcept{
     const SliderPlacement& placement = state.placement();
-    // Lanes are x, y.
-    const SIMDVectorSingle scale = VectorSet(placement.centerTravel.width, 0.5f, 0.0f, 0.0f);
-    const SIMDVectorSingle point = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(normalized), placement.track.height, 0.0f, 0.0f), scale, VectorSet(placement.centerTravel.x, placement.track.y, 0.0f, 0.0f));
-    return { VectorGetX(point), VectorGetY(point) };
+    return {
+        placement.centerTravel.x + (static_cast<f32>(normalized) * placement.centerTravel.width),
+        placement.track.y + (placement.track.height * 0.5f),
+    };
 }
 
 Point SliderFixture::thumbPoint()const noexcept{
     return UiWidgetTests::Center(m_state.placement().thumb);
-}
-
-SliderAcceptedFrame SliderFixture::accepted()const noexcept{
-    SliderAcceptedFrame saved;
-    saved.count = m_context.input().targets().size();
-    saved.popupCount = m_context.input().popupCount();
-    saved.generation = m_context.input().layoutGeneration();
-    saved.focus = m_context.input().focus();
-    saved.capture = m_context.input().capture();
-    for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
-        saved.targets[index] = m_context.input().targets()[index];
-    return saved;
-}
-
-void SliderFixture::expectAccepted(const SliderAcceptedFrame& saved, const b8 popupFocus)const{
-    EXPECT_EQ(m_context.input().layoutGeneration(), saved.generation);
-    if(popupFocus){
-        EXPECT_EQ(m_context.input().popupCount(), saved.popupCount);
-        EXPECT_EQ(m_context.input().focus(), saved.focus);
-    }
-    EXPECT_EQ(m_context.input().capture(), saved.capture);
-    ExpectAcceptedTargets(m_context.input(), saved.targets, saved.count);
 }
 
 

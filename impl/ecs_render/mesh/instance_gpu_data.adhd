@@ -273,6 +273,27 @@ InstanceGpuData BuildInstanceGpuData(
 
 const usize s_RetainedAccelerationBuffersPerMesh = 5u;
 
+b8 RequiresMeshBlasUpdateState(
+    in b8 blasBuildPending,
+    in b8 blasBuildAccepted,
+    in b8 runtimeMesh,
+    in u64 runtimeGeometryContentRevision,
+    in u64 blasGeometryContentRevision
+){
+    return blasBuildPending || !blasBuildAccepted || (runtimeMesh && (runtimeGeometryContentRevision == 0u || runtimeGeometryContentRevision != blasGeometryContentRevision));
+}
+
+b8 RequiresMeshSwBvhUpdateState(
+    in b8 swBvhBuildPending,
+    in b8 swBvhTopologyBuilt,
+    in b8 swBvhBuildAccepted,
+    in b8 runtimeMesh,
+    in u64 runtimeGeometryContentRevision,
+    in u64 swBvhGeometryContentRevision
+){
+    return swBvhBuildPending || !swBvhTopologyBuilt || !swBvhBuildAccepted || (runtimeMesh && (runtimeGeometryContentRevision == 0u || runtimeGeometryContentRevision != swBvhGeometryContentRevision));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

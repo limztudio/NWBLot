@@ -137,7 +137,7 @@ void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommand
         return;
 
     ScopedLock lock(m_mutex);
-    retireOwnerChunksLocked(queue, reusableVersion, true, *owner, nativeRecordingID);
+    retireOwnerChunksLocked(queue, reusableVersion, true, nativeRecordingID, *owner);
     trimRetiredChunksLocked(queue, reusableVersion);
 }
 
@@ -146,7 +146,7 @@ void UploadManager::abandonChunks(const GpuPhysicalQueueId queue, TrackedCommand
         return;
 
     NothrowScopedLock lock(m_mutex);
-    retireOwnerChunksLocked(queue, 0u, true, *owner, nativeRecordingID);
+    retireOwnerChunksLocked(queue, 0u, true, nativeRecordingID, *owner);
 }
 
 void UploadManager::collectCompletedChunks(){
@@ -266,7 +266,7 @@ void UploadManager::retireSubmittedChunksLocked(
     }
 }
 
-void UploadManager::retireOwnerChunksLocked(const GpuPhysicalQueueId queue, const u64 version, const b8 resetAllocated, TrackedCommandBuffer& owner, const u64 nativeRecordingID)noexcept{
+void UploadManager::retireOwnerChunksLocked(const GpuPhysicalQueueId queue, const u64 version, const b8 resetAllocated, const u64 nativeRecordingID, TrackedCommandBuffer& owner)noexcept{
     QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
     if(!ledger)
         return;

@@ -4,8 +4,6 @@
 
 #include "label.h"
 
-#include <global/simd/vector_arithmetic.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,8 +48,7 @@ b8 Label::paint(TextService& text, PaintBuilder& paint, const Rect& bounds, cons
     if(!measured)
         return false;
     paint.pushClip(bounds);
-    const SIMDVectorSingle origin = VectorSubtract(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
-    const b8 painted = text.paint(paint, m_layout, { VectorGetX(origin), VectorGetY(origin) }, color);
+    const b8 painted = text.paint(paint, m_layout, { bounds.x - measured->x, bounds.y - measured->y }, color);
     const b8 restored = paint.popClip();
     return painted && restored;
 }

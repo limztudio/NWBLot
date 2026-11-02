@@ -10,8 +10,6 @@
 #include <impl/ecs_ui/toolkit/layout/types.adhd.h>
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
-#include <global/simd/type.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,10 +22,6 @@ NWB_IMPL_UI_BEGIN
 
 // Build and arrange on one owning UI thread. The supplied arena outlives the tree and its published boxes.
 class LayoutTree final : NoCopy{
-private:
-    [[nodiscard]] static SIMDVectorSingle Inset(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept;
-
-
 public:
     // Capacity is clamped to s_LayoutMaxNodes; zero capacity admits no nodes.
     explicit LayoutTree(Core::Alloc::GlobalArena& arena, u32 maxNodes = s_LayoutMaxNodes);

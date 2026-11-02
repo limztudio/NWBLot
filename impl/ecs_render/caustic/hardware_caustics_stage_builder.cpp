@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
+Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(const HardwareCausticsStageInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     using namespace RendererTaskGraphDetail;
     HardwareCausticsStageResult result{};
     if(!inputs.declaresHardwareCaustics)
@@ -50,14 +50,7 @@ NWB_IMPL_BEGIN
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ scratchArena };
     const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
-    const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read };
-    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read };
-    Array<Core::GpuTaskResourceSetUse, s_HardwarePhotonResourceSetUseCapacity> hardwarePhotonResourceSetUses{};
-    usize hardwarePhotonResourceSetUseCount = 0u;
-    if(hardwareTraceGeometryStatesGraphOwned)
-        hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = hardwareTraceGeometrySetUse;
-    if(inputs.traceMaterialSampledTextureSet.valid())
-        hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
+    const RendererFramePipelineDetail::TraceResourceSetUses hardwarePhotonResourceSetUses = RendererFramePipelineDetail::MakeTraceResourceSetUses(inputs.hardwareTraceGeometrySet, inputs.traceMaterialSampledTextureSet);
     hardwarePhotonResourceUses.reserve(
         s_HardwarePhotonResourceUseCapacity
         + (inputs.rayTracingResources.csgTraceContextBuffer ? 1u : 0u)
@@ -176,7 +169,7 @@ NWB_IMPL_BEGIN
         .setScheduling(hardwareCausticsScheduling)
         .setDependencies({ &prefixTasksResult->photonDependencyTask, 1u })
         .setResourceUses(hardwarePhotonResourceUses)
-        .setResourceSetUses({ hardwarePhotonResourceSetUseCount != 0u ? hardwarePhotonResourceSetUses.data() : nullptr, hardwarePhotonResourceSetUseCount })
+        .setResourceSetUses({ hardwarePhotonResourceSetUses.useCount != 0u ? hardwarePhotonResourceSetUses.uses.data() : nullptr, hardwarePhotonResourceSetUses.useCount })
     ;
     const auto causticPhotonTaskResult = m_raytracingSystem.declareHardwareCausticsTask(
         m_graph,

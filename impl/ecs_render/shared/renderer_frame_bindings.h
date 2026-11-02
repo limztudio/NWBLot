@@ -45,7 +45,7 @@ struct MeshViewBufferSnapshot{
 
 public:
     [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(buffer); }
-    [[nodiscard]] b8 bindingValid()const noexcept;
+    [[nodiscard]] b8 bindingValid()const noexcept{ return buffer && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer; }
 };
 
 // Mesh owns the registration transaction; snapshot pairs buffers with published handles.

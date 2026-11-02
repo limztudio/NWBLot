@@ -61,10 +61,24 @@ private:
     u64 m_parentOpenGeneration = 0u;
 };
 
-class PopupLayout final{
-public:
-    // Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
-    [[nodiscard]] static Expected<PopupPlacement> Place(const PopupOptions& options, const DisplayMetrics& display)noexcept;
+namespace PopupLayout{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
+[[nodiscard]] inline Expected<PopupPlacement> Place(const PopupOptions& options, const DisplayMetrics& display)noexcept{
+    PopupPlacement placement;
+    if(!TryPlacePopup(options, display, placement))
+        return MakeUnexpected(Failure{});
+    return placement;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

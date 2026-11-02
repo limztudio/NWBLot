@@ -4,6 +4,8 @@
 
 #include "smoke_geometry.h"
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,8 +39,8 @@ Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, c
     const auto rectangle = SmokeListRowBounds(placement, index);
     if(!rectangle)
         return {};
-    const auto visible = Impl::Ui::IntersectUiRects<Impl::Ui::UiRectPrecision::PreciseExtents>(*rectangle, placement.contentClip);
-    return visible ? *visible : Impl::Ui::Rect{};
+    Impl::Ui::Rect visible;
+    return Impl::Ui::TryIntersectUiRects(*rectangle, placement.contentClip, Impl::Ui::UiRectPrecision::PreciseExtents, visible) ? visible : Impl::Ui::Rect{};
 }
 
 void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
@@ -46,10 +48,7 @@ void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView n
 }
 
 u64 HashSmokeText(const AStringView text)noexcept{
-    u32 hash = 2166136261u;
-    for(const char value : text)
-        hash = (hash ^ static_cast<u8>(value)) * 16777619u;
-    return hash;
+    return ComputeFnv32TextHash(text);
 }
 
 void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged){

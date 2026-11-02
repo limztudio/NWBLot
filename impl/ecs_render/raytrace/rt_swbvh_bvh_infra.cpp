@@ -38,6 +38,30 @@ u64 ComputeTlasStaticSceneHash(const Span<const Core::RayTracingInstanceDesc> in
     return hash;
 }
 
+u64 ComputeSceneSwBvhStaticSceneHash(const Span<const SceneSwBvhInstanceGpu> instances, const Span<const SceneBvhPrimitiveCalculation> primitives)noexcept{
+    NWB_ASSERT(instances.size() == primitives.size());
+
+    u64 hash = s_Fnv64OffsetBasis;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendValue(hash, instances.size());
+    for(usize index = 0u; index < instances.size(); ++index){
+        const SceneSwBvhInstanceGpu& instance = instances[index];
+        const SceneBvhPrimitiveCalculation& primitive = primitives[index];
+        Fnv64AppendValue(hash, instance.worldToObject);
+        Fnv64AppendValue(hash, instance.primitiveCount);
+        Fnv64AppendValue(hash, primitive.aabbMin.x);
+        Fnv64AppendValue(hash, primitive.aabbMin.y);
+        Fnv64AppendValue(hash, primitive.aabbMin.z);
+        Fnv64AppendValue(hash, 0.0f);
+        Fnv64AppendValue(hash, primitive.aabbMax.x);
+        Fnv64AppendValue(hash, primitive.aabbMax.y);
+        Fnv64AppendValue(hash, primitive.aabbMax.z);
+        Fnv64AppendValue(hash, 0.0f);
+        Fnv64AppendBool(hash, primitive.transparentOccluder);
+    }
+    return hash;
+}
+
 Expected<Core::GpuDescriptorHandle> AcquireMeshHeapHandle(const Core::BufferHandle& bufferHandle, Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache){
     if(!bufferHandle)
         return MakeUnexpected(Failure{});
@@ -84,6 +108,59 @@ void SweepUnseenMeshHeapHandles(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleC
 void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache)noexcept{
     for(auto it = cache.begin(); it != cache.end(); ++it)
         it.value().seenThisFrame = false;
+}
+
+b8 ResolveShadowOccluderMaterial(
+    const Core::ECS::EntityID entity,
+    const Core::Assets::AssetRef<Material>& material,
+    const Scene::TransformComponent* const transform,
+    const u32 meshInstanceIndex,
+    RendererMaterialSystem& materialSystem,
+    ShadowMaterialSampledTextureCollector& sampledTextureCollector,
+    MaterialTypedByteDataVector& shadowMaterialTypedBytes,
+    ECSRenderDetail::MaterialTypedConstantRangeMap& shadowConstantTypedRanges,
+    ECSRenderDetail::MaterialTypedByteContentRangeMap& shadowMutableTypedRanges,
+    RayTracingOpticalSceneGather& opticalScene,
+    b8& inOutContentComplete,
+    NwbRtInstanceMaterialGpu& outInstanceMaterial,
+    InstanceGpuData& outShadowInstance,
+    b8* const outSceneHasTransparentOccluder
+){
+    outInstanceMaterial = {};
+    outShadowInstance = {};
+    MaterialSurfaceInfo* materialInfo = nullptr;
+    if(const auto materialInfoResult = materialSystem.findMaterialSurfaceInfo(material); materialInfoResult){
+        materialInfo = materialInfoResult->get();
+        if(materialInfo->transparent && outSceneHasTransparentOccluder)
+            *outSceneHasTransparentOccluder = true;
+        // Trace dispatcher reads Texture2D fields via non-uniform slots. Retain resolved handles in preflight.
+        const b8 sampledTexturesReady = materialInfo->surfaceDispatchId == Limit<u32>::s_Max || sampledTextureCollector.collect(
+            *materialInfo,
+            [&materialSystem](const MaterialSurfaceInfo& surface, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
+                return materialSystem.appendPreparedMaterialSurfaceSampledTextures(surface, pending);
+            }
+        );
+        if(!sampledTexturesReady)
+            return false;
+        const auto materialContext = materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, transform, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges);
+        if(!materialContext)
+            return false;
+        outShadowInstance = materialContext->instance;
+        outInstanceMaterial = ResolveInstanceShadowMaterialData(
+            materialInfo->surfaceDispatchId,
+            materialInfo->shadingModelId,
+            materialInfo->transparent,
+            materialInfo->refractive,
+            materialContext->constantByteOffset,
+            meshInstanceIndex
+        );
+    }
+    if(!materialInfo || materialInfo->surfaceDispatchId == Limit<u32>::s_Max)
+        inOutContentComplete = false;
+    // An unavailable hook need not hide a boundary. Unknown/untransparent surfaces cannot use the outside shortcut.
+    if(!materialInfo || (materialInfo->transparent && materialInfo->surfaceDispatchId == Limit<u32>::s_Max))
+        opticalScene.markIncomplete();
+    return true;
 }
 
 Expected<PreparedMeshBlasBuild> ResolvePreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept{
@@ -222,22 +299,11 @@ b8 RendererRayTracingSystem::ensureBvhSortPipeline(){
         return false;
     }
 
-    if(!m_rayTracingState.m_bvhSortBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Push-only layout; sort resources use the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
-
-        auto bvhSortBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(bvhSortBindingLayoutResult)
-            m_rayTracingState.m_bvhSortBindingLayout = Move(*bvhSortBindingLayoutResult);
-        else
-            m_rayTracingState.m_bvhSortBindingLayout.reset();
-        if(!bvhSortBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
-            m_rayTracingState.m_bvhSortPipelineFailed = true;
-            return false;
-        }
+    // Push-only layout; sort resources use the global heap.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(BvhSortPushConstants), Core::ShaderType::Compute, m_rayTracingState.m_bvhSortBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
+        m_rayTracingState.m_bvhSortPipelineFailed = true;
+        return false;
     }
 
     if(!m_shaderSystem.loadShader<ComputeShader>(&BvhSubsystem::bitonicSortCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_BvhBitonicSort", m_rayTracingState.m_bvhSortShader)){
@@ -245,14 +311,7 @@ b8 RendererRayTracingSystem::ensureBvhSortPipeline(){
         return false;
     }
 
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_bvhSortShader).addBindingLayout(m_rayTracingState.m_bvhSortBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto bvhSortPipelineResult = device.createComputePipeline(pipelineDesc);
-    if(bvhSortPipelineResult)
-        m_rayTracingState.m_bvhSortPipeline = Move(*bvhSortPipelineResult);
-    else
-        m_rayTracingState.m_bvhSortPipeline.reset();
-    if(!bvhSortPipelineResult){
+    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_rayTracingState.m_bvhSortShader, m_rayTracingState.m_bvhSortBindingLayout, false, m_rayTracingState.m_bvhSortPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
         m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
@@ -453,38 +512,27 @@ b8 RendererRayTracingSystem::ensureBvhBuildPipeline(){
         return false;
     }
 
-    if(!m_rayTracingState.m_bvhBuildBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Push-only layout; build resources use the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
-
-        auto bvhBuildBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(bvhBuildBindingLayoutResult)
-            m_rayTracingState.m_bvhBuildBindingLayout = Move(*bvhBuildBindingLayoutResult);
-        else
-            m_rayTracingState.m_bvhBuildBindingLayout.reset();
-        if(!bvhBuildBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding layout"));
-            m_rayTracingState.m_bvhBuildPipelineFailed = true;
-            return false;
-        }
+    // Push-only layout; build resources use the global heap.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(BvhBuildPushConstants), Core::ShaderType::Compute, m_rayTracingState.m_bvhBuildBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding layout"));
+        m_rayTracingState.m_bvhBuildPipelineFailed = true;
+        return false;
     }
 
-    const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> BvhSubsystem::* member, const NameText<char> debugLabel)->b8{
-        if(pipeline)
-            return true;
-        if(!m_shaderSystem.loadShader<ComputeShader>(member, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), shader))
-            return false;
-
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_bvhBuildBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto pipelineResult = device.createComputePipeline(pipelineDesc);
-        if(pipelineResult)
-            pipeline = Move(*pipelineResult);
-        else
-            pipeline.reset();
-        return static_cast<b8>(pipelineResult);
+    const auto createBuildPipeline = [this, &device](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> BvhSubsystem::* member, const NameText<char> debugLabel)->b8{
+        return RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+            m_arena,
+            device,
+            m_shaderSystem,
+            member,
+            Core::ShaderArchive::s_DefaultVariant,
+            Name(debugLabel),
+            sizeof(BvhBuildPushConstants),
+            false,
+            m_rayTracingState.m_bvhBuildBindingLayout,
+            shader,
+            pipeline
+        );
     };
 
     if(

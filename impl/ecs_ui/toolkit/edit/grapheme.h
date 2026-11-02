@@ -20,11 +20,20 @@ NWB_IMPL_UI_BEGIN
 using EditBoundaryVector = Vector<usize, Core::Alloc::GlobalArena>;
 
 // Unicode 17.0.0 UAX #29 revision 47 default extended grapheme boundaries, including GB9c.
-class GraphemeSegmentation final{
-public:
-    // General segmentation accepts controls; single-line editing rejects line breaks and NUL.
-    [[nodiscard]] static Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, AStringView text, b8 singleLine = false);
-    [[nodiscard]] static b8 Validate(AStringView text, b8 singleLine = false)noexcept;
+namespace GraphemeSegmentation{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// General segmentation accepts controls; single-line editing rejects line breaks and NUL.
+[[nodiscard]] Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, AStringView text, b8 singleLine = false);
+[[nodiscard]] b8 Validate(AStringView text, b8 singleLine = false)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

@@ -115,11 +115,12 @@ private:
     [[nodiscard]] b8 replaceRange(usize begin, usize end, AStringView replacement);
     [[nodiscard]] b8 validateText(AStringView value)const noexcept;
     [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView value)const;
+    [[nodiscard]] b8 restoreHistoryState(AStringView value, usize anchor, usize caret, isize cursorDelta);
     void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret, AStringView after, usize afterAnchor, usize afterCaret);
     void clearHistory()noexcept;
-    void advanceRevision()noexcept;
-    void advanceSelectionGeneration()noexcept;
-    void advanceCompositionGeneration()noexcept;
+    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
+    void advanceSelectionGeneration()noexcept{ AdvanceRevision(m_selectionGeneration); }
+    void advanceCompositionGeneration()noexcept{ AdvanceRevision(m_compositionGeneration); }
 
 
 private:

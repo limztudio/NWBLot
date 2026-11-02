@@ -27,7 +27,6 @@ inline constexpr u32 s_EntityIndexBits = 22;
 inline constexpr u32 s_EntityGenerationBits = 10;
 inline constexpr u32 s_EntityIndexMask = (1u << s_EntityIndexBits) - 1u;
 inline constexpr u32 s_EntityGenerationMask = (1u << s_EntityGenerationBits) - 1u;
-inline constexpr u32 s_EntityInvalidIndex = s_EntityIndexMask;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +64,7 @@ public:
 
     inline constexpr u32 generation()const noexcept{ return (id >> ECSDetail::s_EntityIndexBits) & ECSDetail::s_EntityGenerationMask; }
 
-    inline constexpr b8 valid()const noexcept{ return index() != ECSDetail::s_EntityInvalidIndex; }
+    inline constexpr b8 valid()const noexcept{ return index() != ECSDetail::s_EntityIndexMask; }
 };
 inline constexpr b8 operator==(const EntityID& lhs, const EntityID& rhs)noexcept{ return lhs.id == rhs.id; }
 

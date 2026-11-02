@@ -281,10 +281,10 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     Core::GpuGraphResourceId feedbackCurrent;
     Core::GpuGraphResourceId feedbackPrevious;
     if(feedbackWrites){
-        const auto feedbackCurrentResult = ImportReflectionBuffer(graph, resources.feedback.current.buffer);
+        const auto feedbackCurrentResult = FindOrImportBuffer(graph, resources.feedback.current.buffer, s_ReflectionBufferLabel);
         Expected<Core::GpuGraphResourceId> feedbackPreviousResult = MakeUnexpected(Failure{});
         if(resources.feedback.plan.reused)
-            feedbackPreviousResult = ImportReflectionBuffer(graph, resources.feedback.previous.buffer);
+            feedbackPreviousResult = FindOrImportBuffer(graph, resources.feedback.previous.buffer, s_ReflectionBufferLabel);
         if(!feedbackCurrentResult || (resources.feedback.plan.reused && !feedbackPreviousResult))
             return MakeUnexpected(Failure{});
         feedbackCurrent = *feedbackCurrentResult;
@@ -294,10 +294,10 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     ReflectionGraphResult result;
     const auto opaqueRadianceResult = ImportReflectionTexture(graph, resources.opaqueRadiance);
     const auto glassRadianceResult = ImportReflectionTexture(graph, resources.glassRadiance);
-    const auto frameParametersResult = ImportReflectionBuffer(graph, resources.frameParameters);
-    const auto countersResult = ImportReflectionBuffer(graph, resources.counters);
-    const auto queueResult = ImportReflectionBuffer(graph, resources.queue);
-    const auto argsResult = ImportReflectionBuffer(graph, resources.indirectArgs);
+    const auto frameParametersResult = FindOrImportBuffer(graph, resources.frameParameters, s_ReflectionBufferLabel);
+    const auto countersResult = FindOrImportBuffer(graph, resources.counters, s_ReflectionBufferLabel);
+    const auto queueResult = FindOrImportBuffer(graph, resources.queue, s_ReflectionBufferLabel);
+    const auto argsResult = FindOrImportBuffer(graph, resources.indirectArgs, s_ReflectionBufferLabel);
     if(!opaqueRadianceResult || !glassRadianceResult || !frameParametersResult || !countersResult || !queueResult || !argsResult)
         return MakeUnexpected(Failure{});
     result.opaqueRadiance = *opaqueRadianceResult;

@@ -28,8 +28,6 @@ namespace __hidden_shadow_trace_geometry{
 
 using MeshSnapshot = ECSRenderDetail::MeshRayTracingResourceSnapshot;
 using BufferRecord = ShadowTraceBufferRecord;
-using ::NWB::Impl::s_ShadowTraceMissingIndex;
-inline constexpr usize s_MissingIndex = s_ShadowTraceMissingIndex;
 inline constexpr Array<Core::BufferHandle MeshSnapshot::*, s_ShadowTraceMemberCount> s_BufferMembers = { &MeshSnapshot::positionBuffer, &MeshSnapshot::triangleIndexBuffer, &MeshSnapshot::attributeBuffer, &MeshSnapshot::swBvhNodeBuffer, };
 
 class BufferIndex final : NoCopy{
@@ -54,7 +52,7 @@ public:
 public:
     void add(Core::Buffer* const buffer, const u32 memberIndex, const usize meshIndex){
         BufferRecord& record = findOrAppend(buffer);
-        if(record.firstMesh[memberIndex] == s_MissingIndex)
+        if(record.firstMesh[memberIndex] == s_ShadowTraceMissingIndex)
             record.firstMesh[memberIndex] = meshIndex;
     }
 
@@ -147,7 +145,7 @@ b8 FreezePreparedShadowTraceGeometryBuffers(
         if(!buffer)
             return false;
         BufferRecord& record = *MakeNotNull(bufferIndex.find(buffer.get()));
-        if(record.preparedIndex != s_MissingIndex){
+        if(record.preparedIndex != s_ShadowTraceMissingIndex){
             outPrepared[record.preparedIndex].roles |= role;
             return true;
         }
@@ -168,7 +166,7 @@ b8 FreezePreparedShadowTraceGeometryBuffers(
     const auto appendSelected = [&](const Span<const NotNull<Core::Buffer*>> selectedBuffers, const u32 memberIndex, const AStringView identitySuffix, const u8 role){
         for(const NotNull<Core::Buffer*> selectedBuffer : selectedBuffers){
             const BufferRecord* const record = bufferIndex.find(selectedBuffer.get());
-            if(!record || record->firstMesh[memberIndex] == s_MissingIndex)
+            if(!record || record->firstMesh[memberIndex] == s_ShadowTraceMissingIndex)
                 return false;
             const MeshSnapshot& mesh = meshes[record->firstMesh[memberIndex]];
             if(!appendBuffer(mesh.*s_BufferMembers[memberIndex], mesh, identitySuffix, role))

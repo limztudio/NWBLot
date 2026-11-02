@@ -400,7 +400,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
 
 TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
     using ByteKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
-    using ByteLookup = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentLookup;
+    using ByteLookup = NWB::Impl::MaterialTypedByteContentLookup;
     using ByteRange = NWB::Impl::MaterialTypedByteRange;
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
 
@@ -558,7 +558,7 @@ static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix()noexcept{
 
 static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(const NWB::Impl::SkeletonJointMatrix& rootJoint, const NWB::Impl::SkeletonJointMatrix& childJoint){
     NWB::Impl::SkeletonPoseComponent pose;
-    pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
+    pose.parentJoints.push_back(NWB::Impl::s_SkeletonInvalidJointIndex);
     pose.parentJoints.push_back(0u);
     pose.localJoints.push_back(rootJoint);
     pose.localJoints.push_back(childJoint);

@@ -6,6 +6,7 @@
 #include "binary_payload_io.h"
 #include "meshlet_payload_packing.h"
 #include "meshlet_triangle_indices.h"
+#include "meshlet_triangle_visit.h"
 #include "meshlet_vertex_attributes.h"
 #include "runtime_validation.h"
 
@@ -317,10 +318,6 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
     return outIndices;
 }
 
-Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
-    return BuildMeshletTriangleIndices(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletPositionRefDeltas(), payload.meshletPrimitiveIndices(), payload.positionStream().size(), scratchArena);
-}
-
 Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
     const Span<const MeshletDesc> meshlets,
     const Span<const MeshletLocalVertexRef> localVertexRefs,
@@ -352,10 +349,6 @@ Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttri
     ))
         return MakeUnexpected(Failure{});
     return outAttributes;
-}
-
-Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
-    return BuildMeshletTriangleAttributes(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletAttributeRefDeltas(), payload.meshletPrimitiveIndices(), payload.normalStream(), payload.uv0Stream(), scratchArena);
 }
 
 

@@ -62,7 +62,7 @@ TEST(SkinningPayload, EmptyPoseClearsPreviousDualQuaternionPayloadAndUsesCurrent
     NWB::Impl::RuntimeSkinPayloadScratch payload(scratchArena);
     palette.joints[1].rows[1].w = 4.0f;
     NWB::Impl::SkeletonPoseComponent pose;
-    pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
+    pose.parentJoints.push_back(NWB::Impl::s_SkeletonInvalidJointIndex);
     pose.parentJoints.push_back(0u);
     pose.localJoints.push_back(MakeTranslationJoint(3.0f, 0.0f, 0.0f));
     pose.localJoints.push_back(MakeTranslationJoint(0.0f, 5.0f, 0.0f));
@@ -267,7 +267,7 @@ TEST(SkinningPayload, PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes){
     palette.joints.assign(2u, MatrixIdentity<Float34>());
     NWB::Impl::SkeletonPoseComponent pose;
     pose.localJoints.assign(2u, MatrixIdentity<Float34>());
-    pose.parentJoints.assign(2u, NWB::Impl::s_SkeletonRootParent);
+    pose.parentJoints.assign(2u, NWB::Impl::s_SkeletonInvalidJointIndex);
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     {
@@ -321,7 +321,7 @@ TEST(SkinningPayload, RuntimePayloadRejectsInvalidDynamicInputs){
     palette.joints.assign(2u, MatrixIdentity<Float34>());
     NWB::Impl::SkeletonPoseComponent pose;
     pose.localJoints.assign(2u, MatrixIdentity<Float34>());
-    pose.parentJoints.assign(2u, NWB::Impl::s_SkeletonRootParent);
+    pose.parentJoints.assign(2u, NWB::Impl::s_SkeletonInvalidJointIndex);
     pose.parentJoints[1] = 1u;
     EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
     ExpectEmptyRuntimePayload(payload);
@@ -383,7 +383,7 @@ TEST(SkinningPayload, InverseBindBoundsAndPartialFailuresLeaveNoActivePayload){
     instance.inverseBindMatrices.assign(2u, MatrixIdentity<Float34>());
     NWB::Impl::SkeletonPoseComponent pose;
     pose.localJoints.assign(2u, MatrixIdentity<Float34>());
-    pose.parentJoints.assign(2u, NWB::Impl::s_SkeletonRootParent);
+    pose.parentJoints.assign(2u, NWB::Impl::s_SkeletonInvalidJointIndex);
     ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
     ASSERT_TRUE(payload.hasActiveSkin());
     pose.parentJoints[1] = 1u;

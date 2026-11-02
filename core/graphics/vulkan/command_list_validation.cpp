@@ -25,7 +25,6 @@ namespace __hidden_command_list_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Graphics);
 inline constexpr TStringView s_UnnamedCommandName = NWB_TEXT("unnamed command");
 
 
@@ -194,7 +193,7 @@ b8 CommandList::validateCommandRecordingScope(const TStringView operationName){
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const b8 validRecordingScope = matchesActiveNativeLeaseIdentity();
-    const b8 validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & __hidden_command_list_validation::s_KnownCapabilityBits) != 0u;
+    const b8 validExactQueue = queueInfo && queueInfo->queueClass == m_creationDesc.queueType && (exactCapabilityBits & GpuQueueCapability::s_KnownCapabilityBits) != 0u;
     if(validRecordingScope && validExactQueue)
         return true;
 
@@ -227,7 +226,7 @@ b8 CommandList::recordAndValidateCommandCapability(const GpuQueueCapability::Mas
     auto& queueInfo = *MakeNotNull(m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue));
     const u8 availableBits = static_cast<u8>(queueInfo.capabilities);
     const CommandQueue::Enum exactQueueClass = queueInfo.queueClass;
-    const b8 validRequiredMask = requiredBits != 0u && (requiredBits & ~__hidden_command_list_validation::s_KnownCapabilityBits) == 0u;
+    const b8 validRequiredMask = requiredBits != 0u && (requiredBits & ~GpuQueueCapability::s_KnownCapabilityBits) == 0u;
     const b8 supported = validRequiredMask && (availableBits & requiredBits) == requiredBits;
     if(supported)
         return true;
@@ -261,7 +260,7 @@ b8 CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability::
     }
 #endif
 
-    if(alternativeBits == 0u || (alternativeBits & ~__hidden_command_list_validation::s_KnownCapabilityBits) != 0u)
+    if(alternativeBits == 0u || (alternativeBits & ~GpuQueueCapability::s_KnownCapabilityBits) != 0u)
         return recordAndValidateCommandCapability(alternativeCapabilities, operationName);
     if(selectableBits == 0u)
         selectableBits = alternativeBits;

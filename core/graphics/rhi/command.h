@@ -110,6 +110,7 @@ namespace GpuQueueCapability{
         Compute = 1u << 1u,
         Graphics = 1u << 2u,
     };
+    static constexpr u8 s_KnownCapabilityBits = static_cast<u8>(Transfer) | static_cast<u8>(Compute) | static_cast<u8>(Graphics);
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };

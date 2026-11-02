@@ -34,22 +34,6 @@ usize MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept{
-    return
-        lhs.material == rhs.material
-        && lhs.pass == rhs.pass
-        && lhs.twoSided == rhs.twoSided
-        && lhs.csgMode == rhs.csgMode
-        && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant
-        && lhs.csgShapeRegistryRevision == rhs.csgShapeRegistryRevision
-        && lhs.framebufferInfo == rhs.framebufferInfo
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 

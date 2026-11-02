@@ -54,8 +54,7 @@ struct AvboitPassUploadInputs{
 struct FrameGraphAvboitPassPhaseDesc{
     Core::Framebuffer& framebuffer;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::AvboitOccupancy;
-    AvboitGeometryPhase::Enum geometryPhase = AvboitGeometryPhase::Occupancy;
-    AvboitMaterialUploadPhase::Enum uploadPhase = AvboitMaterialUploadPhase::Occupancy;
+    AvboitGeometryPhase::Enum phase = AvboitGeometryPhase::Occupancy;
 };
 
 // Parameterized AVBOIT pass upload chain owns gather plus geometry, material-upload, snapshot, and emulation capture.

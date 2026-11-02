@@ -150,13 +150,6 @@ protected:
     EditBoxResult m_result;
 };
 
-struct AcceptedAreaFrame{
-    Array<HitTarget, 16u> targets{};
-    usize count = 0u;
-    usize popupCount = 0u;
-    u64 generation = 0u;
-};
-
 class TextAreaLoanFixture : public TextAreaFixture{
 protected:
     [[nodiscard]] static TextAreaOptions AreaOptions()noexcept;
@@ -168,8 +161,8 @@ protected:
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::LargeLoanParentOptions());
     }
     [[nodiscard]] b8 finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
-    [[nodiscard]] AcceptedAreaFrame accepted()const noexcept;
-    void expectRejected(const AcceptedAreaFrame& frame);
+    [[nodiscard]] UiWidgetTests::AcceptedInputState<16u> accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }
+    void expectRejected(const UiWidgetTests::AcceptedInputState<16u>& frame);
 
 
 protected:

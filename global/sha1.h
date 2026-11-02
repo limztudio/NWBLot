@@ -13,6 +13,7 @@
 
 struct Sha1Digest{
     static constexpr u32 s_ByteCount = 20u;
+    static constexpr u32 s_HexTextLength = ShaBe32Detail::s_HexDigitsPerByte * s_ByteCount;
 
     u8 bytes[s_ByteCount] = {};
 };
@@ -35,14 +36,8 @@ namespace Sha1Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShaBe32Detail::s_WordBits;
-using ShaBe32Detail::s_BlockByteCount;
-using ShaBe32Detail::s_BlockWordCount;
-using ShaBe32Detail::s_HexDigitsPerByte;
-
 inline constexpr u32 s_StateWordCount = 5u;
 inline constexpr u32 s_RoundCount = 80u;
-inline constexpr u32 s_HexTextLength = s_HexDigitsPerByte * Sha1Digest::s_ByteCount;
 inline constexpr u32 s_ScheduleLagA = 3u;
 inline constexpr u32 s_ScheduleLagB = 8u;
 inline constexpr u32 s_ScheduleLagC = 14u;
@@ -71,13 +66,13 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = {
 
 
 [[nodiscard]] inline u32 RotateLeft(const u32 value, const u32 count)noexcept{
-    return (value << count) | (value >> (s_WordBits - count));
+    return (value << count) | (value >> (ShaBe32Detail::s_WordBits - count));
 }
 
-inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, s_BlockByteCount>& block)noexcept{
+inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, ShaBe32Detail::s_BlockByteCount>& block)noexcept{
     Array<u32, s_RoundCount> words = {};
     ShaBe32Detail::UnpackBlockWords(block, words.data());
-    for(u32 index = s_BlockWordCount; index < s_RoundCount; ++index){
+    for(u32 index = ShaBe32Detail::s_BlockWordCount; index < s_RoundCount; ++index){
         const u32 mixed = words[index - s_ScheduleLagA] ^ words[index - s_ScheduleLagB] ^ words[index - s_ScheduleLagC] ^ words[index - s_ScheduleLagD];
         words[index] = RotateLeft(mixed, s_ScheduleRotateLeft);
     }

@@ -81,15 +81,9 @@ b8 ValidateRecord(const ShaderArchive::Record& record){
 
 
 u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane)noexcept{
-    NWB_ASSERT_MSG(lane < NameDetail::s_HashLaneCount, NWB_TEXT("ShaderArchive: invalid hash lane"));
+    NWB_ASSERT_MSG(lane < s_NameHashLaneCount, NWB_TEXT("ShaderArchive: invalid hash lane"));
 
-    const u64 laneValue = nameHash.qwords[lane];
-    for(u32 byteIndex = 0u; byteIndex < sizeof(laneValue); ++byteIndex){
-        hash ^= static_cast<u8>((laneValue >> (byteIndex * NameDetail::s_NameHashByteBitCount)) & NameDetail::s_NameHashByteMask);
-        hash *= s_Fnv64Prime;
-    }
-
-    return hash;
+    return UpdateFnv64U64LittleEndian(hash, nameHash.qwords[lane]);
 }
 
 
@@ -131,7 +125,7 @@ Expected<Name> ShaderArchive::BuildVirtualPathName(const Name& shaderName, const
     NameHash derivedHash;
     static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
     const u64 prefixHash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, s_VirtualPathPrefix);
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         u64 laneHash = prefixHash;
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, shaderName.hash(), lane);
         laneHash = UpdateFnv64TextExact(laneHash, variantName);

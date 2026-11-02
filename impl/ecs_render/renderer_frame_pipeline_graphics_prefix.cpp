@@ -44,40 +44,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 PostGbufferNormalizeGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
-    if(!shadowVisibilityQueue)
-        return false;
-
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    // Explicit uses below lower G-buffer, scene, and trace-geometry states first.
-    if(shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute && payload.asyncPrefixTiming && *payload.asyncPrefixTiming){
-        (*payload.asyncPrefixTiming)->finishTiming(commandList);
-        payload.asyncPrefixTiming->reset();
-    }
-    return true;
-}
-
-void PostGbufferNormalizeGraphTask::Accepted(Payload& payload, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-    payload.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
@@ -483,7 +449,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states"));
     gbufferPayload.csgReceiverComputeEmulationOutputStatesGraphOwned = opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
 
-    gbufferResourceUses.reserve((hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount) + (hasCsgFrameGpuWork ? s_OpaqueCsgFrameGpuResourceUseCount : 0u) + (hasOpaqueCsgFrameWork ? s_OpaqueCsgFrameResourceUseCount : 0u));
+    gbufferResourceUses.reserve((hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount) + (hasCsgFrameGpuWork ? s_OpaqueCsgFrameResourceUseCount : 0u) + (hasOpaqueCsgFrameWork ? s_OpaqueCsgFrameResourceUseCount : 0u));
     gbufferResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
         gbufferResourceUses.push_back(ReadBufferUse(resources.materialInstances, materialInstanceRange));

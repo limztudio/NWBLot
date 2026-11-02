@@ -141,11 +141,11 @@ const TimingStats& TimingRecorder::stats(const TimingScopeId scope)const noexcep
 }
 
 TimingScopeId TimingRecorder::scopeAt(const usize index)const noexcept{
-    return ScopeAt<TimingScopeId>(m_scopes, index);
+    return ScopeAt<TimingScopeId>(Span<const ScopeRecordPtr>(m_scopes), index);
 }
 
 Name TimingRecorder::scopeNameAt(const usize index)const noexcept{
-    return ScopeNameAt(m_scopes, index);
+    return ScopeNameAt(Span<const ScopeRecordPtr>(m_scopes), index);
 }
 
 const TimingStats& TimingRecorder::statsAt(const usize index)const noexcept{
@@ -157,7 +157,7 @@ const TimingStats& TimingRecorder::statsAt(const usize index)const noexcept{
 }
 
 TimingRecorder::ScopeRecord* TimingRecorder::findScope(const TimingScopeId scope)const noexcept{
-    return FindNamedScope<TimingScopeId>(m_scopes, scope);
+    return FindNamedScope<TimingScopeId>(Span<const ScopeRecordPtr>(m_scopes), scope);
 }
 
 

@@ -627,9 +627,8 @@ private:
         createMirrorBackdrop();
         const f32 shift = moved ? 0.9f : 0.0f;
         // Marker spheres behind the camera reflect through z=0 to virtual images at z=+8.
-        const SIMDVectorSingle markerX = VectorAdd(VectorSet(-1.6f, 1.6f, 0.0f, 0.0f), VectorReplicate(shift));
-        const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(VectorGetX(markerX), 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
-        const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(VectorGetY(markerX), 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+        const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f), Float4(-1.6f + shift, 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
+        const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f), Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
         NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProject: offscreen markers failed"));
     }
 
@@ -654,9 +653,8 @@ private:
     void createOpaqueGlassScene(){
         for(u32 stripe = 0u; stripe < 24u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.55f : 0.015f;
-            Float4 position;
-            StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.0f, 0.0f, 0.0f), VectorSet(0.3f, 0.0f, 0.0f, 0.0f), VectorSet(-3.45f, 1.4f, 2.8f, 0.0f)), position);
-            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), position, Float4(0.15f, 1.0f, 3.0f, 0.0f));
+            const f32 x = static_cast<f32>(stripe) * 0.3f - 3.45f;
+            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(x, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 3.0f, 0.0f));
         }
         const auto opaque = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f), Float4(-1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), 0.95f);
         const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f), Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);

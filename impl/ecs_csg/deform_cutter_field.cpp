@@ -16,68 +16,57 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchArena = Core::Alloc::ScratchArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(
     const CsgDeformShape& shape,
     const Span<const CsgDeformVertex> vertices,
-    const SIMDVectorSingle epsilon,
+    const f32 boundaryEpsilon,
     const CsgShapeRegistry* shapeRegistry,
-    Vector<f32, ScratchArena>& outDistances
+    Vector<f32, Core::Alloc::ScratchArena>& outDistances
 ){
-    const CsgShapeInlineParameters inlineParameters = MakeCsgDeformShapeInlineParameters(shape);
+    CsgShapeInlineParameters inlineParameters = MakeCsgShapeInlineParameters(shape.parameter0, shape.parameter1);
     CsgShapeSignedDistanceCallback registryDistanceCallback = nullptr;
-    FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> packedParameterBytes;
+    CsgBuiltInShapeKind::Enum builtInKind = CsgBuiltInShapeKind::Plane;
 
     if(shapeRegistry){
         const auto shapeType = shapeRegistry->findShapeType(shape.shapeType);
         if(shapeType && shapeType->desc.signedDistanceCallback){
+            FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> packedParameterBytes;
             if(!PackCsgShapeDefaultParameterBytes(shapeType->desc.parameterByteSize, inlineParameters, packedParameterBytes))
                 return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+            inlineParameters = ReadCsgShapeInlineParameters(Span<const u8>(packedParameterBytes.data(), packedParameterBytes.size()));
             registryDistanceCallback = shapeType->desc.signedDistanceCallback;
         }
     }
 
-    if(!registryDistanceCallback){
-        f32 probeDistance = 0.0f;
-        if(!TryEvaluateBuiltInCsgShapeSignedDistance(shape.shapeType, s_CsgZeroShapeParameter, inlineParameters, probeDistance))
-            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-    }
+    if(!registryDistanceCallback && !TryResolveBuiltInCsgShapeKind(shape.shapeType, builtInKind))
+        return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
 
     const usize vertexCount = vertices.size();
     outDistances.clear();
     outDistances.resize(vertexCount, s_KeepDistanceZero);
 
     const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
-    const Span<const u8> parameterSpan(packedParameterBytes.data(), packedParameterBytes.size());
 
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
         const SIMDVectorSingle shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
+        Float4 shapePositionFloat4;
+        StoreFloat(shapePosition, shapePositionFloat4);
 
         f32 distance = 0.0f;
         if(registryDistanceCallback){
-            const auto evaluated = registryDistanceCallback(shapePosition, parameterSpan);
+            const auto evaluated = registryDistanceCallback(shapePositionFloat4, inlineParameters);
             if(!evaluated)
                 return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
             distance = *evaluated;
         }
-        else{
-            Float4 shapePositionFloat4;
-            StoreFloat(shapePosition, shapePositionFloat4);
-            if(!TryEvaluateBuiltInCsgShapeSignedDistance(shape.shapeType, shapePositionFloat4, inlineParameters, distance))
-                return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-        }
+        else
+            distance = EvaluateBuiltInCsgShapeSignedDistance(builtInKind, shapePositionFloat4, inlineParameters);
 
         if(!IsFinite(distance))
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
 
-        const SIMDVectorSingle distanceValue = VectorReplicate(distance);
-        if(Vector4LessOrEqual(VectorAbs(distanceValue), epsilon))
+        if(Abs(distance) <= boundaryEpsilon)
             distance = s_KeepDistanceZero;
         outDistances[vertexIndex] = distance;
     }
@@ -92,5 +81,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

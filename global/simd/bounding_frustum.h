@@ -25,6 +25,61 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline void NWB_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, const b8 rightHandedCoordinates)noexcept{
+    outFrustum.origin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    outFrustum.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    const SIMDVectorSingle m00 = VectorSplatX(projection.v[0]);
+    const SIMDVectorSingle m11 = VectorSplatY(projection.v[1]);
+    const SIMDVectorSingle m02 = VectorSplatZ(projection.v[0]);
+    const SIMDVectorSingle m12 = VectorSplatZ(projection.v[1]);
+    const SIMDVectorSingle slopes = VectorDivide(VectorMergeX(VectorSubtract(s_SIMDOne, m02), VectorSubtract(s_SIMDNegativeOne, m02), VectorSubtract(s_SIMDOne, m12), VectorSubtract(s_SIMDNegativeOne, m12)), VectorMergeX(m00, m00, m11, m11));
+    outFrustum.rightSlope = VectorGetX(slopes);
+    outFrustum.leftSlope = VectorGetY(slopes);
+    outFrustum.topSlope = VectorGetZ(slopes);
+    outFrustum.bottomSlope = VectorGetW(slopes);
+
+    const SIMDVectorSingle m22 = VectorSplatZ(projection.v[2]);
+    const SIMDVectorSingle m23 = VectorSplatW(projection.v[2]);
+    const SIMDVectorSingle planeDistances = rightHandedCoordinates
+        ? VectorDivide(VectorMergeX(m23, m23, VectorZero(), VectorZero()), VectorMergeX(m22, VectorAdd(m22, s_SIMDOne), s_SIMDOne, s_SIMDOne))
+        : VectorDivide(VectorMergeX(VectorNegate(m23), m23, VectorZero(), VectorZero()), VectorMergeX(m22, VectorSubtract(s_SIMDOne, m22), s_SIMDOne, s_SIMDOne))
+    ;
+    outFrustum.nearPlane = VectorGetX(planeDistances);
+    outFrustum.farPlane = VectorGetY(planeDistances);
+}
+
+inline void NWB_SIMD_CALL BoundingDoubleFrustum::CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, const b8 rightHandedCoordinates)noexcept{
+    outFrustum.origin = Double4(0.0, 0.0, 0.0, 0.0);
+    outFrustum.orientation = Double4(0.0, 0.0, 0.0, 1.0);
+
+    const SIMDVectorDouble m00 = VectorDoubleSplatX(projection.v[0]);
+    const SIMDVectorDouble m11 = VectorDoubleSplatY(projection.v[1]);
+    const SIMDVectorDouble m02 = VectorDoubleSplatZ(projection.v[0]);
+    const SIMDVectorDouble m12 = VectorDoubleSplatZ(projection.v[1]);
+    const SIMDVectorDouble slopes = VectorDoubleDivide(
+        VectorDoubleMergeX(VectorDoubleSubtract(s_DoubleSIMDOne, m02), VectorDoubleSubtract(s_DoubleSIMDNegativeOne, m02), VectorDoubleSubtract(s_DoubleSIMDOne, m12), VectorDoubleSubtract(s_DoubleSIMDNegativeOne, m12)),
+        VectorDoubleMergeX(m00, m00, m11, m11)
+    );
+    outFrustum.rightSlope = VectorDoubleGetX(slopes);
+    outFrustum.leftSlope = VectorDoubleGetY(slopes);
+    outFrustum.topSlope = VectorDoubleGetZ(slopes);
+    outFrustum.bottomSlope = VectorDoubleGetW(slopes);
+
+    const SIMDVectorDouble m22 = VectorDoubleSplatZ(projection.v[2]);
+    const SIMDVectorDouble m23 = VectorDoubleSplatW(projection.v[2]);
+    const SIMDVectorDouble planeDistances = rightHandedCoordinates
+        ? VectorDoubleDivide(VectorDoubleMergeX(m23, m23, VectorDoubleZero(), VectorDoubleZero()), VectorDoubleMergeX(m22, VectorDoubleAdd(m22, s_DoubleSIMDOne), s_DoubleSIMDOne, s_DoubleSIMDOne))
+        : VectorDoubleDivide(VectorDoubleMergeX(VectorDoubleNegate(m23), m23, VectorDoubleZero(), VectorDoubleZero()), VectorDoubleMergeX(m22, VectorDoubleSubtract(s_DoubleSIMDOne, m22), s_DoubleSIMDOne, s_DoubleSIMDOne))
+    ;
+    outFrustum.nearPlane = VectorDoubleGetX(planeDistances);
+    outFrustum.farPlane = VectorDoubleGetY(planeDistances);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline BoundingFrustum::BoundingFrustum(const SIMDMatrix& projection, const b8 rightHandedCoordinates)noexcept{
     CreateFromMatrix(*this, projection, rightHandedCoordinates);
 }
@@ -272,61 +327,6 @@ inline void BoundingDoubleFrustum::getPlanes(SIMDVectorDouble* nearPlaneOut, SIM
         *topPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Top];
     if(bottomPlaneOut)
         *bottomPlaneOut = planes[CollisionDoubleDetail::FrustumPlaneIndex::Bottom];
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline void NWB_SIMD_CALL BoundingFrustum::CreateFromMatrix(BoundingFrustum& outFrustum, const SIMDMatrix& projection, const b8 rightHandedCoordinates)noexcept{
-    outFrustum.origin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    outFrustum.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-
-    const SIMDVectorSingle m00 = VectorSplatX(projection.v[0]);
-    const SIMDVectorSingle m11 = VectorSplatY(projection.v[1]);
-    const SIMDVectorSingle m02 = VectorSplatZ(projection.v[0]);
-    const SIMDVectorSingle m12 = VectorSplatZ(projection.v[1]);
-    const SIMDVectorSingle slopes = VectorDivide(VectorMergeX(VectorSubtract(s_SIMDOne, m02), VectorSubtract(s_SIMDNegativeOne, m02), VectorSubtract(s_SIMDOne, m12), VectorSubtract(s_SIMDNegativeOne, m12)), VectorMergeX(m00, m00, m11, m11));
-    outFrustum.rightSlope = VectorGetX(slopes);
-    outFrustum.leftSlope = VectorGetY(slopes);
-    outFrustum.topSlope = VectorGetZ(slopes);
-    outFrustum.bottomSlope = VectorGetW(slopes);
-
-    const SIMDVectorSingle m22 = VectorSplatZ(projection.v[2]);
-    const SIMDVectorSingle m23 = VectorSplatW(projection.v[2]);
-    const SIMDVectorSingle planeDistances = rightHandedCoordinates
-        ? VectorDivide(VectorMergeX(m23, m23, VectorZero(), VectorZero()), VectorMergeX(m22, VectorAdd(m22, s_SIMDOne), s_SIMDOne, s_SIMDOne))
-        : VectorDivide(VectorMergeX(VectorNegate(m23), m23, VectorZero(), VectorZero()), VectorMergeX(m22, VectorSubtract(s_SIMDOne, m22), s_SIMDOne, s_SIMDOne))
-    ;
-    outFrustum.nearPlane = VectorGetX(planeDistances);
-    outFrustum.farPlane = VectorGetY(planeDistances);
-}
-
-inline void NWB_SIMD_CALL BoundingDoubleFrustum::CreateFromMatrix(BoundingDoubleFrustum& outFrustum, const SIMDMatrixDouble& projection, const b8 rightHandedCoordinates)noexcept{
-    outFrustum.origin = Double4(0.0, 0.0, 0.0, 0.0);
-    outFrustum.orientation = Double4(0.0, 0.0, 0.0, 1.0);
-
-    const SIMDVectorDouble m00 = VectorDoubleSplatX(projection.v[0]);
-    const SIMDVectorDouble m11 = VectorDoubleSplatY(projection.v[1]);
-    const SIMDVectorDouble m02 = VectorDoubleSplatZ(projection.v[0]);
-    const SIMDVectorDouble m12 = VectorDoubleSplatZ(projection.v[1]);
-    const SIMDVectorDouble slopes = VectorDoubleDivide(
-        VectorDoubleMergeX(VectorDoubleSubtract(s_DoubleSIMDOne, m02), VectorDoubleSubtract(s_DoubleSIMDNegativeOne, m02), VectorDoubleSubtract(s_DoubleSIMDOne, m12), VectorDoubleSubtract(s_DoubleSIMDNegativeOne, m12)),
-        VectorDoubleMergeX(m00, m00, m11, m11)
-    );
-    outFrustum.rightSlope = VectorDoubleGetX(slopes);
-    outFrustum.leftSlope = VectorDoubleGetY(slopes);
-    outFrustum.topSlope = VectorDoubleGetZ(slopes);
-    outFrustum.bottomSlope = VectorDoubleGetW(slopes);
-
-    const SIMDVectorDouble m22 = VectorDoubleSplatZ(projection.v[2]);
-    const SIMDVectorDouble m23 = VectorDoubleSplatW(projection.v[2]);
-    const SIMDVectorDouble planeDistances = rightHandedCoordinates
-        ? VectorDoubleDivide(VectorDoubleMergeX(m23, m23, VectorDoubleZero(), VectorDoubleZero()), VectorDoubleMergeX(m22, VectorDoubleAdd(m22, s_DoubleSIMDOne), s_DoubleSIMDOne, s_DoubleSIMDOne))
-        : VectorDoubleDivide(VectorDoubleMergeX(VectorDoubleNegate(m23), m23, VectorDoubleZero(), VectorDoubleZero()), VectorDoubleMergeX(m22, VectorDoubleSubtract(s_DoubleSIMDOne, m22), s_DoubleSIMDOne, s_DoubleSIMDOne))
-    ;
-    outFrustum.nearPlane = VectorDoubleGetX(planeDistances);
-    outFrustum.farPlane = VectorDoubleGetY(planeDistances);
 }
 
 

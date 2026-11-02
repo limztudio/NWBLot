@@ -3,7 +3,7 @@
 
 
 #include "ui_text_area_gallery.h"
-#include "ui_gallery_constants.h"
+#include "ui_gallery_support.h"
 
 #include <core/common/log.h>
 
@@ -29,18 +29,18 @@ void UiTextAreaGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, c
     Builder& ui = context.ui;
     if(!ui.beginPanel("text_area_gallery", { x, y, s_SelectorWidth, s_ContentHeight }))
         return;
-    const f32 previousFontSize = ui.style().fontSize;
-    ui.style().fontSize = s_GalleryFontSize;
-    b8 valid = ui.label(s_TitleKey, "Multiline text area");
-    if(ui.checkbox(s_ReadOnlyKey, "Read only", m_readOnly))
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: text area read only={}"), m_readOnly);
-    TextAreaOptions options;
-    options.height = { LayoutSizePolicy::Stretch, 1.0f };
-    options.readOnly = m_readOnly;
-    const EditBoxResult result = ui.textArea("document", m_document, m_state, options);
-    valid = result.valid && ui.label(s_HintKey, "Home / End: line; Ctrl: whole document") && valid;
-    valid = ui.endPanel() && valid;
-    ui.style().fontSize = previousFontSize;
+    EditBoxResult result;
+    const b8 valid = WithGalleryFontSize(ui, [&](){
+        b8 declared = ui.label(s_TitleKey, "Multiline text area");
+        if(ui.checkbox(s_ReadOnlyKey, "Read only", m_readOnly))
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: text area read only={}"), m_readOnly);
+        TextAreaOptions options;
+        options.height = { LayoutSizePolicy::Stretch, 1.0f };
+        options.readOnly = m_readOnly;
+        result = ui.textArea("document", m_document, m_state, options);
+        declared = result.valid && ui.label(s_HintKey, "Home / End: line; Ctrl: whole document") && declared;
+        return ui.endPanel() && declared;
+    });
     if(result.submitted)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: multiline document submitted, bytes={}"), m_document.text().size());
     if(!valid)

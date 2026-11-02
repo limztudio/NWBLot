@@ -21,6 +21,8 @@
 class Name;
 
 inline constexpr u32 s_NameHashLaneCount = 8u;
+inline constexpr usize s_HexDigitsPerHashLane = sizeof(u64) * 2u;
+inline constexpr usize s_DebugHashTextLength = s_HexDigitsPerHashLane * s_NameHashLaneCount + (s_NameHashLaneCount - 1u);
 
 struct NameHash{
     Array<u64, s_NameHashLaneCount> qwords;
@@ -42,16 +44,11 @@ namespace NameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_HashLaneCount = s_NameHashLaneCount;
 inline constexpr usize s_DebugNameCapacity = 256u;
-inline constexpr usize s_NameHashBytes = sizeof(u64) * s_HashLaneCount;
-inline constexpr usize s_HexDigitsPerHashLane = sizeof(u64) * 2u;
-inline constexpr usize s_EncodedNameHashLength = s_HexDigitsPerHashLane * s_HashLaneCount;
-inline constexpr usize s_DebugHashTextLength = s_EncodedNameHashLength + (s_HashLaneCount - 1u);
+inline constexpr usize s_NameHashBytes = sizeof(u64) * s_NameHashLaneCount;
+inline constexpr usize s_EncodedNameHashLength = s_HexDigitsPerHashLane * s_NameHashLaneCount;
 inline constexpr i32 s_HashHexInitialBitShift = static_cast<i32>((s_HexU64DigitCount - 1u) * s_HexNibbleBits);
 inline constexpr i32 s_HashHexBitShiftStep = static_cast<i32>(s_HexNibbleBits);
-inline constexpr u32 s_NameHashByteBitCount = 8u;
-inline constexpr u64 s_NameHashByteMask = 0xFFu;
 
 static_assert(sizeof(NameHash) == s_NameHashBytes, "NameHash size must stay stable");
 
@@ -62,7 +59,7 @@ inline constexpr u64 s_LaneSeedSalt4 = 0x8796A5B4C3D2E1F0ull;
 inline constexpr u64 s_LaneSeedSalt5 = 0xDEADBEEFCAFEBABEull;
 inline constexpr u64 s_LaneSeedSalt6 = 0x1234ABCD5678EF01ull;
 inline constexpr u64 s_LaneSeedSalt7 = 0xA0B1C2D3E4F50617ull;
-inline constexpr Array<u64, s_HashLaneCount> s_LaneSeeds = {
+inline constexpr Array<u64, s_NameHashLaneCount> s_LaneSeeds = {
     s_Fnv64OffsetBasis,
     s_Fnv64OffsetBasis ^ s_LaneSeedSalt1,
     s_Fnv64OffsetBasis ^ s_LaneSeedSalt2,
@@ -77,18 +74,18 @@ inline constexpr Array<u64, s_HashLaneCount> s_LaneSeeds = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(sizeof(s_LaneSeeds) / sizeof(s_LaneSeeds[0]) == s_HashLaneCount, "s_LaneSeeds count must match s_HashLaneCount");
+static_assert(sizeof(s_LaneSeeds) / sizeof(s_LaneSeeds[0]) == s_NameHashLaneCount, "s_LaneSeeds count must match s_NameHashLaneCount");
 
 
 inline constexpr void InitializeNameHash(NameHash& hash)noexcept{
-    for(u32 i = 0u; i < s_HashLaneCount; ++i)
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i)
         hash.qwords[i] = s_LaneSeeds[i];
 }
 
 template<typename CharT>
 inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT ch)noexcept(IsArithmetic_V<CharT>){
     const u64 byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-    for(u32 i = 0u; i < s_HashLaneCount; ++i){
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
         hash.qwords[i] ^= byte;
         hash.qwords[i] *= s_Fnv64Prime;
     }
@@ -110,14 +107,40 @@ template<typename CharT>
     return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')) || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')) || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')) || ch == static_cast<CharT>('_');
 }
 
+inline constexpr b8 EqualHash(const NameHash& a, const NameHash& b)noexcept{
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
+        if(a.qwords[i] != b.qwords[i])
+            return false;
+    }
+    return true;
+}
+
+inline constexpr usize HashValue(const NameHash& hash)noexcept{
+    usize seed = static_cast<usize>(hash.qwords[0]);
+    for(u32 i = 1; i < s_NameHashLaneCount; ++i){
+        HashCombineHash(seed, static_cast<usize>(hash.qwords[i]), static_cast<usize>(s_HashCombineGoldenRatio64));
+    }
+    return seed;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename CharT>
 [[nodiscard]] inline Expected<Array<char, s_DebugHashTextLength + 1u>> CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset)noexcept(IsArithmetic_V<CharT>){
     Array<char, s_DebugHashTextLength + 1u> hashText;
     if(offset > text.size() || s_DebugHashTextLength > text.size() - offset)
         return MakeUnexpected(Failure{});
-    if(offset > 0u && IsNameHashTokenChar(text[offset - 1u]))
+    if(offset > 0u && NameDetail::IsNameHashTokenChar(text[offset - 1u]))
         return MakeUnexpected(Failure{});
-    if(offset + s_DebugHashTextLength < text.size() && IsNameHashTokenChar(text[offset + s_DebugHashTextLength]))
+    if(offset + s_DebugHashTextLength < text.size() && NameDetail::IsNameHashTokenChar(text[offset + s_DebugHashTextLength]))
         return MakeUnexpected(Failure{});
 
     for(usize i = 0u; i < s_DebugHashTextLength; ++i){
@@ -126,7 +149,7 @@ template<typename CharT>
             if(ch != static_cast<CharT>('_'))
                 return MakeUnexpected(Failure{});
         }
-        else if(!IsNameHashTokenChar(ch) || ch == static_cast<CharT>('_')){
+        else if(!NameDetail::IsNameHashTokenChar(ch) || ch == static_cast<CharT>('_')){
             return MakeUnexpected(Failure{});
         }
 
@@ -142,7 +165,7 @@ template<typename CharT>
 
     NameHash hash;
     usize cursor = 0u;
-    for(u32 lane = 0u; lane < s_HashLaneCount; ++lane){
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         if((lane > 0u && text[cursor++] != '_') || cursor + s_HexDigitsPerHashLane > text.size())
             return MakeUnexpected(Failure{});
 
@@ -158,28 +181,12 @@ template<typename CharT>
     return hash;
 }
 
-inline constexpr b8 EqualHash(const NameHash& a, const NameHash& b)noexcept{
-    for(u32 i = 0u; i < s_HashLaneCount; ++i){
-        if(a.qwords[i] != b.qwords[i])
-            return false;
-    }
-    return true;
-}
-
 inline constexpr b8 IsZeroHash(const NameHash& hash)noexcept{
-    for(u32 i = 0u; i < s_HashLaneCount; ++i){
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
         if(hash.qwords[i] != 0)
             return false;
     }
     return true;
-}
-
-inline constexpr usize HashValue(const NameHash& hash)noexcept{
-    usize seed = static_cast<usize>(hash.qwords[0]);
-    for(u32 i = 1; i < s_HashLaneCount; ++i){
-        HashCombineHash(seed, static_cast<usize>(hash.qwords[i]), static_cast<usize>(s_HashCombineGoldenRatio64));
-    }
-    return seed;
 }
 
 template<typename CharT>
@@ -187,33 +194,25 @@ inline void HashToDebugString(CharT* dst, const usize dstSize, const NameHash& h
     if(dstSize == 0)
         return;
 
-    static constexpr AStringView s_Hex = "0123456789abcdef";
-
     if(dstSize <= s_DebugHashTextLength){
         dst[0] = CharT{};
         return;
     }
 
     CharT* writeCursor = dst;
-    for(u32 i = 0u; i < s_HashLaneCount; ++i){
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
         if(i > 0){
             *writeCursor = static_cast<CharT>('_');
             ++writeCursor;
         }
         const u64 value = hash.qwords[i];
-        for(i32 bitShift = s_HashHexInitialBitShift; bitShift >= 0; bitShift -= s_HashHexBitShiftStep){
-            *writeCursor = static_cast<CharT>(s_Hex[(value >> bitShift) & s_HexNibbleMask]);
+        for(i32 bitShift = NameDetail::s_HashHexInitialBitShift; bitShift >= 0; bitShift -= NameDetail::s_HashHexBitShiftStep){
+            *writeCursor = NumericTextDetail::HexDigit<CharT>(static_cast<usize>((value >> bitShift) & s_HexNibbleMask));
             ++writeCursor;
         }
     }
     *writeCursor = CharT{};
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -291,7 +290,7 @@ template<typename CharT>
 
 
 [[nodiscard]] inline constexpr b8 LessNameHash(const NameHash& lhs, const NameHash& rhs)noexcept{
-    for(u32 i = 0u; i < NameDetail::s_HashLaneCount; ++i){
+    for(u32 i = 0u; i < s_NameHashLaneCount; ++i){
         if(lhs.qwords[i] < rhs.qwords[i])
             return true;
         if(lhs.qwords[i] > rhs.qwords[i])

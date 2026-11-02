@@ -100,7 +100,7 @@ TEST_F(UiSliderBuilderTests, ConstantRangeIsValidAndNoninteractiveWithoutRewriti
 
 TEST_F(UiSliderBuilderTests, InvalidPolicyRejectsTheCandidateWithoutReplacingItsAcceptedLayout){
     ASSERT_TRUE(accept(1u));
-    const SliderAcceptedFrame displayed = accepted();
+    const AcceptedInputState<64u> displayed = accepted();
     const SliderSnapshot before = m_state.snapshot();
     SliderOptions invalid = Options();
     invalid.minimum = 2.0;

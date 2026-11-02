@@ -81,9 +81,10 @@ template<typename ArenaT>
         return MakeUnexpected(FileRemovalFailure{ pathStat.error(), 0u });
     }
     if(!S_ISDIR(pathStat->st_mode)){
-        if(std::remove(path.c_str()) == 0)
-            return 1u;
-        return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
+        const auto removed = RemoveFile(path);
+        if(!removed)
+            return MakeUnexpected(FileRemovalFailure{ removed.error(), 0u });
+        return *removed ? 1u : 0u;
     }
     DIR* const directory = opendir(path.c_str());
     if(directory == nullptr)
@@ -162,7 +163,7 @@ template<typename ArenaT>
     if(!stillExists)
         return MakeUnexpected(stillExists.error());
     if(*stillExists)
-        return MakeUnexpected(std::make_error_code(std::errc::io_error));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
     return {};
 }
 

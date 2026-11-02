@@ -116,7 +116,7 @@ b8 UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
     options.modal = m_modal;
     options.dismissOutside = !m_modal;
     if(m_edge)
-        options.anchor = StoreSmokeRect(VectorSubtract(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 48.0f, 24.0f), VectorSet(60.0f, 48.0f, 0.0f, 0.0f)));
+        options.anchor = Impl::Ui::StoreRect(VectorSubtract(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 48.0f, 24.0f), VectorSet(60.0f, 48.0f, 0.0f, 0.0f)));
     options.side = m_right ? PopupPlacementSide::Right : PopupPlacementSide::Below;
     m_popupFocused = false;
     if(m_visible && ui.beginPopup(__hidden_ui_popup_smoke::s_PopupKey, m_popup, options)){
@@ -150,7 +150,7 @@ b8 UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
     Rect bounds = m_popup.placement().bounds;
     if(bounds.width <= 0.0f)
         bounds = { 200.0f, 104.0f, 220.0f, 236.0f };
-    if(!context.ui.beginPanel("later_root", StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(-8.0f, -8.0f, 16.0f, 16.0f)))))
+    if(!context.ui.beginPanel("later_root", Impl::Ui::StoreRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(-8.0f, -8.0f, 16.0f, 16.0f)))))
         return false;
     if(!context.ui.endPanel())
         return false;
@@ -202,11 +202,10 @@ void UiPopupSmokeScene::observeState(){
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_ModalLabel, __hidden_ui_popup_smoke::s_ModalTrigger);
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_OutsideLabel, m_outsideEdit.placement.bounds);
-    const Impl::Ui::Rect first = StoreSmokeRect(VectorAdd(VectorSet(placement.bounds.x, placement.bounds.y, placement.bounds.width, 0.0f), VectorSet(8.0f, 36.0f, -16.0f, 32.0f)));
-    const SIMDVectorSingle laterRowsY = VectorAdd(VectorReplicate(first.y), VectorSet(40.0f, 80.0f, 0.0f, 0.0f));
+    const Impl::Ui::Rect first = Impl::Ui::StoreRect(VectorAdd(VectorSet(placement.bounds.x, placement.bounds.y, placement.bounds.width, 0.0f), VectorSet(8.0f, 36.0f, -16.0f, 32.0f)));
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_FirstLabel, first);
-    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_SecondLabel, { first.x, VectorGetX(laterRowsY), first.width, first.height });
-    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("check"), { first.x, VectorGetY(laterRowsY), first.width, first.height });
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, __hidden_ui_popup_smoke::s_SecondLabel, { first.x, first.y + 40.0f, first.width, first.height });
+    LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("check"), { first.x, first.y + 80.0f, first.width, first.height });
     LogSmokeRect(__hidden_ui_popup_smoke::s_LogTag, m_sequence, NWB_TEXT("edit"), m_popupEdit.placement.bounds);
 }
 

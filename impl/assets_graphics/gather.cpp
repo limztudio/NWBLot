@@ -47,7 +47,7 @@ static b8 ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
 
 
 b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const Span<const u8> incomingPayload, Core::Alloc::ScratchArena& scratchArena, Core::Assets::AssetBytes& existingPayload){
-    if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
+    if(virtualPath != Core::ShaderArchive::s_IndexVirtualPathName)
         return false;
     if(!incomingPayload.empty() && incomingPayload.data() == nullptr)
         return false;

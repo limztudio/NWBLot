@@ -17,37 +17,63 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 CommandList::CollectGraphicsBufferStates(const GraphicsState& state, GraphicsBufferStateTable& outTable)noexcept{
+    outTable = {};
+    const auto addRequiredBufferState = [&outTable](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> b8{
+        if(!buffer)
+            return true;
+        for(u32 stateIndex = 0u; stateIndex < outTable.count; ++stateIndex){
+            if(outTable.entries[stateIndex].buffer == buffer){
+                outTable.entries[stateIndex].state |= requiredState;
+                return true;
+            }
+            if(outTable.entries[stateIndex].buffer->m_buffer == buffer->m_buffer)
+                return false;
+        }
+        NWB_ASSERT(outTable.count < LengthOf(outTable.entries));
+        outTable.entries[outTable.count].buffer = buffer;
+        outTable.entries[outTable.count].state = requiredState;
+        ++outTable.count;
+        return true;
+    };
+
+    for(const VertexBufferBinding& binding : state.vertexBuffers){
+        if(!addRequiredBufferState(binding.buffer, ResourceStates::VertexBuffer))
+            return false;
+    }
+    return addRequiredBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer) && addRequiredBufferState(state.indirectParams, ResourceStates::IndirectArgument);
+}
+
 b8 CommandList::validateGraphicsState(const GraphicsState& state){
-    constexpr TStringView s_OperationName = s_SetGraphicsStateOperation;
     if(state.pipeline && &state.pipeline->m_context != &m_context){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline belongs to another device"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline belongs to another device"));
         return false;
     }
     if(state.shadingRateState.enabled){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("variable-rate shading state is not implemented"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("variable-rate shading state is not implemented"));
         return false;
     }
     if(state.pipeline && !state.framebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("a graphics pipeline requires an explicit framebuffer"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("a graphics pipeline requires an explicit framebuffer"));
         return false;
     }
-    if(!validateFramebufferForRendering(state.framebuffer, s_OperationName))
+    if(!validateFramebufferForRendering(state.framebuffer, s_SetGraphicsStateOperation))
         return false;
-    if(!validateViewportState(state.viewport, s_OperationName))
+    if(!validateViewportState(state.viewport, s_SetGraphicsStateOperation))
         return false;
 
     if(state.pipeline){
-        if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->m_pipelineLayout == VK_NULL_HANDLE){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline has no native pipeline or layout"));
+        if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
+            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline has no native pipeline or layout"));
             return false;
         }
         if(state.pipeline->m_framebufferInfo != state.framebuffer->m_framebufferInfo){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline and framebuffer are incompatible"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline and framebuffer are incompatible"));
             return false;
         }
         const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
         if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline writes a read-only depth/stencil attachment"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("graphics pipeline writes a read-only depth/stencil attachment"));
             return false;
         }
     }
@@ -61,12 +87,12 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
             || binding.offset >= binding.buffer->m_creationDesc.byteSize
             || binding.slot >= m_context.physicalDeviceProperties.limits.maxVertexInputBindings
         ){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("vertex-buffer binding is invalid"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("vertex-buffer binding is invalid"));
             return false;
         }
         for(usize priorIndex = 0u; priorIndex < bindingIndex; ++priorIndex){
             if(state.vertexBuffers[priorIndex].slot == binding.slot){
-                rejectCommandRecording(s_OperationName, NWB_TEXT("vertex-buffer slot is bound more than once"));
+                rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("vertex-buffer slot is bound more than once"));
                 return false;
             }
         }
@@ -82,109 +108,77 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
             || (indexBinding.offset % indexBytes) != 0u
             || indexBinding.offset >= indexBinding.buffer->m_creationDesc.byteSize
         ){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("index-buffer binding is invalid"));
+            rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("index-buffer binding is invalid"));
             return false;
         }
     }
     else if(indexBinding.offset != 0u || indexBinding.format != Format::UNKNOWN){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("index-buffer metadata has no buffer"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("index-buffer metadata has no buffer"));
         return false;
     }
 
     if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs || state.indirectParams->m_creationDesc.byteSize == 0u)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("indirect-argument buffer is invalid"));
+        rejectCommandRecording(s_SetGraphicsStateOperation, NWB_TEXT("indirect-argument buffer is invalid"));
         return false;
     }
 
-    struct BufferStateEntry{
-        Buffer* buffer = nullptr;
-        ResourceStates::Mask state = ResourceStates::Unknown;
-    };
-    Array<BufferStateEntry, s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount> requiredBufferStates{};
-    u32 requiredBufferStateCount = 0u;
-
-    const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> b8{
-        if(!buffer)
-            return true;
-        for(u32 stateIndex = 0u; stateIndex < requiredBufferStateCount; ++stateIndex){
-            if(requiredBufferStates[stateIndex].buffer == buffer){
-                requiredBufferStates[stateIndex].state |= requiredState;
-                return true;
-            }
-            if(requiredBufferStates[stateIndex].buffer->m_buffer == buffer->m_buffer){
-                return false;
-            }
-        }
-        NWB_ASSERT(requiredBufferStateCount < LengthOf(requiredBufferStates));
-        requiredBufferStates[requiredBufferStateCount].buffer = buffer;
-        requiredBufferStates[requiredBufferStateCount].state = requiredState;
-        ++requiredBufferStateCount;
-        return true;
-    };
-
-    for(const VertexBufferBinding& binding : state.vertexBuffers){
-        if(!addRequiredBufferState(binding.buffer, ResourceStates::VertexBuffer)){
-            rejectCommandRecording(s_OperationName, s_NativeBufferAliasReason);
-            return false;
-        }
-    }
-    if(!addRequiredBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer) || !addRequiredBufferState(state.indirectParams, ResourceStates::IndirectArgument)){
-        rejectCommandRecording(s_OperationName, s_NativeBufferAliasReason);
+    GraphicsBufferStateTable requiredBufferStates{};
+    if(!CollectGraphicsBufferStates(state, requiredBufferStates)){
+        rejectCommandRecording(s_SetGraphicsStateOperation, s_NativeBufferAliasReason);
         return false;
     }
 
-    for(u32 stateIndex = 0u; stateIndex < requiredBufferStateCount; ++stateIndex){
-        const BufferStateEntry& requiredBufferState = requiredBufferStates[stateIndex];
-        if(!validateBufferForGpuState(requiredBufferState.buffer, requiredBufferState.state, s_OperationName))
+    for(u32 stateIndex = 0u; stateIndex < requiredBufferStates.count; ++stateIndex){
+        const GraphicsBufferStateEntry& requiredBufferState = requiredBufferStates.entries[stateIndex];
+        if(!validateBufferForGpuState(requiredBufferState.buffer, requiredBufferState.state, s_SetGraphicsStateOperation))
             return false;
     }
     return true;
 }
 
 b8 CommandList::validateMeshletState(const MeshletState& state){
-    constexpr TStringView s_OperationName = s_SetMeshletStateOperation;
     if(state.pipeline && &state.pipeline->m_context != &m_context){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline belongs to another device"));
+        rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline belongs to another device"));
         return false;
     }
     if(state.pipeline && !state.framebuffer){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("a meshlet pipeline requires an explicit framebuffer"));
+        rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("a meshlet pipeline requires an explicit framebuffer"));
         return false;
     }
-    if(!validateFramebufferForRendering(state.framebuffer, s_OperationName))
+    if(!validateFramebufferForRendering(state.framebuffer, s_SetMeshletStateOperation))
         return false;
-    if(!validateViewportState(state.viewport, s_OperationName))
+    if(!validateViewportState(state.viewport, s_SetMeshletStateOperation))
         return false;
 
     if(state.pipeline){
         if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
-            rejectCommandRecording(s_OperationName, s_MeshShaderUnavailableReason);
+            rejectCommandRecording(s_SetMeshletStateOperation, s_MeshShaderUnavailableReason);
             return false;
         }
         if(state.pipeline->m_desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("task shader feature is unavailable"));
+            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("task shader feature is unavailable"));
             return false;
         }
-        if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->m_pipelineLayout == VK_NULL_HANDLE){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline has no native pipeline or layout"));
+        if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
+            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline has no native pipeline or layout"));
             return false;
         }
         if(state.pipeline->m_framebufferInfo != state.framebuffer->m_framebufferInfo){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline and framebuffer are incompatible"));
+            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline and framebuffer are incompatible"));
             return false;
         }
         const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
         if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
+            rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
             return false;
         }
     }
 
     if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs || state.indirectParams->m_creationDesc.byteSize == 0u)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("mesh indirect-argument buffer is invalid"));
+        rejectCommandRecording(s_SetMeshletStateOperation, NWB_TEXT("mesh indirect-argument buffer is invalid"));
         return false;
     }
-    if(state.indirectParams && !validateBufferForGpuState(state.indirectParams, ResourceStates::IndirectArgument, s_OperationName))
+    if(state.indirectParams && !validateBufferForGpuState(state.indirectParams, ResourceStates::IndirectArgument, s_SetMeshletStateOperation))
         return false;
     return true;
 }

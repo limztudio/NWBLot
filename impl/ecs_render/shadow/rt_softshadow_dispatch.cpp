@@ -252,9 +252,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         {
             Core::GpuTimingMeasure transparentTraceTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList);
 
-            if(hardwareTransparentShadowReady()){
+            if(hardwareTransparentShadowReady())
                 dispatchHardwareTransparentShadow(commandList, targets, frameIndex);
-            }
             else{
                 // The software route is retained for devices without hardware ray queries.
                 if(!graphOwnsOpaqueToTransparentBoundary){

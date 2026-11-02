@@ -150,7 +150,7 @@ private:
     [[nodiscard]] b8 markAttributionsForRetirement(u64 subscriptionIdentityLimit)noexcept;
     void retireMarkedAttributions(SampleDispatchVector& outSamples);
     void discardMarkedAttributions()noexcept;
-    void retireAttributions(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
+    void retireAttributions(u64 subscriptionIdentityLimit, SampleDispatchVector& outSamples);
     void appendStatistics(GpuTimingRecorderStatistics& outStatistics)const noexcept;
 
 
@@ -318,7 +318,7 @@ private:
     void reservePendingAttributionSamplesLocked(SampleDispatchVector& outSamples)const;
     void retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples);
     void discardMarkedPendingAttributionsLocked()noexcept;
-    void retirePendingAttributionsLocked(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
+    void retirePendingAttributionsLocked(u64 subscriptionIdentityLimit, SampleDispatchVector& outSamples);
     void discardFrameResetLocked()noexcept;
     void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason)noexcept;
     void syncActiveState(u64 subscriptionIdentityLimit)noexcept;

@@ -5,6 +5,7 @@
 #include "material_system.h"
 
 #include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
@@ -27,44 +28,20 @@ NWB_IMPL_BEGIN
 
 
 Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
-    if(!m_materialState.m_materialPassBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc
-            .setVisibility(Core::ShaderType::All)
-            // Every material pass uses this push-only layout; transparent consumes the full payload.
-            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(TransparentDrawPushConstants)))
-        ;
-        auto materialPassBindingLayoutResult = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
-        if(materialPassBindingLayoutResult)
-            m_materialState.m_materialPassBindingLayout = Move(*materialPassBindingLayoutResult);
-        else
-            m_materialState.m_materialPassBindingLayout.reset();
-        if(!materialPassBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
-            return MakeUnexpected(Failure{});
-        }
+    // Every material pass uses this push-only layout; transparent consumes the full payload.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), Core::ShaderType::All, m_materialState.m_materialPassBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
+        return MakeUnexpected(Failure{});
     }
     return m_materialState.m_materialPassBindingLayout;
 }
 
 
 b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
-    if(!m_materialState.m_computeBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshComputePushConstants)));
-
-        auto& device = m_graphics.getDevice();
-        auto computeBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
-        if(computeBindingLayoutResult)
-            m_materialState.m_computeBindingLayout = Move(*computeBindingLayoutResult);
-        else
-            m_materialState.m_computeBindingLayout.reset();
-        if(!computeBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
-            return false;
-        }
+    // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(MeshComputePushConstants), Core::ShaderType::Compute, m_materialState.m_computeBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
+        return false;
     }
 
     return true;

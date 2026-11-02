@@ -30,26 +30,21 @@ namespace __hidden_asset_builder{
 static b8 ResolveRoots(const PipelineOptions& parsed, Core::Assets::ScratchArena& scratchArena, AssetBuilder::AssetBuildOptions& options){
     namespace Assets = Core::Assets;
     auto& arena = options.assetRoots.get_allocator().arena();
-    const auto repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AssetBuilder::s_DefaultRepoRoot : AStringView(options.repoRoot)));
-    if(!repoRoot){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repository root"));
+    auto repoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), NWB_TEXT("AssetBuilder"), arena);
+    if(!repoRoot)
         return false;
-    }
-    options.resolvedRepoRoot = repoRoot->lexicallyNormal();
-    const auto& sources = parsed.assetRoots.empty() ? parsed.inputs : parsed.assetRoots;
-    auto roots = Assets::ResolveAssetRoots(options.resolvedRepoRoot, sources, parsed.assetRoots.empty(), Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
-    if(!roots){
-        const auto& error = roots.error();
-        if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect input '{}'"), ConvertString(sources[error.sourceIndex]));
-        else
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root from '{}'"), ConvertString(sources[error.sourceIndex]));
+    options.resolvedRepoRoot = Move(*repoRoot);
+    auto roots = ResolvePipelineAssetRoots(
+        options.resolvedRepoRoot,
+        parsed.inputs,
+        parsed.assetRoots,
+        Assets::AssetRootDuplicatePolicy::ExactText,
+        NWB_TEXT("AssetBuilder"),
+        NWB_TEXT("an empty input list requires --asset-root"),
+        scratchArena
+    );
+    if(!roots)
         return false;
-    }
-    if(roots->empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: an empty input list requires --asset-root"));
-        return false;
-    }
     options.assetRoots.reserve(roots->size());
     for(Assets::ResolvedAssetRoot& root : *roots)
         options.assetRoots.emplace_back(Move(root.path), root.virtualRoot);

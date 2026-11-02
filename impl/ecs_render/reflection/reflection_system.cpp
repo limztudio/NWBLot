@@ -3,6 +3,8 @@
 
 
 #include "reflection_system.h"
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <impl/assets/graphics/reflection/depth_constants.h>
@@ -213,9 +215,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
     }
 
     const auto registerDescriptor = [&](Core::GpuDescriptorHandle& descriptor, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item){
-        const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(descriptorClass);
-        descriptor = allocated ? *allocated : Core::GpuDescriptorHandle::Invalid();
-        return allocated && heap.write(descriptor, item);
+        return RendererDescriptorRegisterDetail::AssignDescriptor(heap, descriptorClass, item, descriptor);
     };
     if(
         !registerDescriptor(m_descriptors[DescriptorIndex::OpaqueSampled], Core::GpuDescriptorClass::SampledImage, Core::DescriptorWriteItem::TextureSrv(0u, m_resources.opaqueRadiance.get()))
@@ -440,14 +440,10 @@ b8 RendererReflectionSystem::prepareQueue(const u32 capacity){
         return false;
     Core::BufferHandle queue = Move(*queueResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Expected<Core::GpuDescriptorHandle> descriptorResult = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, queue.get()));
     if(!descriptorResult)
         return false;
     const Core::GpuDescriptorHandle descriptor = *descriptorResult;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, queue.get()))){
-        heap.free(descriptor);
-        return false;
-    }
     // Publish only after success; retirement protects the old selector.
     if(m_descriptors[DescriptorIndex::Queue].valid())
         heap.free(m_descriptors[DescriptorIndex::Queue]);
@@ -479,14 +475,10 @@ b8 RendererReflectionSystem::prepareArguments(const u32 capacity, const b8 slice
         return false;
     Core::BufferHandle arguments = Move(*argumentsResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Expected<Core::GpuDescriptorHandle> descriptorResult = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, arguments.get()));
     if(!descriptorResult)
         return false;
     const Core::GpuDescriptorHandle descriptor = *descriptorResult;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, arguments.get()))){
-        heap.free(descriptor);
-        return false;
-    }
     if(m_descriptors[DescriptorIndex::Args].valid())
         heap.free(m_descriptors[DescriptorIndex::Args]);
     m_descriptors[DescriptorIndex::Args] = descriptor;
@@ -498,30 +490,11 @@ b8 RendererReflectionSystem::prepareArguments(const u32 capacity, const b8 slice
 b8 RendererReflectionSystem::preparePipelines(const b8 prepareHardware, const b8 prepareCsgHardware){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!m_bindingLayout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(u32)));
-        auto bindingLayoutResult = device.createBindingLayout(desc);
-        if(bindingLayoutResult)
-            m_bindingLayout = Move(*bindingLayoutResult);
-        else
-            m_bindingLayout.reset();
-        if(!bindingLayoutResult)
-            return false;
-    }
-    if(!m_depthBindingLayout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES));
-        auto depthBindingLayoutResult = device.createBindingLayout(desc);
-        if(depthBindingLayoutResult)
-            m_depthBindingLayout = Move(*depthBindingLayoutResult);
-        else
-            m_depthBindingLayout.reset();
-        if(!depthBindingLayoutResult)
-            return false;
-    }
+    if(
+        !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(u32), Core::ShaderType::Compute, m_bindingLayout)
+        || !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_depthBindingLayout)
+    )
+        return false;
     const auto preparePipeline = [&](
         Core::ComputePipelineHandle& pipeline,
         Core::ShaderHandle& shader,
@@ -535,16 +508,7 @@ b8 RendererReflectionSystem::preparePipelines(const b8 prepareHardware, const b8
             return true;
         if(!m_shaders.loadShader<ComputeShader>(member, variant, debugName, shader))
             return false;
-        Core::ComputePipelineDesc desc;
-        desc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        if(hardware)
-            desc.addBindingLayout(heap.getAccelStructLayout());
-        auto pipelineResult = device.createComputePipeline(desc);
-        if(pipelineResult)
-            pipeline = Move(*pipelineResult);
-        else
-            pipeline.reset();
-        return static_cast<b8>(pipelineResult);
+        return RendererComputePipelineDetail::CreateHeapComputePipeline(device, shader, bindingLayout, hardware, pipeline);
     };
     if(
         !preparePipeline(m_resources.classifyPipeline, m_classifyShader, &ReflectionSubsystem::classifyCs, Name("ECSRender_ReflectionClassify"), false, m_bindingLayout)
@@ -562,18 +526,8 @@ b8 RendererReflectionSystem::preparePipelines(const b8 prepareHardware, const b8
     )
         return false;
     const b8 csgHardware = prepareCsgHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout();
-    if(csgHardware && !m_csgBindingLayout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES));
-        auto csgBindingLayoutResult = device.createBindingLayout(desc);
-        if(csgBindingLayoutResult)
-            m_csgBindingLayout = Move(*csgBindingLayoutResult);
-        else
-            m_csgBindingLayout.reset();
-        if(!csgBindingLayoutResult)
-            return false;
-    }
+    if(csgHardware && !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_csgBindingLayout))
+        return false;
     if(
         csgHardware
         && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, &ReflectionSubsystem::buildArgsCs, Name("ECSRender_ReflectionCsgBuildArgs"), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(

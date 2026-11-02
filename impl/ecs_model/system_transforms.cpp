@@ -136,9 +136,12 @@ void ModelSystem::updateStaticMeshAttachments(){
             }
             else{
                 const SkeletonPoseComponent* const pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
-                if(!pose || !SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints) || attachment.parentJointIndex >= m_scratchJoints.size())
+                if(!pose)
                     return;
-                jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
+                const auto resolvedJointMatrix = SkeletonRuntime::EvaluateSkeletonPoseJointMatrix(*pose, attachment.parentJointIndex);
+                if(!resolvedJointMatrix)
+                    return;
+                jointMatrix = *resolvedJointMatrix;
             }
             worldTransform = MatrixMultiply(MatrixMultiply(parentMatrix, jointMatrix), localMatrix);
         }

@@ -119,26 +119,20 @@ void AppendLightSpaceCsgReceiver(
     StoreFloat(worldMax, receiver.worldMax);
     state.receivers.push_back(receiver);
 
-    Float34 worldToObjectData{};
-    Float4 localMinData;
-    Float4 localMaxData;
-    StoreFloat(worldToObject, worldToObjectData);
-    StoreFloat(localMin, localMinData);
-    StoreFloat(localMax, localMaxData);
     const b8 hasRuntimeBounds = mesh.runtimeLocalBoundsBuffer && mesh.runtimeLocalBoundsHeapHandle.valid();
     if(hasRuntimeBounds)
         state.dynamicBounds.push_back(mesh.runtimeLocalBoundsBuffer);
-    const LightSpaceCsgInstanceGpu instance = BuildLightSpaceCsgInstanceGpu(
-        worldToObjectData,
+    LightSpaceCsgInstanceGpu instance = BuildLightSpaceCsgInstanceGpu(
         mesh.meshletPrimitiveIndexCount,
         hasRuntimeBounds,
         hasRuntimeBounds ? mesh.runtimeLocalBoundsHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot,
         state.hardware,
         mesh.swBvhNodeHeapHandle.valid(),
-        mesh.swBvhNodeHeapHandle.valid() ? mesh.swBvhNodeHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot,
-        localMinData,
-        localMaxData
+        mesh.swBvhNodeHeapHandle.valid() ? mesh.swBvhNodeHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot
     );
+    StoreFloat(worldToObject, instance.worldToObject);
+    StoreFloat(localMin, instance.localMin);
+    StoreFloat(localMax, instance.localMax);
     state.instances.push_back(instance);
     state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
 }
@@ -160,10 +154,9 @@ b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgStat
     const usize cutterBytes = state.snapshot.cutters.size() * sizeof(CsgCutterGpuData);
     const usize instanceBytes = state.instances.size() * sizeof(LightSpaceCsgInstanceGpu);
     u32 activeReceiverCount = 0u;
-    for(const auto& range : state.snapshot.receiverRanges){
+    for(const auto& range : state.snapshot.receiverRanges)
         if((range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u)
             ++activeReceiverCount;
-    }
     const usize activeReceiverBytes = static_cast<usize>(activeReceiverCount) * sizeof(u32);
     const usize activeReceiverOffset = NWB_CSG_RAY_CONTEXT_BYTES + rangeBytes + cutterBytes + instanceBytes;
     usize totalBytes = activeReceiverOffset + activeReceiverBytes;

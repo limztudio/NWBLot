@@ -184,11 +184,11 @@ const MemoryDelta& MemoryRecorder::delta(const MemoryScopeId scope)const noexcep
 }
 
 MemoryScopeId MemoryRecorder::scopeAt(const usize index)const noexcept{
-    return ScopeAt<MemoryScopeId>(m_scopes, index);
+    return ScopeAt<MemoryScopeId>(Span<const ScopeRecordPtr>(m_scopes), index);
 }
 
 Name MemoryRecorder::scopeNameAt(const usize index)const noexcept{
-    return ScopeNameAt(m_scopes, index);
+    return ScopeNameAt(Span<const ScopeRecordPtr>(m_scopes), index);
 }
 
 const MemorySnapshot& MemoryRecorder::snapshotAt(const usize index)const noexcept{
@@ -208,7 +208,7 @@ const MemoryDelta& MemoryRecorder::deltaAt(const usize index)const noexcept{
 }
 
 MemoryRecorder::ScopeRecord* MemoryRecorder::findScope(const MemoryScopeId scope)const noexcept{
-    return FindNamedScope<MemoryScopeId>(m_scopes, scope);
+    return FindNamedScope<MemoryScopeId>(Span<const ScopeRecordPtr>(m_scopes), scope);
 }
 
 

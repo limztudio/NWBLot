@@ -238,7 +238,7 @@ TEST_F(UiRadioGroupBuilderTests, SixtyFourChoicesSucceedAndTheSixtyFifthRejectsA
     m_source.m_count = 64u;
     ASSERT_TRUE(accept(1u));
     EXPECT_EQ(m_state.placement().count, 64u);
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     const RadioGroupSnapshot saved = m_state.snapshot();
     m_source.resetCounters();
     m_source.m_count = 65u;
@@ -253,7 +253,7 @@ TEST_F(UiRadioGroupBuilderTests, SixtyFourChoicesSucceedAndTheSixtyFifthRejectsA
 
 TEST_F(UiRadioGroupBuilderTests, DuplicateStableKeysRejectBeforeAnyLabelBorrow){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     const RadioGroupSnapshot saved = m_state.snapshot();
     m_source.resetCounters();
     m_source.m_duplicate = true;

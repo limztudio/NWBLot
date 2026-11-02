@@ -21,89 +21,95 @@ NWB_IMPL_BEGIN
 
 // Lagged-lighting history-copy tail acceptance (shadow/caustic/surfel returns).
 // Context and recorded/accepted callbacks filter the three return states and commit them together on acceptance.
-class FrameExecuteHistoryCopy final{
-public:
-    struct Context{
-        Core::Alloc::ScratchArena& scratchArena;
-        Core::GpuPersistentResourceStateCache& shadowVisibilityReturnState;
-        Core::GpuPersistentResourceStateCache& causticIrradianceReturnState;
-        Core::GpuPersistentResourceStateCache& surfelIrradianceReturnState;
-        NotNull<DeferredFrameTargets*> targets;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> shadowStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> causticStateCandidate;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> surfelStateCandidate;
-        b8 finalStateReady = false;
-        b8 acceptedStateReady = false;
-    };
+namespace FrameExecuteHistoryCopy{
 
 
-public:
-    [[nodiscard]] static b8 PrepareHistoryCopyFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
-        if(!context || !finalState)
-            return false;
-
-        const b8 shadowStateReady = context->shadowVisibilityReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->shadowVisibility, 1u), {}, context->scratchArena, *context->shadowStateCandidate);
-        const b8 causticStateReady = context->causticIrradianceReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->causticIrradiance, 1u), {}, context->scratchArena, *context->causticStateCandidate);
-        const b8 surfelStateReady = context->surfelIrradianceReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->surfelIrradiance, 1u), {}, context->scratchArena, *context->surfelStateCandidate);
-        context->finalStateReady = shadowStateReady && causticStateReady && surfelStateReady;
-        return context->finalStateReady;
-    }
-
-    [[nodiscard]] static b8 AcceptHistoryCopyFinalState(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-        FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
-        if(!context || !context->finalStateReady)
-            return false;
-
-        const b8 shadowStateReady = context->shadowVisibilityReturnState.commit(*context->shadowStateCandidate);
-        const b8 causticStateReady = context->causticIrradianceReturnState.commit(*context->causticStateCandidate);
-        const b8 surfelStateReady = context->surfelIrradianceReturnState.commit(*context->surfelStateCandidate);
-        context->acceptedStateReady = shadowStateReady && causticStateReady && surfelStateReady;
-        return context->acceptedStateReady;
-    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-public:
-    FrameExecuteHistoryCopy() = delete;
+struct Context{
+    Core::Alloc::ScratchArena& scratchArena;
+    Core::GpuPersistentResourceStateCache& shadowVisibilityReturnState;
+    Core::GpuPersistentResourceStateCache& causticIrradianceReturnState;
+    Core::GpuPersistentResourceStateCache& surfelIrradianceReturnState;
+    NotNull<DeferredFrameTargets*> targets;
+    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> shadowStateCandidate;
+    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> causticStateCandidate;
+    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> surfelStateCandidate;
+    b8 finalStateReady = false;
+    b8 acceptedStateReady = false;
+};
+
+[[nodiscard]] inline b8 PrepareHistoryCopyFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
+    if(!context || !finalState)
+        return false;
+
+    const b8 shadowStateReady = context->shadowVisibilityReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->shadowVisibility, 1u), {}, context->scratchArena, *context->shadowStateCandidate);
+    const b8 causticStateReady = context->causticIrradianceReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->causticIrradiance, 1u), {}, context->scratchArena, *context->causticStateCandidate);
+    const b8 surfelStateReady = context->surfelIrradianceReturnState.buildFilteredResourceSubset(*finalState, Span<const Core::TextureHandle>(&context->targets->surfelIrradiance, 1u), {}, context->scratchArena, *context->surfelStateCandidate);
+    context->finalStateReady = shadowStateReady && causticStateReady && surfelStateReady;
+    return context->finalStateReady;
+}
+
+[[nodiscard]] inline b8 AcceptHistoryCopyFinalState(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
+    FrameExecuteHistoryCopy::Context* const context = static_cast<Context*>(rawContext);
+    if(!context || !context->finalStateReady)
+        return false;
+
+    const b8 shadowStateReady = context->shadowVisibilityReturnState.commit(*context->shadowStateCandidate);
+    const b8 causticStateReady = context->causticIrradianceReturnState.commit(*context->causticStateCandidate);
+    const b8 surfelStateReady = context->surfelIrradianceReturnState.commit(*context->surfelStateCandidate);
+    context->acceptedStateReady = shadowStateReady && causticStateReady && surfelStateReady;
+    return context->acceptedStateReady;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 // Surfel-counter readback tail acceptance (Transfer queue).
 // Context and recorded/accepted callbacks hold the counter candidate until Transfer accepts, then publish the token.
-class FrameExecuteSurfelReadback final{
-public:
-    struct Context{
-        Core::Alloc::ScratchArena& scratchArena;
-        Core::GpuPersistentResourceStateCache& surfelGiCounterPersistentState;
-        RendererRayTracingSystem& raytracingSystem;
-        NotNull<Core::GpuPersistentResourceStateCache::Candidate*> candidate;
-        Span<const Core::BufferHandle> buffers{};
-        b8 finalStateReady = false;
-        b8 acceptedStateReady = false;
-    };
+namespace FrameExecuteSurfelReadback{
 
 
-public:
-    [[nodiscard]] static b8 PrepareReadbackFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
-        FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
-        if(!context || context->buffers.empty())
-            return false;
-        context->finalStateReady = finalState && context->surfelGiCounterPersistentState.buildFilteredBufferSubset(*finalState, context->buffers, context->scratchArena, *context->candidate);
-        return context->finalStateReady;
-    }
-
-    [[nodiscard]] static b8 AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
-        FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
-        if(!context || !context->finalStateReady)
-            return false;
-        context->acceptedStateReady = context->surfelGiCounterPersistentState.commit(*context->candidate);
-        if(context->acceptedStateReady)
-            context->raytracingSystem.confirmSurfelCountReadbackSubmission(token);
-        return context->acceptedStateReady;
-    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-public:
-    FrameExecuteSurfelReadback() = delete;
+struct Context{
+    Core::Alloc::ScratchArena& scratchArena;
+    Core::GpuPersistentResourceStateCache& surfelGiCounterPersistentState;
+    RendererRayTracingSystem& raytracingSystem;
+    NotNull<Core::GpuPersistentResourceStateCache::Candidate*> candidate;
+    Span<const Core::BufferHandle> buffers{};
+    b8 finalStateReady = false;
+    b8 acceptedStateReady = false;
+};
+
+[[nodiscard]] inline b8 PrepareReadbackFinalState(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
+    if(!context || context->buffers.empty())
+        return false;
+    context->finalStateReady = finalState && context->surfelGiCounterPersistentState.buildFilteredBufferSubset(*finalState, context->buffers, context->scratchArena, *context->candidate);
+    return context->finalStateReady;
+}
+
+[[nodiscard]] inline b8 AcceptReadbackFinalState(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
+    FrameExecuteSurfelReadback::Context* const context = static_cast<Context*>(rawContext);
+    if(!context || !context->finalStateReady)
+        return false;
+    context->acceptedStateReady = context->surfelGiCounterPersistentState.commit(*context->candidate);
+    if(context->acceptedStateReady)
+        context->raytracingSystem.confirmSurfelCountReadbackSubmission(token);
+    return context->acceptedStateReady;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -158,9 +164,8 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
             nullptr
         );
         const Core::QueueSubmissionToken readbackSubmissionToken = renderer.m_deferredLightingSubmissionTransaction.taskToken(m_compiledPlan, renderer.m_deferredSurfelGiCounterReadbackTask);
-        if(!readbackSubmissionToken.valid()){
+        if(!readbackSubmissionToken.valid())
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
-        }
         else if(!readbackAccepted || !readbackContext.acceptedStateReady){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
             m_recovery.failFrameRenderRecovery();
@@ -244,9 +249,8 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
             else{
                 // The accepted hook publishes this token; keep the assertion here.
                 NWB_ASSERT(renderer.m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue && renderer.m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value);
-                if(!laggedAsyncLightingSchedule){
+                if(!laggedAsyncLightingSchedule)
                     renderer.reportLaggedLightingTransition(LaggedLightingReport::BootstrapAccepted, targets.laggedLightingHistory.generation);
-                }
             }
         }
     }

@@ -78,7 +78,7 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
             NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load subsystem asset '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
             return false;
         }
-        const ISubsystem* const subsystemPtr = CastSubsystem(loadedAsset->get());
+        const ISubsystem* const subsystemPtr = SubsystemTypeAutoRegistrar::Cast(loadedAsset->get());
         if(!subsystemPtr){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a subsystem"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
             return false;
@@ -115,7 +115,7 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
                 );
                 return false;
             }
-            const IComponent* const componentPtr = CastComponent(loadedComponentAsset->get());
+            const IComponent* const componentPtr = ComponentTypeAutoRegistrar::Cast(loadedComponentAsset->get());
             if(!componentPtr){
                 NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a component"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentComponent.name().resolvedText()));
                 return false;

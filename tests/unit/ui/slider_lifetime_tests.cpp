@@ -44,7 +44,7 @@ TEST_F(UiSliderLifetimeTests, IdenticalPublicValueIntentRetiresAlreadyCopiedKeyb
 
 TEST_F(UiSliderLifetimeTests, PublicValueAwayAndBackDuringTheLoanRejectsTheCandidateWithoutUndoingTheIntent){
     ASSERT_TRUE(accept(1u));
-    const SliderAcceptedFrame displayed = accepted();
+    const AcceptedInputState<64u> displayed = accepted();
     const u64 token = m_state.inputGeneration();
     ASSERT_TRUE(declare(2u));
     ASSERT_TRUE(m_state.setValue(0.9));
@@ -148,7 +148,7 @@ TEST_F(UiSliderLifetimeTests, ChangedThumbExtentRetiresTheOldGrabOffset){
 
 TEST_F(UiSliderLifetimeTests, AStateCannotBeAliasedByTwoDeclarationsInTheSameLiveScope){
     ASSERT_TRUE(accept(1u));
-    const SliderAcceptedFrame displayed = accepted();
+    const AcceptedInputState<64u> displayed = accepted();
     ASSERT_TRUE(declare(2u));
     EXPECT_FALSE(m_builder.slider("alias", m_state, Options()));
     EXPECT_TRUE(m_context.failed());
@@ -160,7 +160,7 @@ TEST_F(UiSliderLifetimeTests, AStateCannotBeAliasedByTwoDeclarationsInTheSameLiv
 TEST_F(UiSliderLifetimeTests, LaterDeferredCallbackRejectsTheSliderCandidateAndPreservesItsExplicitApplicationValue){
     ASSERT_TRUE(accept(1u));
     press(Core::Key::Tab);
-    const SliderAcceptedFrame displayed = accepted();
+    const AcceptedInputState<64u> displayed = accepted();
     press(Core::Key::Right);
     ASSERT_TRUE(declare(2u));
     m_laterSource.arm(SliderCallbackMutation::SetValue, &m_state);
@@ -193,7 +193,7 @@ TEST_F(UiSliderLifetimeTests, FinalWholeScopeValidationCannotPublishAnEarlierSli
 
 TEST_F(UiSliderLifetimeTests, DeferredCallbackBuilderResetCannotPublishStagedSliderDiagnostics){
     ASSERT_TRUE(accept(1u));
-    const SliderAcceptedFrame displayed = accepted();
+    const AcceptedInputState<64u> displayed = accepted();
     ASSERT_TRUE(declare(2u));
     m_laterSource.arm(SliderCallbackMutation::ResetBuilder, nullptr, &m_builder);
     ASSERT_TRUE(sibling());

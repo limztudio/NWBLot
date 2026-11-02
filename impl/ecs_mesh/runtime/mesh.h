@@ -63,6 +63,21 @@ public:
             && meshletPrimitiveIndexBuffer != nullptr
         ;
     }
+    [[nodiscard]] b8 sameBuffers(const RuntimeMeshBuffers& other)const noexcept{
+        return
+            positionBuffer == other.positionBuffer
+            && normalBuffer == other.normalBuffer
+            && tangentBuffer == other.tangentBuffer
+            && uv0Buffer == other.uv0Buffer
+            && colorBuffer == other.colorBuffer
+            && meshletDescBuffer == other.meshletDescBuffer
+            && meshletBoundsBuffer == other.meshletBoundsBuffer
+            && meshletPositionRefDeltaBuffer == other.meshletPositionRefDeltaBuffer
+            && meshletAttributeRefDeltaBuffer == other.meshletAttributeRefDeltaBuffer
+            && meshletLocalVertexRefBuffer == other.meshletLocalVertexRefBuffer
+            && meshletPrimitiveIndexBuffer == other.meshletPrimitiveIndexBuffer
+        ;
+    }
 };
 
 static_assert(alignof(RuntimeMeshLocalBounds) >= alignof(Float4), "RuntimeMeshLocalBounds must stay SIMD-friendly");

@@ -1,0 +1,63 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/avboit/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> DeferredGraphicsPrefixTimingSlot{
+    MeshViewSetup,
+    SceneShadingSetup,
+    DeferredClear,
+    Gbuffer,
+    CsgReceiverSpanBuild,
+    CsgIntervalCombine,
+    CsgIntervalSample,
+    Normalize,
+    kCount
+}
+
+[reflect]
+enum<u8> LaggedLightingReport{
+    Unreported,
+    NoDedicatedAsyncCompute,
+    BootstrapAccepted,
+    ActiveHistoryAccepted,
+    CurrentFrameAccepted
+}
+
+const usize s_GraphicsPrefixTimingTaskCount = 8u;
+const usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphTimingTicketCapacity;
+
+class GraphicsPrefixTimingResolutionResult{
+    public usize uniquePacketCount = 0u;
+    public b8 bindingsValid = true;
+}
+
+class OpaqueEmulationMergeValidationResult{
+    public b8 packetsAreGraphics = false;
+    public b8 opaqueComputeEmulationMerged = false;
+    public b8 opaqueSharedComputeEmulationMerged = false;
+    public b8 opaqueCsgReceiverComputeEmulationMerged = false;
+    public b8 opaqueCsgIntervalSampleComputeEmulationMerged = false;
+    public b8 csgIntervalClearBundleMerged = false;
+}
+
+// Capacity, not a runtime packet-count assumption.
+const usize s_FrameExecuteLifecycleCallbackCapacity = 6u;
+// Scene TLAS backing and the three BVH sort buffers; the CSG trace context adds one.
+const usize s_ShadowPrepareFixedStateBufferCapacity = 4u;
+const usize s_ShadowPrepareCsgStateBufferCapacity = 5u;
+const usize s_SinglePersistentResourceCapacity = 1u;
+const usize s_ShadowComputeScratchTextureCapacity = 15u;
+const usize s_ShadowComputeScratchBufferCapacity = 12u;
+const usize s_CausticsComputeScratchTextureCapacity = 4u;
+const usize s_SurfelGiComputeScratchBufferCapacity = 6u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

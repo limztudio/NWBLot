@@ -105,12 +105,30 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
-b8 RendererRayTracingSystem::hasSurfelWork()const noexcept{
-    return m_rayTracingState.m_surfelEnabled;
+RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSurfelPersistentResources()const noexcept{
+    return RayTracingSurfelPersistentResourceSnapshot{
+        .constantsBuffer = m_rayTracingState.m_surfelConstants,
+        .poolBuffer = m_rayTracingState.m_surfelPoolBuffer,
+        .guidePoolBuffer = m_rayTracingState.m_surfelGuidePoolBuffer,
+        .cellHeadBuffer = m_rayTracingState.m_surfelCellHeadBuffer,
+        .counterBuffer = m_rayTracingState.m_surfelCounterBuffer,
+        .traceIndirectArgsBuffer = m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
+        .freeListBuffer = m_rayTracingState.m_surfelFreeListBuffer,
+        .poolSnapshotBuffer = m_rayTracingState.m_surfelPoolSnapshotBuffer,
+        .cellHeadSnapshotBuffer = m_rayTracingState.m_surfelCellHeadSnapshotBuffer,
+        .counterReadbackBuffer = m_rayTracingState.m_surfelCounterReadback,
+        .countReadbackSubmissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken,
+    };
 }
 
-b8 RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept{
-    return hasSurfelWork() && m_rayTracingState.m_surfelResourcesNeedClear;
+b8 RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept{
+    const Core::QueueSubmissionToken& accepted = m_rayTracingState.m_surfelCountReadbackSubmissionToken;
+    return accepted.valid() && submissionToken.valid() && accepted.queue == submissionToken.queue && accepted.value == submissionToken.value && accepted.matchesPhysicalQueue(submissionToken.physicalQueueIndex, submissionToken.deviceGeneration);
+}
+
+void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(const Core::QueueSubmissionToken& submissionToken)noexcept{
+    NWB_ASSERT(submissionToken.valid());
+    m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;
 }
 
 b8 RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
@@ -127,11 +145,6 @@ void RendererRayTracingSystem::finalizeSurfelResourceInitialization()noexcept{
 
     m_rayTracingState.m_surfelResourcesClearPending = false;
     m_rayTracingState.m_surfelResourcesNeedClear = false;
-}
-
-void RendererRayTracingSystem::discardSurfelResourceInitialization()noexcept{
-    // Keep the clear pending until a producer succeeds.
-    m_rayTracingState.m_surfelResourcesClearPending = false;
 }
 
 b8 RendererRayTracingSystem::ensureSurfelResources(){
@@ -151,226 +164,153 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
         return false;
     }
 
-    // Fresh pool storage needs one clear before tracing.
-    if(!m_rayTracingState.m_surfelPoolBuffer){
+    const auto ensureBuffer = [&](
+        const Core::BufferDesc& desc,
+        const tchar* const errorMessage,
+        const b8 markNeedsClear,
+        const b8 resetSeeded,
+        Core::BufferHandle& inOutBuffer
+    ){
+        if(inOutBuffer)
+            return true;
+        auto bufferResult = m_graphics.createBuffer(desc);
+        if(bufferResult)
+            inOutBuffer = Move(*bufferResult);
+        else{
+            inOutBuffer.reset();
+            NWB_LOGGER_ERROR(NWB_TEXT("{}"), errorMessage);
+            return false;
+        }
+        if(resetSeeded)
+            m_rayTracingState.m_surfelSeeded = false;
+        if(markNeedsClear)
+            m_rayTracingState.m_surfelResourcesNeedClear = true;
+        return true;
+    };
+    const auto makeStructuredDesc = [](
+        const u64 byteSize,
+        const u32 stride,
+        const b8 canHaveUavs,
+        const b8 indirectArgs,
+        const Core::ResourceQueueSharing::Mask queueSharing,
+        const Name debugName
+    ){
         Core::BufferDesc desc;
         desc
-            .setByteSize(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity)
-            .setStructStride(NWB_SURFEL_RECORD_SIZE)
-            .setCanHaveUAVs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-            .setDebugName(Name("surfel_pool"))
+            .setByteSize(byteSize)
+            .setStructStride(stride)
+            .setCanHaveUAVs(canHaveUavs)
+            .setIsDrawIndirectArgs(indirectArgs)
+            .setQueueSharing(queueSharing)
+            .setDebugName(debugName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        auto surfelPoolBufferResult = m_graphics.createBuffer(desc);
-        if(surfelPoolBufferResult)
-            m_rayTracingState.m_surfelPoolBuffer = Move(*surfelPoolBufferResult);
-        else
-            m_rayTracingState.m_surfelPoolBuffer.reset();
-        if(!surfelPoolBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel pool buffer"));
-            return false;
-        }
-        m_rayTracingState.m_surfelSeeded = false;
-        m_rayTracingState.m_surfelResourcesNeedClear = true;
-    }
+        return desc;
+    };
 
-    // Four float4 guide lanes per surfel; this live-only buffer is never needed by bounce gathers.
-    if(!m_rayTracingState.m_surfelGuidePoolBuffer){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(NWB_SURFEL_GUIDE_FLOAT4_STRIDE) * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL * poolCapacity)
-            .setStructStride(NWB_SURFEL_GUIDE_FLOAT4_STRIDE)
-            .setCanHaveUAVs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-            .setDebugName(Name("surfel_guide_pool"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelGuidePoolBufferResult = m_graphics.createBuffer(desc);
-        if(surfelGuidePoolBufferResult)
-            m_rayTracingState.m_surfelGuidePoolBuffer = Move(*surfelGuidePoolBufferResult);
-        else
-            m_rayTracingState.m_surfelGuidePoolBuffer.reset();
-        if(!surfelGuidePoolBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel guide pool buffer"));
-            return false;
-        }
-        m_rayTracingState.m_surfelResourcesNeedClear = true;
-    }
+    Core::BufferDesc readbackDesc;
+    readbackDesc
+        .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
+        .setCpuAccess(Core::CpuAccessMode::Read)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+        .setDebugName(Name("surfel_counter_readback"))
+        .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
+    ;
+    Core::BufferDesc constantsDesc;
+    constantsDesc
+        .setByteSize(sizeof(NwbSurfelConstantsGpu))
+        .setIsConstantBuffer(true)
+        // The upload and asynchronous consumers share this selector.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(Name("surfel_constants"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
 
-    // Hash heads use 0xFFFFFFFF as the empty sentinel.
-    if(!m_rayTracingState.m_surfelCellHeadBuffer){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(sizeof(u32)) * cellCount)
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-            .setDebugName(Name("surfel_cell_head"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelCellHeadBufferResult = m_graphics.createBuffer(desc);
-        if(surfelCellHeadBufferResult)
-            m_rayTracingState.m_surfelCellHeadBuffer = Move(*surfelCellHeadBufferResult);
-        else
-            m_rayTracingState.m_surfelCellHeadBuffer.reset();
-        if(!surfelCellHeadBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel cell-head buffer"));
-            return false;
-        }
-        m_rayTracingState.m_surfelResourcesNeedClear = true;
-    }
-
-    if(!m_rayTracingState.m_surfelCounterBuffer){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(true)
-            // The persistent counter writes on Compute; the diagnostic tail may copy it on Transfer before the next import.
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(Name("surfel_counter")).enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelCounterBufferResult = m_graphics.createBuffer(desc);
-        if(surfelCounterBufferResult)
-            m_rayTracingState.m_surfelCounterBuffer = Move(*surfelCounterBufferResult);
-        else
-            m_rayTracingState.m_surfelCounterBuffer.reset();
-        if(!surfelCounterBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel counter buffer"));
-            return false;
-        }
-        m_rayTracingState.m_surfelResourcesNeedClear = true;
-    }
-
-    // Build-args rewrites the indirect dispatch buffer each frame.
-    if(!m_rayTracingState.m_surfelTraceIndirectArgsBuffer){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT)
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(true)
-            .setIsDrawIndirectArgs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("surfel_trace_indirect_args"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelTraceIndirectArgsBufferResult = m_graphics.createBuffer(desc);
-        if(surfelTraceIndirectArgsBufferResult)
-            m_rayTracingState.m_surfelTraceIndirectArgsBuffer = Move(*surfelTraceIndirectArgsBufferResult);
-        else
-            m_rayTracingState.m_surfelTraceIndirectArgsBuffer.reset();
-        if(!surfelTraceIndirectArgsBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace indirect-args buffer"));
-            return false;
-        }
-    }
-
-    // Age-free pushes ids and spawn pops them from this persistent free list.
-    if(!m_rayTracingState.m_surfelFreeListBuffer){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(sizeof(u32)) * poolCapacity)
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("surfel_free_list"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelFreeListBufferResult = m_graphics.createBuffer(desc);
-        if(surfelFreeListBufferResult)
-            m_rayTracingState.m_surfelFreeListBuffer = Move(*surfelFreeListBufferResult);
-        else
-            m_rayTracingState.m_surfelFreeListBuffer.reset();
-        if(!surfelFreeListBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel free-list buffer"));
-            return false;
-        }
-        m_rayTracingState.m_surfelResourcesNeedClear = true;
-    }
-
-    // Bounce gathers read a stable previous-frame pool snapshot.
-    if(!m_rayTracingState.m_surfelPoolSnapshotBuffer){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity)
-            .setStructStride(NWB_SURFEL_RECORD_SIZE)
-            .setCanHaveUAVs(false)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-            .setDebugName(Name("surfel_pool_snapshot"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelPoolSnapshotBufferResult = m_graphics.createBuffer(desc);
-        if(surfelPoolSnapshotBufferResult)
-            m_rayTracingState.m_surfelPoolSnapshotBuffer = Move(*surfelPoolSnapshotBufferResult);
-        else
-            m_rayTracingState.m_surfelPoolSnapshotBuffer.reset();
-        if(!surfelPoolSnapshotBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel pool snapshot buffer"));
-            return false;
-        }
-    }
-
-    // Snapshot hash heads alongside the pool for a consistent bounce gather.
-    if(!m_rayTracingState.m_surfelCellHeadSnapshotBuffer){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(sizeof(u32)) * cellCount)
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(false)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-            .setDebugName(Name("surfel_cell_head_snapshot"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelCellHeadSnapshotBufferResult = m_graphics.createBuffer(desc);
-        if(surfelCellHeadSnapshotBufferResult)
-            m_rayTracingState.m_surfelCellHeadSnapshotBuffer = Move(*surfelCellHeadSnapshotBufferResult);
-        else
-            m_rayTracingState.m_surfelCellHeadSnapshotBuffer.reset();
-        if(!surfelCellHeadSnapshotBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel cell-head snapshot buffer"));
-            return false;
-        }
-    }
-
-    if(!m_rayTracingState.m_surfelCounterReadback){
-        Core::BufferDesc desc;
-        desc
-            .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
-            .setCpuAccess(Core::CpuAccessMode::Read)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-            .setDebugName(Name("surfel_counter_readback"))
-            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
-        ;
-        auto surfelCounterReadbackResult = m_graphics.createBuffer(desc);
-        if(surfelCounterReadbackResult)
-            m_rayTracingState.m_surfelCounterReadback = Move(*surfelCounterReadbackResult);
-        else
-            m_rayTracingState.m_surfelCounterReadback.reset();
-        if(!surfelCounterReadbackResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel counter readback buffer"));
-            return false;
-        }
-    }
-
-    // Every surfel pass binds this per-frame parameter buffer as a ConstantBuffer.
-    if(!m_rayTracingState.m_surfelConstants){
-        Core::BufferDesc cbDesc;
-        cbDesc
-            .setByteSize(sizeof(NwbSurfelConstantsGpu))
-            .setIsConstantBuffer(true)
-            // The upload and asynchronous consumers share this selector.
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name("surfel_constants")).enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        auto surfelConstantsResult = m_graphics.createBuffer(cbDesc);
-        if(surfelConstantsResult)
-            m_rayTracingState.m_surfelConstants = Move(*surfelConstantsResult);
-        else
-            m_rayTracingState.m_surfelConstants.reset();
-        if(!surfelConstantsResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel constant buffer"));
-            return false;
-        }
-    }
+    if(
+        // Fresh pool storage needs one clear before tracing.
+        !ensureBuffer(
+            makeStructuredDesc(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity, NWB_SURFEL_RECORD_SIZE, true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name("surfel_pool")),
+            NWB_TEXT("RendererSystem: failed to create surfel pool buffer"),
+            true,
+            true,
+            m_rayTracingState.m_surfelPoolBuffer
+        )
+        // Four float4 guide lanes per surfel; this live-only buffer is never needed by bounce gathers.
+        || !ensureBuffer(
+            makeStructuredDesc(
+                static_cast<u64>(NWB_SURFEL_GUIDE_FLOAT4_STRIDE) * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL * poolCapacity,
+                NWB_SURFEL_GUIDE_FLOAT4_STRIDE, true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name("surfel_guide_pool")
+            ),
+            NWB_TEXT("RendererSystem: failed to create surfel guide pool buffer"),
+            true,
+            false,
+            m_rayTracingState.m_surfelGuidePoolBuffer
+        )
+        // Hash heads use 0xFFFFFFFF as the empty sentinel.
+        || !ensureBuffer(
+            makeStructuredDesc(static_cast<u64>(sizeof(u32)) * cellCount, sizeof(u32), true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name("surfel_cell_head")),
+            NWB_TEXT("RendererSystem: failed to create surfel cell-head buffer"),
+            true,
+            false,
+            m_rayTracingState.m_surfelCellHeadBuffer
+        )
+        // The persistent counter writes on Compute; the diagnostic tail may copy it on Transfer before the next import.
+        || !ensureBuffer(
+            makeStructuredDesc(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE, sizeof(u32), true, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name("surfel_counter")),
+            NWB_TEXT("RendererSystem: failed to create surfel counter buffer"),
+            true,
+            false,
+            m_rayTracingState.m_surfelCounterBuffer
+        )
+        // Build-args rewrites the indirect dispatch buffer each frame.
+        || !ensureBuffer(
+            makeStructuredDesc(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT, sizeof(u32), true, true, Core::ResourceQueueSharing::GraphicsAndAsyncCompute, Name("surfel_trace_indirect_args")),
+            NWB_TEXT("RendererSystem: failed to create surfel trace indirect-args buffer"),
+            false,
+            false,
+            m_rayTracingState.m_surfelTraceIndirectArgsBuffer
+        )
+        // Age-free pushes ids and spawn pops them from this persistent free list.
+        || !ensureBuffer(
+            makeStructuredDesc(static_cast<u64>(sizeof(u32)) * poolCapacity, sizeof(u32), true, false, Core::ResourceQueueSharing::GraphicsAndAsyncCompute, Name("surfel_free_list")),
+            NWB_TEXT("RendererSystem: failed to create surfel free-list buffer"),
+            true,
+            false,
+            m_rayTracingState.m_surfelFreeListBuffer
+        )
+        // Bounce gathers read a stable previous-frame pool snapshot.
+        || !ensureBuffer(
+            makeStructuredDesc(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity, NWB_SURFEL_RECORD_SIZE, false, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name("surfel_pool_snapshot")),
+            NWB_TEXT("RendererSystem: failed to create surfel pool snapshot buffer"),
+            false,
+            false,
+            m_rayTracingState.m_surfelPoolSnapshotBuffer
+        )
+        // Snapshot hash heads alongside the pool for a consistent bounce gather.
+        || !ensureBuffer(
+            makeStructuredDesc(static_cast<u64>(sizeof(u32)) * cellCount, sizeof(u32), false, false, Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer, Name("surfel_cell_head_snapshot")),
+            NWB_TEXT("RendererSystem: failed to create surfel cell-head snapshot buffer"),
+            false,
+            false,
+            m_rayTracingState.m_surfelCellHeadSnapshotBuffer
+        )
+        || !ensureBuffer(
+            readbackDesc,
+            NWB_TEXT("RendererSystem: failed to create surfel counter readback buffer"),
+            false,
+            false,
+            m_rayTracingState.m_surfelCounterReadback
+        )
+        // Every surfel pass binds this per-frame parameter buffer as a ConstantBuffer.
+        || !ensureBuffer(
+            constantsDesc,
+            NWB_TEXT("RendererSystem: failed to create surfel constant buffer"),
+            false,
+            false,
+            m_rayTracingState.m_surfelConstants
+        )
+    )
+        return false;
 
     // Persistent descriptors own backing resources until deferred retirement.
     if(
@@ -397,10 +337,6 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
 
 b8 RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const noexcept{
     return hasSurfelWork() && m_rayTracingState.m_surfelCounterBuffer && m_rayTracingState.m_surfelCounterReadback && !m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid() && (m_rayTracingState.m_surfelFrameIndex % s_SurfelCountLogInterval) == 0u;
-}
-
-void RendererRayTracingSystem::markSurfelCountReadbackScheduled()noexcept{
-    m_rayTracingState.m_surfelCountReadbackFrame = m_rayTracingState.m_surfelFrameIndex;
 }
 
 b8 RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #pragma once
 
 
@@ -18,26 +24,31 @@ NWB_IMPL_BEGIN
 
 
 // Deduplicates a meshlet's source vertices into local deformed-position and attribute stream refs.
-class MeshletZippedRefBuilder final : NoCopy{
-public:
-    template<
-        typename PositionRefVectorT,
-        typename AttributeRefVectorT,
-        typename LocalVertexRefVectorT
-    >
-    [[nodiscard]] static b8 BuildZippedMeshletRefs(
-        const Path& nwbFilePath,
-        const TStringView metaKind,
-        const MeshCookEntry& entry,
-        Span<const u32> sourceVertexRefs,
-        PositionRefVectorT& outPositionRefs,
-        AttributeRefVectorT& outAttributeRefs,
-        LocalVertexRefVectorT& outLocalVertexRefs
-    );
+namespace MeshletZippedRefBuilder{
 
 
-public:
-    MeshletZippedRefBuilder() = delete;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<
+    typename PositionRefVectorT,
+    typename AttributeRefVectorT,
+    typename LocalVertexRefVectorT
+>
+[[nodiscard]] b8 BuildZippedMeshletRefs(
+    const Path& nwbFilePath,
+    TStringView metaKind,
+    const MeshCookEntry& entry,
+    Span<const u32> sourceVertexRefs,
+    PositionRefVectorT& outPositionRefs,
+    AttributeRefVectorT& outAttributeRefs,
+    LocalVertexRefVectorT& outLocalVertexRefs
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -101,6 +112,12 @@ template<
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

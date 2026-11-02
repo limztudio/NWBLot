@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
+Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const DeferredGraphSuffixInputs& inputs,
     const Core::GpuTaskId& shadowVisibilityTask,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,

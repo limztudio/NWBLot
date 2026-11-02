@@ -128,13 +128,6 @@ class NativeFontFailure{
     public b8 hasNativeError = false;
 }
 
-FontBinaryHeader BuildFontBinaryHeader(in u32 faceIndex, in usize byteCount){
-    FontBinaryHeader header;
-    header.faceIndex = faceIndex;
-    header.byteCount = cast<u64>(byteCount);
-    return header;
-}
-
 b8 IsValidFontBinaryHeader(in FontBinaryHeader header){
     return
         header.magic == s_FontBinaryMagic
@@ -211,9 +204,6 @@ u32 ReadFontSfntU32BigEndian(in Span<u8> bytes, in usize offset){
 
 // Borrows the source buffer; the caller keeps it alive and unchanged while reading the directory or its tables.
 class FontSfntDirectory{
-    private Span<u8> m_bytes;
-    private u16 m_tableCount = 0u;
-
     public void assign(in Span<u8> bytes, in u16 tableCount){
         this.m_bytes = bytes;
         this.m_tableCount = tableCount;
@@ -252,6 +242,9 @@ class FontSfntDirectory{
         outTag = ReadFontSfntU32BigEndian(rec, 0u);
         return true;
     }
+
+    private Span<u8> m_bytes;
+    private u16 m_tableCount = 0u;
 
     private b8 record(in usize index, mut Span<u8> outRecord)const{
         if(index >= cast<usize>(this.m_tableCount))

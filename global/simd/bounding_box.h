@@ -214,6 +214,83 @@ inline void NWB_SIMD_CALL BoundingDoubleBox::MergeBoxValues(SIMDVectorDouble box
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline void BoundingBox::CreateMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept{
+    SIMDVectorSingle centerVector{};
+    SIMDVectorSingle extentsVector{};
+    MergeBoxValues(LoadFloat(box0.center), LoadFloat(box0.extents), LoadFloat(box1.center), LoadFloat(box1.extents), centerVector, extentsVector);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
+}
+
+inline void BoundingDoubleBox::CreateMerged(BoundingDoubleBox& outBox, const BoundingDoubleBox& box0, const BoundingDoubleBox& box1)noexcept{
+    SIMDVectorDouble centerVector{};
+    SIMDVectorDouble extentsVector{};
+    MergeBoxValues(LoadDouble(box0.center), LoadDouble(box0.extents), LoadDouble(box1.center), LoadDouble(box1.extents), centerVector, extentsVector);
+    StoreDouble(centerVector, outBox.center);
+    StoreDouble(extentsVector, outBox.extents);
+}
+
+inline void BoundingBox::CreateFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept{
+    const SIMDVectorSingle sphereValue = LoadFloat(sphere.centerRadius);
+    StoreFloat(VectorSetW(CollisionDetail::SphereCenter(sphereValue), 0.0f), outBox.center);
+    StoreFloat(VectorSetW(CollisionDetail::SphereRadius(sphereValue), 0.0f), outBox.extents);
+}
+
+inline void BoundingDoubleBox::CreateFromSphere(BoundingDoubleBox& outBox, const BoundingDoubleSphere& sphere)noexcept{
+    const SIMDVectorDouble sphereValue = LoadDouble(sphere.centerRadius);
+    StoreDouble(VectorDoubleSetW(CollisionDoubleDetail::SphereCenter(sphereValue), 0.0), outBox.center);
+    StoreDouble(VectorDoubleSetW(CollisionDoubleDetail::SphereRadius(sphereValue), 0.0), outBox.extents);
+}
+
+inline void NWB_SIMD_CALL BoundingBox::CreateFromPoints(BoundingBox& outBox, const SIMDVectorSingle point0, const SIMDVectorSingle point1)noexcept{
+    SIMDVectorSingle centerVector{};
+    SIMDVectorSingle extentsVector{};
+    CollisionDetail::CenterExtentsFromMinMax(VectorMin(point0, point1), VectorMax(point0, point1), centerVector, extentsVector);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
+}
+
+inline void BoundingBox::CreateFromPoints(BoundingBox& outBox, const usize count, const Float3U& points, const usize stride)noexcept{
+    NWB_ASSERT(count > 0u);
+    SIMDVectorSingle minBounds = LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, 0u));
+    SIMDVectorSingle maxBounds = minBounds;
+    for(usize i = 1u; i < count; ++i)
+        CollisionDetail::ExpandMinMax(LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), minBounds, maxBounds);
+    SIMDVectorSingle centerVector{};
+    SIMDVectorSingle extentsVector{};
+    CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
+}
+
+inline void NWB_SIMD_CALL BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox& outBox, const SIMDVectorDouble point0, const SIMDVectorDouble point1)noexcept{
+    SIMDVectorDouble centerVector{};
+    SIMDVectorDouble extentsVector{};
+    CollisionDoubleDetail::CenterExtentsFromMinMax(VectorDoubleMin(point0, point1), VectorDoubleMax(point0, point1), centerVector, extentsVector);
+    StoreDouble(centerVector, outBox.center);
+    StoreDouble(extentsVector, outBox.extents);
+}
+
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+inline void BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox& outBox, const usize count, const PointT& points, const usize stride)noexcept{
+    NWB_ASSERT(count > 0u);
+    NWB_ASSERT(stride >= sizeof(PointT));
+    NWB_ASSERT(stride % alignof(PointT) == 0u);
+    SIMDVectorDouble minBounds = LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, 0u));
+    SIMDVectorDouble maxBounds = minBounds;
+    for(usize i = 1u; i < count; ++i)
+        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), minBounds, maxBounds);
+    SIMDVectorDouble centerVector{};
+    SIMDVectorDouble extentsVector{};
+    CollisionDoubleDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
+    StoreDouble(centerVector, outBox.center);
+    StoreDouble(extentsVector, outBox.extents);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingBox::containsSphereValues(const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle sphereValue)const noexcept{
     SIMDVectorSingle minBounds{};
     SIMDVectorSingle maxBounds{};
@@ -554,83 +631,6 @@ inline void BoundingDoubleBox::getCorners(PointT (&corners)[s_DoubleCornerCount]
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleBox::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
     return ContainedByValue(LoadDouble(center), LoadDouble(extents), plane0, plane1, plane2, plane3, plane4, plane5);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline void BoundingBox::CreateMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept{
-    SIMDVectorSingle centerVector{};
-    SIMDVectorSingle extentsVector{};
-    MergeBoxValues(LoadFloat(box0.center), LoadFloat(box0.extents), LoadFloat(box1.center), LoadFloat(box1.extents), centerVector, extentsVector);
-    StoreFloat(centerVector, outBox.center);
-    StoreFloat(extentsVector, outBox.extents);
-}
-
-inline void BoundingDoubleBox::CreateMerged(BoundingDoubleBox& outBox, const BoundingDoubleBox& box0, const BoundingDoubleBox& box1)noexcept{
-    SIMDVectorDouble centerVector{};
-    SIMDVectorDouble extentsVector{};
-    MergeBoxValues(LoadDouble(box0.center), LoadDouble(box0.extents), LoadDouble(box1.center), LoadDouble(box1.extents), centerVector, extentsVector);
-    StoreDouble(centerVector, outBox.center);
-    StoreDouble(extentsVector, outBox.extents);
-}
-
-inline void BoundingBox::CreateFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept{
-    const SIMDVectorSingle sphereValue = LoadFloat(sphere.centerRadius);
-    StoreFloat(VectorSetW(CollisionDetail::SphereCenter(sphereValue), 0.0f), outBox.center);
-    StoreFloat(VectorSetW(CollisionDetail::SphereRadius(sphereValue), 0.0f), outBox.extents);
-}
-
-inline void BoundingDoubleBox::CreateFromSphere(BoundingDoubleBox& outBox, const BoundingDoubleSphere& sphere)noexcept{
-    const SIMDVectorDouble sphereValue = LoadDouble(sphere.centerRadius);
-    StoreDouble(VectorDoubleSetW(CollisionDoubleDetail::SphereCenter(sphereValue), 0.0), outBox.center);
-    StoreDouble(VectorDoubleSetW(CollisionDoubleDetail::SphereRadius(sphereValue), 0.0), outBox.extents);
-}
-
-inline void NWB_SIMD_CALL BoundingBox::CreateFromPoints(BoundingBox& outBox, const SIMDVectorSingle point0, const SIMDVectorSingle point1)noexcept{
-    SIMDVectorSingle centerVector{};
-    SIMDVectorSingle extentsVector{};
-    CollisionDetail::CenterExtentsFromMinMax(VectorMin(point0, point1), VectorMax(point0, point1), centerVector, extentsVector);
-    StoreFloat(centerVector, outBox.center);
-    StoreFloat(extentsVector, outBox.extents);
-}
-
-inline void BoundingBox::CreateFromPoints(BoundingBox& outBox, const usize count, const Float3U& points, const usize stride)noexcept{
-    NWB_ASSERT(count > 0u);
-    SIMDVectorSingle minBounds = LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, 0u));
-    SIMDVectorSingle maxBounds = minBounds;
-    for(usize i = 1u; i < count; ++i)
-        CollisionDetail::ExpandMinMax(LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), minBounds, maxBounds);
-    SIMDVectorSingle centerVector{};
-    SIMDVectorSingle extentsVector{};
-    CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
-    StoreFloat(centerVector, outBox.center);
-    StoreFloat(extentsVector, outBox.extents);
-}
-
-inline void NWB_SIMD_CALL BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox& outBox, const SIMDVectorDouble point0, const SIMDVectorDouble point1)noexcept{
-    SIMDVectorDouble centerVector{};
-    SIMDVectorDouble extentsVector{};
-    CollisionDoubleDetail::CenterExtentsFromMinMax(VectorDoubleMin(point0, point1), VectorDoubleMax(point0, point1), centerVector, extentsVector);
-    StoreDouble(centerVector, outBox.center);
-    StoreDouble(extentsVector, outBox.extents);
-}
-
-template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-inline void BoundingDoubleBox::CreateFromPoints(BoundingDoubleBox& outBox, const usize count, const PointT& points, const usize stride)noexcept{
-    NWB_ASSERT(count > 0u);
-    NWB_ASSERT(stride >= sizeof(PointT));
-    NWB_ASSERT(stride % alignof(PointT) == 0u);
-    SIMDVectorDouble minBounds = LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, 0u));
-    SIMDVectorDouble maxBounds = minBounds;
-    for(usize i = 1u; i < count; ++i)
-        CollisionDoubleDetail::ExpandMinMax(LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), minBounds, maxBounds);
-    SIMDVectorDouble centerVector{};
-    SIMDVectorDouble extentsVector{};
-    CollisionDoubleDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
-    StoreDouble(centerVector, outBox.center);
-    StoreDouble(extentsVector, outBox.extents);
 }
 
 

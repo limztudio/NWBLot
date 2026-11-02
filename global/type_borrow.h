@@ -169,6 +169,21 @@ template<class T>
 inline constexpr b8 IsIntegral_V = std::is_integral_v<T>;
 
 template<class T>
+using IsFloatingPoint = std::is_floating_point<T>;
+template<class T>
+inline constexpr b8 IsFloatingPoint_V = std::is_floating_point_v<T>;
+
+template<class T>
+using IsEnum = std::is_enum<T>;
+template<class T>
+inline constexpr b8 IsEnum_V = std::is_enum_v<T>;
+
+template<class T>
+using UnderlyingType = std::underlying_type<T>;
+template<class T>
+using UnderlyingType_T = std::underlying_type_t<T>;
+
+template<class T>
 using IsSigned = std::is_signed<T>;
 template<class T>
 inline constexpr b8 IsSigned_V = std::is_signed_v<T>;
@@ -307,6 +322,11 @@ template<class T>
 using RemoveCVRef = std::remove_cvref<T>;
 template<class T>
 using RemoveCVRef_T = typename RemoveCVRef<T>::type;
+
+template<class T>
+using RemovePointer = std::remove_pointer<T>;
+template<class T>
+using RemovePointer_T = typename RemovePointer<T>::type;
 
 template<class T>
 using RemoveExtent = std::remove_extent<T>;

@@ -132,7 +132,7 @@ b8 GraphicsRuntime::runFrame(){
 
     if(!m_frameSubmissionSuspended){
         if(!recordFrameTiming)
-            return animateRenderPresent();
+            return animateRenderPresentInternal(nullptr);
 
         CpuTimingPhaseBatch phaseTiming;
         const b8 rendered = animateRenderPresentInternal(&phaseTiming);
@@ -193,6 +193,14 @@ b8 GraphicsRuntime::prepareFramePreamble(){
     return true;
 }
 
+b8 GraphicsRuntime::shouldRenderUnfocused()const{
+    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
+        if((*it)->shouldRenderUnfocused())
+            return true;
+    }
+    return false;
+}
+
 Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTiming){
     Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();
     auto& device = getDevice();
@@ -244,14 +252,6 @@ Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTimi
     }
     frameTasks.wait();
     return {};
-}
-
-b8 GraphicsRuntime::shouldRenderUnfocused()const{
-    for(auto it = m_renderPasses.crbegin(); it != m_renderPasses.crend(); ++it){
-        if((*it)->shouldRenderUnfocused())
-            return true;
-    }
-    return false;
 }
 
 b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){

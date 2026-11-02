@@ -84,7 +84,7 @@ class UiTextAreaLoanTests : public TextAreaLoanFixture{};
 
 TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentRetiresAPreparedLoanWithoutChangingNavigation){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     ASSERT_TRUE(beginArea(2u));
     ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     const Point scroll = m_state.scroll();
@@ -102,7 +102,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentRetiresAPreparedLoanWithoutChan
 
 TEST_F(UiTextAreaLoanTests, IdenticalSelectionIntentRetiresAPreparedLoanWithoutATextRevision){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     ASSERT_TRUE(beginArea(2u));
     ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     const u64 revision = m_model.revision();
@@ -118,7 +118,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalSelectionIntentRetiresAPreparedLoanWithoutA
 
 TEST_F(UiTextAreaLoanTests, CancelledCompositionStillRetiresAPreparedLoan){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     ASSERT_TRUE(beginArea(2u));
     ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, AreaOptions()).valid);
     const u64 revision = m_model.revision();
@@ -137,7 +137,7 @@ TEST_F(UiTextAreaLoanTests, CancelledCompositionStillRetiresAPreparedLoan){
 
 TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentDuringHostLoanRejectsBeforePreparation){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     const u64 revision = m_state.revision();
     const Point scroll = m_state.scroll();
     usize attempts = 0u;
@@ -160,7 +160,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentDuringHostLoanRejectsBeforePrep
 
 TEST_F(UiTextAreaLoanTests, FirstPublicationScrollIntentRejectsBeforeTheSecondPublication){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     EditModel secondModel(m_arena, {}, EditTextMode::Multiline);
     TextAreaState secondState;
     ASSERT_TRUE(secondModel.setText("second\narea"));
@@ -190,7 +190,7 @@ TEST_F(UiTextAreaLoanTests, FirstPublicationScrollIntentRejectsBeforeTheSecondPu
 
 TEST_F(UiTextAreaLoanTests, EndedChildLoanRejectsLaterStateIntentBeforeAnyPublication){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
@@ -208,7 +208,7 @@ TEST_F(UiTextAreaLoanTests, EndedChildLoanRejectsLaterStateIntentBeforeAnyPublic
 
 TEST_F(UiTextAreaLoanTests, ParentChildModelAliasRejectsBeforeTheSecondHostLoan){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     TextAreaState secondState;
     m_parent.open();
     m_child.open();
@@ -223,7 +223,7 @@ TEST_F(UiTextAreaLoanTests, ParentChildModelAliasRejectsBeforeTheSecondHostLoan)
 
 TEST_F(UiTextAreaLoanTests, EndedChildSiblingStateAliasRejectsBeforeTheSecondHostLoan){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     EditModel secondModel(m_arena, {}, EditTextMode::Multiline);
     PopupState sibling;
     m_parent.open();
@@ -242,7 +242,7 @@ TEST_F(UiTextAreaLoanTests, EndedChildSiblingStateAliasRejectsBeforeTheSecondHos
 
 TEST_F(UiTextAreaLoanTests, ChildSourceSameTextReplacementRejectsTheAlreadyPaintedParent){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     AreaMutationSource source;
     ListState list;
     m_parent.open();
@@ -265,7 +265,7 @@ TEST_F(UiTextAreaLoanTests, ChildSourceSameTextReplacementRejectsTheAlreadyPaint
 
 TEST_F(UiTextAreaLoanTests, ParentSourceStateIntentRejectsTheEndedChildBeforePublication){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     AreaMutationSource source;
     ListState list;
     m_parent.open();
@@ -286,7 +286,7 @@ TEST_F(UiTextAreaLoanTests, ParentSourceStateIntentRejectsTheEndedChildBeforePub
 
 TEST_F(UiTextAreaLoanTests, LaterSiblingStateScrollABARetiresAnAlreadyPaintedEndedChild){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     AreaMutationSource source;
     ListState list;
     PopupState sibling;
@@ -323,7 +323,7 @@ TEST_F(UiTextAreaLoanTests, LaterSiblingStateScrollABARetiresAnAlreadyPaintedEnd
 
 TEST_F(UiTextAreaLoanTests, FinalMetadataScrollIntentRejectsAfterParentAndChildPaint){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     AreaMutationSource parentSource(4301u);
     AreaMutationSource childSource(4302u);
     ListState parentList;

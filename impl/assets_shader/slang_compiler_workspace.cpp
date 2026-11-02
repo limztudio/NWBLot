@@ -48,6 +48,15 @@ struct CompilerIncludeReplacement{
     usize sourceBytes;
 };
 
+[[nodiscard]] b8 WriteBomStrippedCompilerInput(
+    const Path& sourcePath,
+    const ShaderCook::ShaderCompilerRequest& request,
+    const SlangCompilerWorkspace::ScratchPath& overlayRoot,
+    const SlangCompilerWorkspace::ScratchPath& outputPath,
+    SlangCompilerWorkspace::ScratchString& source,
+    Alloc::ScratchArena& scratchArena
+);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -202,7 +211,7 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
             return MakeUnexpected(Failure{});
         }
         StripUtf8Bom(sourceText);
-        if(!WriteBomStrippedCompilerInput(dependency, request, overlayRoot, *overlayDependencyPath, sourceText, scratchArena))
+        if(!__hidden_slang_compiler_workspace::WriteBomStrippedCompilerInput(dependency, request, overlayRoot, *overlayDependencyPath, sourceText, scratchArena))
             return MakeUnexpected(Failure{});
     }
 
@@ -244,7 +253,15 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
     return CompilerInputs{ .includeDirectories = Move(includeDirectories), .sourcePath = Move(*sourcePathResult) };
 }
 
-b8 SlangCompilerWorkspace::WriteBomStrippedCompilerInput(const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, ScratchString& source, Alloc::ScratchArena& scratchArena){
+b8 __hidden_slang_compiler_workspace::WriteBomStrippedCompilerInput(
+    const Path& sourcePath,
+    const ShaderCook::ShaderCompilerRequest& request,
+    const SlangCompilerWorkspace::ScratchPath& overlayRoot,
+    const SlangCompilerWorkspace::ScratchPath& outputPath,
+    SlangCompilerWorkspace::ScratchString& source,
+    Alloc::ScratchArena& scratchArena
+){
+    using namespace SlangCompilerWorkspace;
     ShaderSourceDependencies::SpliceSourceLines(source);
     ScratchString scanSource(AStringView(source), scratchArena);
     ShaderSourceDependencies::MaskSourceComments(scanSource);

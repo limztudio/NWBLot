@@ -44,7 +44,6 @@ public:
 
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
-[[nodiscard]] Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena);
 [[nodiscard]] Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena);
 
 

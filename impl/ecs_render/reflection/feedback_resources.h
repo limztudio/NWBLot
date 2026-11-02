@@ -38,8 +38,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(u32 width, u32 height)noexcept;
-
 struct ReflectionFeedbackBinding{
     Core::BufferHandle buffer;
     Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
@@ -65,10 +63,6 @@ public:
 
 // Creation belongs to preflight; frozen snapshots retain buffers.
 class RendererReflectionFeedback final : NoCopy{
-private:
-    static constexpr usize s_FeedbackBankCount = s_ReflectionFeedbackBankCount;
-
-
 public:
     RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
         : m_arena(arena)
@@ -91,7 +85,7 @@ private:
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
     ReflectionFeedbackControlHandle m_control;
-    Array<ReflectionFeedbackBinding, s_FeedbackBankCount> m_banks{};
+    Array<ReflectionFeedbackBinding, s_ReflectionFeedbackBankCount> m_banks{};
     ReflectionFeedbackExtent m_extent;
     u16 m_deviceGeneration = 0u;
 };

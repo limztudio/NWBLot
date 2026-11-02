@@ -17,17 +17,8 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IClient : public Core::Common::ILogger{
-public:
-    virtual ~IClient()noexcept override = default;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename T>
-class ClientBase : public IClient, public QueuedLoggerWorkerBase<T>{
+class ClientBase : public Core::Common::ILogger, public QueuedLoggerWorkerBase<T>{
 protected:
     using BaseType = LoggerWorkerBase<T>;
     using UpdateBaseType = QueuedLoggerWorkerBase<T>;
@@ -41,6 +32,9 @@ protected:
 
 public:
     using BaseType::enqueue;
+
+
+public:
     virtual LogArena& arena()noexcept override{ return BaseType::arena(); }
 
     virtual void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{ BaseType::enqueue(Move(str), type); }
@@ -79,6 +73,9 @@ public:
 
 public:
     using ClientBaseType::enqueue;
+
+
+public:
     [[nodiscard]] b8 enqueueTelemetry(const void* bytes, usize byteCount);
 
 

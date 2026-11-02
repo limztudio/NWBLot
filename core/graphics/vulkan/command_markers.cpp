@@ -111,7 +111,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
         if(useAmdBreadcrumb){
             breadcrumb = m_device.reserveAmdBreadcrumb(m_creationDesc.physicalQueue, gpuCrashMarker);
             if(breadcrumb.valid)
-                m_hostReadbackBarrierTracker.registerDeviceOwnedBuffer(breadcrumb.buffer);
+                m_hostReadbackBarrierTracker.registerBuffer(breadcrumb.buffer);
         }
     }
     m_markerStack.push_back(MarkerStackEntry{ .token = token, .usesDebugUtils = useDebugUtils, .usesGpuMarkers = useGpuMarkers, });

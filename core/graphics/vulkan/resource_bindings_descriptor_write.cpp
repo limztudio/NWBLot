@@ -190,7 +190,7 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is invalid."));
                 return false;
             }
-            const VkFormat vkFormat = ConvertFormat(viewFormat);
+            const VkFormat vkFormat = VulkanDetail::ConvertFormat(viewFormat);
             const FormatInfo& formatInfo = GetFormatInfo(viewFormat);
             if(vkFormat == VK_FORMAT_UNDEFINED || formatInfo.bytesPerBlock == 0u){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer format is unsupported."));

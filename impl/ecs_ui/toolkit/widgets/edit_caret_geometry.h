@@ -23,7 +23,19 @@ NWB_IMPL_UI_BEGIN
 
 
 // Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
-[[nodiscard]] Expected<usize> HitEditCaretGeometry(Span<const EditCaretLine> lines, Span<const EditBoxCaretStop> stops, Point localPoint)noexcept;
+[[nodiscard]] inline Expected<usize> HitEditCaretGeometry(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const Point localPoint)noexcept{
+    usize committedByte = 0u;
+    if(!TryHitEditCaretGeometry(lines, stops, localPoint, committedByte))
+        return MakeUnexpected(Failure{});
+    return committedByte;
+}
+
+[[nodiscard]] inline Expected<usize> HitEditWordCaretGeometry(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const Point localPoint)noexcept{
+    usize committedByte = 0u;
+    if(!TryHitEditWordCaretGeometry(lines, stops, localPoint, committedByte))
+        return MakeUnexpected(Failure{});
+    return committedByte;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -29,9 +29,8 @@ b8 IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limit
     if(viewport.maxX <= viewport.minX || viewport.maxY < viewport.minY || viewport.minZ < 0.0f || viewport.minZ > 1.0f || viewport.maxZ < 0.0f || viewport.maxZ > 1.0f)
         return false;
 
-    const SIMDVectorSingle extent = viewport.extent();
-    const f32 width = VectorGetX(extent);
-    const f32 height = VectorGetY(extent);
+    const f32 width = viewport.width();
+    const f32 height = viewport.height();
     return
         static_cast<f64>(width) <= static_cast<f64>(limits.maxViewportDimensions[0u])
         && static_cast<f64>(height) <= static_cast<f64>(limits.maxViewportDimensions[1u])
@@ -169,7 +168,7 @@ b8 CommandList::validateFramebufferForRendering(Framebuffer* const framebuffer, 
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format overrides are unsupported"));
             return false;
         }
-        if(ConvertFormat(format) == VK_FORMAT_UNDEFINED){
+        if(VulkanDetail::ConvertFormat(format) == VK_FORMAT_UNDEFINED){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format is unsupported"));
             return false;
         }

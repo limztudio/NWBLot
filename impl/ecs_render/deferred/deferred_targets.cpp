@@ -46,9 +46,8 @@ Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device)noexcept
 
 Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device)noexcept{
     constexpr Array<Core::Format::Enum, 3> s_Candidates = { Core::Format::D32, Core::Format::D24S8, Core::Format::D16 };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::DepthStencil;
 
-    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
+    return SelectSupportedFormat(device, s_Candidates, Core::FormatSupport::DepthStencil);
 }
 
 
@@ -181,6 +180,20 @@ b8 DeferredLaggedLightingHistoryResources::valid()const noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void ResetCsgIntervalTargets(DeferredFrameTargets& targets)noexcept{
+    targets.csgCapBackNormal.reset();
+    targets.csgIntervalDepth.reset();
+    targets.csgIntervalId.reset();
+    targets.csgReceiverEventData.reset();
+    targets.csgReceiverEventCount.reset();
+    targets.csgReceiverSpanData.reset();
+    targets.csgReceiverSpanCount.reset();
+    targets.csgRemovedIntervalDepth.reset();
+    targets.csgRemovedIntervalCapNormal.reset();
+    targets.csgRemovedIntervalData.reset();
+    targets.csgRemovedIntervalCount.reset();
+}
 
 b8 DeferredFrameTargets::csgIntervalTargetsValid()const noexcept{
     return
@@ -510,17 +523,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& tar
     targets.normal.reset();
     targets.worldPosition.reset();
     targets.specularRoughness.reset();
-    targets.csgCapBackNormal.reset();
-    targets.csgIntervalDepth.reset();
-    targets.csgIntervalId.reset();
-    targets.csgReceiverEventData.reset();
-    targets.csgReceiverEventCount.reset();
-    targets.csgReceiverSpanData.reset();
-    targets.csgReceiverSpanCount.reset();
-    targets.csgRemovedIntervalDepth.reset();
-    targets.csgRemovedIntervalCapNormal.reset();
-    targets.csgRemovedIntervalData.reset();
-    targets.csgRemovedIntervalCount.reset();
+    ResetCsgIntervalTargets(targets);
     targets.opaqueColor.reset();
     targets.compositeColor.reset();
     targets.depth.reset();

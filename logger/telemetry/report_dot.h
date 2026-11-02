@@ -76,7 +76,6 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, Core::Alloc::ScratchArena, G
 
 
 [[nodiscard]] AStringView EventKindText(Core::Telemetry::EventKind::Enum kind)noexcept;
-[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Core::Telemetry::FrameGraphNodePayload& node, Array<char, NameDetail::s_DebugHashTextLength + 1u>& outIdentityText);
 [[nodiscard]] AStringView FrameGraphNodeKindText(const Core::Telemetry::FrameGraphNodeKind::Enum kind)noexcept;
 [[nodiscard]] AStringView FrameGraphEdgeLabel(const Core::Telemetry::FrameGraphEdgeKind::Enum kind)noexcept;
 [[nodiscard]] AStringView FrameGraphQueueClassText(const Core::Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept;

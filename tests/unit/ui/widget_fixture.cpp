@@ -21,8 +21,7 @@ namespace UiWidgetTests{
 
 
 Point Center(const Rect& bounds)noexcept{
-    const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(bounds.width, bounds.height, 0.0f, 0.0f), VectorReplicate(0.5f), VectorSet(bounds.x, bounds.y, 0.0f, 0.0f));
-    return { VectorGetX(center), VectorGetY(center) };
+    return { bounds.x + (bounds.width * 0.5f), bounds.y + (bounds.height * 0.5f) };
 }
 
 void ExpectRectExact(const Rect& actual, const Rect& expected){
@@ -88,17 +87,21 @@ Expected<u64> FindArithmeticFixtureRowIndex(const u64 count, const u64 removed, 
     return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
-b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
+b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, const StringView filename, Font& font){
+    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, NWB_TEST_FONT_DIRECTORY) / filename;
     Core::Assets::AssetBytes bytes(arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
     if(!bytesResult)
         return false;
     bytes = Move(*bytesResult);
     font.setFontBytes(Move(bytes));
-    if(!font.validatePayload())
+    return font.validatePayload();
+}
+
+b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
+    if(!LoadBundledFixtureFont(arena, "latin.font", font))
         return false;
-    const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), font, 1u };
+    const FontSource source{ Core::Assets::AssetRef<Font>(font.virtualPath()), font, 1u };
     return text.setFonts(scratchArena, Span(&source, 1u));
 }
 
@@ -259,15 +262,8 @@ Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& sna
 
 b8 WidgetFixture::installKoreanFallback(){
     Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
-    const auto path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "korean.font";
-    Core::Assets::AssetBytes bytes(m_arena);
-    auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-    if(!bytesResult)
-        return false;
-    bytes = Move(*bytesResult);
     Font korean(m_arena, Name(s_TestKoreanFontPath));
-    korean.setFontBytes(Move(bytes));
-    if(!korean.validatePayload())
+    if(!LoadBundledFixtureFont(m_arena, "korean.font", korean))
         return false;
     const Array<FontSource, 2u> sources = {
         FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u },
@@ -277,19 +273,16 @@ b8 WidgetFixture::installKoreanFallback(){
 }
 
 Expected<Rect> WidgetFixture::skinQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
-    const SIMDVectorSingle edges = VectorDivide(VectorSet(static_cast<f32>(slot), static_cast<f32>(slot + 1u), 0.0f, 0.0f), VectorReplicate(16.0f));
-    const f32 left = VectorGetX(edges);
-    const f32 right = VectorGetY(edges);
+    const f32 left = static_cast<f32>(slot) / 16.0f;
+    const f32 right = static_cast<f32>(slot + 1u) / 16.0f;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Skin)
             continue;
         for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
             const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            if(first.texCoord.x == left && opposite.texCoord.x == right){
-                const SIMDVectorSingle size = VectorSubtract(VectorSet(opposite.position.x, opposite.position.y, 0.0f, 0.0f), VectorSet(first.position.x, first.position.y, 0.0f, 0.0f));
-                return Rect{ first.position.x, first.position.y, VectorGetX(size), VectorGetY(size) };
-            }
+            if(first.texCoord.x == left && opposite.texCoord.x == right)
+                return Rect{ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y };
         }
     }
     return MakeUnexpected(Failure{});

@@ -94,14 +94,6 @@ b8 LoadBinary(const Span<const u8> binary, IComponent& outComponent){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const IComponent* CastComponent(const Core::Assets::IAsset* const asset)noexcept{
-    return ComponentTypeAutoRegistrar::Cast(asset);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(binary, s_ComponentMagic, s_ComponentLoadBinaryContext, s_ComponentAssetKindLabel, cursor);
@@ -127,7 +119,7 @@ b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<TransformComponentPayloadBinary>(payload, NWB_TEXT("TransformComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
-    component = UnpackTransformComponentPayloadBinary(*binaryPayload);
+    component = Scene::TransformComponent(binaryPayload->position, binaryPayload->rotation, binaryPayload->scale);
     return true;
 }
 
@@ -150,7 +142,7 @@ b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<CameraComponentPayloadBinary>(payload, NWB_TEXT("CameraComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
-    component = UnpackCameraComponentPayloadBinary(*binaryPayload);
+    component = Scene::CameraComponent(binaryPayload->projection);
     return true;
 }
 

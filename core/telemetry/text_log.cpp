@@ -27,7 +27,7 @@ namespace __hidden_telemetry_text_log{
     return header.magic == s_TextLogPayloadMagic && header.version == s_TextLogPayloadVersion && header.reserved == 0u && IsValidTextLogType(static_cast<Common::LogType::Enum>(header.type));
 }
 
-static void AppendUtf8Text(TelemetryBytes& outText, const TStringView message){
+static void AppendUtf8Text(const TStringView message, TelemetryBytes& outText){
     auto inserter = BackInserter(outText);
     WriteConvertedText<char>(inserter, message);
 }
@@ -48,7 +48,7 @@ static void AppendUtf8Text(TelemetryBytes& outText, const TStringView message){
     header.type = static_cast<u8>(type);
     outPayload.reserve(minimumPayloadBytes);
     AppendPOD(outPayload, header);
-    AppendUtf8Text(outPayload, message);
+    AppendUtf8Text(message, outPayload);
 
     header.messageBytes = static_cast<u64>(outPayload.size() - sizeof(header));
     NWB_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));

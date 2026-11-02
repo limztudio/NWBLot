@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_CameraDefaultVerticalFovDegrees = 60.0f;
+const f32 s_CameraDegreesPerHalfTurn = 180.0f;
+const f32 s_CameraVerticalFovRadians = s_CameraDefaultVerticalFovDegrees * (s_PI / s_CameraDegreesPerHalfTurn);
+const f32 s_CameraNearPlane = 0.001f;
+const f32 s_CameraFarPlane = 10000.0f;
+const f32 s_CameraAutoAspectRatio = 0.0f;
+const f32 s_CameraFallbackAspectRatio = 1.0f;
+
+const f32 s_CameraFovCosEpsilon = 0.000001f;
+const f32 s_HalfFovWeight = 0.5f;
+const f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+class CameraProjection{
+    // Persistent projection payload; helpers convert at this boundary.
+    public f32x4 projectionParams(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 aspectRatio = 0.0f;
+    public f32 tanHalfVerticalFov = 0.0f;
+    public f32 nearPlane = 0.0f;
+    public f32 farPlane = 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CameraProjection MakeFallbackCameraProjection(){
+    CameraProjection projection;
+    projection.projectionParams = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+    projection.aspectRatio = 1.0f;
+    projection.tanHalfVerticalFov = 1.0f;
+    projection.nearPlane = s_CameraNearPlane;
+    projection.farPlane = s_CameraFarPlane;
+    return projection;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -18,6 +18,28 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_backend_context_device{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SameClassQueueRequest{
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    i32 family = s_InvalidQueueFamilyIndex;
+    u32 queueIndex = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u32 BackendContext::findNativeQueueIndex(const u32 familyIndex, const u32 queueIndex)const noexcept{
     for(usize nativeQueueIndex = 0u; nativeQueueIndex < m_nativeQueues.size(); ++nativeQueueIndex){
         const VulkanNativeQueueDesc& nativeQueue = m_nativeQueues[nativeQueueIndex];
@@ -297,11 +319,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     ;
     const i32 secondaryTransferQueueFamily = createCrossFamilySecondaryTransferQueue ? m_secondaryTransferQueueFamily : s_InvalidQueueFamilyIndex;
 
-    struct SameClassQueueRequest{
-        CommandQueue::Enum queueClass = CommandQueue::kCount;
-        i32 family = s_InvalidQueueFamilyIndex;
-        u32 queueIndex = 0u;
-    };
+    using __hidden_backend_context_device::SameClassQueueRequest;
     Vector<SameClassQueueRequest, Alloc::ScratchArena> sameClassQueueRequests{scratchArena};
     const auto appendSameClassQueue = [&sameClassQueueRequests](const CommandQueue::Enum queueClass, const i32 family, const u32 queueIndex){
         for(const SameClassQueueRequest& existing : sameClassQueueRequests){

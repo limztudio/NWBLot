@@ -204,7 +204,7 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
         return false;
     }
 
-    if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, context.scratchArena, materialEntries))
+    if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
         return false;
 
     auto materialBindIncludeRootResult = EmitMaterialBindIncludes(context.resolvedPaths.cacheDirectory, context.configurationSafeName, graphicsMetadata.materialBindEntries, context.arena, context.scratchArena);

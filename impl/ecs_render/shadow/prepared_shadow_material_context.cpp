@@ -19,6 +19,60 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ComputeShadowMaterialContextHash(
+    const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
+    const Span<const InstanceGpuData> instanceData,
+    const Span<const u8> materialTypedBytes
+)noexcept{
+    NWB_ASSERT(instanceMaterials.size() == instanceData.size());
+
+    u64 hash = s_Fnv64OffsetBasis;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    for(const NwbRtInstanceMaterialGpu& material : instanceMaterials){
+        Fnv64AppendValue(hash, material.surfaceDispatchId);
+        Fnv64AppendValue(hash, material.flags);
+        Fnv64AppendValue(hash, material.shadingModelId);
+        Fnv64AppendValue(hash, material.materialConstantByteOffset);
+        Fnv64AppendValue(hash, material.meshInstanceIndex);
+        Fnv64AppendValue(hash, material.indexSlot);
+        Fnv64AppendValue(hash, material.attributeSlot);
+        Fnv64AppendValue(hash, material.positionSlot);
+        Fnv64AppendValue(hash, material.nodeSlot);
+    }
+    for(const InstanceGpuData& instance : instanceData){
+        Fnv64AppendValue(hash, instance.rotation);
+        Fnv64AppendValue(hash, instance.translation.x);
+        Fnv64AppendValue(hash, instance.translation.y);
+        Fnv64AppendValue(hash, instance.translation.z);
+        Fnv64AppendValue(hash, instance.translation.w);
+        Fnv64AppendValue(hash, instance.scale.x);
+        Fnv64AppendValue(hash, instance.scale.y);
+        Fnv64AppendValue(hash, instance.scale.z);
+        Fnv64AppendValue(hash, instance.scale.w);
+        for(u32 slotIndex = 0u; slotIndex < s_MeshInstanceGeometrySlotCount; ++slotIndex)
+            Fnv64AppendValue(hash, instance.geometryHeapSlots[slotIndex]);
+    }
+    if(!materialTypedBytes.empty())
+        Fnv64AppendBuffer(hash, materialTypedBytes);
+    return hash;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 PreparedShadowMaterialContext::StorageReady(const RendererRayTracingState& state, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
     return
         state.m_shadowInstanceMaterialBuffer
@@ -126,24 +180,11 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
         || m_instanceMaterialCount == 0u
         || m_instanceCount == 0u
         || m_materialTypedUploadBytes == 0u
-        || m_instanceMaterialCapacity < m_instanceMaterialCount
-        || m_instanceCapacity < m_instanceCount
-        || m_materialTypedCapacity < m_materialTypedUploadBytes
-        || state.m_shadowInstanceMaterialBuffer.get() != m_instanceMaterialBuffer.get()
-        || state.m_shadowInstanceBuffer.get() != m_instanceBuffer.get()
-        || state.m_shadowMaterialTypedBuffer.get() != m_materialTypedBuffer.get()
+        || !storageMatches(state)
         || state.m_shadowInstanceMaterialCapacity != m_instanceMaterialCapacity
         || state.m_shadowInstanceCapacity != m_instanceCapacity
         || state.m_shadowMaterialTypedCapacity != m_materialTypedCapacity
-        || state.m_shadowInstanceMaterialHeapHandle != m_instanceMaterialHeapHandle
-        || state.m_shadowInstanceHeapHandle != m_instanceHeapHandle
-        || state.m_shadowMaterialTypedHeapHandle != m_materialTypedHeapHandle
-        || !state.m_shadowInstanceMaterialHeapHandle.valid()
-        || state.m_shadowInstanceMaterialHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !state.m_shadowInstanceHeapHandle.valid()
-        || state.m_shadowInstanceHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !state.m_shadowMaterialTypedHeapHandle.valid()
-        || state.m_shadowMaterialTypedHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+        || !StorageReady(state, m_instanceMaterialCount, m_instanceCount, m_materialTypedUploadBytes)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen shadow material-context identity no longer matches preflight storage"));
         return MakeUnexpected(Failure{});
@@ -238,6 +279,19 @@ void PreparedShadowMaterialContext::captureStorage(const RendererRayTracingState
     m_instanceCapacity = state.m_shadowInstanceCapacity;
     m_materialTypedCapacity = state.m_shadowMaterialTypedCapacity;
     m_hash = hash;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MergePreparedShadowMaterialSampledTextures(const Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
+    for(const Core::TextureHandle& texture : sampledTextures){
+        if(!texture || !texture->getCreationDescription().name)
+            return false;
+        collector.append(texture);
+    }
+    return true;
 }
 
 

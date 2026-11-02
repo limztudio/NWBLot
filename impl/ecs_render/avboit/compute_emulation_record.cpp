@@ -3,13 +3,13 @@
 
 
 #include "compute_emulation_record.h"
-#include "record_inputs_base.h"
 
+#include <impl/ecs_render/avboit/avboit_frame_targets.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/avboit/avboit_frame_targets.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -18,42 +18,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void AvboitRecordInputsBase::applyResources(const DeferredGraphResourceImportResult& resources, const b8 intervalOutputsOwned)noexcept{
-    albedo = resources.albedo;
-    normal = resources.normal;
-    worldPosition = resources.worldPosition;
-    depth = resources.depth;
-    refractionInstance = resources.refractionInstance;
-    avboitMaterialDomain = resources.avboitMaterialDomain;
-    avboitCsgDomain = resources.avboitCsgDomain;
-    meshView = resources.meshView;
-    materialInstances = resources.materialInstances;
-    materialTyped = resources.materialTyped;
-    csgReceiverRanges = resources.csgReceiverRanges;
-    csgCutters = resources.csgCutters;
-    csgClipContextSlots = resources.csgClipContextSlots;
-    csgIntervalSampleState = resources.csgIntervalSampleState;
-    csgRemovedIntervalDepth = resources.csgRemovedIntervalDepth;
-    csgRemovedIntervalCapNormal = resources.csgRemovedIntervalCapNormal;
-    csgRemovedIntervalData = resources.csgRemovedIntervalData;
-    csgRemovedIntervalCount = resources.csgRemovedIntervalCount;
-    csgRemovedIntervalSubresources = resources.csgRemovedIntervalSubresources;
-    csgRemovedIntervalCountSubresources = resources.csgRemovedIntervalCountSubresources;
-    currentBindlessSlots = resources.currentBindlessSlots;
-    intervalOutputsGraphOwned = intervalOutputsOwned;
-}
-
-b8 AvboitRecordInputsBase::generatedGeometryReusePlansValid()const noexcept{
-    const b8 generatedGeometryReused = reusedGeometryProducer.valid();
-    if((generatedGeometryReused || producesReusableGeometry) && (!regularComputeEmulationPlanCaptured || csgComputeEmulationPlanCaptured || sharedComputeEmulationPlanCaptured))
-        return false;
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -147,9 +111,8 @@ b8 AvboitRecordInputsBase::generatedGeometryReusePlansValid()const noexcept{
     viewportState.addViewportAndScissorRect((inputs.targets.avboit.*(trait.framebuffer))->getFramebufferInfo().getViewport());
     Core::Framebuffer* const rasterFramebuffer = generatePhase ? nullptr : (inputs.targets.avboit.*(trait.framebuffer)).get();
     const MaterialPassDrawContext drawContext{ commandList, rasterFramebuffer, &inputs.targets.avboit, viewportState, nullptr, inputs.frameBindings, trait.pipelinePass, inputs.materialFrameStatesGraphOwned, inputs.materialGeometryStatesGraphOwned, true };
-    if(generatePhase){
+    if(generatePhase)
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
-    }
     else{
         materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
         if(inputs.finishTiming){

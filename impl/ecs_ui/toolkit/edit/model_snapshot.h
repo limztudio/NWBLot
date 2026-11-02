@@ -27,7 +27,9 @@ public:
 
 
 public:
+    [[nodiscard]] b8 matchesSurrounding(const EditModel& model)const noexcept;
     [[nodiscard]] b8 matches(const EditModel& model)const noexcept;
+    void captureSurrounding(const EditModel& model);
     void capture(const EditModel& model);
     void clear()noexcept;
 

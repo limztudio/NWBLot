@@ -16,6 +16,34 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_backend_context_adapter{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeviceSelection{
+    VkPhysicalDevice device = VK_NULL_HANDLE;
+    i32 graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 computeQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 transferQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 presentQueueFamily = s_InvalidQueueFamilyIndex;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
     GraphicsVector<AdapterInfo> adapters(m_arena);
     VkResult res = VK_SUCCESS;
@@ -130,17 +158,7 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
     auto errorStream = VulkanDetail::ScratchStringStream(s_FileOpenWrite, scratchArena);
     errorStream << "Cannot find a compatible hardware or software Vulkan device. Software fallback requires an installed Vulkan ICD with all required extensions, features, queues and presentation support.";
 
-    struct DeviceSelection{
-        VkPhysicalDevice device = VK_NULL_HANDLE;
-        i32 graphicsQueueFamily = s_InvalidQueueFamilyIndex;
-        i32 secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
-        i32 computeQueueFamily = s_InvalidQueueFamilyIndex;
-        i32 asyncComputeQueueFamily = s_InvalidQueueFamilyIndex;
-        i32 secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
-        i32 transferQueueFamily = s_InvalidQueueFamilyIndex;
-        i32 secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
-        i32 presentQueueFamily = s_InvalidQueueFamilyIndex;
-    };
+    using __hidden_backend_context_adapter::DeviceSelection;
     auto captureCurrentSelection = [this](VkPhysicalDevice device)noexcept{
         DeviceSelection selection;
         selection.device = device;

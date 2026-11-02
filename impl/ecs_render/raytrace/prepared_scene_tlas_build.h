@@ -37,6 +37,8 @@ public:
 
 
 public:
+    [[nodiscard]] static b8 StorageReady(const RendererRayTracingState& state, usize instanceCount)noexcept;
+
     [[nodiscard]] b8 capture(
         const RendererRayTracingState& state,
         b8 staticScene,
@@ -49,6 +51,7 @@ public:
     void confirm(RendererRayTracingState& state)noexcept;
     void clear()noexcept;
     [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
+    [[nodiscard]] b8 storageMatches(const RendererRayTracingState& state)const noexcept;
 
 
 private:

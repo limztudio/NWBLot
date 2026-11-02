@@ -18,6 +18,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_rt_surfel_tasks{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(Float4) * NWB_SURFEL_CONSTANTS_FLOAT4_COUNT, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
 static_assert(s_SurfelUpdateDivisor == NWB_SURFEL_UPDATE_DIVISOR, "s_SurfelUpdateDivisor must match NWB_SURFEL_UPDATE_DIVISOR");
 static_assert(s_SurfelCellSize == NWB_SURFEL_CELL_SIZE, "s_SurfelCellSize must match NWB_SURFEL_CELL_SIZE");
@@ -26,15 +32,6 @@ static_assert(s_SurfelMaxAccum == NWB_SURFEL_MAX_ACCUM, "s_SurfelMaxAccum must m
 static_assert(s_SurfelMaxAge == NWB_SURFEL_MAX_AGE, "s_SurfelMaxAge must match NWB_SURFEL_MAX_AGE");
 static_assert(s_SurfelRaysPerSurfel == NWB_SURFEL_RAYS_PER_SURFEL, "s_SurfelRaysPerSurfel must match NWB_SURFEL_RAYS_PER_SURFEL");
 static_assert(s_SurfelSpawnTile == NWB_SURFEL_SPAWN_TILE, "s_SurfelSpawnTile must match NWB_SURFEL_SPAWN_TILE");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RayTracingSurfelGiTaskDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct SurfelGiAsyncPassPayload{
@@ -138,7 +135,8 @@ public:
     }
 };
 
-struct SurfelGiHashBuildGraphTask{
+template<b8 DispatchHashBuild, b8 DispatchSpawn, b8 DispatchTraceBuildArgs, b8 DispatchTrace, b8 DispatchResolve>
+struct SurfelGiAsyncPassGraphTask{
     using Payload = SurfelGiAsyncPassPayload;
 
 
@@ -148,64 +146,10 @@ public:
 
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSurfelGiAsyncPass<true, false, false, false, false>(payload, commandList, context);
+        return RecordSurfelGiAsyncPass<DispatchHashBuild, DispatchSpawn, DispatchTraceBuildArgs, DispatchTrace, DispatchResolve>(payload, commandList, context);
     }
 
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
-    }
-};
-
-struct SurfelGiSpawnGraphTask{
-    using Payload = SurfelGiAsyncPassPayload;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSurfelGiAsyncPass<false, true, false, false, false>(payload, commandList, context);
-    }
-
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
-    }
-};
-
-struct SurfelGiTraceBuildArgsGraphTask{
-    using Payload = SurfelGiAsyncPassPayload;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSurfelGiAsyncPass<false, false, true, false, false>(payload, commandList, context);
-    }
-
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
-    }
-};
-
-struct SurfelGiTraceGraphTask{
-    using Payload = SurfelGiAsyncPassPayload;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSurfelGiAsyncPass<false, false, false, true, false>(payload, commandList, context);
-    }
-
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept requires(DispatchTrace){
         payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
     }
 
@@ -214,23 +158,11 @@ public:
     }
 };
 
-struct SurfelGiResolveGraphTask{
-    using Payload = SurfelGiAsyncPassPayload;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        return RecordSurfelGiAsyncPass<false, false, false, false, true>(payload, commandList, context);
-    }
-
-    static void Discarded(Payload& payload)noexcept{
-        Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
-    }
-};
+using SurfelGiHashBuildGraphTask = SurfelGiAsyncPassGraphTask<true, false, false, false, false>;
+using SurfelGiSpawnGraphTask = SurfelGiAsyncPassGraphTask<false, true, false, false, false>;
+using SurfelGiTraceBuildArgsGraphTask = SurfelGiAsyncPassGraphTask<false, false, true, false, false>;
+using SurfelGiTraceGraphTask = SurfelGiAsyncPassGraphTask<false, false, false, true, false>;
+using SurfelGiResolveGraphTask = SurfelGiAsyncPassGraphTask<false, false, false, false, true>;
 
 struct SurfelGiGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
@@ -331,9 +263,9 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareAgeFreeTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
-    return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask>(
+    return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiAgeFreeGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask::Payload{
+        __hidden_rt_surfel_tasks::SurfelGiAgeFreeGraphTask::Payload{
             .raytracingSystem = m_system,
             .graphics = m_system.graphics(),
             .targets = targets,
@@ -351,9 +283,9 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareHashBuildTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
-    return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask>(
+    return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiHashBuildGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
+        __hidden_rt_surfel_tasks::SurfelGiHashBuildGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -364,9 +296,9 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareSpawnTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
-    return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask>(
+    return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiSpawnGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
+        __hidden_rt_surfel_tasks::SurfelGiSpawnGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -377,9 +309,9 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceBuildArgsTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
-    return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask>(
+    return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiTraceBuildArgsGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
+        __hidden_rt_surfel_tasks::SurfelGiTraceBuildArgsGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -390,9 +322,9 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
-    return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask>(
+    return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiTraceGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
+        __hidden_rt_surfel_tasks::SurfelGiTraceGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -403,9 +335,9 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareResolveTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
-    return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask>(
+    return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiResolveGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
+        __hidden_rt_surfel_tasks::SurfelGiResolveGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 
@@ -416,9 +348,9 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTerminalTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
-    return m_graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiGraphTask>(
+    return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiGraphTask>(
         desc,
-        RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
+        __hidden_rt_surfel_tasks::SurfelGiGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
     );
 }
 

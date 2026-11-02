@@ -27,11 +27,6 @@ namespace __hidden_frame_state{
     return desc.receiverVisible(world, entity, receiverKind, receiver, desc.receiverVisibleUserData);
 }
 
-template<typename ComponentT>
-[[nodiscard]] b8 HasComponentCandidates(Core::ECS::World& world)noexcept{
-    return world.view<ComponentT>().candidateCount() > 0u;
-}
-
 template<typename ReceiverT>
 void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum receiverKind, const CsgFrameReceiverLookup& receiverLookup, const CsgFrameBuildDesc& desc, CsgFrameState& inOutState){
     auto receiverView = world.view<ReceiverT>();
@@ -149,7 +144,7 @@ Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange
 
 
 b8 HasCsgFrameCandidates(Core::ECS::World& world)noexcept{
-    return __hidden_frame_state::HasComponentCandidates<CsgCutterComponent>(world) && (__hidden_frame_state::HasComponentCandidates<StaticCsgMeshComponent>(world) || __hidden_frame_state::HasComponentCandidates<SkinnedCsgMeshComponent>(world));
+    return world.view<CsgCutterComponent>().candidateCount() > 0u && (world.view<StaticCsgMeshComponent>().candidateCount() > 0u || world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u);
 }
 
 Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{

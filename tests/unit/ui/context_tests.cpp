@@ -553,13 +553,12 @@ TEST_F(UiContextTests, DenseReorderedDeclarationsKeepLifetimesAcrossRetirement){
 }
 
 TEST_F(UiContextTests, CapacityReplacementPreservesSurvivorLifetimesAndDeclarationPointers){
-    constexpr usize s_Count = s_WidgetMaxStates;
     const WidgetRoot root{ 161u, 1u };
     ASSERT_TRUE(m_context.beginFrame(1u));
     ASSERT_TRUE(m_context.beginRoot(root));
     WidgetState survivor;
     WidgetState omitted;
-    for(usize index = 0u; index < s_Count; ++index){
+    for(usize index = 0u; index < s_WidgetMaxStates; ++index){
         const auto state = declareIndex(index);
         ASSERT_TRUE(state);
         if(index == 0u)
@@ -575,11 +574,11 @@ TEST_F(UiContextTests, CapacityReplacementPreservesSurvivorLifetimesAndDeclarati
 
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(root));
-    const auto first = declareIndex(s_Count);
+    const auto first = declareIndex(s_WidgetMaxStates);
     ASSERT_TRUE(first);
     const WidgetState firstCopy = **first;
-    for(usize index = 1u; index < s_Count - 1u; ++index)
-        ASSERT_TRUE(declareIndex(s_Count + index));
+    for(usize index = 1u; index < s_WidgetMaxStates - 1u; ++index)
+        ASSERT_TRUE(declareIndex(s_WidgetMaxStates + index));
     // The surviving declaration may arrive after every new ID, even when the prior frame filled the store.
     const auto current = declareIndex(0u);
     ASSERT_TRUE(current);
@@ -588,11 +587,11 @@ TEST_F(UiContextTests, CapacityReplacementPreservesSurvivorLifetimesAndDeclarati
     ASSERT_TRUE(m_context.addTarget(**current, ButtonTarget()));
     ASSERT_EQ(m_context.states().find(firstCopy.id), first->get());
     EXPECT_EQ((*first)->declarationGeneration, firstCopy.declarationGeneration);
-    EXPECT_EQ(m_context.states().entries().size(), s_Count * 2u - 1u);
+    EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates * 2u - 1u);
     ASSERT_TRUE(m_context.endRoot());
     ASSERT_TRUE(m_context.finishFrame());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.states().entries().size(), s_Count);
+    EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates);
     EXPECT_EQ(m_context.states().find(omitted.id), nullptr);
     ASSERT_NE(m_context.states().find(survivor.id), nullptr);
     EXPECT_EQ(m_context.states().find(survivor.id)->declarationGeneration, survivor.declarationGeneration);
@@ -600,13 +599,13 @@ TEST_F(UiContextTests, CapacityReplacementPreservesSurvivorLifetimesAndDeclarati
     // A subsequent entirely disjoint frame needs the complete old/new union before retirement.
     ASSERT_TRUE(m_context.beginFrame(3u));
     ASSERT_TRUE(m_context.beginRoot(root));
-    for(usize index = 0u; index < s_Count; ++index)
-        ASSERT_TRUE(declareIndex(s_Count * 2u + index));
-    EXPECT_EQ(m_context.states().entries().size(), s_Count * 2u);
+    for(usize index = 0u; index < s_WidgetMaxStates; ++index)
+        ASSERT_TRUE(declareIndex(s_WidgetMaxStates * 2u + index));
+    EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates * 2u);
     ASSERT_TRUE(m_context.endRoot());
     ASSERT_TRUE(m_context.finishFrame());
     ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_EQ(m_context.states().entries().size(), s_Count);
+    EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates);
     EXPECT_EQ(m_context.states().find(survivor.id), nullptr);
 }
 
@@ -659,7 +658,6 @@ TEST_F(UiContextTests, RetiringAPassiveLabelPreservesLiveInputBeforeAndAfterPubl
 }
 
 TEST_F(UiContextTests, RepeatedCapacityFailuresRetireOmittedStatesAndAllowRetry){
-    constexpr usize s_Count = s_WidgetMaxStates;
     const WidgetRoot root{ 171u, 1u };
     WidgetState retained;
     for(usize attempt = 0u; attempt < 3u; ++attempt){
@@ -670,14 +668,14 @@ TEST_F(UiContextTests, RepeatedCapacityFailuresRetireOmittedStatesAndAllowRetry)
         if(attempt != 0u)
             EXPECT_EQ((*first)->declarationGeneration, retained.declarationGeneration);
         retained = **first;
-        for(usize index = 1u; index < s_Count; ++index)
-            ASSERT_TRUE(declareIndex(attempt * s_Count + index));
-        EXPECT_FALSE(declareIndex((attempt + 1u) * s_Count));
+        for(usize index = 1u; index < s_WidgetMaxStates; ++index)
+            ASSERT_TRUE(declareIndex(attempt * s_WidgetMaxStates + index));
+        EXPECT_FALSE(declareIndex((attempt + 1u) * s_WidgetMaxStates));
         EXPECT_TRUE(m_context.failed());
         EXPECT_FALSE(m_context.endRoot());
         EXPECT_FALSE(m_context.finishFrame());
         m_context.abandonFrame();
-        EXPECT_EQ(m_context.states().entries().size(), s_Count);
+        EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates);
         ASSERT_NE(m_context.states().find(retained.id), nullptr);
         EXPECT_EQ(m_context.states().find(retained.id)->declarationGeneration, retained.declarationGeneration);
     }
@@ -686,12 +684,12 @@ TEST_F(UiContextTests, RepeatedCapacityFailuresRetireOmittedStatesAndAllowRetry)
     const auto first = declareIndex(0u);
     ASSERT_TRUE(first);
     EXPECT_EQ((*first)->declarationGeneration, retained.declarationGeneration);
-    for(usize index = 1u; index < s_Count; ++index)
-        ASSERT_TRUE(declareIndex(s_Count * 3u + index));
+    for(usize index = 1u; index < s_WidgetMaxStates; ++index)
+        ASSERT_TRUE(declareIndex(s_WidgetMaxStates * 3u + index));
     ASSERT_TRUE(m_context.endRoot());
     ASSERT_TRUE(m_context.finishFrame());
     ASSERT_TRUE(m_context.commitFrame(4u));
-    EXPECT_EQ(m_context.states().entries().size(), s_Count);
+    EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates);
 }
 
 

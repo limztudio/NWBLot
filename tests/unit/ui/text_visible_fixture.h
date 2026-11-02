@@ -6,6 +6,7 @@
 
 
 #include "paint_assertions.h"
+#include "widget_fixture.h"
 
 #include <impl/ecs_ui/toolkit/text/service.h>
 
@@ -29,13 +30,11 @@ namespace UiTextVisibleTests{
 
 using namespace Impl;
 using namespace Impl::Ui;
+using UiPaintAssertions::ExpectSamePaint;
 
-inline constexpr AStringView s_LatinFontPath = "tests/ui/fonts/latin";
-inline constexpr AStringView s_KoreanFontPath = "tests/ui/fonts/korean";
-inline constexpr AStringView s_SkinPath = "tests/ui/skin";
-
-
-void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
+using UiWidgetTests::s_TestKoreanFontPath;
+using UiWidgetTests::s_TestLatinFontPath;
+using UiWidgetTests::s_TestSkinPath;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +42,6 @@ void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
 
 class TextVisibleFixture : public testing::Test{
 protected:
-    [[nodiscard]] static SIMDVectorSingle LoadOutlinePosition(const PlacedGlyph& glyph, Point origin)noexcept;
     [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, Point origin)noexcept;
 
 

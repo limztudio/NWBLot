@@ -6,6 +6,8 @@
 
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
 #include <impl/assets_graphics/components.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -62,15 +64,11 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
         if(!replacementResult)
             return false;
         Core::BufferHandle replacement = Move(*replacementResult);
-        const Expected<Core::GpuDescriptorHandle> slotResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        const Core::DescriptorWriteItem write = output ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get()) : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get());
+        const Expected<Core::GpuDescriptorHandle> slotResult = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, write);
         if(!slotResult)
             return false;
         const Core::GpuDescriptorHandle slot = *slotResult;
-        const Core::DescriptorWriteItem write = output ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get()) : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get());
-        if(!heap.write(slot, write)){
-            heap.free(slot);
-            return false;
-        }
         if(descriptor.valid())
             heap.free(descriptor);
         buffer = Move(replacement);
@@ -133,36 +131,23 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
 b8 RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem& shaderSystem){
     if(m_pipeline)
         return true;
-    auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!m_bindingLayout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES));
-        auto bindingLayoutResult = device.createBindingLayout(desc);
-        if(bindingLayoutResult)
-            m_bindingLayout = Move(*bindingLayoutResult);
-        else
-            m_bindingLayout.reset();
-        if(!bindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize binding layout"));
-            return false;
-        }
-    }
-    if(!shaderSystem.loadShader<ComputeShader>(&TransparentSubsystem::opticalBoundsFinalizeCs, Core::ShaderArchive::s_DefaultVariant, Name("RayOpticalBoundsFinalize"), m_shader))
-        return false;
-    Core::ComputePipelineDesc desc;
-    desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult)
-        m_pipeline = Move(*pipelineResult);
-    else
-        m_pipeline.reset();
-    if(!pipelineResult)
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        shaderSystem,
+        &TransparentSubsystem::opticalBoundsFinalizeCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        Name("RayOpticalBoundsFinalize"),
+        NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES,
+        false,
+        m_bindingLayout,
+        m_shader,
+        m_pipeline
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize pipeline"));
-    return static_cast<b8>(pipelineResult);
+        return false;
+    }
+    return true;
 }
 
 

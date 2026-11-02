@@ -9,6 +9,8 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,13 +91,12 @@ public:
 public:
     void defineObjectMacro(MStringView name, MStringView body);
     void undefineMacro(MStringView name)noexcept;
-    [[nodiscard]] b8 isMacroDefined(MStringView name)const noexcept{ return m_macros.find(name) != m_macros.end(); }
     [[nodiscard]] b8 isOffsetInIncludedRange(usize offset)const noexcept;
 
     [[nodiscard]] b8 process(MStringView source, MString& outProcessed);
 
-    [[nodiscard]] const IncludedList& includedFiles()const noexcept{ return m_includedFiles; }
-    [[nodiscard]] const IncludedList& resolvedIncludedFiles()const noexcept{ return m_resolvedIncludedFiles; }
+    [[nodiscard]] Span<const MString> includedFiles()const noexcept{ return {m_includedFiles.data(), m_includedFiles.size()}; }
+    [[nodiscard]] Span<const MString> resolvedIncludedFiles()const noexcept{ return {m_resolvedIncludedFiles.data(), m_resolvedIncludedFiles.size()}; }
 
 
 private:
@@ -129,5 +130,4 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

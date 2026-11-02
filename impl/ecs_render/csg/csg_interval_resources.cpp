@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
@@ -23,46 +24,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CsgIntervalDetail{
+namespace __hidden_csg_interval_resources{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static b8 CreateCsgIntervalBindingLayout(Core::GraphicsArena& arena, Core::Device& device, Core::ShaderType::Mask visibility, Core::BindingLayoutHandle& layout){
-    if(layout)
-        return true;
-
-    Core::BindingLayoutDesc bindingLayoutDesc(arena);
-    bindingLayoutDesc.setVisibility(visibility);
-    // Push range selects the CSG context and mesh view; the rest is heap-owned.
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
-
-    auto layoutResult = device.createBindingLayout(bindingLayoutDesc);
-    if(layoutResult)
-        layout = Move(*layoutResult);
-    else
-        layout.reset();
-    return static_cast<b8>(layoutResult);
-}
-
-[[nodiscard]] static b8 CreateCsgIntervalComputePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::ComputePipelineHandle& pipeline){
-    if(pipeline)
-        return true;
-
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-
-    auto pipelineResult = device.createComputePipeline(pipelineDesc);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    return static_cast<b8>(pipelineResult);
-}
 
 [[nodiscard]] static b8 CreateIntervalCapFillPipeline(
     Core::Device& device,
@@ -135,17 +101,18 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targe
     if(!createCsgIntervalSampleStateBuffer())
         return false;
 
-    if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(m_arena, device, Core::ShaderType::Compute, m_csgState.m_intervalPeelBindingLayout)){
+    // Push range selects the CSG context and mesh view; the rest is heap-owned.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(CsgIntervalDispatchPushConstants), Core::ShaderType::Compute, m_csgState.m_intervalPeelBindingLayout)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel binding layout"));
         return false;
     }
 
-    if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(m_arena, device, Core::ShaderType::Compute, m_csgState.m_receiverSpanBuildBindingLayout)){
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(CsgIntervalDispatchPushConstants), Core::ShaderType::Compute, m_csgState.m_receiverSpanBuildBindingLayout)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver span build binding layout"));
         return false;
     }
 
-    if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(m_arena, device, Core::ShaderType::Compute, m_csgState.m_intervalCombineBindingLayout)){
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(CsgIntervalDispatchPushConstants), Core::ShaderType::Compute, m_csgState.m_intervalCombineBindingLayout)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval combine binding layout"));
         return false;
     }
@@ -175,22 +142,22 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targe
         }
     }
 
-    if(!CsgIntervalDetail::CreateCsgIntervalComputePipeline(device, m_csgState.m_intervalPeelComputeShader, m_csgState.m_intervalPeelBindingLayout, m_csgState.m_intervalPeelPipeline)){
+    if(!m_csgState.m_intervalPeelPipeline && !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_csgState.m_intervalPeelComputeShader, m_csgState.m_intervalPeelBindingLayout, false, m_csgState.m_intervalPeelPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel pipeline"));
         return false;
     }
 
-    if(!CsgIntervalDetail::CreateCsgIntervalComputePipeline(device, m_csgState.m_receiverSpanBuildComputeShader, m_csgState.m_receiverSpanBuildBindingLayout, m_csgState.m_receiverSpanBuildPipeline)){
+    if(!m_csgState.m_receiverSpanBuildPipeline && !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_csgState.m_receiverSpanBuildComputeShader, m_csgState.m_receiverSpanBuildBindingLayout, false, m_csgState.m_receiverSpanBuildPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver span build pipeline"));
         return false;
     }
 
-    if(!CsgIntervalDetail::CreateCsgIntervalComputePipeline(device, m_csgState.m_intervalCombineComputeShader, m_csgState.m_intervalCombineBindingLayout, m_csgState.m_intervalCombinePipeline)){
+    if(!m_csgState.m_intervalCombinePipeline && !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_csgState.m_intervalCombineComputeShader, m_csgState.m_intervalCombineBindingLayout, false, m_csgState.m_intervalCombinePipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval combine pipeline"));
         return false;
     }
 
-    if(capFillRequired && !CsgIntervalDetail::CreateIntervalCapFillPipeline(
+    if(capFillRequired && !__hidden_csg_interval_resources::CreateIntervalCapFillPipeline(
         device,
         m_shaderSystem.deferredCompositeVertexShader(),
         m_csgState.m_intervalCapFillPixelShader,
@@ -242,7 +209,7 @@ b8 RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFrameT
         if(!m_shaderSystem.loadShader<PixelShader>(&CsgSubsystem::refractionCapFillPs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgRefractionCapFillPS", m_csgState.m_refractionCapFillPixelShader))
             return false;
     }
-    if(!CsgIntervalDetail::CreateIntervalCapFillPipeline(
+    if(!__hidden_csg_interval_resources::CreateIntervalCapFillPipeline(
         m_graphics.getDevice(),
         m_shaderSystem.deferredCompositeVertexShader(),
         m_csgState.m_refractionCapFillPixelShader,

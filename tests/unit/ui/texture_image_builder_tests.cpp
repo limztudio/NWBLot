@@ -45,10 +45,6 @@ struct TextureImagePaintSample{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<SharedImageSource> MakeImage(Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image", const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u){
-    return UiFixtureSupport::MakeSeededImage(path, seed, width, height, arena);
-}
-
 [[nodiscard]] static Expected<TextureImagePaintSample> SampleImage(const DrawSnapshot& snapshot, const u64 generation)noexcept{
     TextureImagePaintSample candidate;
     // Lanes are x, y.
@@ -118,7 +114,7 @@ PopupOptions UiTextureImageBuilderTests::ChildOptions()noexcept{
 
 
 TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease){
-    auto sourceResult = MakeImage(m_arena, s_CopiedImagePath, 37u);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage(s_CopiedImagePath, 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -127,7 +123,7 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
     options.tint = { 2.0f, 0.8f, 0.6f, 0.5f };
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_builder.image("image", source, options));
-    auto sourceReplacement = MakeImage(m_arena, s_CopiedImagePath, 73u, 9u, 7u);
+    auto sourceReplacement = UiFixtureSupport::MakeSeededImage(s_CopiedImagePath, 73u, 9u, 7u, m_arena);
     ASSERT_TRUE(sourceReplacement);
     source = Move(*sourceReplacement);
     ASSERT_TRUE(source);
@@ -152,7 +148,7 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
 }
 
 TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease){
-    auto sourceResult = MakeImage(m_arena, s_FrozenImagePath, 37u);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage(s_FrozenImagePath, 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -163,7 +159,7 @@ TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderReset
     DrawSnapshot retained = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
     source.reset();
-    auto sourceReplacement = MakeImage(m_arena, s_FrozenImagePath, 73u, 9u, 7u);
+    auto sourceReplacement = UiFixtureSupport::MakeSeededImage(s_FrozenImagePath, 73u, 9u, 7u, m_arena);
     ASSERT_TRUE(sourceReplacement);
     source = Move(*sourceReplacement);
     ASSERT_TRUE(source);
@@ -195,10 +191,10 @@ TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderReset
 }
 
 TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding){
-    auto firstResult = MakeImage(m_arena, s_VersionedImagePath, 37u);
+    auto firstResult = UiFixtureSupport::MakeSeededImage(s_VersionedImagePath, 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(firstResult);
     const SharedImageSource first = Move(*firstResult);
-    auto secondResult = MakeImage(m_arena, s_VersionedImagePath, 73u, 9u, 7u);
+    auto secondResult = UiFixtureSupport::MakeSeededImage(s_VersionedImagePath, 73u, 9u, 7u, m_arena);
     ASSERT_TRUE(secondResult);
     const SharedImageSource second = Move(*secondResult);
     ASSERT_TRUE(first && second);
@@ -225,7 +221,7 @@ TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandle
 }
 
 TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePaintStack){
-    auto sourceResult = MakeImage(m_arena);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -253,7 +249,7 @@ TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePa
 }
 
 TEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads){
-    auto sourceResult = MakeImage(m_arena);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -270,7 +266,7 @@ TEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBi
 }
 
 TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput){
-    auto sourceResult = MakeImage(m_arena);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -300,7 +296,7 @@ TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyW
 }
 
 TEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFrame){
-    auto sourceResult = MakeImage(m_arena);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     const SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -330,7 +326,7 @@ TEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilT
     PopupState child;
     parent.open();
     child.open();
-    auto sourceResult = MakeImage(m_arena, "tests/ui/nested_builder_image", 37u);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/nested_builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -369,7 +365,7 @@ TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAn
     TooltipState tooltip;
     parent.open();
     child.open();
-    auto sourceResult = MakeImage(m_arena);
+    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(sourceResult);
     SharedImageSource source = Move(*sourceResult);
     ASSERT_TRUE(source);
@@ -395,13 +391,13 @@ TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAn
 TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDeferredPaint){
     FixedVector<SharedImageSource, s_PaintMaxImages> images;
     for(usize index = 0u; index < images.max_size(); ++index){
-        auto imageResult = MakeImage(m_arena, s_CapacityImagePath, static_cast<u8>(index), 4u, 4u);
+        auto imageResult = UiFixtureSupport::MakeSeededImage(s_CapacityImagePath, static_cast<u8>(index), 4u, 4u, m_arena);
         ASSERT_TRUE(imageResult);
         SharedImageSource image = Move(*imageResult);
         ASSERT_TRUE(image);
         images.push_back(Move(image));
     }
-    auto additionResult = MakeImage(m_arena);
+    auto additionResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(additionResult);
     const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(addition);
@@ -419,13 +415,13 @@ TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDefer
 TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot){
     FixedVector<SharedImageSource, s_PaintMaxImages> images;
     for(usize index = 0u; index < images.max_size(); ++index){
-        auto imageResult = MakeImage(m_arena, s_CapacityImagePath, static_cast<u8>(index), 4u, 4u);
+        auto imageResult = UiFixtureSupport::MakeSeededImage(s_CapacityImagePath, static_cast<u8>(index), 4u, 4u, m_arena);
         ASSERT_TRUE(imageResult);
         SharedImageSource image = Move(*imageResult);
         ASSERT_TRUE(image);
         images.push_back(Move(image));
     }
-    auto additionResult = MakeImage(m_arena);
+    auto additionResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
     ASSERT_TRUE(additionResult);
     const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(addition);

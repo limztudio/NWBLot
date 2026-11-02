@@ -48,51 +48,55 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshCookSourceStreams final : NoCopy{
-public:
-    template<typename VertexRefVectorT, typename PathArenaT>
-    static b8 ParseSourceVertexRefsInto(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        const TStringView metaKind,
-        Core::Alloc::ScratchArena& scratchArena,
-        VertexRefVectorT& outVertexRefs
-    );
-    static Expected<ScratchVector<MeshVertexRef>> ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Alloc::ScratchArena& scratchArena);
-    template<typename PathArenaT>
-    static b8 ValidateSourceStreamIndex(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, const AStringView streamName, const u32 index, const usize streamCount);
-    static b8 ValidateSourceStreamIndexWithContext(AStringView context, AStringView streamName, u32 index, usize streamCount);
-    template<typename PathArenaT>
-    static b8 ValidateSourceIndexStream(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, Span<const u32> indices, const usize vertexRefCount);
-    template<typename VertexRefT, typename PathArenaT>
-    static b8 ValidateSourceVertexRefStreams(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const TStringView metaKind,
-        Span<const VertexRefT> vertexRefs,
-        const usize positionCount,
-        const usize normalCount,
-        const usize tangentCount,
-        const usize uv0Count,
-        const usize colorCount
-    );
-    static b8 ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams);
-    template<typename SkinInfluenceVectorT, typename PathArenaT>
-    static b8 ParseSourceSkinInfluencesInto(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& skinAsset,
-        const TStringView metaKind,
-        const AStringView ownerPrefix,
-        const b8 normalizeWeights,
-        SkinInfluenceVectorT& outInfluences
-    );
+namespace MeshCookSourceStreams{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename VertexRefVectorT, typename PathArenaT>
+b8 ParseSourceVertexRefsInto(
+    const ::Path<PathArenaT>& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    TStringView metaKind,
+    Core::Alloc::ScratchArena& scratchArena,
+    VertexRefVectorT& outVertexRefs
+);
+template<typename PathArenaT>
+b8 ValidateSourceStreamIndex(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, AStringView streamName, u32 index, usize streamCount);
+b8 ValidateSourceStreamIndexWithContext(AStringView context, AStringView streamName, u32 index, usize streamCount);
+template<typename PathArenaT>
+b8 ValidateSourceIndexStream(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, Span<const u32> indices, usize vertexRefCount);
+template<typename VertexRefT, typename PathArenaT>
+b8 ValidateSourceVertexRefStreams(
+    const ::Path<PathArenaT>& nwbFilePath,
+    TStringView metaKind,
+    Span<const VertexRefT> vertexRefs,
+    usize positionCount,
+    usize normalCount,
+    usize tangentCount,
+    usize uv0Count,
+    usize colorCount
+);
+b8 ValidateSourceVertexRefs(const Path& nwbFilePath, TStringView metaKind, const SourceMeshStreams& streams);
+template<typename SkinInfluenceVectorT, typename PathArenaT>
+b8 ParseSourceSkinInfluencesInto(
+    const ::Path<PathArenaT>& nwbFilePath,
+    const Core::Metascript::Value& skinAsset,
+    TStringView metaKind,
+    AStringView ownerPrefix,
+    b8 normalizeWeights,
+    SkinInfluenceVectorT& outInfluences
+);
 #if defined(NWB_COOK)
-    static void CopySourceStreams(const SourceMeshStreams& streams, MeshCookEntry& outEntry);
-    static Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena);
+void CopySourceStreams(const SourceMeshStreams& streams, MeshCookEntry& outEntry);
+Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(const Path& nwbFilePath, const Core::Metascript::Value& asset, TStringView metaKind, Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena);
 #endif
 
 
-public:
-    MeshCookSourceStreams() = delete;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

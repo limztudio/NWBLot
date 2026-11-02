@@ -4,9 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
-#include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
-
-#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -112,7 +109,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
             return result;
         }
     }
-    const auto choices = RadioGroupBehavior::Reconcile(state, result, source, &guard);
+    const auto choices = RadioGroupBehavior::Reconcile(source, &guard, state, result);
     const b8 reconciled = choices.has_value();
     if(choices)
         frame.m_choices = *choices;
@@ -140,7 +137,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     if(!interactive)
         m_context.input().invalidateTarget((*widget)->id);
     while(auto action = m_context.takeControlAction(**widget, interactive, frame.m_token)){
-        if(!RadioGroupBehavior::Apply(state, result, frame.m_choices, options, *action)){
+        if(!RadioGroupBehavior::Apply(frame.m_choices, options, *action, state, result)){
             result.valid = false;
             m_context.fail();
             return result;
@@ -188,7 +185,7 @@ b8 Builder::radioGroupMatches(const RadioGroupFrame& frame)const{
 b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
     if(!radioGroupMatches(frame))
         return false;
-    SIMDVectorSingle maximumLabelSize = VectorZero();
+    Point maximumLabel{};
     frame.m_labels.reserve(frame.m_choices.count);
     for(u32 index = 0u; index < frame.m_choices.count; ++index){
         if(!radioGroupStateMatches(frame))
@@ -203,8 +200,8 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
         const auto textBounds = m_text.measure(*label, m_paint.displayMetrics());
         if(!textBounds)
             return false;
-        const SIMDVectorSingle labelSize = VectorSet(textBounds->width, textBounds->height, 0.0f, 0.0f);
-        maximumLabelSize = VectorSelect(labelSize, maximumLabelSize, VectorGreater(maximumLabelSize, labelSize));
+        maximumLabel.x = Max(maximumLabel.x, textBounds->width);
+        maximumLabel.y = Max(maximumLabel.y, textBounds->height);
         frame.m_labels.push_back({ Move(*label), *textBounds });
     }
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.fallback);
@@ -213,18 +210,17 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
     if(!normal || !checked || !mark || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
         return false;
     const Array<const UiSkinRegion*, 5u> states = { normal, checked, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
-    const SIMDVectorDouble referenceDensity = VectorDoubleReplicate(m_skin->referenceDensity());
+    const f32 referenceDensity = m_skin->referenceDensity();
     f32 indicatorExtent = frame.m_style.indicatorExtent;
     for(const UiSkinRegion* skinRegion : states){
         if(!skinRegion)
             continue;
-        const auto minimum = LoadUiSkinMinimumSize(*skinRegion, referenceDensity);
-        if(!minimum)
+        Point minimum;
+        if(!TryResolveSkinRegionMinimumSize(*skinRegion, referenceDensity, minimum))
             return false;
-        indicatorExtent = Max(indicatorExtent, Max(VectorGetX(minimum->value), VectorGetY(minimum->value)));
+        indicatorExtent = Max(indicatorExtent, Max(minimum.x, minimum.y));
     }
     frame.m_style.indicatorExtent = indicatorExtent;
-    const Point maximumLabel{ VectorGetX(maximumLabelSize), VectorGetY(maximumLabelSize) };
     const auto metrics = RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
     if(!metrics)
         return false;

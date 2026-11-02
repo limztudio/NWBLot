@@ -5,7 +5,6 @@
 #include <impl/ecs_ui/toolkit/builder.h>
 #include "selectable_paint.h"
 
-#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -107,9 +106,9 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
         }
         // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
         const f64 clippedTop = static_cast<f64>(candidate->contentClip.y) - static_cast<f64>(candidate->viewport.y);
-        const SIMDVectorDouble rowOffsets = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(candidate->firstRow)), VectorDoubleSet(frame.rowHeight, height, 0.0, 0.0));
-        const f64 within = (candidate->offset + clippedTop) - VectorDoubleGetX(rowOffsets);
-        const f64 offset = (VectorDoubleGetY(rowOffsets) + within) - clippedTop;
+        const f64 firstRow = static_cast<f64>(candidate->firstRow);
+        const f64 within = (candidate->offset + clippedTop) - (firstRow * static_cast<f64>(frame.rowHeight));
+        const f64 offset = ((firstRow * static_cast<f64>(height)) + within) - clippedTop;
         if(!scroll.setOffset(Max(0.0, offset)))
             return MakeUnexpected(Failure{});
         frame.rowHeight = height;

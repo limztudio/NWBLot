@@ -50,8 +50,8 @@ static b8 RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
             },
             nullptr,
             [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildUiSkinAsset(entry, arena); },
-            registry,
-            false
+            false,
+            registry
         )
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<UiSubsystem>(registry)
     ;

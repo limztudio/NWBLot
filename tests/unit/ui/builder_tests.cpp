@@ -106,10 +106,8 @@ protected:
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& last = snapshot.vertices()[snapshot.indices()[index + 2u]];
                 const SIMDVectorSingle error = VectorAbs(VectorSubtract(VectorSet(first.texCoord.x, last.texCoord.x, first.texCoord.y, last.texCoord.y), expected));
-                if(Vector4Less(error, VectorReplicate(1e-6f))){
-                    const SIMDVectorSingle size = VectorSubtract(VectorSet(last.position.x, last.position.y, 0.0f, 0.0f), VectorSet(first.position.x, first.position.y, 0.0f, 0.0f));
-                    return Rect{ first.position.x, first.position.y, VectorGetX(size), VectorGetY(size) };
-                }
+                if(Vector4Less(error, VectorReplicate(1e-6f)))
+                    return Rect{ first.position.x, first.position.y, last.position.x - first.position.x, last.position.y - first.position.y };
             }
         }
         return MakeUnexpected(Failure{});

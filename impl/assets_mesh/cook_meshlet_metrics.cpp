@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "cook_meshlet_metrics.h"
 
 #include <core/common/log.h>
@@ -51,23 +57,14 @@ void MeshletCookMetricsReport::LogMeshletCookMetrics(const Path& nwbFilePath, co
     if(metrics.meshletCount == 0u)
         return;
 
-    const SIMDVectorDouble reciprocalAndCutoff = VectorDoubleDivide(
-        VectorDoubleSet(1.0, metrics.coneEnabledCount != 0u ? metrics.coneCutoffSum : 0.0, 0.0, 0.0),
-        VectorDoubleSet(static_cast<f64>(metrics.meshletCount), metrics.coneEnabledCount != 0u ? static_cast<f64>(metrics.coneEnabledCount) : 1.0, 1.0, 1.0)
-    );
-    const SIMDVectorDouble invMeshletCount = VectorDoubleSplatX(reciprocalAndCutoff);
-    const SIMDVectorDouble countAverages = VectorDoubleMultiply(
-        VectorDoubleSet(static_cast<f64>(metrics.primitiveCountSum), static_cast<f64>(metrics.vertexCountSum), static_cast<f64>(metrics.positionCountSum), static_cast<f64>(metrics.attributeCountSum)),
-        invMeshletCount
-    );
-    const f64 primitiveCountAverage = VectorDoubleGetX(countAverages);
-    const f64 vertexCountAverage = VectorDoubleGetY(countAverages);
-    const f64 positionCountAverage = VectorDoubleGetZ(countAverages);
-    const f64 attributeCountAverage = VectorDoubleGetW(countAverages);
-    const SIMDVectorDouble radiusAndPercentage = VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleSet(metrics.radiusSum, static_cast<f64>(metrics.coneDisabledCount), 0.0, 0.0), VectorDoubleSet(1.0, s_MeshletPercentScale, 1.0, 1.0)), invMeshletCount);
-    const f64 radiusAverage = VectorDoubleGetX(radiusAndPercentage);
-    const f64 coneDisabledPercentage = VectorDoubleGetY(radiusAndPercentage);
-    const f64 coneCutoffAverage = VectorDoubleGetY(reciprocalAndCutoff);
+    const f64 invMeshletCount = 1.0 / static_cast<f64>(metrics.meshletCount);
+    const f64 primitiveCountAverage = static_cast<f64>(metrics.primitiveCountSum) * invMeshletCount;
+    const f64 vertexCountAverage = static_cast<f64>(metrics.vertexCountSum) * invMeshletCount;
+    const f64 positionCountAverage = static_cast<f64>(metrics.positionCountSum) * invMeshletCount;
+    const f64 attributeCountAverage = static_cast<f64>(metrics.attributeCountSum) * invMeshletCount;
+    const f64 radiusAverage = metrics.radiusSum * invMeshletCount;
+    const f64 coneDisabledPercentage = static_cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
+    const f64 coneCutoffAverage = metrics.coneEnabledCount != 0u ? (metrics.coneCutoffSum / static_cast<f64>(metrics.coneEnabledCount)) : 0.0;
     const f32 worstConeCutoff = metrics.coneEnabledCount != 0u ? metrics.worstConeCutoff : 0.0f;
     const usize sourceBytes = EstimateMeshletSourceBytes(indices, entry);
     const usize runtimeBytes = EstimateMeshletRuntimeBytes(entry);
@@ -102,6 +99,12 @@ void MeshletCookMetricsReport::LogMeshletCookMetrics(const Path& nwbFilePath, co
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

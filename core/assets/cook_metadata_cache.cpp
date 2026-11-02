@@ -224,7 +224,7 @@ void PrepareNwbFileAssetCacheRecord(
 
     const Sha1Digest pathSha1 = ComputeSha1Text(AStringView(inOutRelativePathText));
     inOutCacheFileName.clear();
-    inOutCacheFileName.reserve(Sha1Detail::s_HexTextLength);
+    inOutCacheFileName.reserve(Sha1Digest::s_HexTextLength);
     AppendSha1Hex(pathSha1, inOutCacheFileName);
     outRecord.cacheFilePath = assetCacheDirectory / inOutCacheFileName;
 

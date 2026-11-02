@@ -64,7 +64,7 @@ inline constexpr u32 s_ClearHighWordShift = 32u;
 
 
 template<typename ValueT>
-inline void WriteClearPatternValue(NotNull<u8*> outBytes, const ValueT& value)noexcept{
+inline void WriteClearPatternValue(const ValueT& value, NotNull<u8*> outBytes)noexcept{
     NWB_MEMCPY(outBytes.get(), sizeof(value), &value, sizeof(value));
 }
 
@@ -96,16 +96,16 @@ public:
 [[nodiscard]] f32 QuantizeSNormClearScalar(f32 value, f32 maxValue)noexcept;
 [[nodiscard]] SIMDVectorSingle QuantizeSNormClearVector(SIMDVectorSingle value, SIMDVectorSingle maxValue)noexcept;
 [[nodiscard]] SIMDVectorSingle LinearToSRGBClearVector(SIMDVectorSingle linear)noexcept;
-void WriteBC1ColorClearBlock(NotNull<u8*> outPattern, SIMDVectorSingle sourceRgba, b8 srgb)noexcept;
-void WriteBC4ClearBlockEndpoint(NotNull<u8*> outPattern, u8 endpoint)noexcept;
-void WriteBC4UNormClearBlock(NotNull<u8*> outPattern, f32 value)noexcept;
-void WriteBC4SNormClearBlock(NotNull<u8*> outPattern, f32 value)noexcept;
+void WriteBC1ColorClearBlock(SIMDVectorSingle sourceRgba, b8 srgb, NotNull<u8*> outPattern)noexcept;
+void WriteBC4ClearBlockEndpoint(u8 endpoint, NotNull<u8*> outPattern)noexcept;
+void WriteBC4UNormClearBlock(f32 value, NotNull<u8*> outPattern)noexcept;
+void WriteBC4SNormClearBlock(f32 value, NotNull<u8*> outPattern)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatClearPattern(Format::Enum format, const VkClearColorValue& clearValue)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureUIntClearPattern(Format::Enum format, const VkClearColorValue& clearValue)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureIntClearPattern(Format::Enum format, const VkClearColorValue& clearValue)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearDepthPatternBytes>> BuildTextureDepthClearPattern(Format::Enum format, f32 depth)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearStencilPatternBytes>> BuildTextureStencilClearPattern(Format::Enum format, u8 stencil)noexcept;
-void FillTextureClearBytes(void* bytes, usize byteCount, Span<const u8> pattern)noexcept;
+void FillTextureClearBytes(usize byteCount, Span<const u8> pattern, void* outBytes)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

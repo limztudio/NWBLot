@@ -62,8 +62,8 @@ public:
 
 
 private:
-    void advanceRevision()noexcept;
-    void advanceAdmission()noexcept;
+    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
+    void advanceAdmission()noexcept{ AdvanceRevision(m_admissionGeneration); }
 
 
 private:
@@ -85,14 +85,23 @@ private:
 };
 
 class SliderBehavior final{
+private:
+    [[nodiscard]] static b8 SameSliderOptions(const SliderState& state, const SliderOptions& options)noexcept{
+        return BitCast<u64>(state.m_minimum) == BitCast<u64>(options.minimum)
+            && BitCast<u64>(state.m_maximum) == BitCast<u64>(options.maximum)
+            && BitCast<u64>(state.m_keyStep) == BitCast<u64>(options.keyStep)
+            && state.m_enabled == options.enabled;
+    }
+
+
 public:
     [[nodiscard]] static Expected<f64> Normalize(f64 minimum, f64 maximum, f64 value)noexcept;
     [[nodiscard]] static Expected<f64> Interpolate(f64 minimum, f64 maximum, f64 normalized)noexcept;
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
     [[nodiscard]] static b8 Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept;
-    [[nodiscard]] static b8 Apply(SliderState& state, SliderResult& result, const SliderOptions& options, const ControlAction& action)noexcept;
-    [[nodiscard]] static b8 Seek(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept;
-    [[nodiscard]] static b8 Drag(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept;
+    [[nodiscard]] static b8 Apply(const SliderOptions& options, const ControlAction& action, SliderState& state, SliderResult& result)noexcept;
+    [[nodiscard]] static b8 Seek(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept;
+    [[nodiscard]] static b8 Drag(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept;
 };
 
 

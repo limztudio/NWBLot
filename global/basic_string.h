@@ -90,11 +90,6 @@ using AFormatArgs = BasicFormatArgs<char>;
 using WFormatArgs = BasicFormatArgs<wchar>;
 using TStringFormatArgs = BasicFormatArgs<tchar>;
 
-template<typename... T>
-using AFormatString = std::format_string<T...>;
-template<typename... T>
-using WFormatString = std::wformat_string<T...>;
-
 template<usize N>
 struct ConstString{
     char data[N];

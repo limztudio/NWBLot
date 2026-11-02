@@ -4,7 +4,7 @@
 
 #include "deferred_system.h"
 
-#include <impl/ecs_render/deferred/deferred_descriptor_register.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/shadow/rt_shadow_state.h>
 
@@ -108,43 +108,35 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         return false;
     }
 
-    const auto descriptorsRegistered = [&]() -> Expected<void>{
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
+    if(
+        !RendererDescriptorRegisterDetail::AssignSampledTexture(
             heap,
             Core::GpuDescriptorClass::SampledImage2DArray,
             history.shadowVisibility,
             targets.shadowVisibilityFormat,
             ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::TextureDimension::Texture2DArray
-        ); descriptor)
-            history.shadowVisibilityDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
+            Core::TextureDimension::Texture2DArray,
+            history.shadowVisibilityDescriptor
+        )
+        || !RendererDescriptorRegisterDetail::AssignSampledTexture(
             heap,
             Core::GpuDescriptorClass::SampledImage,
             history.causticIrradiance,
             targets.causticIrradianceFormat,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
-            history.causticIrradianceDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
+            Core::TextureDimension::Texture2D,
+            history.causticIrradianceDescriptor
+        )
+        || !RendererDescriptorRegisterDetail::AssignSampledTexture(
             heap,
             Core::GpuDescriptorClass::SampledImage,
             history.surfelIrradiance,
             targets.surfelIrradianceFormat,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ); descriptor)
-            history.surfelIrradianceDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        return {};
-    };
-    if(!descriptorsRegistered()){
+            Core::TextureDimension::Texture2D,
+            history.surfelIrradianceDescriptor
+        )
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history images in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;
@@ -174,7 +166,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         return false;
     }
 
-    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = DeferredDescriptorRegisterDetail::RegisterConstantBuffer(heap, history.slotsBuffer);
+    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RendererDescriptorRegisterDetail::RegisterConstantBuffer(heap, history.slotsBuffer);
     history.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
     if(!slotsBufferDescriptor){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));

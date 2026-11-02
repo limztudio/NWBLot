@@ -9,6 +9,7 @@
 #include <global/algorithm.h>
 #include <global/binary.h>
 #include <global/simd/vector.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,8 +46,7 @@ inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 }
 #endif
 
-template<usize Count>
-[[nodiscard]] static b8 DurationsAreOrdinary(const Array<SIMDVectorDouble, Count>& durations)noexcept{
+[[nodiscard]] static b8 DurationsAreOrdinary(const Span<const SIMDVectorDouble> durations)noexcept{
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
     for(const SIMDVectorDouble pack : durations){
         if(HasExceptionalDurationPack(pack))
@@ -54,12 +54,12 @@ template<usize Count>
     }
     return true;
 #else
+    static_cast<void>(durations);
     return false;
 #endif
 }
 
-template<usize Count>
-[[nodiscard]] static b8 DurationsAreValid(const Array<SIMDVectorDouble, Count>& durations)noexcept{
+[[nodiscard]] static b8 DurationsAreValid(const Span<const SIMDVectorDouble> durations)noexcept{
 #pragma STDC FENV_ACCESS ON
     for(const SIMDVectorDouble pack : durations)
         if(pack[0] < 0.0 || pack[1] < 0.0 || pack[2] < 0.0 || pack[3] < 0.0)

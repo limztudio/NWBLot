@@ -42,6 +42,29 @@ struct OpaqueCsgIntervalClearResult{
     Core::GpuTaskId clearFirstTask;
 };
 
+struct CsgIntervalRectClearDesc{
+    Name intervalClearIdentity = s_NameNone;
+    AStringView intervalClearMarkerLabel;
+    const tchar* intervalClearWarningMessage = nullptr;
+    Name receiverEventClearIdentity = s_NameNone;
+    AStringView receiverEventClearMarkerLabel;
+    const tchar* receiverEventClearWarningMessage = nullptr;
+    Core::GpuGraphResourceId csgIntervalId;
+    Core::GpuGraphResourceId csgReceiverEventCount;
+    Core::TextureSubresourceSet csgPeelSubresources{};
+    Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
+    Core::Rect clearRect{};
+    Core::GpuTaskId dependencyTask;
+};
+
+[[nodiscard]] b8 DeclareCsgIntervalRectClearTasks(
+    const CsgIntervalRectClearDesc& desc,
+    Core::GpuTaskGraph& graph,
+    GraphClearTimingRecordState& clearTimingState,
+    Core::GpuTaskId& outFirstTask,
+    Core::GpuTaskId& outTailTask
+);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

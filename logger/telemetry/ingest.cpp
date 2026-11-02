@@ -72,11 +72,6 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
     result.type = type;
 }
 
-[[nodiscard]] b8 StoreRawTelemetry(const Path& rawPath, const void* bytes, const usize byteCount){
-    const BinaryByteView view{ static_cast<const u8*>(bytes), byteCount };
-    return WriteBinaryFile(rawPath, view);
-}
-
 [[nodiscard]] ScratchPath DefaultRootDirectory(Core::Alloc::ScratchArena& arena){
     const auto executableDirectory = GetExecutableDirectory(arena);
     if(executableDirectory)
@@ -90,14 +85,6 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
         return ScratchPath(arena, configuredStorageDirectory);
 
     return DefaultRootDirectory(arena);
-}
-
-[[nodiscard]] ScratchPath RawDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
-    return StorageDirectory(arena, configuredStorageDirectory) / s_RawDirectoryName;
-}
-
-[[nodiscard]] ScratchPath ReportDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
-    return StorageDirectory(arena, configuredStorageDirectory) / s_ReportDirectoryName;
 }
 
 
@@ -118,8 +105,9 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     }
 
     Core::Alloc::ScratchArena scratchArena(Name("logger/telemetry/report"));
-    const auto rawDirectory = __hidden_telemetry_ingest::RawDirectory(scratchArena, config.storageDirectory);
-    const auto reportDirectory = __hidden_telemetry_ingest::ReportDirectory(scratchArena, config.storageDirectory);
+    const auto storageDirectory = __hidden_telemetry_ingest::StorageDirectory(scratchArena, config.storageDirectory);
+    const auto rawDirectory = storageDirectory / __hidden_telemetry_ingest::s_RawDirectoryName;
+    const auto reportDirectory = storageDirectory / __hidden_telemetry_ingest::s_ReportDirectoryName;
     if(!EnsureDirectories(rawDirectory) || !EnsureDirectories(reportDirectory)){
         __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not create storage directories", Core::Common::LogType::Error);
         return result;
@@ -135,7 +123,7 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     result.graphPath = reportDirectory / uploadStem;
     result.graphPath.replaceExtension(__hidden_telemetry_ingest::s_GraphFileExtension);
 
-    result.storedRaw = __hidden_telemetry_ingest::StoreRawTelemetry(result.rawPath, bytes, byteCount);
+    result.storedRaw = WriteBinaryFile(result.rawPath, BinaryByteView{ static_cast<const u8*>(bytes), byteCount });
     if(!result.storedRaw){
         __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not store raw stream", Core::Common::LogType::Error);
         return result;

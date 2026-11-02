@@ -21,10 +21,9 @@ b8 SoftShadowCombinedWaveletInputs::valid()const noexcept{
     for(usize index = 0u; index < LengthOf(textures); ++index){
         if(!textures[index])
             return false;
-        for(usize previous = 0u; previous < index; ++previous){
+        for(usize previous = 0u; previous < index; ++previous)
             if(textures[index] == textures[previous])
                 return false;
-        }
     }
     return true;
 }
@@ -88,37 +87,23 @@ b8 RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
         return true;
     if(resolve.m_combinedWaveletFailed)
         return false;
-    auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!resolve.m_combinedWaveletBindingLayout){
-        Core::BindingLayoutDesc layout(m_arena);
-        layout.setVisibility(Core::ShaderType::Compute);
-        layout.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(ShadowCombinedWaveletPushConstants)));
-        auto combinedWaveletBindingLayoutResult = device.createBindingLayout(layout);
-        if(combinedWaveletBindingLayoutResult)
-            resolve.m_combinedWaveletBindingLayout = Move(*combinedWaveletBindingLayoutResult);
-        else
-            resolve.m_combinedWaveletBindingLayout.reset();
-        if(!combinedWaveletBindingLayoutResult){
-            resolve.m_combinedWaveletFailed = true;
-            return false;
-        }
-    }
-    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowResolveWaveletCombinedCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowWavelet", resolve.m_combinedWavelet.m_shader)){
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaderSystem,
+        &ShadowSubsystem::shadowResolveWaveletCombinedCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        "ECSRender_CombinedShadowWavelet",
+        sizeof(ShadowCombinedWaveletPushConstants),
+        false,
+        resolve.m_combinedWaveletBindingLayout,
+        resolve.m_combinedWavelet.m_shader,
+        resolve.m_combinedWavelet.m_pipeline
+    )){
         resolve.m_combinedWaveletFailed = true;
         return false;
     }
-    Core::ComputePipelineDesc desc;
-    desc.setComputeShader(resolve.m_combinedWavelet.m_shader).addBindingLayout(resolve.m_combinedWaveletBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult)
-        resolve.m_combinedWavelet.m_pipeline = Move(*pipelineResult);
-    else
-        resolve.m_combinedWavelet.m_pipeline.reset();
-    resolve.m_combinedWaveletFailed = !pipelineResult;
-    return !resolve.m_combinedWaveletFailed;
+    return true;
 }
 
 

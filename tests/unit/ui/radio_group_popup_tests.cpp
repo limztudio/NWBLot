@@ -131,7 +131,7 @@ protected:
 
 TEST_F(UiRadioGroupPopupTests, ChildEndKeepsTheRadioStateLoanThroughTheOutermostPopupEnd){
     ASSERT_TRUE(acceptFamily(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(declareFamily(2u));
     const u64 token = m_childState.inputGeneration();
     m_childState.select(20u);
@@ -146,7 +146,7 @@ TEST_F(UiRadioGroupPopupTests, ChildEndKeepsTheRadioStateLoanThroughTheOutermost
 
 TEST_F(UiRadioGroupPopupTests, ParentLabelCallbackRejectsAnIdenticalIntentOnTheAlreadyEndedChild){
     ASSERT_TRUE(acceptFamily(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(declareFamily(2u));
     const u64 token = m_childState.inputGeneration();
     m_laterSource.armSelection(m_childState, RadioCallbackSite::Text, 20u);
@@ -161,7 +161,7 @@ TEST_F(UiRadioGroupPopupTests, ParentLabelCallbackRejectsAnIdenticalIntentOnTheA
 
 TEST_F(UiRadioGroupPopupTests, ChildMetadataMutationCannotPublishTheAlreadyPaintedParentGroup){
     ASSERT_TRUE(acceptFamily(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(declareFamily(2u));
     m_childSource.armSelection(m_state, RadioCallbackSite::Revision, 50u);
     EXPECT_FALSE(m_builder.endPopup());
@@ -174,7 +174,7 @@ TEST_F(UiRadioGroupPopupTests, ChildMetadataMutationCannotPublishTheAlreadyPaint
 
 TEST_F(UiRadioGroupPopupTests, AParentStateCannotBeAliasedByItsLiveChildRadioGroup){
     ASSERT_TRUE(acceptFamily(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(beginParent(2u));
     ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
     m_childSource.resetCounters();

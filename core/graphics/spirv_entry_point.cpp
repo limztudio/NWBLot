@@ -28,7 +28,6 @@ inline constexpr usize s_SpirvHeaderWords = 5u;
 inline constexpr usize s_SpirvMagicWordIndex = 0u;
 inline constexpr usize s_SpirvEntryPointExecutionModelWordIndex = 1u;
 inline constexpr usize s_SpirvEntryPointFixedWordCount = 3u;
-inline constexpr usize s_SpirvEntryPointNameWordIndex = s_SpirvEntryPointFixedWordCount;
 inline constexpr u32 s_SpirvInstructionOpcodeBitMask = 0xffffu;
 inline constexpr u32 s_SpirvInstructionWordCountBitShift = 16u;
 
@@ -73,8 +72,8 @@ public:
 
     [[nodiscard]] u32 word(const usize index)const noexcept{ return words[index]; }
 
-    [[nodiscard]] AStringView nameBytes(const usize index, const usize count)const noexcept{
-        return AStringView(reinterpret_cast<const char*>(words.data() + index), count * sizeof(u32));
+    [[nodiscard]] const u8* wordBytes(const usize index)const noexcept{
+        return reinterpret_cast<const u8*>(words.data() + index);
     }
 };
 
@@ -88,16 +87,19 @@ public:
     [[nodiscard]] usize size()const noexcept{ return bytecode.size() / sizeof(u32); }
 
     [[nodiscard]] u32 word(const usize index)const noexcept{
-        const u8* const wordBytes = bytecode.data() + index * sizeof(u32);
-        const Array<u8, sizeof(u32)> bytes = {{ wordBytes[0u], wordBytes[1u], wordBytes[2u], wordBytes[3u] }};
+        const u8* const bytesPtr = wordBytes(index);
+        const Array<u8, sizeof(u32)> bytes = {{ bytesPtr[0u], bytesPtr[1u], bytesPtr[2u], bytesPtr[3u] }};
         return BitCast<u32>(bytes);
     }
 
-    [[nodiscard]] AStringView nameBytes(const usize index, const usize count)const noexcept{
-        return AStringView(reinterpret_cast<const char*>(bytecode.data() + index * sizeof(u32)), count * sizeof(u32));
+    [[nodiscard]] const u8* wordBytes(const usize index)const noexcept{
+        return bytecode.data() + index * sizeof(u32);
     }
 };
 
+[[nodiscard]] inline AStringView SpirvNameBytes(const u8* const bytes, const usize wordCount)noexcept{
+    return AStringView(reinterpret_cast<const char*>(bytes), wordCount * sizeof(u32));
+}
 
 inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel)noexcept{
     switch(executionModel){
@@ -130,7 +132,7 @@ template<typename Source>
 
     entryPoint.shaderType = ConvertExecutionModel(source.word(instructionIndex + s_SpirvEntryPointExecutionModelWordIndex));
 
-    const AStringView entryPointBytes = source.nameBytes(instructionIndex + s_SpirvEntryPointNameWordIndex, static_cast<usize>(instructionWordCount) - s_SpirvEntryPointFixedWordCount);
+    const AStringView entryPointBytes = SpirvNameBytes(source.wordBytes(instructionIndex + s_SpirvEntryPointFixedWordCount), static_cast<usize>(instructionWordCount) - s_SpirvEntryPointFixedWordCount);
     const usize entryPointLength = entryPointBytes.find('\0');
     if(entryPointLength == AStringView::npos)
         return MakeUnexpected(Failure{});

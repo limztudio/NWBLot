@@ -18,7 +18,13 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalArena& arena, const AStringView text, const b8 singleLine){
+namespace GraphemeSegmentation{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, const AStringView text, const b8 singleLine){
     if(!Validate(text, singleLine))
         return MakeUnexpected(Failure{});
     EditBoundaryVector candidate(arena);
@@ -41,7 +47,7 @@ Expected<EditBoundaryVector> GraphemeSegmentation::Build(Core::Alloc::GlobalAren
     return candidate;
 }
 
-b8 GraphemeSegmentation::Validate(const AStringView text, const b8 singleLine)noexcept{
+b8 Validate(const AStringView text, const b8 singleLine)noexcept{
     if(text.size() > Limit<i32>::s_Max || (!text.empty() && text.data() == nullptr))
         return false;
     usize offset = 0u;
@@ -55,6 +61,12 @@ b8 GraphemeSegmentation::Validate(const AStringView text, const b8 singleLine)no
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

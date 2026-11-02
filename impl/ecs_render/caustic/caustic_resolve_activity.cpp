@@ -4,9 +4,9 @@
 
 #include "caustic_resolve_state.h"
 
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -83,10 +83,7 @@ b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, 
             releaseCausticResolveActivity();
             return false;
         }
-        const Expected<Core::GpuDescriptorHandle> descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(descriptor)
-            activity.descriptors[index] = *descriptor;
-        if(!descriptor || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))){
+        if(!RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()), activity.descriptors[index])){
             releaseCausticResolveActivity();
             return false;
         }

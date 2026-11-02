@@ -141,7 +141,7 @@ private:
 
 Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadShaderArchiveRecords(NWB::Core::GraphicsArena& arena, const NWB::Core::Assets::IAssetBinarySource& assetBinarySource){
     NWB::Core::Assets::AssetBytes indexBinary{arena};
-    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
+    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::s_IndexVirtualPathName, indexBinary))
         return MakeUnexpected(Failure{});
     return NWB::Core::ShaderArchive::DeserializeIndex(arena, { indexBinary.data(), indexBinary.size() });
 }

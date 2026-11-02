@@ -51,9 +51,9 @@ b8 GpuTaskGraphCompiler::assignQueues(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
+    const GpuTaskGraphQueueAssignmentOptions& options,
     Alloc::ScratchArena& scratchArena,
-    GpuTaskGraphQueueAssignments& outAssignments,
-    const GpuTaskGraphQueueAssignmentOptions& options
+    GpuTaskGraphQueueAssignments& outAssignments
 )const{
     using namespace GpuTaskGraphCompilerDetail;
 
@@ -295,7 +295,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
             u64& prefixQueueCost = prefixQueueCosts[static_cast<usize>(selectedQueue.get() - topology.queues)];
             for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
                 const GpuTaskId task = outAssignments.m_assignments[group.assignmentOffset + taskOffset].task;
-                const u64 cost = scoringData.m_taskCosts[task.index];
+                const u64 cost = scoringData.taskCosts[task.index];
                 prefixQueueCost = prefixQueueCost > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : prefixQueueCost + cost;
             }
         }

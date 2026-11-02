@@ -48,6 +48,31 @@ Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint
     return matrix;
 }
 
+Expected<SIMDMatrix> EvaluateSkeletonPoseJointMatrix(const SkeletonPoseComponent& pose, const u32 targetJointIndex)noexcept{
+    if(!HasSkeletonPoseData(pose) || !ValidSkeletonPoseTopology(pose))
+        return MakeUnexpected(Failure{});
+
+    const usize jointCount = pose.localJoints.size();
+    if(static_cast<usize>(targetJointIndex) >= jointCount)
+        return MakeUnexpected(Failure{});
+
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        if(!MatrixIsInvertibleAffine(LoadFloat(pose.localJoints[jointIndex]), s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+            return MakeUnexpected(Failure{});
+    }
+
+    SIMDMatrix matrix = LoadFloat(pose.localJoints[targetJointIndex]);
+    u32 currentJoint = targetJointIndex;
+    while(pose.parentJoints[currentJoint] != s_SkeletonInvalidJointIndex){
+        const u32 parentJoint = pose.parentJoints[currentJoint];
+        matrix = MatrixMultiply(LoadFloat(pose.localJoints[parentJoint]), matrix);
+        if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+            return MakeUnexpected(Failure{});
+        currentJoint = parentJoint;
+    }
+    return matrix;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

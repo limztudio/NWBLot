@@ -260,7 +260,7 @@ template<typename ArenaT>
             return true;
         const int accessError = errno;
         if(accessError != ENOENT && accessError != ENOTDIR && accessError != EACCES)
-            return MakeUnexpected(ErrorCode(accessError, std::generic_category()));
+            return MakeUnexpected(ErrorCode(accessError, GenericCategory()));
 #endif
 
         if(cursor >= searchPath.size())

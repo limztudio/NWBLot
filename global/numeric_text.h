@@ -150,7 +150,7 @@ template<typename NumberT>
         else
             return std::from_chars(begin, end, value);
     }();
-    if(parsed.ec != std::errc() || parsed.ptr != end)
+    if(parsed.ec != ErrorCondition{} || parsed.ptr != end)
         return MakeUnexpected(Failure{});
     return value;
 }

@@ -180,7 +180,7 @@ b8 UiNestedPopupSmokeScene::paintChild(Impl::Ui::Builder& ui){
     using namespace Impl::Ui;
     PopupOptions options;
     const Rect& parent = m_parent.placement().bounds;
-    options.anchor = StoreSmokeRect(VectorSubtract(VectorAdd(VectorSet(parent.x, parent.y, 8.0f, 32.0f), VectorSet(parent.width, 124.0f, 0.0f, 0.0f)), VectorSet(8.0f, 0.0f, 0.0f, 0.0f)));
+    options.anchor = Impl::Ui::StoreRect(VectorSubtract(VectorAdd(VectorSet(parent.x, parent.y, 8.0f, 32.0f), VectorSet(parent.width, 124.0f, 0.0f, 0.0f)), VectorSet(8.0f, 0.0f, 0.0f, 0.0f)));
     options.side = PopupPlacementSide::Right;
     options.size = { 220.0f, 178.0f };
     if(!ui.beginPopup("child", m_child, options))
@@ -209,25 +209,25 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
         const Rect parent = m_parent.placement().bounds;
         m_rectangles[2] = parent;
         const SIMDVectorSingle parentFrame = VectorSet(parent.x, parent.y, parent.width, 0.0f);
-        m_rectangles[4] = StoreSmokeRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 28.0f, 0.0f, 0.0f)));
+        m_rectangles[4] = Impl::Ui::StoreRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 28.0f, 0.0f, 0.0f)));
         m_rectangles[5] = m_beforeEdit.placement.bounds;
         m_rectangles[6] = m_beforeList.placement().bounds;
         m_rectangles[7] = rowBounds(m_beforeList, m_source, 2u);
-        m_rectangles[8] = StoreSmokeRect(VectorAdd(parentFrame, VectorSet(8.0f, 124.0f, -16.0f, 32.0f)));
-        m_rectangles[9] = StoreSmokeRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 160.0f, 0.0f, 0.0f)));
+        m_rectangles[8] = Impl::Ui::StoreRect(VectorAdd(parentFrame, VectorSet(8.0f, 124.0f, -16.0f, 32.0f)));
+        m_rectangles[9] = Impl::Ui::StoreRect(VectorAdd(VectorSet(parent.x, parent.y, 100.0f, 32.0f), VectorSet(8.0f, 160.0f, 0.0f, 0.0f)));
         m_rectangles[10] = m_afterEdit.placement.bounds;
         m_rectangles[11] = m_afterList.placement().bounds;
         m_rectangles[12] = rowBounds(m_afterList, m_source, 2u);
         m_rectangles[16] = m_combo.bounds();
         m_rectangles[19] = m_search.combo().bounds();
-        m_rectangles[23] = StoreSmokeRect(VectorAdd(parentFrame, VectorSet(8.0f, 328.0f, -16.0f, 32.0f)));
+        m_rectangles[23] = Impl::Ui::StoreRect(VectorAdd(parentFrame, VectorSet(8.0f, 328.0f, -16.0f, 32.0f)));
         if(m_childDeclared && m_child.isOpen()){
             const Rect child = m_child.placement().bounds;
             m_rectangles[3] = child;
             const SIMDVectorSingle childFrame = VectorSet(child.x, child.y, child.width, 0.0f);
-            m_rectangles[13] = StoreSmokeRect(VectorAdd(childFrame, VectorSet(8.0f, 28.0f, -16.0f, 32.0f)));
+            m_rectangles[13] = Impl::Ui::StoreRect(VectorAdd(childFrame, VectorSet(8.0f, 28.0f, -16.0f, 32.0f)));
             m_rectangles[14] = m_childEdit.placement.bounds;
-            m_rectangles[15] = StoreSmokeRect(VectorAdd(childFrame, VectorSet(8.0f, 100.0f, -16.0f, 32.0f)));
+            m_rectangles[15] = Impl::Ui::StoreRect(VectorAdd(childFrame, VectorSet(8.0f, 100.0f, -16.0f, 32.0f)));
         }
         if(m_combo.isOpen()){
             m_rectangles[17] = m_combo.placement().bounds;

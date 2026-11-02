@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_scene/components.adhd.h>
+#include <impl/ecs_scene/view_types.adhd.h>
 
 #include <core/ecs/world.h>
 

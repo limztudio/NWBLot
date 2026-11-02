@@ -92,7 +92,7 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
 
     for(u32 i = 0u; i < attributeCount; ++i){
         const VertexAttributeDesc& attr = d[i];
-        if(ConvertFormat(attr.format) == VK_FORMAT_UNDEFINED){
+        if(VulkanDetail::ConvertFormat(attr.format) == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has unsupported vertex format"), i);
             return MakeUnexpected(Failure{});
         }
@@ -181,7 +181,7 @@ Expected<InputLayoutHandle> Device::createInputLayout(const VertexAttributeDesc*
         VkVertexInputAttributeDescription vkAttr{};
         vkAttr.location = static_cast<u32>(i);
         vkAttr.binding = attr.bufferIndex;
-        vkAttr.format = ConvertFormat(attr.format);
+        vkAttr.format = VulkanDetail::ConvertFormat(attr.format);
         vkAttr.offset = attr.offset;
 
         layout->m_vkAttributes[i] = vkAttr;

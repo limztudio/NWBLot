@@ -42,20 +42,13 @@ using namespace RendererTaskGraphDetail;
         || leftCache.indexByteOffset != rightCache.indexByteOffset || leftCache.indexCount != rightCache.indexCount
     )
         return false;
-    Array<Core::Buffer*, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT> rightSources{};
-    usize sourceIndex = 0u;
-    ForEachMaterialPassMeshSourceBuffer(right.meshResources, [&](const Core::BufferHandle& source)noexcept{
-        rightSources[sourceIndex++] = source.get();
-    });
-    sourceIndex = 0u;
-    b8 same = true;
-    ForEachMaterialPassMeshSourceBuffer(left.meshResources, [&](const Core::BufferHandle& source)noexcept{
-        same = same && source.get() == rightSources[sourceIndex];
-        ++sourceIndex;
-    });
-    for(usize index = 0u; index < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++index)
-        same = same && left.meshResources.geometryHeapHandles[index] == right.meshResources.geometryHeapHandles[index];
-    return same;
+    if(!left.meshResources.sourceBuffers.sameBuffers(right.meshResources.sourceBuffers))
+        return false;
+    for(usize index = 0u; index < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++index){
+        if(left.meshResources.geometryHeapHandles[index] != right.meshResources.geometryHeapHandles[index])
+            return false;
+    }
+    return true;
 }
 
 struct DecodeTask{

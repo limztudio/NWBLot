@@ -17,8 +17,8 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFont){
-    RasterGlyphs glyphs(inOutFont.m_bytes.get_allocator().arena());
-    FT_Face face = inOutFont.m_freeType.face();
+    RasterGlyphs glyphs(inOutFont.arena());
+    FT_Face face = inOutFont.freeType().face();
     const f32 designPerPixel = Impl::ComputeFontAtlasUnitsPerPixel(face->units_per_EM, options.ppem);
     const u64 capacity = static_cast<u64>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount * options.maxGroups;
     u64 rasterBytes = 0u;

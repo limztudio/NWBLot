@@ -110,7 +110,7 @@ void CheckSingleLaneStateChangeScratch(usize& scratchPeak, const usize taskCount
     Core::GpuTaskGraphCompileOptions options;
     options.allowMetadataOnlyTasks = true;
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-    ASSERT_TRUE(compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, options));
+    ASSERT_TRUE(compiler.compile(declarations, topology, options, scratchArena, analysis, assignments, compiledGraph));
     scratchPeak = scratchArena.memoryStats().peakUsedBytes;
     const Core::GpuCompiledGraph::ReadView plan(compiledGraph);
     ASSERT_EQ(plan.packetCount(), taskCount);

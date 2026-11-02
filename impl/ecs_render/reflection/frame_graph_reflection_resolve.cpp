@@ -85,19 +85,14 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         reflectionHardwareReads.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         reflectionHardwareReads.push_back(ReadUse(lights));
     }
-    Array<Core::GpuTaskResourceSetUse, s_ReflectionResourceSetUseCapacity> reflectionSets{};
-    usize reflectionSetCount = 0u;
-    for(const Core::GpuGraphResourceSetId set : {hardwareTraceGeometrySet, traceMaterialSampledTextureSet}){
-        if(set.valid())
-            reflectionSets[reflectionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    }
+    const RendererFramePipelineDetail::TraceResourceSetUses reflectionSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(hardwareTraceGeometrySet, traceMaterialSampledTextureSet);
     const ReflectionGraphInputs reflectionInputs{
         .raytracingSystem = m_raytracingSystem,
         .opaqueDepth = depth,
         .opaqueColor = opaqueColor,
         .surfaceReads = reflectionSurfaceReads,
         .hardwareReads = reflectionHardwareReads,
-        .hardwareSetReads = Span<const Core::GpuTaskResourceSetUse>(reflectionSets.data(), reflectionSetCount),
+        .hardwareSetReads = Span<const Core::GpuTaskResourceSetUse>(reflectionSets.uses.data(), reflectionSets.useCount),
         .hardwarePreparationReady = &inputs.hardwarePreparationReady,
         .hardwareDispatchLogged = &inputs.hardwareDispatchLogged,
         .fallbackDispatchLogged = &inputs.fallbackDispatchLogged,
@@ -106,11 +101,11 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     if(!reflectionGraphResult)
         return MakeUnexpected(Failure{});
     result.reflectionGraph = Move(*reflectionGraphResult);
-    result.reflectionCompositeInputs = MakeReflectionCompositeInputs(
-        reflectionResources.parameters.opaqueRadianceSlot,
-        reflectionResources.parameters.glassRadianceSlot,
-        reflectionSettings.debugView
-    );
+    result.reflectionCompositeInputs = ReflectionCompositeInputs{
+        .opaqueRadianceSlot = reflectionResources.parameters.opaqueRadianceSlot,
+        .glassRadianceSlot = reflectionResources.parameters.glassRadianceSlot,
+        .debugView = reflectionSettings.debugView,
+    };
     return result;
 }
 

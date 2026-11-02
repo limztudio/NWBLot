@@ -254,7 +254,7 @@ namespace GpuTaskGraphCompilerDetail{
     b8 allTasksAllowOverlap = true;
     for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
         const GpuTaskQueueAssignment& assignment = assignments[group.assignmentOffset + taskOffset];
-        const u64 cost = scoringData.m_taskCosts[assignment.task.index];
+        const u64 cost = scoringData.taskCosts[assignment.task.index];
         exclusions.totalCost += cost;
         if(assignment.queue == candidate.id)
             exclusions.candidateQueueCost += cost;
@@ -288,7 +288,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(allTasksAllowOverlap && analysis.schedulingEdges().empty()){
         const u64 assignedQueueCost = scoringData.assignedQueueLoad(candidate.id);
         NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
-        overlap = scoringData.m_totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
+        overlap = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
     }
     else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){
         overlap = scoringData.independentQueueCost(schedulingReachability, candidate.id, assignments.subspan(group.assignmentOffset, group.assignmentCount));

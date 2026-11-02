@@ -235,7 +235,7 @@ private:
 
 
 public:
-    POOL* m_pool = nullptr;
+    POOL* pool = nullptr;
 
 
 private:
@@ -245,32 +245,32 @@ private:
 
 private:
     static consteval b8 CanDeallocate()noexcept{
-        return requires(POOL& pool, void* allocation){ pool.template deallocate<T>(static_cast<T*>(allocation), 1); } || requires(POOL& pool, void* allocation){ pool.template deallocate<T>(static_cast<RemoveCV_T<T>*>(allocation), 1); };
+        return requires(POOL& inPool, void* allocation){ inPool.template deallocate<T>(static_cast<T*>(allocation), 1); } || requires(POOL& inPool, void* allocation){ inPool.template deallocate<T>(static_cast<RemoveCV_T<T>*>(allocation), 1); };
     }
 
-    static void Deallocate(POOL& pool, void* allocation)noexcept{
-        if constexpr(requires{ pool.template deallocate<T>(static_cast<T*>(allocation), 1); })
-            pool.template deallocate<T>(static_cast<T*>(allocation), 1);
+    static void Deallocate(POOL& inPool, void* allocation)noexcept{
+        if constexpr(requires{ inPool.template deallocate<T>(static_cast<T*>(allocation), 1); })
+            inPool.template deallocate<T>(static_cast<T*>(allocation), 1);
         else
-            pool.template deallocate<T>(static_cast<RemoveCV_T<T>*>(allocation), 1);
+            inPool.template deallocate<T>(static_cast<RemoveCV_T<T>*>(allocation), 1);
     }
 
 
 public:
     constexpr ArenaDeleter()noexcept = default;
-    constexpr ArenaDeleter(POOL& pool)noexcept
-        : m_pool(&pool)
+    constexpr ArenaDeleter(POOL& inPool)noexcept
+        : pool(&inPool)
     {}
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U, POOL>& other, typename EnableIf<IsConvertible<U*, T*>::value && IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>>>::type* = 0)noexcept
-        : m_pool(other.m_pool)
+        : pool(other.pool)
         , m_deallocate(other.m_deallocate)
         , m_offset(other.m_offset)
     {}
     // Cross-type ownership needs the live source pointer before its base adjustment is erased.
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U, POOL>& other, TypeIdentity<U*> source, typename EnableIf<IsConvertible<U*, T*>::value && !IsSame_V<RemoveCV_T<U>, RemoveCV_T<T>>>::type* = 0)noexcept
-        : m_pool(other.m_pool)
+        : pool(other.pool)
     {
         if(source){
             m_deallocate = other.m_deallocate;
@@ -292,46 +292,46 @@ public:
     void operator()(T* p)const noexcept{
         static_assert(IsCompleteType_V<T>, "Attempting to call the destructor of an incomplete type");
         // Destruction can reenter a surviving owner and replace its deleter.
-        POOL* const pool = m_pool;
+        POOL* const targetPool = pool;
         const DeallocateFunction deallocate = m_deallocate;
         void* const allocation = reinterpret_cast<void*>(reinterpret_cast<usize>(p) - m_offset);
         p->~T();
         if(deallocate)
-            deallocate(*pool, allocation);
+            deallocate(*targetPool, allocation);
         else{
-            if constexpr(requires{ pool->template deallocate<T>(p, 1); })
-                pool->template deallocate<T>(p, 1);
+            if constexpr(requires{ targetPool->template deallocate<T>(p, 1); })
+                targetPool->template deallocate<T>(p, 1);
             else
-                pool->template deallocate<T>(const_cast<RemoveCV_T<T>*>(p), 1);
+                targetPool->template deallocate<T>(const_cast<RemoveCV_T<T>*>(p), 1);
         }
     }
 };
 template<typename T, typename POOL>
 struct ArenaDeleter<T[], POOL>{
-    POOL* m_pool = nullptr;
-    usize m_size = 0;
+    POOL* pool = nullptr;
+    usize size = 0;
 
 
 public:
     constexpr ArenaDeleter()noexcept = default;
-    constexpr ArenaDeleter(POOL& pool, usize size)noexcept
-        : m_pool(&pool)
-        , m_size(size)
+    constexpr ArenaDeleter(POOL& inPool, usize inSize)noexcept
+        : pool(&inPool)
+        , size(inSize)
     {}
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U[], POOL>& other, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept
-        : m_pool(other.m_pool)
-        , m_size(other.m_size)
+        : pool(other.pool)
+        , size(other.size)
     {}
 
 
 public:
     void operator()(T* p)const noexcept{
-        POOL* const pool = m_pool;
-        const usize size = m_size;
-        for(usize i = 0u; i < size; ++i)
+        POOL* const targetPool = pool;
+        const usize count = size;
+        for(usize i = 0u; i < count; ++i)
             p[i].~T();
-        pool->template deallocate<T>(p, size);
+        targetPool->template deallocate<T>(p, count);
     }
 };
 
@@ -348,22 +348,22 @@ struct EmptyDeleter{
 };
 template<typename T>
 struct EmptyDeleter<T[]>{
-    usize m_size = 0;
+    usize size = 0;
 
 
 public:
     constexpr EmptyDeleter()noexcept = default;
-    constexpr EmptyDeleter(usize size)noexcept
-        : m_size(size)
+    constexpr EmptyDeleter(usize inSize)noexcept
+        : size(inSize)
     {}
     template<typename U>
     EmptyDeleter(const EmptyDeleter<U[]>& other, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept
-        : m_size(other.m_size)
+        : size(other.size)
     {}
 
     void operator()(T* p)const noexcept{
-        const usize size = m_size;
-        for(usize i = 0u; i < size; ++i)
+        const usize count = size;
+        for(usize i = 0u; i < count; ++i)
             p[i].~T();
     }
 };

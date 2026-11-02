@@ -23,10 +23,8 @@ b8 PreparedSceneBvhUpload::StorageReady(const RendererRayTracingState& state, co
         && state.m_sceneInstanceBuffer
         && state.m_sceneBvhNodeCapacity >= nodeCount
         && state.m_sceneInstanceCapacity >= instanceCount
-        && state.m_sceneBvhNodeHeapHandle.valid()
-        && state.m_sceneBvhNodeHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_sceneInstanceHeapHandle.valid()
-        && state.m_sceneInstanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && RayTracingDetail::IsHeapHandle(state.m_sceneBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RayTracingDetail::IsHeapHandle(state.m_sceneInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ;
 }
 
@@ -113,18 +111,7 @@ Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const Re
     if(!m_ready)
         return result;
 
-    if(
-        state.m_sceneBvhNodeBuffer.get() != m_nodeBuffer.get()
-        || state.m_sceneInstanceBuffer.get() != m_instanceBuffer.get()
-        || state.m_sceneBvhNodeCapacity != m_nodeCapacity
-        || state.m_sceneInstanceCapacity != m_instanceCapacity
-        || state.m_sceneBvhNodeHeapHandle != m_nodeHeapHandle
-        || state.m_sceneInstanceHeapHandle != m_instanceHeapHandle
-        || !state.m_sceneBvhNodeHeapHandle.valid()
-        || state.m_sceneBvhNodeHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !state.m_sceneInstanceHeapHandle.valid()
-        || state.m_sceneInstanceHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    ){
+    if(!storageMatches(state) || !StorageReady(state, m_nodeCount, m_instanceCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage"));
         return MakeUnexpected(Failure{});
     }

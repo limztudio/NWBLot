@@ -4,10 +4,6 @@
 
 #include <impl/ecs_ui/skin_selection.h>
 #include <impl/assets_ui_skin/asset.h>
-#include <impl/assets_ui_skin/toolkit_contract.h>
-
-#include <tests/common/capturing_logger.h>
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -24,7 +20,6 @@ namespace __hidden_ui_skin_selection_tests{
 constexpr AStringView s_DefaultSkinPath = "engine/ui/skins/default/atlas";
 constexpr AStringView s_MissingSkinPath = "project/ui/skins/missing/atlas";
 constexpr AStringView s_CustomSkinPath = "project/ui/skins/custom/atlas";
-constexpr AStringView s_AlternateSkinPath = "project/ui/skins/alternate/atlas";
 using namespace NWB;
 using namespace NWB::Impl;
 inline constexpr Core::Assets::AssetRef<UiSkin> s_DefaultUiSkinRef{ s_DefaultSkinPath };
@@ -83,146 +78,6 @@ TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
     );
     EXPECT_EQ(calls, 1u);
     EXPECT_EQ(selection.selected, custom);
-}
-
-TEST(UiSkinSelectionTests, ChangeWaitsForResourcesGpuFrameAndAcceptedLayout){
-    UiSkinSelectionState selection = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
-    const Core::Assets::AssetRef<UiSkin> alternate{ __hidden_ui_skin_selection_tests::s_AlternateSkinPath };
-    selection.requestChange(alternate);
-    u32 binds = 0u;
-    const auto bind = [&](const Core::Assets::AssetRef<UiSkin>&, const u64)noexcept{ ++binds; return true; };
-    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, false, false, false, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
-    EXPECT_TRUE(selection.changePending);
-    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
-    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, true, false, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
-    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, true, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
-    EXPECT_EQ(binds, 0u);
-    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
-    EXPECT_EQ(selection.generation, 1u);
-    const auto bindAlternate = [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-        ++binds;
-        EXPECT_EQ(ref, alternate);
-        EXPECT_EQ(generation, 2u);
-        EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
-        EXPECT_EQ(selection.generation, 1u);
-        return true;
-    };
-    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, bindAlternate), UiSkinChangeResult::Applied);
-    EXPECT_EQ(binds, 1u);
-    EXPECT_EQ(selection.selected, alternate);
-    EXPECT_EQ(selection.generation, 2u);
-}
-
-TEST(UiSkinSelectionTests, SameReferenceReloadAdvancesGenerationAndLatestRequestWins){
-    UiSkinSelectionState selection = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
-    const Core::Assets::AssetRef<UiSkin> obsolete{ "project/ui/skins/obsolete/atlas" };
-    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
-    selection.requestChange(obsolete);
-    selection.requestChange(s_DefaultUiSkinRef);
-    EXPECT_EQ(
-        ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            EXPECT_EQ(ref, s_DefaultUiSkinRef);
-            EXPECT_EQ(generation, 2u);
-            return true;
-        }),
-        UiSkinChangeResult::Applied
-    );
-    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
-    EXPECT_EQ(selection.generation, 2u);
-    EXPECT_FALSE(selection.changePending);
-}
-
-TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetry){
-    UiSkinSelectionState selection = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
-    const Core::Assets::AssetRef<UiSkin> alternate{ __hidden_ui_skin_selection_tests::s_AlternateSkinPath };
-    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
-    selection.requestChange(alternate);
-    u32 binds = 0u;
-    const auto reject = [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-        ++binds;
-        EXPECT_EQ(ref, alternate);
-        EXPECT_EQ(generation, 2u);
-        return false;
-    };
-    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, reject), UiSkinChangeResult::Failed);
-    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
-    EXPECT_EQ(selection.generation, 1u);
-    EXPECT_TRUE(selection.changeFailed);
-    EXPECT_FALSE(selection.changePending);
-    EXPECT_EQ(selection.requestedChange, alternate);
-    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, reject), UiSkinChangeResult::Deferred);
-    EXPECT_EQ(binds, 1u);
-    selection.resourcesValidated();
-    EXPECT_TRUE(selection.changePending);
-    EXPECT_EQ(
-        ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            EXPECT_EQ(ref, alternate);
-            EXPECT_EQ(generation, 2u);
-            return true;
-        }),
-        UiSkinChangeResult::Applied
-    );
-    EXPECT_EQ(selection.selected, alternate);
-    EXPECT_EQ(selection.generation, 2u);
-    EXPECT_FALSE(selection.changeFailed);
-}
-
-TEST(UiSkinSelectionTests, EmptyLiveRequestSelectsAndRebindsEngineDefault){
-    const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_CustomSkinPath };
-    UiSkinSelectionState selection = MakeUiSkinSelectionState(custom);
-    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
-    selection.requestChange({});
-    EXPECT_EQ(
-        ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            EXPECT_EQ(ref, s_DefaultUiSkinRef);
-            EXPECT_EQ(generation, 2u);
-            return true;
-        }),
-        UiSkinChangeResult::Applied
-    );
-    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
-}
-
-TEST(UiSkinSelectionTests, IncompleteCookedCandidateCannotReachGpuBindOrReplaceSelection){
-    NWB::Tests::CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    struct SkinAdmissionArenaTag{};
-    NWB::Tests::TestArena<SkinAdmissionArenaTag> testArena;
-    const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/incomplete/atlas" };
-    UiSkin incomplete(testArena.arena, custom.name());
-    UiSkin::RegionVector regions(testArena.arena);
-    UiSkinRegion panel;
-    panel.name = Name("panel.normal");
-    panel.rectangle = { 0u, 0u, 16u, 16u };
-    regions.push_back(panel);
-    incomplete.setAtlas(Core::Assets::AssetRef<Texture>{ "project/ui/texture" }, 32u, 32u, 1.0f, Move(regions));
-    ASSERT_TRUE(incomplete.validatePayload());
-
-    u32 gpuBinds = 0u;
-    const auto tryBind = [&](const Core::Assets::AssetRef<UiSkin>& ref){
-        if(ref == custom){
-            if(!ValidateUiSkinToolkitContract(incomplete))
-                return false;
-            ++gpuBinds;
-            return true;
-        }
-        EXPECT_EQ(ref, s_DefaultUiSkinRef);
-        return true;
-    };
-    UiSkinSelectionState startup = MakeUiSkinSelectionState(custom);
-    EXPECT_EQ(EnsureUiSkinSelection(startup, s_DefaultUiSkinRef, tryBind), UiSkinSelectionResult::DefaultFallback);
-    EXPECT_EQ(startup.selected, s_DefaultUiSkinRef);
-    EXPECT_EQ(gpuBinds, 0u);
-
-    UiSkinSelectionState live = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
-    ASSERT_EQ(EnsureUiSkinSelection(live, s_DefaultUiSkinRef, tryBind), UiSkinSelectionResult::Selected);
-    live.requestChange(custom);
-    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(live, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64){ return tryBind(ref); }), UiSkinChangeResult::Failed);
-    EXPECT_EQ(live.selected, s_DefaultUiSkinRef);
-    EXPECT_EQ(live.generation, 1u);
-    EXPECT_EQ(gpuBinds, 0u);
-    EXPECT_TRUE(live.changeFailed);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing required region 'window.normal'")));
 }
 
 

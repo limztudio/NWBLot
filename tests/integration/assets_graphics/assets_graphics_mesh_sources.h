@@ -85,8 +85,13 @@ namespace Tests{
 
 
 // Triangle mesh metadata and field variants shared by the mesh cook and validation tests.
-struct AssetsGraphicsMeshSources{
-    static constexpr AStringView s_MinimalMeshMeta =
+namespace AssetsGraphicsFixture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr AStringView s_MinimalMeshMeta =
     "mesh asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
@@ -100,25 +105,20 @@ struct AssetsGraphicsMeshSources{
 
     )" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
-    #if defined(NWB_FINAL)
-    static constexpr AStringView s_TriangleNormalField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS;
-    static constexpr AStringView s_TriangleTangentField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS;
-    static constexpr AStringView s_TriangleVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS;
-    static constexpr AStringView s_TriangleMissingNormalVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_NORMAL_VERTEX_REFS;
-    static constexpr AStringView s_TriangleMissingTangentVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS;
-    static constexpr AStringView s_EmptyNormalListField = R"(asset.normals = [];
+#if defined(NWB_FINAL)
+inline constexpr AStringView s_EmptyNormalListField = R"(asset.normals = [];
 
     )";
-    static constexpr AStringView s_EmptyNormalMapField = R"(asset.normals = {};
+inline constexpr AStringView s_EmptyNormalMapField = R"(asset.normals = {};
 
     )";
-    static constexpr AStringView s_EmptyTangentListField = R"(asset.tangents = [];
+inline constexpr AStringView s_EmptyTangentListField = R"(asset.tangents = [];
 
     )";
-    static constexpr AStringView s_EmptyTangentMapField = R"(asset.tangents = {};
+inline constexpr AStringView s_EmptyTangentMapField = R"(asset.tangents = {};
 
     )";
-    static constexpr AStringView s_UnsupportedMeshFieldsMeta = R"(mesh asset;
+inline constexpr AStringView s_UnsupportedMeshFieldsMeta = R"(mesh asset;
 
     asset.vertex_stride = 24;
 
@@ -132,7 +132,7 @@ struct AssetsGraphicsMeshSources{
     [0, 1, 2],
     ];
     )";
-    static constexpr AStringView s_MismatchedMeshMeta =
+inline constexpr AStringView s_MismatchedMeshMeta =
     "mesh asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
@@ -142,7 +142,12 @@ struct AssetsGraphicsMeshSources{
 
     )" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
-    #endif
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

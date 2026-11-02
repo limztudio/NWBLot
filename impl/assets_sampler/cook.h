@@ -27,15 +27,8 @@ NWB_IMPL_BEGIN
 
 
 struct SamplerCookEntry{
-    Core::Assets::AssetArena& arena;
     Name virtualPath = s_NameNone;
     Core::SamplerDesc description;
-
-
-public:
-    explicit SamplerCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
-        : arena(memoryArena)
-    {}
 };
 
 

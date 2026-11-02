@@ -36,34 +36,21 @@ b8 RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
     if(sampling.m_pipelines[0] && sampling.m_pipelines[1])
         return true;
     auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!sampling.m_layout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(SoftwareTransparentSamplingPush)));
-        auto layoutResult = device.createBindingLayout(desc);
-        if(layoutResult)
-            sampling.m_layout = Move(*layoutResult);
-        else
-            sampling.m_layout.reset();
-        if(!layoutResult)
-            return false;
-    }
-    const Array<AStringView, 2u> variants = { "NWB_SW_TRANSPARENT_ADAPTIVE=0", "NWB_SW_TRANSPARENT_ADAPTIVE=1" };
+    const Array<AStringView, 2u> variants = { s_SwTransparentAdaptiveDisabledVariant, s_SwTransparentAdaptiveEnabledVariant };
     for(u32 index = 0u; index < variants.size(); ++index){
-        if(sampling.m_pipelines[index])
-            continue;
-        if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::swShadowTransparentSoftCs, variants[index], "ECSRender_SwShadowTransparentSoft", sampling.m_shaders[index]))
-            return false;
-        Core::ComputePipelineDesc desc;
-        desc.setComputeShader(sampling.m_shaders[index]).addBindingLayout(sampling.m_layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto pipelinesResult = device.createComputePipeline(desc);
-        if(pipelinesResult)
-            sampling.m_pipelines[index] = Move(*pipelinesResult);
-        else
-            sampling.m_pipelines[index].reset();
-        if(!pipelinesResult)
+        if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+            m_arena,
+            device,
+            m_shaderSystem,
+            &ShadowSubsystem::swShadowTransparentSoftCs,
+            variants[index],
+            Name("ECSRender_SwShadowTransparentSoft"),
+            sizeof(SoftwareTransparentSamplingPush),
+            false,
+            sampling.m_layout,
+            sampling.m_shaders[index],
+            sampling.m_pipelines[index]
+        ))
             return false;
     }
     return true;

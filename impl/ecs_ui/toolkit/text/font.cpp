@@ -227,7 +227,7 @@ private:
         )
             return {};
         const Rect ink{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(width), static_cast<f32>(height) };
-        if(!VectorIsFinite(VectorAdd(VectorSet(ink.x, ink.y, 0.0f, 0.0f), VectorSet(ink.width, ink.height, 0.0f, 0.0f)), VectorComponentMask::s_XY))
+        if(!IsFinite(ink.x + ink.width) || !IsFinite(ink.y + ink.height))
             return {};
         return { ink, true };
     }

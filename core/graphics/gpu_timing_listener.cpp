@@ -359,9 +359,9 @@ void GpuTimingRecorder::discardMarkedPendingAttributionsLocked()noexcept{
     m_pendingAttributionRetirements = false;
 }
 
-void GpuTimingRecorder::retirePendingAttributionsLocked(SampleDispatchVector& outSamples, const u64 subscriptionIdentityLimit){
+void GpuTimingRecorder::retirePendingAttributionsLocked(const u64 subscriptionIdentityLimit, SampleDispatchVector& outSamples){
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
-        it.value()->retireAttributions(outSamples, subscriptionIdentityLimit);
+        it.value()->retireAttributions(subscriptionIdentityLimit, outSamples);
     m_pendingAttributionRetirements = false;
 }
 

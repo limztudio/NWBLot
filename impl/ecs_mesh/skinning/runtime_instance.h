@@ -127,6 +127,22 @@ public:
         ;
     }
 
+    [[nodiscard]] RuntimeMeshBuffers runtimeMeshBuffers()const noexcept{
+        return {
+            .positionBuffer = skinnedPositionBuffer,
+            .normalBuffer = skinnedNormalBuffer,
+            .tangentBuffer = skinnedTangentBuffer,
+            .uv0Buffer = uv0Buffer,
+            .colorBuffer = colorBuffer,
+            .meshletDescBuffer = meshletDescBuffer,
+            .meshletBoundsBuffer = meshletBoundsBuffer,
+            .meshletPositionRefDeltaBuffer = meshletPositionRefDeltaBuffer,
+            .meshletAttributeRefDeltaBuffer = meshletAttributeRefDeltaBuffer,
+            .meshletLocalVertexRefBuffer = meshletLocalVertexRefBuffer,
+            .meshletPrimitiveIndexBuffer = meshletPrimitiveIndexBuffer,
+        };
+    }
+
     [[nodiscard]] b8 hasPersistentComputeBuffers()const noexcept{
         return
             restPositionBuffer != nullptr
@@ -158,8 +174,7 @@ public:
             && localBounds.valid()
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
             && hasPersistentComputeBuffers()
-            && uv0Buffer != nullptr
-            && colorBuffer != nullptr
+            && runtimeMeshBuffers().buffersValid()
         ;
     }
 };

@@ -70,10 +70,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
             painted = m_paint.drawRegion(frame.m_style.focus, row.rectangle);
         const TextLayout& label = frame.m_labels[index].text;
         const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + frame.m_metrics.gap);
-        const f32 verticalOffset = Max(0.0f, (row.rectangle.height - textBounds.height) * s_RectCenterFraction);
-        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, 0.0f, 0.0f), VectorSet(horizontalOffset, verticalOffset, 0.0f, 0.0f));
-        const SIMDVectorSingle alignedOrigin = VectorSubtract(textOrigin, VectorSet(textBounds.x, textBounds.y, textBounds.x, textBounds.y));
-        const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
+        const Point origin = ResolveCenteredTextOrigin(row.rectangle, horizontalOffset, textBounds);
         m_paint.pushClip(row.textClip);
         if(painted)
             painted = m_text.paint(m_paint, label, origin, enabled ? frame.m_widgetStyle.text : frame.m_widgetStyle.disabledText);

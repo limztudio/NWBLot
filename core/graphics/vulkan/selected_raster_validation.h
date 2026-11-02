@@ -28,22 +28,14 @@ NWB_VULKAN_BEGIN
 
 [[nodiscard]] inline b8 IsViewportValid(const Viewport& viewport, const Device& device)noexcept{ return VulkanDetail::IsViewportValid(viewport, device.getPhysicalDeviceLimits()); }
 
-[[nodiscard]] inline b8 IsImplicitScissorValid(const Viewport& viewport)noexcept{ return VulkanDetail::IsImplicitScissorValid(viewport); }
+using VulkanDetail::IsImplicitScissorValid;
+using VulkanDetail::IsFramebufferAttachmentSubresourceSetValid;
+using VulkanDetail::GetIndexElementByteSize;
+using VulkanDetail::IsIndexDrawRangeValid;
+using VulkanDetail::IsStridedBufferRangeValid;
 
 [[nodiscard]] inline b8 IsGraphicsPipelineReady(GraphicsPipeline& pipeline, const Device& device)noexcept{
-    return pipeline.getDeviceGeneration() == device.getDeviceGeneration() && pipeline.getNativeHandle(ObjectTypes::s_Pipeline).integer != 0u && pipeline.m_pipelineLayout != VK_NULL_HANDLE;
-}
-
-[[nodiscard]] constexpr b8 IsFramebufferAttachmentSubresourceSetValid(const TextureDesc& description, const TextureSubresourceSet& subresources)noexcept{ return VulkanDetail::IsFramebufferAttachmentSubresourceSetValid(description, subresources); }
-
-[[nodiscard]] constexpr u32 GetIndexElementByteSize(const Format::Enum format)noexcept{ return VulkanDetail::GetIndexElementByteSize(format); }
-
-[[nodiscard]] constexpr b8 IsIndexDrawRangeValid(const BufferDesc& description, const u64 offset, const u32 startIndex, const u32 indexCount, const u32 indexElementBytes)noexcept{
-    return VulkanDetail::IsIndexDrawRangeValid(description, offset, startIndex, indexCount, indexElementBytes);
-}
-
-[[nodiscard]] constexpr b8 IsStridedBufferRangeValid(const BufferDesc& description, const u64 offset, const u32 firstElement, const u32 elementCount, const u32 stride, const u32 requiredBytes)noexcept{
-    return VulkanDetail::IsStridedBufferRangeValid(description, offset, firstElement, elementCount, stride, requiredBytes);
+    return pipeline.getDeviceGeneration() == device.getDeviceGeneration() && pipeline.getNativeHandle(ObjectTypes::s_Pipeline).integer != 0u && pipeline.pipelineLayout != VK_NULL_HANDLE;
 }
 
 

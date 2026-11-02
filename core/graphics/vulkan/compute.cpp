@@ -118,7 +118,7 @@ void CommandList::setComputeState(const ComputeState& state){
         rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, NWB_TEXT("compute pipeline belongs to another device"));
         return;
     }
-    if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->m_pipelineLayout == VK_NULL_HANDLE){
+    if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, NWB_TEXT("compute pipeline has no valid native pipeline or layout"));
         return;
     }

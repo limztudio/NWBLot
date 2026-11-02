@@ -54,12 +54,6 @@ void EditNavigationState::reset()noexcept{
     m_valid = false;
 }
 
-void EditNavigationState::advanceGeneration()noexcept{
-    if(m_generation == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_generation;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

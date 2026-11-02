@@ -36,27 +36,9 @@ Core::TextInputAdmission::Enum UiTextEditSession::begin(const UiTextEditOwner& o
     m_owner = owner;
     m_lastSequence = 0u;
     m_expectedModel.capture(model);
-    m_publishedText = m_expectedModel.m_expectedText;
-    m_publishedAnchor = model.anchor();
-    m_publishedCaret = model.caret();
-    m_publishedModelRevision = model.revision();
-    m_publishedExternalRevision = model.externalRevision();
-    m_publishedSelectionGeneration = model.selectionGeneration();
+    m_publishedModel.captureSurrounding(model);
     m_surroundingRevision = m_service.surroundingRevision(m_token);
     return Core::TextInputAdmission::Accepted;
-}
-
-Core::TextInputAdmission::Enum UiTextEditSession::refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
-    if(!m_service.isOwnerThread())
-        return Core::TextInputAdmission::WrongThread;
-    if(!m_token.valid() || !(m_owner == owner) || !m_expectedModel.matches(model))
-        return Core::TextInputAdmission::InvalidSession;
-    const auto admission = m_service.updateCaret(m_token, caret);
-    if(admission != Core::TextInputAdmission::Accepted)
-        return admission;
-    if(matchesPublishedModel(model))
-        return Core::TextInputAdmission::Accepted;
-    return publishSurrounding(model);
 }
 
 UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::EditModel& model){
@@ -90,7 +72,7 @@ UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::Edit
         }
         else{
             m_lastSequence = m_event.sequence;
-            result.status = ApplyUiTextEditEvent(model, m_event, m_surroundingRevision, matchesPublishedModel(model));
+            result.status = ApplyUiTextEditEvent(model, m_event, m_surroundingRevision, m_publishedModel.matchesSurrounding(model));
         }
         if(result.status != UiTextEditStatus::Applied){
             model.cancelComposition();
@@ -102,7 +84,7 @@ UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::Edit
         m_expectedModel.capture(model);
     }
     result.textChanged = model.revision() != initialRevision;
-    if(m_token.valid() && !matchesPublishedModel(model)){
+    if(m_token.valid() && !m_publishedModel.matchesSurrounding(model)){
         if(publishSurrounding(model) != Core::TextInputAdmission::Accepted){
             model.cancelComposition();
             result.status = UiTextEditStatus::NativeFailure;
@@ -121,6 +103,14 @@ b8 UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
     return cancel();
 }
 
+Core::TextInputPollResult::Enum UiTextEditSession::pollOwned(Core::TextInputEvent& event){
+    if(!m_service.isOwnerThread())
+        return Core::TextInputPollResult::WrongThread;
+    if(!m_token.valid())
+        return Core::TextInputPollResult::InvalidSession;
+    return m_service.poll(m_token, event);
+}
+
 b8 UiTextEditSession::cancel(){
     if(!m_token.valid())
         return true;
@@ -131,29 +121,33 @@ b8 UiTextEditSession::cancel(){
     m_token = {};
     m_owner = {};
     m_expectedModel.clear();
-    m_publishedText.clear();
+    m_publishedModel.clear();
     return true;
 }
 
-b8 UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const noexcept{
-    return
-        model.revision() == m_publishedModelRevision && model.externalRevision() == m_publishedExternalRevision
-        && model.selectionGeneration() == m_publishedSelectionGeneration
-        && model.text() == AStringView(m_publishedText)
-        && model.anchor() == m_publishedAnchor && model.caret() == m_publishedCaret
-    ;
+Core::TextInputAdmission::Enum UiTextEditSession::syncSession(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret, const Core::TextInputChangeCause::Enum cause, const b8 adoptExpected){
+    if(!m_service.isOwnerThread())
+        return Core::TextInputAdmission::WrongThread;
+    if(!m_token.valid() || !(m_owner == owner) || (adoptExpected ? m_service.activeSession() != m_token : !m_expectedModel.matches(model)))
+        return Core::TextInputAdmission::InvalidSession;
+    const auto admission = m_service.updateCaret(m_token, caret);
+    if(admission != Core::TextInputAdmission::Accepted)
+        return admission;
+    if(!m_publishedModel.matchesSurrounding(model)){
+        const auto publish = publishSurrounding(model, cause);
+        if(publish != Core::TextInputAdmission::Accepted)
+            return publish;
+    }
+    if(adoptExpected)
+        m_expectedModel.capture(model);
+    return Core::TextInputAdmission::Accepted;
 }
 
 Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(const Ui::EditModel& model, const Core::TextInputChangeCause::Enum cause){
     const auto admission = m_service.updateSurrounding(m_token, model.text(), model.anchor(), model.caret(), cause);
     if(admission != Core::TextInputAdmission::Accepted)
         return admission;
-    m_publishedText.assign(model.text().data(), model.text().size());
-    m_publishedAnchor = model.anchor();
-    m_publishedCaret = model.caret();
-    m_publishedModelRevision = model.revision();
-    m_publishedExternalRevision = model.externalRevision();
-    m_publishedSelectionGeneration = model.selectionGeneration();
+    m_publishedModel.captureSurrounding(model);
     m_surroundingRevision = m_service.surroundingRevision(m_token);
     return Core::TextInputAdmission::Accepted;
 }

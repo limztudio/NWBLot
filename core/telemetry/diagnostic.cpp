@@ -38,8 +38,7 @@ inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycl
 }
 
 [[nodiscard]] static b8 ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
-    constexpr u16 s_KnownFlags = DiagnosticPayloadFlag::TerminatesProcess;
-    return header.magic == s_DiagnosticPayloadMagic && header.version == s_DiagnosticPayloadVersion && (header.flags & ~s_KnownFlags) == 0u;
+    return header.magic == s_DiagnosticPayloadMagic && header.version == s_DiagnosticPayloadVersion && (header.flags & ~DiagnosticPayloadFlag::TerminatesProcess) == 0u;
 }
 
 [[nodiscard]] static Expected<AStringView> ReadText(const BinaryByteView& payload, const u32 byteCount, usize& inOutCursor)noexcept{
@@ -192,8 +191,7 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
 {
     DiagnosticCaptureGuard* expectedGuard = nullptr;
     if(__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expectedGuard, this, MemoryOrder::acq_rel)){
-        DiagnosticEventCallback expectedCallback = nullptr;
-        if(::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, __hidden_telemetry_diagnostic::CaptureCallback, MemoryOrder::acq_rel)){
+        if(TryClaimDiagnosticEventCallback(__hidden_telemetry_diagnostic::CaptureCallback)){
             m_installed = true;
         }
         else{
@@ -210,12 +208,7 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard()noexcept{
     if(!m_installed)
         return;
 
-    while(::DiagnosticDetail::g_EventActive.testAndSet(MemoryOrder::acquire)){
-        ::DiagnosticDetail::g_EventActive.wait(true, MemoryOrder::relaxed);
-    }
-
-    DiagnosticEventCallback expectedCallback = __hidden_telemetry_diagnostic::CaptureCallback;
-    const b8 callbackOwnershipChanged = !::DiagnosticDetail::g_EventCallback.compare_exchange_strong(expectedCallback, nullptr, MemoryOrder::acq_rel);
+    const b8 callbackOwnershipChanged = !ReleaseDiagnosticEventCallback(__hidden_telemetry_diagnostic::CaptureCallback);
     if(callbackOwnershipChanged)
         NWB_ASSERT(false);
 
@@ -224,8 +217,6 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard()noexcept{
     if(guardOwnershipChanged)
         NWB_ASSERT(false);
 
-    ::DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
-    ::DiagnosticDetail::g_EventActive.notifyAll();
     if(callbackOwnershipChanged){
         CaptureDiagnosticEvent(DiagnosticEventRecord{
             .event = DiagnosticEventName::s_Warning,

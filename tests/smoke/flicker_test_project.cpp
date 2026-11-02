@@ -47,7 +47,6 @@ using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
-using NWB::Tests::Smoke::s_SmokeTwoPi;
 using NWB::Tests::Smoke::TickSmokeWorld;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SmokeEnvironmentString;
@@ -182,7 +181,7 @@ public:
         const f32 frozen = FrozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
-        SetSmokeYawWindowTitle(m_yaw.yaw(), m_yaw.manualControl(), s_SmokeTwoPi, m_context);
+        SetSmokeYawWindowTitle(m_yaw.yaw(), m_yaw.manualControl(), s_2PI, m_context);
         return TickSmokeWorld(safeDelta, *m_world);
     }
 

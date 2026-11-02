@@ -77,16 +77,6 @@ public:
 
 // Shared outputs interleave generation and rasterization; each instance records one phase.
 struct OpaqueRegularSharedComputeEmulationGraphTask{
-    struct Phase{
-        static constexpr SharedComputeEmulationPhase::Enum Generate = SharedComputeEmulationPhase::Generate;
-        static constexpr SharedComputeEmulationPhase::Enum Raster = SharedComputeEmulationPhase::Raster;
-
-
-    public:
-        using Enum = SharedComputeEmulationPhase::Enum;
-    };
-
-
 public:
     // All bindings required: shared emulation always brackets its phase with the frame timing.
     struct Payload{
@@ -105,7 +95,7 @@ public:
         b8 materialFrameStatesGraphOwned = false;
         b8 materialGeometryStatesGraphOwned = false;
         b8 finishTiming = false;
-        Phase::Enum phase = Phase::Generate;
+        SharedComputeEmulationPhase::Enum phase = SharedComputeEmulationPhase::Generate;
     };
 
 

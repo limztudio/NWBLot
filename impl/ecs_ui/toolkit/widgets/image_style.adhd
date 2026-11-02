@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/style.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Content dimensions use atlas reference density for named regions and logical texel extent for engine sources.
+class ImageOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    public Color tint;
+}
+
+class ImageMetrics{
+    public Point contentSize;
+}
+
+class ImagePlacement{
+    public Rect bounds;
+    public Rect clip;
+}
+
+class ImageFrameRecord<TImage>{
+    public Name region;
+    // Null selects the atlas-region path; engine frames own the immutable source through deferred paint.
+    public TImage source;
+    public ImageOptions options;
+    public ImageMetrics metrics;
+}
+
+b8 TryMeasureRegionImage(in ImageOptions options, in UiSkinRegion region, in f32 density, mut ImageMetrics outMetrics){
+    outMetrics = ImageMetrics();
+    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !isFinite(density) || density <= 0.0f)
+        return false;
+    f64x4 sliceExtents(0.0, 0.0, 0.0, 0.0);
+    if(!TryLoadUiSkinSliceExtents(region, sliceExtents))
+        return false;
+    const f64 pixelW = max(cast<f64>(region.rectangle.width), sliceExtents.x);
+    const f64 pixelH = max(cast<f64>(region.rectangle.height), sliceExtents.y);
+    const f64 densityF64 = cast<f64>(density);
+    f32x4 minimum(0.0f, 0.0f, 0.0f, 0.0f);
+    if(!TryLoadUiSkinMinimumSize(region, f64x4(pixelW, pixelH, 0.0, 0.0), f64x4(densityF64, densityF64, densityF64, densityF64), minimum))
+        return false;
+    outMetrics.contentSize = Point(minimum.x, minimum.y);
+    return true;
+}
+
+b8 TryPlaceImage(in Rect bounds, in Rect clip, mut ImagePlacement outPlacement){
+    outPlacement = ImagePlacement();
+    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
+        return false;
+    Rect intersection;
+    if(!TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint, intersection))
+        return false;
+    outPlacement.bounds = bounds;
+    outPlacement.clip = intersection;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

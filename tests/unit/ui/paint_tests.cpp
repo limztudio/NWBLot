@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/paint.h>
 
 #include <tests/common/floating_point_environment_guard.h>
@@ -24,7 +26,7 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
-constexpr AStringView s_SkinPath = "tests/ui/skin";
+using UiWidgetTests::s_TestSkinPath;
 constexpr AStringView s_TexturePath = "tests/ui/texture";
 constexpr AStringView s_SpriteRegion = "sprite";
 constexpr AStringView s_PanelRegion = "panel";
@@ -34,7 +36,7 @@ class UiPaintTests : public testing::Test{
 public:
     UiPaintTests()
         : m_arena(Name("tests/ui/paint"))
-        , m_skin(m_arena, Name(s_SkinPath))
+        , m_skin(m_arena, Name(s_TestSkinPath))
         , m_builder(m_arena)
     {
         UiSkin::RegionVector regions(m_arena);
@@ -42,7 +44,7 @@ public:
         UiSkinRegion panel{ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, { 4u, 6u, 8u, 2u }, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice };
         regions.push_back(panel);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f, 1.5f, 2.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+        m_builder.begin({ 200.0f, 100.0f, 1.5f, 2.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         m_builder.reserve(32u);
     }
 
@@ -156,7 +158,7 @@ TEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios){
         UiSkin::RegionVector regions(m_arena);
         regions.push_back({ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, borders[index], {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice });
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
         const b8 drawn = m_builder.drawRegion(Name(s_PanelRegion), { 10.0f, 20.0f, 3.0f, 2.0f });
         const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
@@ -192,7 +194,7 @@ TEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChang
     UiSkin::RegionVector regions(m_arena);
     regions.push_back({ Name(s_SpriteRegion), { 0u, 0u, 4u, 4u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/replacement"), 16u, 16u, 1.0f, Move(regions));
-    m_builder.begin({ 20.0f, 20.0f }, 8u, 4u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+    m_builder.begin({ 20.0f, 20.0f }, 8u, 4u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 10.0f, 10.0f }));
     const auto second = m_builder.freeze();
     EXPECT_EQ(first.generation(), 7u);

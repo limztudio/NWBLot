@@ -19,6 +19,28 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_input_router{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename TContainer, typename TPredicate>
+[[nodiscard]] static auto FindRouterSource(TContainer& sources, TPredicate&& predicate)noexcept -> decltype(&*sources.begin()){
+    const auto found = FindIf(sources.begin(), sources.end(), Forward<TPredicate>(predicate));
+    return found == sources.end() ? nullptr : &*found;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const HitTarget* InputRouter::FindTargetInTable(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const WidgetId id, const u64 declarationGeneration)noexcept{
     usize targetIndex = 0u;
     if(!FindTargetIndexInTable(targets, lookup, id, declarationGeneration, targetIndex))
@@ -141,18 +163,12 @@ b8 InputRouter::commitTargets(const Span<const HitTarget> targets, const u64 lay
     if(!validControlTargets() || !validCommandOwners())
         return false;
     for(const auto& popup : m_stagedPopups){
-        const auto owner = LowerBound(m_stagedLookup.begin(), m_stagedLookup.end(), popup.scope.token.widget.value, [](const TargetLookup& target, const u64 value)noexcept{ return target.value < value; });
-        if(owner == m_stagedLookup.end() || owner->value != popup.scope.token.widget.value)
-            return false;
-        const HitTarget& ownerTarget = m_stagedTargets[owner->index];
-        if(ownerTarget.declarationGeneration != popup.scope.token.declarationGeneration || ownerTarget.popup != popup.scope.token || !ownerTarget.enabled)
+        const HitTarget* ownerTarget = FindTargetInTable(m_stagedTargets, m_stagedLookup, popup.scope.token.widget, popup.scope.token.declarationGeneration);
+        if(ownerTarget == nullptr || ownerTarget->popup != popup.scope.token || !ownerTarget->enabled)
             return false;
         if(popup.scope.dismissFocusTraversal){
-            const auto anchor = LowerBound(m_stagedLookup.begin(), m_stagedLookup.end(), popup.scope.focusAnchor.value, [](const TargetLookup& target, const u64 value)noexcept{ return target.value < value; });
-            if(anchor == m_stagedLookup.end() || anchor->value != popup.scope.focusAnchor.value)
-                return false;
-            const HitTarget& anchorTarget = m_stagedTargets[anchor->index];
-            if(anchorTarget.declarationGeneration != popup.scope.focusAnchorDeclarationGeneration || anchorTarget.popup != popup.scope.parent || !anchorTarget.focusable || !anchorTarget.enabled || anchorTarget.owner.valid())
+            const HitTarget* anchorTarget = FindTargetInTable(m_stagedTargets, m_stagedLookup, popup.scope.focusAnchor, popup.scope.focusAnchorDeclarationGeneration);
+            if(anchorTarget == nullptr || anchorTarget->popup != popup.scope.parent || !anchorTarget->focusable || !anchorTarget->enabled || anchorTarget->owner.valid())
                 return false;
         }
     }
@@ -245,31 +261,27 @@ b8 InputRouter::ownsSource(const InputSource& source)const noexcept{
 }
 
 PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)noexcept{
-    const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
+    return __hidden_ui_input_router::FindRouterSource(m_pointerSources, [&source, intent](const PointerSource& current)noexcept{
         return current.source == source && current.intent == intent;
     });
-    return found == m_pointerSources.end() ? nullptr : &*found;
 }
 
 const PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
-    const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
+    return __hidden_ui_input_router::FindRouterSource(m_pointerSources, [&source, intent](const PointerSource& current)noexcept{
         return current.source == source && current.intent == intent;
     });
-    return found == m_pointerSources.end() ? nullptr : &*found;
 }
 
 CommandSource* InputRouter::findCommandSource(const InputSource& source)noexcept{
-    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
+    return __hidden_ui_input_router::FindRouterSource(m_commandSources, [&source](const CommandSource& current)noexcept{
         return current.source == source;
     });
-    return found == m_commandSources.end() ? nullptr : &*found;
 }
 
 const CommandSource* InputRouter::findCommandSource(const InputSource& source)const noexcept{
-    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
+    return __hidden_ui_input_router::FindRouterSource(m_commandSources, [&source](const CommandSource& current)noexcept{
         return current.source == source;
     });
-    return found == m_commandSources.end() ? nullptr : &*found;
 }
 
 b8 InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{

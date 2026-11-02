@@ -4,6 +4,7 @@
 
 #include "arena_memory.h"
 
+#include "allocation_size.h"
 #include "sync.h"
 
 #include <cstdlib>
@@ -90,7 +91,7 @@ void AccumulateStats(ArenaMemoryStats& total, const ArenaMemoryStats& contributi
 
     void* const storage = std::malloc(sizeof(ArenaMemoryOwnerRecord));
     if(!storage)
-        throw std::bad_alloc{};
+        throw AllocationException{};
     auto& record = *new(storage) ArenaMemoryOwnerRecord;
     record.ownerName = ownerName;
     record.next = s_OwnerHead.load(MemoryOrder::relaxed);

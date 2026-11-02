@@ -4,6 +4,8 @@
 
 #include "router.h"
 
+#include <global/simplemath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -13,6 +15,221 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<InputEvent> InputRouter::queuePointer(const PointerInput& input){
+    InputEvent event;
+    if(!TryMakePointerInputEvent(input, event))
+        return MakeUnexpected(Failure{});
+    return queue(event);
+}
+
+b8 InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{
+    if(!source.valid() || (m_activePointerSource.valid() && m_activePointerSource != source))
+        return false;
+    return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{ return held.source == source && held.inert; }) == m_pointerSources.end();
+}
+
+b8 InputRouter::wantsPointer()const noexcept{
+    if(!m_pointerSources.empty()){
+        return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [](const PointerSource& held)noexcept{ return held.consumed; }) != m_pointerSources.end();
+    }
+    return hasPopup() || m_hover.valid();
+}
+
+Expected<InputEvent> InputRouter::resolvePointerEvent(const InputEvent& event){
+    if(!IsPointerInputEventType(event.type))
+        return event;
+    if(!event.source.valid() || !IsFinite(event.position.x) || !IsFinite(event.position.y))
+        return MakeUnexpected(Failure{});
+    if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
+        return MakeUnexpected(Failure{});
+    InputEvent resolved = event;
+    const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
+    const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
+    const PointerIntent::Enum intent = event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp ? PointerIntent::ContextMenu : PointerIntent::Activate;
+    const auto held = FindIf(m_pointerBindings.begin(), m_pointerBindings.end(), [&event, intent](const PointerBinding& binding)noexcept{
+        return binding.source == event.source && binding.intent == intent;
+    });
+    const auto contact = FindIf(m_pointerBindings.begin(), m_pointerBindings.end(), [&event](const PointerBinding& binding)noexcept{
+        return binding.source == event.source;
+    });
+    if(contact != m_pointerBindings.end())
+        resolved.hoverCapable = contact->hoverCapable;
+    if(press){
+        if(held == m_pointerBindings.end()){
+            if(m_pointerBindings.size() == s_InputMaxSources)
+                return MakeUnexpected(Failure{});
+            m_pointerBindings.push_back({ event.source, intent, resolved.hoverCapable });
+        }
+        else
+            resolved.repeat = true;
+    }
+    else if(release && held != m_pointerBindings.end())
+        m_pointerBindings.erase(held);
+    else if(event.type == InputEventType::PointerCaptureLost){
+        for(usize index = m_pointerBindings.size(); index > 0u; --index){
+            if(m_pointerBindings[index - 1u].source == event.source)
+                m_pointerBindings.erase(m_pointerBindings.begin() + static_cast<isize>(index - 1u));
+        }
+    }
+    return resolved;
+}
+
+void InputRouter::retireQueuedReleases()noexcept{
+    // Admission already observed these releases; dropping delivery must also retire their processed sequence ownership.
+    for(const InputEvent& event : m_events){
+        if(event.type == InputEventType::CommandUp){
+            CommandSource* source = findCommandSource(event.source);
+            if(source != nullptr)
+                m_commandSources.erase(m_commandSources.begin() + (source - m_commandSources.data()));
+        }
+        else if(event.type == InputEventType::PointerCaptureLost)
+            terminatePointerSource(event.source);
+        else if(event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp){
+            const PointerIntent::Enum intent = event.type == InputEventType::PrimaryUp ? PointerIntent::Activate : PointerIntent::ContextMenu;
+            PointerSource* source = findPointerSource(event.source, intent);
+            if(source == nullptr)
+                continue;
+            m_pointerSources.erase(m_pointerSources.begin() + (source - m_pointerSources.data()));
+            if(m_activePointerSource != event.source)
+                continue;
+            if(intent == PointerIntent::Activate){
+                m_primaryDown = false;
+                m_pointerSequenceConsumed = false;
+            }
+            else{
+                m_secondaryDown = false;
+                m_secondarySequenceConsumed = false;
+            }
+            if(!m_primaryDown && !m_secondaryDown)
+                m_activePointerSource = {};
+        }
+    }
+}
+
+void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult& result){
+    if(event.type == InputEventType::PointerCaptureLost){
+        result.pointerConsumed |= ownsPointerSource(event.source, PointerIntent::Activate) || ownsPointerSource(event.source, PointerIntent::ContextMenu);
+        result.pointerRouted |= m_activePointerSource == event.source;
+        terminatePointerSource(event.source);
+        return;
+    }
+    if(event.type == InputEventType::PointerLeave){
+        result.pointerConsumed |= ownsPointerSource(event.source, PointerIntent::Activate) || ownsPointerSource(event.source, PointerIntent::ContextMenu);
+        result.pointerRouted |= m_activePointerSource == event.source;
+        if(m_hoverPointerSource == event.source){
+            advanceHoverActivity();
+            m_pointerKnown = false;
+            m_hoverPointerSource = {};
+            clearHover();
+        }
+        return;
+    }
+    const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
+    const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
+    // Reuse only within this event; popup dismissal and layout reconciliation still resolve hover against their new state.
+    const HitTarget* hit = event.hoverCapable ? findHitTarget(event.position) : nullptr;
+    b8 hitResolved = event.hoverCapable;
+    const auto resolveHit = [this, &event, &hit, &hitResolved]()noexcept{
+        if(!hitResolved){
+            hit = findHitTarget(event.position);
+            hitResolved = true;
+        }
+        return hit;
+    };
+    observePointer(event, hit);
+    const PointerIntent::Enum intent = event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp ? PointerIntent::ContextMenu : PointerIntent::Activate;
+    PointerSource* held = findPointerSource(event.source, intent);
+    if(press){
+        if(held != nullptr){
+            result.pointerConsumed |= held->consumed;
+            return;
+        }
+        if(m_pointerSources.size() == s_InputMaxSources)
+            return;
+        const b8 accepted = !event.repeat && acceptsPointerSource(event.source);
+        const b8 consumed = !event.repeat && (m_activePointerSource == event.source ? m_primaryDown ? m_pointerSequenceConsumed : m_secondarySequenceConsumed : hasPopup() || resolveHit() != nullptr);
+        m_pointerSources.push_back({ event.source, intent, consumed, !accepted });
+        result.pointerConsumed |= consumed;
+        if(!accepted)
+            return;
+        m_activePointerSource = event.source;
+    }
+    else if(release){
+        if(held == nullptr){
+            result.pointerConsumed |= hasPopup() || resolveHit() != nullptr;
+            return;
+        }
+        result.pointerConsumed |= held->consumed;
+        if(held->inert || m_activePointerSource != event.source){
+            const auto index = static_cast<isize>(held - m_pointerSources.data());
+            m_pointerSources.erase(m_pointerSources.begin() + index);
+            return;
+        }
+    }
+    else{
+        const PointerSource* activation = findPointerSource(event.source, PointerIntent::Activate);
+        const PointerSource* context = findPointerSource(event.source, PointerIntent::ContextMenu);
+        const b8 blocked = (activation != nullptr && activation->inert) || (context != nullptr && context->inert) || !acceptsPointerSource(event.source);
+        if(blocked){
+            result.pointerConsumed |= (activation != nullptr && activation->consumed) || (context != nullptr && context->consumed);
+            return;
+        }
+        if(!m_activePointerSource.valid() && !event.hoverCapable && event.type == InputEventType::PointerMove)
+            return;
+    }
+    if(press || release || event.type == InputEventType::PointerWheel)
+        resolveHit();
+    result.pointerRouted = true;
+    m_interactionPosition = event.position;
+    if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
+        routeSecondary(event, hit, result);
+    else if(event.type == InputEventType::PointerWheel)
+        routeWheel(event, hit, result);
+    else
+        routePointer(event, hit, result);
+    if(release){
+        const auto index = static_cast<isize>(held - m_pointerSources.data());
+        m_pointerSources.erase(m_pointerSources.begin() + index);
+        if(!m_primaryDown && !m_secondaryDown)
+            m_activePointerSource = {};
+    }
+}
+
+void InputRouter::observePointer(const InputEvent& event, const HitTarget* hit)noexcept{
+    if(!event.hoverCapable)
+        return;
+    m_hoverPointerSource = event.source;
+    m_pointer = event.position;
+    m_pointerKnown = true;
+    setHoverTarget(hit);
+}
+
+void InputRouter::terminatePointerSource(const InputSource source)noexcept{
+    const b8 active = m_activePointerSource == source;
+    const b8 unfinished = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{
+        return held.source == source;
+    }) != m_pointerSources.end();
+    if(active){
+        cancelPointerPress();
+        m_primaryDown = false;
+        m_pointerSequenceConsumed = false;
+        m_secondaryDown = false;
+        m_secondarySequenceConsumed = false;
+        m_activePointerSource = {};
+    }
+    for(usize index = m_pointerSources.size(); index > 0u; --index){
+        if(m_pointerSources[index - 1u].source == source)
+            m_pointerSources.erase(m_pointerSources.begin() + static_cast<isize>(index - 1u));
+    }
+    // Ordinary mouse release may immediately drop native capture; its completed events and hover remain usable.
+    if(unfinished && m_hoverPointerSource == source){
+        advanceHoverActivity();
+        clearHover();
+        m_pointerKnown = false;
+        m_hoverPointerSource = {};
+    }
+}
 
 void InputRouter::routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
     if(event.type == InputEventType::PointerMove){
@@ -51,12 +268,10 @@ void InputRouter::routePointer(const InputEvent& event, const HitTarget* hit, In
         m_captureControl = hit == nullptr ? ControlToken{} : hit->control;
         m_pointerSubmitArmed = hit != nullptr && hit->activatable;
         const HitTarget* focused = hit != nullptr && hit->owner.valid() ? controlHost(*hit) : hit;
-        const WidgetId nextFocus = focused != nullptr && focused->focusable ? focused->id : WidgetId{};
-        if(m_focus != nextFocus || (nextFocus.valid() && (m_focusDeclaration != focused->declarationGeneration || m_focusControl != focused->control)))
-            retireCommandFocus();
-        m_focus = focused != nullptr && focused->focusable ? focused->id : WidgetId{};
-        m_focusDeclaration = m_focus.valid() ? focused->declarationGeneration : 0u;
-        m_focusControl = m_focus.valid() ? focused->control : ControlToken{};
+        if(focused != nullptr && focused->focusable)
+            assignFocus(*focused);
+        else
+            clearFocus();
         if(hit != nullptr && hit->pointerGesture)
             appendPointerGesture(*hit, result);
         return;

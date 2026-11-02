@@ -42,9 +42,8 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     Array<Core::GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> opaqueComputeEmulationResourceSetUses = {};
     usize opaqueComputeEmulationResourceSetUseCount = 0u;
     opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
-    if(inputs.materialSampledTextureSetUse.resourceSet.valid()){
+    if(inputs.materialSampledTextureSetUse.resourceSet.valid())
         opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = inputs.materialSampledTextureSetUse;
-    }
     opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = outputUavSetUse;
     Core::GpuTaskSchedulingHint opaqueComputeEmulationScheduling;
     opaqueComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -102,9 +101,8 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     Array<Core::GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> opaqueCsgReceiverComputeEmulationResourceSetUses = {};
     usize opaqueCsgReceiverComputeEmulationResourceSetUseCount = 0u;
     opaqueCsgReceiverComputeEmulationResourceSetUses[opaqueCsgReceiverComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
-    if(inputs.materialSampledTextureSetUse.resourceSet.valid()){
+    if(inputs.materialSampledTextureSetUse.resourceSet.valid())
         opaqueCsgReceiverComputeEmulationResourceSetUses[opaqueCsgReceiverComputeEmulationResourceSetUseCount++] = inputs.materialSampledTextureSetUse;
-    }
     opaqueCsgReceiverComputeEmulationResourceSetUses[opaqueCsgReceiverComputeEmulationResourceSetUseCount++] = outputUavSetUse;
     Core::GpuTaskSchedulingHint opaqueCsgReceiverComputeEmulationScheduling;
     opaqueCsgReceiverComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;

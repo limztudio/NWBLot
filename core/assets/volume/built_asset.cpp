@@ -113,10 +113,10 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
     __hidden_built_asset::ScratchBytes existingBytes(scratchArena);
     __hidden_built_asset::ScratchBytes manifestBytes(scratchArena);
     ScratchString filename(scratchArena);
-    filename.reserve(NameDetail::s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size());
+    filename.reserve(s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size());
     const __hidden_built_asset::ScratchPath scratchOutputDirectory(scratchArena, outputDirectory);
     __hidden_built_asset::ScratchPath path(scratchArena);
-    usize manifestLineBytes = NameDetail::s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size();
+    usize manifestLineBytes = s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size();
     usize manifestReserveBytes = 0u;
     if(AddBinaryReserveBytes(manifestLineBytes, 1u) && AddBinaryRepeatedReserveBytes(manifestReserveBytes, manifest.entries.size(), manifestLineBytes))
         manifestBytes.reserve(manifestReserveBytes);

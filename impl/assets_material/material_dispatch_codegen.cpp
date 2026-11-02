@@ -61,9 +61,9 @@ static b8 AppendShadowSurfaceBindAliases(
 ){
     inOutSeenSymbols.clear();
     outAliasSymbols.clear();
-    outAliasSymbols.reserve(static_cast<usize>(NameDetail::s_HashLaneCount) + s_ShadowSurfaceBindLayoutAliasCount + bindEntry.structs.size() + bindEntry.instances.size() * s_ShadowSurfaceBindInstanceAliasReserveCount);
+    outAliasSymbols.reserve(static_cast<usize>(s_NameHashLaneCount) + s_ShadowSurfaceBindLayoutAliasCount + bindEntry.structs.size() + bindEntry.instances.size() * s_ShadowSurfaceBindInstanceAliasReserveCount);
 
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         Array<char, s_DecimalTextBufferBytes> laneDigits{};
         ScratchString suffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);

@@ -3,11 +3,9 @@
 
 
 #include "ui_widget_gallery.h"
-#include "ui_gallery_constants.h"
+#include "CoolStuff/Testbed/ui_gallery_constants.adhd.h"
 
 #include <core/common/log.h>
-
-#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,16 +17,13 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySize, const f32 preferredTop)noexcept{
-    const f32 height = ((s_SelectorHeight + s_ContentGap) + s_ContentHeight);
-    const SIMDVectorSingle size = VectorSet(s_SelectorWidth, height, 0.0f, 0.0f);
-    const SIMDVectorSingle available = VectorSubtract(VectorSubtract(displaySize, size), VectorReplicate(s_GalleryMargin));
-    const SIMDVectorSingle preferred = VectorSet(0.0f, preferredTop, 0.0f, 0.0f);
-    const SIMDVectorSingle topLimit = VectorAndInt(VectorLess(preferred, available), VectorSelectControl(0u, 1u, 0u, 0u));
-    const SIMDVectorSingle capped = VectorSelect(available, preferred, topLimit);
-    const SIMDVectorSingle margin = VectorReplicate(s_GalleryMargin);
-    const SIMDVectorSingle origin = VectorSelect(capped, margin, VectorGreater(margin, capped));
-    return VectorPermute<0, 1, 4, 5>(origin, size);
+NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display, const f32 preferredTop)noexcept{
+    const f32 height = (s_SelectorHeight + s_ContentGap) + s_ContentHeight;
+    const f32 availableX = (display.logicalWidth - s_SelectorWidth) - s_GalleryMargin;
+    const f32 availableY = (display.logicalHeight - height) - s_GalleryMargin;
+    const f32 x = Max(s_GalleryMargin, availableX);
+    const f32 y = Max(s_GalleryMargin, Min(preferredTop, availableY));
+    return { x, y, s_SelectorWidth, height };
 }
 
 
@@ -65,10 +60,8 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
 
     const f32 width = selected == Section::TextArea ? s_SelectorWidth : s_OrdinaryGalleryWidth;
-    const SIMDVectorSingle centeredOrigin = VectorMultiplyAddExpression(VectorSubtract(VectorSet(bounds.width, s_SelectorHeight, 0.0f, 0.0f), VectorSet(width, 0.0f, 0.0f, 0.0f)), VectorSet(0.5f, 1.0f, 0.0f, 0.0f), VectorSet(bounds.x, bounds.y, 0.0f, 0.0f));
-    const SIMDVectorSingle contentOrigin = VectorAdd(centeredOrigin, VectorSet(0.0f, s_ContentGap, 0.0f, 0.0f));
-    const f32 x = VectorGetX(centeredOrigin);
-    const f32 y = VectorGetY(contentOrigin);
+    const f32 x = bounds.x + (bounds.width - width) * 0.5f;
+    const f32 y = bounds.y + s_SelectorHeight + s_ContentGap;
     switch(selected){
     case Section::Controls:
         paintControls(context, scratchArena, x, y);

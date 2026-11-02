@@ -40,6 +40,7 @@ static b8 RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
         [](SkeletonCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
             return BuildSkeletonAsset(entry, arena, scratchArena);
         },
+        true,
         registry
     );
 }

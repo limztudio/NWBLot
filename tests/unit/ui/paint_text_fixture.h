@@ -28,6 +28,9 @@ namespace UiPaintTextTests{
 using namespace Impl;
 using namespace Impl::Ui;
 
+[[nodiscard]] Expected<SharedGlyphPage> MakeTestGlyphPage(Core::Alloc::GlobalArena& arena, u64 atlasIdentity, u64 generation = 1u, u32 index = 0u);
+[[nodiscard]] Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(Core::Alloc::GlobalArena& arena, u64 atlasIdentity, u64 generation = 1u, u32 index = 0u, u8 interior = 255u);
+
 
 class PaintTextFixture : public testing::Test{
 public:

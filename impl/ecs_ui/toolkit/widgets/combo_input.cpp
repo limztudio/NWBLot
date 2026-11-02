@@ -49,7 +49,7 @@ b8 Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, ComboRe
             options.wheelRows = frame.options.wheelRows;
             options.selectOnNavigate = false;
             ListResult preview;
-            if(!ListBehavior::Apply(state.m_list, preview, *frame.results, options, *action))
+            if(!ListBehavior::Apply(*frame.results, options, *action, state.m_list, preview))
                 return false;
         }
     }
@@ -97,7 +97,7 @@ b8 Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
                 continue;
             }
             ListResult preview;
-            if(!ListBehavior::Apply(state.m_list, preview, *frame.results, options, *action) || !comboMatches(frame))
+            if(!ListBehavior::Apply(*frame.results, options, *action, state.m_list, preview) || !comboMatches(frame))
                 return false;
             if(preview.activated){
                 if(!ComboBehavior::Commit(state, *frame.source, state.m_list.selectedKey()))

@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-#include <impl/ecs_render/execute/frame_execute_cpu_restore.h>
 #include <impl/ecs_render/execute/frame_execute_lifecycle.h>
 #include <impl/ecs_render/execute/frame_execute_present_tails.h>
 #include <impl/ecs_render/execute/frame_execute_recovery.h>

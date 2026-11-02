@@ -28,10 +28,10 @@ namespace __hidden_vulkan_resource_bindings_commands{
         return expectedCount == 0u;
 
     u32 foundCount = 0u;
-    for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(pipelineBindings.m_bindingLayoutsAtCreation.size()); ++layoutIndex){
-        if(pipelineBindings.m_bindingLayoutsAtCreation[layoutIndex].get() != expectedLayout)
+    for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(pipelineBindings.bindingLayoutsAtCreation.size()); ++layoutIndex){
+        if(pipelineBindings.bindingLayoutsAtCreation[layoutIndex].get() != expectedLayout)
             continue;
-        if(pipelineBindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] != expectedSetIndex)
+        if(pipelineBindings.bindingLayoutSetIndicesAtCreation[layoutIndex] != expectedSetIndex)
             return false;
         ++foundCount;
     }
@@ -97,19 +97,19 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
     if(m_currentGraphicsState.pipeline){
         auto& gp = *MakeNotNull(m_currentGraphicsState.pipeline);
-        selectPipeline(gp.m_pipelineLayout, gp.m_pushConstantByteSize, GpuQueueCapability::Graphics);
+        selectPipeline(gp.pipelineLayout, gp.pushConstantByteSize, GpuQueueCapability::Graphics);
     }
     if(m_currentComputeState.pipeline){
         auto& cp = *MakeNotNull(m_currentComputeState.pipeline);
-        selectPipeline(cp.m_pipelineLayout, cp.m_pushConstantByteSize, GpuQueueCapability::Compute);
+        selectPipeline(cp.pipelineLayout, cp.pushConstantByteSize, GpuQueueCapability::Compute);
     }
     if(m_currentMeshletState.pipeline){
         auto& mp = *MakeNotNull(m_currentMeshletState.pipeline);
-        selectPipeline(mp.m_pipelineLayout, mp.m_pushConstantByteSize, GpuQueueCapability::Graphics);
+        selectPipeline(mp.pipelineLayout, mp.pushConstantByteSize, GpuQueueCapability::Graphics);
     }
     if(m_currentRayTracingState.shaderTable){
         auto& rtp = m_currentRayTracingState.shaderTable->getPipeline();
-        selectPipeline(rtp.m_pipelineLayout, rtp.m_pushConstantByteSize, GpuQueueCapability::Compute);
+        selectPipeline(rtp.pipelineLayout, rtp.pushConstantByteSize, GpuQueueCapability::Compute);
     }
 
     if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
@@ -135,7 +135,7 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Comput
     constexpr TStringView s_OperationName = NWB_TEXT("bind compute descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
-    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
+    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("compute pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -155,7 +155,7 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Graphi
     constexpr TStringView s_OperationName = NWB_TEXT("bind graphics descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
+    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -175,7 +175,7 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Meshle
     constexpr TStringView s_OperationName = NWB_TEXT("bind meshlet descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
+    if(&pipeline.m_context != &m_context || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -195,7 +195,7 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const RayTra
     constexpr TStringView s_OperationName = NWB_TEXT("bind ray-tracing descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
-    if(&pipeline.m_context != &m_context || &pipeline.m_device != &m_device || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
+    if(&pipeline.m_context != &m_context || &pipeline.m_device != &m_device || pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("ray-tracing pipeline is foreign or has no native pipeline layout"));
         return;
     }
@@ -219,7 +219,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
     const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     NWB_ASSERT(!m_commandRecordingFailed && exactQueueInfo && matchesActiveNativeLeaseIdentity());
-    NWB_ASSERT(pipelineBindings.m_pipelineLayout != VK_NULL_HANDLE);
+    NWB_ASSERT(pipelineBindings.pipelineLayout != VK_NULL_HANDLE);
     if(
         &heap.m_device != &m_device
         || &heap.m_context != &m_context
@@ -402,7 +402,7 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     m_context.deviceDispatch.vkCmdSetDescriptorBufferOffsetsEXT(
         m_currentCmdBuf->m_cmdBuf,
         bindPoint,
-        pipelineBindings.m_pipelineLayout,
+        pipelineBindings.pipelineLayout,
         abi.resourceSetIndex,
         bindAccelStruct ? DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct : DescriptorBufferManager::s_PersistentDescriptorBufferCount,
         bufferIndices.data(),

@@ -26,7 +26,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 DeferredPresentGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 DeferredPresentGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
     const b8 shadowVisibilityRunsOnCompute = shadowVisibilityQueue && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     if(!payload.presentationFrame.valid() || !payload.backBuffer.valid() || !shadowVisibilityQueue)

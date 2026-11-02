@@ -36,8 +36,8 @@ static b8 RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
         },
         nullptr,
         [](TextureCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildTextureAsset(Move(entry), arena); },
-        registry,
-        false
+        false,
+        registry
     );
 }
 

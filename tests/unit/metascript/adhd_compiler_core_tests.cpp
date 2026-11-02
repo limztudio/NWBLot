@@ -15,7 +15,7 @@ namespace __hidden_adhd_compiler_core_tests{
 
 
 using namespace NWB::AdhdCompilerTestsDetail;
-using NWB::Core::Metascript::Adhd::Compiler;
+namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
 using NWB::Core::Metascript::Adhd::CompileResult;
 using NWB::Core::Metascript::MString;
 using NWB::Core::Metascript::MStringView;
@@ -33,7 +33,7 @@ TEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes){
         "}\r\n";
 
     CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_AdhdSource, "impl/math/compute.adhd", arena.arena, result, &resolver));
+    ASSERT_TRUE(Compiler::Compile(s_AdhdSource, "impl/math/compute.adhd", &resolver, arena.arena, result));
     EXPECT_EQ(resolver.resolveCallCount, 1u);
 }
 

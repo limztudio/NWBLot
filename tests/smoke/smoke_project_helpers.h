@@ -39,7 +39,6 @@ namespace Tests::Smoke{
 
 
 inline constexpr f32 s_DegreesPerTurn = 360.0f;
-inline constexpr f32 s_SmokeTwoPi = s_2PI;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,6 +61,17 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct SmokeBoxBounds{
+    Float3U minimum;
+    Float3U maximum;
+};
+
+[[nodiscard]] inline constexpr b8 SmokeBoxBoundsValid(const SmokeBoxBounds& box)noexcept{
+    return box.minimum.x < box.maximum.x && box.minimum.y < box.maximum.y && box.minimum.z < box.maximum.z;
+}
+
+[[nodiscard]] b8 BuildSmokeBoxSubtractionPieces(const SmokeBoxBounds& box, const SmokeBoxBounds& cutter, Array<SmokeBoxBounds, 6>& outPieces)noexcept;
 
 [[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(TStringView projectName, ProjectRuntimeContext& context);
 [[nodiscard]] Core::ECS::EntityID CreateSmokeCamera(f32 cameraHeight, f32 cameraDistance, f32 cameraPitch, Core::ECS::World& world);

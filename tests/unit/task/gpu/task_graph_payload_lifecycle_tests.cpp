@@ -147,7 +147,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
 
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        EXPECT_FALSE(compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph));
+        EXPECT_FALSE(compiler.compile(declarations, topology, Core::GpuTaskGraphCompileOptions{}, scratchArena, analysis, assignments, compiledGraph));
         EXPECT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_FALSE(analysis.valid());
@@ -160,7 +160,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     metadataOptions.allowMetadataOnlyTasks = true;
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        EXPECT_TRUE(compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, metadataOptions));
+        EXPECT_TRUE(compiler.compile(declarations, topology, metadataOptions, scratchArena, analysis, assignments, compiledGraph));
         EXPECT_TRUE(analysis.valid());
         EXPECT_TRUE(assignments.valid());
         const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
@@ -234,7 +234,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
         EXPECT_TRUE(declarations.taskAt(task.index).hasRecordPayload);
-        EXPECT_FALSE(compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph));
+        EXPECT_FALSE(compiler.compile(declarations, topology, Core::GpuTaskGraphCompileOptions{}, scratchArena, analysis, assignments, compiledGraph));
         EXPECT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
@@ -248,7 +248,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
 
         Core::GpuTaskGraphCompileOptions metadataOptions;
         metadataOptions.allowMetadataOnlyTasks = true;
-        EXPECT_TRUE(compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, metadataOptions));
+        EXPECT_TRUE(compiler.compile(declarations, topology, metadataOptions, scratchArena, analysis, assignments, compiledGraph));
         EXPECT_TRUE(analysis.valid());
         EXPECT_TRUE(assignments.valid());
         {
@@ -288,7 +288,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_TRUE(compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph));
+            EXPECT_TRUE(compiler.compile(declarations, topology, Core::GpuTaskGraphCompileOptions{}, scratchArena, analysis, assignments, compiledGraph));
             EXPECT_TRUE(analysis.valid());
             EXPECT_TRUE(assignments.valid());
             const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
@@ -308,7 +308,7 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         metadataOptions.allowMetadataOnlyTasks = true;
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_FALSE(compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, metadataOptions));
+            EXPECT_FALSE(compiler.compile(declarations, topology, metadataOptions, scratchArena, analysis, assignments, compiledGraph));
             EXPECT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
             EXPECT_EQ(analysis.diagnostic().task, invalidTypedTask);
             EXPECT_EQ(analysis.diagnostic().resource, unusedTexture);

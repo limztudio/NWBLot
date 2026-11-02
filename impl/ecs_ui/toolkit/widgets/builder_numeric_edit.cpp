@@ -90,50 +90,88 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NumericEditBoxResult Builder::integerEdit(const AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options){
+template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
+NumericEditBoxResult Builder::declareNumericEdit(const AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, const ValidateBoundsF validateBounds, FrameListT& frames){
     NumericEditBoxResult result;
     result.numeric.valid = true;
-    if(declarationBlocked() || !ValidateIntegerBounds(options.bounds)){
+    if(declarationBlocked() || !validateBounds(options.bounds)){
         m_context.fail();
         result.numeric.valid = false;
         return result;
     }
-    IntegerEditFrame frame;
+    FrameT frame;
     frame.model = &model;
     frame.state = &state;
     frame.revision = model.revision();
     __hidden_builder_numeric_edit::NumericActions actions(options.bounds, m_context, model, result.numeric, frame.revision);
     const usize previousCount = m_scope->m_items.size();
-    result.edit = declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, &frame);
+    if constexpr(IsSame_V<FrameT, IntegerEditFrame>)
+        result.edit = declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, &frame);
+    else
+        result.edit = declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, nullptr, &frame);
     result.numeric.valid &= result.edit.valid;
     if(result.edit.valid && m_scope->m_items.size() > previousCount){
         frame.item = static_cast<u32>(previousCount);
-        m_scope->m_integerEdits.push_back(frame);
+        frames.push_back(frame);
     }
     return result;
 }
 
+NumericEditBoxResult Builder::integerEdit(const AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options){
+    return declareNumericEdit<IntegerEditFrame>(stableKey, model, state, options, ValidateIntegerBounds, m_scope->m_integerEdits);
+}
+
 NumericEditBoxResult Builder::floatEdit(const AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options){
-    NumericEditBoxResult result;
-    result.numeric.valid = true;
-    if(declarationBlocked() || !ValidateFloatBounds(options.bounds)){
-        m_context.fail();
-        result.numeric.valid = false;
-        return result;
+    return declareNumericEdit<FloatEditFrame>(stableKey, model, state, options, ValidateFloatBounds, m_scope->m_floatEdits);
+}
+
+void Builder::snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept{
+    frame.draftGeneration = draft.instanceGeneration();
+    frame.draftRevision = draft.revision();
+    frame.draftExternalRevision = draft.externalRevision();
+    frame.draftCompositionGeneration = draft.compositionGeneration();
+    frame.draftSelectionGeneration = draft.selectionGeneration();
+    frame.anchor = draft.anchor();
+    frame.caret = draft.caret();
+}
+
+b8 Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept{
+    return
+        popupAncestorsVisible() && frame.state && draft.instanceGeneration() == frame.draftGeneration
+        && draft.revision() == frame.draftRevision && draft.externalRevision() == frame.draftExternalRevision
+        && draft.compositionGeneration() == frame.draftCompositionGeneration && draft.selectionGeneration() == frame.draftSelectionGeneration
+        && draft.anchor() == frame.anchor && draft.caret() == frame.caret
+        && frame.state->modelGeneration == frame.draftGeneration && frame.state->revision == frame.draftRevision
+        && frame.state->selectionGeneration == frame.draftSelectionGeneration
+        && frame.state->anchor == frame.anchor && frame.state->caret == frame.caret && frame.state->focused == frame.focused
+    ;
+}
+
+b8 Builder::numericEditMatches(const Item& item)const noexcept{
+    if(item.integerEdit != s_LayoutNoParent){
+        if(item.integerEdit >= m_scope->m_integerEdits.size() || !numericEditFrameMatches(m_scope->m_integerEdits[item.integerEdit]))
+            return false;
     }
-    FloatEditFrame frame;
-    frame.model = &model;
-    frame.state = &state;
-    frame.revision = model.revision();
-    __hidden_builder_numeric_edit::NumericActions actions(options.bounds, m_context, model, result.numeric, frame.revision);
-    const usize previousCount = m_scope->m_items.size();
-    result.edit = declareEditBox(stableKey, options.edit, model.lendDraft(), state, &actions, nullptr, &frame);
-    result.numeric.valid &= result.edit.valid;
-    if(result.edit.valid && m_scope->m_items.size() > previousCount){
-        frame.item = static_cast<u32>(previousCount);
-        m_scope->m_floatEdits.push_back(frame);
+    if(item.floatEdit != s_LayoutNoParent){
+        if(item.floatEdit >= m_scope->m_floatEdits.size() || !numericEditFrameMatches(m_scope->m_floatEdits[item.floatEdit]))
+            return false;
     }
-    return result;
+    return true;
+}
+
+b8 Builder::numericStateAvailable(const EditBoxState& state)const noexcept{
+    for(usize index = 0u; index <= m_popupFrameCount; ++index){
+        const BuilderScopeFrame& scope = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
+        for(const auto& frame : scope.m_integerEdits){
+            if(frame.state == &state)
+                return false;
+        }
+        for(const auto& frame : scope.m_floatEdits){
+            if(frame.state == &state)
+                return false;
+        }
+    }
+    return true;
 }
 
 

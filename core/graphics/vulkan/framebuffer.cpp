@@ -63,9 +63,9 @@ Expected<FramebufferHandle> Device::createFramebuffer(const FramebufferDesc& des
     fb->m_desc = desc;
     fb->m_framebufferInfo = FramebufferInfoEx(desc);
 
-    const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), VulkanDetail::s_MaxColorAttachments);
-    if(desc.colorAttachments.size() > VulkanDetail::s_MaxColorAttachments)
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), VulkanDetail::s_MaxColorAttachments, VulkanDetail::s_MaxColorAttachments);
+    const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), s_MaxRenderTargets);
+    if(desc.colorAttachments.size() > s_MaxRenderTargets)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), s_MaxRenderTargets, s_MaxRenderTargets);
 
     fb->m_resources.reserve(static_cast<usize>(colorAttachmentCount) + (desc.depthAttachment.texture ? 1u : 0u) + (desc.shadingRateAttachment.texture ? 1u : 0u));
     for(u32 i = 0u; i < colorAttachmentCount; ++i){

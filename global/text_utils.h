@@ -116,8 +116,8 @@ template<typename CharT>
     return IsAsciiIdentifierStart(ch) || IsAsciiDigit(ch);
 }
 
-template<typename CharT>
-[[nodiscard]] inline constexpr b8 IsAsciiIdentifier(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+template<typename CharT = char>
+[[nodiscard]] inline constexpr b8 IsAsciiIdentifier(const TypeIdentity<BasicStringView<CharT>> text)noexcept(IsArithmetic_V<CharT>){
     if(text.empty() || !IsAsciiIdentifierStart(text.front()))
         return false;
     for(usize i = 1u; i < text.size(); ++i){
@@ -125,11 +125,6 @@ template<typename CharT>
             return false;
     }
     return true;
-}
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr b8 IsAsciiIdentifier(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
-    return IsAsciiIdentifier<CharT>(BasicStringView<CharT>{text});
 }
 
 template<typename CharT>
@@ -152,11 +147,6 @@ template<typename CharT>
     }
 
     return true;
-}
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr b8 EqualsAsciiIgnoreCase(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
-    return EqualsAsciiIgnoreCase<CharT>(BasicStringView<CharT>{text}, expected);
 }
 
 template<typename CharT, usize N>

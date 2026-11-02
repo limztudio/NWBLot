@@ -105,7 +105,7 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
     if(!selection)
         return MakeUnexpected(Failure{});
 
-    const auto& files = catalog.m_files;
+    const auto& files = catalog.files();
     Assets::AssetVector<Assets::AssetString> candidate(arena);
     if(!options.inputs.empty()){
         candidate.reserve(options.inputs.size());
@@ -127,7 +127,7 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
         if(!depVirtualPath)
             return false;
         const AStringView hint = LookupVirtualPathTextHint(depVirtualPath, knownVirtualPathTexts);
-        const auto provider = catalog.resolve(depVirtualPath, expectedAssetType, hint, scratchArena, &dependencyRegistry);
+        const auto provider = catalog.resolve(depVirtualPath, expectedAssetType, hint, &dependencyRegistry, scratchArena);
         if(!provider)
             return false;
         if(!included[*provider]){
@@ -220,7 +220,7 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
         const auto assetValue = Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(files[fileIndex].filePath, *document, s_DiagnosticPrefix);
         if(!assetValue)
             return MakeUnexpected(Failure{});
-        if(!processAssetItem(fileIndex, *documentAssetType, catalog.m_virtualPaths[fileIndex], **assetValue, &*document))
+        if(!processAssetItem(fileIndex, *documentAssetType, catalog.virtualPaths()[fileIndex], **assetValue, &*document))
             return MakeUnexpected(Failure{});
     }
 

@@ -467,9 +467,9 @@ void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits()noexcept{
 void TrackedCommandBuffer::discardPendingRecordingCommits()noexcept{
     discardTimerQueryRecordingClaims();
     m_resourceReferences.discardBufferStateCommits();
-    discardRetainedTextureStateCommits();
+    m_retainedTextureStateCommits.clear();
     abandonPendingAccelStructBuildCommits();
-    discardPendingOpacityMicromapBuildCommits();
+    m_pendingOpacityMicromapBuildCommits.clear();
 }
 
 void TrackedCommandBuffer::clearTrackedReferences()noexcept{

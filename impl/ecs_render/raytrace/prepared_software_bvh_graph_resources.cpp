@@ -33,9 +33,8 @@ Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphRe
             .sortPayload = declarations.findImportedBuffer(build.sortPayloadBuffer),
             .visitCounter = declarations.findImportedBuffer(build.visitCounterBuffer),
         };
-        if(!resources.position.valid() || !resources.triangleIndex.valid() || !resources.node.valid() || !resources.parent.valid() || !resources.sortKeys.valid() || !resources.sortPayload.valid() || !resources.visitCounter.valid()){
+        if(!resources.position.valid() || !resources.triangleIndex.valid() || !resources.node.valid() || !resources.parent.valid() || !resources.sortKeys.valid() || !resources.sortPayload.valid() || !resources.visitCounter.valid())
             return MakeUnexpected(Failure{});
-        }
         result.push_back(Move(resources));
     }
     return result;

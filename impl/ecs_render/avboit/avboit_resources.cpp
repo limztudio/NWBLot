@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
@@ -17,40 +18,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_avboit_resources{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 CreateHeapComputePipeline(const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::Device& device, Core::ComputePipelineHandle& pipeline){
-    if(pipeline)
-        return true;
-
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !bindingLayout || !heap.getResourceLayout() || !heap.getSamplerLayout())
-        return false;
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(pipelineDesc);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    return static_cast<b8>(pipelineResult);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,12 +62,12 @@ b8 RendererAvboitSystem::createAvboitPipelines(){
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateHeapComputePipeline(m_avboitState.m_depthWarpComputeShader, *materialPassBindingLayout, device, m_avboitState.m_depthWarpPipeline)){
+    if(!m_avboitState.m_depthWarpPipeline && !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_avboitState.m_depthWarpComputeShader, *materialPassBindingLayout, false, m_avboitState.m_depthWarpPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateHeapComputePipeline(m_avboitState.m_integrateComputeShader, *materialPassBindingLayout, device, m_avboitState.m_integratePipeline)){
+    if(!m_avboitState.m_integratePipeline && !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_avboitState.m_integrateComputeShader, *materialPassBindingLayout, false, m_avboitState.m_integratePipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;
     }

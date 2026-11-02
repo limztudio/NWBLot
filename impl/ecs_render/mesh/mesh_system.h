@@ -120,6 +120,15 @@ public:
         handler(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, true);
     }
 
+    [[nodiscard]] static b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
+        b8 ready = true;
+        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
+            const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
+            ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+        });
+        return ready;
+    }
+
     [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot)noexcept;
 
     template<typename BufferHandler>

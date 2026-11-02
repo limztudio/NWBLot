@@ -64,6 +64,10 @@ void GpuFrameData::reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> ski
     m_prepared = false;
 }
 
+b8 GpuFrameData::prefixComplete(Core::Device& device)const{
+    return GpuTokenComplete(device, m_vertexUpload) && GpuTokenComplete(device, m_indexUpload) && GpuTokenComplete(device, m_clear) && GpuTokenComplete(device, m_raster);
+}
+
 b8 GpuFrameData::recyclable(Core::Device& device)const{
     if(!GpuTokenComplete(device, m_finalConsumer) || !prefixComplete(device))
         return false;
@@ -80,6 +84,10 @@ b8 GpuFrameData::recyclable(Core::Device& device)const{
             return false;
     }
     return true;
+}
+
+b8 GpuFrameData::complete(Core::Device& device)const{
+    return m_finalConsumer.valid() && recyclable(device);
 }
 
 

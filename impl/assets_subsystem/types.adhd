@@ -35,32 +35,6 @@ class SubsystemHeaderBinary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SubsystemFieldValueDescriptor MakeSubsystemFieldValueDescriptor(
-    in StringView fieldName,
-    in Name expectedAssetType,
-    in b8 isArray
-){
-    SubsystemFieldValueDescriptor descriptor;
-    descriptor.fieldName = fieldName;
-    descriptor.expectedAssetType = expectedAssetType;
-    descriptor.isArray = isArray;
-    return descriptor;
-}
-
-SubsystemHeaderBinary BuildSubsystemHeaderBinary(
-    in NameHash subsystemTypeHash,
-    in u64 subsystemCount,
-    in u64 fieldCount,
-    in u64 assetCount
-){
-    SubsystemHeaderBinary header;
-    header.subsystemTypeHash = subsystemTypeHash;
-    header.subsystemCount = subsystemCount;
-    header.fieldCount = fieldCount;
-    header.assetCount = assetCount;
-    return header;
-}
-
 b8 TrySumSubsystemFieldElementCounts(in Span<u64> fieldCounts, mut u64 outTotalCount){
     u64 totalCount = 0u;
     for(usize i = 0u; i < fieldCounts.size(); ++i){

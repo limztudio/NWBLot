@@ -62,7 +62,7 @@ class ShadowVisibilityMergeValidationResult{
 }
 
 f32 ShadowSlotImportanceData(in f32x4 colorIntensity, in f32x4 params, in f32x4 lightPosition, in f32x4 cameraPosition){
-    const f32 radiantImportance = CausticSlotImportanceData(colorIntensity);
+    const f32 radiantImportance = SceneLightRadiantImportance(colorIntensity);
     if(params.y < s_LightTypeDirectionalMax)
         return radiantImportance * s_DirectionalShadowImportanceBoost + 1.0f;
 
@@ -114,16 +114,15 @@ class SoftwareTransparentSamplingHistory{
 
     public void prepareLighting(in Span<SceneLightGpuData> lights){
         const u32 lightCount = cast<u32>(lights.size());
-        u64 hash = s_RtFnv64OffsetBasis;
-        RtFnv64AppendU32(hash, lightCount);
+        usize seed = hashValue(lightCount);
         for(usize i = 0u; i < lights.size(); ++i){
-            RtFnv64AppendF32x4(hash, lights[i].position);
-            RtFnv64AppendF32x4(hash, lights[i].direction);
-            RtFnv64AppendF32x4(hash, lights[i].colorIntensity);
-            RtFnv64AppendF32x4(hash, lights[i].params);
-            RtFnv64AppendF32x4(hash, lights[i].params2);
+            HashCombineF32x4(lights[i].position, seed);
+            HashCombineF32x4(lights[i].direction, seed);
+            HashCombineF32x4(lights[i].colorIntensity, seed);
+            HashCombineF32x4(lights[i].params, seed);
+            HashCombineF32x4(lights[i].params2, seed);
         }
-        this.m_lightHash = hash;
+        this.m_lightHash = cast<u64>(seed);
         this.m_lightingPrepared = true;
     }
 
@@ -482,48 +481,6 @@ const usize s_MaxTransparentTemporalMergeUses = 13u;
 const usize s_MaxTransparentFirstWaveletUses = 7u;
 const usize s_MaxTransparentFoldUses = 9u;
 
-void RtFnv64AppendInstanceMaterial(mut u64 hash, in NwbRtInstanceMaterialGpu material){
-    RtFnv64AppendU32(hash, material.surfaceDispatchId);
-    RtFnv64AppendU32(hash, material.flags);
-    RtFnv64AppendU32(hash, material.shadingModelId);
-    RtFnv64AppendU32(hash, material.materialConstantByteOffset);
-    RtFnv64AppendU32(hash, material.meshInstanceIndex);
-    RtFnv64AppendU32(hash, material.indexSlot);
-    RtFnv64AppendU32(hash, material.attributeSlot);
-    RtFnv64AppendU32(hash, material.positionSlot);
-    RtFnv64AppendU32(hash, material.nodeSlot);
-}
-
-void RtFnv64AppendInstanceGpuData(mut u64 hash, in InstanceGpuData instance){
-    RtFnv64AppendF32x4(hash, instance.rotation);
-    RtFnv64AppendF32(hash, instance.translation.x);
-    RtFnv64AppendF32(hash, instance.translation.y);
-    RtFnv64AppendF32(hash, instance.translation.z);
-    RtFnv64AppendU32(hash, instance.translation.w);
-    RtFnv64AppendF32(hash, instance.scale.x);
-    RtFnv64AppendF32(hash, instance.scale.y);
-    RtFnv64AppendF32(hash, instance.scale.z);
-    RtFnv64AppendU32(hash, instance.scale.w);
-    for(u32 slotIndex = 0u; slotIndex < s_MeshInstanceGeometrySlotCount; ++slotIndex)
-        RtFnv64AppendU32(hash, instance.geometryHeapSlots[slotIndex]);
-}
-
-u64 ComputeShadowMaterialContextHash(
-    in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
-    in Span<InstanceGpuData> instanceData,
-    in Span<u8> materialTypedBytes
-){
-    assert(instanceMaterials.size() == instanceData.size());
-
-    u64 hash = s_RtFnv64OffsetBasis;
-    RtFnv64AppendU32(hash, s_SceneStaticCacheHashVersion);
-    for(usize index = 0u; index < instanceMaterials.size(); ++index)
-        RtFnv64AppendInstanceMaterial(hash, instanceMaterials[index]);
-    for(usize index = 0u; index < instanceData.size(); ++index)
-        RtFnv64AppendInstanceGpuData(hash, instanceData[index]);
-    RtFnv64AppendBytes(hash, materialTypedBytes);
-    return hash;
-}
 const StringView s_ShadowTraceHardwarePositionIdentitySuffix = ":shadow_trace_hw_position";
 const StringView s_ShadowTraceHardwareIndexIdentitySuffix = ":shadow_trace_hw_index";
 const StringView s_ShadowTraceHardwareAttributeIdentitySuffix = ":shadow_trace_hw_attribute";

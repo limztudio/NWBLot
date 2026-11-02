@@ -28,9 +28,9 @@ inline constexpr AStringView s_JsonNullText = "null";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Telemetry::PerfMemoryPayload& payload)noexcept;
-void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& out, const TelemetryReportSummary& summary);
-void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, const Core::Telemetry::PerfMemoryPayload& payload, u32 streamId);
+void AddTelemetryMemorySummary(const Core::Telemetry::PerfMemoryPayload& payload, TelemetryReportSummary& summary)noexcept;
+void AppendTelemetryMemorySourcesJson(const TelemetryReportSummary& summary, AString<Core::Telemetry::TelemetryArena>& out);
+void AppendTelemetryMemoryRecordJson(const Core::Telemetry::PerfMemoryPayload& payload, u32 streamId, AString<Core::Alloc::ScratchArena>& out);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

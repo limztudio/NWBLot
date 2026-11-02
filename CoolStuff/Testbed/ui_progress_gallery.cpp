@@ -3,7 +3,7 @@
 
 
 #include "ui_progress_gallery.h"
-#include "ui_gallery_constants.h"
+#include "CoolStuff/Testbed/ui_gallery_constants.adhd.h"
 
 #include <core/common/log.h>
 
@@ -23,7 +23,7 @@ void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::All
         return;
     b8 valid = ui.label(s_TitleKey, "Skinned progress bar");
     if(ui.button("advance", "Advance by 25%"))
-        m_fraction = m_fraction >= 1.0 ? 0.0 : m_fraction + s_ProgressAdvanceFraction;
+        m_fraction = m_fraction >= 1.0 ? 0.0 : m_fraction + s_DefaultProgressFraction;
     valid = ui.progress(s_AmountKey, m_fraction) && valid;
     const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", m_fraction * s_ProgressPercentScale);
     valid = ui.label("value", { caption.data(), caption.size() }) && valid;

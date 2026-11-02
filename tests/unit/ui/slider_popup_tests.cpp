@@ -94,7 +94,7 @@ TEST_F(UiSliderPopupTests, ChildResultsRemainStagedUntilTheOutermostPopupValidat
 
 TEST_F(UiSliderPopupTests, AnIdenticalIntentOnTheEndedChildRejectsBothUnpublishedResults){
     ASSERT_TRUE(acceptFamily(1u));
-    const SliderAcceptedFrame displayed = accepted();
+    const AcceptedInputState<64u> displayed = accepted();
     ASSERT_TRUE(declareFamily(2u));
     const u64 token = m_childState.inputGeneration();
     ASSERT_TRUE(m_childState.setValue(0.5));

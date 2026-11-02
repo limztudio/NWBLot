@@ -21,7 +21,6 @@ NWB_IMPL_BEGIN
 
 Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationChainBuilder::declare(const OpaqueSharedComputeEmulationChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, const Span<Core::GpuTaskId> tasks){
     using namespace RendererTaskGraphDetail;
-    using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum;
 
     const DeferredGraphResourceImportResult& resources = inputs.resources;
     const Array<Core::GpuTaskResourceUse, 4u> generateResourceUses = {
@@ -50,38 +49,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     if(inputs.materialSampledTextureSetUse.resourceSet.valid())
         resourceSetUses[resourceSetUseCount++] = inputs.materialSampledTextureSetUse;
 
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Medium;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    // Each phase chains explicitly. Keep that serial chain in the primary-Graphics packet under FrontierSafe.
-    scheduling.allowMergeAcrossConsumerFrontier = true;
-
-    const Array<Name, 10u> phaseIdentities = {
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_a"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_a"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_b"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_b"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_c"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_c"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_d"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_d"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_e"),
-        Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_e"),
-    };
-    const Array<AStringView, 10u> phaseMarkers = {
-        "Opaque Shared Compute Emulation Generate A",
-        "Opaque Shared Compute Emulation Raster A",
-        "Opaque Shared Compute Emulation Generate B",
-        "Opaque Shared Compute Emulation Raster B",
-        "Opaque Shared Compute Emulation Generate C",
-        "Opaque Shared Compute Emulation Raster C",
-        "Opaque Shared Compute Emulation Generate D",
-        "Opaque Shared Compute Emulation Raster D",
-        "Opaque Shared Compute Emulation Generate E",
-        "Opaque Shared Compute Emulation Raster E",
-    };
+    NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.graphics_prefix.opaque", "Opaque");
     const usize phaseCount = SharedComputeEmulationPhaseCountForDrawCount(inputs.plan.drawCount);
     if(!IsSupportedSharedComputeEmulationPhaseCount(phaseCount) || phaseCount > tasks.size()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
@@ -93,11 +61,10 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         const b8 isRasterPhase = phaseIndex % s_SharedComputeEmulationPhasesPerDraw != 0u;
         const auto phaseTask = declarePhase(
             inputs,
-            scheduling,
-            phaseIdentities[phaseIndex],
-            phaseMarkers[phaseIndex],
+            sharedPhaseIdentities[phaseIndex],
+            sharedPhaseMarkers[phaseIndex],
             dependency,
-            isRasterPhase ? OpaqueSharedPhase::Raster : OpaqueSharedPhase::Generate,
+            isRasterPhase ? SharedComputeEmulationPhase::Raster : SharedComputeEmulationPhase::Generate,
             phaseIndex / s_SharedComputeEmulationPhasesPerDraw,
             phaseIndex + 1u == phaseCount,
             isRasterPhase ? Span<const Core::GpuTaskResourceUse>(rasterResourceUses) : Span<const Core::GpuTaskResourceUse>(generateResourceUses),
@@ -117,25 +84,17 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
 
 Expected<Core::GpuTaskId> OpaqueSharedComputeEmulationChainBuilder::declarePhase(
     const OpaqueSharedComputeEmulationChainInputs& inputs,
-    const Core::GpuTaskSchedulingHint& scheduling,
     const Name& identity,
     const AStringView markerLabel,
     const Core::GpuTaskId& dependency,
-    const ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum phase,
+    const SharedComputeEmulationPhase::Enum phase,
     const usize drawIndex,
     const b8 finishTiming,
     const Span<const Core::GpuTaskResourceUse> resourceUses,
     const Span<const Core::GpuTaskResourceSetUse> resourceSetUses
 ){
     Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(identity)
-        .setMarkerLabel(markerLabel)
-        .setScheduling(scheduling)
-        .setDependencies({ &dependency, 1u })
-        .setResourceUses(resourceUses)
-        .setResourceSetUses({ resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size() })
-    ;
+    RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(identity, markerLabel, dependency, resourceUses, resourceSetUses, desc);
     ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Payload payload{
         m_materialSystem,
         inputs.targets,

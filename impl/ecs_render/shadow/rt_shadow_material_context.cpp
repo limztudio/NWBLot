@@ -17,101 +17,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
-    // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its preparation packet records.
-    // Never recreate here: a recording-time replacement would break frozen identity and the selector snapshot.
-    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer)
-        return MakeUnexpected(Failure{});
-
-    RayTraceMaterialContextSlots slots;
-    const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle)noexcept -> Expected<u32>{
-        if(!buffer)
-            return 0u;
-        if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
-            return MakeUnexpected(Failure{});
-        return handle.slot();
-    };
-
-    const auto sceneBvhNodes = resolveStorageSlot(m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle);
-    if(!sceneBvhNodes){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
-    slots.sceneBvhNodes = *sceneBvhNodes;
-    const auto sceneInstances = resolveStorageSlot(m_rayTracingState.m_sceneInstanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle);
-    if(!sceneInstances){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
-    slots.sceneInstances = *sceneInstances;
-    const auto instanceMaterial = resolveStorageSlot(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
-    if(!instanceMaterial){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
-    slots.instanceMaterial = *instanceMaterial;
-    const auto materialTyped = resolveStorageSlot(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle);
-    if(!materialTyped){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
-    slots.materialTyped = *materialTyped;
-    const auto meshInstances = resolveStorageSlot(m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
-    if(!meshInstances){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
-    slots.meshInstances = *meshInstances;
-
-    // Optical metadata follows the selected backend's instance order and retains its preflighted descriptor.
-    const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
-    if(opticalScene.valid()){
-        slots.opticalScene = opticalScene.descriptor.slot();
-        slots.opticalInstanceCount = opticalScene.upload->instanceCount;
-    }
-
-    if(m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg){
-        const auto csgContext = resolveStorageSlot(m_rayTracingState.m_csgTraceContextBuffer.get(), m_rayTracingState.m_csgTraceContextHeapHandle);
-        if(!csgContext || !m_rayTracingState.m_csgTraceContextBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: current CSG ray context is unavailable"));
-            return MakeUnexpected(Failure{});
-        }
-        slots.csgContext = *csgContext;
-    }
-
-    return slots;
-}
-
 void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noexcept{
     if(m_preparedShadowMaterialContext.publishAcceptedUpload(m_rayTracingState))
         clearPreparedShadowMaterialContext();
-}
-
-void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        heap.free(m_rayTracingState.m_sceneBvhNodeHeapHandle);
-        heap.free(m_rayTracingState.m_sceneInstanceHeapHandle);
-        heap.free(m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
-        heap.free(m_rayTracingState.m_shadowMaterialTypedHeapHandle);
-        heap.free(m_rayTracingState.m_shadowInstanceHeapHandle);
-        heap.free(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_csgTraceContextHeapHandle);
-        heap.free(m_rayTracingState.m_swShadowEdgeCounterHeapHandle);
-        heap.free(m_rayTracingState.m_swShadowEdgeListHeapHandle);
-        heap.free(m_rayTracingState.m_swShadowIndirectArgsHeapHandle);
-    }
-    m_rayTracingState.m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 // The frozen software traversal indexes this context, so a new context always drops it.
@@ -137,63 +45,6 @@ b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(cons
 void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
     m_preparedShadowMaterialContext.clear();
     clearPreparedSceneSwBvhTraversal();
-}
-
-b8 RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
-    if(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer)
-        return true;
-
-    Core::BufferDesc slotsBufferDesc;
-    slotsBufferDesc
-        .setByteSize(sizeof(RayTraceMaterialContextSlots))
-        .setIsConstantBuffer(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("raytrace_material_context_slots"))
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-    auto rayTraceMaterialContextSlotsBufferResult = m_graphics.createBuffer(slotsBufferDesc);
-    if(rayTraceMaterialContextSlotsBufferResult)
-        m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer = Move(*rayTraceMaterialContextSlotsBufferResult);
-    else
-        m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.reset();
-    if(!rayTraceMaterialContextSlotsBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
-        return false;
-    }
-    return true;
-}
-
-b8 RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    if(handle.valid())
-        return true;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
-        return false;
-    }
-
-    if(!RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, buffer, handle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
-        return false;
-    }
-    return true;
-}
-
-b8 RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
-        return false;
-    }
-
-    if(!RayTracingDetail::ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, buffer, handle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
-        return false;
-    }
-    return true;
 }
 
 

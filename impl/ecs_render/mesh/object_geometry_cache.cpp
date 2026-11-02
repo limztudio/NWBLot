@@ -7,6 +7,7 @@
 #include "mesh_system.h"
 
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
 #include <core/common/log.h>
@@ -44,17 +45,7 @@ b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers&
         || cache.indexCount != expected.indexCount
         || mesh.runtimeMesh != runtimeMesh
         || mesh.runtimeGeometryContentRevision != expected.sourceRevision
-        || mesh.positionBuffer != sourceBuffers.positionBuffer
-        || mesh.normalBuffer != sourceBuffers.normalBuffer
-        || mesh.tangentBuffer != sourceBuffers.tangentBuffer
-        || mesh.uv0Buffer != sourceBuffers.uv0Buffer
-        || mesh.colorBuffer != sourceBuffers.colorBuffer
-        || mesh.meshletDescBuffer != sourceBuffers.meshletDescBuffer
-        || mesh.meshletBoundsBuffer != sourceBuffers.meshletBoundsBuffer
-        || mesh.meshletPositionRefDeltaBuffer != sourceBuffers.meshletPositionRefDeltaBuffer
-        || mesh.meshletAttributeRefDeltaBuffer != sourceBuffers.meshletAttributeRefDeltaBuffer
-        || mesh.meshletLocalVertexRefBuffer != sourceBuffers.meshletLocalVertexRefBuffer
-        || mesh.meshletPrimitiveIndexBuffer != sourceBuffers.meshletPrimitiveIndexBuffer
+        || !mesh.sameBuffers(sourceBuffers)
     )
         return false;
     cache.acceptedContent = !runtimeMesh || expected.sourceRevision != 0u;
@@ -133,15 +124,7 @@ b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Cor
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!handle)
-        return false;
-    Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
-    if(!heap.write(*handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, cache.buffer.get())))
-        return false;
-    cache.heapHandle = *handle;
-    retireHandle.release();
-    return true;
+    return RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferUav(0u, cache.buffer.get()), cache.heapHandle);
 }
 
 b8 RendererMeshSystem::confirmObjectGeometryCache(const Name& meshKey, const RuntimeMeshBuffers& sourceBuffers, const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected, const b8 runtimeMesh)noexcept{

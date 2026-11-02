@@ -78,37 +78,23 @@ b8 RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
         return true;
     if(resolve.m_combinedTemporalFailed)
         return false;
-    auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!resolve.m_combinedTemporalBindingLayout){
-        Core::BindingLayoutDesc layout(m_arena);
-        layout.setVisibility(Core::ShaderType::Compute);
-        layout.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(ShadowCombinedTemporalPushConstants)));
-        auto combinedTemporalBindingLayoutResult = device.createBindingLayout(layout);
-        if(combinedTemporalBindingLayoutResult)
-            resolve.m_combinedTemporalBindingLayout = Move(*combinedTemporalBindingLayoutResult);
-        else
-            resolve.m_combinedTemporalBindingLayout.reset();
-        if(!combinedTemporalBindingLayoutResult){
-            resolve.m_combinedTemporalFailed = true;
-            return false;
-        }
-    }
-    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowReprojectMergeCombinedCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowTemporal", resolve.m_combinedTemporal.m_shader)){
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaderSystem,
+        &ShadowSubsystem::shadowReprojectMergeCombinedCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        "ECSRender_CombinedShadowTemporal",
+        sizeof(ShadowCombinedTemporalPushConstants),
+        false,
+        resolve.m_combinedTemporalBindingLayout,
+        resolve.m_combinedTemporal.m_shader,
+        resolve.m_combinedTemporal.m_pipeline
+    )){
         resolve.m_combinedTemporalFailed = true;
         return false;
     }
-    Core::ComputePipelineDesc desc;
-    desc.setComputeShader(resolve.m_combinedTemporal.m_shader).addBindingLayout(resolve.m_combinedTemporalBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult)
-        resolve.m_combinedTemporal.m_pipeline = Move(*pipelineResult);
-    else
-        resolve.m_combinedTemporal.m_pipeline.reset();
-    resolve.m_combinedTemporalFailed = !pipelineResult;
-    return !resolve.m_combinedTemporalFailed;
+    return true;
 }
 
 

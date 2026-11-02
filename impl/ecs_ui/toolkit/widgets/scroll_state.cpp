@@ -46,18 +46,6 @@ b8 ScrollState::setOffset(const f64 offset)noexcept{
     return true;
 }
 
-b8 ScrollState::ensureVisible(const f64 start, const f64 end, const f64 viewportHeight)noexcept{
-    return TryEnsureScrollVisible(m_offset, start, end, viewportHeight, m_offset);
-}
-
-b8 ScrollState::scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{
-    return TryScrollByOffset(m_offset, delta, contentHeight, viewportHeight, m_offset);
-}
-
-b8 ScrollState::clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{
-    return TryClampScrollOffset(m_offset, contentHeight, viewportHeight, m_offset);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

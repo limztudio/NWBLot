@@ -34,10 +34,6 @@ b8 RendererRayTracingSystem::setCausticQualitySettings(const CausticQualitySetti
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear()noexcept{
-    m_rayTracingState.m_causticAccumulatorInitialized = true;
-}
-
 void RendererRayTracingSystem::dispatchCausticGeometryDownsample(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();

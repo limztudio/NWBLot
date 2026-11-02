@@ -37,22 +37,21 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
         return false;
     }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, UiSkinColorRole::kCount, sizeof(UiSkinColorBinary))){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, UiSkinColorRole::kCount, sizeof(UiSkinColor))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
         return false;
     }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, sizeof(UiSkinTypographyBinary))){
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, sizeof(UiSkinTypography))){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: typography payload size overflows"));
         return false;
     }
 
-    const UiSkinHeaderBinary header = BuildUiSkinHeaderBinary(
-        skin.texture().name().hash(),
-        skin.atlasWidth(),
-        skin.atlasHeight(),
-        skin.referenceDensity(),
-        static_cast<u32>(skin.regions().size())
-    );
+    UiSkinHeaderBinary header;
+    header.textureNameHash = skin.texture().name().hash();
+    header.atlasWidth = skin.atlasWidth();
+    header.atlasHeight = skin.atlasHeight();
+    header.referenceDensity = skin.referenceDensity();
+    header.regionCount = static_cast<u32>(skin.regions().size());
 
     outBinary.clear();
     outBinary.reserve(reserveBytes);
@@ -60,8 +59,8 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     for(const UiSkinRegion& region : skin.regions())
         AppendPOD(outBinary, PackUiSkinRegionBinary(region));
     for(const UiSkinColor& color : skin.palette().colors)
-        AppendPOD(outBinary, PackUiSkinColorBinary(color));
-    AppendPOD(outBinary, PackUiSkinTypographyBinary(skin.typography()));
+        AppendPOD(outBinary, color);
+    AppendPOD(outBinary, skin.typography());
     return true;
 }
 

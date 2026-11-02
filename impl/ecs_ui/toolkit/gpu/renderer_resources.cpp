@@ -104,7 +104,35 @@ template<typename TShader>
     const Core::Assets::AssetRef<TShader>& resolved = uiSubsystem->*member;
     if(!resolved.valid())
         return false;
-    return ShaderAssetLoader::Load<TShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, identity, s_GpuRendererContext, state.m_graphics, state.m_assets, state.m_resolver, outShader);
+    return ShaderAssetLoader::Load<TShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, identity, s_GpuRendererContext, state.m_graphics, state.m_assets, state.m_resolver, nullptr, outShader);
+}
+
+template<typename TElement>
+[[nodiscard]] static b8 EnsureGeometryBuffer(
+    Core::Device& device,
+    const usize requiredCount,
+    const usize initialCapacity,
+    const Name& debugName,
+    const b8 isVertexBuffer,
+    Core::BufferHandle& inOutBuffer,
+    usize& inOutCapacity
+){
+    if(inOutCapacity >= requiredCount)
+        return true;
+    usize capacity = NextGrowingCapacity(inOutCapacity, requiredCount, initialCapacity);
+    if(capacity > Limit<usize>::s_Max / sizeof(TElement))
+        capacity = requiredCount;
+    Core::BufferDesc description;
+    description.setByteSize(static_cast<u64>(capacity * sizeof(TElement))).setIsVertexBuffer(isVertexBuffer).setIsIndexBuffer(!isVertexBuffer)
+        .setDebugName(debugName).enableAutomaticStateTracking(Core::ResourceStates::Common)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+    ;
+    auto bufferResult = device.createBuffer(description);
+    if(!bufferResult)
+        return false;
+    inOutBuffer = Move(*bufferResult);
+    inOutCapacity = capacity;
+    return true;
 }
 
 
@@ -136,6 +164,39 @@ b8 PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core:
     inOutDescriptor = descriptor;
     descriptorGuard.release();
     return true;
+}
+
+b8 CreateAndUploadGpuPageTexture(
+    Core::GraphicsRuntime& graphics,
+    const GpuPageTextureUploadDesc& desc,
+    Core::TextureHandle& outTexture,
+    Core::QueueSubmissionToken& outReadinessToken
+){
+    Core::TextureDesc description;
+    description
+        .setName(desc.name).setWidth(desc.width).setHeight(desc.height)
+        .setFormat(desc.format).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+    ;
+    auto textureResult = graphics.getDevice().createTexture(description);
+    if(textureResult)
+        outTexture = Move(*textureResult);
+    else{
+        outTexture.reset();
+        return false;
+    }
+    const Core::GraphicsRuntime::TextureUploadRegion region{ .data = desc.data, .dataSize = desc.dataSize, .rowPitch = desc.rowPitch, .depthPitch = desc.dataSize };
+    if(!graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
+        .destination = outTexture,
+        .regions = &region,
+        .regionCount = 1u,
+        .acceptedToken = &outReadinessToken,
+        .finalState = Core::ResourceStates::ShaderResource,
+        .physicalInitialState = Core::ResourceStates::Unknown,
+        .hasPhysicalInitialState = true,
+    }))
+        return false;
+    return outReadinessToken.valid() && outReadinessToken.hasPhysicalQueueIdentity();
 }
 
 b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token){
@@ -180,18 +241,6 @@ Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportGpu
     const Core::GpuGraphResourceId texture = *textureResult;
     uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     return texture;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 GpuFrameData::prefixComplete(Core::Device& device)const{
-    return GpuTokenComplete(device, m_vertexUpload) && GpuTokenComplete(device, m_indexUpload) && GpuTokenComplete(device, m_clear) && GpuTokenComplete(device, m_raster);
-}
-
-b8 GpuFrameData::complete(Core::Device& device)const{
-    return m_finalConsumer.valid() && recyclable(device);
 }
 
 
@@ -330,13 +379,7 @@ Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 
     target->m_readinessToken = *submission;
     if(!target->m_readinessToken.valid() || !target->m_readinessToken.hasPhysicalQueueIdentity())
         return MakeUnexpected(Failure{});
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> sampledImage = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(!sampledImage)
-        return MakeUnexpected(sampledImage.error());
-    target->m_sampledImage = *sampledImage;
-    const Core::DescriptorWriteItem view = Core::DescriptorWriteItem::TextureSrv(0u, target->m_color.get(), Core::Format::RGBA16_FLOAT, Core::s_AllSubresources, Core::TextureDimension::Texture2D);
-    if(!heap.write(target->m_sampledImage, view))
+    if(!PrepareGpuSampledImageDescriptor(m_graphics, target->m_color, Core::Format::RGBA16_FLOAT, target->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(target);
 }
@@ -349,39 +392,8 @@ b8 GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snap
     if(vertexCount == 0u || indexCount == 0u || vertexCount > Limit<usize>::s_Max / sizeof(Vertex) || indexCount > Limit<usize>::s_Max / sizeof(u32))
         return false;
     Core::Device& device = m_graphics.getDevice();
-    if(slot.vertexCapacity < vertexCount){
-        usize capacity = NextGrowingCapacity(slot.vertexCapacity, vertexCount, s_GpuInitialVertexCapacity);
-        if(capacity > Limit<usize>::s_Max / sizeof(Vertex))
-            capacity = vertexCount;
-        Core::BufferDesc description;
-        description.setByteSize(static_cast<u64>(capacity * sizeof(Vertex))).setIsVertexBuffer(true)
-            .setDebugName(s_GpuVertexBufferName).enableAutomaticStateTracking(Core::ResourceStates::Common)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        ;
-        auto bufferResult = device.createBuffer(description);
-        if(!bufferResult)
-            return false;
-        Core::BufferHandle buffer = Move(*bufferResult);
-        slot.vertices = Move(buffer);
-        slot.vertexCapacity = capacity;
-    }
-    if(slot.indexCapacity < indexCount){
-        usize capacity = NextGrowingCapacity(slot.indexCapacity, indexCount, s_GpuInitialIndexCapacity);
-        if(capacity > Limit<usize>::s_Max / sizeof(u32))
-            capacity = indexCount;
-        Core::BufferDesc description;
-        description.setByteSize(static_cast<u64>(capacity * sizeof(u32))).setIsIndexBuffer(true)
-            .setDebugName(s_GpuIndexBufferName).enableAutomaticStateTracking(Core::ResourceStates::Common)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        ;
-        auto bufferResult = device.createBuffer(description);
-        if(!bufferResult)
-            return false;
-        Core::BufferHandle buffer = Move(*bufferResult);
-        slot.indices = Move(buffer);
-        slot.indexCapacity = capacity;
-    }
-    return true;
+    return __hidden_ui_gpu_resources::EnsureGeometryBuffer<Vertex>(device, vertexCount, s_GpuInitialVertexCapacity, s_GpuVertexBufferName, true, slot.vertices, slot.vertexCapacity)
+        && __hidden_ui_gpu_resources::EnsureGeometryBuffer<u32>(device, indexCount, s_GpuInitialIndexCapacity, s_GpuIndexBufferName, false, slot.indices, slot.indexCapacity);
 }
 
 b8 GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){

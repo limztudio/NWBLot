@@ -54,7 +54,7 @@ public:
 
 
 private:
-    void advanceRevision()noexcept;
+    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
 
 
 private:
@@ -83,9 +83,9 @@ public:
 class RadioGroupBehavior final{
 public:
     // Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
-    [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(RadioGroupState& state, RadioGroupResult& result, const IListDataSource& source, const IRadioGroupReconcileGuard* guard = nullptr);
+    [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(const IListDataSource& source, const IRadioGroupReconcileGuard* guard, RadioGroupState& state, RadioGroupResult& result);
     // Navigation consumes copied choices and never calls the source; accepted internal intents preserve the input token.
-    [[nodiscard]] static b8 Apply(RadioGroupState& state, RadioGroupResult& result, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action)noexcept;
+    [[nodiscard]] static b8 Apply(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result)noexcept;
 };
 
 

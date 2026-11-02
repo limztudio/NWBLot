@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_ui/components.adhd.h>
+#include <impl/ecs_ui/clipboard_types.adhd.h>
 
 #include <core/os/clipboard.h>
 

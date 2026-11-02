@@ -6,7 +6,6 @@
 
 
 #include "asset.h"
-#include "meshlet_triangle_visit.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +27,9 @@ NWB_IMPL_BEGIN
     usize positionCount,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] inline Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
+    return BuildMeshletTriangleIndices(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletPositionRefDeltas(), payload.meshletPrimitiveIndices(), payload.positionStream().size(), scratchArena);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

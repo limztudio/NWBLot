@@ -67,18 +67,6 @@ class PopupDismissal{
     public PopupDismissReason reason = PopupDismissReason::None;
 }
 
-class ContextOwnedPopup{
-    public ContextOwnedPopup(){}
-
-    public ContextOwnedPopup(in PopupScope inScope, in WidgetRoot inRoot){
-        this.scope = inScope;
-        this.root = inRoot;
-    }
-
-    public PopupScope scope;
-    public WidgetRoot root;
-}
-
 class PopupRecord{
     public PopupScope scope;
     public WidgetId restoreFocus;

@@ -3,9 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
-#include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 
-#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -14,6 +12,59 @@
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_builder_combo{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ComboQueryCache{
+    u64 revision = 0u;
+    u64 externalRevision = 0u;
+    u64 compositionGeneration = 0u;
+    u64 selectionGeneration = 0u;
+    usize anchor = 0u;
+    usize caret = 0u;
+
+    [[nodiscard]] static ComboQueryCache Capture(const SearchComboState* const search)noexcept{
+        if(!search)
+            return {};
+        const EditModel& query = search->query();
+        return {
+            query.revision(),
+            query.externalRevision(),
+            query.compositionGeneration(),
+            query.selectionGeneration(),
+            query.anchor(),
+            query.caret(),
+        };
+    }
+
+    [[nodiscard]] b8 matches(const SearchComboState* const search)const noexcept{
+        if(!search)
+            return true;
+        const EditModel& query = search->query();
+        return
+            query.revision() == revision
+            && query.externalRevision() == externalRevision
+            && query.compositionGeneration() == compositionGeneration
+            && query.selectionGeneration() == selectionGeneration
+            && query.anchor() == anchor
+            && query.caret() == caret
+        ;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,46 +99,17 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     state.m_popup.bindParent(m_context.popupToken());
     if(previouslyOpen && !state.isOpen())
         ComboBehavior::Close(state);
-    const u64 queryRevision = search ? search->query().revision() : 0u;
-    const u64 queryExternalRevision = search ? search->query().externalRevision() : 0u;
-    const u64 queryCompositionGeneration = search ? search->query().compositionGeneration() : 0u;
-    const u64 querySelectionGeneration = search ? search->query().selectionGeneration() : 0u;
-    const usize queryAnchor = search ? search->query().anchor() : 0u;
-    const usize queryCaret = search ? search->query().caret() : 0u;
-    if(!ComboBehavior::Reconcile(state, source)){
+    const __hidden_builder_combo::ComboQueryCache queryCache = __hidden_builder_combo::ComboQueryCache::Capture(search);
+    if(!ComboBehavior::Reconcile(state, source) || !queryCache.matches(search)){
         m_context.fail();
         return result;
     }
-    if(
-        search && (search->query().revision() != queryRevision || search->query().externalRevision() != queryExternalRevision
-            || search->query().compositionGeneration() != queryCompositionGeneration
-            || search->query().selectionGeneration() != querySelectionGeneration
-            || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
-    ){
-        m_context.fail();
-        return result;
-    }
-    if(
-        search && (!SearchComboBehavior::Filter(*search, *searchSource) || search->query().revision() != queryRevision
-            || search->query().externalRevision() != queryExternalRevision
-            || search->query().compositionGeneration() != queryCompositionGeneration
-            || search->query().selectionGeneration() != querySelectionGeneration
-            || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
-    ){
+    if(search && (!SearchComboBehavior::Filter(*search, *searchSource) || !queryCache.matches(search))){
         m_context.fail();
         return result;
     }
     const IListDataSource& results = search ? searchSource->filtered() : source;
-    if(!ListBehavior::Reconcile(state.m_list, results)){
-        m_context.fail();
-        return result;
-    }
-    if(
-        search && (search->query().revision() != queryRevision || search->query().externalRevision() != queryExternalRevision
-            || search->query().compositionGeneration() != queryCompositionGeneration
-            || search->query().selectionGeneration() != querySelectionGeneration
-            || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
-    ){
+    if(!ListBehavior::Reconcile(state.m_list, results) || !queryCache.matches(search)){
         m_context.fail();
         return result;
     }
@@ -136,7 +158,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     item.style = m_style;
     item.enabled = options.enabled;
     item.combo = static_cast<u32>(m_scope->m_combos.size());
-    SIMDVectorSingle minimumSize = VectorZero();
+    Point minimumSize{};
     const Array<Name, 5> names{ frame.style.normal, frame.style.hover, frame.style.open, frame.style.focused, frame.style.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, frame.style.fallback);
@@ -144,11 +166,9 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
             m_context.fail();
             return {};
         }
-        const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
-        minimumSize = VectorSelect(minimumCandidate, minimumSize, VectorGreater(minimumSize, minimumCandidate));
+        minimumSize = { Max(minimumSize.x, skinRegion->minimumWidth), Max(minimumSize.y, skinRegion->minimumHeight) };
     }
     item.padding = resolveRegionsPadding(frame.style.padding, names, frame.style.fallback);
-    const SIMDVectorSingle itemPadding = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!arrow){
         m_context.fail();
@@ -208,11 +228,9 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle content = VectorMax(VectorSet(measured.x, measured.y, 0.0f, 0.0f), VectorSet(measured.x, frame.arrowExtent, 0.0f, 0.0f));
-    const SIMDVectorSingle contentSize = VectorAdd(VectorAdd(content, VectorSet(frame.arrowExtent, 0.0f, 0.0f, 0.0f)), VectorSet(frame.style.arrowGap, 0.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSelect(VectorZero(), itemPadding, s_SIMDMaskXY)), VectorSwizzle<2, 3, 2, 3>(itemPadding));
-    const SIMDVectorSingle intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
-    description.intrinsicSize = { VectorGetX(intrinsicSize), VectorGetY(intrinsicSize) };
+    const f32 paddedWidth = ((measured.x + frame.arrowExtent) + frame.style.arrowGap) + item.padding.left + item.padding.right;
+    const f32 paddedHeight = Max(measured.y, frame.arrowExtent) + item.padding.top + item.padding.bottom;
+    description.intrinsicSize = { Max(minimumSize.x, paddedWidth), Max(minimumSize.y, paddedHeight) };
     if(!addItemNode(description, item))
         return {};
     frame.list = static_cast<u32>(m_scope->m_lists.size());

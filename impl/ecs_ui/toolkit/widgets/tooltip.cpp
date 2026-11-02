@@ -55,12 +55,6 @@ void TooltipState::reset()noexcept{
     m_visible = false;
 }
 
-void TooltipState::advanceRevision()noexcept{
-    if(m_revision == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_revision;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -122,7 +122,7 @@ public:
 
 
 [[nodiscard]] Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] b8 ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
+[[nodiscard]] b8 ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEntry& entry, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<Path> EmitMaterialBindIncludes(const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(

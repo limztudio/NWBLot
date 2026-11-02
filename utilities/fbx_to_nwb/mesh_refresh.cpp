@@ -40,11 +40,11 @@ struct StreamSortEntry{
 
 
 [[nodiscard]] b8 LessEmittedF32(const f32 lhs, const f32 rhs)noexcept{
-    return FloatingHashBits(TextWrite::CleanFloat(lhs)) < FloatingHashBits(TextWrite::CleanFloat(rhs));
+    return FloatingHashBits(CleanFloat(lhs)) < FloatingHashBits(CleanFloat(rhs));
 }
 
 [[nodiscard]] b8 SameEmittedF32(const f32 lhs, const f32 rhs)noexcept{
-    return FloatingHashBits(TextWrite::CleanFloat(lhs)) == FloatingHashBits(TextWrite::CleanFloat(rhs));
+    return FloatingHashBits(CleanFloat(lhs)) == FloatingHashBits(CleanFloat(rhs));
 }
 
 [[nodiscard]] b8 LessValue(const Vec2& lhs, const Vec2& rhs)noexcept{

@@ -37,14 +37,6 @@ struct DeferredFrameTargets;
 
 
 struct AvboitRecordInputsBase : public FrameGraphAvboitMaterialUploadResult{
-    static constexpr usize s_ResourceBaseCount = s_AvboitResourceBaseCount;
-    static constexpr usize s_StreamUseCount = s_AvboitStreamUseCount;
-    static constexpr usize s_CsgIntervalUseCount = s_AvboitCsgIntervalUseCount;
-    static constexpr usize s_EmulationBaseCount = s_AvboitEmulationBaseCount;
-    static constexpr usize s_EmulationPlanUseCount = s_AvboitEmulationPlanUseCount;
-    static constexpr usize s_MaterialResourceSetUseCapacity = s_AvboitMaterialResourceSetUseCapacity;
-    static constexpr usize s_ComputeEmulationResourceSetUseCapacity = s_AvboitComputeEmulationResourceSetUseCapacity;
-
     DeferredFrameTargets& targets;
     Core::GpuGraphResourceId albedo;
     Core::GpuGraphResourceId normal;
@@ -81,14 +73,42 @@ public:
 
 
 public:
-    void applyResources(const DeferredGraphResourceImportResult& resources, b8 intervalOutputsOwned)noexcept;
+    void applyResources(const DeferredGraphResourceImportResult& resources, const b8 intervalOutputsOwned)noexcept{
+        albedo = resources.albedo;
+        normal = resources.normal;
+        worldPosition = resources.worldPosition;
+        depth = resources.depth;
+        refractionInstance = resources.refractionInstance;
+        avboitMaterialDomain = resources.avboitMaterialDomain;
+        avboitCsgDomain = resources.avboitCsgDomain;
+        meshView = resources.meshView;
+        materialInstances = resources.materialInstances;
+        materialTyped = resources.materialTyped;
+        csgReceiverRanges = resources.csgReceiverRanges;
+        csgCutters = resources.csgCutters;
+        csgClipContextSlots = resources.csgClipContextSlots;
+        csgIntervalSampleState = resources.csgIntervalSampleState;
+        csgRemovedIntervalDepth = resources.csgRemovedIntervalDepth;
+        csgRemovedIntervalCapNormal = resources.csgRemovedIntervalCapNormal;
+        csgRemovedIntervalData = resources.csgRemovedIntervalData;
+        csgRemovedIntervalCount = resources.csgRemovedIntervalCount;
+        csgRemovedIntervalSubresources = resources.csgRemovedIntervalSubresources;
+        csgRemovedIntervalCountSubresources = resources.csgRemovedIntervalCountSubresources;
+        currentBindlessSlots = resources.currentBindlessSlots;
+        intervalOutputsGraphOwned = intervalOutputsOwned;
+    }
 
     void applyUploadResult(const FrameGraphAvboitMaterialUploadResult& upload)noexcept{
         static_cast<FrameGraphAvboitMaterialUploadResult&>(*this) = upload;
     }
 
     // Reuse requires the regular emulation plan and excludes CSG/shared plans.
-    [[nodiscard]] b8 generatedGeometryReusePlansValid()const noexcept;
+    [[nodiscard]] b8 generatedGeometryReusePlansValid()const noexcept{
+        const b8 generatedGeometryReused = reusedGeometryProducer.valid();
+        if((generatedGeometryReused || producesReusableGeometry) && (!regularComputeEmulationPlanCaptured || csgComputeEmulationPlanCaptured || sharedComputeEmulationPlanCaptured))
+            return false;
+        return true;
+    }
 
     [[nodiscard]] b8 generatedGeometryReused()const noexcept{
         return reusedGeometryProducer.valid();
@@ -112,49 +132,23 @@ inline void AppendCsgRemovedIntervalUses(
     resourceUses.push_back(RendererTaskGraphDetail::ReadTextureUse(removedIntervalCount, countSubresources, Core::ResourceStates::UnorderedAccess));
 }
 
-#define NWB_DEFINE_AVBOIT_SHARED_COMPUTE_EMULATION_PHASE_TABLES(phaseIdPrefix, phaseLabelPrefix) \
-    const Array<Name, 10u> sharedPhaseIdentities = { \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_a"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_a"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_b"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_b"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_c"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_c"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_d"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_d"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_generate_e"), \
-        Name(phaseIdPrefix ".shared_compute_emulation_raster_e"), \
-    }; \
-    const Array<AStringView, 10u> sharedPhaseMarkers = { \
-        phaseLabelPrefix " Shared Compute Emulation Generate A", \
-        phaseLabelPrefix " Shared Compute Emulation Raster A", \
-        phaseLabelPrefix " Shared Compute Emulation Generate B", \
-        phaseLabelPrefix " Shared Compute Emulation Raster B", \
-        phaseLabelPrefix " Shared Compute Emulation Generate C", \
-        phaseLabelPrefix " Shared Compute Emulation Raster C", \
-        phaseLabelPrefix " Shared Compute Emulation Generate D", \
-        phaseLabelPrefix " Shared Compute Emulation Raster D", \
-        phaseLabelPrefix " Shared Compute Emulation Generate E", \
-        phaseLabelPrefix " Shared Compute Emulation Raster E", \
-    }
-
 #define NWB_MAKE_AVBOIT_RASTER_RECORD_PHASE_DESC(phaseIdPrefix, phaseLabelPrefix, rasterIdentityIn, rasterLabelIn, resourceBaseCapacityIn) \
-    MakeAvboitRasterRecordPhaseDesc( \
-        Name(phaseIdPrefix ".compute_emulation.outputs"), \
-        phaseLabelPrefix " Compute Emulation Outputs", \
-        Name(phaseIdPrefix ".csg_compute_emulation.outputs"), \
-        phaseLabelPrefix " CSG Compute Emulation Outputs", \
-        phaseLabelPrefix " Shared Compute Emulation Output", \
-        Name(phaseIdPrefix ".compute_emulation"), \
-        phaseLabelPrefix " Compute Emulation", \
-        Name(phaseIdPrefix ".csg_compute_emulation"), \
-        phaseLabelPrefix " CSG Compute Emulation", \
-        sharedPhaseIdentities, \
-        sharedPhaseMarkers, \
-        (rasterIdentityIn), \
-        (rasterLabelIn), \
-        (resourceBaseCapacityIn) \
-    )
+    AvboitRasterRecordPhaseDesc{ \
+        .regularOutputSetLabel = phaseLabelPrefix " Compute Emulation Outputs", \
+        .csgOutputSetLabel = phaseLabelPrefix " CSG Compute Emulation Outputs", \
+        .sharedOutputLabel = phaseLabelPrefix " Shared Compute Emulation Output", \
+        .regularComputeEmulationLabel = phaseLabelPrefix " Compute Emulation", \
+        .csgComputeEmulationLabel = phaseLabelPrefix " CSG Compute Emulation", \
+        .sharedPhaseIdentities = sharedPhaseIdentities, \
+        .sharedPhaseLabels = sharedPhaseMarkers, \
+        .rasterLabel = (rasterLabelIn), \
+        .regularOutputSetIdentity = Name(phaseIdPrefix ".compute_emulation.outputs"), \
+        .csgOutputSetIdentity = Name(phaseIdPrefix ".csg_compute_emulation.outputs"), \
+        .regularComputeEmulationIdentity = Name(phaseIdPrefix ".compute_emulation"), \
+        .csgComputeEmulationIdentity = Name(phaseIdPrefix ".csg_compute_emulation"), \
+        .rasterIdentity = (rasterIdentityIn), \
+        .resourceBaseCapacity = (resourceBaseCapacityIn), \
+    }
 
 struct AvboitRasterRecordStageOutputs{
     Core::GpuTaskId& reusedGeometryProducer;
@@ -251,8 +245,8 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     resourceUses.reserve(
         phaseDesc.resourceBaseCapacity
-        + (streamsUploaded ? AvboitRecordInputsBase::s_StreamUseCount : 0u)
-        + (hasCsgIntervalReads ? AvboitRecordInputsBase::s_CsgIntervalUseCount : 0u)
+        + (streamsUploaded ? s_AvboitStreamUseCount : 0u)
+        + (hasCsgIntervalReads ? s_AvboitCsgIntervalUseCount : 0u)
     );
     for(const Core::GpuTaskResourceUse& use : baseResourceUses)
         resourceUses.push_back(use);
@@ -287,7 +281,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
         .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Array<Core::GpuTaskResourceSetUse, AvboitRecordInputsBase::s_MaterialResourceSetUseCapacity> materialResourceSetUses = {};
+    Array<Core::GpuTaskResourceSetUse, s_AvboitMaterialResourceSetUseCapacity> materialResourceSetUses = {};
     usize materialResourceSetUseCount = 0u;
     if(rasterPayload.materialGeometryStatesGraphOwned)
         materialResourceSetUses[materialResourceSetUseCount++] = materialGeometrySetUse;
@@ -324,13 +318,13 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
         computeEmulationPayload.materialFrameStatesGraphOwned = rasterPayload.materialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned = rasterPayload.materialGeometryStatesGraphOwned;
 
-        Array<Core::GpuTaskResourceUse, AvboitRecordInputsBase::s_EmulationBaseCount + AvboitRecordInputsBase::s_EmulationPlanUseCount> computeEmulationResourceUses = {
+        Array<Core::GpuTaskResourceUse, s_AvboitEmulationBaseCount + s_AvboitEmulationPlanUseCount> computeEmulationResourceUses = {
             ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer),
             ReadBufferUse(inputs.materialInstances, inputs.instanceRange),
             ReadBufferUse(inputs.materialTyped, inputs.materialTypedRange),
             ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
         };
-        usize computeEmulationResourceUseCount = AvboitRecordInputsBase::s_EmulationBaseCount;
+        usize computeEmulationResourceUseCount = s_AvboitEmulationBaseCount;
         if(inputs.csgComputeEmulationPlanCaptured){
             computeEmulationResourceUses[computeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgReceiverRanges, inputs.receiverRange);
             computeEmulationResourceUses[computeEmulationResourceUseCount++] = ReadBufferUse(inputs.csgCutters, inputs.cutterRange);
@@ -341,7 +335,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
             computeEmulationResourceUses[computeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalData, inputs.csgRemovedIntervalSubresources, Core::ResourceStates::UnorderedAccess);
             computeEmulationResourceUses[computeEmulationResourceUseCount++] = ReadTextureUse(inputs.csgRemovedIntervalCount, inputs.csgRemovedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess);
         }
-        Array<Core::GpuTaskResourceSetUse, AvboitRecordInputsBase::s_ComputeEmulationResourceSetUseCapacity> computeEmulationResourceSetUses = {};
+        Array<Core::GpuTaskResourceSetUse, s_AvboitComputeEmulationResourceSetUseCapacity> computeEmulationResourceSetUses = {};
         usize computeEmulationResourceSetUseCount = 0u;
         computeEmulationResourceSetUses[computeEmulationResourceSetUseCount++] = materialGeometrySetUse;
         if(inputs.materialSampledTextureSet.valid())

@@ -301,9 +301,8 @@ void RendererTaskTimingFeedback::configureCompileOptions(Core::GpuTaskGraphCompi
             }
         }
     }
-    if(drainResult.rejectedAssignmentCount != 0u || drainResult.rejectedSampleCount != 0u){
+    if(drainResult.rejectedAssignmentCount != 0u || drainResult.rejectedSampleCount != 0u)
         NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback rejected {} assignment(s) and {} terminal sample(s)."), drainResult.rejectedAssignmentCount, drainResult.rejectedSampleCount);
-    }
 }
 
 void RendererTaskTimingFeedback::reset()noexcept{

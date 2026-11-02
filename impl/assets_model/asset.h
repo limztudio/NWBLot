@@ -28,7 +28,9 @@ NWB_IMPL_BEGIN
 
 inline constexpr TStringView s_ModelAssetKindLabel = NWB_TEXT("model");
 inline constexpr TStringView s_ModelLoadBinaryContext = NWB_TEXT("Model::loadBinary");
+#if defined(NWB_COOK)
 inline constexpr TStringView s_ModelSerializeContext = NWB_TEXT("ModelAssetCodec::serialize");
+#endif
 inline constexpr TStringView s_ModelSkeletonObjectsPayloadLabel = NWB_TEXT("skeleton objects");
 inline constexpr TStringView s_ModelStaticMeshObjectsPayloadLabel = NWB_TEXT("static mesh objects");
 inline constexpr TStringView s_ModelSkinnedMeshObjectsPayloadLabel = NWB_TEXT("skinned mesh objects");

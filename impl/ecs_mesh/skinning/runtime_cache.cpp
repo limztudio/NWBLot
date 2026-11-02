@@ -72,10 +72,6 @@ void MeshSkinningRuntimeCache::clear()noexcept{
     m_sources.clear();
 }
 
-MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)noexcept{
-    return const_cast<MeshSkinningRuntimeInstance*>(static_cast<const MeshSkinningRuntimeCache&>(*this).findInstance(handle));
-}
-
 const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const noexcept{
     const auto foundEntity = m_handleToEntity.find(handle.value);
     if(foundEntity == m_handleToEntity.end() || !foundEntity.value().valid())

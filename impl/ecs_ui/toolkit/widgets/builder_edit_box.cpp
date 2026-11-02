@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
-#include <impl/ecs_ui/toolkit/edit/caret_clock.h>
+#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -95,23 +95,23 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
     return result;
 }
 
-SIMDVectorSingle Builder::loadEditMinimumSize()const noexcept{
-    SIMDVectorSingle minimum = VectorSet(s_StyleMinimumFieldWidth, 0.0f, s_StyleMinimumFieldWidth, 0.0f);
+Point Builder::loadEditMinimumSize()const noexcept{
+    Point minimum{ s_StyleMinimumFieldWidth, 0.0f };
     const Array<Name, 4> names{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
         if(skinRegion){
-            const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
-            minimum = VectorSelect(minimumCandidate, minimum, VectorGreater(minimum, minimumCandidate));
+            minimum.x = Max(minimum.x, skinRegion->minimumWidth);
+            minimum.y = Max(minimum.y, skinRegion->minimumHeight);
         }
     }
     return minimum;
 }
 
 void Builder::resolveEditIntrinsicSize(const Item& item, Point& outSize)const noexcept{
-    const SIMDVectorSingle minimum = loadEditMinimumSize();
+    const Point minimum = loadEditMinimumSize();
     const f32 paddedHeight = (item.editView.visualBounds().height + item.padding.top) + item.padding.bottom;
-    outSize = { VectorGetX(minimum), Max(VectorGetY(minimum), paddedHeight) };
+    outSize = { minimum.x, Max(minimum.y, paddedHeight) };
 }
 
 b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){

@@ -240,7 +240,6 @@ public:
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render(){ return renderWithPhaseTiming(nullptr); }
     void notifyPointerScaleChanged()const;
     [[nodiscard]] b8 shouldRenderUnfocused()const;
-    b8 animateRenderPresent(){ return animateRenderPresentInternal(nullptr); }
 
 
 private:

@@ -41,9 +41,10 @@ struct CrashSymbolicationFailure{
     ErrorCode code;
 };
 
-void AppendNativeFailure(CrashReportText& outReport, const CrashSymbolicationFailure& failure);
-void AppendHexAddress(CrashReportText& outReport, u64 address);
-[[nodiscard]] CrashScratchPath EffectiveSymbolStoreDirectory(Core::Alloc::ScratchArena& arena, const CrashSymbolicationConfig& config);
+void AppendNativeFailure(const CrashSymbolicationFailure& failure, CrashReportText& outReport);
+void AppendHexAddress(u64 address, CrashReportText& outReport);
+[[nodiscard]] Expected<u64> ParseCallstackFrameAddress(AStringView line)noexcept;
+[[nodiscard]] CrashScratchPath EffectiveSymbolStoreDirectory(const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena);
 
 void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport);
 void AppendAndroidTombstoneSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport);

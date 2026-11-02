@@ -50,8 +50,38 @@ void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui
     EXPECT_EQ(actual.material, expected.material);
     EXPECT_EQ(actual.glyphPageIndex, expected.glyphPageIndex);
     EXPECT_EQ(actual.sdfPageIndex, expected.sdfPageIndex);
+    EXPECT_EQ(actual.textureImageIndex, expected.textureImageIndex);
     EXPECT_EQ(actual.sdfChannel, expected.sdfChannel);
     EXPECT_EQ(actual.layer, expected.layer);
+}
+
+void ExpectSamePaint(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
+    ASSERT_EQ(actual.glyphPages().size(), expected.glyphPages().size());
+    ASSERT_EQ(actual.sdfPages().size(), expected.sdfPages().size());
+    ASSERT_EQ(actual.vertices().size(), expected.vertices().size());
+    ASSERT_EQ(actual.commands().size(), expected.commands().size());
+    EXPECT_EQ(actual.indices(), expected.indices());
+    for(usize index = 0u; index < actual.glyphPages().size(); ++index){
+        ASSERT_TRUE(actual.glyphPages()[index]);
+        ASSERT_TRUE(expected.glyphPages()[index]);
+        EXPECT_EQ(actual.glyphPages()[index].get(), expected.glyphPages()[index].get());
+        EXPECT_EQ(actual.glyphPages()[index]->binding(), expected.glyphPages()[index]->binding());
+        EXPECT_EQ(actual.glyphPages()[index]->pixels(), expected.glyphPages()[index]->pixels());
+    }
+    for(usize index = 0u; index < actual.sdfPages().size(); ++index){
+        ASSERT_TRUE(actual.sdfPages()[index]);
+        ASSERT_TRUE(expected.sdfPages()[index]);
+        EXPECT_EQ(actual.sdfPages()[index].get(), expected.sdfPages()[index].get());
+        EXPECT_EQ(actual.sdfPages()[index]->binding(), expected.sdfPages()[index]->binding());
+        EXPECT_EQ(actual.sdfPages()[index]->pixels(), expected.sdfPages()[index]->pixels());
+    }
+    ExpectSameVertices(actual, expected);
+    for(usize index = 0u; index < actual.commands().size(); ++index){
+        const Impl::Ui::DrawCommand& a = actual.commands()[index];
+        const Impl::Ui::DrawCommand& e = expected.commands()[index];
+        ExpectSameCommandFields(a, e);
+        ExpectRect(a.clip, e.clip);
+    }
 }
 
 

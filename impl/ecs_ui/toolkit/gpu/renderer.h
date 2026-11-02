@@ -8,6 +8,7 @@
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_ui_skin/types.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/gpu/types.adhd.h>
 
 #include <core/assets/manager.h>
 #include <core/graphics/runtime/runtime.h>

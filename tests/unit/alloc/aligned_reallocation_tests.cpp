@@ -20,8 +20,6 @@ namespace __hidden_aligned_reallocation_tests{
 
 
 inline constexpr usize s_VerifyAlignedReallocationAlignment = 256u;
-inline constexpr usize s_VerifyAlignedReallocationInitialBytes = s_VerifyAlignedReallocationAlignment;
-inline constexpr usize s_VerifyAlignedReallocationBlockerBytes = s_VerifyAlignedReallocationAlignment;
 inline constexpr usize s_VerifyAlignedReallocationGrownBytes = s_VerifyAlignedReallocationAlignment * 4u;
 
 
@@ -30,29 +28,24 @@ inline constexpr usize s_VerifyAlignedReallocationGrownBytes = s_VerifyAlignedRe
 
 template<typename Arena>
 static void VerifyAlignedReallocation(Arena& arena){
-    constexpr usize s_Alignment = s_VerifyAlignedReallocationAlignment;
-    constexpr usize s_InitialBytes = s_VerifyAlignedReallocationInitialBytes;
-    constexpr usize s_BlockerBytes = s_VerifyAlignedReallocationBlockerBytes;
-    constexpr usize s_GrownBytes = s_VerifyAlignedReallocationGrownBytes;
-
-    EXPECT_EQ(arena.reallocate(nullptr, s_Alignment, 0u), nullptr);
-    auto* initial = static_cast<u8*>(arena.reallocate(nullptr, s_Alignment, s_InitialBytes));
+    EXPECT_EQ(arena.reallocate(nullptr, s_VerifyAlignedReallocationAlignment, 0u), nullptr);
+    auto* initial = static_cast<u8*>(arena.reallocate(nullptr, s_VerifyAlignedReallocationAlignment, s_VerifyAlignedReallocationAlignment));
     ASSERT_NE(initial, nullptr);
-    EXPECT_EQ(reinterpret_cast<usize>(initial) % s_Alignment, 0u);
-    for(usize i = 0u; i < s_InitialBytes; ++i)
+    EXPECT_EQ(reinterpret_cast<usize>(initial) % s_VerifyAlignedReallocationAlignment, 0u);
+    for(usize i = 0u; i < s_VerifyAlignedReallocationAlignment; ++i)
         initial[i] = static_cast<u8>(i);
 
-    void* blocker = arena.allocate(1u, s_BlockerBytes);
+    void* blocker = arena.allocate(1u, s_VerifyAlignedReallocationAlignment);
     ASSERT_NE(blocker, nullptr);
 
-    auto* resized = static_cast<u8*>(arena.reallocate(initial, s_Alignment, s_GrownBytes));
+    auto* resized = static_cast<u8*>(arena.reallocate(initial, s_VerifyAlignedReallocationAlignment, s_VerifyAlignedReallocationGrownBytes));
     ASSERT_NE(resized, nullptr);
-    EXPECT_EQ(reinterpret_cast<usize>(resized) % s_Alignment, 0u);
-    for(usize i = 0u; i < s_InitialBytes; ++i)
+    EXPECT_EQ(reinterpret_cast<usize>(resized) % s_VerifyAlignedReallocationAlignment, 0u);
+    for(usize i = 0u; i < s_VerifyAlignedReallocationAlignment; ++i)
         EXPECT_EQ(resized[i], static_cast<u8>(i));
 
-    arena.deallocate(blocker, 1u, s_BlockerBytes);
-    EXPECT_EQ(arena.reallocate(resized, s_Alignment, 0u), nullptr);
+    arena.deallocate(blocker, 1u, s_VerifyAlignedReallocationAlignment);
+    EXPECT_EQ(arena.reallocate(resized, s_VerifyAlignedReallocationAlignment, 0u), nullptr);
 }
 
 

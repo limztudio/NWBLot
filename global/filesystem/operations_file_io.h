@@ -33,7 +33,7 @@ template<typename ArenaT>
 template<typename ArenaT>
 [[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsolutePath(ArenaT& arena, const Path<ArenaT>& baseDirectory, const AStringView relativeOrAbsolute){
     if(relativeOrAbsolute.empty())
-        return MakeUnexpected(std::make_error_code(std::errc::invalid_argument));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
     Path<ArenaT> candidate(arena, relativeOrAbsolute);
     if(!candidate.isAbsolute())
         candidate = baseDirectory / candidate;
@@ -66,17 +66,17 @@ template<typename ArenaT, typename Container>
         const auto size = FileSize(path);
         if(!size)
             return MakeUnexpected(size.error());
-        return MakeUnexpected(std::make_error_code(std::errc::io_error));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
     }
     const StreamOffset fileSizeAtEnd = stream.tellg();
     if(fileSizeAtEnd < 0)
-        return MakeUnexpected(std::make_error_code(std::errc::io_error));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
     const u64 fileSize = static_cast<u64>(fileSizeAtEnd);
     if(fileSize > static_cast<u64>(Limit<usize>::s_Max) || !CanRepresentStreamSize(fileSize))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     stream.seekg(0, InputFileStream::beg);
     if(!stream.good())
-        return MakeUnexpected(std::make_error_code(std::errc::io_error));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
     inOutData.resize(static_cast<usize>(fileSize));
     if(fileSize == 0u)
         return {};
@@ -84,7 +84,7 @@ template<typename ArenaT, typename Container>
     if(stream.good() || (stream.eof() && stream.gcount() == static_cast<StreamSize>(fileSize)))
         return {};
     inOutData.clear();
-    return MakeUnexpected(std::make_error_code(std::errc::io_error));
+    return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
 }
 
 
@@ -179,7 +179,7 @@ template<typename ArenaT>
     outCreated = false;
 #if defined(NWB_PLATFORM_WINDOWS)
     if(static_cast<u64>(count) > static_cast<u64>(Limit<i64>::s_Max))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(handle == INVALID_HANDLE_VALUE)
         return MakeUnexpected(LastSystemError());
@@ -195,7 +195,7 @@ template<typename ArenaT>
             break;
         }
         if(transferred == 0u){
-            error = std::make_error_code(std::errc::io_error);
+            error = MakeErrorCode(ErrorCondition::io_error);
             break;
         }
         cursor += transferred;
@@ -207,7 +207,7 @@ template<typename ArenaT>
         error = LastSystemError();
 #else
     if(static_cast<u64>(count) > static_cast<u64>(Limit<off_t>::s_Max))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     constexpr u32 s_NewFileMode = 0666u;
     const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewFileMode);
     if(descriptor < 0)
@@ -226,7 +226,7 @@ template<typename ArenaT>
             break;
         }
         if(transferred == 0){
-            error = std::make_error_code(std::errc::io_error);
+            error = MakeErrorCode(ErrorCondition::io_error);
             break;
         }
         cursor += static_cast<usize>(transferred);
@@ -246,7 +246,7 @@ template<typename ArenaT>
 [[nodiscard]] inline Expected<void, ErrorCode> ResizeFile(const Path<ArenaT>& path, const u64 byteCount)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     const HANDLE file = CreateFile(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(file == INVALID_HANDLE_VALUE)
         return MakeUnexpected(LastSystemError());
@@ -265,7 +265,7 @@ template<typename ArenaT>
     return {};
 #else
     if(!::CanRepresentU64<off_t>(byteCount))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) != 0)
         return MakeUnexpected(LastSystemError());
     return {};

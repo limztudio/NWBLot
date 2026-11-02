@@ -54,12 +54,6 @@ b8 IsValidSkeletonHeaderBinary(in SkeletonHeaderBinary header){
     return header.padding0 == 0u && header.jointCount <= 0xFFFFFFFFul;
 }
 
-SkeletonHeaderBinary BuildSkeletonHeaderBinary(in u64 jointCount){
-    SkeletonHeaderBinary header;
-    header.jointCount = jointCount;
-    return header;
-}
-
 b8 IsAllowedSkeletonMetadataField(in StringView fieldName){
     return fieldName == s_SkeletonJointsField;
 }

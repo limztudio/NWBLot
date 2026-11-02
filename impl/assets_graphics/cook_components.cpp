@@ -39,11 +39,6 @@ using ModelComponentCookEntry = TypedComponentCookEntry<ModelComponent>;
 using MeshComponentCookEntry = TypedComponentCookEntry<MeshComponent>;
 using RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
 
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MeshSubsystemNonStandaloneAssetTypeRegistrar(MeshSubsystem::AssetTypeName(), "mesh_subsystem");
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_IncludeNonStandaloneAssetTypeRegistrar(s_IncludeAssetTypeName, "include");
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_ShaderNonStandaloneAssetTypeRegistrar(Name("shader"), "shader");
-static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar s_ShaderSuffixNonStandaloneRegistrar("_shader");
-
 template<
     typename ComponentAssetT,
     typename ReferencedAssetT,
@@ -127,18 +122,22 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
     }
 
     if(asset.findField(s_RendererComponentOpticalVolumeCoincidenceField)){
-        const auto coincidenceText = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumeCoincidenceField, true);
-        if(!coincidenceText)
+        static constexpr Array<::NamedEnumCase<OpticalVolumeCoincidence::Enum>, 3u> s_CoincidenceCases = {{
+            { s_OpticalVolumeCoincidenceIndependentText, OpticalVolumeCoincidence::Independent },
+            { s_OpticalVolumeCoincidenceIdenticalMaterialText, OpticalVolumeCoincidence::IdenticalMaterial },
+            { s_OpticalVolumeCoincidenceSharedGroupText, OpticalVolumeCoincidence::SharedGroup },
+        }};
+        const auto parsedCoincidence = Core::Assets::ParseNamedMetadataEnumField<OpticalVolumeCoincidence::Enum>(
+            nwbFilePath,
+            asset,
+            s_RendererComponentDiagnosticPrefix,
+            s_RendererComponentOpticalVolumeCoincidenceField,
+            Span<const ::NamedEnumCase<OpticalVolumeCoincidence::Enum>>(s_CoincidenceCases.data(), s_CoincidenceCases.size()),
+            "'independent', 'identical_material', or 'shared_group'"
+        );
+        if(!parsedCoincidence)
             return MakeUnexpected(Failure{});
-        if(!TryParseOpticalVolumeCoincidence(coincidenceText->text, entry.component.opticalVolumeCoincidence)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': field '{}' must be 'independent', 'identical_material', or 'shared_group'"),
-                ConvertString(s_RendererComponentDiagnosticPrefix),
-                PathToString<tchar>(nwbFilePath),
-                ConvertString(s_RendererComponentOpticalVolumeCoincidenceField)
-            );
-            return MakeUnexpected(Failure{});
-        }
+        entry.component.opticalVolumeCoincidence = *parsedCoincidence;
     }
 
     if(asset.findField(s_RendererComponentOpticalVolumeGroupField)){
@@ -158,18 +157,22 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
     }
 
     if(asset.findField(s_RendererComponentOpticalBoundaryModeField)){
-        const auto boundaryModeText = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalBoundaryModeField, true);
-        if(!boundaryModeText)
+        static constexpr Array<::NamedEnumCase<OpticalBoundaryMode::Enum>, 3u> s_BoundaryModeCases = {{
+            { s_OpticalBoundaryModeUnspecifiedText, OpticalBoundaryMode::Unspecified },
+            { s_OpticalBoundaryModeClosedNestedText, OpticalBoundaryMode::ClosedNested },
+            { s_OpticalBoundaryModeClosedPriorityText, OpticalBoundaryMode::ClosedPriority },
+        }};
+        const auto parsedBoundaryMode = Core::Assets::ParseNamedMetadataEnumField<OpticalBoundaryMode::Enum>(
+            nwbFilePath,
+            asset,
+            s_RendererComponentDiagnosticPrefix,
+            s_RendererComponentOpticalBoundaryModeField,
+            Span<const ::NamedEnumCase<OpticalBoundaryMode::Enum>>(s_BoundaryModeCases.data(), s_BoundaryModeCases.size()),
+            "'unspecified', 'closed_nested', or 'closed_priority'"
+        );
+        if(!parsedBoundaryMode)
             return MakeUnexpected(Failure{});
-        if(!TryParseOpticalBoundaryMode(boundaryModeText->text, entry.component.opticalBoundaryMode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': field '{}' must be 'unspecified', 'closed_nested', or 'closed_priority'"),
-                ConvertString(s_RendererComponentDiagnosticPrefix),
-                PathToString<tchar>(nwbFilePath),
-                ConvertString(s_RendererComponentOpticalBoundaryModeField)
-            );
-            return MakeUnexpected(Failure{});
-        }
+        entry.component.opticalBoundaryMode = *parsedBoundaryMode;
     }
 
     if(
@@ -191,6 +194,11 @@ static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependenc
     return collector.addAssetDependency(entry->component.material.name(), Material::AssetTypeName());
 }
 
+[[nodiscard]] static b8 SerializeSingleAssetRefComponentPayload(const Name& assetName, Core::Assets::AssetBytes& outPayload){
+    const SingleAssetRefComponentPayloadBinary binaryPayload = PackSingleAssetRefComponentPayloadBinary(assetName);
+    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -202,13 +210,11 @@ static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependenc
 
 
 b8 ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const SingleAssetRefComponentPayloadBinary binaryPayload = PackSingleAssetRefComponentPayloadBinary(component.model.name());
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+    return __hidden_assets_graphics_cook_components::SerializeSingleAssetRefComponentPayload(component.model.name(), outPayload);
 }
 
 b8 MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const SingleAssetRefComponentPayloadBinary binaryPayload = PackSingleAssetRefComponentPayloadBinary(component.mesh.name());
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+    return __hidden_assets_graphics_cook_components::SerializeSingleAssetRefComponentPayload(component.mesh.name(), outPayload);
 }
 
 b8 RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{

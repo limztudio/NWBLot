@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<b8> AvboitMaterialUploadBuilder::declare(
+Expected<b8> AvboitMaterialUploadBuilder::declare(
     const AvboitMaterialUploadInputs& inputs,
     const Span<const InstanceGpuData> instanceData,
     const Span<const u8> materialTypedBytes,

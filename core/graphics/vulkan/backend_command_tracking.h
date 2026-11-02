@@ -168,9 +168,6 @@ private:
     void commitRetainedBufferStateCommits()noexcept;
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits()noexcept;
-    void discardRetainedTextureStateCommits()noexcept{
-        m_retainedTextureStateCommits.clear();
-    }
     [[nodiscard]] b8 appendPendingAccelStructBuildCommit(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
@@ -189,9 +186,6 @@ private:
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
     [[nodiscard]] b8 hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept;
     void commitPendingOpacityMicromapBuildCommits()noexcept;
-    void discardPendingOpacityMicromapBuildCommits()noexcept{
-        m_pendingOpacityMicromapBuildCommits.clear();
-    }
     void discardPendingRecordingCommits()noexcept;
     void clearTrackedReferences()noexcept;
 

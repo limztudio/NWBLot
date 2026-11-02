@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/text_edit_session.h>
+#include "edit_host_fixture_support.h"
 
-#include <core/os/text_input_service.h>
+#include <impl/ecs_ui/text_edit_session.h>
 
 #include <tests/common/test_context.h>
 
@@ -23,23 +23,7 @@ namespace __hidden_ui_text_edit_owned_tests{
 using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
-
-class OwnedTextInput final : public QueuedTextInputService{
-public:
-    explicit OwnedTextInput(Alloc::GlobalArena& arena)
-        : QueuedTextInputService(arena)
-    {}
-
-
-public:
-    [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
-
-    [[nodiscard]] TextInputAdmission::Enum commit(const AStringView text){ return emitCommit(activeSession(), text); }
-
-    [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text, const usize anchor, const usize caret){
-        return emitPreedit(activeSession(), text, anchor, caret, false);
-    }
-};
+using UiEditHostFixtureSupport::FakeTextInput;
 
 inline constexpr UiTextEditOwner s_Owner{ { 61u }, 1u, 2u };
 inline constexpr TextInputRect s_Caret{ 10, 20, 1, 18 };
@@ -50,7 +34,7 @@ inline constexpr TextInputRect s_Caret{ 10, 20, 1, 18 };
 
 TEST(UiTextEditOwned, PollCopiesEventsWithoutApplyingAndOwnedCommitSurvivesNativeCancellation){
     Tests::TestArena arena;
-    OwnedTextInput service(arena.arena);
+    FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
     TextInputEvent event(arena.arena);
@@ -76,7 +60,7 @@ TEST(UiTextEditOwned, PollCopiesEventsWithoutApplyingAndOwnedCommitSurvivesNativ
 
 TEST(UiTextEditOwned, TrustedLocalAdoptionRecoversAfterStrictRefreshRejectsChangedModel){
     Tests::TestArena arena;
-    OwnedTextInput service(arena.arena);
+    FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
     ASSERT_TRUE(service.setFocused(true));
@@ -96,13 +80,13 @@ TEST(UiTextEditOwned, TrustedLocalAdoptionRecoversAfterStrictRefreshRejectsChang
 
 TEST(UiTextEditOwned, CancelWithoutModelLeavesTransientCompositionForTheNextSynchronousLend){
     Tests::TestArena arena;
-    OwnedTextInput service(arena.arena);
+    FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
     ASSERT_EQ(session.begin(s_Owner, s_Caret, model), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
+    ASSERT_EQ(service.preedit("draft", 0u, 5u, false), TextInputAdmission::Accepted);
     ASSERT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Applied);
     ASSERT_TRUE(session.cancel());
     EXPECT_TRUE(model.composition().active);
@@ -159,7 +143,7 @@ TEST(UiTextEditOwned, MalformedCopiedEventsAndRejectedPreeditPreserveCommittedSt
 
 TEST(UiTextEditOwned, IdenticalExternalResetFencesOldEventsAndPublishedDeletionContext){
     Tests::TestArena arena;
-    OwnedTextInput service(arena.arena);
+    FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
     ASSERT_TRUE(service.setFocused(true));
@@ -177,7 +161,7 @@ TEST(UiTextEditOwned, IdenticalExternalResetFencesOldEventsAndPublishedDeletionC
 
 TEST(UiTextEditOwned, OwnedCollectionAdoptionAndCancellationRejectAnotherThread){
     Tests::TestArena arena;
-    OwnedTextInput service(arena.arena);
+    FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
     UiTextEditSession session(arena.arena, service);
     TextInputEvent event(arena.arena);

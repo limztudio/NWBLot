@@ -5,6 +5,7 @@
 #include "statistics_readback.h"
 
 #include <impl/assets/graphics/refraction/diagnostics_layout.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/refraction/types.adhd.h>
 #include <impl/ecs_render/shared/statistics_readback_detail.h>
 
@@ -74,12 +75,10 @@ b8 RefractionStatisticsReadback::prepareResources(){
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    const auto descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const auto descriptor = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, counters.get()));
     if(!descriptor)
         return false;
     Core::GpuDescriptorRetirementGuard retireDescriptor(heap, *descriptor);
-    if(!heap.write(*descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, counters.get())))
-        return false;
     if(!ECSRenderDetail::PrepareStatisticsReadbackControlAndBuffers<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(
         s_Names,
         NWB_TEXT("Refraction statistics: failed to allocate readback control"),

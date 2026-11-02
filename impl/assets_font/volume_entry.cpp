@@ -38,8 +38,8 @@ static b8 RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
             return ParseFontCookMetadataValue(virtualPath, path, asset, context.cookArena);
         },
         [](FontCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildFontAsset(Move(entry), arena); },
-        registry,
-        false
+        false,
+        registry
     );
 }
 

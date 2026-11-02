@@ -65,7 +65,7 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     // G-buffer starts the preserved range only when frozen resources are ready; later miss is a no-op.
     if(!payload.opaqueRegularTiming.has_value()){
-        if(payload.phase == Phase::Raster)
+        if(payload.phase == SharedComputeEmulationPhase::Raster)
             commandList.endRenderPass();
         return true;
     }
@@ -78,7 +78,7 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
     const Span<const MaterialPassDrawItem> drawItems(&payload.plan.drawItems[payload.drawIndex], 1u);
     if(!payload.materialDrawBuffersUploaded || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount) || !materialSystem.computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings)){
         Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
-        if(payload.phase == Phase::Raster)
+        if(payload.phase == SharedComputeEmulationPhase::Raster)
             commandList.endRenderPass();
         return true;
     }
@@ -87,7 +87,7 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
     deferredViewportState.addViewportAndScissorRect(payload.targets.framebuffer->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext drawContext{
         commandList,
-        payload.phase == Phase::Raster ? payload.targets.framebuffer.get() : nullptr,
+        payload.phase == SharedComputeEmulationPhase::Raster ? payload.targets.framebuffer.get() : nullptr,
         nullptr,
         deferredViewportState,
         nullptr,
@@ -97,7 +97,7 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
         payload.materialGeometryStatesGraphOwned,
         true
     };
-    if(payload.phase == Phase::Generate)
+    if(payload.phase == SharedComputeEmulationPhase::Generate)
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
     else{
         materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);

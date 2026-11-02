@@ -142,10 +142,10 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
 
 [[nodiscard]] b8 ConsiderScoredCallableCandidate(
     const SymbolTable& symbols,
-    MethodDecl& candidate,
     const usize* preferredArgCount,
     const Span<const MStringView> argTypeNames,
     const Span<const u8> argIsMut,
+    MethodDecl& candidate,
     MethodDecl*& inOutBestMatch,
     i32& inOutBestScore
 )noexcept{
@@ -349,7 +349,7 @@ MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* p
     for(MethodDecl* fn : m_freeFunctions){
         if(!fn || fn->name != name)
             continue;
-        if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, *fn, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
+        if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *fn, bestMatch, bestScore))
             return bestMatch;
     }
     return bestMatch;
@@ -420,7 +420,7 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
     for(MethodDecl* method : iface->methods){
         if(method && method->name == methodName){
             MethodDecl* subMethod = __hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
-            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, *subMethod, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
+            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *subMethod, bestMatch, bestScore))
                 return bestMatch;
         }
     }
@@ -433,7 +433,7 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
             continue;
         MethodDecl* inherited = findInterfaceMethod(*subBase, methodName, preferredArgCount, depth + 1u, argTypeNames, argIsMut);
         if(inherited){
-            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, *inherited, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
+            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *inherited, bestMatch, bestScore))
                 return bestMatch;
         }
     }
@@ -567,5 +567,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

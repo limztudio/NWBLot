@@ -5,7 +5,6 @@
 #include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simd/vector_arithmetic.h>
-#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +45,7 @@ b8 Builder::paintWindowTitle(){
     const InputRouter& input = m_context.input();
     const b8 focused = input.focus() == m_scope->m_window.collapseState.id;
     if(m_scope->m_window.options.collapsible){
-        const Rect collapse = WindowLayout::Collapse(state, metrics);
+        const Rect collapse = ResolveWindowCollapseBounds(state, metrics);
         const b8 pressed = input.pressed(m_scope->m_window.collapseState.id);
         if(painted && (input.hover() == m_scope->m_window.collapseState.id || pressed)){
             const UiSkinRegion* hover = region(pressed ? style.buttonPressed : style.buttonHover, style.windowTitle);
@@ -60,12 +59,9 @@ b8 Builder::paintWindowTitle(){
     const Rect& titleBounds = m_scope->m_window.titleBounds;
     const f32 collapseReservation = m_scope->m_window.options.collapsible ? metrics.collapseExtent + style.gap : 0.0f;
     const SIMDVectorSingle padding = VectorSet(metrics.titlePadding.left + collapseReservation, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom);
-    const SIMDVectorSingle content = InsetRectValue(LoadRect(header), padding);
-    const f32 verticalOffset = Max(0.0f, (VectorGetW(content) - titleBounds.height) * s_RectCenterFraction);
-    const SIMDVectorSingle textOrigin = VectorAdd(VectorSwizzle<0, 1, 0, 1>(content), VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
-    const SIMDVectorSingle alignedOrigin = VectorSubtract(textOrigin, VectorSet(titleBounds.x, titleBounds.y, titleBounds.x, titleBounds.y));
-    const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
-    m_paint.pushClip(StoreRect(content));
+    const Rect content = StoreRect(InsetRectValue(LoadRect(header), padding));
+    const Point origin = ResolveCenteredTextOrigin(content, 0.0f, titleBounds);
+    m_paint.pushClip(content);
     if(painted)
         painted = m_text.paint(m_paint, m_scope->m_window.title, origin, style.text);
     const b8 textPopped = m_paint.popClip();
@@ -79,7 +75,7 @@ b8 Builder::paintWindowTitle(){
         return false;
     if(m_scope->m_window.options.collapsible){
         HitTarget collapse;
-        collapse.rectangle = WindowLayout::Collapse(state, metrics);
+        collapse.rectangle = ResolveWindowCollapseBounds(state, metrics);
         collapse.clip = clip;
         collapse.focusable = true;
         collapse.activatable = true;
@@ -93,7 +89,7 @@ b8 Builder::paintWindowResize(){
         return true;
     const WindowState& state = *m_scope->m_window.state;
     const WidgetStyle& style = m_scope->m_window.style;
-    const Rect corner = WindowLayout::Resize(state, m_scope->m_window.metrics);
+    const Rect corner = ResolveWindowResizeBounds(state, m_scope->m_window.metrics);
     const Rect clip = visibleClip(ResolveVisibleWindowBounds(state, m_scope->m_window.metrics));
     m_paint.pushClip(clip);
     const UiSkinRegion* resize = region(style.windowResize, style.windowResize);
@@ -102,13 +98,9 @@ b8 Builder::paintWindowResize(){
         painted = m_paint.drawRegion(resize->name, corner, style.text);
     else{
         // Skins may supply a resize sprite. The default atlas uses its white sprite for a logical corner grip.
-        const f32 thickness = Min(s_WindowResizeGripMaximumThickness, corner.width * s_WindowResizeGripThicknessFraction);
-        const SIMDVectorSingle cornerSize = VectorSet(corner.width, corner.height, corner.width, corner.height);
-        const SIMDVectorSingle scaledSize = VectorMultiply(cornerSize, VectorSet(s_WindowResizeGripStartFraction, s_WindowResizeGripStartFraction, s_WindowResizeGripLengthFraction, s_WindowResizeGripLengthFraction));
-        const SIMDVectorSingle ends = VectorMultiplyAddExpression(cornerSize, VectorSet(s_WindowResizeGripStartFraction, 1.0f, 1.0f, s_WindowResizeGripStartFraction), VectorSet(corner.x, corner.y, corner.x, corner.y));
-        const SIMDVectorSingle origins = VectorSubtract(ends, VectorSwizzle<2, 0, 0, 2>(VectorSet(thickness, 0.0f, 0.0f, 0.0f)));
-        const Rect horizontal{ VectorGetX(origins), VectorGetY(origins), VectorGetZ(scaledSize), thickness };
-        const Rect vertical{ VectorGetZ(origins), VectorGetW(origins), thickness, VectorGetW(scaledSize) };
+        Rect horizontal;
+        Rect vertical;
+        ResolveWindowResizeGripBars(corner, horizontal, vertical);
         painted = m_paint.drawRegion(style.white, horizontal, style.text) && m_paint.drawRegion(style.white, vertical, style.text);
     }
     const b8 popped = m_paint.popClip();

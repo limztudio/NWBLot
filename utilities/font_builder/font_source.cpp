@@ -5,6 +5,7 @@
 #include "font_source.h"
 
 #include <impl/assets_font/asset.h>
+#include <impl/assets_font/prepared_source.h>
 
 #include <core/common/log.h>
 
@@ -44,6 +45,38 @@ Core::Alloc::GlobalArena& Arena(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena){
+    static constexpr Array<AStringView, 1u> s_PreparedFontExtensions = { Impl::s_PreparedFontExtension };
+    if(PathHasListedExtension(path, s_PreparedFontExtensions)){
+        auto prepared = Impl::ReadPreparedFontSource(path, false, arena);
+        if(!prepared)
+            return MakeUnexpected(prepared.error());
+        if(prepared->faceIndex != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: malformed prepared .font input"));
+            return MakeUnexpected(AStringView("prepared font face index must be zero"));
+        }
+        return Move(prepared->fontBytes);
+    }
+    InputFileStream stream(path, InputFileStream::binary | InputFileStream::ate);
+    if(!stream.is_open())
+        return MakeUnexpected(AStringView("failed to open font source"));
+    const StreamOffset sourceSize = stream.tellg();
+    if(!stream || sourceSize <= 0 || static_cast<u64>(sourceSize) > Impl::s_FontMaxSourceBytes || !CanRepresentStreamSize(static_cast<u64>(sourceSize))){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source size is invalid or unreadable"));
+        return MakeUnexpected(AStringView("source size is invalid or unreadable"));
+    }
+    stream.seekg(0, InputFileStream::beg);
+    if(!stream)
+        return MakeUnexpected(AStringView("failed to seek font source"));
+    Core::Assets::AssetBytes input(arena);
+    input.resize(static_cast<usize>(sourceSize));
+    if(!ReadStreamExact(stream, NotNull<void*>(input.data()), input.size()))
+        return MakeUnexpected(AStringView("failed to read complete font source"));
+    if(!VerifyStreamAtEnd(stream))
+        return MakeUnexpected(AStringView("font source changed while reading"));
+    return input;
+}
 
 FontSource::FontSource(Core::Assets::AssetArena& arena)noexcept
     : m_bytes(arena)
@@ -107,7 +140,7 @@ Core::Assets::AssetBytes FontSource::takeBytes()noexcept{
 
 b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload){
     Core::Assets::AssetArena& arena = payload.positioningTables.get_allocator().arena();
-    auto tables = Impl::CopyFontAtlasPositioningTables(font.m_bytes, payload.faceIndex, payload.sourceGlyphCount, false, arena);
+    auto tables = Impl::CopyFontAtlasPositioningTables(font.bytes(), payload.faceIndex, payload.sourceGlyphCount, arena);
     if(!tables)
         return false;
     payload.positioningTables = Move(*tables);

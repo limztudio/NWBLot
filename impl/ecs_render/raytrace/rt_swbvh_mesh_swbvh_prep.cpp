@@ -26,9 +26,8 @@ b8 RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core::
         ? refitMeshSwBvhPrepared(build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.nodeHeapHandle, build.parentHeapHandle, commandList, nodeBuffer, parentBuffer)
         : buildMeshSwBvhPrepared(build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.aabbMin, build.aabbMax, build.nodeHeapHandle, build.parentHeapHandle, commandList, nodeBuffer, parentBuffer)
     ;
-    if(!recorded){
+    if(!recorded)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
-    }
     return recorded;
 }
 
@@ -68,9 +67,8 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
             allPlansCurrent = false;
             continue;
         }
-        if(build.firstBuild){
+        if(build.firstBuild)
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"), ConvertString(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.primitiveCount));
-        }
     }
     if(!allPlansCurrent)
         m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;

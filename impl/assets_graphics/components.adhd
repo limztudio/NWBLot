@@ -150,76 +150,12 @@ b8 IsAllowedRendererComponentMetadataField(in StringView field){
     ;
 }
 
-b8 TryParseOpticalVolumeCoincidence(in StringView text, mut OpticalVolumeCoincidence outCoincidence){
-    if(text == s_OpticalVolumeCoincidenceIndependentText){
-        outCoincidence = OpticalVolumeCoincidence::Independent;
-        return true;
-    }
-    if(text == s_OpticalVolumeCoincidenceIdenticalMaterialText){
-        outCoincidence = OpticalVolumeCoincidence::IdenticalMaterial;
-        return true;
-    }
-    if(text == s_OpticalVolumeCoincidenceSharedGroupText){
-        outCoincidence = OpticalVolumeCoincidence::SharedGroup;
-        return true;
-    }
-    return false;
-}
-
-b8 TryParseOpticalBoundaryMode(in StringView text, mut OpticalBoundaryMode outBoundaryMode){
-    if(text == s_OpticalBoundaryModeUnspecifiedText){
-        outBoundaryMode = OpticalBoundaryMode::Unspecified;
-        return true;
-    }
-    if(text == s_OpticalBoundaryModeClosedNestedText){
-        outBoundaryMode = OpticalBoundaryMode::ClosedNested;
-        return true;
-    }
-    if(text == s_OpticalBoundaryModeClosedPriorityText){
-        outBoundaryMode = OpticalBoundaryMode::ClosedPriority;
-        return true;
-    }
-    return false;
-}
-
-const u64 s_ShaderVariantFnv64OffsetBasis = 14695981039346656037ull;
-const u64 s_ShaderVariantFnv64Prime = 1099511628211ull;
-
-u64 UpdateShaderVariantFnv64Byte(in u64 hash, in u8 byteValue){
-    return (hash ^ cast<u64>(byteValue)) * s_ShaderVariantFnv64Prime;
-}
-
-u64 UpdateShaderVariantFnv64U32(in u64 hash, in u32 value){
-    u64 result = hash;
-    for(u32 byteIndex = 0u; byteIndex < 4u; ++byteIndex){
-        const u8 byteValue = cast<u8>((value >> (byteIndex * 8u)) & 0xffu);
-        result = UpdateShaderVariantFnv64Byte(result, byteValue);
-    }
-    return result;
-}
-
-u64 UpdateShaderVariantFnv64U64(in u64 hash, in u64 value){
-    u64 result = hash;
-    for(u32 byteIndex = 0u; byteIndex < 8u; ++byteIndex){
-        const u8 byteValue = cast<u8>((value >> (byteIndex * 8u)) & 0xffull);
-        result = UpdateShaderVariantFnv64Byte(result, byteValue);
-    }
-    return result;
-}
-
-u64 UpdateShaderVariantFnv64NameHash(in u64 hash, in NameHash nameHash){
-    u64 result = hash;
-    for(usize lane = 0u; lane < nameHash.qwords.size(); ++lane)
-        result = UpdateShaderVariantFnv64U64(result, nameHash.qwords[lane]);
-    return result;
-}
-
 u64 BuildShaderVariantCookKeyHash(in NameHash virtualPathHash, in u64 sourceChecksum, in u64 bytecodeChecksum){
-    u64 hash = s_ShaderVariantFnv64OffsetBasis;
-    hash = UpdateShaderVariantFnv64U32(hash, s_ShaderVariantCookKeyVersion);
-    hash = UpdateShaderVariantFnv64NameHash(hash, virtualPathHash);
-    hash = UpdateShaderVariantFnv64U64(hash, sourceChecksum);
-    hash = UpdateShaderVariantFnv64U64(hash, bytecodeChecksum);
+    u64 hash = s_ShaderFnv64OffsetBasis;
+    hash = UpdateShaderFnv64U32(hash, s_ShaderVariantCookKeyVersion);
+    hash = UpdateShaderFnv64NameHash(hash, virtualPathHash);
+    hash = UpdateShaderFnv64U64(hash, sourceChecksum);
+    hash = UpdateShaderFnv64U64(hash, bytecodeChecksum);
     return hash;
 }
 

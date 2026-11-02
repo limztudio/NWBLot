@@ -4,7 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
-#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -58,7 +57,7 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
     m_scope->m_window.options = options;
     m_scope->m_window.firstUse = !state.initialized;
     WindowState candidate = state;
-    if(!WindowBehavior::Initialize(candidate, options, m_scope->m_window.metrics) || !m_context.pushScope(stableKey)){
+    if(!TryInitializeWindow(options, m_scope->m_window.metrics, candidate) || !m_context.pushScope(stableKey)){
         m_context.fail();
         return false;
     }
@@ -78,34 +77,31 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
     if(m_context.takeActivation(m_scope->m_window.collapseState, options.collapsible))
         candidate.collapsed = !candidate.collapsed;
     while(auto gesture = m_context.takePointerGesture(m_scope->m_window.titleState, options.movable)){
-        if(!WindowBehavior::ApplyMove(candidate, *gesture)){
+        if(!TryApplyWindowMove(*gesture, candidate)){
             m_context.fail();
             return false;
         }
     }
     while(auto gesture = m_context.takePointerGesture(m_scope->m_window.resizeState, options.resizable && !candidate.collapsed)){
-        if(!WindowBehavior::ApplyResize(candidate, *gesture, m_scope->m_window.metrics.minimumSize)){
+        if(!TryApplyWindowResize(*gesture, m_scope->m_window.metrics.minimumSize, candidate)){
             m_context.fail();
             return false;
         }
     }
-    if(!WindowBehavior::Constrain(candidate, m_paint.displayMetrics(), m_scope->m_window.metrics.titleHeight)){
+    if(!TryConstrainWindow(m_paint.displayMetrics(), m_scope->m_window.metrics.titleHeight, candidate)){
         m_context.fail();
         return false;
     }
-    m_scope->m_bounds = WindowLayout::Content(candidate, m_scope->m_window.metrics);
+    m_scope->m_bounds = ResolveWindowContentBounds(candidate, m_scope->m_window.metrics);
     LayoutNodeDesc description;
     description.direction = options.direction;
     description.width = m_scope->m_window.firstUse && options.contentWidthFirstUse ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
     description.height = m_scope->m_window.firstUse && options.contentHeightFirstUse ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
     description.padding = m_scope->m_window.metrics.contentPadding;
     description.gap = m_style.gap;
-    const SIMDVectorSingle minimum = VectorSubtract(VectorSet(m_scope->m_window.metrics.minimumSize.x, m_scope->m_window.metrics.minimumSize.y, 0.0f, 0.0f), VectorSet(0.0f, m_scope->m_window.metrics.titleHeight, 0.0f, 0.0f));
-    const SIMDVectorSingle paddingStart = VectorSet(description.padding.left, description.padding.top, 0.0f, 0.0f);
-    const SIMDVectorSingle paddingEnd = VectorSet(description.padding.right, description.padding.bottom, 0.0f, 0.0f);
-    const SIMDVectorSingle extent = VectorSubtract(VectorSubtract(minimum, paddingStart), paddingEnd);
-    const SIMDVectorSingle size = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
-    description.intrinsicSize = { VectorGetX(size), VectorGetY(size) };
+    const f32 intrinsicWidth = (m_scope->m_window.metrics.minimumSize.x - description.padding.left) - description.padding.right;
+    const f32 intrinsicHeight = ((m_scope->m_window.metrics.minimumSize.y - m_scope->m_window.metrics.titleHeight) - description.padding.top) - description.padding.bottom;
+    description.intrinsicSize = { Max(0.0f, intrinsicWidth), Max(0.0f, intrinsicHeight) };
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
     if(!admittedNode){
@@ -131,21 +127,16 @@ b8 Builder::endWindow(){
     b8 arranged = true;
     if(!state.collapsed){
         const DisplayMetrics& display = m_paint.displayMetrics();
-        const SIMDVectorSingle boundsSize = VectorSet(m_scope->m_bounds.width, m_scope->m_bounds.height, m_scope->m_bounds.width, m_scope->m_bounds.height);
-        const SIMDVectorSingle displaySize = VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight);
-        const SIMDVectorSingle viewportSize = VectorSelect(displaySize, boundsSize, VectorGreater(boundsSize, displaySize));
-        const Rect viewport{ m_scope->m_bounds.x, m_scope->m_bounds.y, VectorGetX(viewportSize), VectorGetY(viewportSize) };
+        const Rect viewport{ m_scope->m_bounds.x, m_scope->m_bounds.y, Max(display.logicalWidth, m_scope->m_bounds.width), Max(display.logicalHeight, m_scope->m_bounds.height) };
         arranged = m_scope->m_layout.arrange(viewport);
         const LayoutBox* root = m_scope->m_layout.box(0u);
         if(arranged && root){
-            const SIMDVectorSingle rootSize = VectorAdd(VectorSet(root->rectangle.width, root->rectangle.height, 0.0f, 0.0f), VectorSet(0.0f, m_scope->m_window.metrics.titleHeight, 0.0f, 0.0f));
-            const SIMDVectorSingle firstUseSize = VectorMax(rootSize, VectorSet(m_scope->m_window.metrics.minimumSize.x, m_scope->m_window.metrics.minimumSize.y, 0.0f, 0.0f));
             if(m_scope->m_window.firstUse && m_scope->m_window.options.contentWidthFirstUse)
-                state.bounds.width = VectorGetX(firstUseSize);
+                state.bounds.width = Max(root->rectangle.width, m_scope->m_window.metrics.minimumSize.x);
             if(m_scope->m_window.firstUse && m_scope->m_window.options.contentHeightFirstUse)
-                state.bounds.height = VectorGetY(firstUseSize);
-            arranged = WindowBehavior::Constrain(state, display, m_scope->m_window.metrics.titleHeight);
-            m_scope->m_bounds = WindowLayout::Content(state, m_scope->m_window.metrics);
+                state.bounds.height = Max(root->rectangle.height + m_scope->m_window.metrics.titleHeight, m_scope->m_window.metrics.minimumSize.y);
+            arranged = TryConstrainWindow(display, m_scope->m_window.metrics.titleHeight, state);
+            m_scope->m_bounds = ResolveWindowContentBounds(state, m_scope->m_window.metrics);
             if(arranged)
                 arranged = m_scope->m_layout.arrange(m_scope->m_bounds);
         }

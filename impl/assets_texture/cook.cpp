@@ -48,13 +48,13 @@ namespace __hidden_texture_cook{
         entry.depth,
         Texture::MipLevelVector(arena),
         [](const TextureFormat::MipLevelLayout& level)noexcept -> TextureMipLevel{
-            return BuildTextureMipLevel(
+            return TextureMipLevel(
+                level.offsetBytes,
+                level.sizeBytes,
                 level.width,
                 level.height,
                 level.blockCountX,
                 level.blockCountY,
-                level.offsetBytes,
-                level.sizeBytes,
                 level.sliceCount
             );
         }

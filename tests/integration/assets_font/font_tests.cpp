@@ -57,7 +57,6 @@ static constexpr usize s_SfntRecordLengthField = 12u;
 static constexpr usize s_OneTableDirectoryBytes = s_FontSfntHeaderBytes + s_SfntTableRecordBytes;
 static constexpr usize s_FirstRecordOffsetField = s_FontSfntHeaderBytes + s_SfntRecordOffsetField;
 static constexpr usize s_FirstRecordLengthField = s_FontSfntHeaderBytes + s_SfntRecordLengthField;
-static constexpr usize s_SecondRecordTagOffset = s_OneTableDirectoryBytes;
 static constexpr usize s_SecondRecordOffsetField = s_OneTableDirectoryBytes + s_SfntRecordOffsetField;
 static constexpr usize s_SecondRecordLengthField = s_OneTableDirectoryBytes + s_SfntRecordLengthField;
 
@@ -144,7 +143,7 @@ TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
     WriteBigU32(s_FontSfntHeadTag, MakeNotNull(bytes.data() + s_FontSfntHeaderBytes));
     WriteBigU32(s_TableDataOffset, MakeNotNull(bytes.data() + s_FirstRecordOffsetField));
     WriteBigU32(s_TableDataBytes, MakeNotNull(bytes.data() + s_FirstRecordLengthField));
-    WriteBigU32(s_FontSfntMaxpTag, MakeNotNull(bytes.data() + s_SecondRecordTagOffset));
+    WriteBigU32(s_FontSfntMaxpTag, MakeNotNull(bytes.data() + s_OneTableDirectoryBytes));
     WriteBigU32(Limit<u32>::s_Max, MakeNotNull(bytes.data() + s_SecondRecordOffsetField));
     WriteBigU32(2u, MakeNotNull(bytes.data() + s_SecondRecordLengthField));
     WriteBigU32(0x12345678u, MakeNotNull(bytes.data() + s_TableDataOffset));
@@ -339,7 +338,7 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
         case 1u: bytes[s_SfntTableCountHighByte] = 1u; bytes[s_SfntTableCountLowByte] = 1u; break;
         case 2u: WriteBigU32(Limit<u32>::s_Max, MakeNotNull(bytes.data() + s_FirstRecordOffsetField)); break;
         case 3u: WriteBigU32(Limit<u32>::s_Max, MakeNotNull(bytes.data() + s_FirstRecordLengthField)); break;
-        case 4u: WriteBigU32(ReadU32BigEndian(NotNull<const u8*>(bytes.data() + s_FontSfntHeaderBytes)), MakeNotNull(bytes.data() + s_SecondRecordTagOffset)); break;
+        case 4u: WriteBigU32(ReadU32BigEndian(NotNull<const u8*>(bytes.data() + s_FontSfntHeaderBytes)), MakeNotNull(bytes.data() + s_OneTableDirectoryBytes)); break;
         case 5u: {
             const usize head = FindTableRecord(bytes, s_FontSfntHeadTag);
             ASSERT_NE(head, 0u);

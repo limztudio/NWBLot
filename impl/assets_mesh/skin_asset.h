@@ -24,7 +24,9 @@ NWB_IMPL_BEGIN
 
 inline constexpr TStringView s_SkinAssetKindLabel = NWB_TEXT("skin");
 inline constexpr TStringView s_SkinLoadBinaryContext = NWB_TEXT("Skin::loadBinary");
+#if defined(NWB_COOK)
 inline constexpr TStringView s_SkinSerializeContext = NWB_TEXT("SkinAssetCodec::serialize");
+#endif
 inline constexpr TStringView s_SkinInfluencesPayloadLabel = NWB_TEXT("influences");
 inline constexpr TStringView s_SkinInverseBindMatricesPayloadLabel = NWB_TEXT("inverse bind matrices");
 
@@ -64,7 +66,10 @@ public:
 
     void setSkeleton(const Core::Assets::AssetRef<Skeleton>& skeleton)noexcept{ m_skeleton = skeleton; }
 
-    void setPayload(InfluenceVector&& influences, InverseBindMatrixVector&& inverseBindMatrices)noexcept;
+    void setPayload(InfluenceVector&& influences, InverseBindMatrixVector&& inverseBindMatrices)noexcept{
+        m_influences = Move(influences);
+        m_inverseBindMatrices = Move(inverseBindMatrices);
+    }
 
 
 public:

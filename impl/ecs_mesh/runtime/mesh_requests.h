@@ -36,7 +36,7 @@ private:
     };
     struct KeyHash{
         [[nodiscard]] usize operator()(const Key& key)const noexcept{ return key.hash(); }
-        [[nodiscard]] usize operator()(const Lookup& key)const noexcept;
+        [[nodiscard]] usize operator()(const Lookup& key)const noexcept{ return HashRuntimeMeshRequestKey(key.name, key.version); }
     };
     struct KeyEqual{
         using is_transparent = void;
@@ -54,7 +54,6 @@ private:
 
 public:
     RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, usize expectedRequestCount);
-    RuntimeMeshRequestSet(RuntimeMeshRequestSet&&) = delete;
 
 
 public:
@@ -67,7 +66,6 @@ public:
 
 
 private:
-    [[nodiscard]] usize findInline(const NameHash& name, u64 version)const noexcept;
     void promoteIndex();
     void markIndexedLive(const Name& meshKey, u64 version)noexcept;
     [[nodiscard]] b8 containsIndexedLive(const Name& meshKey, u64 version)const noexcept;

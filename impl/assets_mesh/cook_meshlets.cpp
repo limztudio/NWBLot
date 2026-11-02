@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "cook_meshlets.h"
 
 
@@ -85,20 +91,12 @@ b8 MeshCookMeshlets::AddVisitedMeshletTriangle(
         return false;
 
     localTriangleIndices.push_back(triangleIndex);
-    const MeshletTriangleCalculation& triangleCalculation = trianglePrecompute.triangleCalculations[triangleIndex];
-    const MeshletTriangleVectors triangleVectors{
-        {
-            LoadFloat(triangleCalculation.positions[0u]),
-            LoadFloat(triangleCalculation.positions[1u]),
-            LoadFloat(triangleCalculation.positions[2u]),
-        },
-        LoadFloat(triangleCalculation.centroid),
-        LoadFloat(triangleCalculation.areaNormal),
-    };
-    const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex)noexcept{
-        return LoadFloat(trianglePrecompute.triangleCalculations[otherTriangleIndex].areaNormal);
-    };
-    MeshletCandidateSearch::AddMeshletTriangleToScoreState(localTriangleIndices, triangleVectors, triangleAreaNormalAt, scoreState);
+    MeshletCandidateSearch::AddMeshletTriangleToScoreState(
+        localTriangleIndices,
+        trianglePrecompute.loadTriangleVectors(triangleIndex),
+        trianglePrecompute.triangleAreaNormalAt(),
+        scoreState
+    );
     trianglePrecompute.visitedTriangles[triangleIndex] = 1u;
     AddMeshletTriangleNeighborsToFrontier(trianglePrecompute, triangleIndex, frontier, frontierFlags);
     return true;
@@ -246,6 +244,12 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

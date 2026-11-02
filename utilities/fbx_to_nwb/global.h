@@ -23,7 +23,7 @@
 #include <global/text_utils.h>
 #include <global/type.h>
 
-#include "utilities/fbx_to_nwb/types.adhd.h"
+#include <utilities/fbx_to_nwb/types.adhd.h>
 
 #include <ufbx.h>
 

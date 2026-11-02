@@ -5,8 +5,8 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,10 +18,30 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SliderLayout final{
-public:
-    [[nodiscard]] static Expected<SliderMetrics> Measure(const SliderOptions& options, const SliderStyle& style)noexcept;
-    [[nodiscard]] static Expected<SliderPlacement> Place(const Rect& bounds, const Rect& clip, const SliderMetrics& metrics, f64 normalized)noexcept;
+namespace SliderLayout{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline Expected<SliderMetrics> Measure(const SliderOptions& options, const SliderStyle& style)noexcept{
+    SliderMetrics candidate;
+    if(!TryMeasureSlider(options, style, candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+[[nodiscard]] inline Expected<SliderPlacement> Place(const Rect& bounds, const Rect& clip, const SliderMetrics& metrics, const f64 normalized)noexcept{
+    SliderPlacement candidate;
+    if(!TryPlaceSlider(bounds, clip, metrics, normalized, candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

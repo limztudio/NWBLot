@@ -14,13 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexRefs(const Path& nwbFilePath, const Core::Metascript::Value& asset, const TStringView metaKind, Core::Alloc::ScratchArena& scratchArena){
-    ScratchVector<MeshVertexRef> vertexRefs(scratchArena);
-    if(!ParseSourceVertexRefsInto(nwbFilePath, asset, metaKind, scratchArena, vertexRefs))
-        return MakeUnexpected(Failure{});
-    return vertexRefs;
-}
-
 b8 MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(const AStringView context, const AStringView streamName, const u32 index, const usize streamCount){
     if(index < streamCount)
         return true;
@@ -77,40 +70,20 @@ Expected<SourceMeshStreams> MeshCookSourceStreams::ParseCommonSourceMeshStreams(
     Core::Alloc::ScratchArena& scratchArena
 ){
     SourceMeshStreams streams(assetArena, scratchArena);
-
-    auto positionsResult = MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(nwbFilePath, asset, metaKind, s_MeshPositionsFieldNameView, scratchArena);
-    if(!positionsResult)
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float3U, 3u>(nwbFilePath, asset, metaKind, s_MeshPositionsFieldNameView, scratchArena, streams.positions))
         return MakeUnexpected(Failure{});
-    streams.positions = Move(*positionsResult);
-
-    auto normalsResult = MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(nwbFilePath, asset, metaKind, s_MeshNormalsFieldNameView, scratchArena);
-    if(!normalsResult)
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float3U, 3u>(nwbFilePath, asset, metaKind, s_MeshNormalsFieldNameView, scratchArena, streams.normals))
         return MakeUnexpected(Failure{});
-    streams.normals = Move(*normalsResult);
-
-    auto tangentsResult = MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(nwbFilePath, asset, metaKind, s_MeshTangentsFieldNameView, scratchArena);
-    if(!tangentsResult)
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float4U, 4u>(nwbFilePath, asset, metaKind, s_MeshTangentsFieldNameView, scratchArena, streams.tangents))
         return MakeUnexpected(Failure{});
-    streams.tangents = Move(*tangentsResult);
-
-    auto uv0Result = MeshCookMetadata::ParseMetadataFloatListField<Float2U, 2u>(nwbFilePath, asset, metaKind, s_MeshUv0FieldNameView, scratchArena);
-    if(!uv0Result)
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float2U, 2u>(nwbFilePath, asset, metaKind, s_MeshUv0FieldNameView, scratchArena, streams.uv0))
         return MakeUnexpected(Failure{});
-    streams.uv0 = Move(*uv0Result);
-
-    auto colorsResult = MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(nwbFilePath, asset, metaKind, s_MeshColorsFieldNameView, scratchArena);
-    if(!colorsResult)
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float4U, 4u>(nwbFilePath, asset, metaKind, s_MeshColorsFieldNameView, scratchArena, streams.colors))
         return MakeUnexpected(Failure{});
-    streams.colors = Move(*colorsResult);
-
-    auto vertexRefsResult = ParseSourceVertexRefs(nwbFilePath, asset, metaKind, scratchArena);
-    if(!vertexRefsResult)
+    if(!ParseSourceVertexRefsInto(nwbFilePath, asset, metaKind, scratchArena, streams.vertexRefs))
         return MakeUnexpected(Failure{});
-    streams.vertexRefs = Move(*vertexRefsResult);
-    auto indicesResult = MeshCookMetadata::ParseMetadataIndexField(nwbFilePath, asset, metaKind, assetArena, scratchArena);
-    if(!indicesResult)
+    if(!MeshCookMetadata::ParseMetadataIndexFieldInto(nwbFilePath, asset, metaKind, scratchArena, streams.indices))
         return MakeUnexpected(Failure{});
-    streams.indices = Move(*indicesResult);
     if(!ValidateSourceIndexStream(nwbFilePath, metaKind, streams.indices, streams.vertexRefs.size()))
         return MakeUnexpected(Failure{});
     if(!ValidateSourceVertexRefs(nwbFilePath, metaKind, streams))

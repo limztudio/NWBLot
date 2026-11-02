@@ -128,9 +128,7 @@ static Core::ECS::EntityID CreateBox(
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested, const i32 priority = 0,
     const f32 xyScale = 1.f
 ){
-    Float4 scale;
-    StoreFloat(VectorSetZ(VectorScale(VectorSet(24.f, 18.f, 0.f, 0.f), xyScale), thickness), scale);
-    return CreateBoundary(s_Box, Float4(0.f, 1.4f, centerZ, 0.f), scale, ior, transmission, world, mode, priority);
+    return CreateBoundary(s_Box, Float4(0.f, 1.4f, centerZ, 0.f), Float4(24.f * xyScale, 18.f * xyScale, thickness, 0.f), ior, transmission, world, mode, priority);
 }
 
 static Expected<OpticalReceiverEntities> CreateDenseReceiver(const b8 csg, Core::ECS::World& world){
@@ -298,12 +296,12 @@ static b8 CreateOpticalObjects(const AStringView caseName, Core::ECS::World& wor
     if(caseName == "optical_nested2" || caseName == s_OpticalNested3Case || caseName == s_OpticalOverflowCase){
         const u32 count = caseName == s_OpticalOverflowCase ? 5u : caseName == s_OpticalNested3Case ? 3u : 2u;
         for(u32 index = 0u; index < count; ++index){
-            // Lanes are stepped thickness and layer opacity.
-            const SIMDVectorSingle layerFade = VectorNegativeMultiplySubtractExpression(VectorSet(0.6f, 0.1f, 0.f, 0.f), VectorReplicate(static_cast<f32>(index)), VectorSet(4.f, 1.f, 0.f, 0.f));
-            const f32 thickness = count == 5u ? VectorGetX(layerFade) : 3.f / static_cast<f32>(1u << index);
+            const f32 indexFloat = static_cast<f32>(index);
+            const f32 thickness = count == 5u ? 4.f - 0.6f * indexFloat : 3.f / static_cast<f32>(1u << index);
+            const f32 opacity = 1.f - 0.1f * indexFloat;
             const f32 ior = index == 0u ? 1.5f : index == 1u ? 1.33f : 0.02f * static_cast<f32>(index - 2u) + 1.1f;
             const Float4 transmission = index == 0u ? s_Tinted : Float4(1.f, 0.7f, 0.45f, 0.f);
-            if(!CreateBox(-9.f, thickness, ior, transmission, world, Impl::OpticalBoundaryMode::ClosedNested, 0, VectorGetY(layerFade)).valid())
+            if(!CreateBox(-9.f, thickness, ior, transmission, world, Impl::OpticalBoundaryMode::ClosedNested, 0, opacity).valid())
                 return false;
         }
         return true;
@@ -391,10 +389,8 @@ b8 CreateReflectionOpticalScene(const AStringView caseName, Core::ECS::World& wo
     if(caseName != s_OpticalTirCase){
         for(u32 stripe = 0u; stripe < 31u; ++stripe){
             const Float4 color = stripe == 15u ? Float4(0.9f, 0.9f, 0.9f, 1.f) : Float4(stripe % 3u == 0u ? 0.9f : 0.f, stripe % 3u == 1u ? 0.9f : 0.f, stripe % 3u == 2u ? 0.9f : 0.f, 1.f);
-            const SIMDVectorSingle stripeOffset = VectorScale(VectorSubtract(VectorSet(static_cast<f32>(stripe), 0.f, 0.f, 0.f), VectorSet(15.f, 0.f, 0.f, 0.f)), 0.8f);
-            Float4 position;
-            StoreFloat(VectorSetZ(VectorSetY(stripeOffset, 1.4f), -14.f), position);
-            if(!CreatePanel(color, position, Float4(0.4f, 1.f, 8.f, 0.f), world).valid())
+            const f32 x = (static_cast<f32>(stripe) - 15.f) * 0.8f;
+            if(!CreatePanel(color, Float4(x, 1.4f, -14.f, 0.f), Float4(0.4f, 1.f, 8.f, 0.f), world).valid())
                 return false;
         }
     }

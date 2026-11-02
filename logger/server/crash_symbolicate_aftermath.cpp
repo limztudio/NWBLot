@@ -105,18 +105,19 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
+void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
     const auto regularDump = IsRegularFile(dumpPath);
     if(!regularDump){
         outReport += "\n[aftermath]\nstatus=inspect_failed\n";
-        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "inspect_aftermath_dump", .code = regularDump.error(), });
+        AppendNativeFailure(CrashSymbolicationFailure{ .operation = "inspect_aftermath_dump", .code = regularDump.error(), }, outReport);
         return;
     }
     if(!*regularDump)
         return;
 
 #if !defined(NWB_WITH_AFTERMATH)
+    static_cast<void>(scratchArena);
     outReport += s_AftermathSectionHeader;
     outReport += s_AftermathSkippedReport;
 #else
@@ -125,7 +126,7 @@ void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, [[m
     if(!read || dumpBytes.empty()){
         outReport += "\n[aftermath]\nstatus=read_failed\n";
         if(!read)
-            AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_aftermath_dump", .code = read.error(), });
+            AppendNativeFailure(CrashSymbolicationFailure{ .operation = "read_aftermath_dump", .code = read.error(), }, outReport);
         return;
     }
 
@@ -135,7 +136,7 @@ void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, [[m
         const AftermathLoadFailure& failure = loaded.error();
         outReport += failure.operation == s_AftermathLoadRuntimeOperation ? "\n[aftermath]\nstatus=skipped\n" : "\n[aftermath]\nstatus=decode_failed\n";
         outReport += "detail=Aftermath runtime admission failed\n";
-        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = failure.operation, .code = failure.native.code, });
+        AppendNativeFailure(CrashSymbolicationFailure{ .operation = failure.operation, .code = failure.native.code, }, outReport);
         outReport += "native_detail=";
         outReport += failure.native.detail.view();
         outReport += failure.native.detailTruncated ? "\nnative_detail_truncated=true\n" : "\nnative_detail_truncated=false\n";

@@ -137,15 +137,15 @@ Expected<PipelineBindingState> Device::buildPipelineBindings(const Span<const Bi
     const auto layout = createPipelineLayoutForBindingLayouts(bindingLayouts, operationName, scratchArena);
     if(!layout)
         return MakeUnexpected(Failure{});
-    bindings.m_pipelineLayout = layout->layout;
-    bindings.m_pushConstantByteSize = layout->pushConstantByteSize;
-    bindings.m_ownsPipelineLayout = layout->ownsLayout;
+    bindings.pipelineLayout = layout->layout;
+    bindings.pushConstantByteSize = layout->pushConstantByteSize;
+    bindings.ownsPipelineLayout = layout->ownsLayout;
 
     for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(bindingLayouts.size()); ++layoutIndex){
-        bindings.m_bindingLayoutsAtCreation.push_back(bindingLayouts[layoutIndex]);
+        bindings.bindingLayoutsAtCreation.push_back(bindingLayouts[layoutIndex]);
         const BindingLayout& bindingLayout = *bindingLayouts[layoutIndex];
         const BindlessLayoutDesc* const bindlessDesc = bindingLayout.getBindlessDesc();
-        bindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc ? bindlessDesc->descriptorSetIndex : Limit<u32>::s_Max;
+        bindings.bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc ? bindlessDesc->descriptorSetIndex : Limit<u32>::s_Max;
     }
     return bindings;
 }

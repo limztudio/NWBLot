@@ -11,8 +11,6 @@
 #include <global/type.h>
 #include <global/type_properties.h>
 
-#include <new>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -129,11 +127,11 @@ public:
 
         NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator cannot allocate without an arena"));
         if(m_arena == nullptr)
-            throw std::bad_alloc{};
+            throw AllocationException{};
 
         pointer const output = static_cast<pointer>(m_arena->allocate(static_cast<size_type>(alignof(value_type)), bytes));
         if(output == nullptr)
-            throw std::bad_alloc{};
+            throw AllocationException{};
 
         return output;
     }
@@ -289,11 +287,11 @@ public:
 
         NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator cannot allocate without an arena"));
         if(m_arena == nullptr)
-            throw std::bad_alloc{};
+            throw AllocationException{};
 
         pointer const output = static_cast<pointer>(m_arena->allocate(Alignment(), bytes));
         if(output == nullptr)
-            throw std::bad_alloc{};
+            throw AllocationException{};
 
         return output;
     }

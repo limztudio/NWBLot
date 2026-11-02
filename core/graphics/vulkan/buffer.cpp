@@ -418,26 +418,26 @@ Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize data
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace VulkanDetail{
+namespace __hidden_vulkan_buffer{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(const void* const src, const usize size, CpuTaskScheduler& cpuScheduler, void* const outDst, const usize parallelThreshold, const usize chunkSize){
+inline constexpr usize s_CopyHostMemoryParallelThreshold = 1024u * 1024u;
+inline constexpr usize s_CopyHostMemoryChunkSize = 256u * 1024u;
+
+[[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(const void* const src, const usize size, CpuTaskScheduler& cpuScheduler, void* const outDst){
     if(!outDst || !src || size == 0)
         return {};
 
-    const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
-    const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
-
-    if(cpuScheduler.isParallelEnabled() && size >= effectiveParallelThreshold){
+    if(cpuScheduler.isParallelEnabled() && size >= s_CopyHostMemoryParallelThreshold){
         const auto dstBytes = MakeNotNull(static_cast<u8*>(outDst));
         const auto srcBytes = MakeNotNull(static_cast<const u8*>(src));
-        const usize chunkCount = DivideUp(size, effectiveChunkSize);
+        const usize chunkCount = DivideUp(size, s_CopyHostMemoryChunkSize);
         return cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex)noexcept{
-            const usize chunkOffset = chunkIndex * effectiveChunkSize;
-            const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
+            const usize chunkOffset = chunkIndex * s_CopyHostMemoryChunkSize;
+            const usize chunkBytes = Min(s_CopyHostMemoryChunkSize, size - chunkOffset);
             NWB_MEMCPY(dstBytes.get() + chunkOffset, chunkBytes, srcBytes.get() + chunkOffset, chunkBytes);
         });
     }
@@ -452,12 +452,16 @@ Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(const void* const src
 
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<BufferSuballocation> CommandList::prepareUploadStaging(const void* data, const usize dataSize, TStringView operationName, const u32 alignment){
     const auto staging = prepareUploadStaging(dataSize, operationName, alignment);
     if(!staging)
         return MakeUnexpected(staging.error());
 
-    const auto copied = VulkanDetail::CopyHostMemory(data, dataSize, taskScheduler(), staging->cpuAddress);
+    const auto copied = __hidden_vulkan_buffer::CopyHostMemory(data, dataSize, taskScheduler(), staging->cpuAddress);
     if(!copied){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: staging copy for {} rejected CPU work: {}"), operationName, static_cast<u32>(copied.error()));
         return MakeUnexpected(Failure{});

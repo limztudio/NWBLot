@@ -26,7 +26,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBuffer(Buffer& buffer, const ResourceStates::Mask state, const GpuPhysicalQueueInfo& queue, CommandList& commandList)noexcept{
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBuffer(const ResourceStates::Mask state, const GpuPhysicalQueueInfo& queue, Buffer& buffer, CommandList& commandList)noexcept{
     if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, state))
         return GpuCommandIrReplayError::BackendResourceNotReady;
     if(!ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), queue))
@@ -37,7 +37,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
     return GpuCommandIrReplayError::None;
 }
 
-[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateColorAttachment(Texture& texture, const GpuPhysicalQueueInfo& queue, CommandList& commandList)noexcept{
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateColorAttachment(const GpuPhysicalQueueInfo& queue, Texture& texture, CommandList& commandList)noexcept{
     if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, ResourceStates::RenderTarget))
         return GpuCommandIrReplayError::BackendResourceNotReady;
     if(!ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), queue))
@@ -53,8 +53,8 @@ namespace __hidden_gpu_command_ir_raster_lowering{
     const GpuCommandIrRasterStateOwner& owner,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuPhysicalQueueInfo& queue,
-    CommandList& commandList,
-    const u64 recordIndex
+    const u64 recordIndex,
+    CommandList& commandList
 )noexcept{
     if(
         owner.recordIndex != recordIndex
@@ -78,7 +78,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
     Texture* const color = framebuffer.colorAttachments[0u].texture;
     if(!color || !color->getDescription().isRenderTarget || !GraphicsBackend::IsFramebufferAttachmentSubresourceSetValid(color->getDescription(), framebuffer.colorAttachments[0u].subresources))
         return GpuCommandIrReplayError::BackendResourceNotReady;
-    const GpuCommandIrReplayError::Enum colorError = ValidateColorAttachment(*color, queue, commandList);
+    const GpuCommandIrReplayError::Enum colorError = ValidateColorAttachment(queue, *color, commandList);
     if(colorError != GpuCommandIrReplayError::None)
         return colorError;
 
@@ -91,7 +91,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
             return GpuCommandIrReplayError::BackendResourceNotReady;
         const b8 sharedIndex = record.indexResource.valid() && buffer == owner.indexBuffer.get();
         const ResourceStates::Mask requiredState = sharedIndex ? ResourceStates::VertexBuffer | ResourceStates::IndexBuffer : ResourceStates::VertexBuffer;
-        const GpuCommandIrReplayError::Enum bufferError = ValidateBuffer(*buffer, requiredState, queue, commandList);
+        const GpuCommandIrReplayError::Enum bufferError = ValidateBuffer(requiredState, queue, *buffer, commandList);
         if(bufferError != GpuCommandIrReplayError::None)
             return bufferError;
     }
@@ -110,7 +110,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
         if(vertex.get() == index)
             return GpuCommandIrReplayError::None;
     }
-    return ValidateBuffer(*index, ResourceStates::IndexBuffer, queue, commandList);
+    return ValidateBuffer(ResourceStates::IndexBuffer, queue, *index, commandList);
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateDraw(const GpuCommandIrRasterTaskRecord& record, const GpuCommandIrRasterTaskRecord& stateRecord, const GpuCommandIrRasterStateOwner& owner)noexcept{
@@ -195,7 +195,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
         const GpuCommandIrRasterStateOwner* const owner = stream.rasterStateOwner(record.framebufferOwnerIndex);
         if(!owner)
             return GpuCommandIrReplayError::InvalidRasterOwner;
-        const GpuCommandIrReplayError::Enum error = __hidden_gpu_command_ir_raster_lowering::ValidateStateOwner(record, *owner, graph, queue, commandList, recordIndex);
+        const GpuCommandIrReplayError::Enum error = __hidden_gpu_command_ir_raster_lowering::ValidateStateOwner(record, *owner, graph, queue, recordIndex, commandList);
         if(error != GpuCommandIrReplayError::None)
             return error;
         state.graphicsState = record;
@@ -229,7 +229,7 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
         // An active state was admitted with this owner and its pipeline.
         auto& owner = *MakeNotNull(stream.rasterStateOwner(state.graphicsState.framebufferOwnerIndex));
         NWB_ASSERT(owner.pipeline);
-        if(record.blobSizeBytes > owner.pipeline->m_pushConstantByteSize)
+        if(record.blobSizeBytes > owner.pipeline->pushConstantByteSize)
             return GpuCommandIrReplayError::InvalidRasterState;
         state.pushConstantsSet = true;
         return GpuCommandIrReplayError::None;

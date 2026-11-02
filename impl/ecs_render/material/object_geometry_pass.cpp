@@ -6,6 +6,7 @@
 
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
 #include <impl/assets_graphics/components.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
@@ -28,19 +29,11 @@ b8 RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelin
     if(!prepareMeshComputeBindingLayout())
         return false;
     auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
     // A single fixed engine decoder defines cache contents independently of the selected material or raster pass.
     if(!m_materialState.m_objectGeometryDecodePipeline){
         if(!m_shaderSystem.loadShader<ComputeShader>(&MeshSubsystem::objectDecodeCs, Core::ShaderArchive::s_DefaultVariant, s_ObjectGeometryDecodeDebugName, m_materialState.m_objectGeometryDecodeShader))
             return false;
-        Core::ComputePipelineDesc desc;
-        desc.setComputeShader(m_materialState.m_objectGeometryDecodeShader).addBindingLayout(m_materialState.m_computeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto objectGeometryDecodePipelineResult = device.createComputePipeline(desc);
-        if(objectGeometryDecodePipelineResult)
-            m_materialState.m_objectGeometryDecodePipeline = Move(*objectGeometryDecodePipelineResult);
-        else
-            m_materialState.m_objectGeometryDecodePipeline.reset();
-        if(!objectGeometryDecodePipelineResult)
+        if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_materialState.m_objectGeometryDecodeShader, m_materialState.m_computeBindingLayout, false, m_materialState.m_objectGeometryDecodePipeline))
             return false;
     }
     if(!m_shaderSystem.loadShader<VertexShader>(&MeshSubsystem::objectVs, Core::ShaderArchive::s_DefaultVariant, s_ObjectGeometryVsDebugName, resources.objectGeometryVertexShader))
@@ -50,9 +43,8 @@ b8 RendererMaterialSystem::createObjectGeometryPipelineResources(MaterialPipelin
         const Array<Core::Format::Enum, 5u> formats = { Core::Format::RGBA32_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RGBA16_FLOAT, Core::Format::RG32_FLOAT, Core::Format::RGBA16_FLOAT, };
         const Array<u32, 5u> offsets = { NWB_MESH_OBJECT_VERTEX_POSITION_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_NORMAL_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET, };
         const Array<Name, 5u> names = { s_VertexAttributePositionName, s_VertexAttributeNormalName, s_VertexAttributeTangentName, s_VertexAttributeTexCoordName, s_VertexAttributeColorName };
-        for(u32 index = 0u; index < attributes.size(); ++index){
+        for(u32 index = 0u; index < attributes.size(); ++index)
             attributes[index].setFormat(formats[index]).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsets[index]).setElementStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setName(names[index]);
-        }
         auto objectGeometryInputLayoutResult = device.createInputLayout(attributes.data(), static_cast<u32>(attributes.size()), resources.objectGeometryVertexShader.get());
         if(objectGeometryInputLayoutResult)
             m_materialState.m_objectGeometryInputLayout = Move(*objectGeometryInputLayoutResult);
@@ -114,21 +106,12 @@ b8 RendererMaterialSystem::recordObjectGeometryDecode(const MaterialPassDrawCont
     state.setPipeline(pipeline.get());
     context.commandList.setComputeState(state);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipeline.get());
-    MeshFrameHeapSlots slots;
-    slots.instance = context.frameBindings.instanceHeapHandle.slot();
-    slots.materialTyped = context.frameBindings.materialTypedHeapHandle.slot();
-    slots.view = context.frameBindings.meshView.heapHandle.slot();
-    slots.generatedVertex = cache.heapHandle.slot();
-    const b8 hasViewport = !context.viewportState.viewports.empty();
-    const Core::Viewport viewport = hasViewport ? context.viewportState.viewports[0] : Core::Viewport{};
-    const Core::Rect scissorRect = hasViewport ? (!context.viewportState.scissorRects.empty() ? context.viewportState.scissorRects[0] : Core::Rect::FromViewport(viewport)) : Core::Rect{};
-    const ShaderDrivenPushConstants meshPush = ResolveShaderDrivenPushConstants(
+    const MeshFrameHeapSlots slots = ECSRenderDetail::ResolveMeshFrameHeapSlots(context.frameBindings, cache.heapHandle.slot());
+    const ShaderDrivenPushConstants meshPush = ECSRenderDetail::BuildShaderDrivenPushConstants(
         mesh.meshletCount,
         drawItem.instanceIndex,
         drawItem.materialConstantByteOffset,
-        hasViewport,
-        Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
-        Float4(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY)),
+        context.viewportState,
         slots,
         0u
     );

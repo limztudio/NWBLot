@@ -7,12 +7,19 @@
 
 #include "array.h"
 #include "atomic.h"
+#include "error_code.h"
 
 #include <charconv>
 #include <format>
-#include <string>
-#include <string_view>
-#include <type_traits>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename... T>
+using AFormatString = std::format_string<T...>;
+template<typename... T>
+using WFormatString = std::wformat_string<T...>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +103,7 @@ namespace DiagnosticDetail{
 inline Atomic<DiagnosticEventCallback> g_EventCallback{ nullptr };
 inline AtomicFlag g_EventActive;
 inline constexpr usize s_NumberTextBufferBytes = 128u;
-inline constexpr wchar_t s_AsciiCharacterMax = 0x7F;
+inline constexpr wchar s_AsciiCharacterMax = 0x7F;
 inline constexpr StringView s_NullText = "(null)";
 inline constexpr StringView s_PointerHexPrefix = "0x";
 inline constexpr StringView s_UnprintableText = "<unprintable>";
@@ -108,7 +115,7 @@ inline constexpr i32 s_PointerTextRadix = 16;
 
 template<typename CharT>
 [[nodiscard]] constexpr char ToEventAsciiChar(const CharT ch)noexcept{
-    if constexpr(std::is_same_v<CharT, char>)
+    if constexpr(IsSame_V<CharT, char>)
         return ch;
     else
         return ch >= 0 && ch <= s_AsciiCharacterMax ? static_cast<char>(ch) : '?';
@@ -157,7 +164,7 @@ template<typename T>
 inline void AppendEventNumber(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const T value)noexcept(IsArithmetic_V<T>){
     Array<char, s_NumberTextBufferBytes> buffer = {};
     const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
-    if(result.ec == std::errc{})
+    if(result.ec == ErrorCondition{})
         AppendEventText(outText, outCursor, AStringView(buffer.data(), static_cast<usize>(result.ptr - buffer.data())));
 }
 
@@ -170,7 +177,7 @@ inline void AppendEventPointer(Array<char, s_MaxEventTextBytes>& outText, usize&
     Array<char, s_NumberTextBufferBytes> buffer = {};
     const usize address = reinterpret_cast<usize>(value);
     const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), address, s_PointerTextRadix);
-    if(result.ec != std::errc{})
+    if(result.ec != ErrorCondition{})
         return;
 
     AppendEventText(outText, outCursor, AStringView(s_PointerHexPrefix));
@@ -179,33 +186,33 @@ inline void AppendEventPointer(Array<char, s_MaxEventTextBytes>& outText, usize&
 
 template<typename T>
 inline void AppendEventArgument(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const T& value)noexcept{
-    using RawT = std::remove_cvref_t<T>;
-    if constexpr(std::is_same_v<RawT, b8>){
+    using RawT = RemoveCVRef_T<T>;
+    if constexpr(IsSame_V<RawT, b8>){
         AppendEventText(outText, outCursor, value ? AStringView(s_TrueText) : AStringView(s_FalseText));
     }
-    else if constexpr(std::is_same_v<RawT, char>){
+    else if constexpr(IsSame_V<RawT, char>){
         AppendEventChar(outText, outCursor, value);
     }
-    else if constexpr(std::is_same_v<RawT, wchar_t>){
+    else if constexpr(IsSame_V<RawT, wchar>){
         AppendEventChar(outText, outCursor, ToEventAsciiChar(value));
     }
-    else if constexpr(std::is_same_v<RawT, Nullptr>){
+    else if constexpr(IsSame_V<RawT, Nullptr>){
         AppendEventText(outText, outCursor, AStringView(s_NullText));
     }
-    else if constexpr(std::is_pointer_v<RawT> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<RawT>>, char>){
+    else if constexpr(IsPointer_V<RawT> && IsSame_V<RemoveCV_T<RemovePointer_T<RawT>>, char>){
         AppendEventText(outText, outCursor, value ? AStringView(value) : AStringView(s_NullText));
     }
-    else if constexpr(std::is_pointer_v<RawT> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<RawT>>, wchar_t>){
+    else if constexpr(IsPointer_V<RawT> && IsSame_V<RemoveCV_T<RemovePointer_T<RawT>>, wchar>){
         AppendEventText(outText, outCursor, value ? WStringView(value) : WStringView());
     }
-    else if constexpr(std::is_pointer_v<RawT>){
+    else if constexpr(IsPointer_V<RawT>){
         AppendEventPointer(outText, outCursor, value);
     }
-    else if constexpr(std::is_integral_v<RawT> || std::is_floating_point_v<RawT>){
+    else if constexpr(IsIntegral_V<RawT> || IsFloatingPoint_V<RawT>){
         AppendEventNumber(outText, outCursor, value);
     }
-    else if constexpr(std::is_enum_v<RawT>){
-        AppendEventNumber(outText, outCursor, static_cast<std::underlying_type_t<RawT>>(value));
+    else if constexpr(IsEnum_V<RawT>){
+        AppendEventNumber(outText, outCursor, static_cast<UnderlyingType_T<RawT>>(value));
     }
     else if constexpr(requires{ { AStringView(value) }noexcept; }){
         AppendEventText(outText, outCursor, AStringView(value));
@@ -371,18 +378,8 @@ inline DiagnosticEventText MakeDiagnosticEventText(const char* const text)noexce
     return MakeDiagnosticEventText(text ? AStringView(text) : AStringView());
 }
 
-inline DiagnosticEventText MakeDiagnosticEventText(const wchar_t* const text)noexcept{
+inline DiagnosticEventText MakeDiagnosticEventText(const wchar* const text)noexcept{
     return MakeDiagnosticEventText(text ? WStringView(text) : WStringView());
-}
-
-template<typename Traits, typename Allocator>
-inline DiagnosticEventText MakeDiagnosticEventText(const std::basic_string<char, Traits, Allocator>& text)noexcept{
-    return MakeDiagnosticEventText(AStringView(text.data(), text.size()));
-}
-
-template<typename Traits, typename Allocator>
-inline DiagnosticEventText MakeDiagnosticEventText(const std::basic_string<wchar_t, Traits, Allocator>& text)noexcept{
-    return MakeDiagnosticEventText(WStringView(text.data(), text.size()));
 }
 
 template<typename Arg, typename... Args>
@@ -395,16 +392,16 @@ inline DiagnosticEventText MakeDiagnosticEventText(const WStringView fmt, Arg&& 
     return DiagnosticDetail::MakeFormattedEventText(fmt, Forward<Arg>(arg), Forward<Args>(args)...);
 }
 
-template<typename... Args>
-inline DiagnosticEventText MakeDiagnosticEventText(std::format_string<Args...> fmt, Args&&... args)noexcept{
+template<typename Arg, typename... Args>
+inline DiagnosticEventText MakeDiagnosticEventText(AFormatString<Arg, Args...> fmt, Arg&& arg, Args&&... args)noexcept{
     const auto text = fmt.get();
-    return DiagnosticDetail::MakeFormattedEventText(AStringView(text.data(), text.size()), Forward<Args>(args)...);
+    return DiagnosticDetail::MakeFormattedEventText(AStringView(text.data(), text.size()), Forward<Arg>(arg), Forward<Args>(args)...);
 }
 
-template<typename... Args>
-inline DiagnosticEventText MakeDiagnosticEventText(std::wformat_string<Args...> fmt, Args&&... args)noexcept{
+template<typename Arg, typename... Args>
+inline DiagnosticEventText MakeDiagnosticEventText(WFormatString<Arg, Args...> fmt, Arg&& arg, Args&&... args)noexcept{
     const auto text = fmt.get();
-    return DiagnosticDetail::MakeFormattedEventText(WStringView(text.data(), text.size()), Forward<Args>(args)...);
+    return DiagnosticDetail::MakeFormattedEventText(WStringView(text.data(), text.size()), Forward<Arg>(arg), Forward<Args>(args)...);
 }
 
 template<typename Arg, typename... Args>
@@ -413,7 +410,7 @@ inline DiagnosticEventText MakeDiagnosticEventText(const char* const fmt, Arg&& 
 }
 
 template<typename Arg, typename... Args>
-inline DiagnosticEventText MakeDiagnosticEventText(const wchar_t* const fmt, Arg&& arg, Args&&... args)noexcept{
+inline DiagnosticEventText MakeDiagnosticEventText(const wchar* const fmt, Arg&& arg, Args&&... args)noexcept{
     return MakeDiagnosticEventText(fmt ? WStringView(fmt) : WStringView(), Forward<Arg>(arg), Forward<Args>(args)...);
 }
 
@@ -425,11 +422,27 @@ inline void SetDiagnosticEventCallback(const DiagnosticEventCallback callback)no
     DiagnosticDetail::g_EventCallback.store(callback, MemoryOrder::release);
 }
 
+[[nodiscard]] inline b8 TryClaimDiagnosticEventCallback(const DiagnosticEventCallback callback)noexcept{
+    DiagnosticEventCallback expected = nullptr;
+    return DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, callback, MemoryOrder::acq_rel);
+}
+
 inline void ClearDiagnosticEventCallback(const DiagnosticEventCallback callback)noexcept{
     DiagnosticEventCallback expected = callback;
     const b8 clearedCallback = DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
     if(clearedCallback)
         return;
+}
+
+[[nodiscard]] inline b8 ReleaseDiagnosticEventCallback(const DiagnosticEventCallback callback)noexcept{
+    while(DiagnosticDetail::g_EventActive.testAndSet(MemoryOrder::acquire))
+        DiagnosticDetail::g_EventActive.wait(true, MemoryOrder::relaxed);
+
+    DiagnosticEventCallback expected = callback;
+    const b8 releasedCallback = DiagnosticDetail::g_EventCallback.compare_exchange_strong(expected, nullptr, MemoryOrder::acq_rel);
+    DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
+    DiagnosticDetail::g_EventActive.notifyAll();
+    return releasedCallback;
 }
 
 NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{

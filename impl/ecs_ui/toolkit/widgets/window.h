@@ -6,8 +6,9 @@
 
 
 #include <impl/ecs_ui/toolkit/paint.h>
-#include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
-#include <impl/ecs_ui/toolkit/input/input.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd.h>
+
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,24 +20,40 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class WindowBehavior final{
-public:
-    [[nodiscard]] static b8 Initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics)noexcept;
-    [[nodiscard]] static b8 ApplyMove(WindowState& state, const PointerGesture& gesture)noexcept;
-    [[nodiscard]] static b8 ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize)noexcept;
-    [[nodiscard]] static b8 Constrain(WindowState& state, const DisplayMetrics& display, f32 titleHeight)noexcept;
-};
+namespace WindowLayout{
 
-class WindowLayout final{
-public:
-    [[nodiscard]] static Expected<WindowMetrics> Measure(
-        const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* collapse,
-        const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
-        const Point& titleSize, f32 density
-    )noexcept;
-    [[nodiscard]] static Rect Content(const WindowState& state, const WindowMetrics& metrics)noexcept;
-    [[nodiscard]] static Rect Collapse(const WindowState& state, const WindowMetrics& metrics)noexcept;
-    [[nodiscard]] static Rect Resize(const WindowState& state, const WindowMetrics& metrics)noexcept;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline Expected<WindowMetrics> Measure(
+    const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* const collapse,
+    const UiSkinRegion* const resize, const WidgetStyle& style, const WindowOptions& options,
+    const Point& titleSize, const f32 density
+)noexcept{
+    if(
+        !IsFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
+        || !IsFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
+        || !IsFinite(style.gap) || style.gap < 0.0f || !IsFinite(density) || density <= 0.0f
+        || !IsValidUiExtent(options.minimumSize)
+    )
+        return MakeUnexpected(Failure{});
+    f32 collapseExtent = options.collapsible ? style.windowCollapseExtent : 0.0f;
+    if(options.collapsible && collapse)
+        collapseExtent = ResolveUiSkinSquareExtent(collapseExtent, *collapse, density);
+    f32 resizeExtent = style.windowResizeExtent;
+    if(resize)
+        resizeExtent = ResolveUiSkinSquareExtent(resizeExtent, *resize, density);
+    WindowMetrics metrics;
+    if(!TryMeasureWindow(frame, title, collapseExtent, resizeExtent, style, options, titleSize, density, metrics))
+        return MakeUnexpected(Failure{});
+    return metrics;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

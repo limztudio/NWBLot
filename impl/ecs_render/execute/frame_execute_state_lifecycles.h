@@ -5,8 +5,8 @@
 #pragma once
 
 
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/execute/frame_execute_lifecycle.h>
+#include <impl/ecs_render/execute/types.adhd.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
 
@@ -25,17 +25,6 @@ NWB_IMPL_BEGIN
 // Persistent-state candidates, retained resource lists, and record/accept callbacks for the stateful normal-execution tasks of one frame.
 // Contexts point at sibling members, so the set stays in place for the whole execution.
 struct FrameExecuteStateLifecycleSet final : NoCopy{
-    // Capacity, not a runtime packet-count assumption.
-    static constexpr usize s_CallbackCapacity = s_FrameExecuteLifecycleCallbackCapacity;
-    // Scene TLAS backing and the three BVH sort buffers; the CSG trace context adds one.
-    static constexpr usize s_ShadowPrepareFixedStateBufferCapacity = ::NWB::Impl::s_ShadowPrepareFixedStateBufferCapacity;
-    static constexpr usize s_ShadowPrepareCsgStateBufferCapacity = ::NWB::Impl::s_ShadowPrepareCsgStateBufferCapacity;
-    static constexpr usize s_SinglePersistentResourceCapacity = ::NWB::Impl::s_SinglePersistentResourceCapacity;
-    static constexpr usize s_ShadowComputeScratchTextureCapacity = ::NWB::Impl::s_ShadowComputeScratchTextureCapacity;
-    static constexpr usize s_ShadowComputeScratchBufferCapacity = ::NWB::Impl::s_ShadowComputeScratchBufferCapacity;
-    static constexpr usize s_CausticsComputeScratchTextureCapacity = ::NWB::Impl::s_CausticsComputeScratchTextureCapacity;
-    static constexpr usize s_SurfelGiComputeScratchBufferCapacity = ::NWB::Impl::s_SurfelGiComputeScratchBufferCapacity;
-
     // Prep/prefix stay serial; later upload packets may use workers.
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena;
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> meshAccelerationStateBuffers;
@@ -72,8 +61,8 @@ struct FrameExecuteStateLifecycleSet final : NoCopy{
     FrameExecuteLifecycle::SurfelGiStateLifecycleContext surfelGiStateLifecycle;
     FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext hardwareCausticsStateLifecycle;
     FrameExecuteLifecycle::DeferredLightingStateLifecycleContext deferredLightingStateLifecycle;
-    Array<Core::GpuTaskGraphTaskRecordedCallback, s_CallbackCapacity> recordedCallbacks = {};
-    Array<Core::GpuTaskGraphTaskAcceptedCallback, s_CallbackCapacity> acceptedCallbacks = {};
+    Array<Core::GpuTaskGraphTaskRecordedCallback, s_FrameExecuteLifecycleCallbackCapacity> recordedCallbacks = {};
+    Array<Core::GpuTaskGraphTaskAcceptedCallback, s_FrameExecuteLifecycleCallbackCapacity> acceptedCallbacks = {};
     usize recordedCallbackCount = 0u;
     usize acceptedCallbackCount = 0u;
 

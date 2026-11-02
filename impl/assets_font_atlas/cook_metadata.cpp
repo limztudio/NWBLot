@@ -11,7 +11,6 @@
 #include "cook.h"
 
 #include <impl/assets_font/prepared_source.h>
-#include <impl/assets_font/types.adhd.h>
 
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
@@ -43,11 +42,6 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontAtlasPairedSideca
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static b8 ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload)noexcept{
-    payload.faceIndex = font.faceIndex();
-    return TryReadFontFaceMetricsFromSfnt(font.fontBytes(), payload.unitsPerEm, payload.sourceGlyphCount);
-}
 
 [[nodiscard]] static b8 ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
     auto bakePpemResult = ReadFontAtlasMetadataU32(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasBakePpemField, s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
@@ -139,11 +133,14 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     candidate.payload.fontSha256 = source.fontSha256;
     Font font(arena, candidate.payload.font.name());
     font.setFontBytes(Move(source.fontBytes), source.faceIndex);
-    if(!ReadSourceFaceMetrics(font, candidate.payload)){
+    candidate.payload.faceIndex = font.faceIndex();
+    if(!TryReadFontFaceMetricsFromSfnt(font.fontBytes(), candidate.payload.unitsPerEm, candidate.payload.sourceGlyphCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    auto positioningTablesResult = CopyFontAtlasPositioningTables(font, candidate.payload.sourceGlyphCount, arena);
+    if(!font.validatePayload())
+        return MakeUnexpected(Failure{});
+    auto positioningTablesResult = CopyFontAtlasPositioningTables(font.fontBytes(), font.faceIndex(), candidate.payload.sourceGlyphCount, arena);
     if(!positioningTablesResult)
         return MakeUnexpected(Failure{});
     candidate.payload.positioningTables = Move(*positioningTablesResult);

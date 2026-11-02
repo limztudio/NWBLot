@@ -4,7 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
-#include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 
 #include <global/scope_exit.h>
 
@@ -72,27 +71,25 @@ b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.thumbFallback);
     if(!track || !normal)
         return false;
-    const auto trackMinimum = LoadUiSkinMinimumSize(*track, VectorDoubleReplicate(m_skin->referenceDensity()));
-    if(!trackMinimum)
+    const f32 referenceDensity = m_skin->referenceDensity();
+    Point trackMinimum;
+    if(!TryResolveSkinRegionMinimumSize(*track, referenceDensity, trackMinimum))
         return false;
-    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, VectorGetY(trackMinimum->value));
+    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum.y);
     const Array<const UiSkinRegion*, 4> thumbs{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
             continue;
-        const auto minimum = LoadUiSkinMinimumSize(*thumb, VectorDoubleReplicate(m_skin->referenceDensity()));
-        if(!minimum)
+        Point minimum;
+        if(!TryResolveSkinRegionMinimumSize(*thumb, referenceDensity, minimum))
             return false;
-        const SIMDVectorSingle currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y, frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
-        const SIMDVectorSingle minimumSize = VectorSwizzle<0, 1, 0, 1>(minimum->value);
-        const SIMDVectorSingle maximumSize = VectorSelect(minimumSize, currentSize, VectorGreater(currentSize, minimumSize));
-        frame.m_style.thumbExtent = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
+        frame.m_style.thumbExtent = { Max(frame.m_style.thumbExtent.x, minimum.x), Max(frame.m_style.thumbExtent.y, minimum.y) };
     }
     const auto metrics = SliderLayout::Measure(frame.m_options, frame.m_style);
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + static_cast<f64>(frame.m_metrics.padding.right) + static_cast<f64>(frame.m_metrics.thumbExtent.x) + static_cast<f64>(VectorGetX(trackMinimum->value));
+    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + static_cast<f64>(frame.m_metrics.padding.right) + static_cast<f64>(frame.m_metrics.thumbExtent.x) + static_cast<f64>(trackMinimum.x);
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;
     frame.m_metrics.contentSize.x = Max(frame.m_metrics.contentSize.x, static_cast<f32>(width));

@@ -18,12 +18,33 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ScrollbarLayout final{
-public:
-    // Resolve coupled bar visibility in logical coordinates.
-    [[nodiscard]] static Expected<ScrollViewportPlacement> Calculate(const Rect& bounds, const Rect& clip, const Insets& padding, const Point& contentMeasure, f32 caretWidth, const Point& previousScroll, f32 thickness, f32 minThumb)noexcept;
-    // Update only clamped offsets and thumb positions after caret reveal; extents and reserved geometry remain fixed.
-    [[nodiscard]] static b8 UpdateOffsets(const Point& scroll, ScrollViewportPlacement& placement)noexcept;
+namespace ScrollbarLayout{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Resolve coupled bar visibility in logical coordinates.
+[[nodiscard]] inline Expected<ScrollViewportPlacement> Calculate(
+    const Rect& bounds,
+    const Rect& clip,
+    const Insets& padding,
+    const Point& contentMeasure,
+    const f32 caretWidth,
+    const Point& previousScroll,
+    const f32 thickness,
+    const f32 minThumb
+)noexcept{
+    ScrollViewportPlacement placement;
+    if(!TryCalculateScrollViewportPlacement(bounds, clip, padding, contentMeasure, caretWidth, previousScroll, thickness, minThumb, placement))
+        return MakeUnexpected(Failure{});
+    return placement;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

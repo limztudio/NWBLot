@@ -80,7 +80,7 @@ Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(const Span<const V
         VkFormat format = VK_FORMAT_UNDEFINED;
         Format::Enum rhiFormat = Format::UNKNOWN;
     };
-    const VkFormat requestedVkFormat = ConvertFormat(requestedSdrFormat);
+    const VkFormat requestedVkFormat = VulkanDetail::ConvertFormat(requestedSdrFormat);
     const Array<SdrCandidate, 3> candidates = {{
         { requestedVkFormat, requestedSdrFormat },
         // RGBA8/BGRA8 sRGB are interchangeable presentation fallbacks for the engine's default request.

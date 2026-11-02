@@ -5,7 +5,6 @@
 #include "text_area_navigation.h"
 #include <impl/ecs_ui/toolkit/rect_math.h>
 
-#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -42,13 +41,8 @@ namespace __hidden_ui_text_area_navigation{
     const f64 target = center + (down ? pageStep : -pageStep);
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
-    const SIMDVectorDouble minimumMaximumValue = VectorDoubleMultiplyAddExpression(
-        VectorDoubleSet(static_cast<f64>(first.height), static_cast<f64>(last.height), 0.0, 0.0),
-        VectorDoubleSet(s_RectCenterFractionF64, s_RectCenterFractionF64, 0.0, 0.0),
-        VectorDoubleSet(static_cast<f64>(first.top), static_cast<f64>(last.top), 0.0, 0.0)
-    );
-    const f64 minimum = VectorDoubleGetX(minimumMaximumValue);
-    const f64 maximum = VectorDoubleGetY(minimumMaximumValue);
+    const f64 minimum = static_cast<f64>(first.top) + (static_cast<f64>(first.height) * s_RectCenterFractionF64);
+    const f64 maximum = static_cast<f64>(last.top) + (static_cast<f64>(last.height) * s_RectCenterFractionF64);
     if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
         return MakeUnexpected(Failure{});
     const Point point{ preferredX, static_cast<f32>(Clamp(target, minimum, maximum)) };

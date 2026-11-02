@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitOccupancyRecordBuilder::declare(
+b8 AvboitOccupancyRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -38,7 +38,7 @@ NWB_IMPL_BEGIN
         ReadWriteUse(inputs.avboitLowRaster, Core::ResourceStates::RenderTarget),
         ReadWriteUse(inputs.avboitCoverage, Core::ResourceStates::UnorderedAccess),
     };
-    NWB_DEFINE_AVBOIT_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.avboit.occupancy", "AVBOIT Occupancy");
+    NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.avboit.occupancy", "AVBOIT Occupancy");
 
     RendererAvboitTaskGraphStageState& stage = m_avboitSystem.taskGraphStage();
     return DeclareAvboitRasterRecordPhase<AvboitOccupancyComputeEmulationGraphTask, AvboitOccupancySharedComputeEmulationGraphTask, AvboitOccupancyGraphTask>(

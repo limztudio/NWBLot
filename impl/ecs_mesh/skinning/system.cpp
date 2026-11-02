@@ -22,32 +22,19 @@ NWB_IMPL_BEGIN
 
 
 b8 MeshSkinningSystem::RuntimeResources::hasPersistentHeapDescriptors(const b8 hasActiveSkin, const b8 hasAttributeBuffer)const noexcept{
-    const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
+    const auto storageHandle = [this](const RuntimeStorageDescriptorSlot::Enum slot)noexcept{
+        const Core::GpuDescriptorHandle handle = bindlessHeapHandles.storageBuffers[static_cast<usize>(slot)];
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };
     const auto uniformHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
     };
-    const b8 common =
-        bindlessResourceSlotsBuffer != nullptr
-        && uniformHandle(bindlessHeapHandles.resourceSlots)
-        && storageHandle(bindlessHeapHandles.restPosition)
-        && storageHandle(bindlessHeapHandles.skinnedPosition)
-        && storageHandle(bindlessHeapHandles.restNormal)
-        && storageHandle(bindlessHeapHandles.skinnedNormal)
-        && storageHandle(bindlessHeapHandles.restTangent)
-        && storageHandle(bindlessHeapHandles.skinnedTangent)
-        && storageHandle(bindlessHeapHandles.meshletDesc)
-        && storageHandle(bindlessHeapHandles.positionRefDeltas)
-        && storageHandle(bindlessHeapHandles.attributeRefDeltas)
-        && storageHandle(bindlessHeapHandles.attributeSkins)
-        && storageHandle(bindlessHeapHandles.localVertexRefs)
-        && storageHandle(bindlessHeapHandles.primitiveIndices)
-        && storageHandle(bindlessHeapHandles.meshletBounds)
-        && storageHandle(bindlessHeapHandles.meshletLocalBounds)
-        && storageHandle(bindlessHeapHandles.localBounds)
-    ;
-    return common && (!hasActiveSkin || (storageHandle(bindlessHeapHandles.skinInfluences) && storageHandle(bindlessHeapHandles.jointPalette))) && (!hasAttributeBuffer || storageHandle(bindlessHeapHandles.attributeBuffer));
+    if(!bindlessResourceSlotsBuffer || !uniformHandle(bindlessHeapHandles.resourceSlots))
+        return false;
+    for(usize index = 0u; index < s_RuntimeRequiredStorageDescriptorCount; ++index)
+        if(!storageHandle(static_cast<RuntimeStorageDescriptorSlot::Enum>(index)))
+            return false;
+    return (!hasActiveSkin || (storageHandle(RuntimeStorageDescriptorSlot::SkinInfluences) && storageHandle(RuntimeStorageDescriptorSlot::JointPalette))) && (!hasAttributeBuffer || storageHandle(RuntimeStorageDescriptorSlot::AttributeBuffer));
 }
 
 MeshSkinningSystem::MeshSkinningSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, IRuntimeMeshRegistry& runtimeMeshRegistry, ShaderPathResolveCallback shaderPathResolver)

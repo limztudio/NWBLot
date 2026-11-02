@@ -40,6 +40,23 @@ void YawSpinController::update(const f32 safeDelta, const f32 frozenYaw, const b
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 BuildSmokeBoxSubtractionPieces(const SmokeBoxBounds& box, const SmokeBoxBounds& cutter, Array<SmokeBoxBounds, 6>& outPieces)noexcept{
+    SmokeBoxBounds intersection;
+    StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), intersection.minimum);
+    StoreFloat(VectorMin(LoadFloat(box.maximum), LoadFloat(cutter.maximum)), intersection.maximum);
+    const Float3U& lower = intersection.minimum;
+    const Float3U& upper = intersection.maximum;
+    outPieces = {{
+        { box.minimum, Float3U(lower.x, box.maximum.y, box.maximum.z) },
+        { Float3U(upper.x, box.minimum.y, box.minimum.z), box.maximum },
+        { Float3U(lower.x, box.minimum.y, box.minimum.z), Float3U(upper.x, lower.y, box.maximum.z) },
+        { Float3U(lower.x, upper.y, box.minimum.z), Float3U(upper.x, box.maximum.y, box.maximum.z) },
+        { Float3U(lower.x, lower.y, box.minimum.z), Float3U(upper.x, upper.y, lower.z) },
+        { Float3U(lower.x, lower.y, upper.z), Float3U(upper.x, upper.y, box.maximum.z) },
+    }};
+    return SmokeBoxBoundsValid(intersection);
+}
+
 NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const TStringView projectName, ProjectRuntimeContext& context){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
@@ -57,9 +74,7 @@ NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const TStringView proje
 Core::ECS::EntityID CreateSmokeCamera(const f32 cameraHeight, const f32 cameraDistance, const f32 cameraPitch, Core::ECS::World& world){
     auto activeCameraEntity = world.createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
-    Float4 cameraPosition;
-    StoreFloat(VectorXorInt(VectorSet(0.0f, cameraHeight, cameraDistance, 0.0f), s_SIMDFlipZ), cameraPosition);
-    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, cameraPosition);
+    activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(world, Float4(0.0f, cameraHeight, -cameraDistance, 0.0f));
     auto& cameraTransform = *MakeNotNull(world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera));
     StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform.rotation);
 

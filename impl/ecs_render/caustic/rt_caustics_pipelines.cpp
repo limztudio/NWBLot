@@ -29,82 +29,6 @@ b8 RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& tar
     return prepareCausticResources(meshView, true, targets);
 }
 
-b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
-    // Hardware photons share the accumulator and resolve with the software reference.
-    if(!hasHwCausticWork(meshView))
-        return false;
-    NWB_ASSERT(meshView.bindingValid());
-    NWB_ASSERT(targets.bindless.valid());
-    {
-        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
-            return false;
-        }
-    }
-    const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
-    const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
-    const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
-    if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets))
-        return false;
-    const u32 temporalPhaseCount = s_CausticTemporalPhaseCount;
-    const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
-    const u32 photonCount = photonBudget.photonsPerFrame;
-
-    const auto recordPhotons = [&](){
-        const CausticPhotonPushConstants pushConstants = ResolveCausticPhotonPushConstants(
-            targets.width,
-            targets.height,
-            m_rayTracingState.m_tlasInstanceCount,
-            photonBudget,
-            m_rayTracingState.m_causticRefractiveInstanceCount,
-            static_cast<u32>(m_graphics.getFrameIndex()),
-            targets.bindless.gbufferDepth.slot(),
-            targets.bindless.gbufferWorldPosition.slot(),
-            m_rayTracingState.m_causticEmissionTargetHeapHandle.slot(),
-            meshView.heapHandle.slot(),
-            targets.bindless.slotsBufferDescriptor.slot(),
-            m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
-            targets.bindless.causticAccumulatorStorage.slot(),
-            temporalPhaseCount
-        );
-
-        Core::RayTracingState rayTracingPassState;
-        rayTracingPassState.setShaderTable(shaderTable.get());
-        commandList.setRayTracingState(rayTracingPassState);
-        // Bind heap blocks after RayTracingState; set 2 selects the TLAS generation.
-        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        heap.bindRayTracing(commandList, *pipeline.get(), m_rayTracingState.m_tlasHeapHandle);
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-
-        Core::RayTracingDispatchRaysArguments dispatchArgs;
-        dispatchArgs.setDimensions(photonBudget.gridSide, photonBudget.gridSide / temporalPhaseCount, 1u);
-        commandList.dispatchRays(dispatchArgs);
-    };
-    if(causticPhotonTiming && causticPhotonTiming->has_value()){
-        recordPhotons();
-        causticPhotonTiming->value().finishTiming(commandList);
-        causticPhotonTiming->reset();
-    }
-    else{
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
-
-        recordPhotons();
-    }
-
-    if(!m_rayTracingState.m_hwCausticDispatchLogged){
-        m_rayTracingState.m_hwCausticDispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
-            , static_cast<u64>(photonCount)
-            , static_cast<u64>(temporalPhaseCount)
-            , static_cast<u64>(photonBudget.fullGridCount)
-            , static_cast<u64>(m_rayTracingState.m_causticLightCount)
-            , static_cast<u64>(m_rayTracingState.m_causticRefractiveInstanceCount)
-        );
-    }
-    return true;
-}
-
 b8 RendererRayTracingSystem::hasHwCausticWork()const noexcept{
     const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
     return hasHwCausticWork(meshView);
@@ -132,47 +56,19 @@ b8 RendererRayTracingSystem::ensureSwCausticPipeline(){
     if(failed)
         return false;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software caustics require the initialized global descriptor heap"));
-        failed = true;
-        return false;
-    }
-
-    if(!m_rayTracingState.m_swCausticBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Set 0 is push-only; resources come from the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
-
-        auto swCausticBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(swCausticBindingLayoutResult)
-            m_rayTracingState.m_swCausticBindingLayout = Move(*swCausticBindingLayoutResult);
-        else
-            m_rayTracingState.m_swCausticBindingLayout.reset();
-        if(!swCausticBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic binding layout"));
-            failed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::causticPhotonSwCs, csg ? s_RayTracingCsgEnabledVariant : s_RayTracingCsgDisabledVariant, "ECSRender_SwCausticPhotons", shader)){
-        failed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_swCausticBindingLayout);
-    // Global heap layouts occupy their fixed sets.
-    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(pipelineDesc);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    if(!pipelineResult){
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaderSystem,
+        &RefractiveSubsystem::causticPhotonSwCs,
+        csg ? s_RayTracingCsgEnabledVariant : s_RayTracingCsgDisabledVariant,
+        "ECSRender_SwCausticPhotons",
+        sizeof(CausticPhotonPushConstants),
+        false,
+        m_rayTracingState.m_swCausticBindingLayout,
+        shader,
+        pipeline
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic compute pipeline"));
         failed = true;
         return false;
@@ -188,29 +84,10 @@ b8 RendererRayTracingSystem::ensureCausticResolvePipeline(){
         return false;
 
     auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic resolve requires the initialized global descriptor heap"));
+    if(!device.getDescriptorHeap().isInitialized() || !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(CausticResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve binding layout"));
         resolve.m_failed = true;
         return false;
-    }
-
-    if(!resolve.m_bindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Target-generation resources are selected through the push block.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
-
-        auto bindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(bindingLayoutResult)
-            resolve.m_bindingLayout = Move(*bindingLayoutResult);
-        else
-            resolve.m_bindingLayout.reset();
-        if(!bindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve binding layout"));
-            resolve.m_failed = true;
-            return false;
-        }
     }
 
     struct StageRequest{
@@ -233,19 +110,10 @@ b8 RendererRayTracingSystem::ensureCausticResolvePipeline(){
     for(const StageRequest& stage : stages){
         if(stage.m_state.m_pipeline)
             continue;
-        if(!m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::causticResolveCs, stage.m_variant, "ECSRender_CausticResolve", stage.m_state.m_shader)){
-            resolve.m_failed = true;
-            return false;
-        }
-
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc.setComputeShader(stage.m_state.m_shader).addBindingLayout(resolve.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto pipelineResult = device.createComputePipeline(pipelineDesc);
-        if(pipelineResult)
-            stage.m_state.m_pipeline = Move(*pipelineResult);
-        else
-            stage.m_state.m_pipeline.reset();
-        if(!pipelineResult){
+        if(
+            !m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::causticResolveCs, stage.m_variant, "ECSRender_CausticResolve", stage.m_state.m_shader)
+            || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, stage.m_state.m_shader, resolve.m_bindingLayout, false, stage.m_state.m_pipeline)
+        ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized caustic resolve pipeline"));
             resolve.m_failed = true;
             return false;
@@ -260,45 +128,19 @@ b8 RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     if(m_rayTracingState.m_causticGeometryDownsamplePipelineFailed)
         return false;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic geometry downsample requires the initialized global descriptor heap"));
-        m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
-        return false;
-    }
-
-    if(!m_rayTracingState.m_causticGeometryDownsampleBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticGeometryDownsamplePushConstants)));
-
-        auto causticGeometryDownsampleBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(causticGeometryDownsampleBindingLayoutResult)
-            m_rayTracingState.m_causticGeometryDownsampleBindingLayout = Move(*causticGeometryDownsampleBindingLayoutResult);
-        else
-            m_rayTracingState.m_causticGeometryDownsampleBindingLayout.reset();
-        if(!causticGeometryDownsampleBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample binding layout"));
-            m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::causticGeometryDownsampleCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticGeometryDownsample", m_rayTracingState.m_causticGeometryDownsampleShader)){
-        m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_causticGeometryDownsampleShader).addBindingLayout(m_rayTracingState.m_causticGeometryDownsampleBindingLayout);
-    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto causticGeometryDownsamplePipelineResult = device.createComputePipeline(pipelineDesc);
-    if(causticGeometryDownsamplePipelineResult)
-        m_rayTracingState.m_causticGeometryDownsamplePipeline = Move(*causticGeometryDownsamplePipelineResult);
-    else
-        m_rayTracingState.m_causticGeometryDownsamplePipeline.reset();
-    if(!causticGeometryDownsamplePipelineResult){
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaderSystem,
+        &RefractiveSubsystem::causticGeometryDownsampleCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        "ECSRender_CausticGeometryDownsample",
+        sizeof(CausticGeometryDownsamplePushConstants),
+        false,
+        m_rayTracingState.m_causticGeometryDownsampleBindingLayout,
+        m_rayTracingState.m_causticGeometryDownsampleShader,
+        m_rayTracingState.m_causticGeometryDownsamplePipeline
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample compute pipeline"));
         m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
         return false;
@@ -330,46 +172,19 @@ b8 RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     if(m_rayTracingState.m_causticAccumulatorDecayPipelineFailed)
         return false;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic accumulator decay requires the initialized global descriptor heap"));
-        m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
-        return false;
-    }
-
-    if(!m_rayTracingState.m_causticAccumulatorDecayBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The accumulator is heap-selected through push constants.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticAccumulatorDecayPushConstants)));
-
-        auto causticAccumulatorDecayBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(causticAccumulatorDecayBindingLayoutResult)
-            m_rayTracingState.m_causticAccumulatorDecayBindingLayout = Move(*causticAccumulatorDecayBindingLayoutResult);
-        else
-            m_rayTracingState.m_causticAccumulatorDecayBindingLayout.reset();
-        if(!causticAccumulatorDecayBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay binding layout"));
-            m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::causticAccumulatorDecayCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticAccumulatorDecay", m_rayTracingState.m_causticAccumulatorDecayShader)){
-        m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_causticAccumulatorDecayShader).addBindingLayout(m_rayTracingState.m_causticAccumulatorDecayBindingLayout);
-    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto causticAccumulatorDecayPipelineResult = device.createComputePipeline(pipelineDesc);
-    if(causticAccumulatorDecayPipelineResult)
-        m_rayTracingState.m_causticAccumulatorDecayPipeline = Move(*causticAccumulatorDecayPipelineResult);
-    else
-        m_rayTracingState.m_causticAccumulatorDecayPipeline.reset();
-    if(!causticAccumulatorDecayPipelineResult){
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaderSystem,
+        &RefractiveSubsystem::causticAccumulatorDecayCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        "ECSRender_CausticAccumulatorDecay",
+        sizeof(CausticAccumulatorDecayPushConstants),
+        false,
+        m_rayTracingState.m_causticAccumulatorDecayBindingLayout,
+        m_rayTracingState.m_causticAccumulatorDecayShader,
+        m_rayTracingState.m_causticAccumulatorDecayPipeline
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay compute pipeline"));
         m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
         return false;
@@ -406,21 +221,10 @@ b8 RendererRayTracingSystem::ensureCausticRtPipeline(){
         return false;
     }
 
-    if(!m_rayTracingState.m_hwCausticBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
-
-        auto hwCausticBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(hwCausticBindingLayoutResult)
-            m_rayTracingState.m_hwCausticBindingLayout = Move(*hwCausticBindingLayoutResult);
-        else
-            m_rayTracingState.m_hwCausticBindingLayout.reset();
-        if(!hwCausticBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware caustic binding layout"));
-            failed = true;
-            return false;
-        }
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(CausticPhotonPushConstants), Core::ShaderType::AllRayTracing, m_rayTracingState.m_hwCausticBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware caustic binding layout"));
+        failed = true;
+        return false;
     }
 
     Core::ShaderHandle raygenShader;
@@ -475,17 +279,11 @@ b8 RendererRayTracingSystem::ensureCausticRtPipeline(){
     b8 shaderTablePopulated = shaderTable->setRayGenerationShader(s_CausticHwRaygenExportName);
     if(shaderTablePopulated){
         const auto missIndex = shaderTable->addMissShader(s_CausticHwMissExportName);
-        if(!missIndex)
-            shaderTablePopulated = false;
-        else
-            shaderTablePopulated = *missIndex == 0u;
+        shaderTablePopulated = missIndex && *missIndex == 0u;
     }
     if(shaderTablePopulated){
         const auto hitIndex = shaderTable->addHitGroup(s_CausticHwHitGroupExportName);
-        if(!hitIndex)
-            shaderTablePopulated = false;
-        else
-            shaderTablePopulated = *hitIndex == 0u;
+        shaderTablePopulated = hitIndex && *hitIndex == 0u;
     }
     if(!shaderTablePopulated){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to populate RT caustic shader table"));

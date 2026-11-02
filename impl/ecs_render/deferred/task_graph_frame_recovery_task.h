@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 
+#include <core/common/log.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -39,7 +40,9 @@ public:
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+        return payload.frameTimingTransaction.recordEnd(commandList);
+    }
 };
 
 
@@ -74,9 +77,25 @@ public:
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
-    static void Discarded(Payload& payload)noexcept;
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+        return payload.armed && (!payload.retiresFrameTiming || payload.frameTimingTransaction.recordEnd(commandList));
+    }
+
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(payload.armed && payload.retiresFrameTiming && !payload.frameTimingTransaction.confirmEndSubmission(token, false)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
+            payload.frameTimingTransaction.discard();
+        }
+        payload.armed = false;
+        payload.retiresFrameTiming = false;
+    }
+
+    static void Discarded(Payload& payload)noexcept{
+        if(payload.armed)
+            payload.frameTimingTransaction.discard();
+        payload.armed = false;
+        payload.retiresFrameTiming = false;
+    }
 };
 
 

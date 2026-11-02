@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
 
 
@@ -143,53 +144,43 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         instanceDesc.setInstanceMask(s_RayTracingAllInstanceMask);
 
         const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        SIMDMatrix objectToWorld = MatrixIdentity();
         if(transformPtr){
-            const SIMDMatrix instanceWorld = MatrixAffineTransformation(LoadFloat(transformPtr->scale), VectorZero(), LoadFloat(transformPtr->rotation), LoadFloat(transformPtr->position));
-            StoreFloat(instanceWorld, instanceDesc.transform);
+            objectToWorld = MatrixAffineTransformation(LoadFloat(transformPtr->scale), VectorZero(), LoadFloat(transformPtr->rotation), LoadFloat(transformPtr->position));
+            StoreFloat(objectToWorld, instanceDesc.transform);
         }
 
         // Build material context in InstanceID order; unresolved materials remain opaque.
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        MaterialSurfaceInfo* materialInfo = nullptr;
-        if(const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material); materialInfoResult){
-            materialInfo = materialInfoResult->get();
-            if(materialInfo->transparent)
-                m_rayTracingState.m_sceneHasTransparentOccluder = true;
-            // Trace dispatcher reads Texture2D fields via non-uniform slots. Retain resolved handles in preflight.
-            if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
-                return false;
-            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, transformPtr, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges);
-            if(!materialContext)
-                return false;
-            shadowInstance = materialContext->instance;
-            instanceMaterial = ResolveInstanceShadowMaterialData(
-                materialInfo->surfaceDispatchId,
-                materialInfo->shadingModelId,
-                materialInfo->transparent,
-                materialInfo->refractive,
-                materialContext->constantByteOffset,
-                meshInstanceIndex
-            );
-        }
-        if(!materialInfo || materialInfo->surfaceDispatchId == Limit<u32>::s_Max)
-            contentComplete = false;
-        // An unavailable hook need not hide a boundary. Unknown/untransparent surfaces cannot use the outside shortcut.
-        if(!materialInfo || (materialInfo->transparent && materialInfo->surfaceDispatchId == Limit<u32>::s_Max))
-            opticalScene.markIncomplete();
+        if(!ResolveShadowOccluderMaterial(
+            entity,
+            renderer.material,
+            transformPtr,
+            meshInstanceIndex,
+            m_materialSystem,
+            sampledTextureCollector,
+            shadowMaterialTypedBytes,
+            shadowConstantTypedRanges,
+            shadowMutableTypedRanges,
+            opticalScene,
+            contentComplete,
+            instanceMaterial,
+            shadowInstance,
+            &m_rayTracingState.m_sceneHasTransparentOccluder
+        ))
+            return false;
         instanceMaterial.indexSlot = m_rayTracingState.m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_shadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_shadowMeshPositionHandles[meshSlot].slot();
 
-        // Opaque candidates terminate RayQuery; transparent candidates retain material evaluation.
-        if(!(materialInfo && materialInfo->transparent))
-            instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
-
         const b8 transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
         const b8 refractive = (instanceMaterial.flags & RtInstanceMaterialFlag::Refractive) != 0u;
+        // Opaque candidates terminate RayQuery; transparent candidates retain material evaluation.
+        if(!transparent)
+            instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
         instanceDesc.setInstanceMask(ResolveRayTracingInstanceMask(transparent, refractive));
-        const SIMDMatrix objectToWorld = LoadFloat(instanceDesc.transform);
         const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
         const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
         if(m_lightSpaceShadow.m_csg.gathering){
@@ -208,17 +199,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
                 .transparent = transparent,
                 .csg = false,
             });
-            m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.positionBuffer);
-            m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.triangleIndexBuffer);
-            m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.attributeBuffer);
-            if(meshResult->meshResources.meshletCount != 0u){
-                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.meshletDescBuffer);
-                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.meshletLocalBoundsBuffer);
-            }
-            if(meshResult->meshResources.runtimeLocalBoundsBuffer)
-                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.runtimeLocalBoundsBuffer);
-            if(meshResult->meshResources.swBvhNodeBuffer)
-                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.swBvhNodeBuffer);
+            AppendLightSpaceSceneBuffers(meshResult->meshResources, true, m_lightSpaceShadow.m_sceneBuffers);
         }
         SIMDVectorSingle opticalMin = VectorZero();
         SIMDVectorSingle opticalMax = VectorZero();
@@ -245,11 +226,8 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
             singleRefractiveInstanceIndex = meshInstanceIndex;
         }
         const b8 runtimeOpticalBounds = transparent && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid();
-        if(runtimeOpticalBounds){
-            Float34 opticalWorld{};
-            StoreFloat(objectToWorld, opticalWorld);
-            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
-        }
+        if(runtimeOpticalBounds)
+            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, instanceDesc.transform);
         else
             opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
 
@@ -335,10 +313,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         }
         Core::RayTracingAccelStructHandle tlas = Move(*tlasResult);
         // Retire the old heap block before replacing the TLAS generation.
-        if(m_rayTracingState.m_tlasHeapHandle.valid()){
-            heap.free(m_rayTracingState.m_tlasHeapHandle);
-            m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        }
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
         m_rayTracingState.m_tlas = Move(tlas);
         m_rayTracingState.m_tlasBackingFresh = true;
         m_rayTracingState.m_tlasMaxInstances = capacity;
@@ -347,21 +322,13 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
 
     // Allocate a heap block only for a new TLAS generation.
     if(!RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)){
-        if(m_rayTracingState.m_tlasHeapHandle.valid()){
-            heap.free(m_rayTracingState.m_tlasHeapHandle);
-            m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
-        }
-        const Expected<Core::GpuDescriptorHandle> tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
-        b8 registered = false;
-        if(tlasHeapHandle){
-            Core::GpuDescriptorRetirementGuard retireUnpublished(heap, *tlasHeapHandle);
-            registered = heap.write(*tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()));
-            if(registered){
-                m_rayTracingState.m_tlasHeapHandle = *tlasHeapHandle;
-                retireUnpublished.release();
-            }
-        }
-        if(!registered){
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
+        if(!RendererDescriptorRegisterDetail::AssignDescriptor(
+            heap,
+            Core::GpuDescriptorClass::AccelStruct,
+            Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()),
+            m_rayTracingState.m_tlasHeapHandle
+        )){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             return false;
         }

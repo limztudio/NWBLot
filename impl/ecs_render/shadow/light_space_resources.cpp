@@ -4,6 +4,7 @@
 
 #include "light_space_shadow.h"
 
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -40,17 +41,8 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     constexpr auto s_DepthSupport = Core::FormatSupport::Texture | Core::FormatSupport::DepthStencil | Core::FormatSupport::ShaderLoad;
     if(!heap.isInitialized() || (hardwareCsg && !heap.hasAccelStructLayout()) || (device.queryFormatSupport(Core::Format::D32) & s_DepthSupport) != s_DepthSupport)
         return false;
-    if(!snapshot.layout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::All).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(LightSpaceShadowPush)));
-        auto layoutResult = device.createBindingLayout(desc);
-        if(layoutResult)
-            snapshot.layout = Move(*layoutResult);
-        else
-            snapshot.layout.reset();
-        if(!layoutResult)
-            return false;
-    }
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(LightSpaceShadowPush), Core::ShaderType::All, snapshot.layout))
+        return false;
     using ComputeShaderMember = const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::*;
     const ComputeShaderMember csgResolveMember = hardwareCsg ? &ShadowSubsystem::lightSpaceResolveHwCs : &ShadowSubsystem::lightSpaceResolveCs;
     const Array<ComputeShaderMember, 12u> computeMembers = {
@@ -112,16 +104,8 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
             continue;
         if(*outputs[index])
             continue;
-        Core::ComputePipelineDesc desc;
-        desc.setComputeShader(state.m_shaders[index]).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        if(hardwareCsg && index >= s_LightSpaceFirstCsgResolvePipelineIndex && index <= s_LightSpaceLastCsgResolvePipelineIndex)
-            desc.addBindingLayout(heap.getAccelStructLayout());
-        auto outputsResult = device.createComputePipeline(desc);
-        if(outputsResult)
-            *outputs[index] = Move(*outputsResult);
-        else
-            (*outputs[index]).reset();
-        if(!outputsResult)
+        const b8 includeAccelStruct = hardwareCsg && index >= s_LightSpaceFirstCsgResolvePipelineIndex && index <= s_LightSpaceLastCsgResolvePipelineIndex;
+        if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, state.m_shaders[index], snapshot.layout, includeAccelStruct, *outputs[index]))
             return false;
     }
     for(u32 transparent = 0u; transparent < s_LightSpaceCapturePipelineKindCount; ++transparent){
@@ -264,11 +248,15 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
     if(!depthResult)
         return false;
     Core::TextureHandle depth = Move(*depthResult);
-    const Expected<Core::GpuDescriptorHandle> depthDescriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage2DArray);
-    if(!depthDescriptor)
-        return false;
-    descriptors[s_LightSpaceDepthDescriptorIndex] = *depthDescriptor;
-    if(!heap.write(descriptors[s_LightSpaceDepthDescriptorIndex], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
+    if(!RendererDescriptorRegisterDetail::AssignSampledTexture(
+        heap,
+        Core::GpuDescriptorClass::SampledImage2DArray,
+        depth.get(),
+        Core::Format::D32,
+        Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount),
+        Core::TextureDimension::Texture2DArray,
+        descriptors[s_LightSpaceDepthDescriptorIndex]
+    ))
         return false;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> opaque;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> transparent;

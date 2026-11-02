@@ -32,8 +32,13 @@ namespace Tests{
 
 
 // Slang probe sources compiled against the generated material bind includes.
-struct AssetsGraphicsShaderSources{
-    static constexpr AStringView s_MaterialBindMeshSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
+namespace AssetsGraphicsFixture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr AStringView s_MaterialBindMeshSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
 
     NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source, const NwbMeshInstanceData instance){
     NwbMeshGeneratedVertex generatedVertex;
@@ -48,7 +53,7 @@ struct AssetsGraphicsShaderSources{
     }
 
     )NWB_SLANG";
-    static constexpr AStringView s_MaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+inline constexpr AStringView s_MaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
     #include "project/material_interfaces/test_surface.bind"
 
     NwbMeshSurface nwbMaterialSurface(){
@@ -71,17 +76,17 @@ struct AssetsGraphicsShaderSources{
     }
 
     )NWB_SLANG";
-    static constexpr AStringView s_ShadowDispatchSharedSurfaceHelperSource = R"NWB_SLANG(#ifndef NWB_TEST_SHADOW_DISPATCH_SHARED_SURFACE_HELPER_SLANGI
+inline constexpr AStringView s_ShadowDispatchSharedSurfaceHelperSource = R"NWB_SLANG(#ifndef NWB_TEST_SHADOW_DISPATCH_SHARED_SURFACE_HELPER_SLANGI
     #define NWB_TEST_SHADOW_DISPATCH_SHARED_SURFACE_HELPER_SLANGI
 
     half3 nwbTestShadowDispatchSharedSurfaceColor(const half3 color){
     return color;
     }
 
-    #endif
+#endif
 
     )NWB_SLANG";
-    static constexpr AStringView s_ShadowDispatchFirstMaterialSurfaceSource = R"NWB_SLANG(#include "shadow_dispatch_shared_surface_helper.slangi"
+inline constexpr AStringView s_ShadowDispatchFirstMaterialSurfaceSource = R"NWB_SLANG(#include "shadow_dispatch_shared_surface_helper.slangi"
 
     NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
@@ -90,7 +95,7 @@ struct AssetsGraphicsShaderSources{
     }
 
     )NWB_SLANG";
-    static constexpr AStringView s_ShadowDispatchSecondMaterialSurfaceSource = R"NWB_SLANG(#include "shadow_dispatch_shared_surface_helper.slangi"
+inline constexpr AStringView s_ShadowDispatchSecondMaterialSurfaceSource = R"NWB_SLANG(#include "shadow_dispatch_shared_surface_helper.slangi"
 
     NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
@@ -99,8 +104,8 @@ struct AssetsGraphicsShaderSources{
     }
 
     )NWB_SLANG";
-    #if defined(NWB_FINAL)
-    static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+#if defined(NWB_FINAL)
+inline constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
     #include "project/material_interfaces/other_surface.bind"
 
     NwbMeshSurface nwbMaterialSurface(){
@@ -110,7 +115,7 @@ struct AssetsGraphicsShaderSources{
     }
 
     )NWB_SLANG";
-    static constexpr AStringView s_UnboundMaterialShaderProbeSource =
+inline constexpr AStringView s_UnboundMaterialShaderProbeSource =
     "#define NWB_MESH_GBUFFER_BASE_COLOR_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION) "\n"
     "#define NWB_MESH_GBUFFER_NORMAL_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_NORMAL_LOCATION) "\n"
     "#define NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION) "\n"
@@ -129,8 +134,13 @@ struct AssetsGraphicsShaderSources{
     }
 
     )NWB_SLANG";
-    #endif
-    static constexpr AStringView s_MaterialBindBxdfSource = "half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){ return surface.baseColor; }\n";
+#endif
+inline constexpr AStringView s_MaterialBindBxdfSource = "half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){ return surface.baseColor; }\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

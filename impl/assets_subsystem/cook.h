@@ -73,18 +73,6 @@ template<typename SubsystemT>
 }
 
 template<typename SubsystemT>
-[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    return Core::Assets::ParseCookMetadataDocument<SubsystemCookEntry<SubsystemT>, &ParseSubsystemCookMetadata<SubsystemT>>(assetRoot, virtualRoot, nwbFilePath, doc, s_SubsystemDiagnosticPrefix, arena, scratchArena);
-}
-
-template<typename SubsystemT>
 [[nodiscard]] Expected<SubsystemT> BuildSubsystemAsset(SubsystemCookEntry<SubsystemT>& entry, Core::Assets::AssetArena&, Core::Alloc::ScratchArena&){
     SubsystemT asset = Move(entry.subsystem);
     if(!asset.validatePayload())
@@ -121,12 +109,13 @@ template<typename SubsystemT>
     return Core::Assets::RegisterDocumentValueCookEntry<SubsystemCookEntry<SubsystemT>, SubsystemT, TypedSubsystemAssetCodec<SubsystemT>>(
         s_SubsystemAssetKindLabel,
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-            return ParseSubsystemCookMetadata<SubsystemT>(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+            return Core::Assets::ParseCookMetadataDocument<SubsystemCookEntry<SubsystemT>, &ParseSubsystemCookMetadata<SubsystemT>>(assetRoot, virtualRoot, nwbFilePath, doc, s_SubsystemDiagnosticPrefix, context.cookArena, context.scratchArena);
         },
         [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
             return ParseSubsystemCookMetadata<SubsystemT>(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildSubsystemAsset<SubsystemT>,
+        true,
         registry
     );
 }

@@ -44,6 +44,13 @@ using OpacityMicromapGeometryVector = Vector<VkAccelerationStructureTrianglesOpa
 using OpacityMicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchArena>;
 using OpacityMicromapUsageOffsetVector = Vector<usize, Alloc::ScratchArena>;
 
+struct BlasGeometry{
+    VkAccelerationStructureGeometryKHR geometry = {};
+    VkAccelerationStructureGeometrySpheresDataNV spheresData = {};
+    VkAccelerationStructureGeometryLinearSweptSpheresDataNV lssData = {};
+    u32 primitiveCount = 0u;
+};
+
 struct BlasGeometryScratch{
     BlasGeometryVector geometries;
     BlasSpheresDataVector spheresData;
@@ -79,6 +86,17 @@ public:
         rangeInfos.resize(geometryCount);
         primitiveCounts.resize(geometryCount);
         transformOffsets.resize(geometryCount);
+    }
+
+    void assignGeometry(const usize index, const BlasGeometry& source)noexcept{
+        geometries[index] = source.geometry;
+        spheresData[index] = source.spheresData;
+        lssData[index] = source.lssData;
+        primitiveCounts[index] = source.primitiveCount;
+        if(source.geometry.geometryType == VK_GEOMETRY_TYPE_SPHERES_NV)
+            geometries[index].pNext = &spheresData[index];
+        else if(source.geometry.geometryType == VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV)
+            geometries[index].pNext = &lssData[index];
     }
 };
 
@@ -176,14 +194,40 @@ Expected<u64> ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned,
 
 [[nodiscard]] Expected<u64> ComputeShaderTableAlignedOffset(u64 deviceAddress, u64 allocationByteSize, u64 recordByteSize, u32 baseAlignment)noexcept;
 
-struct BlasGeometry{
-    VkAccelerationStructureGeometryKHR geometry = {};
-    VkAccelerationStructureGeometrySpheresDataNV spheresData = {};
-    VkAccelerationStructureGeometryLinearSweptSpheresDataNV lssData = {};
-    u32 primitiveCount = 0u;
+struct OpacityMicromapIndexFormatInfo{
+    VkIndexType indexType = VK_INDEX_TYPE_NONE_KHR;
+    u64 indexStride = 0u;
 };
 
 Expected<BlasGeometry> FillBlasGeometryForSizeQuery(const VulkanContext& context, const RayTracingGeometryDesc& geomDesc, TStringView operation, b8 requireBuffers);
+[[nodiscard]] b8 PrepareBlasOpacityMicromapUsageOffsets(
+    const VulkanContext& context,
+    const RayTracingGeometryDesc* geometries,
+    usize geometryCount,
+    TStringView operation,
+    OpacityMicromapUsageOffsetVector& outUsageOffsets,
+    OpacityMicromapUsageVector& outUsageCounts,
+    b8& outHasOpacityMicromap
+);
+[[nodiscard]] Expected<OpacityMicromapIndexFormatInfo> ResolveOpacityMicromapIndexFormat(Format::Enum format, TStringView operation);
+[[nodiscard]] b8 ValidateOpacityMicromapStorageAndFillUsages(
+    const RayTracingGeometryTriangles& triangles,
+    VkIndexType ommIndexType,
+    u64 ommIndexStride,
+    VkDeviceAddress ommIndexAddress,
+    usize usageOffset,
+    TStringView operation,
+    OpacityMicromapUsageVector& inOutUsageCounts,
+    VkAccelerationStructureTrianglesOpacityMicromapEXT& outOmmGeometry
+);
+void AttachBlasOpacityMicromapGeometries(
+    const RayTracingGeometryDesc* geometries,
+    usize geometryCount,
+    const OpacityMicromapUsageOffsetVector& opacityMicromapUsageOffsets,
+    const OpacityMicromapUsageVector& opacityMicromapUsageCounts,
+    OpacityMicromapGeometryVector& inOutOpacityMicromapGeometries,
+    BlasGeometryScratch& inOutBlasScratch
+)noexcept;
 
 [[nodiscard]] VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept;
 

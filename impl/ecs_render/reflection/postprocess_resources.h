@@ -65,10 +65,6 @@ struct ReflectionPostprocessSnapshot{
 
 // Only the extra opaque history bank and spatial destination live here.
 class RendererReflectionPostprocess final : NoCopy{
-private:
-    static constexpr usize s_PostprocessDescriptorCount = s_ReflectionPostprocessDescriptorCount;
-
-
 public:
     RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
         : m_arena(arena)
@@ -101,7 +97,7 @@ private:
     Array<Core::ComputePipelineHandle, NWB_REFLECTION_SPATIAL_MAX_RADIUS> m_spatialPipelines{};
     Core::ShaderHandle m_temporalShader;
     Array<Core::ShaderHandle, NWB_REFLECTION_SPATIAL_MAX_RADIUS> m_spatialShaders{};
-    Array<Core::GpuDescriptorHandle, s_PostprocessDescriptorCount> m_descriptors{};
+    Array<Core::GpuDescriptorHandle, s_ReflectionPostprocessDescriptorCount> m_descriptors{};
     u32 m_width = 0u;
     u32 m_height = 0u;
 };

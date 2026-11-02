@@ -279,7 +279,7 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
     NWB::Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ecs_graphics/reset_runtime_statistics_scratch"));
     const NWB::Core::GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(declarationAccess, topology, scratchArena, analysis, assignments, compiledGraph));
+    ASSERT_TRUE(compiler.compile(declarationAccess, topology, NWB::Core::GpuTaskGraphCompileOptions{}, scratchArena, analysis, assignments, compiledGraph));
 
     const NWB::Core::GpuCompiledGraph::ReadView planAccess(compiledGraph);
     ASSERT_TRUE(planAccess.validFor(declarationAccess));

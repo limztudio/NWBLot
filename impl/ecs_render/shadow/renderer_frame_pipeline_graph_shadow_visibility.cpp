@@ -5,7 +5,6 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/kernel/task_graph_float_clear_tasks.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/shadow/soft_shadow_split_task_chain.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -97,13 +96,11 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Array<Core::GpuTaskExternalStateSource, s_ShadowVisibilityStateSourceCapacity> shadowVisibilityStateSources = {};
     usize shadowVisibilityStateSourceCount = 0u;
     const auto* const shadowScratchStates = m_shadowComputePersistentState.source();
-    if(shadowScratchStates){
+    if(shadowScratchStates)
         shadowVisibilityStateSources[shadowVisibilityStateSourceCount++] = { .states = shadowScratchStates, };
-    }
     const auto* const shadowReturnStates = m_shadowVisibilityReturnState.source();
-    if(shadowReturnStates){
+    if(shadowReturnStates)
         shadowVisibilityStateSources[shadowVisibilityStateSourceCount++] = { .states = shadowReturnStates, .applicableConsumerQueueClass = Core::CommandQueue::Compute, };
-    }
     const Core::GpuTaskExternalStateSource* const shadowVisibilityStateSourceData = shadowVisibilityStateSourceCount != 0u ? shadowVisibilityStateSources.data() : nullptr;
 
     const Core::GpuExternalCompletionId* const laggedLightingHistoryWriterDrainDependencies = laggedLightingHistoryWriterDrainCompletion.valid() ? &laggedLightingHistoryWriterDrainCompletion : nullptr;

@@ -56,19 +56,6 @@ namespace __hidden_generated_geometry_reuse{
     return true;
 }
 
-[[nodiscard]] b8 SourceBuffersMatch(const RuntimeMeshBuffers& left, const RuntimeMeshBuffers& right)noexcept{
-    return
-        left.positionBuffer == right.positionBuffer && left.normalBuffer == right.normalBuffer
-        && left.tangentBuffer == right.tangentBuffer && left.uv0Buffer == right.uv0Buffer
-        && left.colorBuffer == right.colorBuffer && left.meshletDescBuffer == right.meshletDescBuffer
-        && left.meshletBoundsBuffer == right.meshletBoundsBuffer
-        && left.meshletPositionRefDeltaBuffer == right.meshletPositionRefDeltaBuffer
-        && left.meshletAttributeRefDeltaBuffer == right.meshletAttributeRefDeltaBuffer
-        && left.meshletLocalVertexRefBuffer == right.meshletLocalVertexRefBuffer
-        && left.meshletPrimitiveIndexBuffer == right.meshletPrimitiveIndexBuffer
-    ;
-}
-
 [[nodiscard]] b8 DrawInputsMatch(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
     const MaterialPassMeshResourceSnapshot& leftMesh = left.meshResources;
     const MaterialPassMeshResourceSnapshot& rightMesh = right.meshResources;
@@ -88,7 +75,7 @@ namespace __hidden_generated_geometry_reuse{
         || leftMesh.emulationVertexHeapHandle != rightMesh.emulationVertexHeapHandle
         || leftMesh.emulationIndexByteOffset != rightMesh.emulationIndexByteOffset
         || left.pipelineResources.indexedGeometryOutput != right.pipelineResources.indexedGeometryOutput
-        || !SourceBuffersMatch(leftMesh.sourceBuffers, rightMesh.sourceBuffers)
+        || !leftMesh.sourceBuffers.sameBuffers(rightMesh.sourceBuffers)
     )
         return false;
     // The four eligible AVBOIT passes derive equal generation flags from the retained freshness/two-sided/cull inputs.

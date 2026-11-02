@@ -198,42 +198,31 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
-        MaterialSurfaceInfo* materialInfo = nullptr;
-        if(const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material); materialInfoResult){
-            materialInfo = materialInfoResult->get();
-            // Software paths share the HW material dispatcher. Freeze its sampled textures with the scene-BVH context.
-            if(materialInfo->surfaceDispatchId != Limit<u32>::s_Max && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector))
-                return false;
-            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(entity, *materialInfo, objectTransformPtr, shadowMaterialTypedBytes, shadowConstantTypedRanges, shadowMutableTypedRanges);
-            if(!materialContext)
-                return false;
-            shadowInstance = materialContext->instance;
-            instanceMaterial = ResolveInstanceShadowMaterialData(
-                materialInfo->surfaceDispatchId,
-                materialInfo->shadingModelId,
-                materialInfo->transparent,
-                materialInfo->refractive,
-                materialContext->constantByteOffset,
-                meshInstanceIndex
-            );
-        }
-        if(!materialInfo || materialInfo->surfaceDispatchId == Limit<u32>::s_Max)
-            contentComplete = false;
-        if(!materialInfo || (materialInfo->transparent && materialInfo->surfaceDispatchId == Limit<u32>::s_Max))
-            opticalScene.markIncomplete();
+        if(!ResolveShadowOccluderMaterial(
+            entity,
+            renderer.material,
+            objectTransformPtr,
+            meshInstanceIndex,
+            m_materialSystem,
+            sampledTextureCollector,
+            shadowMaterialTypedBytes,
+            shadowConstantTypedRanges,
+            shadowMutableTypedRanges,
+            opticalScene,
+            contentComplete,
+            instanceMaterial,
+            shadowInstance
+        ))
+            return false;
         instanceMaterial.indexSlot = m_rayTracingState.m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
         instanceMaterial.nodeSlot = m_rayTracingState.m_swShadowMeshNodeHandles[meshSlot].slot();
-        Float4 worldMinData;
-        Float4 worldMaxData;
-        StoreFloat(worldMin, worldMinData);
-        StoreFloat(worldMax, worldMaxData);
-        const SceneBvhPrimitiveCalculation bvhPrimitive = MakeSceneBvhPrimitiveCalculation(
-            worldMinData,
-            worldMaxData,
-            (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u
-        );
+        SceneBvhPrimitiveCalculation bvhPrimitive;
+        StoreFloat(worldMin, bvhPrimitive.aabbMin);
+        StoreFloat(worldMax, bvhPrimitive.aabbMax);
+        StoreFloat(VectorMultiply(VectorAdd(worldMin, worldMax), VectorReplicate(0.5f)), bvhPrimitive.centroid);
+        bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
 
         SIMDVectorSingle opticalMin = VectorZero();
         SIMDVectorSingle opticalMax = VectorZero();
@@ -250,10 +239,10 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
             bvhPrimitive.transparentOccluder && (meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
             && meshResult->meshResources.runtimeLocalBoundsBuffer && meshResult->meshResources.runtimeLocalBoundsHeapHandle.valid()
         ;
-        Float34 opticalWorld{};
-        StoreFloat(objectToWorld, opticalWorld);
+        Float34 instanceWorld{};
+        StoreFloat(objectToWorld, instanceWorld);
         if(runtimeOpticalBounds)
-            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, opticalWorld);
+            opticalScene.appendRuntime(entity, renderer, meshResult->meshResources.runtimeLocalBoundsBuffer, meshResult->meshResources.runtimeLocalBoundsHeapHandle, instanceWorld);
         else
             opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 
@@ -276,24 +265,11 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         Fnv64AppendValue(captureSceneIdentity, opticalScene.instances.back());
         if((meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeGeometryContentRevision == 0u)
             captureSceneTrusted = false;
-        m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.positionBuffer);
-        m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.triangleIndexBuffer);
-        m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.attributeBuffer);
-        if(meshResult->meshResources.meshletCount != 0u){
-            m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.meshletDescBuffer);
-            m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.meshletLocalBoundsBuffer);
-        }
-        if(m_lightSpaceShadow.m_csg.gathering){
-            if(meshResult->meshResources.runtimeLocalBoundsBuffer)
-                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.runtimeLocalBoundsBuffer);
-            if(meshResult->meshResources.swBvhNodeBuffer)
-                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.swBvhNodeBuffer);
-        }
+        AppendLightSpaceSceneBuffers(meshResult->meshResources, m_lightSpaceShadow.m_csg.gathering, m_lightSpaceShadow.m_sceneBuffers);
 
-        if(m_lightSpaceShadow.m_csg.gathering){
+        if(m_lightSpaceShadow.m_csg.gathering)
             AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, worldToObject, localMin, localMax, meshResult->meshResources);
-        }
-        sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
+        sceneRefitInputs.push_back({ instanceWorld, instanceMaterial.nodeSlot, {} });
         sceneRefitRoots.push_back(meshResult->meshResources.swBvhNodeBuffer);
         lightSpaceCasters.push_back({
             .triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer,

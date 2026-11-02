@@ -126,7 +126,7 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
             if(scope.m_searchIdentity == 0u)
                 TerminateInvariant();
         }
-        wait.m_scopeIdentity = scope.m_searchIdentity;
+        wait.scopeIdentity = scope.m_searchIdentity;
         validateWaitLocked({}, &scope);
     }
     while(scope.m_pending.load(MemoryOrder::acquire) != 0u){

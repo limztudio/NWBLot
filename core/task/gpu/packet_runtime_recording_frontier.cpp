@@ -343,7 +343,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             }
             if(recordingEntries[recordingIndex].allowsParallelRecording)
                 parallelPacketIndices.push_back(packet.index);
-            else if(!recordPacket(graph, compiledGraph, planAccess, artifactOperation, packet, serialStateFanInScratchArena, *serialScratch, outRecordedGraph, nullptr, nullptr)){
+            else if(!recordPacket(graph, compiledGraph, planAccess, artifactOperation, packet, 0u, 0u, serialStateFanInScratchArena, *serialScratch, outRecordedGraph)){
                 if(outFailedPacket)
                     *outFailedPacket = packet;
                 return false;
@@ -370,13 +370,13 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     planAccess,
                     artifactOperation,
                     packet,
+                    cpuScheduler.domainIdentity(),
+                    static_cast<u32>(cpuScheduler.currentWorkerIndex() + 1u),
                     *scratch->stateFanInScratchArena,
                     *scratch,
                     outRecordedGraph,
                     nullptr,
-                    &parallelAborts[parallelIndex],
-                    cpuScheduler.domainIdentity(),
-                    static_cast<u32>(cpuScheduler.currentWorkerIndex() + 1u)
+                    &parallelAborts[parallelIndex]
                 ) ? 1u : 0u;
             });
             for(usize parallelIndex = 0u; parallelIndex < parallelAborts.size(); ++parallelIndex){
@@ -431,7 +431,7 @@ b8 GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
     // Compiler packet IDs are in stable topological order, preserving state-seed dependencies.
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-        if(!recordPacket(graph, compiledGraph, planAccess, artifactAccess, packet, stateFanInScratchArena, scratch, outRecordedGraph, outCommandIrCapture, nullptr)){
+        if(!recordPacket(graph, compiledGraph, planAccess, artifactAccess, packet, 0u, 0u, stateFanInScratchArena, scratch, outRecordedGraph, outCommandIrCapture)){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;

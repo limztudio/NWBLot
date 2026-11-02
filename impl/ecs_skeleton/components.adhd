@@ -18,7 +18,6 @@ b8 ValidSkeletonSkinningMode(in u32 mode){
     return mode == cast<u32>(SkeletonSkinningMode::LinearBlend) || mode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
 }
 
-const u32 s_SkeletonRootParent = s_SkeletonInvalidJointIndex;
 const f32 s_SkeletonAffineEpsilon = 0.000001f;
 const f32 s_SkeletonJointDeterminantEpsilon = 0.000000000001f;
 const f32 s_SkeletonRigidJointEpsilon = 0.001f;
@@ -48,7 +47,7 @@ b8 ValidSkeletonPoseTopology(in SkeletonPoseComponent pose){
         return false;
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const u32 parentJoint = pose.parentJoints[jointIndex];
-        if(parentJoint != s_SkeletonRootParent && cast<usize>(parentJoint) >= jointIndex)
+        if(parentJoint != s_SkeletonInvalidJointIndex && cast<usize>(parentJoint) >= jointIndex)
             return false;
     }
     return true;

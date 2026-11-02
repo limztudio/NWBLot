@@ -5,6 +5,8 @@
 #include "software_scene_refit.h"
 
 #include <impl/assets_graphics/components.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/shader/shader_system.h>
 
@@ -24,24 +26,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_software_scene_refit{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ::NWB::Impl::s_SoftwareNodeByteSize;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void SoftwareSceneRefitResources::invalidate(){
     m_snapshots.clear();
     auto& device = m_graphics.getDevice();
@@ -56,8 +40,11 @@ void SoftwareSceneRefitResources::invalidate(){
 }
 
 Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
-    const Span<const SoftwareSceneRefitInstanceGpu> inputs, const Span<const Core::BufferHandle> meshNodes,
-    const Core::BufferHandle& sceneNodes, const Core::GpuDescriptorHandle sceneDescriptor, const u32 nodeCount,
+    const Span<const SoftwareSceneRefitInstanceGpu> inputs,
+    const Span<const Core::BufferHandle> meshNodes,
+    const Core::BufferHandle& sceneNodes,
+    const Core::GpuDescriptorHandle sceneDescriptor,
+    const u32 nodeCount,
     RendererShaderSystem& shaderSystem
 ){
     const usize instanceCount = inputs.size();
@@ -70,7 +57,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const auto& sceneDesc = sceneNodes->getCreationDescription();
-    if(sceneNodes->getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs || sceneDesc.byteSize < static_cast<u64>(nodeCount) * __hidden_software_scene_refit::s_SoftwareNodeByteSize)
+    if(sceneNodes->getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs || sceneDesc.byteSize < static_cast<u64>(nodeCount) * s_NwbBvhNodeGpuByteSize)
         return MakeUnexpected(Failure{});
     const usize byteSize = instanceCount * sizeof(SoftwareSceneRefitInstanceGpu);
     if(m_inputBuffer && m_inputBuffer->getDeviceGeneration() != device.getDeviceGeneration())
@@ -83,14 +70,10 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
         if(!replacementResult)
             return MakeUnexpected(Failure{});
         Core::BufferHandle replacement = Move(*replacementResult);
-        const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        const Expected<Core::GpuDescriptorHandle> descriptorResult = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get()));
         if(!descriptorResult)
             return MakeUnexpected(descriptorResult.error());
         const Core::GpuDescriptorHandle descriptor = *descriptorResult;
-        if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get()))){
-            heap.free(descriptor);
-            return MakeUnexpected(Failure{});
-        }
         if(m_inputDescriptor.valid())
             heap.free(m_inputDescriptor);
         m_inputBuffer = Move(replacement);
@@ -124,7 +107,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
     for(usize index = 0u; index < instanceCount; ++index){
         if(
             !meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max
-            || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index]->getCreationDescription().byteSize < __hidden_software_scene_refit::s_SoftwareNodeByteSize
+            || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration() || meshNodes[index]->getCreationDescription().byteSize < s_NwbBvhNodeGpuByteSize
         )
             return MakeUnexpected(Failure{});
         snapshot->inputs.push_back(inputs[index]);
@@ -134,34 +117,19 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
 }
 
 b8 SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSystem){
-    if(m_pipeline)
-        return true;
-    auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!m_bindingLayout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_SCENE_BVH_REFIT_PUSH_BYTES));
-        auto bindingLayoutResult = device.createBindingLayout(desc);
-        if(bindingLayoutResult)
-            m_bindingLayout = Move(*bindingLayoutResult);
-        else
-            m_bindingLayout.reset();
-        if(!bindingLayoutResult)
-            return false;
-    }
-    if(!shaderSystem.loadShader<ComputeShader>(&BvhSubsystem::sceneRefitCs, Core::ShaderArchive::s_DefaultVariant, Name("SoftwareSceneRefit"), m_shader))
-        return false;
-    Core::ComputePipelineDesc desc;
-    desc.setComputeShader(m_shader).addBindingLayout(m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult)
-        m_pipeline = Move(*pipelineResult);
-    else
-        m_pipeline.reset();
-    return static_cast<b8>(pipelineResult);
+    return RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        shaderSystem,
+        &BvhSubsystem::sceneRefitCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        Name("SoftwareSceneRefit"),
+        NWB_SCENE_BVH_REFIT_PUSH_BYTES,
+        false,
+        m_bindingLayout,
+        m_shader,
+        m_pipeline
+    );
 }
 
 

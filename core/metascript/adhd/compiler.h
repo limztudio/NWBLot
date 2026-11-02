@@ -43,17 +43,25 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Compiler final{
-public:
-    [[nodiscard]] static b8 Compile(MStringView source, MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult, IIncludeResolver* includeResolver = nullptr, MStringView customNamespace = {}, Span<const MString> macroDefinitions = {});
-
-    [[nodiscard]] static MString DeriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);
-    [[nodiscard]] static MString DeriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.h", arena); }
-    [[nodiscard]] static MString DeriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.cpp", arena); }
+namespace Compiler{
 
 
-private:
-    [[nodiscard]] static MString DeriveOutputFilename(MStringView virtualFilePath, MStringView suffix, MetaArena& arena);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 Compile(MStringView source, MStringView virtualFilePath, IIncludeResolver* includeResolver, MStringView customNamespace, Span<const MString> macroDefinitions, MetaArena& arena, CompileResult& outResult);
+[[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, MetaArena& arena, CompileResult& outResult){ return Compile(source, virtualFilePath, includeResolver, {}, {}, arena, outResult); }
+[[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult){ return Compile(source, virtualFilePath, nullptr, {}, {}, arena, outResult); }
+
+[[nodiscard]] MString DeriveOutputFilename(MStringView virtualFilePath, MStringView suffix, MetaArena& arena);
+[[nodiscard]] MString DeriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);
+[[nodiscard]] inline MString DeriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.h", arena); }
+[[nodiscard]] inline MString DeriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.cpp", arena); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

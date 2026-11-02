@@ -51,8 +51,8 @@ static b8 RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
         [](FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
             return BuildFontAtlasAsset(Move(entry), arena, scratchArena);
         },
-        registry,
-        false
+        false,
+        registry
     );
 }
 

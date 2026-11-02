@@ -336,7 +336,7 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> AssetsGrap
     UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = Move(*filesystemResult);
 
     NWB::Core::GraphicsBytes indexBinary(testArena.arena);
-    const b8 loadedIndex = filesystem->readFile(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
+    const b8 loadedIndex = filesystem->readFile(NWB::Core::ShaderArchive::s_IndexVirtualPathName, indexBinary);
     EXPECT_TRUE(loadedIndex);
     EXPECT_FALSE(indexBinary.empty());
     if(!loadedIndex || indexBinary.empty())

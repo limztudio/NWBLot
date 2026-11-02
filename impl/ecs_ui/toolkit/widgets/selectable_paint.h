@@ -18,15 +18,24 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SelectablePainter final{
-public:
-    [[nodiscard]] static Expected<SelectableMetrics> Measure(const UiSkin& skin, const SelectableStyle& style)noexcept;
-    // Use the same display-scale visual bounds and resolved padding that sized the control.
-    [[nodiscard]] static b8 Paint(
-        PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
-        const Rect& textBounds, const Insets& padding, const Rect& bounds, const Rect& clip, const SelectableStyle& style,
-        const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor
-    );
+namespace SelectablePainter{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<SelectableMetrics> Measure(const UiSkin& skin, const SelectableStyle& style)noexcept;
+// Use the same display-scale visual bounds and resolved padding that sized the control.
+[[nodiscard]] b8 Paint(
+    PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
+    const Rect& textBounds, const Insets& padding, const Rect& bounds, const Rect& clip, const SelectableStyle& style,
+    const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

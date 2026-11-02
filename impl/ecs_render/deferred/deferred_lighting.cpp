@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/caustic/rt_caustic_state.h>
 #include <impl/ecs_render/deferred/deferred_graph_private.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/shadow/types.adhd.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -111,9 +112,8 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     const usize lightByteCount = lights.size() * sizeof(SceneLightGpuData);
     // Commit the empty mirror on accept so later diffs stay correct.
     if(lightUploadRequired || lightCount == 0u){
-        if(lightByteCount != 0u){
+        if(lightByteCount != 0u)
             NWB_MEMCPY(m_deferredState.m_lightGpuData.data(), m_deferredState.m_lightGpuData.size(), lights.data(), lightByteCount);
-        }
         m_deferredState.m_lightGpuDataCount = lightCount;
         m_deferredState.m_lightGpuDataValid = true;
     }
@@ -171,21 +171,10 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         }
     }
 
-    if(!m_deferredState.m_lightingBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Local layout carries the heap slot plus the swap-chain mode.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(DeferredLightingPushConstants)));
-
-        auto lightingBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
-        if(lightingBindingLayoutResult)
-            m_deferredState.m_lightingBindingLayout = Move(*lightingBindingLayoutResult);
-        else
-            m_deferredState.m_lightingBindingLayout.reset();
-        if(!lightingBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
-            return false;
-        }
+    // Local layout carries the heap slot plus the swap-chain mode.
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(DeferredLightingPushConstants), Core::ShaderType::Compute, m_deferredState.m_lightingBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
+        return false;
     }
 
     if(!ECSRenderDetail::CreateClampSampler(device, false, m_deferredState.m_sampler)){
@@ -207,17 +196,7 @@ b8 RendererDeferredSystem::createDeferredLightingPipeline(){
     if(m_deferredState.m_lightingPipeline)
         return true;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_deferredState.m_lightingComputeShader).addBindingLayout(m_deferredState.m_lightingBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-
-    auto lightingPipelineResult = device.createComputePipeline(pipelineDesc);
-    if(lightingPipelineResult)
-        m_deferredState.m_lightingPipeline = Move(*lightingPipelineResult);
-    else
-        m_deferredState.m_lightingPipeline.reset();
-    if(!lightingPipelineResult){
+    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), m_deferredState.m_lightingComputeShader, m_deferredState.m_lightingBindingLayout, false, m_deferredState.m_lightingPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
     }

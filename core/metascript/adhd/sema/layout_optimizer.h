@@ -28,9 +28,9 @@ void CollectExternalForwardDeclClasses(
     const SymbolTable& symbols,
     Span<const TemplateParamDecl> outerTemplateParams,
     Span<const TemplateParamDecl> innerTemplateParams,
-    MVector<MStringView>& outNames,
-    b8 inRefOrAssetContext = false,
-    u32 depth = 0u
+    b8 inRefOrAssetContext,
+    u32 depth,
+    MVector<MStringView>& outNames
 );
 
 
@@ -85,5 +85,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

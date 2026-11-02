@@ -9,7 +9,6 @@
 #include <impl/assets_shader/loader.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
 #include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -34,10 +33,9 @@ inline constexpr u32 s_TilesX = DivideUp(s_Width, static_cast<u32>(NWB_REFRACTIO
 inline constexpr u32 s_TilesY = DivideUp(s_Height, static_cast<u32>(NWB_REFRACTION_GROUP_SIZE));
 inline constexpr u32 s_TileCount = s_TilesX * s_TilesY;
 inline constexpr u32 s_PixelCount = s_Width * s_Height;
-inline constexpr u32 s_GuardWords = NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
-inline constexpr u32 s_ArgumentWords = NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32) + s_GuardWords;
-inline constexpr u32 s_QueueWords = s_TileCount + s_GuardWords;
-inline constexpr u32 s_VisitWords = NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + s_TileCount + s_PixelCount + s_GuardWords;
+inline constexpr u32 s_ArgumentWords = NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32) + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
+inline constexpr u32 s_QueueWords = s_TileCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
+inline constexpr u32 s_VisitWords = NWB_SMOKE_REFRACTION_PROBE_HEADER_WORDS + s_TileCount + s_PixelCount + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS;
 inline constexpr u32 s_ReadbackWords = s_ArgumentWords + s_QueueWords + s_VisitWords;
 inline constexpr u32 s_Sentinel = 0xa573d91bu;
 inline constexpr u32 s_PhaseCount = 6u;
@@ -136,13 +134,13 @@ public:
         arguments.fill(s_Sentinel);
         for(u32 word = 0u; word < NWB_REFRACTION_TILE_ARGUMENT_BYTES / sizeof(u32); ++word)
             arguments[word] = 0u;
-        Array<u32, s_GuardWords> guards;
+        Array<u32, NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS> guards;
         guards.fill(s_Sentinel);
         commands.clearBufferUInt(*payload.queue, s_Sentinel);
         commands.clearBufferUInt(*payload.visits, 0u);
         commands.setBufferState(payload.visits.get(), Core::ResourceStates::CopyDest, true);
         commands.commitBarriers();
-        if(!commands.tryWriteBuffer(*payload.arguments, arguments.data(), sizeof(arguments)) || !commands.tryWriteBuffer(*payload.visits, guards.data(), sizeof(guards), static_cast<u64>(s_VisitWords - s_GuardWords) * sizeof(u32)))
+        if(!commands.tryWriteBuffer(*payload.arguments, arguments.data(), sizeof(arguments)) || !commands.tryWriteBuffer(*payload.visits, guards.data(), sizeof(guards), static_cast<u64>(s_VisitWords - NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS) * sizeof(u32)))
             return false;
 
         payload.stage = NWB_TEXT("production tile classification");
@@ -290,7 +288,7 @@ public:
                 , payload.arguments->getCreationDescription().byteSize, payload.queue->getCreationDescription().byteSize, payload.visits->getCreationDescription().byteSize, payload.readback->getCreationDescription().byteSize
                 , s_QueueWords, s_ArgumentWords * sizeof(u32), (s_ArgumentWords + s_QueueWords) * sizeof(u32)
             );
-            for(u32 neighbor = count > 4u ? count - 4u : 0u; neighbor < Min(count + s_GuardWords, s_QueueWords); ++neighbor)
+            for(u32 neighbor = count > 4u ? count - 4u : 0u; neighbor < Min(count + NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS, s_QueueWords); ++neighbor)
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: queue[{}]=0x{:08x}"), neighbor, queue.get()[neighbor]);
             const auto counters = MakeNotNull(queue.get() + s_QueueWords);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: counters groups={} tails={} errors={} edge_lanes={}"), counters.get()[0], counters.get()[1], counters.get()[2], counters.get()[3]);
@@ -328,7 +326,7 @@ public:
             return false;
         }
     }
-    for(u32 word = s_VisitWords - s_GuardWords; word < s_VisitWords; ++word){
+    for(u32 word = s_VisitWords - NWB_SMOKE_REFRACTION_PROBE_GUARD_WORDS; word < s_VisitWords; ++word){
         if(visits.get()[word] != s_Sentinel){
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} visit guard overwritten at {}"), payload.phase, word);
             return false;
@@ -367,11 +365,14 @@ b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystem
     const auto verifyShaderRef = sceneSubsystems.findSceneAsset<Impl::ComputeShader>(s_VerifyShaderName);
     if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
         return false;
+    const auto loadProbeShader = [&](const Name& shaderName, const AStringView variantName, Core::ShaderHandle& outShader){
+        return Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shaderName, variantName, s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, outShader);
+    };
     if(
-        !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, classifyShader)
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, finalizeShader)
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, verifyCompactShader)
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, verifyDenseShader)
+        !loadProbeShader(classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, classifyShader)
+        || !loadProbeShader(finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, finalizeShader)
+        || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), verifyCompactShader)
+        || !loadProbeShader(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), verifyDenseShader)
     )
         return false;
     Core::BindingLayoutDesc layoutDesc(context.objectArena);

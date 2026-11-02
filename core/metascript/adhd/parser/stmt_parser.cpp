@@ -162,7 +162,7 @@ Stmt* StmtParser::parseStatement(){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         TypeRef* maybeType = m_typeParser.parseType(true, true);
         if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("as"))
-            return parseVarDeclWithType(maybeType, span, false);
+            return parseVarDeclWithType(*maybeType, span, false);
         if(startsWithRefOrProhibitedType){
             if(maybeType)
                 m_cursor.errorExpected("expected variable name");
@@ -224,7 +224,7 @@ Stmt* StmtParser::parseConstDeclaration(const SourceSpan span){
         m_cursor.errorExpected("expected constant name after type");
         return nullptr;
     }
-    return parseVarDeclWithType(varType, span, true);
+    return parseVarDeclWithType(*varType, span, true);
 }
 
 b8 StmtParser::rejectStatementAttributes(const Span<const ParsedAttribute> attributes, const SourceSpan span, const MStringView message){
@@ -547,5 +547,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

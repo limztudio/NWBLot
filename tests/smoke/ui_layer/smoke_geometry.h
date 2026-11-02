@@ -8,7 +8,8 @@
 #include "marker_positions.h"
 
 #include <impl/ecs_ui/paint_context.h>
-#include <impl/ecs_ui/toolkit/layout/rectangle.h>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <core/common/log.h>
 #include <core/alloc/general.h>
@@ -67,9 +68,6 @@ template<typename Source>
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{ return EncodeSmokeColor(static_cast<u64>(value)); }
 
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value)noexcept{ return EncodeSmokeColor(static_cast<u64>(Max(0.0f, value) + 0.5f)); }
-
-// Lanes are x, y, width and height.
-[[nodiscard]] inline Impl::Ui::Rect StoreSmokeRect(const SIMDVectorSingle rectangle)noexcept{ return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) }; }
 
 [[nodiscard]] inline b8 SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{ return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height; }
 

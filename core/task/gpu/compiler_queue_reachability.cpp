@@ -98,10 +98,10 @@ static void SymmetrizeCompactTaskRelations(const Span<u64> words, const Span<con
         using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
         return
             noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
-            && noexcept(static_cast<b8>(DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end))
-            && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin])
-            && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
-            && noexcept(DeclVal<usize&>() = Max(DeclVal<usize&>(), DeclVal<const RowRanges&>()[DeclVal<usize>()].m_end))
+            && noexcept(static_cast<b8>(DeclVal<const usize&>() < DeclVal<Range>().begin || DeclVal<const usize&>() >= DeclVal<Range>().end))
+            && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().begin])
+            && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().begin && DeclVal<const usize&>() < DeclVal<Range>().end))
+            && noexcept(DeclVal<usize&>() = Max(DeclVal<usize&>(), DeclVal<const RowRanges&>()[DeclVal<usize>()].end))
         ;
     }()
 ){
@@ -111,38 +111,38 @@ static void SymmetrizeCompactTaskRelations(const Span<u64> words, const Span<con
             return
                 noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
                 && noexcept(
-                    DeclVal<const usize&>() < DeclVal<Range>().m_begin || DeclVal<const usize&>() >= DeclVal<Range>().m_end
+                    DeclVal<const usize&>() < DeclVal<Range>().begin || DeclVal<const usize&>() >= DeclVal<Range>().end
                     ? static_cast<u64>(0u)
-                    : DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin]
+                    : DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().begin]
                 )
             ;
         }()
     ){
         const auto& range = ranges[task];
-        return word < range.m_begin || word >= range.m_end ? static_cast<u64>(0u) : words[offsets[task] + word - range.m_begin];
+        return word < range.begin || word >= range.end ? static_cast<u64>(0u) : words[offsets[task] + word - range.begin];
     };
     const auto appendWord = [&](const usize task, const usize word, const u64 bits)noexcept(
         []()constexpr noexcept{
             using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
             return
                 noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
-                && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().m_begin && DeclVal<const usize&>() < DeclVal<Range>().m_end))
-                && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().m_begin] |= DeclVal<const u64&>())
+                && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().begin && DeclVal<const usize&>() < DeclVal<Range>().end))
+                && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().begin] |= DeclVal<const u64&>())
             ;
         }()
     ){
         if(bits == 0u)
             return;
         const auto& range = ranges[task];
-        NWB_ASSERT(word >= range.m_begin && word < range.m_end);
-        words[offsets[task] + word - range.m_begin] |= bits;
+        NWB_ASSERT(word >= range.begin && word < range.end);
+        words[offsets[task] + word - range.begin] |= bits;
     };
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
         const usize rowBase = rowBlock * s_BitsPerWord;
         const usize rowCount = Min(s_BitsPerWord, taskCount - rowBase);
         usize columnEnd = rowBlock + 1u;
         for(usize row = 0u; row < rowCount; ++row)
-            columnEnd = Max(columnEnd, ranges[rowBase + row].m_end);
+            columnEnd = Max(columnEnd, ranges[rowBase + row].end);
         for(usize columnBlock = rowBlock; columnBlock < columnEnd; ++columnBlock){
             const usize columnBase = columnBlock * s_BitsPerWord;
             const usize columnCount = Min(s_BitsPerWord, taskCount - columnBase);
@@ -220,9 +220,9 @@ b8 GpuTaskSchedulingReachability::transitivelyIndependent(const GpuTaskId& lhs, 
 b8 GpuTaskSchedulingReachability::hasRelatedBit(const u32 sourceIndex, const u32 destinationIndex)const noexcept{
     const usize destinationWord = destinationIndex / s_BitsPerWord;
     const auto& range = m_relatedWordRanges[sourceIndex];
-    if(destinationWord < range.m_begin || destinationWord >= range.m_end)
+    if(destinationWord < range.begin || destinationWord >= range.end)
         return false;
-    const usize wordIndex = m_rowOffsets.empty() ? sourceIndex * m_wordsPerRow + destinationWord : m_rowOffsets[sourceIndex] + destinationWord - range.m_begin;
+    const usize wordIndex = m_rowOffsets.empty() ? sourceIndex * m_wordsPerRow + destinationWord : m_rowOffsets[sourceIndex] + destinationWord - range.begin;
     const u64 mask = static_cast<u64>(1u) << (destinationIndex % s_BitsPerWord);
     return (m_words[wordIndex] & mask) != 0u;
 }
@@ -304,7 +304,7 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         Vector<GpuTaskSchedulingReachability::WordRange, Alloc::ScratchArena> descendantRanges(taskCount, outReachability.m_relatedWordRanges.get_allocator());
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
             const usize selfWord = taskIndex / s_BitsPerWord;
-            descendantRanges[taskIndex] = { .m_begin = selfWord, .m_end = selfWord + 1u };
+            descendantRanges[taskIndex] = { .begin = selfWord, .end = selfWord + 1u };
             outReachability.m_relatedWordRanges[taskIndex] = descendantRanges[taskIndex];
         }
         for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
@@ -316,8 +316,8 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
                 const usize child = consumers[consumer];
                 NWB_ASSERT(child < taskCount && child != source.index);
                 const auto& childRange = descendantRanges[child];
-                sourceRange.m_begin = Min(sourceRange.m_begin, childRange.m_begin);
-                sourceRange.m_end = Max(sourceRange.m_end, childRange.m_end);
+                sourceRange.begin = Min(sourceRange.begin, childRange.begin);
+                sourceRange.end = Max(sourceRange.end, childRange.end);
             }
         }
         // Forward ancestry bounds stay separate until every producer has propagated its own ancestors.
@@ -326,16 +326,16 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
             const auto producers = analysis.schedulingProducers(task);
             for(usize producer = 0u; producer < producers.taskCount; ++producer){
                 const auto& parentRange = outReachability.m_relatedWordRanges[producers[producer]];
-                range.m_begin = Min(range.m_begin, parentRange.m_begin);
-                range.m_end = Max(range.m_end, parentRange.m_end);
+                range.begin = Min(range.begin, parentRange.begin);
+                range.end = Max(range.end, parentRange.end);
             }
         }
         usize compactWordCount = 0u;
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
             auto& range = outReachability.m_relatedWordRanges[taskIndex];
-            range.m_begin = Min(range.m_begin, descendantRanges[taskIndex].m_begin);
-            range.m_end = Max(range.m_end, descendantRanges[taskIndex].m_end);
-            const usize span = range.m_end - range.m_begin;
+            range.begin = Min(range.begin, descendantRanges[taskIndex].begin);
+            range.end = Max(range.end, descendantRanges[taskIndex].end);
+            const usize span = range.end - range.begin;
             if(span > Limit<usize>::s_Max - compactWordCount)
                 return fail();
             compactWordCount += span;
@@ -356,26 +356,26 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
             usize rowOffset = 0u;
             for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
                 const auto range = outReachability.m_relatedWordRanges[taskIndex];
-                const usize firstWord = compactRows ? range.m_begin : 0u;
+                const usize firstWord = compactRows ? range.begin : 0u;
                 if(compactRows)
                     outReachability.m_rowOffsets[taskIndex] = rowOffset;
                 outReachability.m_words[rowOffset + taskIndex / s_BitsPerWord - firstWord] |= static_cast<u64>(1u) << (taskIndex % s_BitsPerWord);
-                rowOffset += compactRows ? range.m_end - range.m_begin : wordsPerRow;
+                rowOffset += compactRows ? range.end - range.begin : wordsPerRow;
             }
             for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
                 const GpuTaskId source = analysis.topologicalOrder()[orderIndex - 1u];
                 outReachability.m_topologicalRanks[source.index] = static_cast<u32>(orderIndex - 1u);
-                const usize sourceFirstWord = compactRows ? outReachability.m_relatedWordRanges[source.index].m_begin : 0u;
+                const usize sourceFirstWord = compactRows ? outReachability.m_relatedWordRanges[source.index].begin : 0u;
                 const usize sourceOffset = compactRows ? outReachability.m_rowOffsets[source.index] : source.index * wordsPerRow;
                 const auto consumers = analysis.schedulingConsumers(source);
                 for(usize consumer = 0u; consumer < consumers.taskCount; ++consumer){
                     const usize child = consumers[consumer];
-                    const usize childFirstWord = compactRows ? outReachability.m_relatedWordRanges[child].m_begin : 0u;
+                    const usize childFirstWord = compactRows ? outReachability.m_relatedWordRanges[child].begin : 0u;
                     const usize childOffset = compactRows ? outReachability.m_rowOffsets[child] : child * wordsPerRow;
                     const auto descendantRange = descendantRanges[child];
-                    const usize sourceBegin = sourceOffset + descendantRange.m_begin - sourceFirstWord;
-                    const usize childBegin = childOffset + descendantRange.m_begin - childFirstWord;
-                    const usize wordCount = descendantRange.m_end - descendantRange.m_begin;
+                    const usize sourceBegin = sourceOffset + descendantRange.begin - sourceFirstWord;
+                    const usize childBegin = childOffset + descendantRange.begin - childFirstWord;
+                    const usize wordCount = descendantRange.end - descendantRange.begin;
                     // Snapshot the bounds before writes so the closure OR can be vectorized.
                     for(usize word = 0u; word < wordCount; ++word)
                         outReachability.m_words[sourceBegin + word] |= outReachability.m_words[childBegin + word];
@@ -394,7 +394,7 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
     // Reverse topology completes each consumer's nonzero descendant span before its producer reads it.
     outReachability.m_relatedWordRanges.resize(taskCount);
     for(auto& range : outReachability.m_relatedWordRanges)
-        range = { .m_begin = wordsPerRow, .m_end = 0u };
+        range = { .begin = wordsPerRow, .end = 0u };
     for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
         const GpuTaskId source = analysis.topologicalOrder()[orderIndex - 1u];
         NWB_ASSERT(source.valid() && source.generation == graph.generation() && source.index < taskCount);
@@ -406,15 +406,15 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
             NWB_ASSERT(consumerIndex < taskCount && consumerIndex != source.index);
             const usize consumerRowOffset = consumerIndex * wordsPerRow;
             const auto& consumerRange = outReachability.m_relatedWordRanges[consumerIndex];
-            for(usize wordIndex = consumerRange.m_begin; wordIndex < consumerRange.m_end; ++wordIndex){
+            for(usize wordIndex = consumerRange.begin; wordIndex < consumerRange.end; ++wordIndex){
                 outReachability.m_words[sourceRowOffset + wordIndex] |= outReachability.m_words[consumerRowOffset + wordIndex];
             }
             const usize consumerWordIndex = consumerIndex / s_BitsPerWord;
             const usize consumerWord = sourceRowOffset + consumerWordIndex;
             outReachability.m_words[consumerWord] |= static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
             auto& sourceRange = outReachability.m_relatedWordRanges[source.index];
-            sourceRange.m_begin = Min(sourceRange.m_begin, Min(consumerRange.m_begin, consumerWordIndex));
-            sourceRange.m_end = Max(sourceRange.m_end, Max(consumerRange.m_end, consumerWordIndex + 1u));
+            sourceRange.begin = Min(sourceRange.begin, Min(consumerRange.begin, consumerWordIndex));
+            sourceRange.end = Max(sourceRange.end, Max(consumerRange.end, consumerWordIndex + 1u));
         }
     }
     // Symmetrize the completed directed closure with bounded tile storage; ranks preserve strict direction.
@@ -426,12 +426,12 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         const usize rowOffset = taskIndex * wordsPerRow;
         outReachability.m_words[rowOffset + taskIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (taskIndex % s_BitsPerWord);
         auto& range = outReachability.m_relatedWordRanges[taskIndex];
-        range = { .m_begin = wordsPerRow, .m_end = 0u };
+        range = { .begin = wordsPerRow, .end = 0u };
         for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex){
             const u64 word = outReachability.m_words[rowOffset + wordIndex];
             if(word != 0u){
-                range.m_begin = Min(range.m_begin, wordIndex);
-                range.m_end = wordIndex + 1u;
+                range.begin = Min(range.begin, wordIndex);
+                range.end = wordIndex + 1u;
             }
         }
     }

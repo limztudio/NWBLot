@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::declare(const DeferredGraphResourceImportInputs& inputs)const{
+Expected<DeferredGraphResourceImportResult> DeferredGraphResourceImportBuilder::declare(const DeferredGraphResourceImportInputs& inputs)const{
     DeferredGraphResourceImportResult result{};
 
     DeferredFrameTargets& deferredTargets = inputs.targets;

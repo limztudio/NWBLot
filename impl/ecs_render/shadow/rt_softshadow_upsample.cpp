@@ -78,22 +78,14 @@ b8 RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
     if(resolve.m_combinedUpsampleFailed || !resolve.m_bindingLayout)
         return false;
     auto& device = m_graphics.getDevice();
-    auto& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowResolveCombinedCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowUpsample", resolve.m_combinedUpsample.m_shader)){
+    if(
+        !m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowResolveCombinedCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CombinedShadowUpsample", resolve.m_combinedUpsample.m_shader)
+        || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, resolve.m_combinedUpsample.m_shader, resolve.m_bindingLayout, false, resolve.m_combinedUpsample.m_pipeline)
+    ){
         resolve.m_combinedUpsampleFailed = true;
         return false;
     }
-    Core::ComputePipelineDesc desc;
-    desc.setComputeShader(resolve.m_combinedUpsample.m_shader).addBindingLayout(resolve.m_bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult)
-        resolve.m_combinedUpsample.m_pipeline = Move(*pipelineResult);
-    else
-        resolve.m_combinedUpsample.m_pipeline.reset();
-    resolve.m_combinedUpsampleFailed = !pipelineResult;
-    return !resolve.m_combinedUpsampleFailed;
+    return true;
 }
 
 

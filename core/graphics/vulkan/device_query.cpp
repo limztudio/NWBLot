@@ -202,7 +202,7 @@ FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format
     if(!VulkanDetail::IsCompressedTextureFormatFeatureEnabled(format, compressedTextureFeatures))
         return FormatSupport::None;
 
-    const VkFormat vkFormat = ConvertFormat(format);
+    const VkFormat vkFormat = VulkanDetail::ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
         return FormatSupport::None;
 
@@ -236,7 +236,7 @@ FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format
 }
 
 b8 Device::canCreateSampledTextureFormat(const Format::Enum format)const{
-    const VkFormat vkFormat = ConvertFormat(format);
+    const VkFormat vkFormat = VulkanDetail::ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
         return false;
 

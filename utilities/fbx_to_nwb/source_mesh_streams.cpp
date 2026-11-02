@@ -22,27 +22,6 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace UtilityDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Core::Alloc::GlobalArena& Arena(){
-    static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
-    return s_Arena;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename Value, typename Lookup>
 [[nodiscard]] static Expected<u32> InternSourceValue(const Value& value, const AStringView streamName, UtilityVector<Value>& inOutStream, Lookup& inOutLookup){
     auto found = inOutLookup.find(value);
@@ -83,14 +62,6 @@ usize MeshSkinInfluenceHasher::operator()(const MeshSkinInfluence& value)const n
     for(const f32 weight : value.weight.raw)
         HashCombine(seed, FloatingHashBits(weight));
     return seed;
-}
-
-usize SourceVertexRefHasher::operator()(const SourceVertexRef& value)const noexcept{
-    return HashSourceVertexRef(value);
-}
-
-b8 SourceVertexRefEqual::operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
-    return EqualSourceVertexRef(lhs, rhs);
 }
 
 SourceMeshBuildContext::SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)
@@ -263,7 +234,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
 
         Vec4 generatedTangent;
         StoreFloat(VectorSelect(tangent, ::FrameTangentHandedness(storedTangent, s_SIMDOne), s_SIMDMaskW), generatedTangent);
-        const auto tangentIndex = InternSourceValue(generatedTangent, s_SourceTangentLabel, inOutMesh.tangents, tangentLookup);
+        const auto tangentIndex = InternSourceValue(generatedTangent, Impl::s_VertexRefTangentName, inOutMesh.tangents, tangentLookup);
         if(!tangentIndex)
             return MakeUnexpected(tangentIndex.error());
         ref.tangent = *tangentIndex;
@@ -276,25 +247,25 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
 
 Expected<u32> FbxSourceMeshStreams::InternSourceCorner(const SourceTriangleCorner& corner, const b8 wantsSkinning, SourceMeshBuildContext& inOutContext){
     SourceVertexRef ref;
-    const auto positionIndex = InternSourceValue(corner.position, s_SourcePositionLabel, inOutContext.mesh.positions, inOutContext.positions);
+    const auto positionIndex = InternSourceValue(corner.position, Impl::s_VertexRefPositionName, inOutContext.mesh.positions, inOutContext.positions);
     if(!positionIndex)
         return MakeUnexpected(positionIndex.error());
     ref.position = *positionIndex;
-    const auto normalIndex = InternSourceValue(corner.normal, s_SourceNormalLabel, inOutContext.mesh.normals, inOutContext.normals);
+    const auto normalIndex = InternSourceValue(corner.normal, Impl::s_VertexRefNormalName, inOutContext.mesh.normals, inOutContext.normals);
     if(!normalIndex)
         return MakeUnexpected(normalIndex.error());
     ref.normal = *normalIndex;
     if(corner.hasTangent){
-        const auto tangentIndex = InternSourceValue(corner.tangent, s_SourceTangentLabel, inOutContext.mesh.tangents, inOutContext.tangents);
+        const auto tangentIndex = InternSourceValue(corner.tangent, Impl::s_VertexRefTangentName, inOutContext.mesh.tangents, inOutContext.tangents);
         if(!tangentIndex)
             return MakeUnexpected(tangentIndex.error());
         ref.tangent = *tangentIndex;
     }
-    const auto uv0Index = InternSourceValue(corner.uv0, s_SourceUv0Label, inOutContext.mesh.uv0, inOutContext.uv0);
+    const auto uv0Index = InternSourceValue(corner.uv0, Impl::s_MeshUv0FieldNameView, inOutContext.mesh.uv0, inOutContext.uv0);
     if(!uv0Index)
         return MakeUnexpected(uv0Index.error());
     ref.uv0 = *uv0Index;
-    const auto colorIndex = InternSourceValue(corner.color, s_SourceColorLabel, inOutContext.mesh.colors, inOutContext.colors);
+    const auto colorIndex = InternSourceValue(corner.color, Impl::s_VertexRefColorName, inOutContext.mesh.colors, inOutContext.colors);
     if(!colorIndex)
         return MakeUnexpected(colorIndex.error());
     ref.color = *colorIndex;

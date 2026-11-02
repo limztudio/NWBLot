@@ -164,7 +164,7 @@ static b8 AppendMaterialBindLayoutConstants(
     const u32 mutableByteSize = storageByteSizes.mutableBytes;
 
     const NameHash& interfaceHash = interfaceName.hash();
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         ScratchString laneSuffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
         Array<char, s_DecimalTextBufferBytes> laneDigits{};
         laneSuffix += FormatDecimal(static_cast<usize>(lane), laneDigits);

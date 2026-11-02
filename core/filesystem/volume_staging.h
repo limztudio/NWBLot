@@ -45,8 +45,34 @@ private:
     b8 m_active = true;
 };
 
-b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena);
+// A synchronous no-throw owner publication occurs after all segment moves, before fallible cleanup observers.
+struct VolumePublicationObserver{
+    void* context = nullptr;
+    void(*commit)(void*)noexcept = nullptr;
+};
+
+b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena, VolumePublicationObserver observer = {});
 b8 RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace FilesystemVolumeStagingDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
+
+StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

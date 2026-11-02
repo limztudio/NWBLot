@@ -58,12 +58,6 @@ public:
     using TelemetryUploadCallback = b8(*)(void* userData, const void* bytes, usize byteCount);
 
 
-private:
-    static void ApplyPointerScale(void* userData, const f32 scaleX, const f32 scaleY)noexcept{
-        MakeNotNull(static_cast<Frame*>(userData))->m_input.setMousePositionScale(scaleX, scaleY);
-    }
-
-
 public:
     Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cpuTaskConfig = {});
     ~Frame()noexcept(false);

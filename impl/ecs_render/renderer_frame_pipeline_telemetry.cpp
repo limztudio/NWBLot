@@ -195,10 +195,8 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
             VectorDoubleSet(recordingStatistics.graphBarrierRecordingSeconds, recordingStatistics.taskRecordSeconds, recordingStatistics.readyFrontierElapsedSeconds, recordingStatistics.readyFrontierWorkerBusySeconds),
             millisecondsScale
         );
-        const SIMDVectorDouble frontierCapacityMsAndPercent = VectorDoubleMultiply(
-            VectorDoubleSelect(VectorDoubleSet(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0, 0.0, 0.0), recordingStatistics.readyFrontierWorkerUtilization(), s_DoubleSIMDMaskY),
-            VectorDoubleSet(s_MillisecondsPerSecondTelemetry, s_PercentScaleTelemetry, 1.0, 1.0)
-        );
+        const f64 frontierCapacityMs = recordingStatistics.readyFrontierWorkerCapacitySeconds * s_MillisecondsPerSecondTelemetry;
+        const f64 frontierUtilizationPercent = recordingStatistics.readyFrontierWorkerUtilization() * s_PercentScaleTelemetry;
         StringAppendFormat(
             m_frameGraphRendererLabel,
             "Renderer Frame\n"
@@ -282,8 +280,8 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
             VectorDoubleGetY(recordingFrontierTimingMs),
             VectorDoubleGetZ(recordingFrontierTimingMs),
             VectorDoubleGetW(recordingFrontierTimingMs),
-            VectorDoubleGetX(frontierCapacityMsAndPercent),
-            VectorDoubleGetY(frontierCapacityMsAndPercent)
+            frontierCapacityMs,
+            frontierUtilizationPercent
         );
 
         // Borrows plan topology + packet slots under the serialization contract; never the registry (recompile can move the plan).
@@ -309,7 +307,8 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
             if(!commandArenaStatistics.valid())
                 continue;
 
-            const SIMDVectorDouble queueSubmissionAndRecordingMs = VectorDoubleMultiply(VectorDoubleSet(queueStatistics.submissionSeconds, queueRecordingStatistics.recordingSeconds, 0.0, 0.0), millisecondsScale);
+            const f64 queueSubmissionMs = queueStatistics.submissionSeconds * s_MillisecondsPerSecondTelemetry;
+            const f64 queueRecordingMs = queueRecordingStatistics.recordingSeconds * s_MillisecondsPerSecondTelemetry;
             const SIMDVectorDouble queueRecordingBreakdownMs = VectorDoubleMultiply(
                 VectorDoubleSet(queueRecordingStatistics.commandListAcquisitionSeconds, queueRecordingStatistics.graphBarrierRecordingSeconds, queueRecordingStatistics.taskRecordSeconds, 0.0),
                 millisecondsScale
@@ -342,7 +341,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
                 queueStatistics.inheritedTimelineWaitElisionCount,
                 queueStatistics.acceptedFrontierSubmissionCount,
                 queueStatistics.recoverySubmissionCount,
-                VectorDoubleGetX(queueSubmissionAndRecordingMs),
+                queueSubmissionMs,
                 queueCompileStatistics.taskCount,
                 queueCompileStatistics.packetCount,
                 queueCompileStatistics.mergedTaskCount,
@@ -366,7 +365,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
                 VectorDoubleGetX(queueRecordingBreakdownMs),
                 VectorDoubleGetY(queueRecordingBreakdownMs),
                 VectorDoubleGetZ(queueRecordingBreakdownMs),
-                VectorDoubleGetY(queueSubmissionAndRecordingMs),
+                queueRecordingMs,
                 commandArenaStatistics.workerArenaCount,
                 commandArenaStatistics.commandPoolEpochCount,
                 commandArenaStatistics.pendingCommandPoolEpochCount,
@@ -651,9 +650,8 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 
     if(m_deferredLightingTaskGraphScheduled){
-        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(deferredTaskGraphView, m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, m_deferredLightingSubmissionTransaction, scratchArena)){
+        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(deferredTaskGraphView, m_deferredLightingTaskGraphQueueAssignments, deferredCompiledPlan, m_deferredLightingSubmissionTransaction, scratchArena))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
-        }
         else{
             const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
                 .queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,

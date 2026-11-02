@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(const DeferredLightingStageInputs& inputs, Core::GpuTimingSubmissionTicket& timingTicket){
+Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(const DeferredLightingStageInputs& inputs, Core::GpuTimingSubmissionTicket& timingTicket){
     using namespace RendererTaskGraphDetail;
     DeferredLightingStageResult result{};
     if(

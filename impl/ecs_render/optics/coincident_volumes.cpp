@@ -142,9 +142,9 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         candidate.mediumPriority = renderer.opticalMediumPriority;
         candidate.mutableTypedBytes = *mutableBytes;
         if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
-            StoreFloat(LoadFloat(transformPtr->position), candidate.position);
-            StoreFloat(LoadFloat(transformPtr->rotation), candidate.rotation);
-            StoreFloat(LoadFloat(transformPtr->scale), candidate.scale);
+            candidate.position = transformPtr->position;
+            candidate.rotation = transformPtr->rotation;
+            candidate.scale = transformPtr->scale;
         }
         candidates.push_back(candidate);
     }

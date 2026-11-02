@@ -19,27 +19,32 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class FbxMeshBuild final : NoCopy{
-public:
-    static b8 AppendInstanceMesh(
-        const MeshInstance& instance,
-        const ImportOptions& options,
-        const b8 wantsSkinning,
-        const NormalMode::Enum normalMode,
-        const Vec4& defaultColor,
-        Core::Alloc::ScratchArena& scratchArena,
-        UtilityScratchVector<u32>& inOutTriangleIndices,
-        SourceMeshBuildContext& inOutMesh,
-        FbxSkinDetail::ExportContext& inOutSkinContext,
-        b8& inOutSawVertexColors,
-        b8& inOutSawVertexUvs,
-        b8& inOutUsedDefaultUvs
-    );
-    static Expected<usize> EstimateSelectedTriangleCorners(Span<const MeshInstance> instances, Span<const usize> selection);
+namespace FbxMeshBuild{
 
 
-public:
-    FbxMeshBuild() = delete;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 AppendInstanceMesh(
+    const MeshInstance& instance,
+    const ImportOptions& options,
+    b8 wantsSkinning,
+    NormalMode::Enum normalMode,
+    const Vec4& defaultColor,
+    Core::Alloc::ScratchArena& scratchArena,
+    UtilityScratchVector<u32>& inOutTriangleIndices,
+    SourceMeshBuildContext& inOutMesh,
+    FbxSkinDetail::ExportContext& inOutSkinContext,
+    b8& inOutSawVertexColors,
+    b8& inOutSawVertexUvs,
+    b8& inOutUsedDefaultUvs
+);
+Expected<usize> EstimateSelectedTriangleCorners(Span<const MeshInstance> instances, Span<const usize> selection);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

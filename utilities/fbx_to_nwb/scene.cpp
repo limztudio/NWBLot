@@ -28,7 +28,7 @@ void AppendMeshDisplayName(const MeshInstance& instance, ScratchStringStream& in
     AStringView nodeName = UfbxStringView(instance.node->name);
     AStringView meshName = UfbxStringView(instance.mesh->name);
     if(nodeName.empty())
-        nodeName = "<unnamed node>";
+        nodeName = s_UnnamedNodeLabel;
     if(meshName.empty())
         meshName = "<unnamed mesh>";
 

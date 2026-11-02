@@ -150,10 +150,6 @@ const u32 s_FontAtlasLookupFlagUseMarkFilteringSet = 0x10u;
 
 
 class FontAtlasTableValidator{
-    private Span<u8> m_bytes;
-    private u32 m_glyphCount;
-    private u32 m_budget;
-
     public FontAtlasTableValidator(in Span<u8> bytes, in u32 glyphCount){
         this.m_bytes = bytes;
         this.m_glyphCount = glyphCount;
@@ -317,6 +313,10 @@ class FontAtlasTableValidator{
         }
         return true;
     }
+
+    private Span<u8> m_bytes;
+    private u32 m_glyphCount;
+    private u32 m_budget;
 
     private b8 spend(in u32 count){
         if(count > this.m_budget)

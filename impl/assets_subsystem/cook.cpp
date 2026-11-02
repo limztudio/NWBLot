@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 
 
 b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    const ISubsystem* const subsystem = CastSubsystem(&asset);
+    const ISubsystem* const subsystem = SubsystemTypeAutoRegistrar::Cast(&asset);
     if(!subsystem){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}'"), s_SubsystemSerializeContext, ConvertString(asset.assetType().resolvedText()));
         return false;
@@ -87,12 +87,11 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    const SubsystemHeaderBinary header = BuildSubsystemHeaderBinary(
-        subsystem.assetType().hash(),
-        static_cast<u64>(subsystemHashes.size()),
-        static_cast<u64>(fieldCounts.size()),
-        static_cast<u64>(assetHashes.size())
-    );
+    SubsystemHeaderBinary header;
+    header.subsystemTypeHash = subsystem.assetType().hash();
+    header.subsystemCount = static_cast<u64>(subsystemHashes.size());
+    header.fieldCount = static_cast<u64>(fieldCounts.size());
+    header.assetCount = static_cast<u64>(assetHashes.size());
     AppendPOD(outBinary, header);
 
     return
@@ -164,16 +163,9 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                 );
                 return false;
             }
-            b8 duplicate = false;
-            for(const ISubsystem::SubsystemRef& existing : outSubsystem.subsystems){
-                if(existing.name() == parsedRef->name()){
-                    duplicate = true;
-                    break;
-                }
-            }
-            if(!duplicate)
-                outSubsystem.subsystems.push_back(*parsedRef);
+            outSubsystem.subsystems.push_back(*parsedRef);
         }
+        SubsystemAssetRuntime::DeduplicateSubsystemRefs(outSubsystem.subsystems);
     }
 
     const usize count = outSubsystem.fieldCount();

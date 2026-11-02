@@ -40,22 +40,13 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
     const auto transparentHistoryBResult = ImportExternalTexture(m_graph, inputs.targets.transparentHistB, Name(s_TransparentHistoryBName), s_TransparentHistoryBLabel);
     const auto transparentMomentsAResult = ImportExternalTexture(m_graph, inputs.targets.transparentMomentsA, Name(s_TransparentMomentsAName), s_TransparentMomentsALabel);
     const auto transparentMomentsBResult = ImportExternalTexture(m_graph, inputs.targets.transparentMomentsB, Name(s_TransparentMomentsBName), s_TransparentMomentsBLabel);
-    Expected<Optional<Core::GpuGraphResourceId>> sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{};
-    if(!(hardwareTransparentTrace)){
-        const auto importedResource = ImportExternalBuffer(m_graph, inputs.rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel);
-        if(!importedResource)
-            sceneBvhNodesResult = MakeUnexpected(importedResource.error());
-        else
-            sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    Expected<Optional<Core::GpuGraphResourceId>> sceneInstancesResult = Optional<Core::GpuGraphResourceId>{};
-    if(!(hardwareTransparentTrace)){
-        const auto importedResource = ImportExternalBuffer(m_graph, inputs.rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel);
-        if(!importedResource)
-            sceneInstancesResult = MakeUnexpected(importedResource.error());
-        else
-            sceneInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
+    const auto importSoftwareBuffer = [&](const Core::BufferHandle& buffer, const Name identity, const AStringView label) -> Expected<Core::GpuGraphResourceId>{
+        if(hardwareTransparentTrace)
+            return Core::GpuGraphResourceId{};
+        return ImportExternalBuffer(m_graph, buffer, identity, label);
+    };
+    const auto sceneBvhNodesResult = importSoftwareBuffer(inputs.rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel);
+    const auto sceneInstancesResult = importSoftwareBuffer(inputs.rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel);
     const auto shadowInstanceMaterialsResult = ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceMaterialBuffer, Name(s_SceneShadowInstanceMaterialName), s_SceneShadowInstanceMaterialLabel);
     const auto shadowTypedMaterialsResult = ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel);
     const auto shadowInstancesResult = ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel);
@@ -81,8 +72,8 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
         return false;
     }
-    const Core::GpuGraphResourceId sceneInstances = sceneInstancesResult->value_or(Core::GpuGraphResourceId{});
-    const Core::GpuGraphResourceId sceneBvhNodes = sceneBvhNodesResult->value_or(Core::GpuGraphResourceId{});
+    const Core::GpuGraphResourceId sceneInstances = *sceneInstancesResult;
+    const Core::GpuGraphResourceId sceneBvhNodes = *sceneBvhNodesResult;
     const Core::GpuGraphResourceId shadowSoftHalfA = *shadowSoftHalfAResult;
     const Core::GpuGraphResourceId shadowSoftHalfB = *shadowSoftHalfBResult;
     const Core::GpuGraphResourceId shadowSoftGeometry = *shadowSoftGeometryResult;

@@ -91,15 +91,14 @@ b8 UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
             return false;
         if(rectangle->width == 0.0f)
             continue;
-        const SIMDVectorSingle origin = VectorAdd(VectorSet(rectangle->x, rectangle->y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
-        rectangle->x = VectorGetX(origin);
-        rectangle->y = VectorGetY(origin);
+        rectangle->x += placement.textOrigin.x;
+        rectangle->y += placement.textOrigin.y;
         current.selections[current.selectionCount++] = *rectangle;
     }
-    const SIMDVectorSingle caretOffset = VectorSubtract(VectorSet(placement.caret.x, placement.caret.y, 0.0f, 0.0f), VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f));
-    const SIMDVectorSingle caretError = VectorAbs(VectorSubtract(caretOffset, VectorSet(localCaret->x, localCaret->y, 0.0f, 0.0f)));
-    const b8 coherent = VectorGetX(caretError) < 0.02f
-        && VectorGetY(caretError) < 0.02f
+    const f32 caretErrorX = Abs((placement.caret.x - placement.textOrigin.x) - localCaret->x);
+    const f32 caretErrorY = Abs((placement.caret.y - placement.textOrigin.y) - localCaret->y);
+    const b8 coherent = caretErrorX < 0.02f
+        && caretErrorY < 0.02f
         && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY
         && SameSmokeRect(placement.content, scrollbars.viewport) && SameSmokeRect(placement.clip, scrollbars.contentClip)
         && current.scroll.x == scrollbars.horizontal.offset && current.scroll.y == scrollbars.vertical.offset;

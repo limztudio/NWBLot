@@ -9,6 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_RtMaxI32AsU32 = 2147483647u;
+
 // Shader variant selectors for the NWB_RT_CSG_ENABLED define.
 const StringView s_RayTracingCsgDisabledVariant = "NWB_RT_CSG_ENABLED=0";
 const StringView s_RayTracingCsgEnabledVariant = "NWB_RT_CSG_ENABLED=1";
@@ -253,20 +255,6 @@ f32 EffectiveCausticIntensity(in f32 decay){
     if(decay > 0.0f)
         return s_CausticIntensity * (1.0f - decay);
     return s_CausticIntensity;
-}
-
-CausticAccumulatorDecayPushConstants ResolveCausticAccumulatorDecayPushConstants(
-    in u32 width,
-    in u32 height,
-    in f32 decayFactor,
-    in u32 accumulatorStorageSlot
-){
-    CausticAccumulatorDecayPushConstants decayPush;
-    decayPush.width = width;
-    decayPush.height = height;
-    decayPush.decayFactor = decayFactor;
-    decayPush.accumulatorStorageSlot = accumulatorStorageSlot;
-    return decayPush;
 }
 
 const StringView s_CausticHwRaygenExportName = "CausticHwRayGen";

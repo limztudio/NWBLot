@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_model/components.adhd.h>
+#include <impl/ecs_model/types.adhd.h>
 
 #include <core/assets/ref.h>
 #include <core/ecs/system.h>
@@ -83,7 +84,7 @@ class ModelSkinnedMeshObject;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ModelObjectRendererCallback = Function<void(Core::ECS::World& world, Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity)>;
+using ModelObjectRendererCallback = Function<void(Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::World& world, Core::ECS::Entity& entity)>;
 
 struct ModelObjectRendererHooks{
     ModelObjectRendererCallback apply;
@@ -101,7 +102,7 @@ public:
 
 
 public:
-    virtual void prepare(Core::ECS::World& world)override;
+    virtual void prepare([[maybe_unused]] Core::ECS::World& world)override{ syncModelRuntimes(); }
     [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
     void syncModelRuntimes();
 

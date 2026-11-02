@@ -4,7 +4,6 @@
 
 #include "raytracing_system.h"
 
-#include <impl/ecs_render/material/sampled_texture_collection.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 
@@ -346,12 +345,6 @@ Core::ResourceStates::Mask RendererRayTracingSystem::sceneTlasBackingInitialStat
     return state.m_tlasBackingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
 }
 
-b8 RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector){
-    return collector.collect(materialInfo, [this](const MaterialSurfaceInfo& material, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
-        return m_materialSystem.appendPreparedMaterialSurfaceSampledTextures(material, pending);
-    });
-}
-
 b8 RendererRayTracingSystem::capturePreparedSceneBvh(
     const b8 staticScene,
     const u64 staticSceneHash,
@@ -376,9 +369,6 @@ void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
 b8 RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Span<const PreparedSceneSwBvhMesh> meshes, const u32 instanceCount){
     clearPreparedSceneSwBvhTraversal();
     const usize meshCount = meshes.size();
-    const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
-        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    };
     if(
         meshCount == 0u
         || meshCount > static_cast<usize>(Limit<u32>::s_Max)
@@ -398,10 +388,10 @@ b8 RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Span<const
             || !mesh.positionBuffer
             || !mesh.triangleIndexBuffer
             || !mesh.attributeBuffer
-            || !validStorageHandle(mesh.nodeHeapHandle)
-            || !validStorageHandle(mesh.positionHeapHandle)
-            || !validStorageHandle(mesh.triangleIndexHeapHandle)
-            || !validStorageHandle(mesh.attributeHeapHandle)
+            || !RayTracingDetail::IsHeapHandle(mesh.nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !RayTracingDetail::IsHeapHandle(mesh.positionHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !RayTracingDetail::IsHeapHandle(mesh.triangleIndexHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !RayTracingDetail::IsHeapHandle(mesh.attributeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
             || mesh.primitiveCount == 0u
             || mesh.nodeByteSize == 0u
             || mesh.positionByteSize == 0u
@@ -422,9 +412,6 @@ b8 RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(const Span<const
 }
 
 b8 RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
-    const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
-        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    };
     auto& state = m_rayTracingState;
     const b8 sceneSnapshotValid = m_preparedSceneBvh.snapshotAccepted(state);
     const b8 materialSnapshotValid = m_preparedShadowMaterialContext.softwareSnapshotAccepted(state);
@@ -444,11 +431,11 @@ b8 RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         || !sceneSnapshotValid
         || !materialSnapshotValid
         || !preparedTraversalStorageMatchesCurrent()
-        || !validStorageHandle(state.m_sceneBvhNodeHeapHandle)
-        || !validStorageHandle(state.m_sceneInstanceHeapHandle)
-        || !validStorageHandle(state.m_shadowInstanceMaterialHeapHandle)
-        || !validStorageHandle(state.m_shadowInstanceHeapHandle)
-        || !validStorageHandle(state.m_shadowMaterialTypedHeapHandle)
+        || !RayTracingDetail::IsHeapHandle(state.m_sceneBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(state.m_sceneInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(state.m_shadowInstanceMaterialHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(state.m_shadowInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(state.m_shadowMaterialTypedHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene traversal no longer matches preflight storage"));
         return rejectPreparedTraversal();
@@ -462,7 +449,7 @@ b8 RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         return rejectPreparedTraversal();
     }
 
-    const auto matchesMesh = [this, &validStorageHandle](const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const PreparedSceneSwBvhMesh& prepared)noexcept{
+    const auto matchesMesh = [this](const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh, const PreparedSceneSwBvhMesh& prepared)noexcept{
         const auto attributeCache = m_rayTracingState.m_swMeshHeapHandleCache.find(NotNull<const Core::Buffer*>(prepared.attributeBuffer.get()));
         const b8 topologyReady = mesh.swBvhTopologyBuilt || preparedMeshSwBvhBuildProducesTopology(mesh);
         return
@@ -485,10 +472,10 @@ b8 RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
             && mesh.positionBuffer->getCreationDescription().byteSize == prepared.positionByteSize
             && mesh.triangleIndexBuffer->getCreationDescription().byteSize == prepared.triangleIndexByteSize
             && mesh.attributeBuffer->getCreationDescription().byteSize == prepared.attributeByteSize
-            && validStorageHandle(prepared.nodeHeapHandle)
-            && validStorageHandle(prepared.positionHeapHandle)
-            && validStorageHandle(prepared.triangleIndexHeapHandle)
-            && validStorageHandle(prepared.attributeHeapHandle)
+            && RayTracingDetail::IsHeapHandle(prepared.nodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && RayTracingDetail::IsHeapHandle(prepared.positionHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && RayTracingDetail::IsHeapHandle(prepared.triangleIndexHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && RayTracingDetail::IsHeapHandle(prepared.attributeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         ;
     };
 

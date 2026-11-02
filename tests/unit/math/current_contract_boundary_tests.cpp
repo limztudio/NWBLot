@@ -21,7 +21,6 @@ namespace __hidden_current_contract_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr f32 s_SingleEpsilon = NWB::Tests::s_DefaultNearlyEqualEpsilon;
 constexpr f64 s_DoubleEpsilon = 2.0e-14;
 
 
@@ -46,7 +45,7 @@ struct DoubleStreamLoadInput{};
 
 void ExpectSingleDirectionNear(SIMDVectorSingle actual, SIMDVectorSingle expected){
     for(usize lane = 0u; lane < 3u; ++lane)
-        EXPECT_NEAR(VectorGetByIndex(actual, lane), VectorGetByIndex(expected, lane), s_SingleEpsilon) << lane;
+        EXPECT_NEAR(VectorGetByIndex(actual, lane), VectorGetByIndex(expected, lane), NWB::Tests::s_DefaultNearlyEqualEpsilon) << lane;
 }
 
 void ExpectDoubleDirectionNear(SIMDVectorDouble actual, SIMDVectorDouble expected){

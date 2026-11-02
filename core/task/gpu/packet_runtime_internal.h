@@ -129,13 +129,13 @@ private:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         GpuSubmissionPacketId packetID,
+        u64 recordingWorkerDomain,
+        u32 recordingWorkerIndex,
         Alloc::ScratchArena& stateFanInScratchArena,
         GpuRecordedGraph::PacketRecordingScratch& scratch,
         GpuRecordedGraph& outRecordedGraph,
-        GpuCommandIrCapture* commandIrCapture,
-        GpuPacketRecordingAbort* deferredAbort,
-        u64 recordingWorkerDomain = 0u,
-        u32 recordingWorkerIndex = 0u
+        GpuCommandIrCapture* commandIrCapture = nullptr,
+        GpuPacketRecordingAbort* deferredAbort = nullptr
     )const;
     [[nodiscard]] b8 prepareRecordingAttempt(
         const GpuTaskGraph& graph,

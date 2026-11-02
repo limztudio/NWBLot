@@ -20,12 +20,6 @@ namespace NumericEditDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AdvanceRevision(u64& inOutRevision)noexcept{
-    if(inOutRevision == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++inOutRevision;
-}
-
 Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
     if(!formatted)
         return MakeUnexpected(formatted.error());

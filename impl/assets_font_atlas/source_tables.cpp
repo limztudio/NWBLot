@@ -14,14 +14,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Span<const u8> fontBytes, const u32 faceIndex, const u32 sourceGlyphCount, const b8 validateSource, Core::Assets::AssetArena& arena){
-    if(validateSource){
-        if(!ValidateFontSource(fontBytes, faceIndex, arena))
-            return MakeUnexpected(Failure{});
-    }
-    else if(faceIndex != 0u){
+Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Span<const u8> fontBytes, const u32 faceIndex, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
+    if(faceIndex != 0u)
         return MakeUnexpected(Failure{});
-    }
     FontSfntDirectory directory;
     if(!ReadFontSfntDirectory(fontBytes, directory))
         return MakeUnexpected(Failure{});
@@ -59,12 +54,6 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
         }
     }
     return tables;
-}
-
-Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Font& font, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
-    if(!font.validatePayload())
-        return MakeUnexpected(Failure{});
-    return CopyFontAtlasPositioningTables(font.fontBytes(), font.faceIndex(), sourceGlyphCount, false, arena);
 }
 
 

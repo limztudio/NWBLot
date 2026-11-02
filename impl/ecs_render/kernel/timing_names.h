@@ -6,7 +6,6 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 
@@ -118,16 +117,16 @@ namespace RendererGpuPassText{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_AvboitDepthWarpName = s_PassAvboitDepthWarpName;
-inline constexpr AStringView s_AvboitDepthWarpLabel = s_PassAvboitDepthWarpLabel;
-inline constexpr AStringView s_AvboitExtinctionName = s_PassAvboitExtinctionName;
-inline constexpr AStringView s_AvboitExtinctionLabel = s_PassAvboitExtinctionLabel;
-inline constexpr AStringView s_AvboitIntegrationLabel = s_PassAvboitIntegrationLabel;
-inline constexpr AStringView s_TransparentCsgIntervalsLabel = s_PassTransparentCsgIntervalsLabel;
-inline constexpr AStringView s_ShadowVisibilityLabel = s_PassShadowVisibilityLabel;
-inline constexpr AStringView s_DeferredLightingLabel = s_PassDeferredLightingLabel;
-inline constexpr AStringView s_DeferredCompositeLabel = s_PassDeferredCompositeLabel;
-inline constexpr AStringView s_DeferredPresentLabel = s_PassDeferredPresentLabel;
+inline constexpr AStringView s_AvboitDepthWarpName = "render.avboit.depth_warp";
+inline constexpr AStringView s_AvboitDepthWarpLabel = "AVBOIT Depth Warp";
+inline constexpr AStringView s_AvboitExtinctionName = "render.avboit.extinction";
+inline constexpr AStringView s_AvboitExtinctionLabel = "AVBOIT Extinction";
+inline constexpr AStringView s_AvboitIntegrationLabel = "AVBOIT Integration";
+inline constexpr AStringView s_TransparentCsgIntervalsLabel = "Transparent CSG Intervals";
+inline constexpr AStringView s_ShadowVisibilityLabel = "Shadow Visibility";
+inline constexpr AStringView s_DeferredLightingLabel = "Deferred Lighting";
+inline constexpr AStringView s_DeferredCompositeLabel = "Deferred Composite";
+inline constexpr AStringView s_DeferredPresentLabel = "Deferred Present";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

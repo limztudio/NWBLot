@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,25 +164,7 @@ void RendererMaterialState::invalidateResources()noexcept{
 
 
 b8 MaterialPassMeshResourceSnapshot::geometryHeapHandlesReady()const noexcept{
-    constexpr Array<u32, 11> s_SourceBindingSlots = {
-        NWB_MESH_BINDING_POSITION,
-        NWB_MESH_BINDING_NORMAL,
-        NWB_MESH_BINDING_TANGENT,
-        NWB_MESH_BINDING_UV0,
-        NWB_MESH_BINDING_COLOR,
-        NWB_MESH_BINDING_MESHLET_DESC,
-        NWB_MESH_BINDING_MESHLET_BOUNDS,
-        NWB_MESH_BINDING_MESHLET_POSITION_REFS,
-        NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS,
-        NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS,
-        NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES,
-    };
-    for(const u32 bindingSlot : s_SourceBindingSlots){
-        const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
-        if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
-            return false;
-    }
-    return true;
+    return RendererMeshSystem::GeometryHeapHandlesReady(geometryHeapHandles);
 }
 
 

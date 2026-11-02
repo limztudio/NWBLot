@@ -230,7 +230,7 @@ b8 RunAvboitIntegrationProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsys
     const auto integrateShaderRef = transparentSubsystem ? transparentSubsystem->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
     if(
         !integrateShaderRef.valid()
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("AvboitIntegrationProbe"), graphics, context.assetManager, context.shaderPathResolver, shader)
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("AvboitIntegrationProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader)
     )
         return false;
     Core::BindingLayoutDesc layoutDesc(context.objectArena);

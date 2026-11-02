@@ -89,30 +89,30 @@ b8 UiImageSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bou
     if(!ui.image("natural_sprite", Name(__hidden_ui_image_smoke::s_RadioRegion), options) || !ui.image("natural_slice", Name(__hidden_ui_image_smoke::s_ProgressRegion)))
         return false;
     const SIMDVectorSingle origin = VectorSet(bounds.x, bounds.y, 0.0f, 0.0f);
-    m_declared.rectangles[2u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 68.0f, 24.0f, 24.0f)));
-    m_declared.rectangles[3u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 100.0f, 24.0f, 24.0f)));
+    m_declared.rectangles[2u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 68.0f, 24.0f, 24.0f)));
+    m_declared.rectangles[3u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 100.0f, 24.0f, 24.0f)));
     options.width = { LayoutSizePolicy::Fixed, 96.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
     if(!ui.image("fixed_sprite", Name(__hidden_ui_image_smoke::s_RadioRegion), options) || !ui.image("fixed_slice", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
         return false;
-    m_declared.rectangles[4u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 132.0f, 96.0f, 40.0f)));
-    m_declared.rectangles[5u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 180.0f, 96.0f, 40.0f)));
+    m_declared.rectangles[4u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 132.0f, 96.0f, 40.0f)));
+    m_declared.rectangles[5u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 180.0f, 96.0f, 40.0f)));
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 32.0f };
     if(!ui.image("stretch", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
         return false;
-    m_declared.rectangles[6u] = StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 228.0f, -16.0f, 32.0f)));
+    m_declared.rectangles[6u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 228.0f, -16.0f, 32.0f)));
     options.width = { LayoutSizePolicy::Fixed, 96.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
     options.tint = { 0.4f, 0.7f, 0.9f, 0.5f };
     if(!ui.image("tinted", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
         return false;
-    m_declared.rectangles[7u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 268.0f, 96.0f, 40.0f)));
+    m_declared.rectangles[7u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 268.0f, 96.0f, 40.0f)));
     options.height = { LayoutSizePolicy::Fixed, 24.0f };
     options.tint = { 1.0f, 1.0f, 1.0f, 0.0f };
     if(!ui.image("transparent", Name(__hidden_ui_image_smoke::s_RadioRegion), options))
         return false;
-    m_declared.rectangles[8u] = StoreSmokeRect(VectorAdd(origin, VectorSet(8.0f, 316.0f, 96.0f, 24.0f)));
+    m_declared.rectangles[8u] = Impl::Ui::StoreRect(VectorAdd(origin, VectorSet(8.0f, 316.0f, 96.0f, 24.0f)));
     if(ui.button("after", "After images", button))
         ++m_afterClicks;
     return ui.endPanel();
@@ -133,7 +133,7 @@ b8 UiImageSmokeScene::paintFrozen(Impl::Ui::Builder& ui, const Impl::Ui::Rect& b
     m_declared.values[8u] = m_phase ? 2u : 1u;
     if(!ui.image("frozen", region, options))
         return false;
-    m_declared.rectangles[9u] = StoreSmokeRect(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(8.0f, 32.0f, 96.0f, 40.0f)));
+    m_declared.rectangles[9u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(bounds.x, bounds.y, 0.0f, 0.0f), VectorSet(8.0f, 32.0f, 96.0f, 40.0f)));
     region = m_phase ? Name(__hidden_ui_image_smoke::s_ProgressRegion) : Name(__hidden_ui_image_smoke::s_RadioRegion);
     m_declared.values[9u] = m_phase ? 1u : 2u;
     options.width = { LayoutSizePolicy::Fixed, 70.0f };
@@ -146,8 +146,8 @@ b8 UiImageSmokeScene::paintExternal(Impl::UiPaintContext& context, const Impl::U
     using namespace Impl::Ui;
     auto& ui = context.ui;
     const SIMDVectorSingle content = VectorAdd(VectorSet(bounds.x, bounds.y, bounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 40.0f));
-    m_declared.rectangles[10u] = StoreSmokeRect(content);
-    const Rect clip = StoreSmokeRect(VectorMultiply(content, VectorSet(1.0f, 1.0f, 0.5f, 1.0f)));
+    m_declared.rectangles[10u] = Impl::Ui::StoreRect(content);
+    const Rect clip = Impl::Ui::StoreRect(VectorMultiply(content, VectorSet(1.0f, 1.0f, 0.5f, 1.0f)));
     m_declared.rectangles[11u] = clip;
     context.paint.fillRect(bounds, { 0.07f, 0.13f, 0.2f, 1.0f });
     context.paint.pushClip(clip);
@@ -190,11 +190,11 @@ b8 UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
         return false;
     const Rect& parentBounds = m_parent.placement().bounds;
     m_declared.rectangles[14u] = parentBounds;
-    m_declared.rectangles[12u] = StoreSmokeRect(VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 40.0f)));
+    m_declared.rectangles[12u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(parentBounds.x, parentBounds.y, parentBounds.width, 0.0f), VectorSet(8.0f, 44.0f, -16.0f, 40.0f)));
     if(m_child.isOpen()){
         const Rect& childBounds = m_child.placement().bounds;
         m_declared.rectangles[15u] = childBounds;
-        m_declared.rectangles[13u] = StoreSmokeRect(VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 40.0f)));
+        m_declared.rectangles[13u] = Impl::Ui::StoreRect(VectorAdd(VectorSet(childBounds.x, childBounds.y, childBounds.width, 0.0f), VectorSet(8.0f, 8.0f, -16.0f, 40.0f)));
     }
     return true;
 }

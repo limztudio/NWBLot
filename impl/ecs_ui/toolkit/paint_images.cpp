@@ -3,12 +3,59 @@
 
 
 #include "paint.h"
+#include "rect_math.h"
+
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
+
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_paint_images{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename TResource, typename TPrepare, typename TSameKey>
+[[nodiscard]] static b8 ResolvePreparedResourceSlot(
+    const PaintVector<TResource>& resources,
+    const TResource& candidate,
+    TPrepare&& prepare,
+    TSameKey&& sameKey,
+    u32& outIndex
+){
+    for(u32 index = 0u; index < resources.size(); ++index){
+        if(resources[index].get() == candidate.get()){
+            outIndex = index;
+            return true;
+        }
+    }
+    if(!prepare(Span<const TResource>(&candidate, 1u)))
+        return false;
+    for(u32 index = 0u; index < resources.size(); ++index){
+        if(sameKey(*resources[index], *candidate)){
+            outIndex = index;
+            return true;
+        }
+    }
+    NWB_ASSERT(false);
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -134,6 +181,67 @@ b8 PaintBuilder::prepareImages(const Span<const SharedGlyphPage> glyphPages, con
         if(!found)
             m_snapshot.m_textureImages.push_back(textureImages[candidate]);
     }
+    return true;
+}
+
+b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
+    using namespace __hidden_ui_paint_images;
+    NWB_ASSERT(m_recording);
+    if(!page || !IsValidPaintUvRect(uv))
+        return false;
+    u32 index = 0u;
+    if(!ResolvePreparedResourceSlot(
+        m_snapshot.m_glyphPages,
+        page,
+        [this](const Span<const SharedGlyphPage> pages){ return prepareGlyphPages(pages); },
+        [](const GlyphPage& lhs, const GlyphPage& rhs)noexcept{ return SameGlyphPageKey(lhs.binding(), rhs.binding()); },
+        index
+    ))
+        return false;
+    emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index);
+    return true;
+}
+
+b8 PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint){
+    using namespace __hidden_ui_paint_images;
+    NWB_ASSERT(m_recording);
+    if(!page || channel >= page->binding().channelCount || !IsValidPaintUvRect(uv))
+        return false;
+    u32 index = 0u;
+    if(!ResolvePreparedResourceSlot(
+        m_snapshot.m_sdfPages,
+        page,
+        [this](const Span<const SharedSdfAtlasPage> pages){ return prepareSdfPages(pages); },
+        [](const SdfAtlasPage& lhs, const SdfAtlasPage& rhs)noexcept{ return lhs.binding() == rhs.binding(); },
+        index
+    ))
+        return false;
+    emitQuad(rectangle, uv, tint, PaintMaterial::SdfGlyph, Limit<u32>::s_Max, index, channel);
+    return true;
+}
+
+b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
+    using namespace __hidden_ui_paint_images;
+    NWB_ASSERT(m_recording);
+    if(
+        !source || !IsValidUiRect(rectangle) || !IsValidPaintUvRect(uv)
+        || !IsFinite(tint.r) || !IsFinite(tint.g) || !IsFinite(tint.b) || !IsFinite(tint.a)
+        || tint.a < 0.0f || tint.a > 1.0f
+    )
+        return false;
+    const Rect clip = m_clips.back();
+    if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip) || tint.a == 0.0f || !HasVisibleRectIntersection(LoadRect(rectangle), LoadRect(clip)))
+        return true;
+    u32 index = 0u;
+    if(!ResolvePreparedResourceSlot(
+        m_snapshot.m_textureImages,
+        source,
+        [this](const Span<const SharedImageSource> images){ return prepareTextureImages(images); },
+        [](const ImageSource& lhs, const ImageSource& rhs)noexcept{ return SameTextureImageKey(lhs, rhs); },
+        index
+    ))
+        return false;
+    emitQuad(rectangle, uv, tint, PaintMaterial::Image, Limit<u32>::s_Max, Limit<u32>::s_Max, 0u, index);
     return true;
 }
 

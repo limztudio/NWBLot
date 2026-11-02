@@ -42,7 +42,8 @@ namespace __hidden_camera{
     )
         return MakeUnexpected(Failure{});
 
-    const auto projection = TryBuildCameraProjection(VectorReplicate(camera.verticalFovRadians()), VectorReplicate(camera.nearPlane()), VectorReplicate(camera.farPlane()), VectorReplicate(camera.aspectRatio()), VectorReplicate(fallbackAspectRatio));
+    const SIMDVectorSingle proj = LoadFloat(camera.projection);
+    const auto projection = TryBuildCameraProjection(VectorSplatX(proj), VectorSplatY(proj), VectorSplatZ(proj), VectorSplatW(proj), VectorReplicate(fallbackAspectRatio));
     if(!projection)
         return MakeUnexpected(Failure{});
 

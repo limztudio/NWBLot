@@ -29,7 +29,6 @@ namespace RendererTaskGraphDetail{
     AStringView resourceLabel = "Reflection Output",
     b8 firstWrite = true
 );
-[[nodiscard]] Expected<Core::GpuGraphResourceId> ImportReflectionBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer);
 [[nodiscard]] Core::GpuTaskDesc ReflectionTaskDesc(Name identity, AStringView label, const Core::GpuTaskId& dependency)noexcept;
 
 [[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(

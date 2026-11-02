@@ -243,10 +243,7 @@ void RendererRayTracingState::invalidateResources()noexcept{
     // Accumulator target is recreated on invalidation; re-seed the EMA.
     m_causticAccumulatorInitialized = false;
     // Surfel buffers live on this state; resize keeps convergence, invalidate re-seeds.
-    m_surfelSpawnBindingLayout.reset();
-    m_surfelAgeFreeBindingLayout.reset();
-    m_surfelHashBuildBindingLayout.reset();
-    m_surfelTraceBindingLayout.reset();
+    m_surfelHeapBindingLayout.reset();
     m_surfelSpawnShader.reset();
     m_surfelSpawnPipeline.reset();
     m_surfelAgeFreeShader.reset();
@@ -257,16 +254,12 @@ void RendererRayTracingState::invalidateResources()noexcept{
     m_surfelTracePipeline.reset();
     m_surfelTraceCsgShader.reset();
     m_surfelTraceCsgPipeline.reset();
-    m_surfelResolveBindingLayout.reset();
     m_surfelResolveShader.reset();
     m_surfelResolvePipeline.reset();
-    m_surfelUpsampleBindingLayout.reset();
     m_surfelUpsampleShader.reset();
     m_surfelUpsamplePipeline.reset();
-    m_surfelTraceBuildArgsBindingLayout.reset();
     m_surfelTraceBuildArgsShader.reset();
     m_surfelTraceBuildArgsPipeline.reset();
-    m_surfelTraceHwBindingLayout.reset();
     m_surfelTraceHwShader.reset();
     m_surfelTraceHwPipeline.reset();
     m_surfelTraceCsgHwShader.reset();

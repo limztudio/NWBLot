@@ -29,7 +29,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     if(!payload.opaqueDrawSnapshot.captured)
         return false;
 
@@ -91,9 +91,8 @@ namespace ECSRenderDetail{
                 // Close the marker before finalizing this command list.
                 if(!Core::FinishSplitGpuTimingMarker(payload.regularSharedComputeEmulationTiming))
                     return false;
-                if(!regularDrawItemsForGbuffer.empty()){
+                if(!regularDrawItemsForGbuffer.empty())
                     materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, regularDrawItemsForGbuffer);
-                }
             }
             else{
                 Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, graphics.getDevice(), commandList);

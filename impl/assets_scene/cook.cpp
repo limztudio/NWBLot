@@ -46,7 +46,8 @@ b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    const EntityHeaderBinary header = BuildEntityHeaderBinary(static_cast<u64>(componentHashes.size()));
+    EntityHeaderBinary header;
+    header.componentCount = static_cast<u64>(componentHashes.size());
     AppendPOD(outBinary, header);
 
     return Core::Assets::AppendVectorPayload(componentHashes, s_EntitySerializeContext, s_EntityComponentsPayloadLabel, outBinary);
@@ -60,7 +61,8 @@ b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     if(!project.validatePayload())
         return false;
 
-    const ProjectHeaderBinary header = BuildProjectHeaderBinary(project.startScene().name().hash());
+    ProjectHeaderBinary header;
+    header.startSceneHash = project.startScene().name().hash();
     return ComponentAssetSerialization::WriteSinglePodPayload(header, outBinary);
 }
 
@@ -87,7 +89,7 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
 
     assetEntries.reserve(scene.assets().size());
     for(const auto& [nickname, item] : scene.assets())
-        assetEntries.push_back(PackSceneAssetEntryBinary(nickname.hash(), item.name().hash()));
+        assetEntries.push_back(SceneAssetEntryBinary(nickname.hash(), item.name().hash()));
     Sort(assetEntries.begin(), assetEntries.end(), [](const SceneAssetEntryBinary& lhs, const SceneAssetEntryBinary& rhs)noexcept{
         return LessNameHash(lhs.nicknameHash, rhs.nicknameHash);
     });
@@ -103,11 +105,10 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    const SceneHeaderBinary header = BuildSceneHeaderBinary(
-        static_cast<u64>(subsystemHashes.size()),
-        static_cast<u64>(entityHashes.size()),
-        static_cast<u64>(assetEntries.size())
-    );
+    SceneHeaderBinary header;
+    header.subsystemCount = static_cast<u64>(subsystemHashes.size());
+    header.entityCount = static_cast<u64>(entityHashes.size());
+    header.assetCount = static_cast<u64>(assetEntries.size());
     AppendPOD(outBinary, header);
 
     return

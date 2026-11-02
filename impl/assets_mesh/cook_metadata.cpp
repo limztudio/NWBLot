@@ -46,10 +46,6 @@ b8 AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshCookMetadata::IsAllowedMeshAssetField(const AStringView fieldName)noexcept{
-    return Impl::IsAllowedMeshAssetField(fieldName);
-}
-
 Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept{
     usize count = 0u;
     if(!MeshCookMetadataDetail::AccumulateFlattenedValueLeafCount(value, count))

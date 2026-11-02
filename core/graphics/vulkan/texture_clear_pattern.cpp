@@ -87,7 +87,7 @@ SIMDVectorSingle LinearToSRGBClearVector(const SIMDVectorSingle linear)noexcept{
     return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(clamped, threshold));
 }
 
-void WriteBC1ColorClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle sourceRgba, const b8 srgb)noexcept{
+void WriteBC1ColorClearBlock(const SIMDVectorSingle sourceRgba, const b8 srgb, NotNull<u8*> outPattern)noexcept{
     const SIMDVectorSingle srgbEncodedTriple = LinearToSRGBClearVector(sourceRgba);
     const SIMDVectorSingle srgbSelectMask = srgb ? VectorTrueInt() : VectorFalseInt();
     const SIMDVectorSingle encodedRgb = VectorSelect(sourceRgba, srgbEncodedTriple, srgbSelectMask);
@@ -102,26 +102,26 @@ void WriteBC1ColorClearBlock(NotNull<u8*> outPattern, const SIMDVectorSingle sou
         indices = s_BC1TransparentColorIndices;
     }
 
-    WriteClearPatternValue(outPattern, color0);
-    WriteClearPatternValue(MakeNotNull(outPattern.get() + sizeof(color0)), color1);
-    WriteClearPatternValue(MakeNotNull(outPattern.get() + sizeof(color0) + sizeof(color1)), indices);
+    WriteClearPatternValue(color0, outPattern);
+    WriteClearPatternValue(color1, MakeNotNull(outPattern.get() + sizeof(color0)));
+    WriteClearPatternValue(indices, MakeNotNull(outPattern.get() + sizeof(color0) + sizeof(color1)));
 }
 
-void WriteBC4ClearBlockEndpoint(NotNull<u8*> outPattern, const u8 endpoint)noexcept{
+void WriteBC4ClearBlockEndpoint(const u8 endpoint, NotNull<u8*> outPattern)noexcept{
     outPattern.get()[0] = endpoint;
     outPattern.get()[1] = endpoint;
     for(u32 byteIndex = s_BC4EndpointByteCount; byteIndex < s_BCSingleClearBlockBytes; ++byteIndex)
         outPattern.get()[byteIndex] = 0u;
 }
 
-void WriteBC4UNormClearBlock(NotNull<u8*> outPattern, const f32 value)noexcept{
+void WriteBC4UNormClearBlock(const f32 value, NotNull<u8*> outPattern)noexcept{
     const u8 endpoint = static_cast<u8>(QuantizeUNormClearScalar(value, static_cast<f32>(Limit<u8>::s_Max)));
-    WriteBC4ClearBlockEndpoint(outPattern, endpoint);
+    WriteBC4ClearBlockEndpoint(endpoint, outPattern);
 }
 
-void WriteBC4SNormClearBlock(NotNull<u8*> outPattern, const f32 value)noexcept{
+void WriteBC4SNormClearBlock(const f32 value, NotNull<u8*> outPattern)noexcept{
     const i8 endpoint = static_cast<i8>(QuantizeSNormClearScalar(value, static_cast<f32>(Limit<i8>::s_Max)));
-    WriteBC4ClearBlockEndpoint(outPattern, static_cast<u8>(endpoint));
+    WriteBC4ClearBlockEndpoint(static_cast<u8>(endpoint), outPattern);
 }
 
 Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatClearPattern(const Format::Enum format, const VkClearColorValue& clearValue)noexcept{
@@ -136,7 +136,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
         const SIMDVectorSingle quantized = QuantizeUNormClearVector(selectedValues, VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const u8 packed = static_cast<u8>(VectorGetByIndex(quantized, static_cast<usize>(component)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
+            WriteClearPatternValue(packed, MakeNotNull(pattern.get() + component * sizeof(packed)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(u8));
         return result;
@@ -148,7 +148,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
         const SIMDVectorSingle quantized = QuantizeUNormClearVector(selectedValues, VectorReplicate(static_cast<f32>(Limit<u8>::s_Max)));
         for(u32 component = 0u; component < s_TextureClearRGBAComponentCount; ++component){
             const u8 packed = static_cast<u8>(VectorGetByIndex(quantized, static_cast<usize>(component)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
+            WriteClearPatternValue(packed, MakeNotNull(pattern.get() + component * sizeof(packed)));
         }
         result.byteCount = s_TextureClearRGBAComponentCount * static_cast<u32>(sizeof(u8));
         return result;
@@ -157,7 +157,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
         const SIMDVectorSingle signedMagnitude = QuantizeSNormClearVector(sourceValues, VectorReplicate(static_cast<f32>(Limit<i8>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const i8 packed = static_cast<i8>(VectorGetByIndex(signedMagnitude, static_cast<usize>(component)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
+            WriteClearPatternValue(packed, MakeNotNull(pattern.get() + component * sizeof(packed)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(i8));
         return result;
@@ -166,7 +166,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
         const SIMDVectorSingle quantized = QuantizeUNormClearVector(sourceValues, VectorReplicate(static_cast<f32>(Limit<u16>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const u16 packed = static_cast<u16>(VectorGetByIndex(quantized, static_cast<usize>(component)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
+            WriteClearPatternValue(packed, MakeNotNull(pattern.get() + component * sizeof(packed)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(u16));
         return result;
@@ -175,7 +175,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
         const SIMDVectorSingle signedMagnitude = QuantizeSNormClearVector(sourceValues, VectorReplicate(static_cast<f32>(Limit<i16>::s_Max)));
         for(u32 component = 0u; component < componentCount; ++component){
             const i16 packed = static_cast<i16>(VectorGetByIndex(signedMagnitude, static_cast<usize>(component)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(packed)), packed);
+            WriteClearPatternValue(packed, MakeNotNull(pattern.get() + component * sizeof(packed)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(i16));
         return result;
@@ -183,14 +183,14 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
     auto writeHalfComponents = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
             const Half value = ConvertFloatToHalf(values[component]);
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(value)), value);
+            WriteClearPatternValue(value, MakeNotNull(pattern.get() + component * sizeof(value)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(Half));
         return result;
     };
     auto writeFloatComponents = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(f32)), values[component]);
+            WriteClearPatternValue(values[component], MakeNotNull(pattern.get() + component * sizeof(f32)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(f32));
         return result;
@@ -203,7 +203,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
             | (static_cast<u32>(VectorGetZ(quantized4444)) << s_ClearShift4)
             | static_cast<u32>(VectorGetW(quantized4444))
         );
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     };
@@ -212,7 +212,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
         const SIMDVectorSingle max565 = VectorSet(static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), static_cast<f32>((1u << s_ClearChannelBits565G) - 1u), static_cast<f32>((1u << s_ClearChannelBits565R) - 1u), 0.0f);
         const SIMDVectorSingle quantized565 = VectorMin(VectorFloor(VectorAdd(VectorMultiply(VectorSaturate(source565), max565), VectorReplicate(s_ClearFloatRoundingBias))), max565);
         const u16 packed = static_cast<u16>((static_cast<u32>(VectorGetX(quantized565)) << s_ClearShift11) | (static_cast<u32>(VectorGetY(quantized565)) << s_ClearShift5) | static_cast<u32>(VectorGetZ(quantized565)));
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     };
@@ -226,7 +226,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
             | (static_cast<u32>(VectorGetZ(quantized5551)) << 1u)
             | static_cast<u32>(VectorGetW(quantized5551))
         );
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     };
@@ -243,7 +243,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
             | (static_cast<u32>(VectorGetY(quantized1010102)) << s_ClearShift10)
             | (static_cast<u32>(VectorGetZ(quantized1010102)) << s_ClearShift20)
             | (static_cast<u32>(VectorGetW(quantized1010102)) << s_ClearShift30);
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     };
@@ -252,48 +252,48 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureFloatCl
             ConvertFloatToUnsignedFloat<s_UFloat111110GreenMantissaBits>(values[0])
             | (ConvertFloatToUnsignedFloat<s_UFloat111110GreenMantissaBits>(values[1]) << s_ClearShift11)
             | (ConvertFloatToUnsignedFloat<s_UFloat111110BlueMantissaBits>(values[2]) << s_ClearShift22);
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     };
     auto writeBC1Components = [&](const b8 srgb)noexcept{
-        WriteBC1ColorClearBlock(pattern, sourceValues, srgb);
+        WriteBC1ColorClearBlock(sourceValues, srgb, pattern);
         result.byteCount = s_BCSingleClearBlockBytes;
         return result;
     };
     auto writeBC2Components = [&](const b8 srgb)noexcept{
         const u64 alphaNibble = static_cast<u64>(QuantizeUNormClearScalar(values[3], static_cast<f32>((1u << s_ClearChannelBits4444) - 1u)));
         const u64 alphaBits = (static_cast<u64>(s_BC2AlphaNibbleSplat) | (static_cast<u64>(s_BC2AlphaNibbleSplat) << s_ClearHighWordShift)) * alphaNibble;
-        WriteClearPatternValue(pattern, alphaBits);
-        WriteBC1ColorClearBlock(MakeNotNull(pattern.get() + sizeof(alphaBits)), VectorSetW(sourceValues, 1.0f), srgb);
+        WriteClearPatternValue(alphaBits, pattern);
+        WriteBC1ColorClearBlock(VectorSetW(sourceValues, 1.0f), srgb, MakeNotNull(pattern.get() + sizeof(alphaBits)));
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };
     auto writeBC3Components = [&](const b8 srgb)noexcept{
-        WriteBC4UNormClearBlock(pattern, values[3]);
-        WriteBC1ColorClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), VectorSetW(sourceValues, 1.0f), srgb);
+        WriteBC4UNormClearBlock(values[3], pattern);
+        WriteBC1ColorClearBlock(VectorSetW(sourceValues, 1.0f), srgb, MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes));
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };
     auto writeBC4UNormComponents = [&]()noexcept{
-        WriteBC4UNormClearBlock(pattern, values[0]);
+        WriteBC4UNormClearBlock(values[0], pattern);
         result.byteCount = s_BCSingleClearBlockBytes;
         return result;
     };
     auto writeBC4SNormComponents = [&]()noexcept{
-        WriteBC4SNormClearBlock(pattern, values[0]);
+        WriteBC4SNormClearBlock(values[0], pattern);
         result.byteCount = s_BCSingleClearBlockBytes;
         return result;
     };
     auto writeBC5UNormComponents = [&]()noexcept{
-        WriteBC4UNormClearBlock(pattern, values[0]);
-        WriteBC4UNormClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), values[1]);
+        WriteBC4UNormClearBlock(values[0], pattern);
+        WriteBC4UNormClearBlock(values[1], MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes));
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };
     auto writeBC5SNormComponents = [&]()noexcept{
-        WriteBC4SNormClearBlock(pattern, values[0]);
-        WriteBC4SNormClearBlock(MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes), values[1]);
+        WriteBC4SNormClearBlock(values[0], pattern);
+        WriteBC4SNormClearBlock(values[1], MakeNotNull(pattern.get() + s_BCSingleClearBlockBytes));
         result.byteCount = s_BCDoubleClearBlockBytes;
         return result;
     };
@@ -350,7 +350,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureUIntCle
     auto writeU8Components = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
             const u8 value = static_cast<u8>(Min(values[component], static_cast<u32>(Limit<u8>::s_Max)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(value)), value);
+            WriteClearPatternValue(value, MakeNotNull(pattern.get() + component * sizeof(value)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(u8));
         return result;
@@ -358,14 +358,14 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureUIntCle
     auto writeU16Components = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
             const u16 value = static_cast<u16>(Min(values[component], static_cast<u32>(Limit<u16>::s_Max)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(value)), value);
+            WriteClearPatternValue(value, MakeNotNull(pattern.get() + component * sizeof(value)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(u16));
         return result;
     };
     auto writeU32Components = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(u32)), values[component]);
+            WriteClearPatternValue(values[component], MakeNotNull(pattern.get() + component * sizeof(u32)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(u32));
         return result;
@@ -402,7 +402,7 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureIntClea
     auto writeI8Components = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
             const i8 value = static_cast<i8>(clampValue(values[component], static_cast<i32>(Limit<i8>::s_Min), static_cast<i32>(Limit<i8>::s_Max)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(value)), value);
+            WriteClearPatternValue(value, MakeNotNull(pattern.get() + component * sizeof(value)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(i8));
         return result;
@@ -410,14 +410,14 @@ Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureIntClea
     auto writeI16Components = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component){
             const i16 value = static_cast<i16>(clampValue(values[component], static_cast<i32>(Limit<i16>::s_Min), static_cast<i32>(Limit<i16>::s_Max)));
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(value)), value);
+            WriteClearPatternValue(value, MakeNotNull(pattern.get() + component * sizeof(value)));
         }
         result.byteCount = componentCount * static_cast<u32>(sizeof(i16));
         return result;
     };
     auto writeI32Components = [&](const u32 componentCount)noexcept{
         for(u32 component = 0u; component < componentCount; ++component)
-            WriteClearPatternValue(MakeNotNull(pattern.get() + component * sizeof(i32)), values[component]);
+            WriteClearPatternValue(values[component], MakeNotNull(pattern.get() + component * sizeof(i32)));
         result.byteCount = componentCount * static_cast<u32>(sizeof(i32));
         return result;
     };
@@ -444,20 +444,20 @@ Expected<TextureClearPattern<s_TextureClearDepthPatternBytes>> BuildTextureDepth
     switch(format){
     case Format::D16:{
         const u16 packed = static_cast<u16>(QuantizeUNormClearScalar(depth, static_cast<f32>(Limit<u16>::s_Max)));
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     }
     case Format::D24S8:{
         const u32 packed = static_cast<u32>(QuantizeUNormClearScalar(depth, static_cast<f32>(s_D24ClearValueMask)));
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     }
     case Format::D32:
     case Format::D32S8:{
         const f32 packed = Saturate(depth);
-        WriteClearPatternValue(pattern, packed);
+        WriteClearPatternValue(packed, pattern);
         result.byteCount = sizeof(packed);
         return result;
     }
@@ -472,7 +472,7 @@ Expected<TextureClearPattern<s_TextureClearStencilPatternBytes>> BuildTextureSte
     switch(format){
     case Format::D24S8:
     case Format::D32S8:
-        WriteClearPatternValue(pattern, stencil);
+        WriteClearPatternValue(stencil, pattern);
         result.byteCount = sizeof(stencil);
         return result;
     default:
@@ -480,7 +480,7 @@ Expected<TextureClearPattern<s_TextureClearStencilPatternBytes>> BuildTextureSte
     }
 }
 
-void FillTextureClearBytes(void* bytes, const usize byteCount, const Span<const u8> pattern)noexcept{
+void FillTextureClearBytes(const usize byteCount, const Span<const u8> pattern, void* bytes)noexcept{
     if(byteCount == 0u || pattern.empty())
         return;
     const auto outBytes = MakeNotNull(static_cast<u8*>(bytes));

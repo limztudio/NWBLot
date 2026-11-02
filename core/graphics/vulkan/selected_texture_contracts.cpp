@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "selected_texture_clear_contract.h"
 #include "selected_texture_copy_contract.h"
 
 
@@ -15,26 +14,22 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(static_cast<u8>(TextureClearValueKind::Float) == static_cast<u8>(VulkanTextureDetail::TextureClearValueKind::Float));
-static_assert(static_cast<u8>(TextureClearValueKind::UInt) == static_cast<u8>(VulkanTextureDetail::TextureClearValueKind::UInt));
-static_assert(static_cast<u8>(TextureClearValueKind::Int) == static_cast<u8>(VulkanTextureDetail::TextureClearValueKind::Int));
-static_assert(static_cast<u8>(TextureClearValueKind::DepthStencil) == static_cast<u8>(VulkanTextureDetail::TextureClearValueKind::DepthStencil));
-static_assert(static_cast<u8>(TextureClearQueueRequirement::Transfer) == static_cast<u8>(VulkanTextureDetail::TextureClearQueueRequirement::Transfer));
-static_assert(static_cast<u8>(TextureClearQueueRequirement::ComputeOrGraphics) == static_cast<u8>(VulkanTextureDetail::TextureClearQueueRequirement::ComputeOrGraphics));
-static_assert(static_cast<u8>(TextureClearQueueRequirement::Graphics) == static_cast<u8>(VulkanTextureDetail::TextureClearQueueRequirement::Graphics));
-static_assert(static_cast<u8>(TextureCopyQueueRequirement::Transfer) == static_cast<u8>(VulkanTextureDetail::TextureCopyQueueRequirement::Transfer));
-static_assert(static_cast<u8>(TextureCopyQueueRequirement::ComputeOrGraphics) == static_cast<u8>(VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics));
-static_assert(static_cast<u8>(TextureCopyQueueRequirement::Graphics) == static_cast<u8>(VulkanTextureDetail::TextureCopyQueueRequirement::Graphics));
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace VulkanTextureDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] static b8 SliceCoversWholeMipExtent(const TextureDesc& description, const TextureSlice& resolvedSlice)noexcept{
+    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(description, resolvedSlice.mipLevel);
+    return resolvedSlice.x == 0u
+        && resolvedSlice.y == 0u
+        && resolvedSlice.z == 0u
+        && resolvedSlice.width == mipExtent.width
+        && resolvedSlice.height == mipExtent.height
+        && resolvedSlice.depth == mipExtent.depth
+    ;
+}
 
 Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDesc, const TextureSlice& sourceSlice, const TextureDesc& destinationDesc, const TextureSlice& destinationSlice)noexcept{
     TextureCopyContract contract{};
@@ -90,22 +85,8 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
     )
         return MakeUnexpected(Failure{});
 
-    const VkExtent3D sourceMipExtent = VulkanDetail::GetTextureMipExtent(sourceDesc, contract.sourceSlice.mipLevel);
-    const VkExtent3D destinationMipExtent = VulkanDetail::GetTextureMipExtent(destinationDesc, contract.destinationSlice.mipLevel);
-    const b8 sourceWholeMip = contract.sourceSlice.x == 0u
-        && contract.sourceSlice.y == 0u
-        && contract.sourceSlice.z == 0u
-        && contract.sourceSlice.width == sourceMipExtent.width
-        && contract.sourceSlice.height == sourceMipExtent.height
-        && contract.sourceSlice.depth == sourceMipExtent.depth
-    ;
-    const b8 destinationWholeMip = contract.destinationSlice.x == 0u
-        && contract.destinationSlice.y == 0u
-        && contract.destinationSlice.z == 0u
-        && contract.destinationSlice.width == destinationMipExtent.width
-        && contract.destinationSlice.height == destinationMipExtent.height
-        && contract.destinationSlice.depth == destinationMipExtent.depth
-    ;
+    const b8 sourceWholeMip = SliceCoversWholeMipExtent(sourceDesc, contract.sourceSlice);
+    const b8 destinationWholeMip = SliceCoversWholeMipExtent(destinationDesc, contract.destinationSlice);
 
     contract.formatLayout = *formatLayout;
     contract.imageType = *sourceImageType;
@@ -113,9 +94,9 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
     if(contract.aspectMask == 0u)
         return MakeUnexpected(Failure{});
     if(sourceDesc.sampleCount > 1u && (contract.aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u)
-        contract.queueRequirement = static_cast<decltype(contract.queueRequirement)>(TextureCopyQueueRequirement::Graphics);
+        contract.queueRequirement = TextureCopyQueueRequirement::Graphics;
     else if(!sourceWholeMip || !destinationWholeMip)
-        contract.queueRequirement = static_cast<decltype(contract.queueRequirement)>(TextureCopyQueueRequirement::ComputeOrGraphics);
+        contract.queueRequirement = TextureCopyQueueRequirement::ComputeOrGraphics;
 
     return contract;
 }
@@ -130,18 +111,11 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TextureClearContract> ResolveTextureClearContract(const TextureDesc& description, const TextureSubresourceSet& subresources, const TextureClearValueKind::Enum valueKind, const b8 clearDepth, const b8 clearStencil)noexcept{
-    const auto nativeContract = VulkanTextureDetail::ResolveTextureClearContract(description, subresources, static_cast<VulkanTextureDetail::TextureClearValueKind::Enum>(valueKind), clearDepth, clearStencil);
-    if(!nativeContract)
-        return MakeUnexpected(nativeContract.error());
-    return TextureClearContract{ .subresources = nativeContract->subresources, .queueRequirement = static_cast<TextureClearQueueRequirement::Enum>(nativeContract->queueRequirement), };
-}
-
 Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDescription, const TextureSlice& sourceSlice, const TextureDesc& destinationDescription, const TextureSlice& destinationSlice)noexcept{
     const auto nativeContract = VulkanTextureDetail::ResolveTextureCopyContract(sourceDescription, sourceSlice, destinationDescription, destinationSlice);
     if(!nativeContract)
         return MakeUnexpected(nativeContract.error());
-    return TextureCopyContract{ .sourceSlice = nativeContract->sourceSlice, .destinationSlice = nativeContract->destinationSlice, .queueRequirement = static_cast<TextureCopyQueueRequirement::Enum>(nativeContract->queueRequirement), };
+    return TextureCopyContract{ .sourceSlice = nativeContract->sourceSlice, .destinationSlice = nativeContract->destinationSlice, .queueRequirement = nativeContract->queueRequirement, };
 }
 
 

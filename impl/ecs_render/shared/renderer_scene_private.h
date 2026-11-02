@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/ecs_scene/module.h>
@@ -19,6 +20,14 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(RayTracingLightingClassificationInput) == sizeof(u32));
+static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
+static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 44u, "Deferred bindless slots must match eleven std140 uint4 lanes");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

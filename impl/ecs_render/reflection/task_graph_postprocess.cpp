@@ -240,10 +240,6 @@ Expected<Core::GpuGraphResourceId> ImportReflectionTexture(
     return FindOrImportTexture(graph, texture, resourceLabel, firstWrite ? Core::ResourceStates::Unknown : Core::ResourceStates::Common);
 }
 
-Expected<Core::GpuGraphResourceId> ImportReflectionBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer){
-    return FindOrImportBuffer(graph, buffer, s_ReflectionBufferLabel);
-}
-
 Core::GpuTaskDesc ReflectionTaskDesc(const Name identity, const AStringView label, const Core::GpuTaskId& dependency)noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -386,7 +382,7 @@ Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
             const Core::BufferHandle& readback = resources.statistics.buffers[reservation.slotIndex()];
             if(!readback)
                 return MakeUnexpected(Failure{});
-            const auto readbackResourceResult = ImportReflectionBuffer(graph, readback);
+            const auto readbackResourceResult = FindOrImportBuffer(graph, readback, s_ReflectionBufferLabel);
             if(!readbackResourceResult)
                 return MakeUnexpected(Failure{});
             const Core::GpuGraphResourceId readbackResource = *readbackResourceResult;

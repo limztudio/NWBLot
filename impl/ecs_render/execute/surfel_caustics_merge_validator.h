@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/global.h>
 
 #include <core/task/gpu/compiled_graph.h>

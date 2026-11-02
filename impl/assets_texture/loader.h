@@ -56,7 +56,7 @@ namespace TextureAssetLoader{
 [[nodiscard]] b8 Load(const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, TStringView ownerName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, TextureGpuResource& outResource);
 
 // Frees the global descriptor first, then releases the owner's TextureHandle. Safe to call on an empty resource.
-void Release(TextureGpuResource& inOutResource, Core::GraphicsRuntime& graphics);
+void Release(Core::GraphicsRuntime& graphics, TextureGpuResource& inOutResource);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

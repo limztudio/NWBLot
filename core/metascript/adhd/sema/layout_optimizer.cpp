@@ -133,7 +133,7 @@ void VisitDeclTopo(const usize idx, const Span<const DeclT* const> items, const 
 }
 
 template<typename DeclT, typename DependsOnPred>
-void SortDeclsTopologically(const Span<const DeclT* const> items, MetaArena& arena, const DependsOnPred& dependsOn, MVector<const DeclT*>& outSorted){
+void SortDeclsTopologically(const Span<const DeclT* const> items, const DependsOnPred& dependsOn, MetaArena& arena, MVector<const DeclT*>& outSorted){
     outSorted.clear();
     if(items.empty())
         return;
@@ -208,25 +208,25 @@ b8 InstantiationDependsOnClassByValue(const ClassTemplateInstantiation& inst, co
 }
 
 void SortTypeAliasesTopologically(const Span<const TypeAliasDecl* const> aliases, MetaArena& arena, MVector<const TypeAliasDecl*>& outSorted){
-    __hidden_adhd_layout_optimizer::SortDeclsTopologically(aliases, arena, [](const TypeAliasDecl& cur, const TypeAliasDecl& dep)noexcept{
+    __hidden_adhd_layout_optimizer::SortDeclsTopologically(aliases, [](const TypeAliasDecl& cur, const TypeAliasDecl& dep)noexcept{
         return cur.aliasedType && TypeRefReferencesSymbol(*cur.aliasedType, dep.name);
-    }, outSorted);
+    }, arena, outSorted);
 }
 
 void SortInterfacesTopologically(const Span<const InterfaceDecl* const> interfaces, const SymbolTable& symbols, MetaArena& arena, MVector<const InterfaceDecl*>& outSorted){
-    __hidden_adhd_layout_optimizer::SortDeclsTopologically(interfaces, arena, [&](const InterfaceDecl& cur, const InterfaceDecl& dep)noexcept{
+    __hidden_adhd_layout_optimizer::SortDeclsTopologically(interfaces, [&](const InterfaceDecl& cur, const InterfaceDecl& dep)noexcept{
         for(const TypeRef* baseRef : cur.baseInterfaces){
             if(baseRef && symbols.resolveBaseTypeName(baseRef->name) == dep.name)
                 return true;
         }
         return false;
-    }, outSorted);
+    }, arena, outSorted);
 }
 
 void SortClassesTopologically(const Span<const ClassDecl* const> classes, const SymbolTable& symbols, MetaArena& arena, MVector<const ClassDecl*>& outSorted){
-    __hidden_adhd_layout_optimizer::SortDeclsTopologically(classes, arena, [&](const ClassDecl& cur, const ClassDecl& dep)noexcept{
+    __hidden_adhd_layout_optimizer::SortDeclsTopologically(classes, [&](const ClassDecl& cur, const ClassDecl& dep)noexcept{
         return __hidden_adhd_layout_optimizer::ClassDependsOnClassByValue(cur, dep.name, symbols);
-    }, outSorted);
+    }, arena, outSorted);
 }
 
 void CollectExternalForwardDeclClasses(
@@ -234,19 +234,19 @@ void CollectExternalForwardDeclClasses(
     const SymbolTable& symbols,
     const Span<const TemplateParamDecl> outerTemplateParams,
     const Span<const TemplateParamDecl> innerTemplateParams,
-    MVector<MStringView>& outNames,
     const b8 inRefOrAssetContext,
-    const u32 depth
+    const u32 depth,
+    MVector<MStringView>& outNames
 ){
     if(depth > 16u || type.isAuto)
         return;
 
     if(type.isFuncType){
         if(type.funcReturnType)
-            CollectExternalForwardDeclClasses(*type.funcReturnType, symbols, outerTemplateParams, innerTemplateParams, outNames, type.funcReturnType->refMode != ParamPassingMode::None, depth + 1u);
+            CollectExternalForwardDeclClasses(*type.funcReturnType, symbols, outerTemplateParams, innerTemplateParams, type.funcReturnType->refMode != ParamPassingMode::None, depth + 1u, outNames);
         for(const FuncParamType& fp : type.funcParams){
             if(fp.type)
-                CollectExternalForwardDeclClasses(*fp.type, symbols, outerTemplateParams, innerTemplateParams, outNames, true, depth + 1u);
+                CollectExternalForwardDeclClasses(*fp.type, symbols, outerTemplateParams, innerTemplateParams, true, depth + 1u, outNames);
         }
         return;
     }
@@ -274,7 +274,7 @@ void CollectExternalForwardDeclClasses(
     const b8 childInAssetContext = (symbols.resolveBaseTypeName(type.name) == "AssetRef");
     for(const TypeArg& targ : type.templateArgs){
         if(targ.type)
-            CollectExternalForwardDeclClasses(*targ.type, symbols, outerTemplateParams, innerTemplateParams, outNames, childInAssetContext || (targ.type->refMode != ParamPassingMode::None), depth + 1u);
+            CollectExternalForwardDeclClasses(*targ.type, symbols, outerTemplateParams, innerTemplateParams, childInAssetContext || (targ.type->refMode != ParamPassingMode::None), depth + 1u, outNames);
     }
 }
 
@@ -557,5 +557,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

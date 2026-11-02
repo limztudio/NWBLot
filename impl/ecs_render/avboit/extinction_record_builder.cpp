@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitExtinctionRecordBuilder::declare(
+b8 AvboitExtinctionRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -42,7 +42,7 @@ NWB_IMPL_BEGIN
         ReadWriteUse(inputs.avboitExtinction, Core::ResourceStates::UnorderedAccess),
         ReadWriteUse(inputs.avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess),
     };
-    NWB_DEFINE_AVBOIT_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.avboit.extinction", "AVBOIT Extinction");
+    NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.avboit.extinction", "AVBOIT Extinction");
 
     RendererAvboitTaskGraphStageState& stage = m_avboitSystem.taskGraphStage();
     return DeclareAvboitRasterRecordPhase<AvboitExtinctionComputeEmulationGraphTask, AvboitExtinctionSharedComputeEmulationGraphTask, AvboitExtinctionGraphTask>(
@@ -62,7 +62,7 @@ NWB_IMPL_BEGIN
             "AVBOIT Extinction",
             Name(RendererGpuPassText::s_AvboitExtinctionName),
             RendererGpuPassText::s_AvboitExtinctionLabel,
-            AvboitRecordInputsBase::s_ResourceBaseCount
+            s_AvboitResourceBaseCount
         ),
         extinctionPayload,
         computeEmulationPayload,

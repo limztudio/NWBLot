@@ -21,6 +21,7 @@
 #include "call_traits.h"
 #include "not_null.h"
 #include "containers.h"
+#include "filesystem.h"
 #include "fixed_buffer.h"
 #include "inplace_function.h"
 #include "text_utils.h"

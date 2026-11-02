@@ -6,7 +6,6 @@
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
-#include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -70,7 +69,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
             haveGesture = gesture && gesture->control == token;
         }
         else{
-            if(!ListBehavior::Apply(state, result, source, options, *action)){
+            if(!ListBehavior::Apply(source, options, *action, state, result)){
                 m_context.fail();
                 result.valid = false;
                 return result;
@@ -106,11 +105,9 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
         for(;;){
             LayoutBox provisional;
-            const SIMDVectorSingle probeMinimum = VectorMax(VectorSet(s_StyleMinimumFieldWidth, background->minimumHeight, 0.0f, 0.0f), VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f));
-            const SIMDVectorSingle probePadding = VectorAdd(VectorSet(frame.padding.left, frame.rowHeight, 0.0f, 0.0f), VectorSet(frame.padding.right, frame.padding.top, 0.0f, 0.0f));
-            const SIMDVectorSingle probeWidth = VectorAdd(VectorAdd(probePadding, VectorSet(frame.style.scrollbarWidth, frame.padding.bottom, 0.0f, 0.0f)), VectorSet(frame.rowHeight, 0.0f, 0.0f, 0.0f));
-            const SIMDVectorSingle probeSize = VectorMax(probeMinimum, probeWidth);
-            provisional.rectangle = { 0.0f, 0.0f, VectorGetX(probeSize), VectorGetY(probeSize) };
+            const f32 probeWidth = Max(Max(s_StyleMinimumFieldWidth, background->minimumWidth), frame.padding.left + frame.padding.right + frame.style.scrollbarWidth + frame.rowHeight);
+            const f32 probeHeight = Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom);
+            provisional.rectangle = { 0.0f, 0.0f, probeWidth, probeHeight };
             provisional.clip = provisional.rectangle;
             const auto placement = measureListPlacement(frame, provisional, provisional.clip);
             if(!placement){
@@ -130,10 +127,10 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle preferredSize = VectorAdd(VectorAdd(VectorSet(s_StyleMinimumFieldWidth, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
-    const SIMDVectorSingle intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
-    description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
+    description.intrinsicSize = {
+        Max(background->minimumWidth, s_StyleMinimumFieldWidth),
+        Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom),
+    };
     if(!addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -201,11 +198,9 @@ b8 Builder::applyListGesture(ListState& state, const PointerGesture& gesture)noe
     const f64 travel = static_cast<f64>(gesture.referenceRectangle.height) - static_cast<f64>(gesture.targetRectangle.height);
     if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
         return false;
-    const SIMDVectorDouble startDeltaValue = VectorDoubleSubtract(
-        VectorDoubleSet(static_cast<f64>(gesture.targetRectangle.y), static_cast<f64>(gesture.position.y), 0.0, 0.0),
-        VectorDoubleSet(static_cast<f64>(gesture.referenceRectangle.y), static_cast<f64>(gesture.origin.y), 0.0, 0.0)
-    );
-    const f64 fractionValue = (VectorDoubleGetX(startDeltaValue) + VectorDoubleGetY(startDeltaValue)) / travel;
+    const f64 start = static_cast<f64>(gesture.targetRectangle.y) - static_cast<f64>(gesture.referenceRectangle.y);
+    const f64 delta = static_cast<f64>(gesture.position.y) - static_cast<f64>(gesture.origin.y);
+    const f64 fractionValue = (start + delta) / travel;
     const f64 fraction = fractionValue > 0.0 ? Min(1.0, fractionValue) : 0.0;
     state.m_ensureCursor = false;
     return state.m_scroll.setOffset(fraction * gesture.maximum);

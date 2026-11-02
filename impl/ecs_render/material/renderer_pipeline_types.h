@@ -57,7 +57,17 @@ struct MaterialPipelineKeyHasher{
     usize operator()(const MaterialPipelineKey& key)const noexcept;
 };
 struct MaterialPipelineKeyEqualTo{
-    b8 operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept;
+    [[nodiscard]] b8 operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept{
+        return
+            lhs.material == rhs.material
+            && lhs.pass == rhs.pass
+            && lhs.twoSided == rhs.twoSided
+            && lhs.csgMode == rhs.csgMode
+            && lhs.csgEvaluatorVariant == rhs.csgEvaluatorVariant
+            && lhs.csgShapeRegistryRevision == rhs.csgShapeRegistryRevision
+            && lhs.framebufferInfo == rhs.framebufferInfo
+        ;
+    }
 };
 
 struct MaterialSurfaceInfo{

@@ -36,7 +36,7 @@ static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4
 // Scene hierarchy and leaf instances share topology/indices; preflight freezes one batch per storage generation.
 // A fresh capture keeps node and instance bytes together for one graph upload; accepted static-cache reuse keeps only identity, counts, and hash.
 class PreparedSceneBvhUpload final : NoCopy{
-private:
+public:
     [[nodiscard]] static b8 StorageReady(const RendererRayTracingState& state, usize nodeCount, usize instanceCount)noexcept;
 
 

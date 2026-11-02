@@ -52,10 +52,7 @@ static constexpr Array<Name, 3> s_Groups = { Name("smoke/gi/passage"), Name("smo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct Box{
-    Float3U minimum;
-    Float3U maximum;
-};
+using Box = SmokeBoxBounds;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,21 +69,11 @@ struct Box{
 }
 
 [[nodiscard]] static b8 CreateReferencePieces(const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint, Core::ECS::World& world){
-    Float3U lower;
-    Float3U upper;
-    StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), lower);
-    StoreFloat(VectorMin(LoadFloat(box.maximum), LoadFloat(cutter.maximum)), upper);
     // Ordinary closed pieces provide independent triangle geometry for the same subtraction union.
-    const Array<Box, 6> pieces = {{
-        { box.minimum, Float3U(lower.x, box.maximum.y, box.maximum.z) },
-        { Float3U(upper.x, box.minimum.y, box.minimum.z), box.maximum },
-        { Float3U(lower.x, box.minimum.y, box.minimum.z), Float3U(upper.x, lower.y, box.maximum.z) },
-        { Float3U(lower.x, upper.y, box.minimum.z), Float3U(upper.x, box.maximum.y, box.maximum.z) },
-        { Float3U(lower.x, lower.y, box.minimum.z), Float3U(upper.x, upper.y, lower.z) },
-        { Float3U(lower.x, lower.y, upper.z), Float3U(upper.x, upper.y, box.maximum.z) },
-    }};
+    Array<Box, 6> pieces{};
+    (void)BuildSmokeBoxSubtractionPieces(box, cutter, pieces);
     for(const auto& piece : pieces){
-        if(piece.minimum.x >= piece.maximum.x || piece.minimum.y >= piece.maximum.y || piece.minimum.z >= piece.maximum.z)
+        if(!SmokeBoxBoundsValid(piece))
             continue;
         if(!CreateBox(piece, material, tint, world).valid())
             return false;
@@ -105,11 +92,9 @@ struct Box{
         return false;
     AddStaticCsgMeshReceiver(receiver, s_Groups[slot], true, false, world);
     // Overlapping cutters form one opening without an internal GI seam.
-    const SIMDVectorSingle cutterBegin = VectorReplicate(cutter.minimum.x);
-    const SIMDVectorSingle cutterSpan = VectorSubtract(VectorReplicate(cutter.maximum.x), cutterBegin);
-    const SIMDVectorSingle overlap = VectorMultiplyAddExpression(cutterSpan, VectorSet(0.35f, 0.65f, 0.0f, 0.0f), cutterBegin);
-    const f32 overlapBegin = VectorGetX(overlap);
-    const f32 overlapEnd = VectorGetY(overlap);
+    const f32 cutterSpan = cutter.maximum.x - cutter.minimum.x;
+    const f32 overlapBegin = cutter.minimum.x + cutterSpan * 0.35f;
+    const f32 overlapEnd = cutter.minimum.x + cutterSpan * 0.65f;
     const Array<Box, 2> cuts = {{
         { cutter.minimum, Float3U(overlapEnd, cutter.maximum.y, cutter.maximum.z) },
         { Float3U(overlapBegin, cutter.minimum.y, cutter.minimum.z), cutter.maximum },
@@ -229,11 +214,8 @@ Expected<b8> CsgGiScene::start(){
         return MakeUnexpected(Failure{});
     for(u32 slot = 0u; slot < 2u; ++slot){
         const f32 x = slot == 0u ? -1.3f : 1.3f;
-        const SIMDVectorSingle halfWidths = VectorSet(0.9f, 0.65f, 0.0f, 0.0f);
-        const SIMDVectorSingle minimumX = VectorSubtract(VectorReplicate(x), halfWidths);
-        const SIMDVectorSingle maximumX = VectorAdd(VectorReplicate(x), halfWidths);
-        const Box receiver{ Float3U(VectorGetX(minimumX), 0.3f, -0.8f), Float3U(VectorGetX(maximumX), 2.3f, 0.8f) };
-        const Box cutter{ Float3U(VectorGetY(minimumX), 0.55f, -1.0f), Float3U(VectorGetY(maximumX), 2.05f, slot == 0u ? 1.0f : 0.4f) };
+        const Box receiver{ Float3U(x - 0.9f, 0.3f, -0.8f), Float3U(x + 0.9f, 2.3f, 0.8f) };
+        const Box cutter{ Float3U(x - 0.65f, 0.55f, -1.0f), Float3U(x + 0.65f, 2.05f, slot == 0u ? 1.0f : 0.4f) };
         if(!CreateSubtraction(receiver, cutter, slot, arm, m_world))
             return MakeUnexpected(Failure{});
     }

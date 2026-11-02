@@ -11,9 +11,6 @@
 
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
 
-#include <core/os/clipboard_service.h>
-#include <core/os/text_input_service.h>
-
 #include <gtest/gtest.h>
 
 
@@ -29,70 +26,8 @@ namespace EcsUiPopupInputTestDetail{
 using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
-
-// These queued service doubles exercise the borrowed OS contract without claiming native IME qualification.
-class FakeTextInput final : public QueuedTextInputService{
-public:
-    using QueuedTextInputService::surroundingText;
-
-
-public:
-    explicit FakeTextInput(Alloc::GlobalArena& arena)
-        : QueuedTextInputService(arena)
-    {}
-    virtual ~FakeTextInput()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
-
-    [[nodiscard]] TextInputAdmission::Enum commit(const TextInputSessionToken token, const AStringView text){
-        return emitCommit(token, text);
-    }
-
-    [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text){
-        return emitPreedit(activeSession(), text, 0u, text.size());
-    }
-
-
-protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken, const TextInputSessionDesc&)noexcept override;
-
-    virtual void endNativeSession(const TextInputSessionToken)noexcept override{ ++ends; }
-
-
-public:
-    u32 starts = 0u;
-    u32 ends = 0u;
-};
-
-class FakeClipboard final : public QueuedClipboardService{
-public:
-    explicit FakeClipboard(Alloc::GlobalArena& arena)
-        : QueuedClipboardService(arena)
-    {}
-    virtual ~FakeClipboard()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept override{
-        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
-    }
-
-    [[nodiscard]] b8 complete(const ClipboardRequestToken token, const AStringView text){
-        return completeNativeRequest(token, ClipboardStatus::Success, text);
-    }
-
-
-protected:
-    virtual void startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum, const ClipboardChannel::Enum, const AStringView)noexcept override{
-        startedToken = token;
-    }
-
-
-public:
-    ClipboardRequestToken startedToken;
-};
+using UiEditHostFixtureSupport::FakeClipboard;
+using UiEditHostFixtureSupport::FakeTextInput;
 
 class UiPopupInputTests : public testing::Test{
 protected:

@@ -144,8 +144,9 @@ public:
 
 
 public:
-    // x = width, y = height.
-    [[nodiscard]] SIMDVectorSingle extent()const noexcept{ return VectorSubtract(VectorSet(maxX, maxY, 0.0f, 0.0f), VectorSet(minX, minY, 0.0f, 0.0f)); }
+    [[nodiscard]] constexpr f32 width()const noexcept{ return maxX - minX; }
+
+    [[nodiscard]] constexpr f32 height()const noexcept{ return maxY - minY; }
 };
 inline b8 operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
     return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY) && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ);

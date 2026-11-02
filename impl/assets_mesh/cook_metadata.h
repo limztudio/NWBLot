@@ -59,79 +59,67 @@ namespace MeshCookMetadataDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshCookMetadata final : NoCopy{
-public:
-    [[nodiscard]] static b8 IsAllowedMeshAssetField(AStringView fieldName)noexcept;
-    [[nodiscard]] static Expected<usize> CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept;
-    [[nodiscard]] static ScratchString MakeIndexedLabel(AStringView baseLabel, usize index, Core::Alloc::ScratchArena& arena);
-    template<typename PathArenaT>
-    [[nodiscard]] static Expected<NotNull<const Core::Metascript::Value*>> FindRequiredMetadataListField(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& map,
-        const TStringView metaKind,
-        const AStringView fieldName
-    );
-    [[nodiscard]] static Expected<f32, MetadataF32ValueFailure::Enum> ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept;
-    template<typename PathArenaT>
-    static void LogMetadataFiniteF32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataF32ValueFailure::Enum failure);
-    template<usize ComponentCount, typename PathArenaT>
-    static Expected<Array<f32, ComponentCount>> ParseMetadataF32TupleListElement(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& value,
-        const TStringView metaKind,
-        const AStringView fieldName,
-        const usize elementIndex,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-    template<typename ElementT, usize ComponentCount, typename VectorT, typename PathArenaT>
-    static b8 FillMetadataFloatListField(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        const TStringView metaKind,
-        const AStringView fieldName,
-        Core::Alloc::ScratchArena& scratchArena,
-        VectorT& outValues
-    );
-    template<typename ElementT, usize ComponentCount, typename PathArenaT>
-    static Expected<ScratchVector<ElementT>> ParseMetadataFloatListField(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        const TStringView metaKind,
-        const AStringView fieldName,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-    [[nodiscard]] static Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept;
-    template<typename PathArenaT>
-    static void LogMetadataU32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure);
-    template<typename IndexVectorT, typename PathArenaT>
-    static b8 FillMetadataIndexRecursive(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& value,
-        const TStringView metaKind,
-        const AStringView label,
-        Core::Alloc::ScratchArena& scratchArena,
-        IndexVectorT& outIndices
-    );
-    template<typename IndexVectorT, typename PathArenaT>
-    static b8 ParseMetadataIndexFieldInto(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        const TStringView metaKind,
-        Core::Alloc::ScratchArena& scratchArena,
-        IndexVectorT& outIndices
-    );
-    template<typename PathArenaT>
-    static Expected<Core::Assets::AssetVector<u32>> ParseMetadataIndexField(
-        const ::Path<PathArenaT>& nwbFilePath,
-        const Core::Metascript::Value& asset,
-        const TStringView metaKind,
-        Core::Assets::AssetArena& arena,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+namespace MeshCookMetadata{
 
 
-public:
-    MeshCookMetadata() = delete;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<usize> CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept;
+[[nodiscard]] ScratchString MakeIndexedLabel(AStringView baseLabel, usize index, Core::Alloc::ScratchArena& arena);
+template<typename PathArenaT>
+[[nodiscard]] Expected<NotNull<const Core::Metascript::Value*>> FindRequiredMetadataListField(
+    const ::Path<PathArenaT>& nwbFilePath,
+    const Core::Metascript::Value& map,
+    TStringView metaKind,
+    AStringView fieldName
+);
+[[nodiscard]] Expected<f32, MetadataF32ValueFailure::Enum> ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept;
+template<typename PathArenaT>
+void LogMetadataFiniteF32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, AStringView label, MetadataF32ValueFailure::Enum failure);
+template<usize ComponentCount, typename PathArenaT>
+Expected<Array<f32, ComponentCount>> ParseMetadataF32TupleListElement(
+    const ::Path<PathArenaT>& nwbFilePath,
+    const Core::Metascript::Value& value,
+    TStringView metaKind,
+    AStringView fieldName,
+    usize elementIndex,
+    Core::Alloc::ScratchArena& scratchArena
+);
+template<typename ElementT, usize ComponentCount, typename VectorT, typename PathArenaT>
+b8 FillMetadataFloatListField(
+    const ::Path<PathArenaT>& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    TStringView metaKind,
+    AStringView fieldName,
+    Core::Alloc::ScratchArena& scratchArena,
+    VectorT& outValues
+);
+[[nodiscard]] Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept;
+template<typename PathArenaT>
+void LogMetadataU32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, AStringView label, MetadataU32ValueFailure::Enum failure);
+template<typename IndexVectorT, typename PathArenaT>
+b8 FillMetadataIndexRecursive(
+    const ::Path<PathArenaT>& nwbFilePath,
+    const Core::Metascript::Value& value,
+    TStringView metaKind,
+    AStringView label,
+    Core::Alloc::ScratchArena& scratchArena,
+    IndexVectorT& outIndices
+);
+template<typename IndexVectorT, typename PathArenaT>
+b8 ParseMetadataIndexFieldInto(
+    const ::Path<PathArenaT>& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    TStringView metaKind,
+    Core::Alloc::ScratchArena& scratchArena,
+    IndexVectorT& outIndices
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -239,20 +227,6 @@ b8 MeshCookMetadata::FillMetadataFloatListField(
         return false;
     }
     return true;
-}
-
-template<typename ElementT, usize ComponentCount, typename PathArenaT>
-Expected<ScratchVector<ElementT>> MeshCookMetadata::ParseMetadataFloatListField(
-    const ::Path<PathArenaT>& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    const AStringView fieldName,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    ScratchVector<ElementT> values(scratchArena);
-    if(!FillMetadataFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, metaKind, fieldName, scratchArena, values))
-        return MakeUnexpected(Failure{});
-    return values;
 }
 
 template<typename PathArenaT>
@@ -367,19 +341,6 @@ b8 MeshCookMetadata::ParseMetadataIndexFieldInto(
     return true;
 }
 
-template<typename PathArenaT>
-Expected<Core::Assets::AssetVector<u32>> MeshCookMetadata::ParseMetadataIndexField(
-    const ::Path<PathArenaT>& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const TStringView metaKind,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    Core::Assets::AssetVector<u32> indices(arena);
-    if(!ParseMetadataIndexFieldInto(nwbFilePath, asset, metaKind, scratchArena, indices))
-        return MakeUnexpected(Failure{});
-    return indices;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

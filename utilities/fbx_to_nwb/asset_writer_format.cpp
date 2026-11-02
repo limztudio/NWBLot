@@ -409,6 +409,29 @@ void WriteModelAssetBody(
     }
 }
 
+template<typename WriteBodyFn>
+[[nodiscard]] b8 WriteNwbTextFile(const ScratchPath& outputPath, const AStringView assetKind, WriteBodyFn&& writeBody){
+    if(!EnsureOutputDirectory(outputPath, assetKind))
+        return false;
+
+    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!rawFile){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to open output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
+        return false;
+    }
+    NwbTextOutputStream file(rawFile);
+    file.precision(s_OutputFloatPrecision);
+    if(!writeBody(file))
+        return false;
+
+    rawFile.close();
+    if(!file){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed while writing output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -430,52 +453,21 @@ b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
 
     if(!ValidatePlainMeshAsset(mesh))
         return false;
-    if(!EnsureOutputDirectory(outputPath, s_MeshAssetTypeText))
-        return false;
 
-    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!rawFile){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed to open output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    NwbTextOutputStream file(rawFile);
-    file.precision(s_OutputFloatPrecision);
-
-    file << "mesh asset;\n\n";
-    WriteMeshAssetBody(mesh, s_AssetVariableName, "", file);
-
-    rawFile.close();
-    if(!file){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    return true;
+    return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+        file << "mesh asset;\n\n";
+        WriteMeshAssetBody(mesh, s_AssetVariableName, "", file);
+        return true;
+    });
 }
 
 b8 WriteSkeletonAsset(const ScratchPath& outputPath, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_asset_writer_format;
 
-    if(!EnsureOutputDirectory(outputPath, s_SkeletonAssetTypeText))
-        return false;
-
-    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!rawFile){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to open output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    NwbTextOutputStream file(rawFile);
-    file.precision(s_OutputFloatPrecision);
-
-    file << "skeleton asset;\n\n";
-    if(!WriteSkeletonAssetBody(s_AssetVariableName, joints, bindPoseMatrices, scratchArena, file))
-        return false;
-
-    rawFile.close();
-    if(!file){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    return true;
+    return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+        file << "skeleton asset;\n\n";
+        return WriteSkeletonAssetBody(s_AssetVariableName, joints, bindPoseMatrices, scratchArena, file);
+    });
 }
 
 b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, const AStringView skeletonName, const Span<const MeshSkinInfluence> influences, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
@@ -485,51 +477,22 @@ b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, con
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: no skin influences were produced"));
         return false;
     }
-    if(!EnsureOutputDirectory(outputPath, s_SkinAssetTypeText))
-        return false;
 
-    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!rawFile){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: failed to open output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    NwbTextOutputStream file(rawFile);
-    file.precision(s_OutputFloatPrecision);
-
-    file << "skin asset;\n\n";
-    WriteSkinAssetBody(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, scratchArena, file);
-
-    rawFile.close();
-    if(!file){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    return true;
+    return WriteNwbTextFile(outputPath, s_SkinAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+        file << "skin asset;\n\n";
+        WriteSkinAssetBody(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, scratchArena, file);
+        return true;
+    });
 }
 
 b8 WriteModelAsset(const ScratchPath& outputPath, const AStringView meshName, const Optional<AStringView> skinName, const Optional<AStringView> skeletonName, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_asset_writer_format;
 
-    if(!EnsureOutputDirectory(outputPath, s_ModelAssetTypeText))
-        return false;
-
-    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!rawFile){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: failed to open output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    NwbTextOutputStream file(rawFile);
-    file.precision(s_OutputFloatPrecision);
-
-    file << "model asset;\n\n";
-    WriteModelAssetBody(s_AssetVariableName, meshName, skinName, skeletonName, s_SkeletonAssetTypeText, true, true, scratchArena, file);
-
-    rawFile.close();
-    if(!file){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    return true;
+    return WriteNwbTextFile(outputPath, s_ModelAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+        file << "model asset;\n\n";
+        WriteModelAssetBody(s_AssetVariableName, meshName, skinName, skeletonName, s_SkeletonAssetTypeText, true, true, scratchArena, file);
+        return true;
+    });
 }
 
 b8 WriteAssetBunch(
@@ -545,55 +508,40 @@ b8 WriteAssetBunch(
 ){
     using namespace __hidden_asset_writer_format;
 
-    if(!EnsureOutputDirectory(outputPath, s_AssetBunchDisplayName))
-        return false;
+    return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, [&](NwbTextOutputStream& file) -> b8{
+        file << "mesh mesh;\n\n";
+        WriteMeshAssetBody(mesh, s_MeshAssetTypeText, "", file);
 
-    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!rawFile){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset bunch: failed to open output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    NwbTextOutputStream file(rawFile);
-    file.precision(s_OutputFloatPrecision);
+        const b8 skinnedBunch = skinName && skeletonName && !skinInfluences.empty();
+        if(skinnedBunch){
+            file << s_AssetSectionSeparatorText;
+            file << "skeleton skeleton;\n\n";
+            if(!WriteSkeletonAssetBody(s_SkeletonAssetTypeText, skeletonJoints, skeletonBindPoseMatrices, scratchArena, file))
+                return false;
 
-    file << "mesh mesh;\n\n";
-    WriteMeshAssetBody(mesh, s_MeshAssetTypeText, "", file);
-
-    if(skinName && skeletonName && !skinInfluences.empty()){
-        file << s_AssetSectionSeparatorText;
-        file << "skeleton skeleton;\n\n";
-        if(!WriteSkeletonAssetBody(s_SkeletonAssetTypeText, skeletonJoints, skeletonBindPoseMatrices, scratchArena, file))
-            return false;
+            file << s_AssetSectionSeparatorText;
+            file << "skin skin;\n\n";
+            WriteSkinAssetBody(s_SkinAssetTypeText, s_MeshAssetTypeText, s_SkeletonAssetTypeText, skinInfluences, inverseBindMatrices, false, scratchArena, file);
+        }
 
         file << s_AssetSectionSeparatorText;
-        file << "skin skin;\n\n";
-        WriteSkinAssetBody(s_SkinAssetTypeText, s_MeshAssetTypeText, s_SkeletonAssetTypeText, skinInfluences, inverseBindMatrices, false, scratchArena, file);
-    }
+        file << "model model;\n\n";
+        if(skinnedBunch)
+            WriteModelAssetBody(s_ModelAssetTypeText, s_MeshAssetTypeText, s_SkinAssetTypeText, s_SkeletonAssetTypeText, s_SkeletonAssetTypeText, false, true, scratchArena, file);
+        else
+            WriteModelAssetBody(s_ModelAssetTypeText, s_MeshAssetTypeText, {}, {}, s_SkeletonAssetTypeText, false, false, scratchArena, file);
 
-    const b8 skinnedBunch = skinName && skeletonName && !skinInfluences.empty();
-    file << s_AssetSectionSeparatorText;
-    file << "model model;\n\n";
-    if(skinnedBunch)
-        WriteModelAssetBody(s_ModelAssetTypeText, s_MeshAssetTypeText, s_SkinAssetTypeText, s_SkeletonAssetTypeText, s_SkeletonAssetTypeText, false, true, scratchArena, file);
-    else
-        WriteModelAssetBody(s_ModelAssetTypeText, s_MeshAssetTypeText, {}, {}, s_SkeletonAssetTypeText, false, false, scratchArena, file);
-
-    file << s_AssetSectionSeparatorText;
-    file << "asset_bunch bunch = [\n";
-    file << "    mesh,\n";
-    if(skinName && skeletonName && !skinInfluences.empty()){
-        file << "    skeleton,\n";
-        file << "    skin,\n";
-    }
-    file << "    model,\n";
-    file << s_FormatListCloseText;
-
-    rawFile.close();
-    if(!file){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset bunch: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    return true;
+        file << s_AssetSectionSeparatorText;
+        file << "asset_bunch bunch = [\n";
+        file << "    mesh,\n";
+        if(skinnedBunch){
+            file << "    skeleton,\n";
+            file << "    skin,\n";
+        }
+        file << "    model,\n";
+        file << s_FormatListCloseText;
+        return true;
+    });
 }
 
 

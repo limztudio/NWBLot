@@ -32,8 +32,6 @@ enum<u8> ScrollAxis{
 }
 
 const u32 s_ScrollAxisCount = 2u;
-// Bar value rows 0..2 carry data; row 3 is padding.
-const u32 s_ScrollbarValueRowCount = 3u;
 // Each axis can add a reservation once, then both axes are rechecked.
 const u32 s_ScrollbarReservationPassLimit = 3u;
 

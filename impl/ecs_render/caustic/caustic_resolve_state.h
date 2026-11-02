@@ -23,8 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_CausticResolveWaveletPassCount = NWB_CAUSTIC_RESOLVE_PASS_COUNT;
-
 inline const Array<Name, s_CausticResolveActivityBufferCount> s_CausticResolveActivityBufferNames = {
     s_CausticResolveActivityBufferAName,
     s_CausticResolveActivityBufferBName,

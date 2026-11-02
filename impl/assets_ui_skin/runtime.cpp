@@ -11,7 +11,6 @@
 #include <core/common/log.h>
 
 #include <global/simplemath.h>
-#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,20 +87,20 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
     }
     UiSkinPalette palette;
     for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
-        const auto packedResult = ReadPOD<UiSkinColorBinary>(binary, cursor);
+        const auto packedResult = ReadPOD<UiSkinColor>(binary, cursor);
         if(!packedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
             return false;
         }
-        palette.colors[index] = UnpackUiSkinColorBinary(*packedResult);
+        palette.colors[index] = *packedResult;
     }
     candidate.setPalette(palette);
-    const auto typographyResult = ReadPOD<UiSkinTypographyBinary>(binary, cursor);
+    const auto typographyResult = ReadPOD<UiSkinTypography>(binary, cursor);
     if(!typographyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
         return false;
     }
-    candidate.setTypography(UnpackUiSkinTypographyBinary(*typographyResult));
+    candidate.setTypography(*typographyResult);
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_UiSkinLoadBinaryContext))
         return false;
     candidate.rebuildRegionIndex();
@@ -123,7 +122,7 @@ b8 UiSkin::validatePayload()const{
         !m_texture.valid() || m_texture.name() == Name("")
         || m_atlasWidth == 0u || m_atlasHeight == 0u
         || !IsFinite(m_referenceDensity) || m_referenceDensity <= 0.0f
-        || !VectorIsFinite(VectorDivide(VectorSet(static_cast<f32>(m_atlasWidth), static_cast<f32>(m_atlasHeight), 0.0f, 0.0f), VectorReplicate(m_referenceDensity)), VectorComponentMask::s_XY)
+        || !(IsFinite(static_cast<f32>(m_atlasWidth) / m_referenceDensity) && IsFinite(static_cast<f32>(m_atlasHeight) / m_referenceDensity))
         || m_regions.empty()
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid"));
@@ -170,6 +169,42 @@ b8 UiSkin::validateTexture(const Texture& texture)const{
 UiSkin::RegionVector UiSkin::takeRegions()noexcept{
     m_regionIndex.clear();
     return Move(m_regions);
+}
+
+void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, const u32 height, const f32 referenceDensity, RegionVector&& regions){
+    RegionVector candidate(m_regions.get_allocator().arena());
+    candidate = Move(regions);
+    m_regions = Move(candidate);
+    rebuildRegionIndex();
+    m_texture = texture;
+    m_atlasWidth = width;
+    m_atlasHeight = height;
+    m_referenceDensity = referenceDensity;
+    m_palette = {};
+    m_typography = {};
+}
+
+const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{
+    usize regionPosition = 0u;
+    if(!TryFindUiSkinRegionIndex(Span<const UiSkinRegion>(m_regions), Span<const u32>(m_regionIndex), name, regionPosition))
+        return nullptr;
+    return &m_regions[regionPosition];
+}
+
+void UiSkin::rebuildRegionIndex(){
+    Core::Assets::AssetVector<u32> index(m_regions.get_allocator().arena());
+    if(m_regions.size() <= s_UiSkinMaxRegionCount){
+        index.reserve(m_regions.size());
+        for(u32 position = 0u; position < m_regions.size(); ++position)
+            index.push_back(position);
+        const Span<const UiSkinRegion> regions = m_regions;
+        Sort(index.begin(), index.end(), [&regions](const u32 left, const u32 right)noexcept{
+            const Name& a = regions[left].name;
+            const Name& b = regions[right].name;
+            return a == b ? left < right : a < b;
+        });
+    }
+    m_regionIndex = Move(index);
 }
 
 

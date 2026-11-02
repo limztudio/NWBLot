@@ -20,63 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 FrameTimingEndGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-    return payload.frameTimingTransaction.recordEnd(commandList);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 FrameRecoveryGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-    return payload.armed && (!payload.retiresFrameTiming || payload.frameTimingTransaction.recordEnd(commandList));
-}
-
-void FrameRecoveryGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-    if(payload.armed && payload.retiresFrameTiming && !payload.frameTimingTransaction.confirmEndSubmission(token, false)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
-        payload.frameTimingTransaction.discard();
-    }
-    payload.armed = false;
-    payload.retiresFrameTiming = false;
-}
-
-void FrameRecoveryGraphTask::Discarded(Payload& payload)noexcept{
-    if(payload.armed)
-        payload.frameTimingTransaction.discard();
-    payload.armed = false;
-    payload.retiresFrameTiming = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const DeferredFrameTailInputs& inputs){
+Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const DeferredFrameTailInputs& inputs){
     using namespace RendererTaskGraphDetail;
     DeferredFrameTailResult result{};
     if(!inputs.terminalPresentationTask.valid())

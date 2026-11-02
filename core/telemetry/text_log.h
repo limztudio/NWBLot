@@ -76,8 +76,6 @@ public:
 
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
 
-    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
-
     [[nodiscard]] Common::ILogger* forwardLogger()const noexcept{ return m_forwardLogger; }
 
     virtual Common::LogArena& arena()override{

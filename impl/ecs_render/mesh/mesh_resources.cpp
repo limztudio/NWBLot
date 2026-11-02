@@ -5,7 +5,6 @@
 #include "mesh_system.h"
 #include "runtime_mesh_pruning.h"
 
-#include <impl/ecs_render/csg/types.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
@@ -84,17 +83,7 @@ private:
 [[nodiscard]] static b8 RuntimeMeshSourceMatches(const MeshResources& mesh, const RuntimeMeshDesc& desc)noexcept{
     return
         mesh.runtimeMeshVersion == desc.version
-        && mesh.positionBuffer == desc.positionBuffer
-        && mesh.normalBuffer == desc.normalBuffer
-        && mesh.tangentBuffer == desc.tangentBuffer
-        && mesh.uv0Buffer == desc.uv0Buffer
-        && mesh.colorBuffer == desc.colorBuffer
-        && mesh.meshletDescBuffer == desc.meshletDescBuffer
-        && mesh.meshletBoundsBuffer == desc.meshletBoundsBuffer
-        && mesh.meshletPositionRefDeltaBuffer == desc.meshletPositionRefDeltaBuffer
-        && mesh.meshletAttributeRefDeltaBuffer == desc.meshletAttributeRefDeltaBuffer
-        && mesh.meshletLocalVertexRefBuffer == desc.meshletLocalVertexRefBuffer
-        && mesh.meshletPrimitiveIndexBuffer == desc.meshletPrimitiveIndexBuffer
+        && mesh.sameBuffers(desc)
         && mesh.triangleIndexBuffer == desc.triangleIndexBuffer
         && mesh.attributeBuffer == desc.attributeBuffer
         && mesh.runtimeLocalBoundsBuffer == desc.localBoundsBuffer

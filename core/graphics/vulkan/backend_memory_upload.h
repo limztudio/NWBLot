@@ -178,7 +178,7 @@ private:
     void linkActiveChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk)noexcept;
     void retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chunk, u64 version, b8 resetAllocated)noexcept;
     void retireSubmittedChunksLocked(GpuPhysicalQueueId queue, u64 version, Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists, const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners)noexcept;
-    void retireOwnerChunksLocked(GpuPhysicalQueueId queue, u64 version, b8 resetAllocated, TrackedCommandBuffer& owner, u64 nativeRecordingID)noexcept;
+    void retireOwnerChunksLocked(GpuPhysicalQueueId queue, u64 version, b8 resetAllocated, u64 nativeRecordingID, TrackedCommandBuffer& owner)noexcept;
 
 
 private:

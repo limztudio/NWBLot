@@ -27,6 +27,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const SIMDMatrix& matrix)noexcept{
+    const SIMDVectorSingle centerVector = CollisionDetail::SphereCenter(sphereValue);
+    const SIMDVectorSingle sphereRadius = VectorSplatW(sphereValue);
+    const SIMDMatrix transposed = MatrixTranspose(matrix);
+    // The largest absolute row sum of A^T A bounds its largest eigenvalue, including shear admitted by decomposition tolerances.
+    const SIMDVectorSingle diagonal = VectorMergeX(Vector3LengthSq(transposed.v[0]), Vector3LengthSq(transposed.v[1]), Vector3LengthSq(transposed.v[2]), VectorZero());
+    const SIMDVectorSingle dot01 = VectorAbs(Vector3Dot(transposed.v[0], transposed.v[1]));
+    const SIMDVectorSingle dot02 = VectorAbs(Vector3Dot(transposed.v[0], transposed.v[2]));
+    const SIMDVectorSingle dot12 = VectorAbs(Vector3Dot(transposed.v[1], transposed.v[2]));
+    const SIMDVectorSingle offDiagonal = VectorMergeX(VectorAdd(dot01, dot02), VectorAdd(dot01, dot12), VectorAdd(dot02, dot12), VectorZero());
+    const SIMDVectorSingle radiusScale = VectorSqrt(Vector3MaxComponent(VectorAdd(diagonal, offDiagonal)));
+    return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, radiusScale));
+}
+
+[[nodiscard]] inline SIMDVectorSingle NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVectorSingle sphereValue, const f32 scale, const SIMDVectorSingle rotation, const SIMDVectorSingle translation)noexcept{
+    const SIMDVectorSingle transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
+    return CollisionDetail::SphereCenterRadius(transformedCenter, VectorMultiply(VectorSplatW(sphereValue), scale < 0.0f ? VectorNegate(VectorReplicate(scale)) : VectorReplicate(scale)));
+}
+
+[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(SIMDVectorDouble sphereValue, const SIMDMatrixDouble& matrix)noexcept{
+    const SIMDVectorDouble centerVector = CollisionDoubleDetail::SphereCenter(sphereValue);
+    const SIMDVectorDouble sphereRadius = VectorDoubleSplatW(sphereValue);
+    const SIMDMatrixDouble transposed = MatrixDoubleTranspose(matrix);
+    // The largest absolute row sum of A^T A bounds its largest eigenvalue, including shear admitted by decomposition tolerances.
+    const SIMDVectorDouble diagonal = VectorDoubleMergeX(VectorDouble3LengthSq(transposed.v[0]), VectorDouble3LengthSq(transposed.v[1]), VectorDouble3LengthSq(transposed.v[2]), VectorDoubleZero());
+    const SIMDVectorDouble dot01 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[0], transposed.v[1]));
+    const SIMDVectorDouble dot02 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[0], transposed.v[2]));
+    const SIMDVectorDouble dot12 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[1], transposed.v[2]));
+    const SIMDVectorDouble offDiagonal = VectorDoubleMergeX(VectorDoubleAdd(dot01, dot02), VectorDoubleAdd(dot01, dot12), VectorDoubleAdd(dot02, dot12), VectorDoubleZero());
+    const SIMDVectorDouble radiusScale = VectorDoubleSqrt(VectorDouble3MaxComponent(VectorDoubleAdd(diagonal, offDiagonal)));
+    return CollisionDoubleDetail::SphereCenterRadius(VectorDouble3Transform(centerVector, matrix), VectorDoubleMultiply(sphereRadius, radiusScale));
+}
+
+[[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::TransformSphereValue(SIMDVectorDouble sphereValue, const f64 scale, const SIMDVectorDouble rotation, const SIMDVectorDouble translation)noexcept{
+    const SIMDVectorDouble transformedCenter = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(CollisionDoubleDetail::SphereCenter(sphereValue), scale), rotation), translation);
+    return CollisionDoubleDetail::SphereCenterRadius(transformedCenter, VectorDoubleMultiply(VectorDoubleSplatW(sphereValue), scale < 0.0 ? VectorDoubleNegate(VectorDoubleReplicate(scale)) : VectorDoubleReplicate(scale)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingSphere::ContainsPointValue(SIMDVectorSingle sphereValue, SIMDVectorSingle point)noexcept{
     const SIMDVectorSingle delta = VectorSubtract(point, CollisionDetail::SphereCenter(sphereValue));
     const SIMDVectorSingle sphereRadius = CollisionDetail::SphereRadius(sphereValue);
@@ -203,6 +245,97 @@
 
 [[nodiscard]] inline SIMDVectorDouble NWB_SIMD_CALL BoundingDoubleSphere::SphereFromCenterExtentsValue(SIMDVectorDouble centerValue, SIMDVectorDouble extentsValue)noexcept{
     return CollisionDoubleDetail::SphereCenterRadius(centerValue, VectorDouble3Length(extentsValue));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline void BoundingSphere::CreateMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept{
+    b8 directCopy = false;
+    b8 copyFirst = true;
+    const SIMDVectorSingle mergedValue = MergeSphereValues(LoadFloat(sphere0.centerRadius), LoadFloat(sphere1.centerRadius), directCopy, copyFirst);
+    if(directCopy){
+        outSphere = copyFirst ? sphere0 : sphere1;
+        return;
+    }
+
+    StoreFloat(mergedValue, outSphere.centerRadius);
+}
+
+inline void BoundingDoubleSphere::CreateMerged(BoundingDoubleSphere& outSphere, const BoundingDoubleSphere& sphere0, const BoundingDoubleSphere& sphere1)noexcept{
+    b8 directCopy = false;
+    b8 copyFirst = true;
+    const SIMDVectorDouble mergedValue = MergeSphereValues(LoadDouble(sphere0.centerRadius), LoadDouble(sphere1.centerRadius), directCopy, copyFirst);
+    if(directCopy){
+        outSphere = copyFirst ? sphere0 : sphere1;
+        return;
+    }
+
+    StoreDouble(mergedValue, outSphere.centerRadius);
+}
+
+inline void BoundingSphere::CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept{
+    StoreFloat(SphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
+}
+
+inline void BoundingSphere::CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept{
+    StoreFloat(SphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
+}
+
+inline void BoundingDoubleSphere::CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleBox& box)noexcept{
+    StoreDouble(SphereFromCenterExtentsValue(LoadDouble(box.center), LoadDouble(box.extents)), outSphere.centerRadius);
+}
+
+inline void BoundingDoubleSphere::CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleOrientedBox& box)noexcept{
+    StoreDouble(SphereFromCenterExtentsValue(LoadDouble(box.center), LoadDouble(box.extents)), outSphere.centerRadius);
+}
+
+inline void BoundingSphere::CreateFromPoints(BoundingSphere& outSphere, const usize count, const Float3U& points, const usize stride)noexcept{
+    NWB_ASSERT(count > 0u);
+    SIMDVectorSingle centerVector = VectorZero();
+    for(usize i = 0u; i < count; ++i)
+        centerVector = VectorAdd(centerVector, LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)));
+    centerVector = VectorDivide(centerVector, VectorReplicate(static_cast<f32>(count)));
+
+    SIMDVectorSingle radiusSq = VectorZero();
+    for(usize i = 0u; i < count; ++i){
+        const SIMDVectorSingle delta = VectorSubtract(LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), centerVector);
+        radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
+    }
+
+    StoreFloat(CollisionDetail::SphereCenterRadius(centerVector, VectorSqrt(radiusSq)), outSphere.centerRadius);
+}
+
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+inline void BoundingDoubleSphere::CreateFromPoints(BoundingDoubleSphere& outSphere, const usize count, const PointT& points, const usize stride)noexcept{
+    NWB_ASSERT(count > 0u);
+    NWB_ASSERT(stride >= sizeof(PointT));
+    NWB_ASSERT(stride % alignof(PointT) == 0u);
+    SIMDVectorDouble centerVector = VectorDoubleZero();
+    for(usize i = 0u; i < count; ++i)
+        centerVector = VectorDoubleAdd(centerVector, LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)));
+    centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(count)));
+
+    SIMDVectorDouble radiusSq = VectorDoubleZero();
+    for(usize i = 0u; i < count; ++i){
+        const SIMDVectorDouble delta = VectorDoubleSubtract(LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), centerVector);
+        radiusSq = VectorDoubleMax(radiusSq, VectorDouble3LengthSq(delta));
+    }
+
+    StoreDouble(CollisionDoubleDetail::SphereCenterRadius(centerVector, VectorDoubleSqrt(radiusSq)), outSphere.centerRadius);
+}
+
+inline void BoundingSphere::CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
+    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
+    CollisionDetail::FrustumCorners(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
+    StoreFloat(CollisionDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
+}
+
+inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept{
+    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
+    CollisionDoubleDetail::FrustumCorners(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
+    StoreDouble(CollisionDoubleDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
 }
 
 
@@ -507,97 +640,6 @@ inline void NWB_SIMD_CALL BoundingDoubleSphere::transform(BoundingDoubleSphere& 
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleSphere::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
     return ContainedByValue(LoadDouble(centerRadius), plane0, plane1, plane2, plane3, plane4, plane5);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline void BoundingSphere::CreateMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept{
-    b8 directCopy = false;
-    b8 copyFirst = true;
-    const SIMDVectorSingle mergedValue = MergeSphereValues(LoadFloat(sphere0.centerRadius), LoadFloat(sphere1.centerRadius), directCopy, copyFirst);
-    if(directCopy){
-        outSphere = copyFirst ? sphere0 : sphere1;
-        return;
-    }
-
-    StoreFloat(mergedValue, outSphere.centerRadius);
-}
-
-inline void BoundingDoubleSphere::CreateMerged(BoundingDoubleSphere& outSphere, const BoundingDoubleSphere& sphere0, const BoundingDoubleSphere& sphere1)noexcept{
-    b8 directCopy = false;
-    b8 copyFirst = true;
-    const SIMDVectorDouble mergedValue = MergeSphereValues(LoadDouble(sphere0.centerRadius), LoadDouble(sphere1.centerRadius), directCopy, copyFirst);
-    if(directCopy){
-        outSphere = copyFirst ? sphere0 : sphere1;
-        return;
-    }
-
-    StoreDouble(mergedValue, outSphere.centerRadius);
-}
-
-inline void BoundingSphere::CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept{
-    StoreFloat(SphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
-}
-
-inline void BoundingSphere::CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept{
-    StoreFloat(SphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
-}
-
-inline void BoundingDoubleSphere::CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleBox& box)noexcept{
-    StoreDouble(SphereFromCenterExtentsValue(LoadDouble(box.center), LoadDouble(box.extents)), outSphere.centerRadius);
-}
-
-inline void BoundingDoubleSphere::CreateFromBoundingBox(BoundingDoubleSphere& outSphere, const BoundingDoubleOrientedBox& box)noexcept{
-    StoreDouble(SphereFromCenterExtentsValue(LoadDouble(box.center), LoadDouble(box.extents)), outSphere.centerRadius);
-}
-
-inline void BoundingSphere::CreateFromPoints(BoundingSphere& outSphere, const usize count, const Float3U& points, const usize stride)noexcept{
-    NWB_ASSERT(count > 0u);
-    SIMDVectorSingle centerVector = VectorZero();
-    for(usize i = 0u; i < count; ++i)
-        centerVector = VectorAdd(centerVector, LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)));
-    centerVector = VectorDivide(centerVector, VectorReplicate(static_cast<f32>(count)));
-
-    SIMDVectorSingle radiusSq = VectorZero();
-    for(usize i = 0u; i < count; ++i){
-        const SIMDVectorSingle delta = VectorSubtract(LoadFloat(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), centerVector);
-        radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
-    }
-
-    StoreFloat(CollisionDetail::SphereCenterRadius(centerVector, VectorSqrt(radiusSq)), outSphere.centerRadius);
-}
-
-template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-inline void BoundingDoubleSphere::CreateFromPoints(BoundingDoubleSphere& outSphere, const usize count, const PointT& points, const usize stride)noexcept{
-    NWB_ASSERT(count > 0u);
-    NWB_ASSERT(stride >= sizeof(PointT));
-    NWB_ASSERT(stride % alignof(PointT) == 0u);
-    SIMDVectorDouble centerVector = VectorDoubleZero();
-    for(usize i = 0u; i < count; ++i)
-        centerVector = VectorDoubleAdd(centerVector, LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)));
-    centerVector = VectorDoubleDivide(centerVector, VectorDoubleReplicate(static_cast<f64>(count)));
-
-    SIMDVectorDouble radiusSq = VectorDoubleZero();
-    for(usize i = 0u; i < count; ++i){
-        const SIMDVectorDouble delta = VectorDoubleSubtract(LoadDouble(*VectorScalarDetail::StridePointer(MakeNotNull(&points), stride, i)), centerVector);
-        radiusSq = VectorDoubleMax(radiusSq, VectorDouble3LengthSq(delta));
-    }
-
-    StoreDouble(CollisionDoubleDetail::SphereCenterRadius(centerVector, VectorDoubleSqrt(radiusSq)), outSphere.centerRadius);
-}
-
-inline void BoundingSphere::CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
-    SIMDVectorSingle corners[BoundingFrustum::s_CornerCount];
-    CollisionDetail::FrustumCorners(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreFloat(CollisionDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
-}
-
-inline void BoundingDoubleSphere::CreateFromFrustum(BoundingDoubleSphere& outSphere, const BoundingDoubleFrustum& frustum)noexcept{
-    SIMDVectorDouble corners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    CollisionDoubleDetail::FrustumCorners(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, corners);
-    StoreDouble(CollisionDoubleDetail::CreateSphereFromVectorPoints(corners), outSphere.centerRadius);
 }
 
 

@@ -185,7 +185,7 @@ void CheckIndexedScores(const Shape::Enum shape){
     expectScores();
     Core::GraphicsVector<Core::GpuTaskQueueAssignment> empty(testArena.arena);
     scoringData.rebuildAssignmentLoads(empty, topology);
-    EXPECT_EQ(scoringData.m_totalAssignedCost, 0u);
+    EXPECT_EQ(scoringData.totalAssignedCost, 0u);
     scoringData.rebuildAssignmentLoads(assignments, topology);
     expectScores();
 }
@@ -207,8 +207,8 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     struct StorageCase{
-        usize m_taskCount;
-        Shape::Enum m_shape;
+        usize taskCount;
+        Shape::Enum shape;
     };
     constexpr Array<StorageCase, 11u> s_Cases = {{
         { 16u, Shape::DisjointPairs }, { 64u, Shape::DisjointPairs },
@@ -228,12 +228,12 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
     }
     const usize reachabilityBookkeepingBytes = s_ReachabilityVectorCount * emptyVectorBookkeepingBytes;
     for(const auto& testCase : s_Cases){
-        SCOPED_TRACE(testCase.m_taskCount);
-        SCOPED_TRACE(testCase.m_shape);
+        SCOPED_TRACE(testCase.taskCount);
+        SCOPED_TRACE(testCase.shape);
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
         Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
-        ASSERT_NO_FATAL_FAILURE(DeclareGraph(graph, testCase.m_taskCount, testCase.m_shape, declarationScratch));
+        ASSERT_NO_FATAL_FAILURE(DeclareGraph(graph, testCase.taskCount, testCase.shape, declarationScratch));
         Core::GpuTaskGraphAnalysis analysis(testArena.arena);
         ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
         const Core::GpuTaskGraph::DeclarationReadView view(graph);
@@ -241,10 +241,10 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
         GpuTaskSchedulingReachability reachability(scratch);
         ASSERT_EQ(scratch.memoryStats().usedBytes, reachabilityBookkeepingBytes);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
-        const usize wordsPerRow = (testCase.m_taskCount + s_BitsPerWord - 1u) / s_BitsPerWord;
-        const usize matrixBytes = testCase.m_taskCount * wordsPerRow * sizeof(u64);
-        const usize denseBytes = matrixBytes + testCase.m_taskCount * (sizeof(u32) + 2u * sizeof(usize));
-        if(testCase.m_shape == Shape::ReversedPairs){
+        const usize wordsPerRow = (testCase.taskCount + s_BitsPerWord - 1u) / s_BitsPerWord;
+        const usize matrixBytes = testCase.taskCount * wordsPerRow * sizeof(u64);
+        const usize denseBytes = matrixBytes + testCase.taskCount * (sizeof(u32) + 2u * sizeof(usize));
+        if(testCase.shape == Shape::ReversedPairs){
             // A partial last tile and backward cross-word edges must not allocate the full square matrix.
             EXPECT_LT(scratch.memoryStats().peakUsedBytes, matrixBytes);
             EXPECT_TRUE(reachability.reaches(view.taskAt(512u).id, view.taskAt(511u).id));
@@ -386,8 +386,8 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
         }
         const auto expectScoresWithoutMasks = [&](){
             // Zero capacity proves neither optional index allocated storage, rather than merely clearing its contents.
-            EXPECT_EQ(scoringData.m_taskCostGroups.capacity(), 0u);
-            EXPECT_EQ(scoringData.m_assignedCostWords.capacity(), 0u);
+            EXPECT_EQ(scoringData.taskCostGroups.capacity(), 0u);
+            EXPECT_EQ(scoringData.assignedCostWords.capacity(), 0u);
             for(usize candidateIndex = 0u; candidateIndex < topology.queueCount; ++candidateIndex){
                 const auto& candidate = queues[candidateIndex];
                 for(usize index = 0u; index < s_TaskCount; ++index){

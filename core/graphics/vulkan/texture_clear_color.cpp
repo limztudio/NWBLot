@@ -163,9 +163,8 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
         return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
-    constexpr TStringView s_OperationName = s_ClearTextureBoxOperation;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotLiveResourceReason);
+        rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_TextureNotLiveResourceReason);
         return;
     }
     const TextureDesc& desc = texture.m_creationDesc;
@@ -173,7 +172,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
     const TStringView subresourceError = __hidden_texture_clear_color::ColorClearSubresourceError(desc, resolvedSubresources, texture.m_aspectMask, integerValue, signedIntegerValue);
     if(!subresourceError.empty()){
-        rejectCommandRecording(s_OperationName, subresourceError);
+        rejectCommandRecording(s_ClearTextureBoxOperation, subresourceError);
         return;
     }
 
@@ -188,27 +187,27 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
         return;
     const VkImageUsageFlags requiredUsage = m_renderPassActive ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
-        rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotReadyForNativeClearReason);
+        rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_TextureNotReadyForNativeClearReason);
         return;
     }
     if(blockCompressed && desc.sampleCount != 1u){
-        rejectCommandRecording(s_OperationName, __hidden_texture_clear_color::s_BlockCompressedMultisampleReason);
+        rejectCommandRecording(s_ClearTextureBoxOperation, __hidden_texture_clear_color::s_BlockCompressedMultisampleReason);
         return;
     }
     if(blockCompressed && m_renderPassActive){
-        rejectCommandRecording(s_OperationName, __hidden_texture_clear_color::s_BlockCompressedActiveRenderingReason);
+        rejectCommandRecording(s_ClearTextureBoxOperation, __hidden_texture_clear_color::s_BlockCompressedActiveRenderingReason);
         return;
     }
 
     if(m_renderPassActive || desc.sampleCount != 1u){
         if(!m_renderPassActive){
-            rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_BoundedMultisampledClearInactiveReason);
+            rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_BoundedMultisampledClearInactiveReason);
             return;
         }
 
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, resolvedSubresources.baseMipLevel);
         if(baseResolvedBox.minZ != 0 || baseResolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-            rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_BoundedClearDepthReason);
+            rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_BoundedClearDepthReason);
             return;
         }
 
@@ -274,8 +273,8 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
     if(!hasNonemptyMip)
         return;
 
-    const VulkanTextureDetail::TextureClearQueueRequirement::Enum queueRequirement = VulkanTextureDetail::TextureClearBoxQueueRequirement(desc, resolvedSubresources, box);
-    if(queueRequirement == VulkanTextureDetail::TextureClearQueueRequirement::Transfer){
+    const TextureClearQueueRequirement::Enum queueRequirement = VulkanTextureDetail::TextureClearBoxQueueRequirement(desc, resolvedSubresources, box);
+    if(queueRequirement == TextureClearQueueRequirement::Transfer){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear color texture box through staging")))
             return;
     }
@@ -311,7 +310,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
             rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
             return;
         }
-        VulkanTextureDetail::FillTextureClearBytes(stagingBytes, mipPlan.uploadLayout.clearByteCount, clearPattern->span());
+        VulkanTextureDetail::FillTextureClearBytes(mipPlan.uploadLayout.clearByteCount, clearPattern->span(), stagingBytes);
 
         if(desc.dimension == TextureDimension::Texture3D){
             VkBufferImageCopy region{};

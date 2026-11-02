@@ -57,60 +57,6 @@ class MaterialInstanceComponent{
     public u64 revision = 0u;
 }
 
-const usize s_MinCoincidentCandidateCount = 2u;
-
-// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
-class CoincidentOpticalVolumeCandidate{
-    public AssetRef<Mesh> mesh;
-    public AssetRef<Material> material;
-    public f32x3u position = f32x3u(0.f, 0.f, 0.f);
-    public f32x4u rotation = f32x4u(0.f, 0.f, 0.f, 1.f);
-    public f32x3u scale = f32x3u(1.f, 1.f, 1.f);
-    public Span<u8> mutableTypedBytes;
-    public Name group = s_NameNone;
-    public EntityID entity = s_InvalidEntityId;
-    public i32 priority = 0;
-    // Identical-material grouping also requires the same authored medium semantics.
-    public u32 boundaryMode = 0u;
-    public i32 mediumPriority = 0;
-}
-
-b8 ValidCoincidentOpticalVolumeCandidateLanes(in f32x3u position, in f32x4u rotation, in f32x3u scale){
-    if(
-        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
-        || !isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w)
-        || !isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z)
-    )
-        return false;
-    const b8 scaleNonzero = scale.x != 0.f && scale.y != 0.f && scale.z != 0.f;
-    const b8 rotationNonzero = rotation.x != 0.f || rotation.y != 0.f || rotation.z != 0.f || rotation.w != 0.f;
-    return scaleNonzero && rotationNonzero;
-}
-
-b8 ValidCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate candidate){
-    if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
-        return false;
-    return ValidCoincidentOpticalVolumeCandidateLanes(candidate.position, candidate.rotation, candidate.scale);
-}
-
-b8 RendererComponentOpticalVolumeMergingEnabled(in RendererComponent renderer){
-    return
-        renderer.visible
-        && (
-            renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial
-            || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone)
-        )
-    ;
-}
-
-b8 OpticalBoundaryModeIsClosed(in OpticalBoundaryMode mode){
-    return mode == OpticalBoundaryMode::ClosedNested || mode == OpticalBoundaryMode::ClosedPriority;
-}
-
-b8 CoincidentOpticalVolumeCandidateOutranks(in CoincidentOpticalVolumeCandidate candidate, in CoincidentOpticalVolumeCandidate previous){
-    return candidate.priority > previous.priority || (candidate.priority == previous.priority && candidate.entity.id < previous.entity.id);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

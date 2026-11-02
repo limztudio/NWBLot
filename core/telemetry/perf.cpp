@@ -5,6 +5,7 @@
 #include "perf.h"
 
 #include <global/binary.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +28,7 @@ namespace __hidden_telemetry_perf{
 }
 
 [[nodiscard]] static b8 TimingDurationsAreFinite(const f64 seconds, const f64 minSeconds, const f64 maxSeconds, const f64 lastSeconds)noexcept{
-    constexpr u64 s_ExponentMask = 0x7FF0000000000000ull;
-    return
-        (BitCast<u64>(seconds) & s_ExponentMask) != s_ExponentMask && (BitCast<u64>(minSeconds) & s_ExponentMask) != s_ExponentMask
-        && (BitCast<u64>(maxSeconds) & s_ExponentMask) != s_ExponentMask && (BitCast<u64>(lastSeconds) & s_ExponentMask) != s_ExponentMask
-    ;
+    return IsFinite(seconds) && IsFinite(minSeconds) && IsFinite(maxSeconds) && IsFinite(lastSeconds);
 }
 
 [[nodiscard]] static b8 ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{
@@ -42,13 +39,12 @@ namespace __hidden_telemetry_perf{
         && IsValidPerfTimingSource(static_cast<PerfTimingSource::Enum>(header.source))
         && header.sampleCount != 0u
         && TimingDurationsAreFinite(header.seconds, header.minSeconds, header.maxSeconds, header.lastSeconds)
-        && !NameDetail::IsZeroHash(header.scopeHash)
+        && !IsZeroHash(header.scopeHash)
     ;
 }
 
 [[nodiscard]] static b8 ValidateHeader(const EncodedPerfMemoryPayloadHeader& header)noexcept{
-    constexpr u16 s_KnownFlags = PerfMemoryPayloadFlag::HasDelta;
-    return header.magic == s_PerfMemoryPayloadMagic && header.version == s_PerfMemoryPayloadVersion && (header.flags & ~s_KnownFlags) == 0u && IsValidMemorySource(header.source) && !NameDetail::IsZeroHash(header.scopeHash);
+    return header.magic == s_PerfMemoryPayloadMagic && header.version == s_PerfMemoryPayloadVersion && (header.flags & ~PerfMemoryPayloadFlag::HasDelta) == 0u && IsValidMemorySource(header.source) && !IsZeroHash(header.scopeHash);
 }
 
 [[nodiscard]] static b8 ValidateTimingInput(const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats)noexcept{

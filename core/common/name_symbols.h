@@ -88,15 +88,15 @@ inline void AppendResolvedText(const AStringView resolvedText, ArenaT& arena, Ba
 
 template<typename CharT, typename ArenaT>
 inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutText){
-    if(inOutText.size() < ::NameDetail::s_DebugHashTextLength)
+    if(inOutText.size() < s_DebugHashTextLength)
         return;
 
     Optional<BasicString<CharT, ArenaT>> decoded;
     usize copiedUntil = 0u;
-    const usize lastTokenOffset = inOutText.size() - ::NameDetail::s_DebugHashTextLength;
+    const usize lastTokenOffset = inOutText.size() - s_DebugHashTextLength;
     for(usize i = 0u; i <= lastTokenOffset;){
-        const auto hashText = ::NameDetail::CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
-        const auto hash = hashText ? ::NameDetail::DecodeDebugHashText(AStringView(hashText->data(), ::NameDetail::s_DebugHashTextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
+        const auto hashText = CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
+        const auto hash = hashText ? DecodeDebugHashText(AStringView(hashText->data(), s_DebugHashTextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
         if(hash){
             Array<char, s_MaxResolvedTextLength> resolvedText;
             if(Resolve(resolvedText.data(), resolvedText.size(), *hash)){
@@ -106,7 +106,7 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
                 }
                 decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
                 AppendResolvedText(AStringView(resolvedText.data()), arena, *decoded);
-                i += ::NameDetail::s_DebugHashTextLength;
+                i += s_DebugHashTextLength;
                 copiedUntil = i;
                 continue;
             }

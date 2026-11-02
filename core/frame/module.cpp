@@ -55,7 +55,9 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     frameData.width() = width;
     frameData.height() = height;
     setupPlatform(inst);
-    m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
+    m_graphics.setPointerScaleChangedCallback([](void* const userData, const f32 scaleX, const f32 scaleY)noexcept{
+        MakeNotNull(static_cast<Frame*>(userData))->input().setMousePositionScale(scaleX, scaleY);
+    }, this);
 }
 
 Frame::~Frame()noexcept(false){

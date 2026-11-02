@@ -28,7 +28,13 @@ namespace MaterialBindDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<f32> MaterialTypedValueParser::ParseMaterialParameterF32Token(const AStringView token)noexcept{
+namespace __hidden_bind_typed_value{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<f32> ParseMaterialParameterF32Token(const AStringView token)noexcept{
     const auto parsed = ParseF64FromChars(token);
     if(!parsed || !IsFinite(*parsed))
         return MakeUnexpected(Failure{});
@@ -37,7 +43,7 @@ Expected<f32> MaterialTypedValueParser::ParseMaterialParameterF32Token(const ASt
     return static_cast<f32>(*parsed);
 }
 
-Expected<u32> MaterialTypedValueParser::ParseMaterialParameterSignedToken(const AStringView token, const i64 minValue, const i64 maxValue, const u32 storageMask)noexcept{
+[[nodiscard]] static Expected<u32> ParseMaterialParameterSignedToken(const AStringView token, const i64 minValue, const i64 maxValue, const u32 storageMask)noexcept{
     const auto parsed = ParseI64(token);
     if(!parsed)
         return MakeUnexpected(Failure{});
@@ -47,7 +53,7 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterSignedToken(const 
     return static_cast<u32>(static_cast<u64>(*parsed) & storageMask);
 }
 
-Expected<u32> MaterialTypedValueParser::ParseMaterialParameterUnsignedToken(const AStringView token, const u64 maxValue)noexcept{
+[[nodiscard]] static Expected<u32> ParseMaterialParameterUnsignedToken(const AStringView token, const u64 maxValue)noexcept{
     const auto parsed = ParseU64(token);
     if(!parsed || *parsed > maxValue)
         return MakeUnexpected(Failure{});
@@ -55,7 +61,7 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterUnsignedToken(cons
     return static_cast<u32>(*parsed);
 }
 
-Expected<u32> MaterialTypedValueParser::ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type)noexcept{
+[[nodiscard]] static Expected<u32> ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type)noexcept{
     AStringView numericToken = token;
     if(type == MaterialParameterValueType::f32)
         numericToken = StripMaterialNumericSuffix(token, static_cast<u8>('f'), static_cast<u8>('F'));
@@ -105,7 +111,7 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterToken(const AStrin
 }
 
 template<typename ValueType>
-b8 MaterialTypedValueParser::StoreMaterialTypedValueScalar(const u32 componentIndex, const u32 value, MaterialTypedValueData& outParameter)noexcept(IsArithmetic_V<ValueType>){
+[[nodiscard]] static b8 StoreMaterialTypedValueScalar(const u32 componentIndex, const u32 value, MaterialTypedValueData& outParameter)noexcept(IsArithmetic_V<ValueType>){
     const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
     if(byteOffset > sizeof(outParameter.data) || sizeof(ValueType) > sizeof(outParameter.data) - byteOffset)
         return false;
@@ -118,7 +124,7 @@ b8 MaterialTypedValueParser::StoreMaterialTypedValueScalar(const u32 componentIn
     return true;
 }
 
-b8 MaterialTypedValueParser::StoreMaterialTypedValueComponent(const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value, MaterialTypedValueData& outParameter)noexcept{
+[[nodiscard]] static b8 StoreMaterialTypedValueComponent(const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value, MaterialTypedValueData& outParameter)noexcept{
     if(componentIndex >= s_MaterialTypedValueComponentCount)
         return false;
 
@@ -139,7 +145,17 @@ b8 MaterialTypedValueParser::StoreMaterialTypedValueComponent(const MaterialPara
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<MaterialTypedValueData> MaterialTypedValueParser::Parse(const AStringView key, const AStringView value)noexcept{
+    using namespace __hidden_bind_typed_value;
     MaterialTypedValueData parameter;
     if(key.empty() || key.size() > ACompactString::s_MaxLength || value.empty() || value.size() > ACompactString::s_MaxLength)
         return MakeUnexpected(Failure{});

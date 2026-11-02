@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <utility>
+#include "type_properties.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,18 +14,18 @@
 // Entry helper only; keep error-reporting state outside invoke; never transports exceptions.
 template<typename Error, typename Invoke, typename ErrorHandler, typename UnexpectedHandler>
 [[nodiscard]] inline int InvokeTerminalEntry(Invoke&& invoke, ErrorHandler&& handleError, UnexpectedHandler&& handleUnexpected)noexcept(
-    noexcept(std::declval<int&>() = std::forward<ErrorHandler>(handleError)(std::declval<const Error&>()))
-    && noexcept(std::declval<int&>() = std::forward<UnexpectedHandler>(handleUnexpected)())
+    noexcept(DeclVal<int&>() = Forward<ErrorHandler>(handleError)(DeclVal<const Error&>()))
+    && noexcept(DeclVal<int&>() = Forward<UnexpectedHandler>(handleUnexpected)())
 ){
     int result;
     try{
-        result = std::forward<Invoke>(invoke)();
+        result = Forward<Invoke>(invoke)();
     }
     catch(const Error& error){
-        result = std::forward<ErrorHandler>(handleError)(error);
+        result = Forward<ErrorHandler>(handleError)(error);
     }
     catch(...){
-        result = std::forward<UnexpectedHandler>(handleUnexpected)();
+        result = Forward<UnexpectedHandler>(handleUnexpected)();
     }
     return result;
 }

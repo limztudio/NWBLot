@@ -26,17 +26,20 @@ using namespace NWB::UiTextVisibleTests;
 class TextVisibleBakedTests : public TextVisibleFixture{
 protected:
     [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin)noexcept{
-        const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(glyph.ink.width, glyph.ink.height, 0.0f, 0.0f), VectorReplicate(0.5f), LoadOutlinePosition(glyph, origin));
-        return { VectorGetX(center), VectorGetY(center), 1.0f, 1.0f };
+        const Rect outline = OutlineRectangle(glyph, origin);
+        return { outline.x + (outline.width * 0.5f), outline.y + (outline.height * 0.5f), 1.0f, 1.0f };
     }
 
     [[nodiscard]] static Rect BakedRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
         const BakedFontAtlas& atlas = *glyph.face->bakedAtlas();
         const FontAtlasGlyph& record = *atlas.glyph(glyph.glyphId);
-        const SIMDVectorSingle scale = VectorReplicate(32.0f / static_cast<f32>(atlas.unitsPerEm()));
-        const SIMDVectorSingle position = VectorMultiplyAddExpression(VectorSet(record.planeLeft, record.planeTop, 0.0f, 0.0f), scale, VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)));
-        const SIMDVectorSingle size = VectorMultiply(VectorSubtract(VectorSet(record.planeRight, record.planeBottom, 0.0f, 0.0f), VectorSet(record.planeLeft, record.planeTop, 0.0f, 0.0f)), scale);
-        return Rect{ VectorGetX(position), VectorGetY(position), VectorGetX(size), VectorGetY(size) };
+        const f32 scale = 32.0f / static_cast<f32>(atlas.unitsPerEm());
+        return Rect{
+            origin.x + glyph.position.x + record.planeLeft * scale,
+            origin.y + glyph.position.y + record.planeTop * scale,
+            (record.planeRight - record.planeLeft) * scale,
+            (record.planeBottom - record.planeTop) * scale,
+        };
     }
 
 
@@ -55,7 +58,7 @@ protected:
             return false;
         m_layout = Move(*layout);
         FontAtlasPayload payload(m_arena);
-        payload.font = Core::Assets::AssetRef<Font>(s_LatinFontPath);
+        payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
         const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
         payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
         UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
@@ -65,7 +68,7 @@ protected:
         payload.glyphs.resize(payload.sourceGlyphCount);
         for(u32 id = 0u; id < payload.sourceGlyphCount; ++id)
             payload.glyphs[id].glyphId = id;
-        const SIMDVectorSingle unitsPerPixel = VectorReplicate(static_cast<f32>(payload.unitsPerEm) / 32.0f);
+        const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / 32.0f;
         for(const PlacedGlyph& placed : m_layout.glyphs()){
             if(placed.face->identity() != payload.font || placed.glyphId >= payload.glyphs.size())
                 return false;
@@ -74,12 +77,12 @@ protected:
                 continue;
             if(payload.groups.size() == s_FontAtlasMaxGroupCount)
                 return false;
-            // Lanes are x and y with an 8-pixel margin on each side.
-            const SIMDVectorSingle inkStart = VectorSet(placed.ink.x, placed.ink.y, 0.0f, 0.0f);
-            const SIMDVectorSingle start = VectorSubtract(VectorFloor(inkStart), VectorReplicate(8.0f));
-            const SIMDVectorSingle extent = VectorAdd(VectorSubtract(VectorCeiling(VectorAdd(inkStart, VectorSet(placed.ink.width, placed.ink.height, 0.0f, 0.0f))), start), VectorReplicate(8.0f));
-            const u32 width = static_cast<u32>(VectorGetX(extent));
-            const u32 height = static_cast<u32>(VectorGetY(extent));
+            const f32 startX = Floor(placed.ink.x) - 8.0f;
+            const f32 startY = Floor(placed.ink.y) - 8.0f;
+            const f32 extentX = Ceil(placed.ink.x + placed.ink.width) - startX + 8.0f;
+            const f32 extentY = Ceil(placed.ink.y + placed.ink.height) - startY + 8.0f;
+            const u32 width = static_cast<u32>(extentX);
+            const u32 height = static_cast<u32>(extentY);
             if(width > 62u || height > 62u)
                 return false;
             glyph.group = static_cast<u32>(payload.groups.size());
@@ -88,12 +91,10 @@ protected:
             glyph.y = 1u;
             glyph.width = width;
             glyph.height = height;
-            const SIMDVectorSingle planeStart = VectorMultiply(start, unitsPerPixel);
-            const SIMDVectorSingle planeEnd = VectorMultiplyAddExpression(extent, unitsPerPixel, planeStart);
-            glyph.planeLeft = VectorGetX(planeStart);
-            glyph.planeTop = VectorGetY(planeStart);
-            glyph.planeRight = VectorGetX(planeEnd);
-            glyph.planeBottom = VectorGetY(planeEnd);
+            glyph.planeLeft = startX * unitsPerPixel;
+            glyph.planeTop = startY * unitsPerPixel;
+            glyph.planeRight = glyph.planeLeft + extentX * unitsPerPixel;
+            glyph.planeBottom = glyph.planeTop + extentY * unitsPerPixel;
             payload.groups.emplace_back(m_arena);
             FontAtlasGroup& group = payload.groups.back();
             group.width = 64u;
@@ -106,8 +107,8 @@ protected:
         if(!m_baked.validatePayload(scratchArena))
             return false;
         const Array<FontSource, 2> sources{
-            FontSource{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u, &m_baked },
-            FontSource{ Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
+            FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u, &m_baked },
+            FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), m_korean, 1u },
         };
         if(!m_text.setFonts(scratchArena, Span(sources.data(), 2u)))
             return false;
@@ -288,7 +289,7 @@ TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersi
     m_paint.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
     ASSERT_TRUE(m_paint.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     PaintBuilder reference(m_arena);
-    reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+    reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     ASSERT_TRUE(reference.prepareGlyphPages(prior));
     reference.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
     ASSERT_TRUE(reference.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));

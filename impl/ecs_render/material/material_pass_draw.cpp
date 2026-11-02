@@ -20,32 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_material_pass_draw{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MaterialPassDrawContext& context)noexcept{
-    NWB_ASSERT(context.frameBindings.bindingValid());
-    MeshFrameHeapSlots slots;
-    slots.instance = context.frameBindings.instanceHeapHandle.slot();
-    slots.materialTyped = context.frameBindings.materialTypedHeapHandle.slot();
-    slots.view = context.frameBindings.meshView.heapHandle.slot();
-    slots.generatedVertex = 0u;
-    return slots;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererMaterialSystem::invalidateResources(){
     releaseMaterialResourceReferences();
     m_materialState.invalidateResources();
@@ -115,7 +89,7 @@ b8 RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPassDr
             return false;
         csgContextHeapSlot = *resolvedClipContext;
     }
-    MeshFrameHeapSlots frameHeapSlots = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(context);
+    MeshFrameHeapSlots frameHeapSlots = ECSRenderDetail::ResolveMeshFrameHeapSlots(context.frameBindings);
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
@@ -148,18 +122,12 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(const MaterialP
     context.commandList.setComputeState(computeState);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
 
-    MeshFrameHeapSlots frameHeapSlots = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(context);
-    frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();
-    const b8 hasViewport = !context.viewportState.viewports.empty();
-    const Core::Viewport viewport = hasViewport ? context.viewportState.viewports[0] : Core::Viewport{};
-    const Core::Rect scissorRect = hasViewport ? (!context.viewportState.scissorRects.empty() ? context.viewportState.scissorRects[0] : Core::Rect::FromViewport(viewport)) : Core::Rect{};
-    ShaderDrivenPushConstants pushConstants = ResolveShaderDrivenPushConstants(
+    const MeshFrameHeapSlots frameHeapSlots = ECSRenderDetail::ResolveMeshFrameHeapSlots(context.frameBindings, mesh.emulationVertexHeapHandle.slot());
+    ShaderDrivenPushConstants pushConstants = ECSRenderDetail::BuildShaderDrivenPushConstants(
         mesh.meshletCount,
         drawItem.instanceIndex,
         drawItem.materialConstantByteOffset,
-        hasViewport,
-        Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
-        Float4(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY)),
+        context.viewportState,
         frameHeapSlots,
         ResolveMaterialPassDrawDispatchFlags(
             mesh.runtimeMesh,

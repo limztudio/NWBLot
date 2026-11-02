@@ -4,7 +4,6 @@
 
 #include "builder.h"
 
-#include "images/skin_region_geometry.h"
 #include "widgets/selectable_paint.h"
 
 #include <global/simd/vector_arithmetic.h>
@@ -136,6 +135,55 @@ void Builder::reset()noexcept{
     m_popupFrameCount = 0u;
 }
 
+b8 Builder::separator(const AStringView stableKey, const SeparatorOptions& options){
+    if(itemDeclarationBlocked() || options.direction > SeparatorDirection::Vertical || !IsFinite(options.thickness) || options.thickness < 0.0f){
+        m_context.fail();
+        return false;
+    }
+    const UiSkinRegion* skinRegion = region(m_style.separator, m_style.separator);
+    const auto state = m_context.declare(stableKey, WidgetKind::Separator);
+    if(!skinRegion || !state){
+        m_context.fail();
+        return false;
+    }
+    const b8 horizontal = options.direction == SeparatorDirection::Horizontal;
+    const f32 minimum = horizontal ? skinRegion->minimumHeight : skinRegion->minimumWidth;
+    const f32 thickness = options.thickness > 0.0f ? options.thickness : Max(1.0f, minimum);
+    Item item(m_arena);
+    item.style = m_style;
+    item.state = **state;
+    LayoutNodeDesc description;
+    description.width = horizontal ? options.length : LayoutSize{ LayoutSizePolicy::Fixed, thickness };
+    description.height = horizontal ? LayoutSize{ LayoutSizePolicy::Fixed, thickness } : options.length;
+    description.intrinsicSize = { skinRegion->minimumWidth, skinRegion->minimumHeight };
+    if(!addItemNode(description, item))
+        return false;
+    m_scope->m_items.push_back(Move(item));
+    return true;
+}
+
+void Builder::setSkin(const UiSkin& skin)noexcept{
+    if(!balanced() || m_context.failed()){
+        m_context.fail();
+        return;
+    }
+    m_skin = &skin;
+    const f32 nextDefaultFontSize = skin.typography().defaultFontSize;
+    if(m_style.fontSize == m_skinDefaultFontSize)
+        m_style.fontSize = nextDefaultFontSize;
+    m_skinDefaultFontSize = nextDefaultFontSize;
+    const UiSkinPalette& palette = skin.palette();
+
+    ApplySkinPaletteToWidgetStyle(palette, m_style);
+    ApplySkinPaletteToTooltipStyle(palette, m_tooltipStyle);
+    ApplySkinPaletteToEditBoxStyle(palette, m_editStyle);
+    ApplySkinPaletteToScrollbarStyle(palette, m_scrollbarStyle);
+    ApplySkinPaletteToPopupStyle(palette, m_popupStyle);
+    ApplySkinPaletteToRadioGroupStyle(palette, m_radioGroupStyle);
+    ApplySkinPaletteToSliderStyle(palette, m_sliderStyle);
+    ApplySkinPaletteToProgressStyle(palette, m_progressStyle);
+}
+
 b8 Builder::setTextShaping(const u32 scriptTag, const StringView language){
     if(!balanced() || m_context.failed()){
         m_context.fail();
@@ -147,87 +195,6 @@ b8 Builder::setTextShaping(const u32 scriptTag, const StringView language){
     m_textLanguage.assign(language.data(), language.size());
     m_textScriptTag = scriptTag;
     return true;
-}
-
-WidgetStyle& Builder::style()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_style;
-}
-
-ScrollbarStyle& Builder::scrollbarStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_scrollbarStyle;
-}
-
-EditBoxStyle& Builder::editStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_editStyle;
-}
-
-PopupStyle& Builder::popupStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_popupStyle;
-}
-
-ListStyle& Builder::listStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_listStyle;
-}
-
-RadioGroupStyle& Builder::radioGroupStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_radioGroupStyle;
-}
-
-SliderStyle& Builder::sliderStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_sliderStyle;
-}
-
-ProgressStyle& Builder::progressStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_progressStyle;
-}
-
-ComboStyle& Builder::comboStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_comboStyle;
-}
-
-TooltipStyle& Builder::tooltipStyle()noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    return m_tooltipStyle;
-}
-
-void Builder::setEditHost(IEditBoxHost* const host)noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    else
-        m_editHost = host;
-}
-
-void Builder::setDeltaSeconds(const f32 delta)noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    else
-        m_deltaSeconds = delta;
-}
-
-void Builder::setPointerBusy(const b8 busy)noexcept{
-    if(declarationBlocked())
-        m_context.fail();
-    else
-        m_pointerBusy = busy;
 }
 
 b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){

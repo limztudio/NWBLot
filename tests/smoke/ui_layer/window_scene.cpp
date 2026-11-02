@@ -52,7 +52,7 @@ static constexpr f32 s_Gap = 4.0f;
 
 
 [[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics)noexcept{
-    const Impl::Ui::Rect content = Impl::Ui::WindowLayout::Content(state, metrics);
+    const Impl::Ui::Rect content = Impl::Ui::ResolveWindowContentBounds(state, metrics);
     const f32 originX = content.x + metrics.contentPadding.left;
     const f32 originY = content.y + metrics.contentPadding.top;
     const f32 buttonY = originY + s_LabelHeight + s_SeparatorHeight + 2.0f * s_Gap;
@@ -132,10 +132,10 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
         , static_cast<u32>(m_window.collapsed), static_cast<u32>(m_locked), m_count
     );
     const Rect title{ bounds.x, bounds.y, bounds.width, metrics.titleHeight };
-    const Rect collapse = WindowLayout::Collapse(m_window, metrics);
-    const Rect resize = WindowLayout::Resize(m_window, metrics);
+    const Rect collapse = ResolveWindowCollapseBounds(m_window, metrics);
+    const Rect resize = ResolveWindowResizeBounds(m_window, metrics);
     const Rect button = __hidden_ui_window_smoke::Button(m_window, metrics);
-    const Rect content = WindowLayout::Content(m_window, metrics);
+    const Rect content = ResolveWindowContentBounds(m_window, metrics);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}")
         , m_sequence, title.x, title.y, title.width, title.height
         , collapse.x, collapse.y, collapse.width, collapse.height

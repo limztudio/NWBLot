@@ -26,7 +26,7 @@ class UiRadioGroupLoanTests : public RadioGroupFixture{};
 
 TEST_F(UiRadioGroupLoanTests, IdenticalSelectionInAKeyCallbackRejectsBeforeTheNextBorrowedCall){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     const u64 token = m_state.inputGeneration();
     m_source.resetCounters();
     m_source.armSelection(m_state, RadioCallbackSite::Key, 10u);
@@ -43,7 +43,7 @@ TEST_F(UiRadioGroupLoanTests, IdenticalSelectionInAKeyCallbackRejectsBeforeTheNe
 
 TEST_F(UiRadioGroupLoanTests, SelectionAwayAndBackInEnabledCallbackCannotPassTheSnapshotFence){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     const RadioGroupSnapshot saved = m_state.snapshot();
     m_source.resetCounters();
     m_source.armSelection(m_state, RadioCallbackSite::Enabled, 10u, true);
@@ -59,7 +59,7 @@ TEST_F(UiRadioGroupLoanTests, SelectionAwayAndBackInEnabledCallbackCannotPassThe
 
 TEST_F(UiRadioGroupLoanTests, SourceRevisionChangedMidReconcileIsPreservedWithoutPublishingPartialChoices){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     const RadioGroupSnapshot saved = m_state.snapshot();
     const u64 revision = m_source.m_contentRevision;
     m_source.armSource(RadioCallbackSite::Key);
@@ -72,7 +72,7 @@ TEST_F(UiRadioGroupLoanTests, SourceRevisionChangedMidReconcileIsPreservedWithou
 
 TEST_F(UiRadioGroupLoanTests, SourceReplacementInsideALabelCallbackRetainsTheApplicationMutation){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     const u64 generation = m_source.m_generation;
     m_source.armSource(RadioCallbackSite::Text, true);
     EXPECT_FALSE(declare(2u));
@@ -84,7 +84,7 @@ TEST_F(UiRadioGroupLoanTests, SourceReplacementInsideALabelCallbackRetainsTheApp
 
 TEST_F(UiRadioGroupLoanTests, FinalCountCallbackRevisionMutationRejectsEvenAfterEarlierMetadataMatched){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(declare(2u));
     const RadioGroupSnapshot prepared = m_state.snapshot();
     const u64 revision = m_source.m_contentRevision;
@@ -100,7 +100,7 @@ TEST_F(UiRadioGroupLoanTests, FinalCountCallbackRevisionMutationRejectsEvenAfter
 
 TEST_F(UiRadioGroupLoanTests, ExplicitSameValueIntentAfterDeclarationRejectsBeforeAnyFurtherSourceCall){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(declare(2u));
     m_source.resetCounters();
     m_state.select(10u);
@@ -113,7 +113,7 @@ TEST_F(UiRadioGroupLoanTests, ExplicitSameValueIntentAfterDeclarationRejectsBefo
 
 TEST_F(UiRadioGroupLoanTests, SharingOneStateAcrossDeclarationsRejectsBeforeTheSecondSourceIsLent){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(declare(2u));
     RadioSource other;
     other.m_generation = 1901u;
@@ -126,7 +126,7 @@ TEST_F(UiRadioGroupLoanTests, SharingOneStateAcrossDeclarationsRejectsBeforeTheS
 
 TEST_F(UiRadioGroupLoanTests, ResetDuringInitialRevisionMetadataRejectsWithoutAnotherSourceCallback){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     m_source.resetCounters();
     m_source.armReentry(m_builder, RadioCallbackSite::Revision);
     EXPECT_FALSE(declare(2u));
@@ -139,7 +139,7 @@ TEST_F(UiRadioGroupLoanTests, ResetDuringInitialRevisionMetadataRejectsWithoutAn
 
 TEST_F(UiRadioGroupLoanTests, ResetInsideAKeyCallbackCannotClearTheScopeUnderTheBorrow){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     m_source.resetCounters();
     m_source.armReentry(m_builder, RadioCallbackSite::Key);
     EXPECT_FALSE(declare(2u));
@@ -152,7 +152,7 @@ TEST_F(UiRadioGroupLoanTests, ResetInsideAKeyCallbackCannotClearTheScopeUnderThe
 
 TEST_F(UiRadioGroupLoanTests, BalancedPanelReentryInsideEnabledCallbackRejectsBothOperations){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     m_source.resetCounters();
     m_source.armReentry(m_builder, RadioCallbackSite::Enabled, true);
     EXPECT_FALSE(declare(2u));
@@ -166,7 +166,7 @@ TEST_F(UiRadioGroupLoanTests, BalancedPanelReentryInsideEnabledCallbackRejectsBo
 
 TEST_F(UiRadioGroupLoanTests, LabelCallbackResetStopsBeforeTheNextLabelOrMetadataBorrow){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     m_source.resetCounters();
     m_source.armReentry(m_builder, RadioCallbackSite::Text);
     EXPECT_FALSE(declare(2u));
@@ -179,7 +179,7 @@ TEST_F(UiRadioGroupLoanTests, LabelCallbackResetStopsBeforeTheNextLabelOrMetadat
 
 TEST_F(UiRadioGroupLoanTests, FinalizationCountCallbackCannotBeginAndEndAReplacementPanel){
     ASSERT_TRUE(accept(1u));
-    const RadioAcceptedFrame displayed = accepted();
+    const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(declare(2u));
     m_source.resetCounters();
     m_source.armReentry(m_builder, RadioCallbackSite::Count, true);

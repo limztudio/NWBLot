@@ -120,7 +120,7 @@ namespace TaskGraphTestUtils{
 ){
     const Core::GpuTaskGraphCompiler compiler;
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.assignQueues(declarations, analysis, topology, scratchArena, assignments, options);
+    return compiler.assignQueues(declarations, analysis, topology, options, scratchArena, assignments);
 }
 
 [[nodiscard]] b8 Compile(
@@ -137,7 +137,7 @@ namespace TaskGraphTestUtils{
     // Allow metadata-only tasks in unit packetization helpers.
     metadataOptions.allowMetadataOnlyTasks = true;
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, metadataOptions);
+    return compiler.compile(declarations, topology, metadataOptions, scratchArena, analysis, assignments, compiledGraph);
 }
 
 [[nodiscard]] b8 CompileWithSeparatedCommandQueues(

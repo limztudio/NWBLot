@@ -2,14 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/module.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include "module.h"
 #include "frame.h"
+
+#include <core/alloc/module.h>
+#include <core/common/application_entry.h>
 
 #include <global/command_line.h>
 #include <global/terminal_entry.h>
@@ -100,8 +97,6 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     );
 }
 
-
-#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

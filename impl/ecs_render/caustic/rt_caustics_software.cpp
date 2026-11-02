@@ -24,12 +24,12 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& 
     // The task declares the accumulator write and the photon producer dependency.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
 
-    const CausticAccumulatorDecayPushConstants decayPush = ResolveCausticAccumulatorDecayPushConstants(
-        targets.width,
-        targets.height,
-        s_DefaultCausticTemporalDecay,
-        targets.bindless.causticAccumulatorStorage.slot()
-    );
+    const CausticAccumulatorDecayPushConstants decayPush{
+        .width = targets.width,
+        .height = targets.height,
+        .decayFactor = s_DefaultCausticTemporalDecay,
+        .accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot(),
+    };
 
     Core::ComputeState decayState;
     decayState.setPipeline(m_rayTracingState.m_causticAccumulatorDecayPipeline.get());

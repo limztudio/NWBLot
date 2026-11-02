@@ -162,6 +162,162 @@ b8 Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
     ;
 }
 
+b8 Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result){
+    InputRouter& input = m_context.input();
+    ContextMenuState& state = *frame.state;
+    input.fencePopup(frame.popupToken);
+    if(input.consumePopupDismissal(frame.popupToken))
+        state.close();
+    while(auto trigger = input.consumeContextMenu(frame.anchor.id, frame.anchor.declarationGeneration)){
+        if(frame.options.enabled && trigger->popup == m_context.popupToken() && !state.open({ trigger->position.x, trigger->position.y, 0.0f, 0.0f }))
+            return false;
+    }
+    if(!frame.options.enabled)
+        state.close();
+    snapshotContextMenu(frame);
+    input.fencePopup(frame.popupToken);
+    input.fenceControl(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+    if(!frame.open){
+        input.closePopup(frame.popupToken);
+        return contextMenuMatches(frame);
+    }
+    if(!ListBehavior::Reconcile(state.m_list, *frame.source) || !contextMenuMatches(frame))
+        return false;
+    if(state.m_list.cursorKey() == 0u){
+        ControlAction first;
+        first.control = frame.listToken;
+        first.kind = ControlActionKind::Home;
+        ListOptions options;
+        options.wheelRows = frame.options.wheelRows;
+        options.selectOnNavigate = false;
+        ListResult preview;
+        if(!ListBehavior::Apply(*frame.source, options, first, state.m_list, preview) || !contextMenuMatches(frame))
+            return false;
+    }
+    return applyContextMenuInput(frame, result);
+}
+
+b8 Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
+    InputRouter& input = m_context.input();
+    WidgetId thumb;
+    if(!TryMakeWidgetId(frame.rows.id, s_WidgetPartScrollbar, thumb))
+        return false;
+    auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
+    b8 haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
+    auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+    b8 haveAction = action && action->popup == frame.popupToken;
+    ListOptions options;
+    options.wheelRows = frame.options.wheelRows;
+    options.selectOnNavigate = false;
+    while(haveGesture || haveAction){
+        if(!contextMenuMatches(frame))
+            return false;
+        if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
+            if(!applyListGesture(frame.state->m_list, *gesture))
+                return false;
+            gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
+            haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
+        }
+        else{
+            ListResult preview;
+            if(!ListBehavior::Apply(*frame.source, options, *action, frame.state->m_list, preview) || !contextMenuMatches(frame))
+                return false;
+            if(preview.activated){
+                result.activated = true;
+                result.key = frame.state->m_list.selectedKey();
+                frame.state->close();
+                input.closePopup(frame.popupToken);
+                snapshotContextMenu(frame);
+                return true;
+            }
+            action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+            haveAction = action && action->popup == frame.popupToken;
+        }
+    }
+    return contextMenuMatches(frame);
+}
+
+void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
+    frame.revision = frame.state->revision();
+    frame.open = frame.state->isOpen();
+    frame.popupToken.openGeneration = frame.state->m_popup.openGeneration();
+    frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
+    if(frame.list < m_scope->m_lists.size())
+        m_scope->m_lists[frame.list].token = frame.listToken;
+}
+
+b8 Builder::paintContextMenus(){
+    for(auto& frame : m_scope->m_contextMenus){
+        if(!contextMenuMatches(frame) || frame.list >= m_scope->m_lists.size() || frame.anchorIndex >= m_scope->m_items.size())
+            return false;
+        if(frame.open && frame.options.enabled && !paintContextMenuPopup(frame))
+            return false;
+    }
+    return true;
+}
+
+b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
+    const Item& anchor = m_scope->m_items[frame.anchorIndex];
+    const LayoutBox* anchorBox = m_scope->m_layout.box(anchor.node);
+    const UiSkinRegion* background = region(frame.popupStyle.background, frame.popupStyle.fallback);
+    if(!anchorBox || !background || !contextMenuMatches(frame))
+        return false;
+    const Rect clip = visibleClip(anchorBox->clip);
+    if(
+        !anchor.enabled || clip.width <= 0.0f || clip.height <= 0.0f
+        || anchorBox->rectangle.x >= clip.x + clip.width || anchorBox->rectangle.y >= clip.y + clip.height
+        || anchorBox->rectangle.x + anchorBox->rectangle.width <= clip.x || anchorBox->rectangle.y + anchorBox->rectangle.height <= clip.y
+    ){
+        frame.state->close();
+        m_context.discardPopupScope(frame.popupToken);
+        snapshotContextMenu(frame);
+        return true;
+    }
+    PopupOptions options;
+    options.anchor = frame.state->m_anchor;
+    options.size = frame.options.size;
+    options.gap = 0.0f;
+    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    if(!placement)
+        return false;
+    PopupScope scope;
+    scope.token = frame.popupToken;
+    scope.parent = frame.parentToken;
+    scope.bounds = placement->bounds;
+    scope.viewport = placement->viewport;
+    if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
+        return false;
+    if(!m_paint.beginOverlay(m_context.popupLayer())){
+        const b8 ended = m_context.endPopupScope(false);
+        if(!ended)
+            m_context.fail();
+        return false;
+    }
+    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background->padding);
+    m_paint.pushClip(placement->bounds);
+    const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
+    const b8 popped = m_paint.popClip();
+    HitTarget barrier;
+    barrier.rectangle = placement->bounds;
+    barrier.clip = placement->viewport;
+    b8 painted = backgroundPainted && popped && m_context.addTarget(frame.popup, barrier);
+    if(painted){
+        Item item(m_arena);
+        item.state = frame.rows;
+        item.list = frame.list;
+        LayoutBox box;
+        const SIMDVectorSingle inset = InsetRectValue(LoadRect(placement->bounds), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
+        box.rectangle = StoreRect(inset);
+        box.clip = placement->bounds;
+        painted = paintList(item, box) && contextMenuMatches(frame);
+    }
+    const b8 overlayEnded = m_paint.endOverlay();
+    const b8 scopeEnded = m_context.endPopupScope(painted);
+    if(painted)
+        frame.state->m_popup.m_placement = *placement;
+    return painted && overlayEnded && scopeEnded;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

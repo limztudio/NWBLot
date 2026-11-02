@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/crash/handler.h>
+#include "handler.h"
+
+#include <core/common/application_entry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,8 +15,6 @@ static int EntryPoint(isize argc, CharT** argv, [[maybe_unused]] void* inst){
     return NWB::Core::Crash::RunCrashHandlerProcess(argc, argv);
 }
 
-
-#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

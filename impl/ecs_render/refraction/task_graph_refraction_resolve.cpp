@@ -220,18 +220,13 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
     refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
     if(refractionCounters.valid())
         refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
-    Array<Core::GpuTaskResourceSetUse, s_RefractionResourceSetUseCapacity> refractionSets{};
-    usize refractionSetCount = 0;
+    RendererFramePipelineDetail::TraceResourceSetUses refractionSets{};
     if(refractionResources.usesHardwareTrace){
         for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
             refractionUses.push_back(read);
         for(const Core::GpuTaskResourceUse& read : sceneReads.csgUses)
             refractionUses.push_back(read);
-        const Array<Core::GpuGraphResourceSetId, 2> sets = { hardwareTraceGeometrySet, traceMaterialSampledTextureSet };
-        for(const auto set : sets){
-            if(set.valid())
-                refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{ .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-        }
+        refractionSets = RendererFramePipelineDetail::MakeTraceResourceSetUses(hardwareTraceGeometrySet, traceMaterialSampledTextureSet);
     }
     const Array<Core::GpuTaskId, 3> refractionDependencies = { inputs.reflectionCompletionTask, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : *tileTask, inputs.surfelGiTask };
     Core::GpuTaskDesc refractionDesc;
@@ -240,7 +235,7 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
         .setScheduling(refractionTileScheduling)
         .setDependencies(refractionDependencies)
         .setResourceUses(refractionUses)
-        .setResourceSetUses({ refractionSets.data(), refractionSetCount })
+        .setResourceSetUses({ refractionSets.uses.data(), refractionSets.useCount })
     ;
     RefractionResolveGraphTask::Payload resolvePayload{
         .system = m_raytracingSystem,

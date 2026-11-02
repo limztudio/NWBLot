@@ -14,6 +14,174 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void InputRouter::cancelDeviceInput(const u64 device)noexcept{
+    if(m_activePointerSource.valid() && m_activePointerSource.device == device)
+        terminatePointerSource(m_activePointerSource);
+    for(usize index = m_pointerSources.size(); index > 0u; --index){
+        if(m_pointerSources[index - 1u].source.device == device)
+            m_pointerSources.erase(m_pointerSources.begin() + static_cast<isize>(index - 1u));
+    }
+    for(usize index = m_pointerBindings.size(); index > 0u; --index){
+        if(m_pointerBindings[index - 1u].source.device == device)
+            m_pointerBindings.erase(m_pointerBindings.begin() + static_cast<isize>(index - 1u));
+    }
+    if(m_hoverPointerSource.valid() && m_hoverPointerSource.device == device){
+        advanceHoverActivity();
+        clearHover();
+        m_pointerKnown = false;
+        m_hoverPointerSource = {};
+    }
+    for(usize index = m_commandSources.size(); index > 0u; --index){
+        if(m_commandSources[index - 1u].source.device == device)
+            m_commandSources.erase(m_commandSources.begin() + static_cast<isize>(index - 1u));
+    }
+    for(usize index = m_boundSources.size(); index > 0u; --index){
+        if(m_boundSources[index - 1u].source.device == device)
+            m_boundSources.erase(m_boundSources.begin() + static_cast<isize>(index - 1u));
+    }
+    for(usize index = m_events.size(); index > 0u; --index){
+        const InputEvent& event = m_events[index - 1u];
+        if(event.source.valid() && event.source.device == device)
+            m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
+    }
+}
+
+b8 InputRouter::canEditCommand(const InputEvent& event)const noexcept{
+    if(event.type != InputEventType::CommandDown || !event.edit)
+        return false;
+    const CommandSource* source = findCommandSource(event.source);
+    if(source == nullptr || !currentCommandFocus(*source))
+        return false;
+    const HitTarget* focused = findTarget(source->focusOwner.target, source->focusOwner.declarationGeneration);
+    if(!focused->textEditable)
+        return false;
+    return !source->delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && currentControlCommandOwner(*source));
+}
+
+b8 InputRouter::canSubmitCommand(const InputEvent& event)const noexcept{
+    if(event.type != InputEventType::CommandUp || !event.edit || (event.command != InputCommand::Accept && event.command != InputCommand::Submit))
+        return false;
+    const CommandSource* source = findCommandSource(event.source);
+    if(source == nullptr || !source->submitArmed || !currentCommandFocus(*source))
+        return false;
+    const HitTarget& focused = *MakeNotNull(findTarget(source->focusOwner.target, source->focusOwner.declarationGeneration));
+    return focused.textEditable && (!source->delegated || currentControlCommandOwner(*source));
+}
+
+void InputRouter::cancelSubmitCommands(const WidgetId id)noexcept{
+    for(CommandSource& source : m_commandSources){
+        if(source.focusOwner.target == id)
+            source.submitArmed = false;
+    }
+}
+
+b8 InputRouter::pressed(const WidgetId id)const noexcept{
+    if(m_primaryDown && m_pointerSubmitArmed && m_capture == id && hitTest(m_interactionPosition) == id)
+        return true;
+    for(const CommandSource& source : m_commandSources){
+        if(source.submitArmed && source.focusOwner.target == id && currentCommandFocus(source))
+            return true;
+    }
+    return false;
+}
+
+Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
+    InputEvent resolved = event;
+    const b8 physical = event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp;
+    const b8 command = event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp;
+    if(!physical && !command)
+        return resolved;
+    if(physical){
+        if(!InputBindings::ValidKey(event.key))
+            return MakeUnexpected(Failure{});
+        resolved.type = event.type == InputEventType::KeyDown ? InputEventType::CommandDown : InputEventType::CommandUp;
+        resolved.source = { 0u, static_cast<u64>(event.key) + 1u };
+    }
+    else if(!event.source.valid() || event.command > InputCommand::ContextMenu)
+        return MakeUnexpected(Failure{});
+    auto held = FindIf(m_boundSources.begin(), m_boundSources.end(), [&resolved](const BoundSource& source)noexcept{
+        return source.source == resolved.source;
+    });
+    if(held != m_boundSources.end()){
+        resolved.command = held->intent.command;
+        resolved.extend = held->intent.extend;
+        resolved.edit = held->intent.edit;
+        resolved.allowText = held->intent.allowText;
+        if(resolved.type == InputEventType::CommandUp)
+            m_boundSources.erase(held);
+        else
+            resolved.repeat = true;
+    }
+    else if(resolved.type == InputEventType::CommandDown){
+        if(m_boundSources.size() == s_InputMaxSources)
+            return MakeUnexpected(Failure{});
+        if(physical){
+            const i32 modifiers = (event.shift ? Core::InputModifier::Shift : 0) | (event.control ? Core::InputModifier::Control : 0) | (event.alt ? Core::InputModifier::Alt : 0) | (event.super ? Core::InputModifier::Super : 0);
+            const InputCommandIntent intent = m_bindings.resolve(event.key, modifiers);
+            resolved.command = intent.command;
+            resolved.extend = intent.extend;
+            resolved.edit = intent.edit;
+            resolved.allowText = intent.allowText;
+        }
+        m_boundSources.push_back({ resolved.source, { resolved.command, resolved.extend, resolved.edit, resolved.allowText } });
+    }
+    else{
+        resolved.command = InputCommand::None;
+        resolved.extend = false;
+        resolved.edit = false;
+        resolved.allowText = false;
+    }
+    if(resolved.type == InputEventType::CommandUp)
+        resolved.repeat = false;
+    return resolved;
+}
+
+void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result){
+    if(!currentCommandFocus(source))
+        return;
+    if(source.contextArmed && event.command == InputCommand::ContextMenu && currentContextMenuOwner(source.focusOwner)){
+        const HitTarget& target = *MakeNotNull(findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration));
+        appendContextMenu(target, source.contextPosition, InputActionSource::Command, event.source, result);
+        return;
+    }
+    if(!source.submitArmed || (event.command != InputCommand::Accept && event.command != InputCommand::Submit && event.command != InputCommand::Activate))
+        return;
+    const HitTarget& focused = *MakeNotNull(findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration));
+    if(source.controlOwner.host.valid()){
+        if(currentControlCommandOwner(source)){
+            const HitTarget& host = *MakeNotNull(findTarget(source.controlOwner.host, source.controlOwner.declarationGeneration));
+            appendControlAction(host, focused, ControlActionKind::Submit, 0.0, result);
+        }
+    }
+    else if(focused.activatable)
+        appendActivation(focused, InputActionSource::Command, event.source, result);
+}
+
+void InputRouter::cancelCommandPresses()noexcept{
+    for(CommandSource& source : m_commandSources){
+        source.submitArmed = false;
+        source.contextArmed = false;
+    }
+}
+
+void InputRouter::retireCommandFocus()noexcept{
+    for(CommandSource& source : m_commandSources){
+        source.submitArmed = false;
+        source.contextArmed = false;
+        source.focusOwner = {};
+        source.controlOwner = {};
+    }
+}
+
+void InputRouter::reconcileCommandPresses()noexcept{
+    for(CommandSource& source : m_commandSources){
+        if(!currentCommandFocus(source)){
+            source.submitArmed = false;
+            source.contextArmed = false;
+        }
+    }
+}
+
 void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& result){
     CommandSource* source = findCommandSource(event.source);
     if(event.type == InputEventType::CommandUp){
@@ -94,6 +262,14 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
     }
 }
 
+void InputRouter::assignFocus(const HitTarget& target)noexcept{
+    if(m_focus != target.id || m_focusDeclaration != target.declarationGeneration || m_focusControl != target.control)
+        retireCommandFocus();
+    m_focus = target.id;
+    m_focusDeclaration = target.declarationGeneration;
+    m_focusControl = target.control;
+}
+
 b8 InputRouter::moveFocus(const b8 reverse)noexcept{
     if(m_targets.empty())
         return false;
@@ -112,11 +288,7 @@ b8 InputRouter::moveFocus(const b8 reverse)noexcept{
             candidate = candidate >= m_targets.size() - 1u ? 0u : candidate + 1u;
         const HitTarget& target = m_targets[candidate];
         if(target.focusable && isInteractive(target)){
-            if(m_focus != target.id || m_focusDeclaration != target.declarationGeneration || m_focusControl != target.control)
-                retireCommandFocus();
-            m_focus = target.id;
-            m_focusDeclaration = target.declarationGeneration;
-            m_focusControl = target.control;
+            assignFocus(target);
             return true;
         }
     }
@@ -142,11 +314,7 @@ b8 InputRouter::moveFocusForTraversal(const b8 reverse){
             const HitTarget& target = m_targets[index - 1u];
             if(target.popup != token || !target.focusable || !isInteractive(target))
                 continue;
-            if(m_focus != target.id || m_focusDeclaration != target.declarationGeneration || m_focusControl != target.control)
-                retireCommandFocus();
-            m_focus = target.id;
-            m_focusDeclaration = target.declarationGeneration;
-            m_focusControl = target.control;
+            assignFocus(target);
             return true;
         }
     }
@@ -155,11 +323,7 @@ b8 InputRouter::moveFocusForTraversal(const b8 reverse){
             const HitTarget& target = m_targets[index];
             if(target.popup != token || !target.focusable || !isInteractive(target))
                 continue;
-            if(m_focus != target.id || m_focusDeclaration != target.declarationGeneration || m_focusControl != target.control)
-                retireCommandFocus();
-            m_focus = target.id;
-            m_focusDeclaration = target.declarationGeneration;
-            m_focusControl = target.control;
+            assignFocus(target);
             return true;
         }
     }

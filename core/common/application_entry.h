@@ -190,17 +190,6 @@ template<typename EntryPoint>
     });
 }
 
-template<typename EntryPoint>
-[[nodiscard]] inline int InvokeWindowsUnicodeConsoleEntryPoint(EntryPoint entryPoint)noexcept(s_TerminalFailureNoThrow && IsNothrowConstructible_V<EntryPoint, EntryPoint&> && IsNothrowDestructible_V<EntryPoint>){
-    return InvokeWithInitializedCommon([entryPoint](){
-        WindowsCommandLineArgs args;
-        if(args.valid())
-            return entryPoint(args.argc(), args.argv(), GetModuleHandleW(nullptr));
-
-        return s_ApplicationEntryFailure;
-    });
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -222,7 +211,7 @@ NWB_COMMON_END
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
     } \
     int main(int, char**)noexcept(::NWB::Core::Common::ApplicationEntryDetail::s_TerminalFailureNoThrow){ \
-        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeConsoleEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint)); \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), GetModuleHandleW(nullptr)); \
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
@@ -242,6 +231,20 @@ NWB_COMMON_END
 
 #ifndef NWB_DEFINE_APPLICATION_ENTRY_POINT
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint)
+#endif
+
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
+#define NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(runFunction) \
+    static int EntryPoint(const isize argc, wchar** argv, void*){ \
+        return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, runFunction); \
+    } \
+    NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+#else
+#define NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(runFunction) \
+    static int EntryPoint(const isize argc, char** argv, void*){ \
+        return (runFunction)(static_cast<int>(argc), argv); \
+    } \
+    NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 #endif
 
 

@@ -14,22 +14,6 @@ namespace UiEditBoxTestSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 FakeClipboard::deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text){
-    if(!completeNativeRequest(token, status, text))
-        return false;
-    if(status == ClipboardStatus::Success && startedOperation == ClipboardOperation::WriteText && token == startedToken)
-        document = startedText;
-    return true;
-}
-
-void FakeClipboard::startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum, const AStringView text){
-    startedToken = token;
-    startedOperation = operation;
-    startedText.assign(text.data(), text.size());
-    if(!delayed && !deliver(token, ClipboardStatus::Success, operation == ClipboardOperation::ReadText ? AStringView(document) : AStringView{}))
-        ADD_FAILURE() << "Clipboard completion failed";
-}
-
 UiEditBoxHostTests::UiEditBoxHostTests()
     : m_arena(Name("tests/ecs_ui/edit_box_host"))
     , m_context(m_arena)

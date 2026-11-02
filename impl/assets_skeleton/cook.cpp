@@ -80,38 +80,6 @@ template<typename JointIndexMapT>
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] b8 ValidateSkeletonCookEntry(const SkeletonCookEntry& skeletonEntry, Core::Alloc::ScratchArena& scratchArena){
-    if(!skeletonEntry.virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: virtual path is invalid"));
-        return false;
-    }
-    if(!IsValidSkeletonJointCount(skeletonEntry.joints.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32"));
-        return false;
-    }
-
-    HashMap<Name, u32, Core::Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> earlierJointIndices(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
-    earlierJointIndices.reserve(skeletonEntry.joints.size());
-    for(usize jointIndex = 0u; jointIndex < skeletonEntry.joints.size(); ++jointIndex){
-        const SkeletonCookJoint& cookJoint = skeletonEntry.joints[jointIndex];
-        if(!ResolveParentIndex(skeletonEntry, earlierJointIndices, jointIndex, cookJoint.parent))
-            return false;
-        if(!earlierJointIndices.emplace(cookJoint.name, static_cast<u32>(jointIndex)).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': duplicate joint name '{}'"), ConvertString(skeletonEntry.virtualPath.resolvedText()), ConvertString(cookJoint.name.resolvedText()));
-            return false;
-        }
-        if(!cookJoint.name){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup contains an empty name"));
-            return false;
-        }
-        if(!MatrixIsAffine(LoadFloat(cookJoint.localBindPose), 0.0f)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has non-finite local bind pose"), jointIndex);
-            return false;
-        }
-    }
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -188,7 +156,8 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     outBinary.clear();
     outBinary.reserve(reserveBytes);
 
-    const SkeletonHeaderBinary header = BuildSkeletonHeaderBinary(static_cast<u64>(skeleton.joints().size()));
+    SkeletonHeaderBinary header;
+    header.jointCount = static_cast<u64>(skeleton.joints().size());
     AppendPOD(outBinary, header);
     for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
         const SkeletonJointBinary jointBinary = PackSkeletonJointBinary(jointNameHashes[jointIndex], skeleton.joints()[jointIndex]);
@@ -229,7 +198,7 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, co
         entry.joints.push_back(*jointResult);
     }
 
-    if(!ValidateSkeletonCookEntry(entry, scratchArena))
+    if(!BuildSkeletonAsset(entry, arena, scratchArena))
         return MakeUnexpected(Failure{});
     return entry;
 }

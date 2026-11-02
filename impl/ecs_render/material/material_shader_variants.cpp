@@ -20,13 +20,6 @@ namespace ECSRenderMaterialShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AStringView> FindVariantDefineAssignment(const AStringView variant, const AStringView defineName)noexcept{
-    AStringView assignment;
-    if(!TryFindVariantDefineAssignment(variant, defineName, Core::ShaderArchive::s_DefaultVariant, assignment))
-        return MakeUnexpected(Failure{});
-    return assignment;
-}
-
 Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const Span<const ShaderVariantDefineAssignment> defineAssignments){
     Core::GraphicsString variant(arena);
     const usize defineAssignmentCount = defineAssignments.size();

@@ -67,12 +67,10 @@ namespace CsgFrameCacheDetail{
 
         const MeshComponent* mesh = world.tryGetComponent<MeshComponent>(entity);
         Fnv64AppendBool(contentHash, mesh != nullptr);
-        if(mesh){
+        if(mesh)
             Fnv64AppendValue(contentHash, mesh->mesh.name().hash());
-        }
-        else if(receiver.enabled && renderer){
+        else if(receiver.enabled && renderer)
             cacheable = false;
-        }
 
         if(receiver.enabled && renderer && renderer->visible && meshSystem.hasRuntimeMeshBinding(entity))
             cacheable = false;

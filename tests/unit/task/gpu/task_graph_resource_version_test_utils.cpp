@@ -39,7 +39,7 @@ namespace TaskGraphResourceVersionTestUtils{
     options.allowMetadataOnlyTasks = true;
     const Core::GpuTaskGraphCompiler compiler;
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, options);
+    return compiler.compile(declarations, topology, options, scratchArena, analysis, assignments, compiledGraph);
 }
 
 void ExpectClosedCycle(const Core::GpuTaskGraphAnalysis& analysis){

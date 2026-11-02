@@ -36,8 +36,8 @@ static b8 RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
         },
         nullptr,
         [](SamplerCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSamplerAsset(entry, arena); },
-        registry,
-        false
+        false,
+        registry
     );
 }
 

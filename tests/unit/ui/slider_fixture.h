@@ -65,19 +65,6 @@ private:
     mutable SliderCallbackMutation::Enum m_mutation = SliderCallbackMutation::None;
 };
 
-struct SliderAcceptedFrame{
-    Array<HitTarget, 64u> targets{};
-    usize count = 0u;
-    usize popupCount = 0u;
-    u64 generation = 0u;
-    WidgetId focus;
-    WidgetId capture;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class SliderFixture : public WidgetFixture{
 protected:
     using WidgetFixture::press;
@@ -100,8 +87,10 @@ protected:
     [[nodiscard]] WidgetId thumb()const;
     [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const noexcept;
     [[nodiscard]] Point thumbPoint()const noexcept;
-    [[nodiscard]] SliderAcceptedFrame accepted()const noexcept;
-    void expectAccepted(const SliderAcceptedFrame& saved, b8 popupFocus = true)const;
+    [[nodiscard]] AcceptedInputState<64u> accepted()const noexcept{ return CaptureAcceptedInput<64u>(m_context.input()); }
+    void expectAccepted(const AcceptedInputState<64u>& saved, const b8 popupFocus = true)const{
+        ExpectAcceptedInput(m_context.input(), saved, false, popupFocus, popupFocus, true);
+    }
 
 
 protected:

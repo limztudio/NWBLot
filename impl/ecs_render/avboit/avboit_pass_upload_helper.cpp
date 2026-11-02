@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
+Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
     const AvboitPassUploadInputs& inputs,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
@@ -142,7 +142,7 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
     AvboitGeometryPreparationBuilder geometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
     const auto geometryPreparationResult = geometryPreparationBuilder.declare(AvboitGeometryPreparationInputs{
         .drawItemSets = materialGeometryDrawSets,
-        .phase = phaseDesc.geometryPhase,
+        .phase = phaseDesc.phase,
     });
     if(!geometryPreparationResult)
         return MakeUnexpected(Failure{});
@@ -177,7 +177,7 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
             .csgCutters = inputs.csgCutters,
             .csgClipContextSlots = inputs.csgClipContextSlots,
             .uploadTask = result.uploadTask,
-            .phase = phaseDesc.uploadPhase,
+            .phase = phaseDesc.phase,
         },
         instanceData,
         materialTypedBytes,

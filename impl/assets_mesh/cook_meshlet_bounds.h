@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #pragma once
 
 
@@ -30,38 +36,43 @@ struct MeshletBoundsCalculation{
 
 
 // Bounding sphere and normal cone of one finished meshlet.
-class MeshletBoundsBuilder final : NoCopy{
-    struct AreaNormalAccumulator{
-        SIMDVectorSingle& normal;
-        u32& count;
+namespace MeshletBoundsBuilder{
 
 
-    public:
-        void operator()(SIMDVectorSingle faceNormal)const noexcept;
-    };
-    struct ConeCutoffAccumulator{
-        SIMDVectorSingle& axis;
-        f32& cutoff;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    public:
-        void operator()(SIMDVectorSingle meshletFaceNormal)const noexcept;
-    };
+struct AreaNormalAccumulator{
+    SIMDVectorSingle& normal;
+    u32& count;
 
 
 public:
-    template<typename PositionAtT, typename VisitFaceNormalsT>
-    [[nodiscard]] static MeshletBoundsCalculation CalculateMeshletBounds(const u32 positionCount, const u32 primitiveCount, const PositionAtT& positionAt, const VisitFaceNormalsT& visitFaceNormals)noexcept(
-        noexcept(AabbTests::Expand(positionAt(DeclVal<u32&>()), DeclVal<SIMDVectorSingle&>(), DeclVal<SIMDVectorSingle&>()))
-        && noexcept(VectorSubtract(positionAt(DeclVal<u32&>()), DeclVal<SIMDVectorSingle&>()))
-        && noexcept(visitFaceNormals(AreaNormalAccumulator{ DeclVal<SIMDVectorSingle&>(), DeclVal<u32&>() }))
-        && noexcept(visitFaceNormals(ConeCutoffAccumulator{ DeclVal<SIMDVectorSingle&>(), DeclVal<f32&>() }))
-    );
-    [[nodiscard]] static MeshletBounds BuildMeshletBounds(const MeshCookEntry& entry, const MeshletDesc& meshlet)noexcept;
+    void operator()(SIMDVectorSingle faceNormal)const noexcept;
+};
+
+struct ConeCutoffAccumulator{
+    SIMDVectorSingle& axis;
+    f32& cutoff;
 
 
 public:
-    MeshletBoundsBuilder() = delete;
+    void operator()(SIMDVectorSingle meshletFaceNormal)const noexcept;
+};
+
+template<typename PositionAtT, typename VisitFaceNormalsT>
+[[nodiscard]] MeshletBoundsCalculation CalculateMeshletBounds(u32 positionCount, u32 primitiveCount, const PositionAtT& positionAt, const VisitFaceNormalsT& visitFaceNormals)noexcept(
+    noexcept(AabbTests::Expand(positionAt(DeclVal<u32&>()), DeclVal<SIMDVectorSingle&>(), DeclVal<SIMDVectorSingle&>()))
+    && noexcept(VectorSubtract(positionAt(DeclVal<u32&>()), DeclVal<SIMDVectorSingle&>()))
+    && noexcept(visitFaceNormals(AreaNormalAccumulator{ DeclVal<SIMDVectorSingle&>(), DeclVal<u32&>() }))
+    && noexcept(visitFaceNormals(ConeCutoffAccumulator{ DeclVal<SIMDVectorSingle&>(), DeclVal<f32&>() }))
+);
+[[nodiscard]] MeshletBounds BuildMeshletBounds(const MeshCookEntry& entry, const MeshletDesc& meshlet)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -111,6 +122,12 @@ MeshletBoundsCalculation MeshletBoundsBuilder::CalculateMeshletBounds(const u32 
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -588,7 +588,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
                 ASSERT_TRUE(expectedPath);
                 ASSERT_TRUE(*expectedPath);
                 EXPECT_EQ(samplers[index].virtualPath, **expectedPath);
-                EXPECT_EQ(&samplers[index].arena, &parseArena);
+                EXPECT_EQ(&samplers.get_allocator().arena(), &parseArena);
                 EXPECT_FLOAT_EQ(samplers[index].description.mipBias, static_cast<f32>(identity));
             }
         }

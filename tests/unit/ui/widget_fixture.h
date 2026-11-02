@@ -50,20 +50,26 @@ template<usize Capacity>
 struct AcceptedInputState{
     Array<HitTarget, Capacity> targets{};
     usize count = 0u;
+    usize popupCount = 0u;
     u64 layoutGeneration = 0u;
+    WidgetId focus;
     WidgetId capture;
 };
 
 template<usize Capacity, typename Input>
 [[nodiscard]] AcceptedInputState<Capacity> CaptureAcceptedInput(const Input& input)noexcept(
     noexcept(DeclVal<usize&>() = input.targets().size())
+    && noexcept(DeclVal<usize&>() = input.popupCount())
     && noexcept(DeclVal<u64&>() = input.layoutGeneration())
+    && noexcept(DeclVal<WidgetId&>() = input.focus())
     && noexcept(DeclVal<WidgetId&>() = input.capture())
     && noexcept(DeclVal<HitTarget&>() = input.targets()[DeclVal<usize&>()])
 ){
     AcceptedInputState<Capacity> saved;
     saved.count = input.targets().size();
+    saved.popupCount = input.popupCount();
     saved.layoutGeneration = input.layoutGeneration();
+    saved.focus = input.focus();
     saved.capture = input.capture();
     for(usize index = 0u; index < Min(saved.count, saved.targets.size()); ++index)
         saved.targets[index] = input.targets()[index];
@@ -80,16 +86,29 @@ void ExpectAcceptedTargets(const Input& input, const Span<const HitTarget> targe
         ExpectHitTargetIdentity(after, before);
         if(checkOwnerDeclaration)
             EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
+        EXPECT_EQ(after.popup, before.popup);
         UiPaintAssertions::ExpectRect(after.rectangle, before.rectangle);
         UiPaintAssertions::ExpectRect(after.clip, before.clip);
     }
 }
 
 template<usize Capacity, typename Input>
-void ExpectAcceptedInput(const Input& input, const AcceptedInputState<Capacity>& saved){
+void ExpectAcceptedInput(
+    const Input& input,
+    const AcceptedInputState<Capacity>& saved,
+    const b8 checkOwnerDeclaration = true,
+    const b8 checkFocus = false,
+    const b8 checkPopupCount = false,
+    const b8 checkCapture = true
+){
     EXPECT_EQ(input.layoutGeneration(), saved.layoutGeneration);
-    EXPECT_EQ(input.capture(), saved.capture);
-    ExpectAcceptedTargets(input, saved.targets, saved.count, true);
+    if(checkPopupCount)
+        EXPECT_EQ(input.popupCount(), saved.popupCount);
+    if(checkFocus)
+        EXPECT_EQ(input.focus(), saved.focus);
+    if(checkCapture)
+        EXPECT_EQ(input.capture(), saved.capture);
+    ExpectAcceptedTargets(input, saved.targets, saved.count, checkOwnerDeclaration);
 }
 
 template<typename VertexVector>
@@ -142,6 +161,7 @@ struct SkinPaintSample{
     f32 maximumU = 0.0f;
 };
 
+[[nodiscard]] b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, StringView filename, Font& font);
 [[nodiscard]] b8 InstallLatinFixtureFont(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, Font& font, TextService& text);
 
 

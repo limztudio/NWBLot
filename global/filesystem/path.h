@@ -9,7 +9,6 @@
 
 #include <functional>
 #include <iterator>
-#include <string>
 
 #include "../allocation_size.h"
 
@@ -299,13 +298,6 @@ public:
 
 
 public:
-    [[nodiscard]] std::string string()const{ return toStdString<char>(false); }
-
-    [[nodiscard]] std::string genericString()const{ return toStdString<char>(true); }
-
-    template<typename OutCharT>
-    [[nodiscard]] std::basic_string<OutCharT> genericString()const{ return toStdString<OutCharT>(true); }
-
     [[nodiscard]] b8 isAbsolute()const noexcept{
         return IsAbsoluteView(native());
     }
@@ -320,8 +312,8 @@ public:
         if(m_text.empty())
             return native_string_view();
 
-        const usize rootDirectoryLength = rootDirectoryLengthInText();
-        const usize rootLength = rootDirectoryLength != 0u ? rootDirectoryLength : rootNameLengthInText();
+        const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(native());
+        const usize rootLength = rootDirectoryLength != 0u ? rootDirectoryLength : GlobalFilesystemPathDetail::RootNameLength(native());
         const usize end = trimTrailingSeparators(m_text.size());
         if(rootLength != 0u && end <= rootLength)
             return native_string_view(m_text.data(), rootLength);
@@ -354,8 +346,8 @@ public:
         if(m_text.empty())
             return native_string_view();
 
-        const usize rootNameLength = rootNameLengthInText();
-        const usize rootDirectoryLength = rootDirectoryLengthInText();
+        const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(native());
+        const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(native());
         const usize end = trimTrailingSeparators(m_text.size());
         if((rootDirectoryLength != 0u && end <= rootDirectoryLength) || (rootNameLength != 0u && end <= rootNameLength))
             return native_string_view();
@@ -373,7 +365,7 @@ public:
     }
 
     [[nodiscard]] native_string_view stemView()const noexcept{
-        const native_string_view fileName = trimmedFilename();
+        const native_string_view fileName = filenameView();
         const usize extensionBegin = fileName.rfind(static_cast<value_type>('.'));
         const usize stemSize = extensionBegin == native_string_view::npos || extensionBegin == 0u ? fileName.size() : extensionBegin;
         return fileName.substr(0u, stemSize);
@@ -385,7 +377,7 @@ public:
     }
 
     [[nodiscard]] native_string_view extensionView()const noexcept{
-        const native_string_view fileName = trimmedFilename();
+        const native_string_view fileName = filenameView();
         const usize extensionBegin = fileName.rfind(static_cast<value_type>('.'));
         if(extensionBegin == native_string_view::npos || extensionBegin == 0u)
             return native_string_view();
@@ -408,7 +400,7 @@ public:
         if(isAbsolute() != base.isAbsolute())
             return Path(arena());
 #if defined(NWB_PLATFORM_WINDOWS)
-        if(native().substr(0u, rootNameLengthInText()) != base.native().substr(0u, base.rootNameLengthInText()))
+        if(native().substr(0u, GlobalFilesystemPathDetail::RootNameLength(native())) != base.native().substr(0u, GlobalFilesystemPathDetail::RootNameLength(base.native())))
             return Path(arena());
 #endif
 
@@ -548,7 +540,7 @@ private:
     }
 
     [[nodiscard]] usize trimTrailingSeparators(usize end)const noexcept{
-        const usize rootDirectoryLength = rootDirectoryLengthInText();
+        const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(native());
         while(end > rootDirectoryLength && end > 0u && GlobalFilesystemPathDetail::IsSeparator(m_text[end - 1u]))
             --end;
         return end;
@@ -569,20 +561,9 @@ private:
         return m_text.size();
     }
 
-    [[nodiscard]] native_string_view trimmedFilename()const noexcept{
-        const usize rootNameLength = rootNameLengthInText();
-        const usize rootDirectoryLength = rootDirectoryLengthInText();
-        const usize boundary = rootDirectoryLength != 0u ? rootDirectoryLength : rootNameLength;
-        const usize end = trimTrailingSeparators(m_text.size());
-        usize begin = end;
-        while(begin > boundary && !GlobalFilesystemPathDetail::IsSeparator(m_text[begin - 1u]))
-            --begin;
-        return native_string_view(m_text.data() + begin, end - begin);
-    }
-
     [[nodiscard]] usize filenameBeginInText()const noexcept{
-        const usize rootNameLength = rootNameLengthInText();
-        const usize rootDirectoryLength = rootDirectoryLengthInText();
+        const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(native());
+        const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(native());
         const usize boundary = rootDirectoryLength != 0u ? rootDirectoryLength : rootNameLength;
         usize begin = m_text.size();
         while(begin > boundary && !GlobalFilesystemPathDetail::IsSeparator(m_text[begin - 1u]))
@@ -591,8 +572,8 @@ private:
     }
 
     void appendNormalizedTo(Path& output)const{
-        const usize rootNameLength = rootNameLengthInText();
-        const usize rootDirectoryLength = rootDirectoryLengthInText();
+        const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(native());
+        const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(native());
         const b8 absolute = isAbsolute();
         if(rootNameLength != 0u)
             output.m_text.append(m_text.data(), rootNameLength);
@@ -612,9 +593,9 @@ private:
             if(text.size() == 1u && GlobalFilesystemPathDetail::IsSeparator(text[0]))
                 continue;
             if(IsDotDot(text)){
-                const native_string_view fileName = output.trimmedFilename();
+                const native_string_view fileName = output.filenameView();
                 if(!fileName.empty() && !IsDotDot(fileName)){
-                    const usize outputRootLength = output.rootDirectoryLengthInText();
+                    const usize outputRootLength = GlobalFilesystemPathDetail::RootDirectoryLength(output.native());
                     usize separator = output.trimTrailingSeparators(output.m_text.size());
                     while(separator > outputRootLength && !GlobalFilesystemPathDetail::IsSeparator(output.m_text[separator - 1u]))
                         --separator;
@@ -631,36 +612,6 @@ private:
 
         if(output.empty() && !absolute)
             output.m_text += static_cast<value_type>('.');
-    }
-
-    [[nodiscard]] usize rootNameLengthInText()const noexcept{
-        return GlobalFilesystemPathDetail::RootNameLength(native());
-    }
-
-    [[nodiscard]] usize rootDirectoryLengthInText()const noexcept{
-        return GlobalFilesystemPathDetail::RootDirectoryLength(native());
-    }
-
-    template<typename OutCharT>
-    [[nodiscard]] std::basic_string<OutCharT> toStdString(const b8 generic)const{
-        std::basic_string<OutCharT> output;
-        output.reserve(m_text.size());
-        auto destination = BackInserter(output);
-        if constexpr(SameAs<value_type, wchar> && !SameAs<OutCharT, wchar>)
-            BasicStringDetail::WriteWStringAsUtf8(destination, native());
-        else if constexpr(!SameAs<value_type, wchar> && SameAs<OutCharT, wchar>)
-            BasicStringDetail::WriteUtf8AsWString(destination, native());
-        else{
-            for(const value_type ch : m_text)
-                output.push_back(static_cast<OutCharT>(ch));
-        }
-        if(generic){
-            for(OutCharT& ch : output){
-                if(GlobalFilesystemPathDetail::IsSeparator(ch))
-                    ch = static_cast<OutCharT>('/');
-            }
-        }
-        return output;
     }
 
 

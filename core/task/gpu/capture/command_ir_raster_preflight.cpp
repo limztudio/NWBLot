@@ -114,10 +114,6 @@ namespace GpuCommandIrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCommandIrReplayError::Enum ValidateRasterBuiltinBoundary(const GpuTaskId&, const RasterReplayState& state)noexcept{
-    return state.active ? GpuCommandIrReplayError::InvalidRasterState : GpuCommandIrReplayError::None;
-}
-
 GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(const GpuCommandIrRasterTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, RasterReplayState& state)noexcept{
     if(state.active && state.task != record.task)
         return GpuCommandIrReplayError::InvalidRasterState;
@@ -162,6 +158,10 @@ GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(const GpuCommandIrRas
     default:
         return GpuCommandIrReplayError::InvalidRasterState;
     }
+}
+
+GpuCommandIrReplayError::Enum ValidateRasterBuiltinBoundary(const GpuTaskId&, const RasterReplayState& state)noexcept{
+    return state.active ? GpuCommandIrReplayError::InvalidRasterState : GpuCommandIrReplayError::None;
 }
 
 

@@ -4,7 +4,7 @@
 
 #include "volume_file_system.h"
 #include "volume_storage_detail.h"
-#include "volume_staging_detail.h"
+#include "volume_staging.h"
 #include "arena_names.h"
 
 #include <global/error_code.h>
@@ -21,23 +21,52 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_volume_segment_compact{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename FileRecordT>
+struct FileLayout{
+    Name path;
+    NotNull<FileRecordT*> record;
+    u64 sourceOffset = 0u;
+    u64 destinationOffset = 0u;
+    u64 size = 0u;
+};
+
+template<typename FileRecordT, typename SegmentPathVectorT>
+struct CompactPublication{
+    Vector<FileLayout<FileRecordT>, Core::Alloc::ScratchArena>& layouts;
+    SegmentPathVectorT& segmentPaths;
+    u64& nextFreeOffset;
+    u64 compactedWriteOffset;
+    usize segmentCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 VolumeFileSystem::compact(const b8 shrinkSegments){
+    using Layout = __hidden_volume_segment_compact::FileLayout<FileRecord>;
+    using Publication = __hidden_volume_segment_compact::CompactPublication<FileRecord, SegmentPathVector>;
+
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, FilesystemVolumeDetail::s_VolumeDetailNotMountedWritable);
         return false;
     }
 
-    struct FileLayout{
-        Name path;
-        NotNull<FileRecord*> record;
-        u64 sourceOffset = 0u;
-        u64 destinationOffset = 0u;
-        u64 size = 0u;
-    };
-
     Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_CompactScratch);
-    Vector<FileLayout, Core::Alloc::ScratchArena> layouts(scratchArena);
+    Vector<Layout, Core::Alloc::ScratchArena> layouts(scratchArena);
     layouts.reserve(m_files.size());
     for(auto entry = m_files.begin(); entry != m_files.end(); ++entry){
         FileRecord& record = entry.value();
@@ -46,9 +75,9 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCompact, "invalid source file layout");
             return false;
         }
-        layouts.push_back(FileLayout{ entry.key(), NotNull<FileRecord*>(&record), record.offset, 0u, record.size });
+        layouts.push_back(Layout{ entry.key(), NotNull<FileRecord*>(&record), record.offset, 0u, record.size });
     }
-    Sort(layouts.begin(), layouts.end(), [](const FileLayout& lhs, const FileLayout& rhs)noexcept{ return lhs.sourceOffset < rhs.sourceOffset; });
+    Sort(layouts.begin(), layouts.end(), [](const Layout& lhs, const Layout& rhs)noexcept{ return lhs.sourceOffset < rhs.sourceOffset; });
 
     u64 compactedWriteOffset = m_metadataBytes;
     u64 previousSourceEnd = m_metadataBytes;
@@ -142,18 +171,11 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
             return false;
     }
 
-    struct CompactPublication{
-        Vector<FileLayout, Core::Alloc::ScratchArena>& layouts;
-        SegmentPathVector& segmentPaths;
-        u64& nextFreeOffset;
-        u64 compactedWriteOffset;
-        usize segmentCount;
-    };
-    CompactPublication publication{ layouts, m_segmentPaths, m_nextFreeOffset, compactedWriteOffset, stagedSegmentCount };
-    const FilesystemVolumeStagingDetail::VolumePublicationObserver observer{
+    Publication publication{ layouts, m_segmentPaths, m_nextFreeOffset, compactedWriteOffset, stagedSegmentCount };
+    const VolumePublicationObserver observer{
         .context = &publication,
         .commit = [](void* context)noexcept{
-            auto& state = *MakeNotNull(static_cast<CompactPublication*>(context));
+            auto& state = *MakeNotNull(static_cast<Publication*>(context));
             for(const auto& layout : state.layouts)
                 *layout.record = FileRecord{ layout.destinationOffset, layout.size };
             state.nextFreeOffset = state.compactedWriteOffset;
@@ -161,7 +183,7 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
                 state.segmentPaths.pop_back();
         },
     };
-    if(!FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, m_mountDirectory, m_volumeName.view(), stagedSegmentCount, scratchArena, observer))
+    if(!PublishStagedVolume(stagedPaths, m_mountDirectory, m_volumeName.view(), stagedSegmentCount, scratchArena, observer))
         return false;
     stageCleanup.dismiss();
     return true;

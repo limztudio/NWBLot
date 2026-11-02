@@ -4,6 +4,8 @@
 
 #include "optical_scene_resources.h"
 
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
+
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
 
@@ -62,10 +64,8 @@ b8 RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& 
             return false;
         }
         Core::BufferHandle buffer = Move(*bufferResult);
-        const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!descriptorResult || !heap.write(*descriptorResult, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()))){
-            if(descriptorResult)
-                heap.free(*descriptorResult);
+        const Expected<Core::GpuDescriptorHandle> descriptorResult = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()));
+        if(!descriptorResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to register metadata buffer"));
             return false;
         }

@@ -65,10 +65,6 @@ ModelSystem::ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& worl
         registerAccess(access.typeId, access.mode);
 }
 
-void ModelSystem::prepare([[maybe_unused]] Core::ECS::World& world){
-    syncModelRuntimes();
-}
-
 Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] const f32 delta){
     const auto transformed = updateModelObjectTransforms();
     if(!transformed)
@@ -232,7 +228,7 @@ b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Model
 b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
     Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::StaticMesh);
     if(m_applyRenderer)
-        m_applyRenderer(m_world, owner, object.material, entity);
+        m_applyRenderer(owner, object.material, m_world, entity);
 
     auto& mesh = entity.addComponent<MeshComponent>();
     mesh.mesh = object.mesh;
@@ -289,7 +285,7 @@ b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const Mo
 
     Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::SkinnedMesh);
     if(m_applyRenderer)
-        m_applyRenderer(m_world, owner, object.material, entity);
+        m_applyRenderer(owner, object.material, m_world, entity);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
     binding.skin = object.skin;

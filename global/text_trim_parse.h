@@ -22,8 +22,6 @@ inline constexpr u32 s_UnicodeSpace = 0x20u;
 inline constexpr u32 s_UnicodeDelete = 0x7Fu;
 inline constexpr u32 s_UnicodeNextLine = 0x85u;
 inline constexpr u32 s_UnicodeC1Last = 0x9Fu;
-inline constexpr u32 s_UnicodeLineSeparator = 0x2028u;
-inline constexpr u32 s_UnicodeParagraphSeparator = 0x2029u;
 
 
 template<typename CharT>
@@ -45,9 +43,6 @@ inline constexpr usize s_Utf8BomByteCount = 3u;
 inline constexpr u8 s_Utf8BomByte0 = 0xEFu;
 inline constexpr u8 s_Utf8BomByte1 = 0xBBu;
 inline constexpr u8 s_Utf8BomByte2 = 0xBFu;
-using BasicStringDetail::s_Utf8TwoByteLength;
-using BasicStringDetail::s_Utf8ThreeByteLength;
-using BasicStringDetail::s_Utf8FourByteLength;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,29 +97,9 @@ template<typename CharT>
     return text.size() >= prefix.size() && BasicStringView<CharT>(text.data(), prefix.size()) == prefix;
 }
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr b8 StartsWith(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
-    return StartsWith<CharT>(BasicStringView<CharT>{text}, prefix);
-}
-
 template<typename CharT, usize N>
 [[nodiscard]] inline constexpr b8 StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
-}
-
-template<typename CharT, typename ArenaT, usize N>
-[[nodiscard]] inline constexpr b8 StartsWith(const BasicString<CharT, ArenaT>& text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
-    return StartsWith<CharT>(BasicStringView<CharT>{text}, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
-}
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> Trim(ArenaT& arena, const BasicStringView<CharT> text){
-    return BasicString<CharT, ArenaT>(TrimView(text), arena);
-}
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> Trim(const BasicString<CharT, ArenaT>& text){
-    return BasicString<CharT, ArenaT>(TrimView<CharT>(BasicStringView<CharT>{text}), text.get_allocator());
 }
 
 template<typename StringT>

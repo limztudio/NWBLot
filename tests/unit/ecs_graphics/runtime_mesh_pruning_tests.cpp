@@ -7,6 +7,8 @@
 
 #include <core/ecs/entity.h>
 
+#include <tests/common/ecs_test_world.h>
+
 #include <global/name.h>
 
 #include <gtest/gtest.h>
@@ -24,10 +26,7 @@ namespace __hidden_runtime_mesh_pruning_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 
-struct PruneContext{
-    Core::Alloc::GlobalArena arena{ Name("tests/runtime_mesh_pruning/owner") };
-    Core::CpuTaskScheduler cpuScheduler{ 0u };
-    Core::ECS::World world{ arena, cpuScheduler };
+struct PruneContext : Tests::EcsTestWorld{
     MeshSystem& meshSystem = world.addSystem<MeshSystem>(world);
 };
 

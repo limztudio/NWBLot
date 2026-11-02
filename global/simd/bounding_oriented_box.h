@@ -226,6 +226,31 @@ inline void NWB_SIMD_CALL BoundingDoubleOrientedBox::TransformOrientedBoxValue(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename OrientedBoxT, typename BoxT>
+    requires ((IsSame_V<OrientedBoxT, BoundingOrientedBox> && IsSame_V<BoxT, BoundingBox>) || (IsSame_V<OrientedBoxT, BoundingDoubleOrientedBox> && IsSame_V<BoxT, BoundingDoubleBox>))
+inline void BoundingOrientedBoxFromBox(OrientedBoxT& outBox, const BoxT& box)noexcept{
+    outBox.center = box.center;
+    outBox.extents = box.extents;
+    outBox.orientation = decltype(outBox.orientation)(0, 0, 0, 1);
+}
+
+inline void BoundingOrientedBox::CreateFromPoints(BoundingOrientedBox& outBox, const usize count, const Float3U& points, const usize stride)noexcept{
+    BoundingBox box;
+    BoundingBox::CreateFromPoints(box, count, points, stride);
+    BoundingOrientedBoxFromBox(outBox, box);
+}
+
+template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
+inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBox& outBox, const usize count, const PointT& points, const usize stride)noexcept{
+    BoundingDoubleBox box;
+    BoundingDoubleBox::CreateFromPoints(box, count, points, stride);
+    BoundingOrientedBoxFromBox(outBox, box);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingOrientedBox::containsSphereValues(const SIMDVectorSingle boxCenter, const SIMDVectorSingle boxExtents, const SIMDVectorSingle boxOrientation, const SIMDVectorSingle sphereValue)const noexcept{
     const SIMDVectorSingle sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVectorSingle localCenter = CollisionDetail::PointToObbLocal(CollisionDetail::SphereCenter(sphereValue), boxCenter, boxOrientation);
@@ -555,31 +580,6 @@ inline void BoundingDoubleOrientedBox::getCorners(PointT (&corners)[s_DoubleCorn
 
 [[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL BoundingDoubleOrientedBox::containedBy(SIMDVectorDouble plane0, SIMDVectorDouble plane1, SIMDVectorDouble plane2, SIMDVectorDouble plane3, SIMDVectorDouble plane4, SIMDVectorDouble plane5)const noexcept{
     return ContainedByValue(LoadDouble(center), LoadDouble(extents), LoadDouble(orientation), plane0, plane1, plane2, plane3, plane4, plane5);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename OrientedBoxT, typename BoxT>
-    requires ((IsSame_V<OrientedBoxT, BoundingOrientedBox> && IsSame_V<BoxT, BoundingBox>) || (IsSame_V<OrientedBoxT, BoundingDoubleOrientedBox> && IsSame_V<BoxT, BoundingDoubleBox>))
-inline void BoundingOrientedBoxFromBox(OrientedBoxT& outBox, const BoxT& box)noexcept{
-    outBox.center = box.center;
-    outBox.extents = box.extents;
-    outBox.orientation = decltype(outBox.orientation)(0, 0, 0, 1);
-}
-
-inline void BoundingOrientedBox::CreateFromPoints(BoundingOrientedBox& outBox, const usize count, const Float3U& points, const usize stride)noexcept{
-    BoundingBox box;
-    BoundingBox::CreateFromPoints(box, count, points, stride);
-    BoundingOrientedBoxFromBox(outBox, box);
-}
-
-template<typename PointT> requires (IsSame_V<PointT, Double3> || IsSame_V<PointT, Double3U>)
-inline void BoundingDoubleOrientedBox::CreateFromPoints(BoundingDoubleOrientedBox& outBox, const usize count, const PointT& points, const usize stride)noexcept{
-    BoundingDoubleBox box;
-    BoundingDoubleBox::CreateFromPoints(box, count, points, stride);
-    BoundingOrientedBoxFromBox(outBox, box);
 }
 
 

@@ -137,8 +137,6 @@ TypedComponent<ComponentT>::~TypedComponent()noexcept = default;
 using ComponentInstanceFactory = Core::Assets::PolymorphicAssetInstanceFactory<IComponent>;
 using ComponentTypeAutoRegistrar = Core::Assets::PolymorphicAssetTypeAutoRegistrar<IComponent>;
 
-[[nodiscard]] const IComponent* CastComponent(const Core::Assets::IAsset* asset)noexcept;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

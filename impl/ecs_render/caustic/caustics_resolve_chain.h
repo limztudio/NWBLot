@@ -33,7 +33,7 @@ using CausticsResolveStageUses = Span<const Core::GpuTaskResourceUse>;
 
 struct CausticsResolveChainStageUseInputs{
     CausticsResolveStageUses prepare{};
-    Array<CausticsResolveStageUses, s_CausticResolveWaveletPassCount> wavelets{};
+    Array<CausticsResolveStageUses, NWB_CAUSTIC_RESOLVE_PASS_COUNT> wavelets{};
     CausticsResolveStageUses upsample{};
 };
 
@@ -65,7 +65,7 @@ public:
 
 struct CausticsResolveChainStageTasks{
     Core::GpuTaskId causticResolvePrepareTask;
-    Array<Core::GpuTaskId, s_CausticResolveWaveletPassCount> causticResolveWaveletTasks{};
+    Array<Core::GpuTaskId, NWB_CAUSTIC_RESOLVE_PASS_COUNT> causticResolveWaveletTasks{};
     Core::GpuTaskId causticResolveUpsampleTask;
 };
 
@@ -75,7 +75,7 @@ struct CausticsResolveChainResult : public CausticsResolveChainStageTasks{
 
 struct CausticsResolveChainNaming{
     CausticsResolveStageNaming prepare;
-    Array<CausticsResolveStageNaming, s_CausticResolveWaveletPassCount> wavelets{};
+    Array<CausticsResolveStageNaming, NWB_CAUSTIC_RESOLVE_PASS_COUNT> wavelets{};
     CausticsResolveStageNaming upsample;
     CausticsResolveStageNaming timingClose;
 };

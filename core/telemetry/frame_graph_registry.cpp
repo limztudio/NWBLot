@@ -29,7 +29,7 @@ namespace __hidden_frame_graph_registry{
 
 using FrameGraphNodeIndexLookup = HashMap<Name, u32, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
-static void ResolvePendingNameEdges(Alloc::ScratchArena& scratchArena, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphPendingNameEdge> pendingNameEdges, FrameGraphEdgeDescs& edges){
+static void ResolvePendingNameEdges(const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphPendingNameEdge> pendingNameEdges, Alloc::ScratchArena& scratchArena, FrameGraphEdgeDescs& edges){
     if(nodes.empty() || pendingNameEdges.empty())
         return;
 
@@ -108,7 +108,7 @@ b8 FrameGraphRegistry::record(CaptureSession& session){
     if(!hasGraph)
         return false;
 
-    __hidden_frame_graph_registry::ResolvePendingNameEdges(scratchArena, m_nodes, m_pendingNameEdges, m_edges);
+    __hidden_frame_graph_registry::ResolvePendingNameEdges(m_nodes, m_pendingNameEdges, scratchArena, m_edges);
 
     return session.recordFrameGraph(scratchArena, m_nodes, m_edges, m_physicalQueueRuntimeStatistics, m_packetSubmissionStatistics);
 }

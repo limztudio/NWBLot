@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #pragma once
 
 
@@ -52,19 +58,24 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshCookStreamReorder final : NoCopy{
-public:
-    template<typename StreamVectorT>
-    static void PrepareMeshStreamReorder(const StreamVectorT& source, StreamVectorT& outStream, ScratchVector<u32>& outRemap);
-    template<typename StreamVectorT>
-    [[nodiscard]] static b8 RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, Span<u32> remap, StreamVectorT& reordered, u32& index);
-    [[nodiscard]] static b8 RemapMeshletAttributeRefs(const TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder);
-    [[nodiscard]] static b8 RemapMeshletPositionRefs(const TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder);
-    [[nodiscard]] static b8 ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena);
+namespace MeshCookStreamReorder{
 
 
-public:
-    MeshCookStreamReorder() = delete;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename StreamVectorT>
+void PrepareMeshStreamReorder(const StreamVectorT& source, StreamVectorT& outStream, ScratchVector<u32>& outRemap);
+template<typename StreamVectorT>
+[[nodiscard]] b8 RemapMeshStreamRef(const Name& virtualPath, TStringView metaKind, TStringView streamName, const StreamVectorT& source, Span<u32> remap, StreamVectorT& reordered, u32& index);
+[[nodiscard]] b8 RemapMeshletAttributeRefs(TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder);
+[[nodiscard]] b8 RemapMeshletPositionRefs(TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder);
+[[nodiscard]] b8 ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -112,6 +123,12 @@ b8 MeshCookStreamReorder::RemapMeshStreamRef(const Name& virtualPath, const TStr
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

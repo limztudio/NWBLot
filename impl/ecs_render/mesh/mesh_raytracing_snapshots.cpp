@@ -4,10 +4,9 @@
 
 #include "mesh_system.h"
 
-#include <impl/ecs_render/raytrace/types.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/assets_mesh/asset.h>
+#include <impl/ecs_mesh/runtime/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/manager.h>
@@ -46,9 +45,8 @@ namespace __hidden_mesh_raytracing_snapshots{
 }
 
 [[nodiscard]] b8 RuntimeMeshletSnapshotMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
-    if(!RuntimeMeshletBoundsReady(mesh)){
+    if(!RuntimeMeshletBoundsReady(mesh))
         return snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer && !snapshot.meshletDescHeapHandle.valid() && !snapshot.meshletLocalBoundsHeapHandle.valid();
-    }
     return
         snapshot.meshletCount == mesh.meshletCount
         && snapshot.meshletDescBuffer == mesh.meshletDescBuffer
@@ -68,7 +66,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
         .positionBuffer = mesh.positionBuffer,
         .triangleIndexBuffer = mesh.triangleIndexBuffer,
         .attributeBuffer = mesh.attributeBuffer,
-        .solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), (static_cast<usize>(mesh.meshletPrimitiveIndexCount) / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits),
+        .solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), ExpectedMeshletSolidTriangleWordCount(mesh.meshletPrimitiveIndexCount)),
         .runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer,
         .meshletDescBuffer = {},
         .meshletLocalBoundsBuffer = {},

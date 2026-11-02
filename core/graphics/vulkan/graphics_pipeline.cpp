@@ -219,22 +219,7 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
 void CommandList::setViewportState(const ViewportState& viewportState){
     if(!viewportState.viewports.empty()){
         const auto& vp = viewportState.viewports[0u];
-        const SIMDVectorSingle viewportMinimum = VectorSet(vp.minX, vp.minY, 0.0f, 0.0f);
-        const SIMDVectorSingle viewportMaximum = VectorSet(vp.maxX, vp.maxY, 0.0f, 0.0f);
-        const SIMDVectorSingle viewportExtent = VectorSubtract(viewportMaximum, viewportMinimum);
-        const SIMDVectorSingle viewportOrigin = VectorPermute<0, 5, 0, 0>(viewportMinimum, viewportMaximum);
-        const SIMDVectorSingle signedViewportExtent = VectorPermute<0, 5, 0, 0>(viewportExtent, VectorNegate(viewportExtent));
-        const SIMDVectorSingle viewportXYWH = VectorPermute<0, 1, 4, 5>(viewportOrigin, signedViewportExtent);
-        Float4U viewportValues;
-        StoreFloat(viewportXYWH, viewportValues);
-
-        VkViewport viewport{};
-        viewport.x = viewportValues.x;
-        viewport.y = viewportValues.y;
-        viewport.width = viewportValues.z;
-        viewport.height = viewportValues.w;
-        viewport.minDepth = vp.minZ;
-        viewport.maxDepth = vp.maxZ;
+        const VkViewport viewport{ vp.minX, vp.maxY, vp.maxX - vp.minX, vp.minY - vp.maxY, vp.minZ, vp.maxZ };
         m_context.deviceDispatch.vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &viewport);
     }
 
@@ -258,9 +243,9 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
 
-    Array<VkRenderingAttachmentInfo, VulkanDetail::s_MaxColorAttachments> colorAttachments = {};
+    Array<VkRenderingAttachmentInfo, s_MaxRenderTargets> colorAttachments = {};
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
-    NWB_ASSERT(numColorAttachments <= VulkanDetail::s_MaxColorAttachments);
+    NWB_ASSERT(numColorAttachments <= s_MaxRenderTargets);
 
     for(u32 i = 0u; i < numColorAttachments; ++i){
         auto& tex = *fbDesc.colorAttachments[i].texture;

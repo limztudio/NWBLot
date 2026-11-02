@@ -171,11 +171,6 @@ b8 HostReadbackBarrierTracker::registerBuffer(const VkBuffer buffer){
     return true;
 }
 
-void HostReadbackBarrierTracker::registerDeviceOwnedBuffer(const VkBuffer buffer){
-    if(!registerBuffer(buffer))
-        return;
-}
-
 void HostReadbackBarrierTracker::appendBarriers(Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& barriers)const{
     barriers.reserve(barriers.size() + m_buffers.size());
     for(const VkBuffer buffer : m_buffers)

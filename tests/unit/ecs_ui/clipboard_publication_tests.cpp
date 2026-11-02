@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/clipboard_publications.h>
+#include "edit_host_fixture_support.h"
 
-#include <core/os/clipboard_service.h>
+#include <impl/ecs_ui/clipboard_publications.h>
 
 #include <tests/common/test_context.h>
 
@@ -23,38 +23,7 @@ namespace __hidden_ui_clipboard_publication_tests{
 using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
-
-class DeferredPublications final : public QueuedClipboardService{
-public:
-    explicit DeferredPublications(Alloc::GlobalArena& arena)
-        : QueuedClipboardService(arena)
-        , startedText(arena)
-    {}
-
-
-public:
-    [[nodiscard]] virtual ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept override{
-        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
-    }
-
-    [[nodiscard]] b8 deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
-        return completeNativeRequest(token, status, text);
-    }
-
-
-protected:
-    virtual void startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, [[maybe_unused]] ClipboardChannel::Enum channel, const AStringView text)override{
-        startedToken = token;
-        startedOperation = operation;
-        startedText.assign(text.data(), text.size());
-    }
-
-
-public:
-    AString<Alloc::GlobalArena> startedText;
-    ClipboardRequestToken startedToken;
-    ClipboardOperation::Enum startedOperation = ClipboardOperation::ReadText;
-};
+using UiEditHostFixtureSupport::FakeClipboard;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +31,7 @@ public:
 
 TEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead){
     Tests::TestArena arena;
-    DeferredPublications service(arena.arena);
+    FakeClipboard service(arena.arena, true);
     UiClipboardPublications publications(arena.arena, service);
     AString<Alloc::GlobalArena> source("copied", arena.arena);
     ASSERT_EQ(publications.request(source), UiClipboardPublicationStatus::Pending);
@@ -89,7 +58,7 @@ TEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead
 
 TEST(UiClipboardPublications, BoundedQueueAndExplicitResetReleaseAllPendingNativeTokens){
     Tests::TestArena arena;
-    DeferredPublications service(arena.arena);
+    FakeClipboard service(arena.arena, true);
     UiClipboardPublications publications(arena.arena, service);
     for(usize index = 0u; index < s_UiClipboardMaxPublications; ++index)
         ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
@@ -106,7 +75,7 @@ TEST(UiClipboardPublications, BoundedQueueAndExplicitResetReleaseAllPendingNativ
 
 TEST(UiClipboardPublications, CompletionFailuresAreReportedAndConsumedWithoutLosingSuccessfulPublications){
     Tests::TestArena arena;
-    DeferredPublications service(arena.arena);
+    FakeClipboard service(arena.arena, true);
     UiClipboardPublications publications(arena.arena, service);
     ASSERT_EQ(publications.request("success"), UiClipboardPublicationStatus::Pending);
     ASSERT_EQ(publications.request("failure"), UiClipboardPublicationStatus::Pending);
@@ -127,7 +96,7 @@ TEST(UiClipboardPublications, CompletionFailuresAreReportedAndConsumedWithoutLos
 
 TEST(UiClipboardPublications, InvalidInputAndUnsupportedChannelNeverAdmitNativeWork){
     Tests::TestArena arena;
-    DeferredPublications service(arena.arena);
+    FakeClipboard service(arena.arena, true);
     UiClipboardPublications publications(arena.arena, service);
     EXPECT_EQ(publications.request("\xC0\xAF"), UiClipboardPublicationStatus::InvalidText);
     EXPECT_EQ(publications.request(AStringView("a\0b", 3u)), UiClipboardPublicationStatus::InvalidText);
@@ -139,7 +108,7 @@ TEST(UiClipboardPublications, InvalidInputAndUnsupportedChannelNeverAdmitNativeW
 
 TEST(UiClipboardPublications, AnotherThreadCannotRequestDrainOrCancelOwnedPublication){
     Tests::TestArena arena;
-    DeferredPublications service(arena.arena);
+    FakeClipboard service(arena.arena, true);
     UiClipboardPublications publications(arena.arena, service);
     ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
     UiClipboardPublicationStatus::Enum requested = UiClipboardPublicationStatus::Idle;
@@ -160,7 +129,7 @@ TEST(UiClipboardPublications, AnotherThreadCannotRequestDrainOrCancelOwnedPublic
 
 TEST(UiClipboardPublications, DestructionCancelsUndeliveredWorkBeforeServiceRetirement){
     Tests::TestArena arena;
-    DeferredPublications service(arena.arena);
+    FakeClipboard service(arena.arena, true);
     ClipboardRequestToken old;
     {
         UiClipboardPublications publications(arena.arena, service);

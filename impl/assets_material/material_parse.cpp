@@ -51,15 +51,17 @@ Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(const Spa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries){
+b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBindEntries, const Span<MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     using namespace MaterialCookDetail;
     auto materialBindLookupResult = BuildMaterialBindInterfaceLookup(materialBindEntries, scratchArena);
     if(!materialBindLookupResult)
         return false;
     const MaterialBindInterfaceLookup& materialBindLookup = *materialBindLookupResult;
+    if(materialEntries.empty())
+        return true;
 
     const usize cacheReserveCount = Min(materialBindEntries.size(), materialEntries.size());
-    MaterialBindTypedLayoutCache layoutCache(materialEntries.get_allocator().arena());
+    MaterialBindTypedLayoutCache layoutCache(materialEntries[0u].virtualPath.get_allocator().arena());
     layoutCache.reserve(cacheReserveCount);
 
     for(MaterialCookEntry& materialEntry : materialEntries){

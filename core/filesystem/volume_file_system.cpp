@@ -4,7 +4,6 @@
 
 #include "volume_file_system.h"
 #include "volume_storage_detail.h"
-#include "volume_staging_detail.h"
 #include "arena_names.h"
 
 #include <global/simplemath.h>

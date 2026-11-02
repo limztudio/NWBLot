@@ -22,19 +22,7 @@ static int RunTool(const int argc, char** argv){
     return NWB::Pipeline::RunPipelineTool(argc, argv);
 }
 
-#if !defined(NWB_PLATFORM_WINDOWS) || !defined(NWB_UNICODE)
-static int EntryPoint(const isize argc, char** argv, void*){
-    return RunTool(static_cast<int>(argc), argv);
-}
-#endif
-
-#if defined(NWB_UNICODE)
-static int EntryPoint(const isize argc, wchar** argv, void*){
-    return NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, RunTool);
-}
-#endif
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(RunTool)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

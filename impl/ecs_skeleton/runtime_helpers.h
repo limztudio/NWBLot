@@ -25,6 +25,7 @@ namespace SkeletonRuntime{
 
 [[nodiscard]] Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, b8 hasInverseBind, const SIMDMatrix& inverseBind, f32 inverseBindDeterminantEpsilon)noexcept;
 [[nodiscard]] Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint, const SIMDMatrix* parentJoint)noexcept;
+[[nodiscard]] Expected<SIMDMatrix> EvaluateSkeletonPoseJointMatrix(const SkeletonPoseComponent& pose, u32 targetJointIndex)noexcept;
 
 template<typename JointMatrixVector>
 [[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, JointMatrixVector& outJointPalette)noexcept(
@@ -47,7 +48,7 @@ template<typename JointMatrixVector>
         const u32 parentJoint = pose.parentJoints[jointIndex];
         SIMDMatrix parentJointMatrix{};
         const SIMDMatrix* parentJointMatrixPtr = nullptr;
-        if(parentJoint != s_SkeletonRootParent){
+        if(parentJoint != s_SkeletonInvalidJointIndex){
             parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
             parentJointMatrixPtr = &parentJointMatrix;
         }

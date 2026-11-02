@@ -138,13 +138,13 @@ b8 GpuNativePacketRecorder::recordPacket(
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
     const GpuSubmissionPacketId packetID,
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex,
     Alloc::ScratchArena& stateFanInScratchArena,
     GpuRecordedGraph::PacketRecordingScratch& scratch,
     GpuRecordedGraph& outRecordedGraph,
     GpuCommandIrCapture* const commandIrCapture,
-    GpuPacketRecordingAbort* const deferredAbort,
-    const u64 recordingWorkerDomain,
-    const u32 recordingWorkerIndex
+    GpuPacketRecordingAbort* const deferredAbort
 )const{
     if(deferredAbort && deferredAbort->valid()){
         NWB_ASSERT_MSG(false, NWB_TEXT("Packet recording abort output must be fresh"));

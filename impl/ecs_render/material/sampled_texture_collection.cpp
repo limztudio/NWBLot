@@ -3,6 +3,7 @@
 
 
 #include "sampled_texture_collection.h"
+#include "renderer_material_state.h"
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -72,15 +73,6 @@ Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedM
         }
     }
     return textures;
-}
-
-b8 MergePreparedShadowMaterialSampledTextures(const Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
-    for(const Core::TextureHandle& texture : sampledTextures){
-        if(!texture || !texture->getCreationDescription().name)
-            return false;
-        collector.append(texture);
-    }
-    return true;
 }
 
 

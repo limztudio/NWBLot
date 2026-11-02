@@ -15,6 +15,7 @@ const Color s_EditBoxCaretColor = Color(0.95f, 0.97f, 1.0f, 1.0f);
 const Color s_EditBoxPreeditColor = Color(0.50f, 0.72f, 1.0f, 1.0f);
 
 const f32 s_TextAreaDefaultHeight = 160.0f;
+const u32 s_UiEditMinInterpolatedStops = 2u;
 // One stop per byte boundary 0..committedBytes, plus one extra at the preedit seam.
 const usize s_EditCaretMaxExtraMappingStops = 2u;
 
@@ -345,7 +346,8 @@ b8 TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Span<EditBoxCare
     return haveBest;
 }
 
-b8 TryHitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint, mut usize outCommittedByte){
+b8 TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint, mut u32 outLineIndex, mut usize outCommittedByte){
+    outLineIndex = 0u;
     outCommittedByte = 0u;
     if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !isFinite(localPoint.x) || !isFinite(localPoint.y))
         return false;
@@ -362,7 +364,52 @@ b8 TryHitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretSto
             break;
         }
     }
-    return TryFindNearestEditCaretStop(lines, stops, lineIndex, localPoint, outCommittedByte);
+    if(!TryFindNearestEditCaretStop(lines, stops, lineIndex, localPoint, outCommittedByte))
+        return false;
+    outLineIndex = lineIndex;
+    return true;
+}
+
+b8 TryHitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint, mut usize outCommittedByte){
+    u32 lineIndex = 0u;
+    return TryHitEditCaretLineAndStop(lines, stops, localPoint, lineIndex, outCommittedByte);
+}
+
+b8 TryHitEditWordCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint, mut usize outCommittedByte){
+    outCommittedByte = 0u;
+    u32 lineIndex = 0u;
+    usize byte = 0u;
+    if(!TryHitEditCaretLineAndStop(lines, stops, localPoint, lineIndex, byte))
+        return false;
+    const EditCaretLine line = lines[lineIndex];
+    if(line.stopCount < s_UiEditMinInterpolatedStops){
+        outCommittedByte = byte;
+        return true;
+    }
+    const usize first = cast<usize>(line.firstStop);
+    const usize end = first + cast<usize>(line.stopCount);
+    usize selected = first;
+    for(usize index = first + 1u; index < end; ++index){
+        if(stops[index].lineIndex != lineIndex || stops[index].x < stops[index - 1u].x)
+            return false;
+        if(localPoint.x < stops[index].x)
+            break;
+        selected = index;
+    }
+    if(selected + 1u == end)
+        --selected;
+    outCommittedByte = stops[selected].committedByte;
+    return true;
+}
+
+void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect segment){
+    if(segment.width > 0.0f){
+        const f32 thickness = min(caretWidth, segment.height);
+        const f32 verticalOffset = textOrigin.y + max(0.0f, segment.height - thickness);
+        segment.x += textOrigin.x;
+        segment.y += verticalOffset;
+        segment.height = thickness;
+    }
 }
 
 

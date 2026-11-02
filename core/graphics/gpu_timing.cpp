@@ -121,7 +121,7 @@ void GpuTimingRecorder::resetQueries(){
         ScopedLock recorderLock(m_mutex);
         if(subscriptionIdentityLimit != 0u){
             reservePendingAttributionSamplesLocked(retiredSamples);
-            retirePendingAttributionsLocked(retiredSamples, subscriptionIdentityLimit);
+            retirePendingAttributionsLocked(subscriptionIdentityLimit, retiredSamples);
         }
         m_accumulators.clear();
         m_queueCompletions.clear();

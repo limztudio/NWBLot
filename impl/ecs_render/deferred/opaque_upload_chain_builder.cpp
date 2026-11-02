@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const OpaqueUploadChainInputs& inputs){
+Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const OpaqueUploadChainInputs& inputs){
     OpaqueUploadChainResult result{};
     if(!inputs.dependencyTask.valid())
         return MakeUnexpected(Failure{});

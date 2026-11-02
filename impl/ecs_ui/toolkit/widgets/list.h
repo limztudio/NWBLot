@@ -98,7 +98,7 @@ public:
         return SourceMatches(source, generation, revision) && source.rowCount() == count;
     }
     [[nodiscard]] static b8 Reconcile(ListState& state, const IListDataSource& source);
-    [[nodiscard]] static b8 Apply(ListState& state, ListResult& result, const IListDataSource& source, const ListOptions& options, const ControlAction& action);
+    [[nodiscard]] static b8 Apply(const IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result);
 };
 
 

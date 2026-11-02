@@ -9,9 +9,6 @@
 
 #include "edit_host_fixture_support.h"
 
-#include <core/os/clipboard_service.h>
-#include <core/os/text_input_service.h>
-
 #include <gtest/gtest.h>
 
 
@@ -27,63 +24,8 @@ namespace UiEditBoxTestSupport{
 using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
-
-class FakeTextInput final : public QueuedTextInputService{
-public:
-    using QueuedTextInputService::emitCommit;
-    using QueuedTextInputService::caretRect;
-
-
-public:
-    explicit FakeTextInput(Alloc::GlobalArena& arena)
-        : QueuedTextInputService(arena)
-    {}
-    virtual ~FakeTextInput()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
-
-    [[nodiscard]] TextInputAdmission::Enum commit(AStringView text){ return emitCommit(activeSession(), text); }
-
-    [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, b8 visible = true){
-        return emitPreedit(activeSession(), text, anchor, caret, visible);
-    }
-
-    [[nodiscard]] TextInputAdmission::Enum erase(usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis){
-        return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
-    }
-};
-
-class FakeClipboard final : public QueuedClipboardService{
-public:
-    explicit FakeClipboard(Alloc::GlobalArena& arena)
-        : QueuedClipboardService(arena)
-        , document(arena)
-        , startedText(arena)
-    {}
-    virtual ~FakeClipboard()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum channel)const noexcept override{
-        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
-    }
-
-    [[nodiscard]] b8 deliver(ClipboardRequestToken token, ClipboardStatus::Enum status, AStringView text = {});
-
-
-protected:
-    virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text)override;
-
-
-public:
-    AString<Alloc::GlobalArena> document;
-    AString<Alloc::GlobalArena> startedText;
-    ClipboardRequestToken startedToken;
-    ClipboardOperation::Enum startedOperation = ClipboardOperation::ReadText;
-    b8 delayed = false;
-};
+using UiEditHostFixtureSupport::FakeClipboard;
+using UiEditHostFixtureSupport::FakeTextInput;
 
 class UiEditBoxHostTests : public testing::Test{
 public:

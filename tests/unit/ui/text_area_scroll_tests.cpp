@@ -51,13 +51,10 @@ TEST_F(UiTextAreaScrollTests, ExplicitTwoAxisScrollSurvivesTheFirstModelBinding)
     EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
     const EditBoxPlacement& placement = m_state.placement();
-    const SIMDVectorSingle content = VectorSet(placement.content.x, placement.content.y, placement.content.width, placement.content.height);
-    const SIMDVectorSingle textOrigin = VectorSubtract(VectorSubtract(content, VectorSet(visual->x, visual->y, 0.0f, 0.0f)), VectorSet(17.0f, 19.0f, 0.0f, 0.0f));
-    const SIMDVectorSingle contentEnd = VectorAdd(content, VectorSwizzle<2, 3, 2, 3>(content));
-    EXPECT_FLOAT_EQ(placement.textOrigin.x, VectorGetX(textOrigin));
-    EXPECT_FLOAT_EQ(placement.textOrigin.y, VectorGetY(textOrigin));
-    EXPECT_GT(placement.caret.x, VectorGetX(contentEnd));
-    EXPECT_GT(placement.caret.y, VectorGetY(contentEnd));
+    EXPECT_FLOAT_EQ(placement.textOrigin.x, placement.content.x - visual->x - 17.0f);
+    EXPECT_FLOAT_EQ(placement.textOrigin.y, placement.content.y - visual->y - 19.0f);
+    EXPECT_GT(placement.caret.x, placement.content.x + placement.content.width);
+    EXPECT_GT(placement.caret.y, placement.content.y + placement.content.height);
 }
 
 TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch){
@@ -82,9 +79,8 @@ TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancing
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    const SIMDVectorSingle textOrigin = VectorSubtract(VectorSet(m_state.placement().content.x, m_state.placement().content.y, 0.0f, 0.0f), VectorSet(visual->x, visual->y, 0.0f, 0.0f));
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.x, VectorGetX(textOrigin));
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, VectorGetY(textOrigin));
+    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.x, m_state.placement().content.x - visual->x);
+    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, m_state.placement().content.y - visual->y);
     ASSERT_EQ(m_host.publications.size(), 3u);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scroll, 17.0f);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scrollY, 19.0f);
@@ -264,13 +260,10 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     const EditBoxPlacement first = m_state.placement();
     EXPECT_FLOAT_EQ(first.scroll, 0.0f);
     EXPECT_FLOAT_EQ(first.scrollY, 0.0f);
-    const SIMDVectorSingle firstInk = VectorAdd(VectorSet(first.textOrigin.x, first.textOrigin.y, 0.0f, 0.0f), VectorSet(visual.x, visual.y, 0.0f, 0.0f));
-    // Lanes are caret bottom and content bottom.
-    const SIMDVectorSingle firstBottom = VectorAdd(VectorSet(first.caret.y, first.content.y, 0.0f, 0.0f), VectorSet(first.caret.height, first.content.height, 0.0f, 0.0f));
-    EXPECT_NEAR(VectorGetX(firstInk), first.content.x, 0.001f);
-    EXPECT_NEAR(VectorGetY(firstInk), first.content.y, 0.001f);
+    EXPECT_NEAR(first.textOrigin.x + visual.x, first.content.x, 0.001f);
+    EXPECT_NEAR(first.textOrigin.y + visual.y, first.content.y, 0.001f);
     EXPECT_GE(first.caret.y, first.content.y);
-    EXPECT_LE(VectorGetX(firstBottom), VectorGetY(firstBottom));
+    EXPECT_LE(first.caret.y + first.caret.height, first.content.y + first.content.height);
     m_host.key(Core::Key::End, true);
     ASSERT_TRUE(frameArea(2u, options));
     EXPECT_EQ(m_model.caret(), text.size());
@@ -279,16 +272,12 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     ASSERT_GT(last.scrollY, 0.0f);
     EXPECT_NEAR(last.scroll, m_state.scrollbars().horizontal.maximum, 0.001);
     EXPECT_NEAR(last.scrollY, m_state.scrollbars().vertical.maximum, 0.001);
-    const SIMDVectorSingle lastTextOrigin = VectorSet(last.textOrigin.x, last.textOrigin.y, 0.0f, 0.0f);
-    const SIMDVectorSingle lastInkEnd = VectorAdd(VectorAdd(lastTextOrigin, VectorSet(visual.x, visual.y, 0.0f, 0.0f)), VectorSet(visual.width, visual.height, 0.0f, 0.0f));
-    const SIMDVectorSingle lastContentEnd = VectorAdd(VectorSet(last.content.x, last.content.y, 0.0f, 0.0f), VectorSet(last.content.width, last.content.height, 0.0f, 0.0f));
-    EXPECT_NEAR(VectorGetX(lastInkEnd) + last.caret.width, VectorGetX(lastContentEnd), 0.001f);
-    EXPECT_NEAR(VectorGetY(lastInkEnd), VectorGetY(lastContentEnd), 0.001f);
+    EXPECT_NEAR(last.textOrigin.x + visual.x + visual.width + last.caret.width, last.content.x + last.content.width, 0.001f);
+    EXPECT_NEAR(last.textOrigin.y + visual.y + visual.height, last.content.y + last.content.height, 0.001f);
     const auto endCaret = reference.caretGeometry().caretRect(text.size());
     ASSERT_TRUE(endCaret);
-    const SIMDVectorSingle endCaretOrigin = VectorAdd(lastTextOrigin, VectorSet(endCaret->x, endCaret->y, 0.0f, 0.0f));
-    EXPECT_FLOAT_EQ(last.caret.x, VectorGetX(endCaretOrigin));
-    EXPECT_FLOAT_EQ(last.caret.y, VectorGetY(endCaretOrigin));
+    EXPECT_FLOAT_EQ(last.caret.x, last.textOrigin.x + endCaret->x);
+    EXPECT_FLOAT_EQ(last.caret.y, last.textOrigin.y + endCaret->y);
     const auto hit = reference.hitTest({ last.caret.x, last.caret.height * 0.5f + last.caret.y }, last);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, text.size());
@@ -337,14 +326,11 @@ TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTe
         const Rect bounds{ 20.25f, 30.75f, expected->width + caretWidth, expected->height };
         const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 800.0f, 600.0f }, {}, caretWidth);
         ASSERT_TRUE(placement);
-        const SIMDVectorSingle textOrigin = VectorSet(placement->textOrigin.x, placement->textOrigin.y, 0.0f, 0.0f);
-        const SIMDVectorSingle inkOrigin = VectorAdd(textOrigin, VectorSet(expected->x, expected->y, 0.0f, 0.0f));
-        const SIMDVectorSingle caretOrigin = VectorAdd(textOrigin, VectorSet(logicalCaret->x, logicalCaret->y, 0.0f, 0.0f));
-        EXPECT_NEAR(VectorGetX(inkOrigin), bounds.x, 0.001f);
-        EXPECT_NEAR(VectorGetY(inkOrigin), bounds.y, 0.001f);
-        EXPECT_NEAR(VectorGetY(inkOrigin) + expected->height, bounds.y + bounds.height, 0.001f);
-        EXPECT_FLOAT_EQ(placement->caret.x, VectorGetX(caretOrigin));
-        EXPECT_FLOAT_EQ(placement->caret.y, VectorGetY(caretOrigin));
+        EXPECT_NEAR(placement->textOrigin.x + expected->x, bounds.x, 0.001f);
+        EXPECT_NEAR(placement->textOrigin.y + expected->y, bounds.y, 0.001f);
+        EXPECT_NEAR(placement->textOrigin.y + expected->y + expected->height, bounds.y + bounds.height, 0.001f);
+        EXPECT_FLOAT_EQ(placement->caret.x, placement->textOrigin.x + logicalCaret->x);
+        EXPECT_FLOAT_EQ(placement->caret.y, placement->textOrigin.y + logicalCaret->y);
         if(scale != 1.0f)
             changedWithScale = changedWithScale || previous.x != expected->x || previous.y != expected->y || previous.width != expected->width || previous.height != expected->height;
         previous = *expected;

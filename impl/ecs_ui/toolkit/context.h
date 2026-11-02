@@ -25,6 +25,16 @@ private:
         [[nodiscard]] usize operator()(const ContextStateClaim& claim)const noexcept{ return ContextStateClaimHash(claim); }
     };
 
+    struct ContextOwnedTarget{
+        HitTarget target;
+        WidgetRoot root;
+    };
+
+    struct ContextOwnedPopup{
+        PopupScope scope;
+        WidgetRoot root;
+    };
+
 
 private:
     using StateClaims = HashSet<ContextStateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<ContextStateClaim>>;

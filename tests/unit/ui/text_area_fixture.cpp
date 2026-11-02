@@ -211,34 +211,12 @@ b8 TextAreaLoanFixture::acceptBaseline(){
     return true;
 }
 
-AcceptedAreaFrame TextAreaLoanFixture::accepted()const noexcept{
-    AcceptedAreaFrame frame;
-    frame.count = m_context.input().targets().size();
-    frame.popupCount = m_context.input().popupCount();
-    frame.generation = m_context.input().layoutGeneration();
-    for(usize index = 0u; index < Min(frame.count, frame.targets.size()); ++index)
-        frame.targets[index] = m_context.input().targets()[index];
-    return frame;
-}
-
-void TextAreaLoanFixture::expectRejected(const AcceptedAreaFrame& frame){
+void TextAreaLoanFixture::expectRejected(const UiWidgetTests::AcceptedInputState<16u>& frame){
     EXPECT_TRUE(m_builder.failed());
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.ready());
     EXPECT_FALSE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().layoutGeneration(), frame.generation);
-    EXPECT_EQ(m_context.input().popupCount(), frame.popupCount);
-    ASSERT_EQ(m_context.input().targets().size(), frame.count);
-    ASSERT_LE(frame.count, frame.targets.size());
-    for(usize index = 0u; index < frame.count; ++index){
-        const HitTarget& before = frame.targets[index];
-        const HitTarget& after = m_context.input().targets()[index];
-        UiWidgetTests::ExpectHitTargetIdentity(after, before);
-        EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
-        EXPECT_EQ(after.popup, before.popup);
-        UiPaintAssertions::ExpectRect(after.rectangle, before.rectangle);
-        UiPaintAssertions::ExpectRect(after.clip, before.clip);
-    }
+    UiWidgetTests::ExpectAcceptedInput(m_context.input(), frame, true, false, true, false);
 }
 
 

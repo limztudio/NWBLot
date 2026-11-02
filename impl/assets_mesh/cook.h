@@ -12,6 +12,7 @@
 
 
 #include "asset.h"
+#include <impl/assets_mesh/cook_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/task/cpu/scheduler.h>

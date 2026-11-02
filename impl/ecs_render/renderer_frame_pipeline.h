@@ -9,6 +9,7 @@
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/ecs_render/deferred/deferred_system.h>
+#include <impl/ecs_render/execute/types.adhd.h>
 #include <impl/ecs_render/gi/quality_settings.adhd.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
@@ -417,7 +418,7 @@ private:
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
     Core::GpuTaskId m_deferredCausticResolvePrepareTask;
-    Array<Core::GpuTaskId, s_CausticResolveWaveletPassCount> m_deferredCausticResolveWaveletTasks{};
+    Array<Core::GpuTaskId, NWB_CAUSTIC_RESOLVE_PASS_COUNT> m_deferredCausticResolveWaveletTasks{};
     Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
     // Surfel lifecycle publishes after all four clears accept; stages share one effects packet.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;

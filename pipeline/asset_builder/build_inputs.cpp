@@ -3,6 +3,7 @@
 
 
 #include "build.h"
+#include "../root_discovery.h"
 
 #include <core/common/log.h>
 
@@ -32,22 +33,7 @@ b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCoo
     // Borrow discovered canonical paths until selection finishes; compact the owning file vector only afterward.
     const auto selectionResult = Assets::SelectDiscoveredNwbInputs(paths.repoRoot, paths.assetRoots, files, options.inputs, true, scratchArena, selected);
     if(!selectionResult){
-        const auto& error = selectionResult.error();
-        switch(error.reason){
-            case Assets::CookInputSelectionFailure::ResolveInput:
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), ConvertString(error.rawInput));
-                break;
-            case Assets::CookInputSelectionFailure::NotFileOrDirectory:
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(error.resolvedPath));
-                break;
-            case Assets::CookInputSelectionFailure::DirectoryOutsideAssetRoots:
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input directory is outside the asset roots '{}'"), PathToString<tchar>(error.resolvedPath));
-                break;
-            case Assets::CookInputSelectionFailure::NoMatchingAsset:
-            case Assets::CookInputSelectionFailure::None:
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a .nwb asset within the asset roots '{}'"), PathToString<tchar>(error.resolvedPath));
-                break;
-        }
+        LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("AssetBuilder"));
         return false;
     }
 

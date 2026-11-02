@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitClearChainInputs& inputs, GraphClearTimingRecordState& clearTimingState){
+Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitClearChainInputs& inputs, GraphClearTimingRecordState& clearTimingState){
     AvboitClearChainResult result{};
     if(!inputs.uploadTask.valid())
         return MakeUnexpected(Failure{});

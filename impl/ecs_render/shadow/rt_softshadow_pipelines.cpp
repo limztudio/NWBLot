@@ -37,22 +37,13 @@ namespace __hidden_softshadow_pipelines{
         { s_ShadowResolveUpsampleVariant, channel.m_upsample },
     }};
     static_assert(NWB_SHADOW_RESOLVE_STAGE_WAVELET == 1u && NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE == 2u);
-    auto& heap = device.getDescriptorHeap();
     for(const StageRequest& stage : stages){
         if(stage.m_state.m_pipeline)
             continue;
-        if(!shaderSystem.loadShader<ComputeShader>(member, stage.m_variant, "ECSRender_SoftShadowResolve", stage.m_state.m_shader)){
-            channel.m_failed = true;
-            return false;
-        }
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc.setComputeShader(stage.m_state.m_shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto pipelineResult = device.createComputePipeline(pipelineDesc);
-        if(pipelineResult)
-            stage.m_state.m_pipeline = Move(*pipelineResult);
-        else
-            stage.m_state.m_pipeline.reset();
-        if(!pipelineResult){
+        if(
+            !shaderSystem.loadShader<ComputeShader>(member, stage.m_variant, "ECSRender_SoftShadowResolve", stage.m_state.m_shader)
+            || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, stage.m_state.m_shader, bindingLayout, false, stage.m_state.m_pipeline)
+        ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
             channel.m_failed = true;
             return false;
@@ -94,19 +85,9 @@ b8 RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     auto& device = m_graphics.getDevice();
     if(!device.getDescriptorHeap().isInitialized())
         return false;
-    if(!resolve.m_bindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
-        auto bindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(bindingLayoutResult)
-            resolve.m_bindingLayout = Move(*bindingLayoutResult);
-        else
-            resolve.m_bindingLayout.reset();
-        if(!bindingLayoutResult){
-            resolve.m_scalar.m_failed = true;
-            return false;
-        }
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(ShadowResolvePushConstants), Core::ShaderType::Compute, resolve.m_bindingLayout)){
+        resolve.m_scalar.m_failed = true;
+        return false;
     }
     return __hidden_softshadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveCs, m_shaderSystem, device, resolve.m_scalar);
 }
@@ -117,36 +98,19 @@ b8 RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed)
         return false;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!m_rayTracingState.m_shadowGeometryDownsampleBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
-        auto shadowGeometryDownsampleBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(shadowGeometryDownsampleBindingLayoutResult)
-            m_rayTracingState.m_shadowGeometryDownsampleBindingLayout = Move(*shadowGeometryDownsampleBindingLayoutResult);
-        else
-            m_rayTracingState.m_shadowGeometryDownsampleBindingLayout.reset();
-        if(!shadowGeometryDownsampleBindingLayoutResult){
-            m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
-            return false;
-        }
-    }
-    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowGeometryDownsampleCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowGeometryDownsample", m_rayTracingState.m_shadowGeometryDownsampleShader)){
-        m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
-        return false;
-    }
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowGeometryDownsampleShader).addBindingLayout(m_rayTracingState.m_shadowGeometryDownsampleBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto shadowGeometryDownsamplePipelineResult = device.createComputePipeline(pipelineDesc);
-    if(shadowGeometryDownsamplePipelineResult)
-        m_rayTracingState.m_shadowGeometryDownsamplePipeline = Move(*shadowGeometryDownsamplePipelineResult);
-    else
-        m_rayTracingState.m_shadowGeometryDownsamplePipeline.reset();
-    if(!shadowGeometryDownsamplePipelineResult){
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaderSystem,
+        &ShadowSubsystem::shadowGeometryDownsampleCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        "ECSRender_ShadowGeometryDownsample",
+        sizeof(ShadowGeometryDownsamplePushConstants),
+        false,
+        m_rayTracingState.m_shadowGeometryDownsampleBindingLayout,
+        m_rayTracingState.m_shadowGeometryDownsampleShader,
+        m_rayTracingState.m_shadowGeometryDownsamplePipeline
+    )){
         m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
         return false;
     }
@@ -268,9 +232,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     NWB_ASSERT(dispatch.waveletPassCount != 0u && (dispatch.waveletPassCount % 2u) == 1u);
     NWB_ASSERT(dispatchFirstWavelet || dispatchTail);
 
-    if(dispatchFirstWavelet){
+    if(dispatchFirstWavelet)
         runPass(dispatch.firstWaveletResources, 1u, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY, dispatch.graphOwnsFirstWaveletInputState, dispatch.graphOwnsFirstWaveletOutputState);
-    }
     if(!dispatchTail)
         return;
 
@@ -290,36 +253,19 @@ b8 RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(m_rayTracingState.m_shadowReprojectMergePipelineFailed)
         return false;
 
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    if(!m_rayTracingState.m_shadowReprojectMergeBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowReprojectMergePushConstants)));
-        auto shadowReprojectMergeBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(shadowReprojectMergeBindingLayoutResult)
-            m_rayTracingState.m_shadowReprojectMergeBindingLayout = Move(*shadowReprojectMergeBindingLayoutResult);
-        else
-            m_rayTracingState.m_shadowReprojectMergeBindingLayout.reset();
-        if(!shadowReprojectMergeBindingLayoutResult){
-            m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
-            return false;
-        }
-    }
-    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowReprojectMergeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SoftShadowReprojectMerge", m_rayTracingState.m_shadowReprojectMergeShader)){
-        m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
-        return false;
-    }
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowReprojectMergeShader).addBindingLayout(m_rayTracingState.m_shadowReprojectMergeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto shadowReprojectMergePipelineResult = device.createComputePipeline(pipelineDesc);
-    if(shadowReprojectMergePipelineResult)
-        m_rayTracingState.m_shadowReprojectMergePipeline = Move(*shadowReprojectMergePipelineResult);
-    else
-        m_rayTracingState.m_shadowReprojectMergePipeline.reset();
-    if(!shadowReprojectMergePipelineResult){
+    if(!RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaderSystem,
+        &ShadowSubsystem::shadowReprojectMergeCs,
+        Core::ShaderArchive::s_DefaultVariant,
+        "ECSRender_SoftShadowReprojectMerge",
+        sizeof(ShadowReprojectMergePushConstants),
+        false,
+        m_rayTracingState.m_shadowReprojectMergeBindingLayout,
+        m_rayTracingState.m_shadowReprojectMergeShader,
+        m_rayTracingState.m_shadowReprojectMergePipeline
+    )){
         m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
         return false;
     }

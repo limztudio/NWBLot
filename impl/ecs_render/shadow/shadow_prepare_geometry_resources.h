@@ -75,7 +75,6 @@ public:
         , m_inputs(inputs)
         , m_scratchArena(scratchArena)
     {}
-    ShadowPrepareGeometryResources(ShadowPrepareGeometryResources&&) = delete;
 
 
 public:

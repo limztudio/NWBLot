@@ -60,8 +60,8 @@ Expected<MicromapUsageVector> BuildOpacityMicromapUsageCounts(
     const Span<const RayTracingOpacityMicromapUsageCount> counts,
     const u32 maxOpacity2StateSubdivisionLevel,
     const u32 maxOpacity4StateSubdivisionLevel,
-    Alloc::ScratchArena& scratchArena,
-    TStringView operation
+    TStringView operation,
+    Alloc::ScratchArena& scratchArena
 ){
     MicromapUsageVector usageCounts(scratchArena);
     usageCounts.reserve(counts.size());
@@ -170,7 +170,7 @@ Expected<RayTracingOpacityMicromapHandle> Device::createOpacityMicromap(const Ra
     m_context.instanceDispatch.vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &physicalDeviceProperties);
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
-    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, opacityMicromapProperties.maxOpacity2StateSubdivisionLevel, opacityMicromapProperties.maxOpacity4StateSubdivisionLevel, scratchArena, s_CreateOperation);
+    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, opacityMicromapProperties.maxOpacity2StateSubdivisionLevel, opacityMicromapProperties.maxOpacity4StateSubdivisionLevel, s_CreateOperation, scratchArena);
     if(!usageCounts)
         return MakeUnexpected(Failure{});
 
@@ -269,7 +269,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
         return;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
-    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, omm.m_maxOpacity2StateSubdivisionLevel, omm.m_maxOpacity4StateSubdivisionLevel, scratchArena, s_OperationName);
+    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, omm.m_maxOpacity2StateSubdivisionLevel, omm.m_maxOpacity4StateSubdivisionLevel, s_OperationName, scratchArena);
     if(!usageCounts)
         return;
 

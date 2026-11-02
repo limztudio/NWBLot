@@ -426,8 +426,8 @@ template<typename EntryT, typename AssetT, typename CodecT>
     typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::ValueParseFunction parseValue,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
-    CookEntryRegistry& outRegistry,
-    const b8 logBuildFailure = true
+    const b8 logBuildFailure,
+    CookEntryRegistry& outRegistry
 ){
     return outRegistry.registerType<EntryT, AssetT, CodecT>(AssetT::AssetTypeName(), assetKindText, parseDocument, parseValue, buildAsset, logBuildFailure);
 }

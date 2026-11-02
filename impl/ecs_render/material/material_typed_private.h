@@ -36,7 +36,6 @@ namespace ECSRenderDetail{
 
 using MaterialTypedByteRangeKeyHasher = Hasher<MaterialTypedByteRangeKey>;
 using MaterialTypedConstantRangeMap = HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
-using ::NWB::Impl::MaterialTypedByteContentLookup;
 
 struct MaterialTypedByteContentKey{
     u64 byteHash = 0u;

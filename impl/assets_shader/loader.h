@@ -40,8 +40,8 @@ template<typename ShaderT, typename ShaderPathResolver>
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolver& shaderPathResolver,
-    Core::ShaderHandle& outShader,
-    const Name* archiveStageName = nullptr
+    const Name* archiveStageName,
+    Core::ShaderHandle& outShader
 ){
     static_assert(Core::ShaderType::IsValid(ShaderT::s_Stage));
     constexpr Core::ShaderType::Mask s_ShaderType = Core::ShaderType::ToMask(ShaderT::s_Stage);

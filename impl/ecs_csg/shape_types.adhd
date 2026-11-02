@@ -12,10 +12,6 @@ const usize s_CsgShapeInlineParameterFloat4Count = 2u;
 const usize s_CsgShapeInlineParameterMaxBytes = 16u * s_CsgShapeInlineParameterFloat4Count;
 const u32 s_CsgShapeParameterRegisterBytes = 16u;
 const f32 s_CsgShapeBoundsW = 0.0f;
-const u32 s_CsgCapsuleAxisSelectX = 0u;
-const u32 s_CsgCapsuleAxisSelectY = 1u;
-const u32 s_CsgCapsuleAxisSelectZ = 0u;
-const u32 s_CsgCapsuleAxisSelectW = 0u;
 const f32x4 s_CsgZeroShapeParameter(0.0f, 0.0f, 0.0f, 0.0f);
 const f32x4 s_CsgPlaneDefaultNormalDistance(0.0f, 1.0f, 0.0f, 0.0f);
 const f32x4 s_CsgBoxDefaultHalfExtents(1.0f, 1.0f, 1.0f, 0.0f);
@@ -134,18 +130,22 @@ b8 MakeCsgSymmetricLocalBounds(in f32x4 halfExtents, mut CsgShapeLocalBounds out
     return MakeCsgLocalBounds(localMin, localMax, outBounds);
 }
 
-f32 ReadCsgShapeParameterFloatLane(in Span<u8> parameterBytes, in usize byteOffset){
+u32 ReadLittleEndianWordBytes(in Span<u8> bytes, in usize byteOffset){
     u32 word = 0u;
-    const usize size = parameterBytes.size();
+    const usize size = bytes.size();
     if(byteOffset < size)
-        word = word | cast<u32>(parameterBytes[byteOffset]);
+        word = word | cast<u32>(bytes[byteOffset]);
     if(byteOffset + 1u < size)
-        word = word | (cast<u32>(parameterBytes[byteOffset + 1u]) << 8u);
+        word = word | (cast<u32>(bytes[byteOffset + 1u]) << 8u);
     if(byteOffset + 2u < size)
-        word = word | (cast<u32>(parameterBytes[byteOffset + 2u]) << 16u);
+        word = word | (cast<u32>(bytes[byteOffset + 2u]) << 16u);
     if(byteOffset + 3u < size)
-        word = word | (cast<u32>(parameterBytes[byteOffset + 3u]) << 24u);
-    return bit_cast<f32>(word);
+        word = word | (cast<u32>(bytes[byteOffset + 3u]) << 24u);
+    return word;
+}
+
+f32 ReadCsgShapeParameterFloatLane(in Span<u8> parameterBytes, in usize byteOffset){
+    return bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, byteOffset));
 }
 
 f32x4 ReadCsgShapeParameter0(in Span<u8> parameterBytes){
@@ -219,15 +219,6 @@ b8 ComputeCsgShapeLocalBoundsFromBytes(in ICsgShape shape, in Span<u8> parameter
 
     const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(parameterBytes);
     return shape.computeLocalBounds(parameters, outBounds);
-}
-
-b8 EvaluateCsgShapeSignedDistanceFromBytes(in ICsgShape shape, in f32x4 shapePosition, in Span<u8> parameterBytes, mut f32 outDistance){
-    if(parameterBytes.size() != cast<usize>(shape.parameterByteSize()))
-        return false;
-
-    const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(parameterBytes);
-    outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
-    return true;
 }
 
 
@@ -358,51 +349,50 @@ class CsgCapsuleShape : ICsgShape{
     }
 }
 
-b8 TryComputeBuiltInCsgShapeLocalBounds(in Name shapeType, in CsgShapeInlineParameters parameters, mut CsgShapeLocalBounds outBounds){
+enum<u8> CsgBuiltInShapeKind{
+    Plane,
+    Box,
+    Sphere,
+    Capsule,
+}
+
+b8 TryResolveBuiltInCsgShapeKind(in Name shapeType, mut CsgBuiltInShapeKind outKind){
     if(shapeType == s_CsgPlaneShapeName){
-        CsgPlaneShape shape;
-        return shape.computeLocalBounds(parameters, outBounds);
+        outKind = CsgBuiltInShapeKind::Plane;
+        return true;
     }
     if(shapeType == s_CsgBoxShapeName){
-        CsgBoxShape shape;
-        return shape.computeLocalBounds(parameters, outBounds);
+        outKind = CsgBuiltInShapeKind::Box;
+        return true;
     }
     if(shapeType == s_CsgSphereShapeName){
-        CsgSphereShape shape;
-        return shape.computeLocalBounds(parameters, outBounds);
+        outKind = CsgBuiltInShapeKind::Sphere;
+        return true;
     }
     if(shapeType == s_CsgCapsuleShapeName){
-        CsgCapsuleShape shape;
-        return shape.computeLocalBounds(parameters, outBounds);
+        outKind = CsgBuiltInShapeKind::Capsule;
+        return true;
     }
     return false;
 }
 
-b8 TryEvaluateBuiltInCsgShapeSignedDistance(in Name shapeType, in f32x4 shapePosition, in CsgShapeInlineParameters parameters, mut f32 outDistance){
-    if(shapeType == s_CsgPlaneShapeName){
+f32 EvaluateBuiltInCsgShapeSignedDistance(in CsgBuiltInShapeKind kind, in f32x4 shapePosition, in CsgShapeInlineParameters parameters){
+    if(kind == CsgBuiltInShapeKind::Plane){
         CsgPlaneShape shape;
-        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
-        return true;
+        return shape.evaluateSignedDistance(shapePosition, parameters);
     }
-    if(shapeType == s_CsgBoxShapeName){
+    if(kind == CsgBuiltInShapeKind::Box){
         CsgBoxShape shape;
-        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
-        return true;
+        return shape.evaluateSignedDistance(shapePosition, parameters);
     }
-    if(shapeType == s_CsgSphereShapeName){
+    if(kind == CsgBuiltInShapeKind::Sphere){
         CsgSphereShape shape;
-        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
-        return true;
+        return shape.evaluateSignedDistance(shapePosition, parameters);
     }
-    if(shapeType == s_CsgCapsuleShapeName){
-        CsgCapsuleShape shape;
-        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
-        return true;
-    }
-    return false;
+    CsgCapsuleShape shape;
+    return shape.evaluateSignedDistance(shapePosition, parameters);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

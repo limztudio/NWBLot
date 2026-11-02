@@ -255,7 +255,7 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue"), i);
             return MakeUnexpected(Failure{});
         }
-        if(!commandList->hasCommandBufferUnchecked()){
+        if(!commandList->matchesNativeLeaseIdentity()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
             return MakeUnexpected(Failure{});
         }

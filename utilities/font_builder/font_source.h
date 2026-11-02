@@ -20,10 +20,6 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 class FontSource final : NoCopy{
-    friend Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFont);
-    friend b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
-
-
 public:
     explicit FontSource(Core::Assets::AssetArena& arena)noexcept;
     ~FontSource()noexcept = default;
@@ -32,6 +28,8 @@ public:
 public:
     [[nodiscard]] b8 open(const BakeOptions& options, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& payload);
     [[nodiscard]] Span<const u8> bytes()const noexcept{ return m_bytes; }
+    [[nodiscard]] Core::Assets::AssetArena& arena()noexcept{ return m_bytes.get_allocator().arena(); }
+    [[nodiscard]] Impl::FreeTypeMemoryFace& freeType()noexcept{ return m_freeType; }
     [[nodiscard]] Core::Assets::AssetBytes takeBytes()noexcept;
 
 

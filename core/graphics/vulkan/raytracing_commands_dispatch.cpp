@@ -70,7 +70,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
             &shaderTable->m_context != &m_context
             || &shaderTable->m_device != &m_device
             || pipeline->m_pipeline == VK_NULL_HANDLE
-            || pipeline->m_pipelineLayout == VK_NULL_HANDLE
+            || pipeline->pipelineLayout == VK_NULL_HANDLE
             || !m_context.extensions.khrRayTracingPipeline
             || !m_context.rayTracingPipelineFeatureEnabled
             || !m_context.deviceDispatch.vkCmdTraceRaysKHR
@@ -132,7 +132,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
 
     auto& pipeline = *MakeNotNull(snapshot.pipeline.get());
     NWB_ASSERT(&pipeline.m_context == &m_context && &pipeline.m_device == &m_device);
-    if(pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.m_pipelineLayout == VK_NULL_HANDLE){
+    if(pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table pipeline is not ready"));
         return;
     }

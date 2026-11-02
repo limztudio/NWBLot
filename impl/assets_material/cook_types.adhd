@@ -21,6 +21,11 @@ const StringView s_MaterialMetaBxdfField = "bxdf";
 const StringView s_MaterialBxdfExtension = ".bxdf";
 const StringView s_MaterialSurfaceExtension = ".surface";
 
+const u32 s_MaterialTypedValueRecordWordCount = 8u;
+const StringView s_MaterialEngineVirtualRoot = "engine";
+const StringView s_MaterialProjectVirtualRoot = "project";
+const u32 s_NoSurfaceDispatchId = 0xFFFFFFFFu;
+
 const StringView s_MaterialBindSourceExtensionText = ".bind";
 const StringView s_MaterialBindGeneratedIncludeCacheDirectoryText = "material_bind_includes";
 const StringView s_MaterialBindTypedBindingImplicitDefineText = "NWB_MATERIAL_TYPED_BINDING";
@@ -159,6 +164,107 @@ b8 IsAllowedMaterialAssetField(in StringView fieldName){
         || fieldName == s_MaterialMetaTwoSidedField
         || fieldName == s_MaterialMetaRefractiveField
         || fieldName == s_MaterialMetaBxdfField;
+}
+
+// Resource fields name an engine/project asset resolved to a heap slot at runtime.
+b8 IsMaterialAssetReference(in StringView resourceName){
+    usize rootEnd = resourceName.size();
+    for(usize i = 0u; i < resourceName.size(); ++i){
+        if(resourceName[i] == '/'){
+            rootEnd = i;
+            break;
+        }
+    }
+    if(rootEnd == 0u || rootEnd + 1u >= resourceName.size())
+        return false;
+
+    const StringView virtualRoot = resourceName.substr(0u, rootEnd);
+    if(virtualRoot != s_MaterialEngineVirtualRoot && virtualRoot != s_MaterialProjectVirtualRoot)
+        return false;
+
+    usize componentBegin = rootEnd + 1u;
+    for(usize index = componentBegin; index <= resourceName.size(); ++index){
+        if(index != resourceName.size() && resourceName[index] != '/')
+            continue;
+
+        const StringView component = resourceName.substr(componentBegin, index - componentBegin);
+        if(component.empty() || component == "." || component == "..")
+            return false;
+        for(usize charIndex = 0u; charIndex < component.size(); ++charIndex){
+            if(component[charIndex] == '\\')
+                return false;
+        }
+        componentBegin = index + 1u;
+    }
+    return true;
+}
+
+b8 IsSupportedMaterialResourceReference(in MaterialResourceKind resourceKind, in StringView resourceName){
+    return IsValidMaterialResourceKind(resourceKind) && IsMaterialAssetReference(resourceName);
+}
+
+MaterialLayoutFieldType MaterialLayoutFieldTypeFromParameterType(in MaterialParameterValueType valueType, in u32 componentCount){
+    if(componentCount == 0u || componentCount > s_MaterialLayoutFieldComponentsPerValueType)
+        return MaterialLayoutFieldType::None;
+
+    u32 firstFieldType = 0u;
+    switch(valueType){
+        case MaterialParameterValueType::b8: firstFieldType = cast<u32>(MaterialLayoutFieldType::b8); break;
+        case MaterialParameterValueType::i8: firstFieldType = cast<u32>(MaterialLayoutFieldType::i8); break;
+        case MaterialParameterValueType::u8: firstFieldType = cast<u32>(MaterialLayoutFieldType::u8); break;
+        case MaterialParameterValueType::i16: firstFieldType = cast<u32>(MaterialLayoutFieldType::i16); break;
+        case MaterialParameterValueType::u16: firstFieldType = cast<u32>(MaterialLayoutFieldType::u16); break;
+        case MaterialParameterValueType::i32: firstFieldType = cast<u32>(MaterialLayoutFieldType::i32); break;
+        case MaterialParameterValueType::u32: firstFieldType = cast<u32>(MaterialLayoutFieldType::u32); break;
+        case MaterialParameterValueType::f16: firstFieldType = cast<u32>(MaterialLayoutFieldType::f16); break;
+        case MaterialParameterValueType::f32: firstFieldType = cast<u32>(MaterialLayoutFieldType::f32); break;
+        default: return MaterialLayoutFieldType::None;
+    }
+
+    return cast<MaterialLayoutFieldType>(firstFieldType + componentCount - 1u);
+}
+
+MaterialTypedLayoutBlockBinary PackMaterialTypedLayoutBlockBinary(in MaterialTypedLayoutBlock block){
+    MaterialTypedLayoutBlockBinary blockBinary;
+    blockBinary.blockNameHash = block.blockName.hash();
+    blockBinary.blockClass = cast<u32>(block.blockClass);
+    blockBinary.fieldBegin = block.fieldBegin;
+    blockBinary.fieldCount = block.fieldCount;
+    blockBinary.byteSize = block.byteSize;
+    return blockBinary;
+}
+
+MaterialTypedLayoutFieldBinary PackMaterialTypedLayoutFieldBinary(in MaterialTypedLayoutField field){
+    MaterialTypedLayoutFieldBinary fieldBinary;
+    fieldBinary.fieldNameHash = field.fieldName.hash();
+    fieldBinary.fieldType = cast<u32>(field.fieldType);
+    fieldBinary.offset = field.offset;
+    fieldBinary.defaultValue = field.defaultValue;
+    return fieldBinary;
+}
+
+MaterialResourceReferenceBinary PackMaterialResourceReferenceBinary(in MaterialResourceReference resourceReference){
+    MaterialResourceReferenceBinary resourceReferenceBinary;
+    resourceReferenceBinary.blockNameHash = resourceReference.blockName.hash();
+    resourceReferenceBinary.fieldNameHash = resourceReference.fieldName.hash();
+    if(resourceReference.resourceKind == MaterialResourceKind::SampledImage2D)
+        resourceReferenceBinary.resourceNameHash = resourceReference.textureAsset.name().hash();
+    else
+        resourceReferenceBinary.resourceNameHash = resourceReference.samplerAsset.name().hash();
+    resourceReferenceBinary.resourceKind = cast<u32>(resourceReference.resourceKind);
+    resourceReferenceBinary.constantByteOffset = resourceReference.constantByteOffset;
+    return resourceReferenceBinary;
+}
+
+u32 PackMaterialFlags(in b8 transparent, in b8 twoSided, in b8 refractive){
+    u32 materialFlags = 0u;
+    if(transparent)
+        materialFlags |= cast<u32>(MaterialFlag::Transparent);
+    if(twoSided)
+        materialFlags |= cast<u32>(MaterialFlag::TwoSided);
+    if(refractive)
+        materialFlags |= cast<u32>(MaterialFlag::Refractive);
+    return materialFlags;
 }
 
 class MaterialParameterType{
@@ -474,9 +580,9 @@ u8 CanonicalizeMaterialAsciiChar(in i8 ch){
 }
 
 u64 ComputeMaterialBindParameterKeyHash(in StringView parameterKey){
-    u64 hash = s_MaterialFnv64OffsetBasis;
+    u64 hash = s_ShaderFnv64OffsetBasis;
     for(usize i = 0u; i < parameterKey.size(); ++i)
-        hash = UpdateMaterialFnv64Byte(hash, CanonicalizeMaterialAsciiChar(parameterKey[i]));
+        hash = UpdateShaderFnv64Byte(hash, CanonicalizeMaterialAsciiChar(parameterKey[i]));
     return hash;
 }
 

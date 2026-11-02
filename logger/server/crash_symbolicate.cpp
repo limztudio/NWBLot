@@ -41,7 +41,7 @@ static void AppendOptionalTextFile(const CrashScratchPath& packageDirectory, con
             outReport += s_ReportSectionOpen;
             outReport += label;
             outReport += "]\nstatus=read_failed\n";
-            AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = fileName, .code = read.error(), });
+            AppendNativeFailure(CrashSymbolicationFailure{ .operation = fileName, .code = read.error(), }, outReport);
         }
         return;
     }
@@ -56,17 +56,31 @@ static void AppendOptionalTextFile(const CrashScratchPath& packageDirectory, con
         outReport += '\n';
 }
 
-void AppendNativeFailure(CrashReportText& outReport, const CrashSymbolicationFailure& failure){
+void AppendNativeFailure(const CrashSymbolicationFailure& failure, CrashReportText& outReport){
     const DiagnosticEventText detail = MakeDiagnosticEventText("operation={}\nnative_category={}\nnative_code={}\n", failure.operation, failure.code.category().name(), failure.code.value());
     outReport += detail.view();
 }
 
-void AppendHexAddress(CrashReportText& outReport, const u64 address){
+void AppendHexAddress(const u64 address, CrashReportText& outReport){
     outReport += s_HexAddressPrefix;
     AppendHexU64(address, outReport);
 }
 
-CrashScratchPath EffectiveSymbolStoreDirectory(Core::Alloc::ScratchArena& arena, const CrashSymbolicationConfig& config){
+Expected<u64> ParseCallstackFrameAddress(const AStringView line)noexcept{
+    const usize prefix = line.find(s_HexAddressPrefix);
+    if(prefix == AStringView::npos)
+        return MakeUnexpected(Failure{});
+
+    usize end = prefix + s_HexAddressPrefix.size();
+    while(end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '\r' && line[end] != '\n')
+        ++end;
+    if(end == prefix + s_HexAddressPrefix.size())
+        return MakeUnexpected(Failure{});
+
+    return ::ParseVariableHexU64(AStringView(line.data() + prefix + s_HexAddressPrefix.size(), end - prefix - s_HexAddressPrefix.size()));
+}
+
+CrashScratchPath EffectiveSymbolStoreDirectory(const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena){
     if(!config.symbolStoreDirectory.empty())
         return CrashScratchPath(arena, config.symbolStoreDirectory);
 
@@ -74,7 +88,7 @@ CrashScratchPath EffectiveSymbolStoreDirectory(Core::Alloc::ScratchArena& arena,
 }
 
 static void AppendSymbolStoreStatus(const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
-    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
+    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(config, arena);
     outReport += "symbol_store=";
     outReport += PathToString<char>(arena, symbolStoreDirectory);
     outReport += "\nsymbol_store_status=";
@@ -87,7 +101,7 @@ static void AppendSymbolStoreStatus(const CrashSymbolicationConfig& config, Core
     outReport += s_ReportLineEnd;
 }
 
-static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackageSummary& summary){
+static void AppendExceptionSummary(const CrashPackageSummary& summary, CrashReportText& outReport){
     if(summary.reasonKind == Core::Crash::s_SignalReasonKind){
         outReport += s_ExceptionKey;
         outReport += Core::Crash::PosixSignalName(summary.reasonCode);
@@ -101,7 +115,7 @@ static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackag
         outReport += s_ExceptionKey;
         outReport += Core::Crash::WindowsExceptionName(summary.reasonCode);
         outReport += " ";
-        AppendHexAddress(outReport, summary.reasonCode);
+        AppendHexAddress(summary.reasonCode, outReport);
         outReport += s_ReportLineEnd;
         return;
     }
@@ -130,7 +144,7 @@ static void AppendEventSummary(const CrashPackageSummary& summary, CrashReportTe
     outReport += s_ReportLineEnd;
 
     if(summary.triggerExpression.empty() && summary.triggerMessage.empty() && summary.triggerFile.empty() && summary.triggerLine == 0u)
-        AppendExceptionSummary(outReport, summary);
+        AppendExceptionSummary(summary, outReport);
 }
 
 struct ReportSectionRange{
@@ -181,7 +195,7 @@ public:
     return TrimView(AStringView(report.data() + range.contentBegin, range.contentEnd - range.contentBegin));
 }
 
-static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outReport, const AStringView report, const ReportSectionRange& range){
+static void AppendReportWithoutSection(const AStringView report, const ReportSectionRange& range, AString<Core::Alloc::ScratchArena>& outReport){
     if(!range.found()){
         outReport.append(report.data(), report.size());
         return;
@@ -193,7 +207,7 @@ static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outRe
         outReport.append(report.data() + range.removeEnd, report.size() - range.removeEnd);
 }
 
-[[nodiscard]] static b8 AppendCrashHeadline(CrashReportText& outReport, const CrashPackageSummary& summary){
+[[nodiscard]] static b8 AppendCrashHeadline(const CrashPackageSummary& summary, CrashReportText& outReport){
     b8 wrote = false;
     if(!summary.triggerExpression.empty()){
         outReport += summary.triggerExpression;
@@ -223,7 +237,7 @@ static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outRe
     return wrote;
 }
 
-static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView callstack){
+static void AppendVisibleCallstack(const AStringView callstack, CrashReportText& outReport){
     outReport += "callstack:\n";
     if(callstack.empty()){
         outReport += "<unavailable>\n";
@@ -235,7 +249,7 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
         outReport += s_ReportLineEnd;
 }
 
-[[nodiscard]] static CrashReportText BuildOrderedCrashReport(Core::Alloc::ScratchArena& scratchArena, const CrashPackageSummary& summary, CrashReportText&& detailReport){
+[[nodiscard]] static CrashReportText BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport){
     CrashReportText report(Move(detailReport));
     const AStringView detailReportView(report.data(), report.size());
     const ReportSectionRange callstackSection = FindCallstackSection(detailReportView);
@@ -243,15 +257,15 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
 
     AString<Core::Alloc::ScratchArena> details(scratchArena);
     details.reserve(report.size());
-    AppendReportWithoutSection(details, detailReportView, callstackSection);
+    AppendReportWithoutSection(detailReportView, callstackSection, details);
     const AStringView detailsView = TrimView(AStringView(details.data(), details.size()));
 
     const AString<Core::Alloc::ScratchArena> callstackCopy(callstack.data(), callstack.size(), scratchArena);
     report.clear();
     report.reserve(AddSize(AddSize(detailsView.size(), callstackCopy.size()), s_CrashReportReserveBytes));
-    if(AppendCrashHeadline(report, summary))
+    if(AppendCrashHeadline(summary, report))
         report += s_ReportLineEnd;
-    AppendVisibleCallstack(report, AStringView(callstackCopy.data(), callstackCopy.size()));
+    AppendVisibleCallstack(AStringView(callstackCopy.data(), callstackCopy.size()), report);
     report += "\ndetails:\n";
     if(!detailsView.empty()){
         report.append(detailsView.data(), detailsView.size());
@@ -293,7 +307,7 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
 #if defined(NWB_PLATFORM_WINDOWS)
         const auto decoded = LoggerCrashSymbolicateDetail::AppendWindowsMinidumpStack(packageDirectory, summary, config, scratchArena, detailReport);
         if(!decoded)
-            LoggerCrashSymbolicateDetail::AppendNativeFailure(detailReport, decoded.error());
+            LoggerCrashSymbolicateDetail::AppendNativeFailure(decoded.error(), detailReport);
         else if(!*decoded)
             detailReport += "stack_decode=unavailable\n";
 #else
@@ -318,7 +332,7 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note", scratchArena, detailReport);
     LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection", scratchArena, detailReport);
-    return LoggerCrashSymbolicateDetail::BuildOrderedCrashReport(scratchArena, summary, Move(detailReport));
+    return LoggerCrashSymbolicateDetail::BuildOrderedCrashReport(summary, scratchArena, Move(detailReport));
 }
 
 

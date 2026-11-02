@@ -6,7 +6,6 @@
 
 
 #include "namespace.h"
-#include "ui_gallery_constants.h"
 #include "ui_skin_preview.h"
 
 #include <loader/project_entry.h>

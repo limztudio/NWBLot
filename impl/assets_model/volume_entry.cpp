@@ -63,6 +63,7 @@ static b8 RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
             return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildModelAsset,
+        true,
         registry
     );
 }

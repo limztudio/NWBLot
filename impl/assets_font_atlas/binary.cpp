@@ -280,20 +280,31 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     AppendU32LittleEndian(binary, static_cast<u32>(payload.groups.size()));
     AppendU32LittleEndian(binary, static_cast<u32>(payload.positioningTables.size()));
     for(const FontAtlasGlyph& glyph : payload.glyphs){
-        AppendU32LittleEndian(binary, glyph.glyphId); AppendU32LittleEndian(binary, glyph.group); AppendU32LittleEndian(binary, glyph.channel);
-        AppendU32LittleEndian(binary, glyph.x); AppendU32LittleEndian(binary, glyph.y); AppendU32LittleEndian(binary, glyph.width); AppendU32LittleEndian(binary, glyph.height);
-        AppendF32LittleEndian(binary, glyph.planeLeft); AppendF32LittleEndian(binary, glyph.planeTop);
-        AppendF32LittleEndian(binary, glyph.planeRight); AppendF32LittleEndian(binary, glyph.planeBottom);
-        AppendF32LittleEndian(binary, glyph.advanceUnits); AppendU32LittleEndian(binary, glyph.drawable);
+        AppendU32LittleEndian(binary, glyph.glyphId);
+        AppendU32LittleEndian(binary, glyph.group);
+        AppendU32LittleEndian(binary, glyph.channel);
+        AppendU32LittleEndian(binary, glyph.x);
+        AppendU32LittleEndian(binary, glyph.y);
+        AppendU32LittleEndian(binary, glyph.width);
+        AppendU32LittleEndian(binary, glyph.height);
+        AppendF32LittleEndian(binary, glyph.planeLeft);
+        AppendF32LittleEndian(binary, glyph.planeTop);
+        AppendF32LittleEndian(binary, glyph.planeRight);
+        AppendF32LittleEndian(binary, glyph.planeBottom);
+        AppendF32LittleEndian(binary, glyph.advanceUnits);
+        AppendU32LittleEndian(binary, glyph.drawable);
     }
     for(const FontAtlasGroup& group : payload.groups){
-        AppendU32LittleEndian(binary, group.width); AppendU32LittleEndian(binary, group.height); AppendU32LittleEndian(binary, group.channelCount);
+        AppendU32LittleEndian(binary, group.width);
+        AppendU32LittleEndian(binary, group.height);
+        AppendU32LittleEndian(binary, group.channelCount);
         AppendU32LittleEndian(binary, static_cast<u32>(group.pixels.size()));
         binary.insert(binary.end(), group.sha256.bytes, group.sha256.bytes + sizeof(group.sha256.bytes));
         binary.insert(binary.end(), group.pixels.begin(), group.pixels.end());
     }
     for(const FontAtlasPositioningTable& table : payload.positioningTables){
-        AppendU32LittleEndian(binary, table.tag); AppendU32LittleEndian(binary, static_cast<u32>(table.bytes.size()));
+        AppendU32LittleEndian(binary, table.tag);
+        AppendU32LittleEndian(binary, static_cast<u32>(table.bytes.size()));
         binary.insert(binary.end(), table.sha256.bytes, table.sha256.bytes + sizeof(table.sha256.bytes));
         binary.insert(binary.end(), table.bytes.begin(), table.bytes.end());
     }

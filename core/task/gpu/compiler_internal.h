@@ -29,9 +29,9 @@ public:
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
         const GpuPhysicalQueueTopology& topology,
+        const GpuTaskGraphQueueAssignmentOptions& options,
         Alloc::ScratchArena& scratchArena,
-        GpuTaskGraphQueueAssignments& outAssignments,
-        const GpuTaskGraphQueueAssignmentOptions& options = {}
+        GpuTaskGraphQueueAssignments& outAssignments
     )const;
 
     // The packet compiler reuses the analysis and queue-assignment results shared by scheduler admission, telemetry, and packet creation.
@@ -39,11 +39,11 @@ public:
     [[nodiscard]] b8 compile(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuPhysicalQueueTopology& topology,
+        const GpuTaskGraphCompileOptions& options,
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraphAnalysis& outAnalysis,
         GpuTaskGraphQueueAssignments& outAssignments,
-        GpuCompiledGraph& outCompiledGraph,
-        const GpuTaskGraphCompileOptions& options = {}
+        GpuCompiledGraph& outCompiledGraph
     )const;
 };
 
@@ -156,8 +156,8 @@ class GpuTaskSchedulingReachability final : NoCopy{
 
 private:
     struct WordRange{
-        usize m_begin = 0u;
-        usize m_end = 0u;
+        usize begin = 0u;
+        usize end = 0u;
     };
 
 
@@ -196,18 +196,18 @@ private:
 
 
 struct GpuTaskQueueScoringData{
-    Vector<u64, Alloc::ScratchArena> m_taskCosts;
-    Vector<u8, Alloc::ScratchArena> m_taskCostGroups;
-    Array<u64, GpuTaskCostHint::Count> m_costGroupWeights;
-    Vector<usize, Alloc::ScratchArena> m_ownershipEdgeOffsets;
-    Vector<NotNull<const GpuTaskDependencyEdge*>, Alloc::ScratchArena> m_ownershipEdges;
-    Vector<GpuTaskQueueLoad, Alloc::ScratchArena> m_assignedQueueLoads;
+    Vector<u64, Alloc::ScratchArena> taskCosts;
+    Vector<u8, Alloc::ScratchArena> taskCostGroups;
+    Array<u64, GpuTaskCostHint::Count> costGroupWeights;
+    Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
+    Vector<NotNull<const GpuTaskDependencyEdge*>, Alloc::ScratchArena> ownershipEdges;
+    Vector<GpuTaskQueueLoad, Alloc::ScratchArena> assignedQueueLoads;
     // Cost-group bitsets: all assigned tasks first, then one block per topology queue, never sparse queue IDs.
-    Vector<u64, Alloc::ScratchArena> m_assignedCostWords;
-    usize m_costWordsPerGroup = 0u;
-    u64 m_totalAssignedCost = 0u;
-    const GpuTaskQueueLoad* m_externalQueueLoads = nullptr;
-    usize m_externalQueueLoadCount = 0u;
+    Vector<u64, Alloc::ScratchArena> assignedCostWords;
+    usize costWordsPerGroup = 0u;
+    u64 totalAssignedCost = 0u;
+    const GpuTaskQueueLoad* externalQueueLoads = nullptr;
+    usize externalQueueLoadCount = 0u;
 
 
 public:

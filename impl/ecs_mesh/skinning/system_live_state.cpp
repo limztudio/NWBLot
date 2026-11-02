@@ -19,15 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshSkinningRestToSkinnedCopyByteCounts> MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance){
-    MeshSkinningRestToSkinnedCopyByteCounts counts;
-    if(!TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size(), counts)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: rest stream payload byte size is empty or overflows"));
-        return MakeUnexpected(Failure{});
-    }
-    return counts;
-}
-
 void MeshSkinningSystem::collectLiveSkinningStateBuffers(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const{
     MeshSkinningStateBufferCollector collector(scratchArena, outBuffers);
     m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){

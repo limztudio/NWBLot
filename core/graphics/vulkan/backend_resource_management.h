@@ -147,6 +147,10 @@ public:
     [[nodiscard]] const RayTracingOpacityMicromapDesc& getDescription()const noexcept{ return m_desc; }
 
     [[nodiscard]] u64 getDeviceAddress()const noexcept{ return m_deviceAddress; }
+    [[nodiscard]] Buffer* getDataBuffer()const noexcept{ return m_dataBuffer.get(); }
+    [[nodiscard]] VkMicromapEXT getMicromap()const noexcept{ return m_micromap; }
+    [[nodiscard]] u32 getMaxOpacity2StateSubdivisionLevel()const noexcept{ return m_maxOpacity2StateSubdivisionLevel; }
+    [[nodiscard]] u32 getMaxOpacity4StateSubdivisionLevel()const noexcept{ return m_maxOpacity4StateSubdivisionLevel; }
 
 
 private:

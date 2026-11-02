@@ -60,7 +60,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
 
 
 [[nodiscard]] inline ErrorCode WindowsError(const DWORD error)noexcept{
-    return ErrorCode(static_cast<i32>(error), std::system_category());
+    return ErrorCode(static_cast<i32>(error), SystemCategory());
 }
 
 [[nodiscard]] inline b8 IsMissing(const DWORD error)noexcept{
@@ -182,7 +182,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
     struct stat status = {};
     if(fstatat(parent, name.get(), &status, AT_SYMLINK_NOFOLLOW) != 0){
         const int error = errno;
-        return IsMissing(error) ? ErrorCode{} : ErrorCode(error, std::generic_category());
+        return IsMissing(error) ? ErrorCode{} : ErrorCode(error, GenericCategory());
     }
     if(!S_ISDIR(status.st_mode)){
         if(unlinkat(parent, name.get(), 0) == 0 || errno == ENOENT)
@@ -192,7 +192,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
     const int descriptor = openat(parent, name.get(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if(descriptor < 0){
         const int error = errno;
-        return error == ENOENT ? ErrorCode{} : ErrorCode(error, std::generic_category());
+        return error == ENOENT ? ErrorCode{} : ErrorCode(error, GenericCategory());
     }
     DIR* const directory = fdopendir(descriptor);
     if(directory == nullptr){
@@ -279,7 +279,7 @@ template<typename ArenaT>
     return GlobalFilesystemCleanupDetail::RemoveWindowsTree(buffer, end);
 #else
     if(text.find('\0') != decltype(text)::npos || !GlobalFilesystemCleanupDetail::HasNamedLeaf(text, namedEnd))
-        return MakeUnexpected(ErrorCode(EINVAL, std::generic_category()));
+        return MakeUnexpected(ErrorCode(EINVAL, GenericCategory()));
     int parent = open(text[0] == '/' ? "/" : ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if(parent < 0)
         return MakeUnexpected(LastSystemError());
@@ -292,7 +292,7 @@ template<typename ArenaT>
         while(end < namedEnd && text[end] != '/')
             ++end;
         if(end - begin > NAME_MAX){
-            error = ErrorCode(ENAMETOOLONG, std::generic_category());
+            error = ErrorCode(ENAMETOOLONG, GenericCategory());
             break;
         }
         Array<char, NAME_MAX + 1u> component = {};
@@ -307,7 +307,7 @@ template<typename ArenaT>
         if(next < 0){
             const int nativeError = errno;
             if(!GlobalFilesystemCleanupDetail::IsMissing(nativeError))
-                error = ErrorCode(nativeError, std::generic_category());
+                error = ErrorCode(nativeError, GenericCategory());
             break;
         }
         if(close(parent) != 0){

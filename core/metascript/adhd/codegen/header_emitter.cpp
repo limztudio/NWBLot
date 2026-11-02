@@ -105,15 +105,15 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     MVector<MStringView> externalForwardClasses(m_arena);
     const auto collectCallableForwardDeclClasses = [&](const MethodDecl& callable, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams){
         if(callable.returnType)
-            CollectExternalForwardDeclClasses(*callable.returnType, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses);
+            CollectExternalForwardDeclClasses(*callable.returnType, m_symbols, outerTemplateParams, innerTemplateParams, false, 0u, externalForwardClasses);
         for(const ParamDecl& p : callable.params){
             if(p.type)
-                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses, true);
+                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, true, 0u, externalForwardClasses);
         }
     };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
         if(aliasDecl && !aliasDecl->isImported && aliasDecl->aliasedType)
-            CollectExternalForwardDeclClasses(*aliasDecl->aliasedType, m_symbols, aliasDecl->templateParams, {}, externalForwardClasses);
+            CollectExternalForwardDeclClasses(*aliasDecl->aliasedType, m_symbols, aliasDecl->templateParams, {}, false, 0u, externalForwardClasses);
     }
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
         if(!ifaceDecl || ifaceDecl->isImported)
@@ -128,7 +128,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             continue;
         for(const FieldDecl* f : classDecl->fields){
             if(f && f->type)
-                CollectExternalForwardDeclClasses(*f->type, m_symbols, classDecl->templateParams, {}, externalForwardClasses);
+                CollectExternalForwardDeclClasses(*f->type, m_symbols, classDecl->templateParams, {}, false, 0u, externalForwardClasses);
         }
         for(const MethodDecl* m : classDecl->methods){
             if(m)

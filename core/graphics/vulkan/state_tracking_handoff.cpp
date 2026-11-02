@@ -35,35 +35,12 @@ void CommandList::setResourceStatesForFramebuffer(Framebuffer& framebuffer){
 }
 
 void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state){
-    struct BufferStateEntry{
-        Buffer* buffer = nullptr;
-        ResourceStates::Mask state = ResourceStates::Unknown;
-    };
-    Array<BufferStateEntry, s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount> entries{};
-    u32 entryCount = 0u;
+    GraphicsBufferStateTable requiredBufferStates{};
+    if(!CollectGraphicsBufferStates(state, requiredBufferStates))
+        return;
 
-    const auto addRequiredState = [&entries, &entryCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept{
-        if(!buffer)
-            return;
-        for(u32 entryIndex = 0u; entryIndex < entryCount; ++entryIndex){
-            if(entries[entryIndex].buffer == buffer){
-                entries[entryIndex].state |= requiredState;
-                return;
-            }
-        }
-        NWB_ASSERT(entryCount < LengthOf(entries));
-        entries[entryCount].buffer = buffer;
-        entries[entryCount].state = requiredState;
-        ++entryCount;
-    };
-
-    for(const VertexBufferBinding& binding : state.vertexBuffers)
-        addRequiredState(binding.buffer, ResourceStates::VertexBuffer);
-    addRequiredState(state.indexBuffer.buffer, ResourceStates::IndexBuffer);
-    addRequiredState(state.indirectParams, ResourceStates::IndirectArgument);
-
-    for(u32 entryIndex = 0u; entryIndex < entryCount; ++entryIndex){
-        setBufferState(entries[entryIndex].buffer, entries[entryIndex].state);
+    for(u32 entryIndex = 0u; entryIndex < requiredBufferStates.count; ++entryIndex){
+        setBufferState(requiredBufferStates.entries[entryIndex].buffer, requiredBufferStates.entries[entryIndex].state);
         if(m_commandRecordingFailed)
             return;
     }

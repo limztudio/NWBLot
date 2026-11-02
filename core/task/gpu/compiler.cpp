@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GpuTaskGraphCompilerDetail{
+namespace __hidden_gpu_task_graph_compiler{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,13 +78,14 @@ u32 GpuTaskGraphSchedulingTaskIndexView::operator[](const usize index)const noex
 b8 GpuTaskGraphCompiler::compile(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,
+    const GpuTaskGraphCompileOptions& options,
     Alloc::ScratchArena& scratchArena,
     GpuTaskGraphAnalysis& outAnalysis,
     GpuTaskGraphQueueAssignments& outAssignments,
-    GpuCompiledGraph& outCompiledGraph,
-    const GpuTaskGraphCompileOptions& options
+    GpuCompiledGraph& outCompiledGraph
 )const{
     using namespace GpuTaskGraphCompilerDetail;
+    using namespace __hidden_gpu_task_graph_compiler;
 
     if(!graph.valid()){
         outAnalysis.reset();
@@ -157,7 +158,7 @@ b8 GpuTaskGraphCompiler::compile(
     }
 
     const Timer queueAssignmentBegin = TimerNow();
-    if(!assignQueues(graph, outAnalysis, topology, scratchArena, outAssignments, options.queueAssignmentOptions))
+    if(!assignQueues(graph, outAnalysis, topology, options.queueAssignmentOptions, scratchArena, outAssignments))
         return false;
     const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
     const Timer planningBegin = TimerNow();

@@ -21,10 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
-[[nodiscard]] Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName)noexcept;
-
-
 // Call-scoped scratch; retained scene/GPU values use Float storage.
 struct alignas(SIMDVectorSingle) CsgShapeBounds{
     SIMDVectorSingle minBounds = VectorZero();
@@ -34,7 +30,7 @@ struct alignas(SIMDVectorSingle) CsgShapeBounds{
 static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes);
-using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, Span<const u8> parameterBytes);
+using CsgShapeSignedDistanceCallback = Expected<f32>(*)(const Float4& shapePosition, const CsgShapeInlineParameters& parameters);
 
 [[nodiscard]] Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept;
 
@@ -50,16 +46,11 @@ template<typename ShapeT>
 }
 
 template<typename ShapeT>
-[[nodiscard]] Expected<f32> EvaluateCsgShapeSignedDistanceCallback(const SIMDVectorSingle shapePosition, const Span<const u8> parameterBytes)noexcept{
+[[nodiscard]] Expected<f32> EvaluateCsgShapeSignedDistanceCallback(const Float4& shapePosition, const CsgShapeInlineParameters& parameters)noexcept{
     static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
 
     const ShapeT shape{};
-    Float4 shapePositionFloat4;
-    StoreFloat(shapePosition, shapePositionFloat4);
-    f32 distance = 0.0f;
-    if(!EvaluateCsgShapeSignedDistanceFromBytes(shape, shapePositionFloat4, parameterBytes, distance))
-        return MakeUnexpected(Failure{});
-    return distance;
+    return shape.evaluateSignedDistance(shapePosition, parameters);
 }
 
 struct CsgShapeTypeDesc{
@@ -94,7 +85,8 @@ template<typename ShapeT>
     desc.shaderModuleInclude = shaderModuleInclude;
     desc.parameterByteSize = shape.parameterByteSize();
     const CsgShapeInlineParameters defaults = shape.defaultParameters();
-    (void)PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults, desc.defaultParameterBytes);
+    [[maybe_unused]] const b8 packedDefaults = PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults, desc.defaultParameterBytes);
+    NWB_ASSERT(packedDefaults);
     desc.boundsCallback = &EvaluateCsgShapeBoundsCallback<ShapeT>;
     desc.signedDistanceCallback = &EvaluateCsgShapeSignedDistanceCallback<ShapeT>;
     return desc;
@@ -202,5 +194,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

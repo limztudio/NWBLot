@@ -54,10 +54,7 @@ static_assert(NWB_SURFEL_RAYS_PER_SURFEL >= NWB_SURFEL_GUIDE_BIN_COUNT);
 
 struct RtSurfelGiState{
     // Device-lifetime, heap-only one-bounce surfel GI stays outside resizable frame targets.
-    Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
-    Core::BindingLayoutHandle m_surfelAgeFreeBindingLayout;
-    Core::BindingLayoutHandle m_surfelHashBuildBindingLayout;
-    Core::BindingLayoutHandle m_surfelTraceBindingLayout;
+    Core::BindingLayoutHandle m_surfelHeapBindingLayout;
     Core::ShaderHandle m_surfelSpawnShader;
     Core::ComputePipelineHandle m_surfelSpawnPipeline;
     Core::ShaderHandle m_surfelAgeFreeShader;
@@ -69,18 +66,14 @@ struct RtSurfelGiState{
     Core::ShaderHandle m_surfelTraceCsgShader;
     Core::ComputePipelineHandle m_surfelTraceCsgPipeline;
     // Compute gather avoids frames-in-flight pool races with deferred lighting.
-    Core::BindingLayoutHandle m_surfelResolveBindingLayout;
     Core::ShaderHandle m_surfelResolveShader;
     Core::ComputePipelineHandle m_surfelResolvePipeline;
     // Surface-gated upsample from half-resolution irradiance.
-    Core::BindingLayoutHandle m_surfelUpsampleBindingLayout;
     Core::ShaderHandle m_surfelUpsampleShader;
     Core::ComputePipelineHandle m_surfelUpsamplePipeline;
-    Core::BindingLayoutHandle m_surfelTraceBuildArgsBindingLayout;
     Core::ShaderHandle m_surfelTraceBuildArgsShader;
     Core::ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
     // HW trace uses the TLAS instead of the SW BVH.
-    Core::BindingLayoutHandle m_surfelTraceHwBindingLayout;
     Core::ShaderHandle m_surfelTraceHwShader;
     Core::ComputePipelineHandle m_surfelTraceHwPipeline;
     Core::ShaderHandle m_surfelTraceCsgHwShader;

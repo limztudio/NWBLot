@@ -35,37 +35,18 @@ b8 RendererRayTracingSystem::ensureShadowPipeline(){
         return false;
     }
 
-    if(!m_rayTracingState.m_shadowBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        appendShadowTraceBindingLayout(layoutDesc);
-
-        auto shadowBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(shadowBindingLayoutResult)
-            m_rayTracingState.m_shadowBindingLayout = Move(*shadowBindingLayoutResult);
-        else
-            m_rayTracingState.m_shadowBindingLayout.reset();
-        if(!shadowBindingLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
-            m_rayTracingState.m_shadowPipelineFailed = true;
-            return false;
-        }
-    }
-
-    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayqueryCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuery", m_rayTracingState.m_shadowShader)){
+    // Trace layouts are push-only; resources come from the global heap.
+    static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
+    if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(ShadowRqSoftPushConstants), Core::ShaderType::Compute, m_rayTracingState.m_shadowBindingLayout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
         m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
 
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowShader).addBindingLayout(m_rayTracingState.m_shadowBindingLayout);
-    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
-    auto shadowPipelineResult = device.createComputePipeline(pipelineDesc);
-    if(shadowPipelineResult)
-        m_rayTracingState.m_shadowPipeline = Move(*shadowPipelineResult);
-    else
-        m_rayTracingState.m_shadowPipeline.reset();
-    if(!shadowPipelineResult){
+    if(
+        !m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayqueryCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuery", m_rayTracingState.m_shadowShader)
+        || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_rayTracingState.m_shadowShader, m_rayTracingState.m_shadowBindingLayout, true, m_rayTracingState.m_shadowPipeline)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
         m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
@@ -100,20 +81,10 @@ b8 RendererRayTracingSystem::ensureShadowSoftPipeline(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayquerySoftCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuerySoft", m_rayTracingState.m_shadowSoftShader)){
-        m_rayTracingState.m_shadowSoftPipelineFailed = true;
-        return false;
-    }
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowSoftShader).addBindingLayout(m_rayTracingState.m_shadowBindingLayout);
-    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
-    auto shadowSoftPipelineResult = device.createComputePipeline(pipelineDesc);
-    if(shadowSoftPipelineResult)
-        m_rayTracingState.m_shadowSoftPipeline = Move(*shadowSoftPipelineResult);
-    else
-        m_rayTracingState.m_shadowSoftPipeline.reset();
-    if(!shadowSoftPipelineResult){
+    if(
+        !m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayquerySoftCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuerySoft", m_rayTracingState.m_shadowSoftShader)
+        || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_rayTracingState.m_shadowSoftShader, m_rayTracingState.m_shadowBindingLayout, true, m_rayTracingState.m_shadowSoftPipeline)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
         m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
@@ -136,22 +107,11 @@ b8 RendererRayTracingSystem::ensureSwShadowPipeline(){
     }
 
     if(!m_rayTracingState.m_swShadowBindingLayout){
-        Core::BindingLayoutDesc layoutDesc(m_arena);
-        layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // All pass resources are selected through the fixed push ABI.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowHeapPushConstants)));
-
-        auto swShadowBindingLayoutResult = device.createBindingLayout(layoutDesc);
-        if(swShadowBindingLayoutResult)
-            m_rayTracingState.m_swShadowBindingLayout = Move(*swShadowBindingLayoutResult);
-        else
-            m_rayTracingState.m_swShadowBindingLayout.reset();
-        if(!swShadowBindingLayoutResult){
+        if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(SwShadowHeapPushConstants), Core::ShaderType::Compute, m_rayTracingState.m_swShadowBindingLayout)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
             m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
-
 
         // Compaction uses a persistent counter and UAV-writable indirect-args buffer.
         Core::BufferDesc edgeCounterDesc;
@@ -229,19 +189,7 @@ b8 RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shad
 
     if(!m_shaderSystem.loadShader<ComputeShader>(shaderMember, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), shader))
         return false;
-
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_swShadowBindingLayout);
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = m_graphics.getDevice().createComputePipeline(pipelineDesc);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    if(!pipelineResult){
+    if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), shader, m_rayTracingState.m_swShadowBindingLayout, false, pipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
         return false;
     }

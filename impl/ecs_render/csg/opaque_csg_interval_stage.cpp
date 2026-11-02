@@ -174,7 +174,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     // Material instance and typed-material reads.
     csgIntervalSampleResourceUses.reserve(
         1u + (inputs.hasOpaqueDrawItems ? s_OpaqueCsgMaterialBufferResourceUseCount : 0u)
-        + (inputs.hasCsgFrameGpuWork ? s_OpaqueCsgFrameGpuResourceUseCount : 0u)
+        + (inputs.hasCsgFrameGpuWork ? s_OpaqueCsgFrameResourceUseCount : 0u)
         + s_OpaqueCsgRemovedIntervalResourceUseCount + s_OpaqueCsgGbufferColorResourceUseCount
     );
     csgIntervalSampleResourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));

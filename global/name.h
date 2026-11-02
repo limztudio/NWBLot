@@ -142,7 +142,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        NameDetail::HashToDebugString(m_debugName.data(), NameDetail::s_DebugNameCapacity, m_hash);
+        HashToDebugString(m_debugName.data(), NameDetail::s_DebugNameCapacity, m_hash);
 #endif
     }
     explicit constexpr Name(const NameText<char> text)
@@ -155,7 +155,7 @@ public:
 
 public:
     [[nodiscard]] constexpr explicit operator b8()const noexcept{
-        return !NameDetail::IsZeroHash(m_hash);
+        return !IsZeroHash(m_hash);
     }
 
 
@@ -186,8 +186,8 @@ public:
             return text.substr(0u, text.find('\0'));
         }
 
-        NameDetail::HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
-        return AStringView(buf.data(), NameDetail::s_DebugHashTextLength);
+        HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        return AStringView(buf.data(), s_DebugHashTextLength);
 #endif
     }
 
@@ -204,7 +204,7 @@ public:
             return buf.data();
         }
 
-        NameDetail::HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
         return buf.data();
 #endif
     }
@@ -215,8 +215,8 @@ public:
         return AStringView(m_debugName.data());
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        NameDetail::HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
-        return AStringView(buf.data(), NameDetail::s_DebugHashTextLength);
+        HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        return AStringView(buf.data(), s_DebugHashTextLength);
 #endif
     }
 
@@ -287,14 +287,6 @@ namespace NameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline u64 UpdateFnv64U64(u64 hash, const u64 value)noexcept{
-    for(u32 byteIndex = 0u; byteIndex < sizeof(value); ++byteIndex){
-        hash ^= static_cast<u8>((value >> (byteIndex * s_NameHashByteBitCount)) & s_NameHashByteMask);
-        hash *= s_Fnv64Prime;
-    }
-    return hash;
-}
-
 inline constexpr AStringView s_DerivePrefix = "global/name/derive";
 inline constexpr u64 s_DerivePrefixHash = UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, s_DerivePrefix);
 
@@ -314,8 +306,8 @@ inline constexpr u64 s_DerivePrefixHash = UpdateFnv64TextCanonical(s_Fnv64Offset
         return MakeUnexpected(Failure{});
 
     const NameHash& baseHash = baseName.hash();
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
-        derivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(NameDetail::s_DerivePrefixHash, baseHash.qwords[lane]);
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
+        derivedHash.qwords[lane] = UpdateFnv64U64LittleEndian(NameDetail::s_DerivePrefixHash, baseHash.qwords[lane]);
 
     return derivedHash;
 }
@@ -344,33 +336,6 @@ template<typename CharT>
         return MakeUnexpected(Failure{});
 
     return FinishDerivedNameHash(*derivedHash);
-}
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline Expected<Name> DeriveName(const Name& baseName, const BasicString<CharT, ArenaT>& suffix){
-    return DeriveName(baseName, BasicStringView<CharT>(suffix));
-}
-
-template<typename CharT>
-[[nodiscard]] inline Expected<Name> DecodeNameHash(const BasicStringView<CharT> encodedHash)noexcept(IsArithmetic_V<CharT>){
-    if(encodedHash.size() != NameDetail::s_EncodedNameHashLength)
-        return MakeUnexpected(Failure{});
-
-    NameHash hash;
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        const usize begin = static_cast<usize>(lane) * NameDetail::s_HexDigitsPerHashLane;
-        const BasicStringView<CharT> laneHex = encodedHash.substr(begin, NameDetail::s_HexDigitsPerHashLane);
-
-        const auto laneHash = ParseHexU64<CharT>(laneHex);
-        if(!laneHash)
-            return MakeUnexpected(Failure{});
-        hash.qwords[lane] = *laneHash;
-    }
-
-    return Name(hash);
-}
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline Expected<Name> DecodeNameHash(const BasicString<CharT, ArenaT>& encodedHash)noexcept(IsArithmetic_V<CharT>){
-    return DecodeNameHash(BasicStringView<CharT>(encodedHash));
 }
 
 

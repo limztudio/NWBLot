@@ -551,7 +551,7 @@ void GpuTimingAccumulator::discardMarkedAttributions()noexcept{
     }
 }
 
-void GpuTimingAccumulator::retireAttributions(SampleDispatchVector& outSamples, const u64 subscriptionIdentityLimit){
+void GpuTimingAccumulator::retireAttributions(const u64 subscriptionIdentityLimit, SampleDispatchVector& outSamples){
     for(QueryRecord& record : m_queries){
         if(record.attribution == s_NoGpuTimingSampleAttribution)
             continue;

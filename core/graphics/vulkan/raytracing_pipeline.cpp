@@ -327,7 +327,7 @@ Expected<RayTracingPipelineHandle> Device::createRayTracingPipeline(const RayTra
     createInfo.groupCount = static_cast<u32>(groups.size());
     createInfo.pGroups = groups.data();
     createInfo.maxPipelineRayRecursionDepth = desc.maxRecursionDepth;
-    createInfo.layout = pso->m_pipelineLayout;
+    createInfo.layout = pso->pipelineLayout;
 
     res = m_context.deviceDispatch.vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){

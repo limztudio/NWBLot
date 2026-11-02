@@ -3,11 +3,6 @@
 
 
 #include "text_visible_fixture.h"
-#include "paint_assertions.h"
-
-#include <tests/common/font_fixture.h>
-
-#include <global/filesystem.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,51 +20,17 @@ namespace UiTextVisibleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
-    ASSERT_EQ(actual.glyphPages().size(), expected.glyphPages().size());
-    ASSERT_EQ(actual.sdfPages().size(), expected.sdfPages().size());
-    ASSERT_EQ(actual.vertices().size(), expected.vertices().size());
-    ASSERT_EQ(actual.commands().size(), expected.commands().size());
-    EXPECT_EQ(actual.indices(), expected.indices());
-    for(usize index = 0u; index < actual.glyphPages().size(); ++index){
-        EXPECT_EQ(actual.glyphPages()[index].get(), expected.glyphPages()[index].get());
-        EXPECT_EQ(actual.glyphPages()[index]->binding(), expected.glyphPages()[index]->binding());
-        EXPECT_EQ(actual.glyphPages()[index]->pixels(), expected.glyphPages()[index]->pixels());
-    }
-    for(usize index = 0u; index < actual.sdfPages().size(); ++index){
-        EXPECT_EQ(actual.sdfPages()[index].get(), expected.sdfPages()[index].get());
-        EXPECT_EQ(actual.sdfPages()[index]->binding(), expected.sdfPages()[index]->binding());
-        EXPECT_EQ(actual.sdfPages()[index]->pixels(), expected.sdfPages()[index]->pixels());
-    }
-    UiPaintAssertions::ExpectSameVertices(actual, expected);
-    for(usize index = 0u; index < actual.commands().size(); ++index){
-        const DrawCommand& a = actual.commands()[index];
-        const DrawCommand& e = expected.commands()[index];
-        UiPaintAssertions::ExpectSameCommandFields(a, e);
-        UiPaintAssertions::ExpectRect(a.clip, e.clip);
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-SIMDVectorSingle TextVisibleFixture::LoadOutlinePosition(const PlacedGlyph& glyph, const Point origin)noexcept{
-    return VectorAdd(VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)), VectorSet(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f));
-}
-
 Rect TextVisibleFixture::OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-    const SIMDVectorSingle position = LoadOutlinePosition(glyph, origin);
-    return Rect{ VectorGetX(position), VectorGetY(position), glyph.ink.width, glyph.ink.height };
+    return Rect{ origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
 }
 
 TextVisibleFixture::TextVisibleFixture()
     : m_arena(Name("tests/ui/text/visible"))
-    , m_latin(m_arena, Name(s_LatinFontPath))
-    , m_korean(m_arena, Name(s_KoreanFontPath))
+    , m_latin(m_arena, Name(s_TestLatinFontPath))
+    , m_korean(m_arena, Name(s_TestKoreanFontPath))
     , m_text(m_arena)
     , m_layout(m_arena)
-    , m_skin(m_arena, Name(s_SkinPath))
+    , m_skin(m_arena, Name(s_TestSkinPath))
     , m_paint(m_arena)
 {}
 
@@ -82,27 +43,20 @@ void TextVisibleFixture::SetUp(){
 }
 
 b8 TextVisibleFixture::loadFont(const StringView filename, Font& font){
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
-    Core::Assets::AssetBytes bytes(m_arena);
-    auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-    if(!bytesResult)
-        return false;
-    bytes = Move(*bytesResult);
-    font.setFontBytes(Move(bytes));
-    return font.validatePayload();
+    return UiWidgetTests::LoadBundledFixtureFont(m_arena, filename, font);
 }
 
 b8 TextVisibleFixture::installCoverageFonts(){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+    Core::Alloc::ScratchArena fontScratchArena(UiWidgetTests::s_FontScratchArenaName);
     const Array<FontSource, 2u> sources = {
-        FontSource{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
-        FontSource{ Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
+        FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u },
+        FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), m_korean, 1u },
     };
     return m_text.setFonts(fontScratchArena, sources);
 }
 
 void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& display){
-    m_paint.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+    m_paint.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
 }
 
 Expected<SharedGlyphPage> TextVisibleFixture::makePage(const u64 atlasIdentity){

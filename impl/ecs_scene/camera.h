@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_scene/camera_types.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
 
 

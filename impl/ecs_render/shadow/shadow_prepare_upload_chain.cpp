@@ -20,6 +20,66 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_shadow_prepare_upload_chain{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline Expected<Core::GpuGraphResourceId> ImportOptionalExternalBuffer(
+    Core::GpuTaskGraph& graph,
+    const Core::BufferHandle& buffer,
+    const Name identity,
+    const AStringView label
+){
+    if(!buffer)
+        return Core::GpuGraphResourceId{};
+    return RendererTaskGraphDetail::ImportExternalBuffer(graph, buffer, identity, label);
+}
+
+[[nodiscard]] inline b8 AppendChainedUploadBufferTask(
+    Core::GpuTaskGraph& graph,
+    const Name identity,
+    const AStringView markerLabel,
+    const Core::GpuTaskCostHint::Enum cost,
+    const Core::GpuUploadBlobId source,
+    const Core::GpuGraphResourceId destination,
+    const tchar* const warningMessage,
+    Core::GpuTaskId& inOutDependencyTask,
+    Core::GpuTaskId& outTask
+){
+    Core::GpuTaskSchedulingHint uploadScheduling;
+    uploadScheduling.cost = cost;
+    uploadScheduling.forceSubmissionBoundary = false;
+    uploadScheduling.allowPacketMerge = true;
+    uploadScheduling.mergeWithPrevious = true;
+
+    Core::GpuTaskDesc uploadDesc;
+    uploadDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(uploadScheduling).setDependencies({ &inOutDependencyTask, 1u });
+    const auto uploadTaskResult = graph.addUploadBufferTask(
+        uploadDesc,
+        Core::GpuUploadBufferTaskDesc{ .source = source, .destination = destination, .finalState = Core::ResourceStates::Common, }
+    );
+    if(!uploadTaskResult){
+        outTask = {};
+        NWB_LOGGER_WARNING(warningMessage);
+        return false;
+    }
+    outTask = *uploadTaskResult;
+    inOutDependencyTask = outTask;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const ShadowPrepareUploadInputs& inputs, Core::Alloc::ScratchArena& scratchArena, ShadowPrepareUploadChain& chain){
     using namespace RendererTaskGraphDetail;
 
@@ -122,19 +182,12 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
             ? Name(s_HardwareCausticEmissionTargetsName)
             : Name(s_SoftwareCausticEmissionTargetsName)
     ;
-    Expected<Optional<Core::GpuGraphResourceId>> causticEmissionTargetsResult = Optional<Core::GpuGraphResourceId>{};
-    if(inputs.rayTracingResources.causticEmissionTargetBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, inputs.rayTracingResources.causticEmissionTargetBuffer, causticEmissionTargetsIdentity, s_CausticEmissionTargetsLabel);
-        if(!importedResource)
-            causticEmissionTargetsResult = MakeUnexpected(importedResource.error());
-        else
-            causticEmissionTargetsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(inputs.rayTracingResources.causticEmissionTargetBuffer && !causticEmissionTargetsResult){
+    const auto causticEmissionTargetsResult = __hidden_shadow_prepare_upload_chain::ImportOptionalExternalBuffer(m_graph, inputs.rayTracingResources.causticEmissionTargetBuffer, causticEmissionTargetsIdentity, s_CausticEmissionTargetsLabel);
+    if(!causticEmissionTargetsResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted caustic emission targets"));
         return false;
     }
-    chain.causticEmissionTargets = causticEmissionTargetsResult->value_or(Core::GpuGraphResourceId{});
+    chain.causticEmissionTargets = *causticEmissionTargetsResult;
 
     const auto causticEmissionTargetsBlob = m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(m_graph);
     if(!causticEmissionTargetsBlob){
@@ -183,50 +236,29 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
             return false;
         }
 
-        Core::GpuTaskSchedulingHint causticEmissionTargetsUploadScheduling;
-        causticEmissionTargetsUploadScheduling.cost = Core::GpuTaskCostHint::Medium;
-        causticEmissionTargetsUploadScheduling.forceSubmissionBoundary = false;
-        causticEmissionTargetsUploadScheduling.allowPacketMerge = true;
-        causticEmissionTargetsUploadScheduling.mergeWithPrevious = true;
-        Core::GpuTaskDesc causticEmissionTargetsUploadDesc;
-        causticEmissionTargetsUploadDesc
-            .setIdentity(Name("render.raytrace.caustic_emission_targets_upload"))
-            .setMarkerLabel("Caustic Emission Targets Upload")
-            .setScheduling(causticEmissionTargetsUploadScheduling)
-            .setDependencies({ &chain.completionTask, 1u });
-        const auto causticEmissionTargetsUploadTaskResult = m_graph.addUploadBufferTask(
-            causticEmissionTargetsUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = **causticEmissionTargetsBlob,
-                .destination = chain.causticEmissionTargets,
-                // Buffer publishes Common; Shadow Preparation owns the SRV handoff.
-                .finalState = Core::ResourceStates::Common, }
-        );
-        if(!causticEmissionTargetsUploadTaskResult){
-            chain.tasks.causticEmissionTargets = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare caustic emission-target upload"));
+        if(!__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
+            m_graph,
+            Name("render.raytrace.caustic_emission_targets_upload"),
+            "Caustic Emission Targets Upload",
+            Core::GpuTaskCostHint::Medium,
+            **causticEmissionTargetsBlob,
+            chain.causticEmissionTargets,
+            NWB_TEXT("RendererSystem: could not declare caustic emission-target upload"),
+            chain.completionTask,
+            chain.tasks.causticEmissionTargets
+        ))
             return false;
-        }
-        chain.tasks.causticEmissionTargets = *causticEmissionTargetsUploadTaskResult;
-        chain.completionTask = chain.tasks.causticEmissionTargets;
     }
     return true;
 }
 
 b8 ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
-    Expected<Optional<Core::GpuGraphResourceId>> surfelFrameConstantsResult = Optional<Core::GpuGraphResourceId>{};
-    if(inputs.rayTracingResources.surfelFrameConstantsBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, inputs.rayTracingResources.surfelFrameConstantsBuffer, Name(s_SurfelConstantsName), s_SurfelConstantsLabel);
-        if(!importedResource)
-            surfelFrameConstantsResult = MakeUnexpected(importedResource.error());
-        else
-            surfelFrameConstantsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(inputs.rayTracingResources.surfelFrameConstantsBuffer && !surfelFrameConstantsResult){
+    const auto surfelFrameConstantsResult = __hidden_shadow_prepare_upload_chain::ImportOptionalExternalBuffer(m_graph, inputs.rayTracingResources.surfelFrameConstantsBuffer, Name(s_SurfelConstantsName), s_SurfelConstantsLabel);
+    if(!surfelFrameConstantsResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted surfel constants"));
         return false;
     }
-    chain.surfelFrameConstants = surfelFrameConstantsResult->value_or(Core::GpuGraphResourceId{});
+    chain.surfelFrameConstants = *surfelFrameConstantsResult;
 
     const auto surfelFrameConstantsBlob = m_raytracingSystem.retainPreparedSurfelFrameConstantsUpload(m_graph, inputs.targets);
     if(!surfelFrameConstantsBlob){
@@ -238,69 +270,33 @@ b8 ShadowPrepareUploadChainBuilder::declareSurfelFrameConstantsUpload(const Shad
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-frame constants upload has no imported destination"));
             return false;
         }
-
-        Core::GpuTaskSchedulingHint surfelFrameConstantsUploadScheduling;
-        surfelFrameConstantsUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
-        surfelFrameConstantsUploadScheduling.forceSubmissionBoundary = false;
-        surfelFrameConstantsUploadScheduling.allowPacketMerge = true;
-        surfelFrameConstantsUploadScheduling.mergeWithPrevious = true;
-        Core::GpuTaskDesc surfelFrameConstantsUploadDesc;
-        surfelFrameConstantsUploadDesc.setIdentity(Name("render.surfel_gi.constants_upload")).setMarkerLabel("Surfel Frame Constants Upload").setScheduling(surfelFrameConstantsUploadScheduling).setDependencies({ &chain.completionTask, 1u });
-        const auto surfelFrameConstantsUploadTaskResult = m_graph.addUploadBufferTask(
-            surfelFrameConstantsUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = **surfelFrameConstantsBlob,
-                .destination = chain.surfelFrameConstants,
-                // Buffer publishes Common; Shadow Preparation owns the CB handoff.
-                .finalState = Core::ResourceStates::Common, }
-        );
-        if(!surfelFrameConstantsUploadTaskResult){
-            chain.tasks.surfelFrameConstants = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare surfel-frame constants upload"));
+        if(!__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
+            m_graph,
+            Name("render.surfel_gi.constants_upload"),
+            "Surfel Frame Constants Upload",
+            Core::GpuTaskCostHint::Tiny,
+            **surfelFrameConstantsBlob,
+            chain.surfelFrameConstants,
+            NWB_TEXT("RendererSystem: could not declare surfel-frame constants upload"),
+            chain.completionTask,
+            chain.tasks.surfelFrameConstants
+        ))
             return false;
-        }
-        chain.tasks.surfelFrameConstants = *surfelFrameConstantsUploadTaskResult;
-        chain.completionTask = chain.tasks.surfelFrameConstants;
     }
     return true;
 }
 
 b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
-    Expected<Optional<Core::GpuGraphResourceId>> shadowInstanceMaterialsResult = Optional<Core::GpuGraphResourceId>{};
-    if(inputs.rayTracingResources.shadowInstanceMaterialBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceMaterialBuffer, Name(s_SceneShadowInstanceMaterialName), s_SceneShadowInstanceMaterialLabel);
-        if(!importedResource)
-            shadowInstanceMaterialsResult = MakeUnexpected(importedResource.error());
-        else
-            shadowInstanceMaterialsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    Expected<Optional<Core::GpuGraphResourceId>> shadowInstancesResult = Optional<Core::GpuGraphResourceId>{};
-    if(inputs.rayTracingResources.shadowInstanceBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel);
-        if(!importedResource)
-            shadowInstancesResult = MakeUnexpected(importedResource.error());
-        else
-            shadowInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    Expected<Optional<Core::GpuGraphResourceId>> shadowMaterialTypedResult = Optional<Core::GpuGraphResourceId>{};
-    if(inputs.rayTracingResources.shadowMaterialTypedBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel);
-        if(!importedResource)
-            shadowMaterialTypedResult = MakeUnexpected(importedResource.error());
-        else
-            shadowMaterialTypedResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if(
-        (inputs.rayTracingResources.shadowInstanceMaterialBuffer && !shadowInstanceMaterialsResult)
-        || (inputs.rayTracingResources.shadowInstanceBuffer && !shadowInstancesResult)
-        || (inputs.rayTracingResources.shadowMaterialTypedBuffer && !shadowMaterialTypedResult)
-    ){
+    const auto shadowInstanceMaterialsResult = __hidden_shadow_prepare_upload_chain::ImportOptionalExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceMaterialBuffer, Name(s_SceneShadowInstanceMaterialName), s_SceneShadowInstanceMaterialLabel);
+    const auto shadowInstancesResult = __hidden_shadow_prepare_upload_chain::ImportOptionalExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel);
+    const auto shadowMaterialTypedResult = __hidden_shadow_prepare_upload_chain::ImportOptionalExternalBuffer(m_graph, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel);
+    if(!shadowInstanceMaterialsResult || !shadowInstancesResult || !shadowMaterialTypedResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow material-context buffers"));
         return false;
     }
-    chain.shadowMaterialTyped = shadowMaterialTypedResult->value_or(Core::GpuGraphResourceId{});
-    chain.shadowInstances = shadowInstancesResult->value_or(Core::GpuGraphResourceId{});
-    chain.shadowInstanceMaterials = shadowInstanceMaterialsResult->value_or(Core::GpuGraphResourceId{});
+    chain.shadowMaterialTyped = *shadowMaterialTypedResult;
+    chain.shadowInstances = *shadowInstancesResult;
+    chain.shadowInstanceMaterials = *shadowInstanceMaterialsResult;
 
     const auto shadowMaterialContextUploads = m_raytracingSystem.retainPreparedShadowMaterialContextUploads(m_graph);
     if(!shadowMaterialContextUploads){
@@ -320,84 +316,55 @@ b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const Sh
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen shadow material-context batch has no imported destination"));
             return false;
         }
-
-        Core::GpuTaskSchedulingHint shadowMaterialContextUploadScheduling;
-        shadowMaterialContextUploadScheduling.cost = Core::GpuTaskCostHint::Medium;
-        shadowMaterialContextUploadScheduling.forceSubmissionBoundary = false;
-        shadowMaterialContextUploadScheduling.allowPacketMerge = true;
-        shadowMaterialContextUploadScheduling.mergeWithPrevious = true;
-
-        Core::GpuTaskDesc shadowInstanceMaterialsUploadDesc;
-        shadowInstanceMaterialsUploadDesc
-            .setIdentity(Name("render.deferred_effects.instance_material_upload"))
-            .setMarkerLabel("Shadow Instance Materials Upload")
-            .setScheduling(shadowMaterialContextUploadScheduling)
-            .setDependencies({ &chain.completionTask, 1u })
-        ;
-        const auto shadowInstanceMaterialUploadTaskResult = m_graph.addUploadBufferTask(
-            shadowInstanceMaterialsUploadDesc,
-            Core::GpuUploadBufferTaskDesc{ .source = shadowInstanceMaterialsBlob, .destination = chain.shadowInstanceMaterials, .finalState = Core::ResourceStates::Common, }
-        );
-        if(!shadowInstanceMaterialUploadTaskResult){
-            chain.tasks.shadowInstanceMaterial = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow instance-material upload"));
+        if(
+            !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
+                m_graph,
+                Name("render.deferred_effects.instance_material_upload"),
+                "Shadow Instance Materials Upload",
+                Core::GpuTaskCostHint::Medium,
+                shadowInstanceMaterialsBlob,
+                chain.shadowInstanceMaterials,
+                NWB_TEXT("RendererSystem: could not declare shadow instance-material upload"),
+                chain.completionTask,
+                chain.tasks.shadowInstanceMaterial
+            )
+            || !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
+                m_graph,
+                Name("render.deferred_effects.shadow_instances_upload"),
+                "Shadow Instances Upload",
+                Core::GpuTaskCostHint::Medium,
+                shadowInstancesBlob,
+                chain.shadowInstances,
+                NWB_TEXT("RendererSystem: could not declare shadow instance upload"),
+                chain.completionTask,
+                chain.tasks.shadowInstance
+            )
+            || !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
+                m_graph,
+                Name("render.deferred_effects.material_typed_upload"),
+                "Shadow Typed Materials Upload",
+                Core::GpuTaskCostHint::Medium,
+                shadowMaterialTypedBlob,
+                chain.shadowMaterialTyped,
+                NWB_TEXT("RendererSystem: could not declare shadow typed-material upload"),
+                chain.completionTask,
+                chain.tasks.shadowMaterialTyped
+            )
+        )
             return false;
-        }
-        chain.tasks.shadowInstanceMaterial = *shadowInstanceMaterialUploadTaskResult;
-
-        Core::GpuTaskDesc shadowInstancesUploadDesc;
-        shadowInstancesUploadDesc.setIdentity(Name("render.deferred_effects.shadow_instances_upload")).setMarkerLabel("Shadow Instances Upload").setScheduling(shadowMaterialContextUploadScheduling).setDependencies({ &chain.tasks.shadowInstanceMaterial, 1u });
-        const auto shadowInstanceUploadTaskResult = m_graph.addUploadBufferTask(
-            shadowInstancesUploadDesc,
-            Core::GpuUploadBufferTaskDesc{ .source = shadowInstancesBlob, .destination = chain.shadowInstances, .finalState = Core::ResourceStates::Common, }
-        );
-        if(!shadowInstanceUploadTaskResult){
-            chain.tasks.shadowInstance = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow instance upload"));
-            return false;
-        }
-        chain.tasks.shadowInstance = *shadowInstanceUploadTaskResult;
-
-        Core::GpuTaskDesc shadowMaterialTypedUploadDesc;
-        shadowMaterialTypedUploadDesc.setIdentity(Name("render.deferred_effects.material_typed_upload")).setMarkerLabel("Shadow Typed Materials Upload").setScheduling(shadowMaterialContextUploadScheduling).setDependencies({ &chain.tasks.shadowInstance, 1u });
-        const auto shadowMaterialTypedUploadTaskResult = m_graph.addUploadBufferTask(
-            shadowMaterialTypedUploadDesc,
-            Core::GpuUploadBufferTaskDesc{ .source = shadowMaterialTypedBlob, .destination = chain.shadowMaterialTyped, .finalState = Core::ResourceStates::Common, }
-        );
-        if(!shadowMaterialTypedUploadTaskResult){
-            chain.tasks.shadowMaterialTyped = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow typed-material upload"));
-            return false;
-        }
-        chain.tasks.shadowMaterialTyped = *shadowMaterialTypedUploadTaskResult;
-        chain.completionTask = chain.tasks.shadowMaterialTyped;
     }
     return true;
 }
 
 b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(const ShadowPrepareUploadInputs& inputs, ShadowPrepareUploadChain& chain){
-    Expected<Optional<Core::GpuGraphResourceId>> sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{};
-    if(inputs.rayTracingResources.sceneBvhNodeBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, inputs.rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel);
-        if(!importedResource)
-            sceneBvhNodesResult = MakeUnexpected(importedResource.error());
-        else
-            sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    Expected<Optional<Core::GpuGraphResourceId>> sceneBvhInstancesResult = Optional<Core::GpuGraphResourceId>{};
-    if(inputs.rayTracingResources.sceneInstanceBuffer){
-        const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, inputs.rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel);
-        if(!importedResource)
-            sceneBvhInstancesResult = MakeUnexpected(importedResource.error());
-        else
-            sceneBvhInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
-    }
-    if((inputs.rayTracingResources.sceneBvhNodeBuffer && !sceneBvhNodesResult) || (inputs.rayTracingResources.sceneInstanceBuffer && !sceneBvhInstancesResult)){
+    const auto sceneBvhNodesResult = __hidden_shadow_prepare_upload_chain::ImportOptionalExternalBuffer(m_graph, inputs.rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel);
+    const auto sceneBvhInstancesResult = __hidden_shadow_prepare_upload_chain::ImportOptionalExternalBuffer(m_graph, inputs.rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel);
+    if(!sceneBvhNodesResult || !sceneBvhInstancesResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted software scene-BVH buffers"));
         return false;
     }
-    chain.sceneBvhInstances = sceneBvhInstancesResult->value_or(Core::GpuGraphResourceId{});
-    chain.sceneBvhNodes = sceneBvhNodesResult->value_or(Core::GpuGraphResourceId{});
+    chain.sceneBvhInstances = *sceneBvhInstancesResult;
+    chain.sceneBvhNodes = *sceneBvhNodesResult;
 
     const auto sceneBvhUploads = m_raytracingSystem.retainPreparedSceneBvhUploads(m_graph);
     if(!sceneBvhUploads){
@@ -416,43 +383,31 @@ b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(const ShadowPrepareUp
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene-BVH pair has no imported destination"));
             return false;
         }
-
-        Core::GpuTaskSchedulingHint sceneBvhUploadScheduling;
-        sceneBvhUploadScheduling.cost = Core::GpuTaskCostHint::Medium;
-        sceneBvhUploadScheduling.forceSubmissionBoundary = false;
-        sceneBvhUploadScheduling.allowPacketMerge = true;
-        sceneBvhUploadScheduling.mergeWithPrevious = true;
-
-        Core::GpuTaskDesc sceneBvhNodesUploadDesc;
-        sceneBvhNodesUploadDesc.setIdentity(Name("render.shadow_visibility.scene_bvh_nodes_upload")).setMarkerLabel("Scene BVH Nodes Upload").setScheduling(sceneBvhUploadScheduling).setDependencies({ &chain.completionTask, 1u });
-        const auto sceneBvhNodesUploadTaskResult = m_graph.addUploadBufferTask(
-            sceneBvhNodesUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = sceneBvhNodesBlob,
-                .destination = chain.sceneBvhNodes,
-                // Scene-BVH storage publishes Common; Shadow Preparation owns the SRV handoff.
-                .finalState = Core::ResourceStates::Common, }
-        );
-        if(!sceneBvhNodesUploadTaskResult){
-            chain.tasks.sceneBvhNodes = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare software scene-BVH node upload"));
+        if(
+            !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
+                m_graph,
+                Name("render.shadow_visibility.scene_bvh_nodes_upload"),
+                "Scene BVH Nodes Upload",
+                Core::GpuTaskCostHint::Medium,
+                sceneBvhNodesBlob,
+                chain.sceneBvhNodes,
+                NWB_TEXT("RendererSystem: could not declare software scene-BVH node upload"),
+                chain.completionTask,
+                chain.tasks.sceneBvhNodes
+            )
+            || !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
+                m_graph,
+                Name("render.shadow_visibility.scene_instances_upload"),
+                "Scene BVH Instances Upload",
+                Core::GpuTaskCostHint::Medium,
+                sceneBvhInstancesBlob,
+                chain.sceneBvhInstances,
+                NWB_TEXT("RendererSystem: could not declare software scene-BVH instance upload"),
+                chain.completionTask,
+                chain.tasks.sceneBvhInstances
+            )
+        )
             return false;
-        }
-        chain.tasks.sceneBvhNodes = *sceneBvhNodesUploadTaskResult;
-
-        Core::GpuTaskDesc sceneBvhInstancesUploadDesc;
-        sceneBvhInstancesUploadDesc.setIdentity(Name("render.shadow_visibility.scene_instances_upload")).setMarkerLabel("Scene BVH Instances Upload").setScheduling(sceneBvhUploadScheduling).setDependencies({ &chain.tasks.sceneBvhNodes, 1u });
-        const auto sceneBvhInstancesUploadTaskResult = m_graph.addUploadBufferTask(
-            sceneBvhInstancesUploadDesc,
-            Core::GpuUploadBufferTaskDesc{ .source = sceneBvhInstancesBlob, .destination = chain.sceneBvhInstances, .finalState = Core::ResourceStates::Common, }
-        );
-        if(!sceneBvhInstancesUploadTaskResult){
-            chain.tasks.sceneBvhInstances = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare software scene-BVH instance upload"));
-            return false;
-        }
-        chain.tasks.sceneBvhInstances = *sceneBvhInstancesUploadTaskResult;
-        chain.completionTask = chain.tasks.sceneBvhInstances;
     }
     return true;
 }

@@ -76,6 +76,16 @@ private:
         b8 usesGpuMarkers = false;
     };
 
+    struct GraphicsBufferStateEntry{
+        Buffer* buffer = nullptr;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+
+    struct GraphicsBufferStateTable{
+        Array<GraphicsBufferStateEntry, s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount> entries{};
+        u32 count = 0u;
+    };
+
 
 private:
     static constexpr u8 s_GraphPublicationUnowned = 0u;
@@ -176,7 +186,7 @@ public:
     // False when no submit-ready command buffer is owned.
     [[nodiscard]] b8 hasCommandBuffer()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
-        return ownership.m_readable && hasCommandBufferUnchecked();
+        return ownership.m_readable && matchesNativeLeaseIdentity();
     }
     // `hasCommandBuffer` remains true after close so queues can submit it.
     // Tooling that emits commands must use this predicate instead of treating ownership as an active recording scope.
@@ -192,7 +202,7 @@ public:
     // Every open starts a distinct lease. Recorders capture it before lowering; a thunk that swaps the buffer while claiming success is rejected.
     [[nodiscard]] u64 recordingLeaseSerial()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
-        return ownership.m_readable ? recordingLeaseSerialUnchecked() : 0u;
+        return ownership.m_readable ? m_recordingLeaseSerial : 0u;
     }
 
     [[nodiscard]] b8 matchesRecordingLease(u64 serial)const noexcept{
@@ -265,7 +275,6 @@ public:
     void clearBufferUInt(Buffer& buffer, u32 clearValue);
     void copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64 srcOffsetBytes, u64 dataSizeBytes);
     [[nodiscard]] b8 tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0, TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic);
-    void writeTexture(Texture& dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0, TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic);
     void resolveTexture(Texture& dest, const TextureSubresourceSet& dstSubresources, Texture& src, const TextureSubresourceSet& srcSubresources);
 
     void setPushConstants(const void* data, usize byteSize);
@@ -332,13 +341,10 @@ public:
 
 private:
     [[nodiscard]] b8 publicCommandStateAccessible()const noexcept;
-    [[nodiscard]] b8 hasCommandBufferUnchecked()const noexcept{ return matchesNativeLeaseIdentity(); }
 
     [[nodiscard]] b8 isRecordingUnchecked()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
 
     [[nodiscard]] b8 commandRecordingFailedUnchecked()const noexcept{ return m_commandRecordingFailed; }
-
-    [[nodiscard]] u64 recordingLeaseSerialUnchecked()const noexcept{ return m_recordingLeaseSerial; }
 
     [[nodiscard]] b8 matchesRecordingLeaseUnchecked(u64 serial)const noexcept{
         return serial != 0u && serial == m_recordingLeaseSerial && matchesActiveNativeLeaseIdentity();
@@ -372,6 +378,7 @@ private:
     [[nodiscard]] b8 validateViewportState(const ViewportState& viewportState, TStringView operationName);
     [[nodiscard]] b8 validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] b8 validateBufferForGpuState(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
+    [[nodiscard]] static b8 CollectGraphicsBufferStates(const GraphicsState& state, GraphicsBufferStateTable& outTable)noexcept;
     [[nodiscard]] b8 validateGraphicsState(const GraphicsState& state);
     [[nodiscard]] b8 validateMeshletState(const MeshletState& state);
     [[nodiscard]] b8 validateGraphicsDrawState(TStringView operationName, b8 indexed);

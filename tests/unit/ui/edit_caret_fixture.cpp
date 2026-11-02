@@ -3,6 +3,7 @@
 
 
 #include "edit_caret_fixture.h"
+#include "fixture_text_shaping.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,10 +61,8 @@ Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(const ShapeReques
         for(ShapedGlyph& glyph : run.glyphs)
             glyph.advance.x = 0.0f;
     }
-    if(request.direction == TextDirection::RightToLeft){
-        for(usize index = 0u; index < run.glyphs.size() / 2u; ++index)
-            Swap(run.glyphs[index], run.glyphs[run.glyphs.size() - index - 1u]);
-    }
+    if(request.direction == TextDirection::RightToLeft)
+        Tests::UiFixtureText::ReverseGlyphs(run);
     return run;
 }
 

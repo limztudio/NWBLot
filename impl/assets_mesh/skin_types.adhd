@@ -5,21 +5,8 @@
 // Joint/weight pairs per influence record. Keeps CPU and GPU forms in lockstep.
 const u32 s_SkinInfluenceJointCount = 4u;
 const u32 s_SkinBinaryMagic = 0x534B4E31u; // SKN1
-const u32 s_MeshBinaryMagic = 0x4D534837u; // MSH7
-const usize s_MeshPackedAlignBytes = 1u;
 const f32 s_SkinValidationEpsilon = 0.000001f;
 const f32 s_SkinWeightSumEpsilon = 0.001f;
-const StringView s_SkinMetaDiagnosticPrefix = "Skin meta";
-const StringView s_SkinMetaMeshField = "mesh";
-const StringView s_SkinMetaSkeletonField = "skeleton";
-const StringView s_SkinInfluencesField = "influences";
-const StringView s_SkinInverseBindMatricesField = "inverse_bind_matrices";
-const StringView s_SkinJointsField = "joints";
-const StringView s_SkinWeightsField = "weights";
-const StringView s_SkinMetaKind = "Skin";
-const StringView s_SkinInfluenceDiagnosticPrefix = "Skin influence";
-const StringView s_SkinIntegerListValueKind = "integer";
-const StringView s_SkinNumericListValueKind = "numeric";
 
 [serialize]
 class SkinInfluence4{
@@ -35,26 +22,6 @@ class SkinHeaderBinary{
     public NameHash skeletonNameHash;
     public u64 influenceCount = 0u;
     public u64 inverseBindMatrixCount = 0u;
-}
-
-[serialize]
-class MeshBinaryHeader{
-    public u32 magic = s_MeshBinaryMagic;
-    public u32 meshClass = 0u;
-    public u64 positionCount = 0u;
-    public u64 normalCount = 0u;
-    public u64 tangentCount = 0u;
-    public u64 uv0Count = 0u;
-    public u64 colorCount = 0u;
-    public u64 skinCount = 0u;
-    public u64 skeletonJointCount = 0u;
-    public u64 inverseBindMatrixCount = 0u;
-    public u64 meshletCount = 0u;
-    public u64 meshletBoundCount = 0u;
-    public u64 meshletPositionRefDeltaByteCount = 0u;
-    public u64 meshletAttributeRefDeltaByteCount = 0u;
-    public u64 meshletLocalVertexRefCount = 0u;
-    public u64 meshletPrimitiveIndexCount = 0u;
 }
 
 b8 ValidSkinInfluenceWeights(in f32x4u weights){
@@ -82,26 +49,6 @@ b8 ValidInverseBindMatrixCount(in usize inverseBindMatrixCount, in u32 skeletonJ
     if(inverseBindMatrixCount == 0u)
         return true;
     return skeletonJointCount != 0u && inverseBindMatrixCount == cast<usize>(skeletonJointCount);
-}
-
-b8 IsAllowedSkinMetadataField(in StringView fieldName){
-    return
-        fieldName == s_SkinMetaMeshField
-        || fieldName == s_SkinMetaSkeletonField
-        || fieldName == s_SkinInfluencesField
-        || fieldName == s_SkinInverseBindMatricesField
-    ;
-}
-
-b8 TryFindOutOfRangeSkinInfluenceJoint(in SkinInfluence4 skin, in u32 skeletonJointCount, mut usize outComponentIndex){
-    for(usize componentIndex = 0u; componentIndex < cast<usize>(s_SkinInfluenceJointCount); ++componentIndex){
-        if(cast<u32>(skin.joint[componentIndex]) < skeletonJointCount)
-            continue;
-
-        outComponentIndex = componentIndex;
-        return true;
-    }
-    return false;
 }
 
 [subsystem("skinning_subsystem")]

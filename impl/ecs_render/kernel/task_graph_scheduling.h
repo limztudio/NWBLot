@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/material/pipeline_types.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/task/gpu/task_desc.h>
 
@@ -65,6 +65,32 @@ void MakeSharedComputeEmulationPhaseTaskDesc(
     const Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
     Core::GpuTaskDesc& desc
 )noexcept;
+
+#define NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES(phaseIdPrefix, phaseLabelPrefix) \
+    const Array<Name, 10u> sharedPhaseIdentities = { \
+        Name(phaseIdPrefix ".shared_compute_emulation_generate_a"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_raster_a"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_generate_b"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_raster_b"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_generate_c"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_raster_c"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_generate_d"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_raster_d"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_generate_e"), \
+        Name(phaseIdPrefix ".shared_compute_emulation_raster_e"), \
+    }; \
+    const Array<AStringView, 10u> sharedPhaseMarkers = { \
+        phaseLabelPrefix " Shared Compute Emulation Generate A", \
+        phaseLabelPrefix " Shared Compute Emulation Raster A", \
+        phaseLabelPrefix " Shared Compute Emulation Generate B", \
+        phaseLabelPrefix " Shared Compute Emulation Raster B", \
+        phaseLabelPrefix " Shared Compute Emulation Generate C", \
+        phaseLabelPrefix " Shared Compute Emulation Raster C", \
+        phaseLabelPrefix " Shared Compute Emulation Generate D", \
+        phaseLabelPrefix " Shared Compute Emulation Raster D", \
+        phaseLabelPrefix " Shared Compute Emulation Generate E", \
+        phaseLabelPrefix " Shared Compute Emulation Raster E", \
+    }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

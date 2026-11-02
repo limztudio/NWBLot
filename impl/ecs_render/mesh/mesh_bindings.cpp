@@ -5,6 +5,7 @@
 #include "mesh_system.h"
 
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
@@ -69,15 +70,8 @@ b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation vertex buffer requires the initialized global descriptor heap"));
         return false;
     }
-    const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(handle){
-        Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
-        if(heap.write(*handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()))){
-            mesh.emulationVertexHeapHandle = *handle;
-            retireHandle.release();
-            return true;
-        }
-    }
+    if(RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()), mesh.emulationVertexHeapHandle))
+        return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
     return false;
@@ -162,12 +156,7 @@ ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSn
 }
 
 b8 RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept{
-    b8 ready = true;
-    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
-        const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
-        ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    });
-    return ready;
+    return GeometryHeapHandlesReady(mesh.geometryHeapHandles);
 }
 
 void RendererMeshSystem::populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept{
@@ -256,17 +245,7 @@ b8 RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime local bounds require a complete raw GPU buffer"));
             return false;
         }
-        const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        b8 registered = false;
-        if(handle){
-            Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
-            registered = heap.write(*handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()));
-            if(registered){
-                mesh.runtimeLocalBoundsHeapHandle = *handle;
-                retireHandle.release();
-            }
-        }
-        if(!registered){
+        if(!RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()), mesh.runtimeLocalBoundsHeapHandle)){
             releaseMeshGeometryHeapHandles(mesh);
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register runtime local bounds"));
             return false;
@@ -277,19 +256,10 @@ b8 RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         const Core::BufferDesc& desc = mesh.runtimeMeshletLocalBoundsBuffer->getCreationDescription();
         const u64 requiredBytes = static_cast<u64>(mesh.meshletCount) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
-        if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews){
-            const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-            if(handle){
-                Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
-                if(heap.write(*handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get()))){
-                    mesh.runtimeMeshletLocalBoundsHeapHandle = *handle;
-                    retireHandle.release();
-                }
-            }
-        }
-        if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
+        if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews)
+            (void)RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get()), mesh.runtimeMeshletLocalBoundsHeapHandle);
+        if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid())
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows"), ConvertString(mesh.meshName.resolvedText()));
-        }
     }
 
     NWB_ASSERT(meshRenderBindingsReady(mesh));
@@ -335,18 +305,8 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
             return;
         }
 
-        const Expected<Core::GpuDescriptorHandle> handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!handle){
+        if(!RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferSrv(0u, buffer.get()), acquired[bindingSlot]))
             registered = false;
-            return;
-        }
-        Core::GpuDescriptorRetirementGuard retireHandle(heap, *handle);
-        if(!heap.write(*handle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, buffer.get()))){
-            registered = false;
-            return;
-        }
-        acquired[bindingSlot] = *handle;
-        retireHandle.release();
     });
 
     if(!registered)

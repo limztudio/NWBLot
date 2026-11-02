@@ -9,7 +9,6 @@ type Vec4 = f32x4u;
 const Name s_UtilityArena = "utilities/fbx_to_nwb/utility";
 const Name s_UtilityScratch = "utilities/fbx_to_nwb/utility_scratch";
 
-const u32 s_MeshMissingStreamIndex = 0xffffffffu;
 const usize s_Vector2ComponentCount = 2u;
 const usize s_Vector3ComponentCount = 3u;
 const usize s_Vector4ComponentCount = 4u;
@@ -123,11 +122,6 @@ const f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
 const u32 s_PositionSkinKeySkinShiftBits = 32u;
 const StringView s_JointFallbackNamePrefix = "joint_";
 
-const StringView s_SourcePositionLabel = "position";
-const StringView s_SourceNormalLabel = "normal";
-const StringView s_SourceTangentLabel = "tangent";
-const StringView s_SourceUv0Label = "uv0";
-const StringView s_SourceColorLabel = "color";
 const StringView s_SourceVertexRefLabel = "vertex_ref";
 
 const f32 s_CleanFloatEpsilon = 0.00000001f;
@@ -161,12 +155,12 @@ enum<u8> OutputAssetType{
 }
 
 class SourceVertexRef{
-    public u32 position = s_MeshMissingStreamIndex;
-    public u32 normal = s_MeshMissingStreamIndex;
-    public u32 tangent = s_MeshMissingStreamIndex;
-    public u32 uv0 = s_MeshMissingStreamIndex;
-    public u32 color = s_MeshMissingStreamIndex;
-    public u32 skin = s_MeshMissingStreamIndex;
+    public u32 position = u32.max;
+    public u32 normal = u32.max;
+    public u32 tangent = u32.max;
+    public u32 uv0 = u32.max;
+    public u32 color = u32.max;
+    public u32 skin = u32.max;
 }
 
 class SourceMeshStreamCounts{
@@ -315,10 +309,7 @@ u64 PositionSkinKey(in u32 position, in u32 skin){
 }
 
 f32 CleanFloat(in f32 value){
-    f32 absValue = value;
-    if(absValue < 0.0f)
-        absValue = -absValue;
-    if(absValue < s_CleanFloatEpsilon)
+    if(abs(value) < s_CleanFloatEpsilon)
         return 0.0f;
     return value;
 }

@@ -43,13 +43,14 @@ struct IngestFailure{
 
 
 static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestConfig& config){
-    const auto extracted = ApplyDirectoryRetention(arena, CrashExtractedDirectory(arena, config.storageDirectory), config.retention.maxExtractedPackages);
+    const CrashScratchPath storageDirectory = CrashStorageDirectory(arena, config.storageDirectory);
+    const auto extracted = ApplyDirectoryRetention(arena, storageDirectory / s_CrashExtractedDirectoryName, config.retention.maxExtractedPackages);
     if(!extracted)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to extracted crash packages: {}"), ConvertString(extracted.error().message()));
-    const auto raw = ApplyDirectoryRetention(arena, CrashRawDirectory(arena, config.storageDirectory), config.retention.maxRawArchives);
+    const auto raw = ApplyDirectoryRetention(arena, storageDirectory / s_CrashRawDirectoryName, config.retention.maxRawArchives);
     if(!raw)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to raw crash archives: {}"), ConvertString(raw.error().message()));
-    const auto invalid = ApplyDirectoryRetention(arena, CrashInvalidDirectory(arena, config.storageDirectory), config.retention.maxInvalidArchives);
+    const auto invalid = ApplyDirectoryRetention(arena, storageDirectory / s_CrashInvalidDirectoryName, config.retention.maxInvalidArchives);
     if(!invalid)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives: {}"), ConvertString(invalid.error().message()));
 }

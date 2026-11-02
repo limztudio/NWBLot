@@ -150,10 +150,10 @@ private:
 
 private:
     struct ScopeWait{
-        CpuTaskScope& m_scope;
-        u64 m_scopeIdentity = 0u;
-        u64 m_publicationGeneration = 0u;
-        Array<TaskHandle, s_QueueCount> m_unrelatedAnchors{};
+        CpuTaskScope& scope;
+        u64 scopeIdentity = 0u;
+        u64 publicationGeneration = 0u;
+        Array<TaskHandle, s_QueueCount> unrelatedAnchors{};
     };
 
 

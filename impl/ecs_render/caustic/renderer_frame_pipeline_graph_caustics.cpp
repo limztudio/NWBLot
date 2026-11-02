@@ -130,14 +130,7 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             photonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
     }
-    const Core::GpuTaskResourceSetUse softwareTraceGeometrySetUse{ .resourceSet = softwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    Array<Core::GpuTaskResourceSetUse, s_SoftwarePhotonResourceSetUseCapacity> photonResourceSetUses{};
-    usize photonResourceSetUseCount = 0u;
-    if(softwareTraceGeometryStatesGraphOwned)
-        photonResourceSetUses[photonResourceSetUseCount++] = softwareTraceGeometrySetUse;
-    if(traceMaterialSampledTextureSet.valid())
-        photonResourceSetUses[photonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
+    const RendererFramePipelineDetail::TraceResourceSetUses photonResourceSetUses = RendererFramePipelineDetail::MakeTraceResourceSetUses(softwareTraceGeometrySet, traceMaterialSampledTextureSet);
 
     const Array<Core::GpuTaskExternalStateSource, 1u> scratchStateSources = {
         Core::GpuTaskExternalStateSource{ .states = m_causticsComputePersistentState.source(), },
@@ -191,7 +184,7 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         .setScheduling(causticsScheduling)
         .setDependencies({ &prefixTasksResult->photonDependencyTask, 1u })
         .setResourceUses(photonResourceUses)
-        .setResourceSetUses({ photonResourceSetUseCount != 0u ? photonResourceSetUses.data() : nullptr, photonResourceSetUseCount })
+        .setResourceSetUses({ photonResourceSetUses.useCount != 0u ? photonResourceSetUses.uses.data() : nullptr, photonResourceSetUses.useCount })
     ;
     const auto deferredCausticPhotonTaskResult = m_raytracingSystem.declareSoftwareCausticsTask(
         m_deferredLightingTaskGraph,

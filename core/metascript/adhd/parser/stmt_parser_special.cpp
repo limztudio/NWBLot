@@ -174,7 +174,7 @@ Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const Diagnost
     return stmt;
 }
 
-Stmt* StmtParser::parseVarDeclWithType(TypeRef* varType, const SourceSpan span, const b8 isConst){
+Stmt* StmtParser::parseVarDeclWithType(TypeRef& varType, const SourceSpan span, const b8 isConst){
     const MStringView varName = m_cursor.current().text;
     m_cursor.advance();
 
@@ -185,7 +185,7 @@ Stmt* StmtParser::parseVarDeclWithType(TypeRef* varType, const SourceSpan span, 
 
     Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
     stmt->kind = StmtKind::VarDecl;
-    stmt->varType = varType;
+    stmt->varType = &varType;
     stmt->name = varName;
     stmt->isConst = isConst;
     stmt->span = span;
@@ -196,7 +196,7 @@ Stmt* StmtParser::parseVarDeclWithType(TypeRef* varType, const SourceSpan span, 
             return nullptr;
     }
     else if(m_cursor.check(TokenType::LeftParen)){
-        if(varType->isAuto){
+        if(varType.isAuto){
             m_cursor.error(span.line, span.column, isConst ? "'auto' constant must be initialized with '= expr'" : "'auto' variable must be initialized with '= expr'");
             return nullptr;
         }
@@ -205,7 +205,7 @@ Stmt* StmtParser::parseVarDeclWithType(TypeRef* varType, const SourceSpan span, 
             return nullptr;
     }
     else if(!isConst && m_cursor.check(TokenType::Semicolon)){
-        if(varType->isAuto){
+        if(varType.isAuto){
             m_cursor.error(span.line, span.column, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
             return nullptr;
         }
@@ -271,5 +271,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

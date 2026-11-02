@@ -69,7 +69,7 @@ namespace __hidden_telemetry_frame_graph{
 }
 
 [[nodiscard]] static b8 ValidateEncodedNode(const EncodedFrameGraphNode& node)noexcept{
-    return node.reserved == 0u && !NameDetail::IsZeroHash(node.nameHash) && IsValidFrameGraphNodeKind(static_cast<FrameGraphNodeKind::Enum>(node.kind));
+    return node.reserved == 0u && !IsZeroHash(node.nameHash) && IsValidFrameGraphNodeKind(static_cast<FrameGraphNodeKind::Enum>(node.kind));
 }
 
 [[nodiscard]] static b8 ValidateEncodedEdge(const EncodedFrameGraphEdge& edge, const usize nodeCount)noexcept{

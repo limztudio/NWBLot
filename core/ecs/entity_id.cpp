@@ -42,7 +42,7 @@ EntityID EntityManager::create(){
         m_generations[index] = static_cast<u16>(m_generations[index] & ECSDetail::s_EntityGenerationMask);
     }
     else{
-        if(m_nextEntityIndex >= ECSDetail::s_EntityInvalidIndex){
+        if(m_nextEntityIndex >= ECSDetail::s_EntityIndexMask){
             NWB_ASSERT_MSG(false, NWB_TEXT("EntityManager exceeded maximum entity count"));
             return s_InvalidEntityId;
         }

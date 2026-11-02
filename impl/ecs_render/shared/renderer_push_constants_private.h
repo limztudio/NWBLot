@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 
@@ -61,6 +62,25 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] NWB_INLINE MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MeshFrameBindingSnapshot& frameBindings, const u32 generatedVertex = 0u)noexcept{
+    NWB_ASSERT(frameBindings.bindingValid());
+    MeshFrameHeapSlots slots;
+    slots.instance = frameBindings.instanceHeapHandle.slot();
+    slots.materialTyped = frameBindings.materialTypedHeapHandle.slot();
+    slots.view = frameBindings.meshView.heapHandle.slot();
+    slots.generatedVertex = generatedVertex;
+    return slots;
+}
+
+[[nodiscard]] ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
+    u32 meshletCount,
+    u32 instanceIndex,
+    u32 materialConstantByteOffset,
+    const Core::ViewportState& viewportState,
+    const MeshFrameHeapSlots& frameHeapSlots,
+    u32 dispatchFlags
+)noexcept;
 
 void SetShaderDrivenPushConstants(
     Core::CommandList& commandList,

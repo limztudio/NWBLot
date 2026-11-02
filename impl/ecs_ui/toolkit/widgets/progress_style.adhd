@@ -8,9 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Metric rows 0..2 carry data; row 3 is padding.
-const u32 s_ProgressMetricRowCount = 3u;
-
 class ProgressOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public f32 height = s_StyleControlHeight;
@@ -75,10 +72,7 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
 b8 TryMeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density, mut ProgressMetrics outMetrics){
     outMetrics = ProgressMetrics();
     if(
-        options.width.policy > LayoutSizePolicy::Stretch
-        || !isFinite(options.width.value)
-        || options.width.value < 0.0f
-        || (options.width.policy == LayoutSizePolicy::Stretch && options.width.value == 0.0f)
+        !IsValidLayoutSize(options.width)
         || !isFinite(options.height)
         || options.height < 0.0f
         || !IsBoundedUiPadding(style.padding)

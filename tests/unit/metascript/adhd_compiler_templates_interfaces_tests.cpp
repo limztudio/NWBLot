@@ -15,7 +15,7 @@ namespace __hidden_adhd_compiler_templates_interfaces_tests{
 
 
 using namespace NWB::AdhdCompilerTestsDetail;
-using NWB::Core::Metascript::Adhd::Compiler;
+namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
 using NWB::Core::Metascript::Adhd::CompileResult;
 using NWB::Core::Metascript::MString;
 using NWB::Core::Metascript::MStringView;
@@ -134,7 +134,7 @@ TEST(AdhdCompiler, OmitsIncludedDeclarationsFromGeneratedOutputAndRejectsInvalid
         "}\r\n";
 
     CompileResult splitRes(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_SplitImplSource, "impl/service/shared_service_impl.adhd", arena.arena, splitRes, &resolver));
+    ASSERT_TRUE(Compiler::Compile(s_SplitImplSource, "impl/service/shared_service_impl.adhd", &resolver, arena.arena, splitRes));
     const MStringView hdrView(splitRes.generatedHeader.data(), splitRes.generatedHeader.size());
     const MStringView cppView(splitRes.generatedSource.data(), splitRes.generatedSource.size());
     EXPECT_NE(hdrView.find("#include \"shared_service.adhd.h\""), MStringView::npos);
@@ -296,7 +296,7 @@ TEST(AdhdCompiler, PopsIncludeScopesAndOmitsTransitiveHeaderReemission){
 
     TransitiveSplitResolver resolver;
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_ImplSource, "impl/split_impl.adhd", arena.arena, res, &resolver));
+    ASSERT_TRUE(Compiler::Compile(s_ImplSource, "impl/split_impl.adhd", &resolver, arena.arena, res));
 
     EXPECT_EQ(resolver.popCount, 2u);
     ASSERT_EQ(res.unit.includedAdhdFiles.size(), 1u);

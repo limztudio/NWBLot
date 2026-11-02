@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ApplyModelObjectRenderer(Core::ECS::World& world, const Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity){
+void ApplyModelObjectRenderer(const Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::World& world, Core::ECS::Entity& entity){
     Core::Assets::AssetRef<Material> resolvedMaterial = material;
     b8 visible = true;
     if(const RendererComponent* ownerRenderer = world.tryGetComponent<RendererComponent>(owner)){

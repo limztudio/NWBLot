@@ -6,8 +6,8 @@
 
 
 #include "global.h"
-#include "utilities/fbx_to_nwb/types.adhd.h"
 
+#include <impl/assets_mesh/cook_types.adhd.h>
 #include <impl/assets_mesh/payload_types.adhd.h>
 #include <impl/assets_skeleton/joint_types.adhd.h>
 
@@ -109,7 +109,7 @@ struct MeshInstance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SceneHandle{
+struct SceneHandle : NoCopy{
 public:
     ufbx_scene* scene = nullptr;
 
@@ -119,12 +119,7 @@ public:
     SceneHandle(SceneHandle&& other)noexcept
         : scene(Exchange(other.scene, nullptr))
     {}
-    SceneHandle(const SceneHandle&) = delete;
     ~SceneHandle()noexcept;
-
-
-public:
-    SceneHandle& operator=(const SceneHandle&) = delete;
 };
 
 
@@ -143,8 +138,8 @@ b8 ValidateAssetTypeText(AString& inOutValue);
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NormalMode::Enum> ParseNormalModeText(AStringView value)noexcept;
 b8 ValidateNormalModeText(AString& inOutValue);
-Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena);
-ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena);
+Expected<Vec4> ParseColorText(AStringView text, Core::Alloc::ScratchArena& scratchArena);
+ScratchPath DefaultOutputPath(AStringView inputPath, Core::Alloc::ScratchArena& scratchArena);
 
 Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena);
 UtilityVector<MeshInstance> CollectMeshInstances(const ufbx_scene& scene, b8 includeHidden);
@@ -167,8 +162,8 @@ Expected<MeshBuildResult> BuildMesh(
 b8 WriteNwbAsset(
     const ScratchPath& outputPath,
     const SourceMeshStreams& mesh,
-    const AStringView assetTypeText,
-    const AStringView virtualRoot,
+    AStringView assetTypeText,
+    AStringView virtualRoot,
     b8 separateAssets,
     Span<ufbx_node* const> skeletonJoints,
     Span<const JointMatrix> skeletonBindPoseMatrices,

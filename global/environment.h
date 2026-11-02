@@ -30,7 +30,7 @@ template<typename ArenaT>
     const int result = ::_dupenv_s(&value, &valueSize, nativeName.c_str());
     ScopeExit freeValue([&]()noexcept{ ::free(value); });
     if(result != 0)
-        return MakeUnexpected(ErrorCode(result, std::generic_category()));
+        return MakeUnexpected(ErrorCode(result, GenericCategory()));
     if(!value)
         return Optional<AString<ArenaT>>{};
     const usize valueLength = valueSize > 0u ? static_cast<usize>(valueSize - 1u) : static_cast<usize>(NWB_STRLEN(value));

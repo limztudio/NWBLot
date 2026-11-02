@@ -11,6 +11,7 @@
 #include <global/limit.h>
 #include <global/name.h>
 #include <global/scope_exit.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,8 +61,8 @@ template<typename ScopeId, typename ScopeVector, typename ScopeMap, typename Cre
 // Generation-stamped scope lookup shared by memory and timing recorders.
 
 
-template<typename ScopeId, typename ScopeVector>
-[[nodiscard]] auto FindNamedScope(const ScopeVector& scopes, const ScopeId scope)noexcept(
+template<typename ScopeId, typename ScopeRecord>
+[[nodiscard]] auto FindNamedScope(const Span<const ScopeRecord> scopes, const ScopeId scope)noexcept(
     noexcept(DeclVal<ScopeId&>().~ScopeId()) && noexcept(static_cast<b8>(!scope.valid() || scope.index >= scopes.size())) &&
     noexcept(scopes[scope.index].get()) && noexcept(static_cast<b8>(!scopes[scope.index].get() || scopes[scope.index].get()->generation != scope.generation))
 ) -> RemoveCVRef_T<decltype(scopes[scope.index].get())>{
@@ -75,8 +76,8 @@ template<typename ScopeId, typename ScopeVector>
     return record;
 }
 
-template<typename ScopeId, typename ScopeVector>
-[[nodiscard]] ScopeId ScopeAt(const ScopeVector& scopes, const usize index)noexcept(
+template<typename ScopeId, typename ScopeRecord>
+[[nodiscard]] ScopeId ScopeAt(const Span<const ScopeRecord> scopes, const usize index)noexcept(
     noexcept(ScopeId{}) && noexcept(ScopeId(DeclVal<ScopeId&&>())) && noexcept(static_cast<b8>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
     noexcept(DeclVal<ScopeId&>().index = static_cast<u32>(index)) && noexcept(DeclVal<ScopeId&>().generation = scopes[index].get()->generation)
 ){
@@ -93,8 +94,8 @@ template<typename ScopeId, typename ScopeVector>
     return scope;
 }
 
-template<typename ScopeVector>
-[[nodiscard]] Name ScopeNameAt(const ScopeVector& scopes, const usize index)noexcept(
+template<typename ScopeRecord>
+[[nodiscard]] Name ScopeNameAt(const Span<const ScopeRecord> scopes, const usize index)noexcept(
     noexcept(static_cast<b8>(index >= scopes.size())) && noexcept(scopes[index].get()) &&
     noexcept(static_cast<b8>(!scopes[index].get())) && noexcept(DeclVal<void(*)(Name)noexcept>()(scopes[index].get()->name))
 ){

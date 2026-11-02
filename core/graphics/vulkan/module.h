@@ -22,8 +22,8 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_DefaultUploadSuballocationAlignment = s_ConstantBufferOffsetSizeAlignment;
-inline constexpr u64 s_AccelerationStructureAlignment = s_ConstantBufferOffsetSizeAlignment;
+inline constexpr u32 s_DefaultUploadSuballocationAlignment = 256;
+inline constexpr u64 s_AccelerationStructureAlignment = 256;
 inline constexpr u64 s_TlasInstanceDataAlignment = 16u;
 
 namespace ObjectTypes{
@@ -142,8 +142,6 @@ public:
 
 
 extern Expected<DeviceHandle> CreateDevice(const DeviceDesc& desc);
-
-extern VkFormat ConvertFormat(Format::Enum format)noexcept;
 
 extern TStringView ResultToString(VkResult result)noexcept;
 

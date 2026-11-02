@@ -3,11 +3,9 @@
 
 
 #include "ui_nested_popup_gallery.h"
-#include "ui_gallery_constants.h"
+#include "ui_gallery_support.h"
 
 #include <core/common/log.h>
-
-#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,29 +33,27 @@ UiNestedPopupGallery::UiNestedPopupGallery(NWB::Core::Alloc::GlobalArena& arena)
 void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
-    const f32 previousFontSize = ui.style().fontSize;
     const f32 previousGap = ui.style().gap;
-    ui.style().fontSize = s_NestedPopupFontSize;
     ui.style().gap = s_NestedPopupCompactGap;
-    if(!ui.beginPanel("nested_popup_gallery", { x, y, s_OrdinaryGalleryWidth, s_NestedPopupPanelHeight }))
-        return;
-    b8 valid = ui.label(s_TitleKey, "Nested popup / parent scope");
-    if(ui.button("open", "Open parent and right child"))
-        m_parent.open();
-    valid = ui.label(s_HintKey, "Escape/outside closes the top child") && valid;
-    valid = ui.endPanel() && valid;
-    PopupOptions parent;
-    const SIMDVectorSingle parentOrigin = VectorAdd(VectorSet(x, y, 0.0f, 0.0f), VectorSet(s_NestedPopupParentAnchorInset, s_NestedPopupParentAnchorTop, 0.0f, 0.0f));
-    parent.anchor = { VectorGetX(parentOrigin), VectorGetY(parentOrigin), s_NestedPopupParentAnchorWidth, s_NestedPopupParentAnchorHeight };
-    parent.size = { s_NestedPopupParentWidth, s_NestedPopupParentHeight };
-    if(ui.beginPopup("nested_parent", m_parent, parent)){
-        valid = paintParent(ui) && valid;
-        valid = ui.endPopup() && valid;
-    }
-    ui.style().fontSize = previousFontSize;
-    ui.style().gap = previousGap;
-    if(!valid || ui.failed())
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom nested popup declaration failed"));
+    ScopeExit restoreGap([&ui, previousGap]()noexcept{ ui.style().gap = previousGap; });
+    WithGalleryFontSize(ui, s_NestedPopupFontSize, [&](){
+        if(!ui.beginPanel("nested_popup_gallery", { x, y, s_OrdinaryGalleryWidth, s_NestedPopupPanelHeight }))
+            return;
+        b8 valid = ui.label(s_TitleKey, "Nested popup / parent scope");
+        if(ui.button("open", "Open parent and right child"))
+            m_parent.open();
+        valid = ui.label(s_HintKey, "Escape/outside closes the top child") && valid;
+        valid = ui.endPanel() && valid;
+        PopupOptions parent;
+        parent.anchor = { x + s_NestedPopupParentAnchorInset, y + s_NestedPopupParentAnchorTop, s_NestedPopupParentAnchorWidth, s_NestedPopupParentAnchorHeight };
+        parent.size = { s_NestedPopupParentWidth, s_NestedPopupParentHeight };
+        if(ui.beginPopup("nested_parent", m_parent, parent)){
+            valid = paintParent(ui) && valid;
+            valid = ui.endPopup() && valid;
+        }
+        if(!valid || ui.failed())
+            NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom nested popup declaration failed"));
+    });
 }
 
 b8 UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
@@ -105,9 +101,7 @@ b8 UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
     using namespace NWB::Impl::Ui;
     const Rect& parent = m_parent.placement().bounds;
     PopupOptions options;
-    const SIMDVectorSingle parentEnd = VectorAdd(VectorSet(parent.x, parent.y, 0.0f, 0.0f), VectorSet(parent.width, s_NestedPopupChildAnchorTop, 0.0f, 0.0f));
-    const SIMDVectorSingle childOrigin = VectorSubtract(parentEnd, VectorSet(s_NestedPopupChildAnchorWidth, 0.0f, 0.0f, 0.0f));
-    options.anchor = { VectorGetX(childOrigin), VectorGetY(parentEnd), s_NestedPopupChildAnchorWidth, s_NestedPopupChildAnchorHeight };
+    options.anchor = { (parent.x + parent.width) - s_NestedPopupChildAnchorWidth, parent.y + s_NestedPopupChildAnchorTop, s_NestedPopupChildAnchorWidth, s_NestedPopupChildAnchorHeight };
     options.side = PopupPlacementSide::Right;
     options.size = { s_NestedPopupChildWidth, s_NestedPopupChildHeight };
     if(!ui.beginPopup("right_child", m_child, options))

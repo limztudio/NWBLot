@@ -146,10 +146,10 @@ static b8 SetShaderImplicitDefine(const AStringView defineName, const AStringVie
 
 static Expected<ShaderCook::ShaderEntry> BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry){
     ShaderCook::ShaderEntry entry = sourceEntry;
-    entry.archiveStage = s_MeshComputeArchiveStageText;
+    entry.archiveStage = ShaderBinaryPayload::s_MeshComputeArchiveStageText;
     entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage);
 
-    if(!SetShaderImplicitDefine(s_MeshComputeImplicitDefineText, s_EnabledImplicitDefineValue, entry))
+    if(!SetShaderImplicitDefine(ShaderBinaryPayload::s_MeshComputeImplicitDefineText, s_EnabledImplicitDefineValue, entry))
         return MakeUnexpected(Failure{});
     return entry;
 }

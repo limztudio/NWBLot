@@ -14,10 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize RuntimeMeshRequestSet::KeyHash::operator()(const Lookup& key)const noexcept{
-    return HashRuntimeMeshRequestKey(key.name, key.version);
-}
-
 RuntimeMeshRequestSet::RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, const usize expectedRequestCount)
     : m_scratchArena(scratchArena)
     , m_expectedRequestCount(expectedRequestCount)
@@ -30,7 +26,7 @@ void RuntimeMeshRequestSet::add(const Name& meshKey, const u64 version){
     if(!meshKey)
         return;
     if(!m_index){
-        if(findInline(meshKey.identityHash(), version) < m_inlineCount)
+        if(FindInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, meshKey.identityHash(), version) < m_inlineCount)
             return;
         if(m_inlineCount < s_RuntimeMeshRequestInlineCapacity){
             m_inlineEntries[m_inlineCount] = Entry(Key(meshKey.identityHash(), version), false);
@@ -51,7 +47,7 @@ void RuntimeMeshRequestSet::markLive(const Name& meshKey, const u64 version)noex
         markIndexedLive(meshKey, version);
         return;
     }
-    const usize index = findInline(meshKey.identityHash(), version);
+    const usize index = FindInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, meshKey.identityHash(), version);
     if(index < m_inlineCount && !m_inlineEntries[index].found){
         m_inlineEntries[index].found = true;
         --m_remainingCount;
@@ -63,12 +59,8 @@ b8 RuntimeMeshRequestSet::containsLive(const Name& meshKey, const u64 version)co
         return false;
     if(m_index)
         return containsIndexedLive(meshKey, version);
-    const usize index = findInline(meshKey.identityHash(), version);
+    const usize index = FindInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, meshKey.identityHash(), version);
     return index < m_inlineCount && m_inlineEntries[index].found;
-}
-
-usize RuntimeMeshRequestSet::findInline(const NameHash& name, const u64 version)const noexcept{
-    return FindInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, name, version);
 }
 
 void RuntimeMeshRequestSet::promoteIndex(){

@@ -30,12 +30,6 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MaterialNonStandaloneAssetTypeRegistrar(Material::AssetTypeName(), "material");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static b8 HasProjectAssetVirtualRoot(const AStringView virtualPath, ScratchArena& scratchArena){
     const auto virtualRoot = Core::Assets::AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
     if(!virtualRoot)
@@ -266,7 +260,7 @@ static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const P
             }
 
             ACompactString flattenedKey;
-            if(!flattenedKey.assign(paramKeyText) || !flattenedKey.pushBack('.') || !flattenedKey.append(blockParamKeyText)){
+            if(!BuildMaterialBindParameterKey(paramKeyText, blockParamKeyText, flattenedKey)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText), ConvertString(blockParamKeyText));
                 return MakeUnexpected(Failure{});
             }
@@ -282,6 +276,20 @@ static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const P
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+static b8 HasMatchingVirtualAssetExtension(const ::Path<ScratchArena>& virtualPath, const AStringView requiredExtension, ScratchArena& scratchArena){
+    ScratchString extension = PathToString(scratchArena, virtualPath.extensionView());
+    CanonicalizeTextInPlace(extension);
+    return AStringView(extension) == requiredExtension;
+}
+
+template<typename StringT>
+static void NormalizeVirtualAssetSeparators(StringT& inOutPath)noexcept{
+    for(char& ch : inOutPath){
+        if(ch == '\\')
+            ch = '/';
+    }
+}
 
 static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena, ScratchArena& scratchArena){
     const auto* interfaceValue = asset.findField(s_MaterialMetaInterfaceField);
@@ -308,19 +316,14 @@ static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, cons
 
     // The interface names a `.bind`; strip the extension to match the discovered virtual path.
     ::Path<ScratchArena> interfacePathPath(scratchArena, interfacePath);
-    ScratchString extension = PathToString(scratchArena, interfacePathPath.extensionView());
-    CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) != s_MaterialBindSourceExtensionText){
+    if(!HasMatchingVirtualAssetExtension(interfacePathPath, s_MaterialBindSourceExtensionText, scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
     interfacePathPath.replaceExtension();
     ScratchString strippedInterface = PathToString(scratchArena, interfacePathPath);
-    for(char& ch : strippedInterface){
-        if(ch == '\\')
-            ch = '/';
-    }
+    NormalizeVirtualAssetSeparators(strippedInterface);
 
     // Store path text; the Name hash is produced on demand.
     const auto interfaceName = Name::FromText(AStringView(strippedInterface));
@@ -358,18 +361,13 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
     }
 
     const ::Path<ScratchArena> virtualPathPath(scratchArena, virtualPath);
-    ScratchString extension = PathToString(scratchArena, virtualPathPath.extensionView());
-    CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) != requiredExtension){
+    if(!HasMatchingVirtualAssetExtension(virtualPathPath, requiredExtension, scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a {} file"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(requiredExtension));
         return MakeUnexpected(Failure{});
     }
 
     CookString normalized(virtualPath, arena);
-    for(char& ch : normalized){
-        if(ch == '\\')
-            ch = '/';
-    }
+    NormalizeVirtualAssetSeparators(normalized);
     return normalized;
 }
 

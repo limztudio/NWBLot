@@ -102,11 +102,9 @@ b8 Builder::paintTooltips(){
         const Point measured{ textBounds->width, textBounds->height };
         PopupOptions options;
         options.anchor = box->rectangle;
-        const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), VectorSwizzle<0, 1, 0, 1>(paddingValue)), VectorSwizzle<2, 3, 2, 3>(paddingValue));
-        const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, background->minimumWidth, background->minimumHeight);
-        const SIMDVectorSingle size = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
-        const SIMDVectorSingle boundedSize = VectorMin(VectorSelect(size, VectorReplicate(frame.options.maximumWidth), s_SIMDMaskX), size);
-        options.size = { VectorGetX(boundedSize), VectorGetY(boundedSize) };
+        const f32 paddedWidth = Max(measured.x + padding.left + padding.right, background->minimumWidth);
+        const f32 paddedHeight = Max(measured.y + padding.top + padding.bottom, background->minimumHeight);
+        options.size = { Min(paddedWidth, frame.options.maximumWidth), paddedHeight };
         options.gap = frame.options.gap;
         options.side = frame.options.side;
         const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
@@ -118,10 +116,8 @@ b8 Builder::paintTooltips(){
         const Rect content = StoreRect(inset);
         m_paint.pushClip(content);
         b8 painted = false;
-        if(backgroundPainted){
-            const SIMDVectorSingle textOrigin = VectorSubtract(VectorSwizzle<0, 1, 0, 1>(inset), VectorSet(textBounds->x, textBounds->y, textBounds->x, textBounds->y));
-            painted = m_text.paint(m_paint, frame.text, { VectorGetX(textOrigin), VectorGetY(textOrigin) }, frame.style.text);
-        }
+        if(backgroundPainted)
+            painted = m_text.paint(m_paint, frame.text, { content.x - textBounds->x, content.y - textBounds->y }, frame.style.text);
         const b8 contentPopped = m_paint.popClip();
         const b8 popped = m_paint.popClip();
         const b8 ended = m_paint.endOverlay();

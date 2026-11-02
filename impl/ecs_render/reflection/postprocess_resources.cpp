@@ -3,6 +3,8 @@
 
 
 #include "postprocess_resources.h"
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <impl/assets/graphics/reflection/temporal_constants.h>
@@ -111,33 +113,20 @@ b8 RendererReflectionPostprocess::preparePipeline(
     Core::ComputePipelineHandle& pipeline,
     Core::ShaderHandle& shader
 ){
-    if(pipeline)
-        return true;
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!m_layout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES));
-        auto layoutResult = device.createBindingLayout(desc);
-        if(layoutResult)
-            m_layout = Move(*layoutResult);
-        else
-            m_layout.reset();
-        if(!layoutResult)
-            return false;
-    }
     const Name shaderName = m_shaders.resolveSubsystemAsset<ReflectionSubsystem>(shaderMember);
-    if(!m_shaders.loadShader<ComputeShader>(shaderName, variant, shaderName, shader))
-        return false;
-    Core::ComputePipelineDesc desc;
-    desc.setComputeShader(shader).addBindingLayout(m_layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-    auto pipelineResult = device.createComputePipeline(desc);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    return static_cast<b8>(pipelineResult);
+    return RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaders,
+        shaderMember,
+        variant,
+        shaderName,
+        NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES,
+        false,
+        m_layout,
+        shader,
+        pipeline
+    );
 }
 
 b8 RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& image, const u32 descriptorIndex, const Name name){
@@ -150,9 +139,9 @@ b8 RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& image,
         return false;
     Core::TextureHandle texture = Move(*textureResult);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> sampled = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    const Expected<Core::GpuDescriptorHandle> storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);
-    if(!sampled || !storage || !heap.write(*sampled, Core::DescriptorWriteItem::TextureSrv(0u, texture.get())) || !heap.write(*storage, Core::DescriptorWriteItem::TextureUav(0u, texture.get()))){
+    const Expected<Core::GpuDescriptorHandle> sampled = RendererDescriptorRegisterDetail::RegisterSampledTexture(heap, Core::GpuDescriptorClass::SampledImage, texture);
+    const Expected<Core::GpuDescriptorHandle> storage = RendererDescriptorRegisterDetail::RegisterStorageTexture(heap, texture);
+    if(!sampled || !storage){
         if(sampled)
             heap.free(*sampled);
         if(storage)

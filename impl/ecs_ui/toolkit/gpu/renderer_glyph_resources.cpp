@@ -92,32 +92,21 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
         return MakeUnexpected(versionResult.error());
     GpuVersion<GpuGlyphVersion> version = Move(*versionResult);
     const GlyphPageBinding& binding = page->binding();
-    Core::TextureDesc description;
-    description
-        .setName(s_GpuGlyphPageTextureName).setWidth(binding.width).setHeight(binding.height)
-        .setFormat(Core::Format::R8_UNORM).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-    ;
-    auto textureResult = device.createTexture(description);
-    if(textureResult)
-        version->m_texture = Move(*textureResult);
-    else
-        version->m_texture.reset();
-    if(!textureResult)
-        return MakeUnexpected(Failure{});
-    const Core::GraphicsRuntime::TextureUploadRegion region{ .data = page->pixels().data(), .dataSize = page->pixels().size(), .rowPitch = binding.width, .depthPitch = page->pixels().size(), };
     // Upload only a fresh immutable image. Accepted readiness stays with this version across presentation retries.
-    if(!m_graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
-        .destination = version->m_texture,
-        .regions = &region,
-        .regionCount = 1u,
-        .acceptedToken = &version->m_readinessToken,
-        .finalState = Core::ResourceStates::ShaderResource,
-        .physicalInitialState = Core::ResourceStates::Unknown,
-        .hasPhysicalInitialState = true,
-    }))
-        return MakeUnexpected(Failure{});
-    if(!version->m_readinessToken.valid() || !version->m_readinessToken.hasPhysicalQueueIdentity())
+    if(!CreateAndUploadGpuPageTexture(
+        m_graphics,
+        GpuPageTextureUploadDesc{
+            .name = s_GpuGlyphPageTextureName,
+            .width = binding.width,
+            .height = binding.height,
+            .format = Core::Format::R8_UNORM,
+            .data = page->pixels().data(),
+            .dataSize = page->pixels().size(),
+            .rowPitch = binding.width,
+        },
+        version->m_texture,
+        version->m_readinessToken
+    ))
         return MakeUnexpected(Failure{});
     // Frames retain superseded versions; evicting a cache entry never overwrites an image or frees a live frame's descriptor.
     if(replaceIndex < m_glyphCache.size())
@@ -144,8 +133,8 @@ b8 GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
     return true;
 }
 
-Expected<GpuGlyphGraphResources> GpuRendererState::declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
-    Expected<GpuGlyphGraphResources> resources{s_InPlace};
+Expected<GpuSampledGraphResources> GpuRendererState::declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
+    Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_glyphPages.size() != frame->m_snapshot.glyphPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
         return MakeUnexpected(Failure{});

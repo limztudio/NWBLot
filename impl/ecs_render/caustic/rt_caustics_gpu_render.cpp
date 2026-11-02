@@ -17,9 +17,87 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_rt_caustics_gpu_render{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static CausticPhotonPushConstants MakeCausticPhotonPushConstants(
+    const RendererRayTracingState& state,
+    const DeferredFrameTargets& targets,
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+    const CausticPhotonBudget& photonBudget,
+    const u32 instanceCount,
+    const u32 frameIndex,
+    const u32 temporalPhaseCount
+)noexcept{
+    return ResolveCausticPhotonPushConstants(
+        targets.width,
+        targets.height,
+        instanceCount,
+        photonBudget,
+        state.m_causticRefractiveInstanceCount,
+        frameIndex,
+        targets.bindless.gbufferDepth.slot(),
+        targets.bindless.gbufferWorldPosition.slot(),
+        state.m_causticEmissionTargetHeapHandle.slot(),
+        meshView.heapHandle.slot(),
+        targets.bindless.slotsBufferDescriptor.slot(),
+        state.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
+        targets.bindless.causticAccumulatorStorage.slot(),
+        temporalPhaseCount
+    );
+}
+
+template<typename RecordFn>
+static void RecordCausticPhotonPass(
+    Core::GraphicsRuntime& graphics,
+    const RendererRayTracingState& state,
+    const CausticPhotonBudget& photonBudget,
+    const u32 temporalPhaseCount,
+    const tchar* const routeLabel,
+    Core::CommandList& commandList,
+    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming,
+    b8& dispatchLogged,
+    RecordFn&& recordPhotons
+){
+    if(causticPhotonTiming && causticPhotonTiming->has_value()){
+        recordPhotons();
+        causticPhotonTiming->value().finishTiming(commandList);
+        causticPhotonTiming->reset();
+    }
+    else{
+        Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics.getDevice(), commandList);
+
+        recordPhotons();
+    }
+
+    if(!dispatchLogged){
+        dispatchLogged = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched {} caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
+            , routeLabel
+            , static_cast<u64>(photonBudget.photonsPerFrame)
+            , static_cast<u64>(temporalPhaseCount)
+            , static_cast<u64>(photonBudget.fullGridCount)
+            , static_cast<u64>(state.m_causticLightCount)
+            , static_cast<u64>(state.m_causticRefractiveInstanceCount)
+        );
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Software photon producer runs before deferred lighting.
-
     if(!hasCausticWork(meshView))
         return false;
     NWB_ASSERT(meshView.bindingValid());
@@ -29,56 +107,89 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList
         return false;
     const u32 temporalPhaseCount = s_CausticTemporalPhaseCount;
     const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, NWB_CAUSTIC_SW_GRID_SIDE, temporalPhaseCount);
-    const u32 photonCount = photonBudget.photonsPerFrame;
 
-    const auto recordPhotons = [&](){
-        const CausticPhotonPushConstants pushConstants = ResolveCausticPhotonPushConstants(
-            targets.width,
-            targets.height,
-            m_rayTracingState.m_sceneBvhInstanceCount,
-            photonBudget,
-            m_rayTracingState.m_causticRefractiveInstanceCount,
-            static_cast<u32>(m_graphics.getFrameIndex()),
-            targets.bindless.gbufferDepth.slot(),
-            targets.bindless.gbufferWorldPosition.slot(),
-            m_rayTracingState.m_causticEmissionTargetHeapHandle.slot(),
-            meshView.heapHandle.slot(),
-            targets.bindless.slotsBufferDescriptor.slot(),
-            m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
-            targets.bindless.causticAccumulatorStorage.slot(),
-            temporalPhaseCount
-        );
+    __hidden_rt_caustics_gpu_render::RecordCausticPhotonPass(
+        m_graphics,
+        m_rayTracingState,
+        photonBudget,
+        temporalPhaseCount,
+        NWB_TEXT("software"),
+        commandList,
+        causticPhotonTiming,
+        m_rayTracingState.m_swCausticDispatchLogged,
+        [&](){
+            const CausticPhotonPushConstants pushConstants = __hidden_rt_caustics_gpu_render::MakeCausticPhotonPushConstants(
+                m_rayTracingState,
+                targets,
+                meshView,
+                photonBudget,
+                m_rayTracingState.m_sceneBvhInstanceCount,
+                static_cast<u32>(m_graphics.getFrameIndex()),
+                temporalPhaseCount
+            );
+            Core::ComputeState computeState;
+            computeState.setPipeline(pipeline.get());
+            commandList.setComputeState(computeState);
+            Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+            NWB_ASSERT(heap.isInitialized());
+            heap.bindCompute(commandList, *pipeline.get());
+            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+            commandList.dispatch(DivideUp(photonBudget.photonsPerFrame, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
+        }
+    );
+    return true;
+}
 
-        Core::ComputeState computeState;
-        computeState.setPipeline(pipeline.get());
-        commandList.setComputeState(computeState);
-        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        NWB_ASSERT(heap.isInitialized());
-        heap.bindCompute(commandList, *pipeline.get());
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(DivideUp(photonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
-    };
-    if(causticPhotonTiming && causticPhotonTiming->has_value()){
-        recordPhotons();
-        causticPhotonTiming->value().finishTiming(commandList);
-        causticPhotonTiming->reset();
+b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, const ECSRenderDetail::MeshViewBufferSnapshot& meshView, DeferredFrameTargets& targets, Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
+    // Hardware photons share the accumulator and resolve with the software reference.
+    if(!hasHwCausticWork(meshView))
+        return false;
+    NWB_ASSERT(meshView.bindingValid());
+    NWB_ASSERT(targets.bindless.valid());
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
+        return false;
     }
-    else{
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, m_graphics.getDevice(), commandList);
+    const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const auto& pipeline = csg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline;
+    const auto& shaderTable = csg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable;
+    if(!pipeline || !shaderTable || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets))
+        return false;
+    const u32 temporalPhaseCount = s_CausticTemporalPhaseCount;
+    const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
 
-        recordPhotons();
-    }
+    __hidden_rt_caustics_gpu_render::RecordCausticPhotonPass(
+        m_graphics,
+        m_rayTracingState,
+        photonBudget,
+        temporalPhaseCount,
+        NWB_TEXT("hardware"),
+        commandList,
+        causticPhotonTiming,
+        m_rayTracingState.m_hwCausticDispatchLogged,
+        [&](){
+            const CausticPhotonPushConstants pushConstants = __hidden_rt_caustics_gpu_render::MakeCausticPhotonPushConstants(
+                m_rayTracingState,
+                targets,
+                meshView,
+                photonBudget,
+                m_rayTracingState.m_tlasInstanceCount,
+                static_cast<u32>(m_graphics.getFrameIndex()),
+                temporalPhaseCount
+            );
+            Core::RayTracingState rayTracingPassState;
+            rayTracingPassState.setShaderTable(shaderTable.get());
+            commandList.setRayTracingState(rayTracingPassState);
+            // Bind heap blocks after RayTracingState; set 2 selects the TLAS generation.
+            heap.bindRayTracing(commandList, *pipeline.get(), m_rayTracingState.m_tlasHeapHandle);
+            commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
-    if(!m_rayTracingState.m_swCausticDispatchLogged){
-        m_rayTracingState.m_swCausticDispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
-            , static_cast<u64>(photonCount)
-            , static_cast<u64>(temporalPhaseCount)
-            , static_cast<u64>(photonBudget.fullGridCount)
-            , static_cast<u64>(m_rayTracingState.m_causticLightCount)
-            , static_cast<u64>(m_rayTracingState.m_causticRefractiveInstanceCount)
-        );
-    }
+            Core::RayTracingDispatchRaysArguments dispatchArgs;
+            dispatchArgs.setDimensions(photonBudget.gridSide, photonBudget.gridSide / temporalPhaseCount, 1u);
+            commandList.dispatchRays(dispatchArgs);
+        }
+    );
     return true;
 }
 

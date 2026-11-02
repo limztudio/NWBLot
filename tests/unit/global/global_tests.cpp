@@ -311,11 +311,9 @@ TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
 }
 
 TEST(Global, DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters){
-    constexpr AStringView s_Format = s_ValueFormatTrailing;
-    const DiagnosticEventText narrow = MakeDiagnosticEventText(s_Format.substr(0u, 8u), 42u);
+    const DiagnosticEventText narrow = MakeDiagnosticEventText(s_ValueFormatTrailing.substr(0u, 8u), 42u);
     EXPECT_EQ(narrow.view(), s_Value42);
-    constexpr WStringView s_WideFormat = s_ValueFormatTrailingWide;
-    const DiagnosticEventText wide = MakeDiagnosticEventText(s_WideFormat.substr(0u, 8u), 42u);
+    const DiagnosticEventText wide = MakeDiagnosticEventText(s_ValueFormatTrailingWide.substr(0u, 8u), 42u);
     EXPECT_EQ(wide.view(), s_Value42);
     EXPECT_EQ(MakeDiagnosticEventText(static_cast<const char*>(nullptr), 42u).view(), AStringView{});
 }

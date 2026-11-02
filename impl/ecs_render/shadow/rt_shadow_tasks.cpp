@@ -41,9 +41,8 @@ b8 ShadowVisibilityOpaqueGraphTask::Record(const Payload& payload, Core::Command
     }
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-    if(queue->queueClass == Core::CommandQueue::Compute){
+    if(queue->queueClass == Core::CommandQueue::Compute)
         payload.asyncTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncShadow, payload.graphics.getDevice(), commandList);
-    }
     payload.shadowVisibilityTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, payload.graphics.getDevice(), commandList);
 
     b8 opaqueRecorded = false;
@@ -201,9 +200,8 @@ b8 ShadowTransparentSoftTemporalMergeGraphTask::Record(const Payload& payload, C
         ? payload.raytracingSystem.renderSoftShadowCombinedTemporalMerge(commandList, payload.targets)
         : payload.raytracingSystem.renderSoftTransparentShadowTemporalMerge(commandList, payload.targets, payload.deferredLightingResources, payload.opaqueFrameIndex, payload.graphOwnsTransparentTemporalMergeEntryStates)
     ;
-    if(merged){
+    if(merged)
         return Core::FinishSplitGpuTimingMarker(&payload.transparentResolveTiming);
-    }
 
     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow temporal merge failed; preserving opaque visibility"));
     payload.transparentTraceProduced = false;
@@ -346,9 +344,8 @@ b8 ShadowVisibilityGraphTask::Record(const Payload& payload, Core::CommandList& 
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     Optional<Core::GpuTimingMeasure> asyncTiming;
-    if(queue->queueClass == Core::CommandQueue::Compute){
+    if(queue->queueClass == Core::CommandQueue::Compute)
         asyncTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncShadow, payload.graphics.getDevice(), commandList);
-    }
 
     b8 shadowVisibilityWritten = false;
     if(payload.prepared && payload.hardwareShadowSupported){
@@ -356,9 +353,8 @@ b8 ShadowVisibilityGraphTask::Record(const Payload& payload, Core::CommandList& 
         if(!shadowVisibilityWritten)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
     }
-    else if(payload.prepared){
+    else if(payload.prepared)
         shadowVisibilityWritten = payload.raytracingSystem.renderGpuBvhShadowVisibility(commandList, payload.targets, payload.deferredLightingResources, false, false, false, graphOwnedAdaptivePlan).has_value();
-    }
     // The preceding typed white clear remains the all-lit result when no producer records.
 
     if(asyncTiming){

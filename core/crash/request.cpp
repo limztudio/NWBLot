@@ -77,7 +77,7 @@ StringView ReasonKindName(const u32 reasonKind)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void BuildCrashId(CrashRequest& outRequest, const u64 sequence)noexcept{
+static void BuildCrashId(const u64 sequence, CrashRequest& outRequest)noexcept{
     CopyFixedBuffer(outRequest.crashId, PackageNames::s_CrashIdPrefix);
     AppendUnsignedToFixedBuffer(outRequest.crashId, outRequest.processId);
     AppendFixedBuffer(outRequest.crashId, "-");
@@ -127,7 +127,7 @@ void PublishCrashStateSnapshot()noexcept{
     g_State.publishedSnapshotImage.store(imageIndex, MemoryOrder::release);
 }
 
-void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum reasonKind, const u32 reasonCode)noexcept{
+void SnapshotCrashState(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, CrashRequest& outRequest)noexcept{
     outRequest = CrashRequest{};
     outRequest.platform = CurrentPlatformKind();
     outRequest.reasonKind = reasonKind;
@@ -135,7 +135,7 @@ void SnapshotCrashState(CrashRequest& outRequest, const CrashReasonKind::Enum re
     outRequest.processId = CurrentProcessId();
     outRequest.threadId = CurrentThreadId();
     const u64 sequence = g_State.crashSequence.fetch_add(1u, MemoryOrder::relaxed);
-    BuildCrashId(outRequest, sequence);
+    BuildCrashId(sequence, outRequest);
     CopyFixedBuffer(outRequest.abi, CurrentAbiName());
 
     for(;;){
@@ -189,7 +189,7 @@ b8 TryConsumeSuppressedPlatformCrashCapture()noexcept{
 
 CrashRequest BuildCrashDumpRequest(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options)noexcept{
     CrashRequest request;
-    SnapshotCrashState(request, reasonKind, reasonCode);
+    SnapshotCrashState(reasonKind, reasonCode, request);
     request.exceptionPointers = options.exceptionPointers;
 #if defined(NWB_PLATFORM_WINDOWS)
     if(options.manualContext){

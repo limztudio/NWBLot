@@ -81,11 +81,10 @@ public:
 private:
     [[nodiscard]] Expected<Core::GpuTaskId> declarePhase(
         const OpaqueSharedComputeEmulationChainInputs& inputs,
-        const Core::GpuTaskSchedulingHint& scheduling,
         const Name& identity,
         AStringView markerLabel,
         const Core::GpuTaskId& dependency,
-        ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum phase,
+        SharedComputeEmulationPhase::Enum phase,
         usize drawIndex,
         b8 finishTiming,
         Span<const Core::GpuTaskResourceUse> resourceUses,

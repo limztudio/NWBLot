@@ -11,7 +11,6 @@
 #include <core/telemetry/text_log.h>
 
 #include <global/bit.h>
-#include <global/csv_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,9 +36,9 @@ static constexpr usize s_PerfCsvBytesPerEvent = 128u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameDetail::s_DebugHashTextLength + 1u>& outIdentityText){
-    NameDetail::HashToDebugString(outIdentityText.data(), outIdentityText.size(), name.hash());
-    return AStringView(outIdentityText.data(), NameDetail::s_DebugHashTextLength);
+[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, s_DebugHashTextLength + 1u>& outIdentityText)noexcept{
+    HashToDebugString(outIdentityText.data(), outIdentityText.size(), name.hash());
+    return AStringView(outIdentityText.data(), s_DebugHashTextLength);
 }
 
 [[nodiscard]] usize EventKindBucket(const Core::Telemetry::EventKind::Enum kind)noexcept{
@@ -47,7 +46,7 @@ static constexpr usize s_PerfCsvBytesPerEvent = 128u;
     return index < s_TelemetryReportEventKindCount ? index : static_cast<usize>(Core::Telemetry::EventKind::Unknown);
 }
 
-void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex)noexcept{
+void RecordFrameRange(const u64 frameIndex, TelemetryReportSummary& summary)noexcept{
     if(!summary.hasFrameRange){
         summary.hasFrameRange = true;
         summary.minFrameIndex = frameIndex;
@@ -91,10 +90,35 @@ void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex)noex
     }
 }
 
-void AppendPerfCsvRow(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::PerfTimingSource::Enum source, const Core::Telemetry::PerfTimingPayload& payload){
+template<typename StringT>
+void AppendCsvCell(const AStringView text, StringT& out)noexcept(noexcept(out.append(text.data(), text.size())) && noexcept(out += '"') && noexcept(out += "\"\"")){
+    b8 quote = false;
+    for(const char ch : text){
+        if(ch == ',' || ch == '"' || ch == '\n' || ch == '\r'){
+            quote = true;
+            break;
+        }
+    }
+
+    if(!quote){
+        out.append(text.data(), text.size());
+        return;
+    }
+
+    out += '"';
+    for(const char ch : text){
+        if(ch == '"')
+            out += "\"\"";
+        else
+            out += ch;
+    }
+    out += '"';
+}
+
+void AppendPerfCsvRow(const Core::Telemetry::PerfTimingSource::Enum source, const Core::Telemetry::PerfTimingPayload& payload, AString<Core::Telemetry::TelemetryArena>& out){
     out += PerfTimingSourceText(source);
     out += ',';
-    AppendCsvCell(out, payload.scopeText);
+    AppendCsvCell(payload.scopeText, out);
     StringAppendFormat(
         out,
         ",{},{:.9},{:.9},{:.9},{:.9},{},{},{}\n",
@@ -109,7 +133,7 @@ void AppendPerfCsvRow(AString<Core::Telemetry::TelemetryArena>& out, const Core:
     );
 }
 
-void AddTiming(TelemetryReportSummary& summary, const Core::Telemetry::PerfTimingPayload& payload)noexcept{
+void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryReportSummary& summary)noexcept{
 #pragma STDC FENV_ACCESS ON
     if(payload.source == Core::Telemetry::PerfTimingSource::Cpu){
         ++summary.cpuTimingEventCount;
@@ -139,7 +163,7 @@ void AddTiming(TelemetryReportSummary& summary, const Core::Telemetry::PerfTimin
     }
 }
 
-void AddFrameGraph(TelemetryReportSummary& summary, const Core::Telemetry::FrameGraphPayload& payload)noexcept{
+void AddFrameGraph(const Core::Telemetry::FrameGraphPayload& payload, TelemetryReportSummary& summary)noexcept{
     ++summary.frameGraphFrameCount;
     summary.frameGraphNodeCount += payload.nodes.size();
     summary.frameGraphEdgeCount += payload.edges.size();
@@ -181,7 +205,7 @@ Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView&
         const Core::Telemetry::EventRecord& event = *MakeNotNull(events.eventAt(i));
 
         ++report.summary.eventKindCounts[TelemetryReportDetail::EventKindBucket(event.header.kind)];
-        TelemetryReportDetail::RecordFrameRange(report.summary, event.header.frameIndex);
+        TelemetryReportDetail::RecordFrameRange(event.header.frameIndex, report.summary);
 
         switch(event.header.kind){
         case Core::Telemetry::EventKind::TextLog: {
@@ -202,8 +226,8 @@ Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView&
                 ++report.summary.parseFailureCount;
                 break;
             }
-            TelemetryReportDetail::AddTiming(report.summary, *payload);
-            TelemetryReportDetail::AppendPerfCsvRow(report.perfCsv, payload->source, *payload);
+            TelemetryReportDetail::AddTiming(*payload, report.summary);
+            TelemetryReportDetail::AppendPerfCsvRow(payload->source, *payload, report.perfCsv);
             // first/last are arrival endpoints, so only one sample proves an exact source-frame association when different queues complete out of order.
             // Aggregated windows remain available in the Perf CSV.
             if(payload->stats.sampleCount == 1u && payload->stats.firstSampleFrameIndex == payload->stats.lastSampleFrameIndex){
@@ -217,8 +241,8 @@ Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView&
                 ++report.summary.parseFailureCount;
                 break;
             }
-            AddTelemetryMemorySummary(report.summary, *payload);
-            AppendTelemetryMemoryRecordJson(memoryRecords, *payload, event.header.streamId);
+            AddTelemetryMemorySummary(*payload, report.summary);
+            AppendTelemetryMemoryRecordJson(*payload, event.header.streamId, memoryRecords);
             break;
         }
         case Core::Telemetry::EventKind::FrameGraphFrame: {
@@ -231,7 +255,7 @@ Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView&
                 break;
             }
             record.payload = Move(*payload);
-            TelemetryReportDetail::AddFrameGraph(report.summary, record.payload);
+            TelemetryReportDetail::AddFrameGraph(record.payload, report.summary);
             break;
         }
         default:

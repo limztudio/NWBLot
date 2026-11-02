@@ -2,11 +2,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font_atlas/types.adhd>
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 #include <impl/ecs_ui/toolkit/layout/validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <global/sha256.h>
+namespace NWB::Impl{
+class Font;
+}
+namespace NWB::Impl::Ui{
+template<typename TFont>
+class GlyphPageBindingRecord;
+template<typename TFont>
+class SdfAtlasPageBindingRecord;
+using GlyphPageBinding = GlyphPageBindingRecord<NWB::Impl::Font>;
+using SdfAtlasPageBinding = SdfAtlasPageBindingRecord<NWB::Impl::Font>;
+}
+}
+
+
+const u32 s_GlyphAtlasPageExtent = 512u;
+const u32 s_GlyphAtlasGlyphGutter = 2u;
+const usize s_GlyphAtlasMaxPages = 16u;
+const u32 s_SdfMaxChannelCount = 4u;
 
 
 const usize s_TextBytesPerKilobyte = 1024u;
@@ -487,6 +510,108 @@ TextGlyphIntersection TryIntersectTextRects(in Rect rectangle, in Rect clip){
     const f64 maxX = minX + cast<f64>(rectangle.width);
     const f64 maxY = minY + cast<f64>(rectangle.height);
     return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
+}
+
+class GlyphPageBindingRecord<TFont>{
+    public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height;
+    }
+
+    public b8 operator!=(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font || this.fontGeneration != rhs.fontGeneration || this.atlasIdentity != rhs.atlasIdentity || this.generation != rhs.generation || this.index != rhs.index || this.width != rhs.width || this.height != rhs.height;
+    }
+
+    public AssetRef<TFont> font;
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+class SdfAtlasPageBindingRecord<TFont>{
+    public b8 operator==(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font
+            && this.fontSha256 == rhs.fontSha256
+            && this.pixelsSha256 == rhs.pixelsSha256
+            && this.fontGeneration == rhs.fontGeneration
+            && this.atlasIdentity == rhs.atlasIdentity
+            && this.generation == rhs.generation
+            && this.index == rhs.index
+            && this.width == rhs.width
+            && this.height == rhs.height
+            && this.channelCount == rhs.channelCount
+            && this.spreadPixels == rhs.spreadPixels
+            && this.distanceEncoding == rhs.distanceEncoding;
+    }
+
+    public b8 operator!=(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font
+            || this.fontSha256 != rhs.fontSha256
+            || this.pixelsSha256 != rhs.pixelsSha256
+            || this.fontGeneration != rhs.fontGeneration
+            || this.atlasIdentity != rhs.atlasIdentity
+            || this.generation != rhs.generation
+            || this.index != rhs.index
+            || this.width != rhs.width
+            || this.height != rhs.height
+            || this.channelCount != rhs.channelCount
+            || this.spreadPixels != rhs.spreadPixels
+            || this.distanceEncoding != rhs.distanceEncoding;
+    }
+
+    public AssetRef<TFont> font;
+    public Sha256Digest fontSha256 = Sha256Digest();
+    public Sha256Digest pixelsSha256 = Sha256Digest();
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = s_SdfMaxChannelCount;
+    public u32 spreadPixels = 0u;
+    public u32 distanceEncoding = s_FontAtlasDistanceEncoding;
+}
+
+b8 SameGlyphPageKey<TFont>(in GlyphPageBindingRecord<TFont> first, in GlyphPageBindingRecord<TFont> second){
+    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
+}
+
+b8 ValidGlyphPageBinding<TFont>(in GlyphPageBindingRecord<TFont> binding, in usize pixelByteCount){
+    return binding.font.valid()
+        && binding.fontGeneration != 0u
+        && binding.atlasIdentity != 0u
+        && binding.generation != 0u
+        && binding.index < s_GlyphAtlasMaxPages
+        && binding.width != 0u
+        && binding.height != 0u
+        && binding.width <= s_GlyphAtlasPageExtent
+        && binding.height <= s_GlyphAtlasPageExtent
+        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height);
+}
+
+b8 SameSdfAtlasPageKey<TFont>(in SdfAtlasPageBindingRecord<TFont> first, in SdfAtlasPageBindingRecord<TFont> second){
+    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.generation == second.generation && first.index == second.index;
+}
+
+b8 ValidSdfAtlasPageBinding<TFont>(in SdfAtlasPageBindingRecord<TFont> binding, in usize pixelByteCount){
+    return binding.font.valid()
+        && binding.fontGeneration != 0u
+        && binding.atlasIdentity != 0u
+        && binding.generation != 0u
+        && binding.index < s_FontAtlasMaxGroupCount
+        && binding.width != 0u
+        && binding.height != 0u
+        && binding.width <= s_FontAtlasMaxExtent
+        && binding.height <= s_FontAtlasMaxExtent
+        && binding.channelCount != 0u
+        && binding.channelCount <= s_SdfMaxChannelCount
+        && binding.spreadPixels >= s_FontAtlasMinSpreadPixels
+        && binding.spreadPixels <= s_FontAtlasMaxSpreadPixels
+        && binding.distanceEncoding == s_FontAtlasDistanceEncoding
+        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height) * cast<usize>(binding.channelCount);
 }
 
 

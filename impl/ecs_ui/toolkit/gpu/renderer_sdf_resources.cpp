@@ -85,19 +85,6 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
     if(!versionResult)
         return MakeUnexpected(versionResult.error());
     GpuVersion<GpuSdfAtlasVersion> version = Move(*versionResult);
-    Core::TextureDesc description;
-    description
-        .setName(s_GpuSdfPageTextureName).setWidth(binding.width).setHeight(binding.height)
-        .setFormat(format).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-    ;
-    auto textureResult = device.createTexture(description);
-    if(textureResult)
-        version->m_texture = Move(*textureResult);
-    else
-        version->m_texture.reset();
-    if(!textureResult)
-        return MakeUnexpected(Failure{});
     Vector<u8, Core::Alloc::ScratchArena> expanded(scratchArena);
     NotNull<const u8*> uploadData(page->pixels().data());
     usize uploadBytes = page->pixels().size();
@@ -109,18 +96,20 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
         uploadData = expanded.data();
         uploadBytes = expanded.size();
     }
-    const Core::GraphicsRuntime::TextureUploadRegion region{ .data = uploadData.get(), .dataSize = uploadBytes, .rowPitch = static_cast<usize>(binding.width) * uploadChannels, .depthPitch = uploadBytes, };
-    if(!m_graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
-        .destination = version->m_texture,
-        .regions = &region,
-        .regionCount = 1u,
-        .acceptedToken = &version->m_readinessToken,
-        .finalState = Core::ResourceStates::ShaderResource,
-        .physicalInitialState = Core::ResourceStates::Unknown,
-        .hasPhysicalInitialState = true,
-    }))
-        return MakeUnexpected(Failure{});
-    if(!version->m_readinessToken.valid() || !version->m_readinessToken.hasPhysicalQueueIdentity())
+    if(!CreateAndUploadGpuPageTexture(
+        m_graphics,
+        GpuPageTextureUploadDesc{
+            .name = s_GpuSdfPageTextureName,
+            .width = binding.width,
+            .height = binding.height,
+            .format = format,
+            .data = uploadData.get(),
+            .dataSize = uploadBytes,
+            .rowPitch = static_cast<usize>(binding.width) * uploadChannels,
+        },
+        version->m_texture,
+        version->m_readinessToken
+    ))
         return MakeUnexpected(Failure{});
     // Native accepted upload commands retain their destination image until the physical queue completes.
     // Frame owners retain sampled descriptors; cache eviction therefore releases neither a live image nor a live draw view.
@@ -146,8 +135,8 @@ b8 GpuRendererState::prepareSdfPages(GpuFrameData& frame){
     return true;
 }
 
-Expected<GpuSdfGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
-    Expected<GpuSdfGraphResources> resources{s_InPlace};
+Expected<GpuSampledGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
+    Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_sdfPages.size() != frame->m_snapshot.sdfPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
         return MakeUnexpected(Failure{});

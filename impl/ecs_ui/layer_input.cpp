@@ -7,7 +7,6 @@
 #include <core/ecs/world.h>
 #include <core/common/log.h>
 
-#include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/timer.h>
 
@@ -66,8 +65,7 @@ b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
 b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
     if(!IsFinite(xpos) || !IsFinite(ypos))
         return false;
-    const SIMDVectorDouble magnitude = VectorDoubleAbs(VectorDoubleSet(xpos, ypos, 0.0, 0.0));
-    if(VectorDoubleGetX(magnitude) > Limit<f32>::s_Max || VectorDoubleGetY(magnitude) > Limit<f32>::s_Max)
+    if(Abs(xpos) > Limit<f32>::s_Max || Abs(ypos) > Limit<f32>::s_Max)
         return false;
     synchronizeNativeInput();
     m_pointer = { static_cast<f32>(xpos), static_cast<f32>(ypos) };
@@ -210,6 +208,25 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
         *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;
     }
     logInputRoutingOverflows(result);
+}
+
+void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consumed){
+    if(consumed)
+        *consumed = false;
+    m_editHost.collectNative();
+    const Ui::WidgetId previousCapture = m_context.input().capture();
+    const auto normalized = m_context.input().queuePointer(input);
+    if(!normalized){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
+        resetNormalizedInput();
+        return;
+    }
+    const Ui::InputRoutingResult result = m_context.input().process();
+    if(result.pointerRouted)
+        m_editHost.input(*normalized, previousCapture, false);
+    logInputRoutingOverflows(result);
+    if(consumed)
+        *consumed = result.pointerConsumed;
 }
 
 void UiLayerSystem::synchronizeNativeInput(){

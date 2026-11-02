@@ -60,7 +60,7 @@ namespace __hidden_telemetry_codec{
     return header;
 }
 
-static void AppendEncodedEvent(TelemetryBytes& outBytes, const EventHeader& header, const void* const payload, const usize payloadBytes){
+static void AppendEncodedEvent(const EventHeader& header, const void* const payload, const usize payloadBytes, TelemetryBytes& outBytes){
     NWB_ASSERT(payloadBytes <= Limit<usize>::s_Max - sizeof(EncodedEventHeader));
 
     const EncodedEventHeader encodedHeader = EncodeHeader(header);
@@ -141,7 +141,7 @@ b8 EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
 
     for(usize i = 0u; i < eventCount; ++i){
         const EventRecord& event = *events.eventAt(i);
-        __hidden_telemetry_codec::AppendEncodedEvent(outBytes, event.header, event.payload.data(), event.payload.size());
+        __hidden_telemetry_codec::AppendEncodedEvent(event.header, event.payload.data(), event.payload.size(), outBytes);
     }
 
     NWB_ASSERT(outBytes.size() == encodedBytes);

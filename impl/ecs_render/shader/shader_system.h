@@ -117,11 +117,15 @@ public:
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
     [[nodiscard]] b8 loadShader(const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName, Core::ShaderHandle& outShader){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
-        return ShaderAssetLoader::Load<TShader>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, m_graphics, m_assetManager, m_shaderPathResolver, outShader, archiveStageName);
+        return ShaderAssetLoader::Load<TShader>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, m_graphics, m_assetManager, m_shaderPathResolver, archiveStageName, outShader);
     }
 
-    [[nodiscard]] b8 hasShaderArchiveStage(const Name& shaderAssetName, AStringView variantName, const Name& stageName)const;
-    [[nodiscard]] b8 loadDeferredCompositeVertexShader();
+    [[nodiscard]] b8 hasShaderArchiveStage(const Name& shaderAssetName, const AStringView variantName, const Name& stageName)const{
+        return m_shaderPathResolver(shaderAssetName, variantName, stageName).has_value();
+    }
+    [[nodiscard]] b8 loadDeferredCompositeVertexShader(){
+        return loadShader<VertexShader>(&DeferredSubsystem::compositeVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeVS", m_deferredCompositeVertexShader);
+    }
     [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{ return m_deferredCompositeVertexShader; }
 
 

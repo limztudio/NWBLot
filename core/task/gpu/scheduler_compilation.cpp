@@ -163,7 +163,7 @@ b8 GpuTaskScheduler::compileGraph(
 
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     const GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, resolvedOptions))
+    if(!compiler.compile(declarations, topology, resolvedOptions, scratchArena, analysis, assignments, compiledGraph))
         return false;
 
     recordedGraph.reset(compiledGraph);

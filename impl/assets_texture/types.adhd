@@ -56,41 +56,6 @@ class PrimaryUastcSlice{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextureMipLevel BuildTextureMipLevel(
-    in u32 width,
-    in u32 height,
-    in u32 blockCountX,
-    in u32 blockCountY,
-    in u64 offsetBytes,
-    in u64 sizeBytes,
-    in u32 sliceCount
-){
-    TextureMipLevel mip;
-    mip.width = width;
-    mip.height = height;
-    mip.blockCountX = blockCountX;
-    mip.blockCountY = blockCountY;
-    mip.offsetBytes = offsetBytes;
-    mip.sizeBytes = sizeBytes;
-    mip.sliceCount = sliceCount;
-    return mip;
-}
-
-TextureResolution MakeTextureResolution(in u32 width, in u32 height, in u32 depth){
-    TextureResolution resolution;
-    resolution.width = width;
-    resolution.height = height;
-    resolution.depth = depth;
-    return resolution;
-}
-
-PrimaryUastcSlice MakePrimaryUastcSlice(in Span<u8> bytes, in u64 blockCount){
-    PrimaryUastcSlice slice;
-    slice.bytes = bytes;
-    slice.blockCount = blockCount;
-    return slice;
-}
-
 b8 IsAllowedTextureMetadataField(in StringView fieldName, in b8 allowAlphaConstant){
     return
         fieldName == s_TextureFormatField

@@ -52,14 +52,6 @@ class ReflectionCompositeInputs{
     public ReflectionDebugView debugView = ReflectionDebugView::None;
 }
 
-ReflectionCompositeInputs MakeReflectionCompositeInputs(in u32 opaqueRadianceSlot, in u32 glassRadianceSlot, in ReflectionDebugView debugView){
-    ReflectionCompositeInputs inputs;
-    inputs.opaqueRadianceSlot = opaqueRadianceSlot;
-    inputs.glassRadianceSlot = glassRadianceSlot;
-    inputs.debugView = debugView;
-    return inputs;
-}
-
 const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
 const u32 s_ReflectionDefaultSpatialRadius = 2u;
 const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;

@@ -63,7 +63,7 @@ class UiTextAreaReentryTests : public TextAreaLoanFixture{};
 
 TEST_F(UiTextAreaReentryTests, HostLoanResetRejectsWithoutClearingTheLentModel){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     usize attempts = 0u;
     b8 failedAtAttempt = false;
     m_host.loanHook = [&](){
@@ -86,7 +86,7 @@ TEST_F(UiTextAreaReentryTests, HostLoanResetRejectsWithoutClearingTheLentModel){
 
 TEST_F(UiTextAreaReentryTests, HostLoanNestedDeclarationRejectsBeforeASecondLoan){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     EditModel otherModel(m_arena, {}, EditTextMode::Multiline);
     TextAreaState otherState;
     ASSERT_TRUE(otherModel.setText("other\narea"));
@@ -109,7 +109,7 @@ TEST_F(UiTextAreaReentryTests, HostLoanNestedDeclarationRejectsBeforeASecondLoan
 
 TEST_F(UiTextAreaReentryTests, PublicationResetRejectsBeforeLaterAreaPublication){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     EditModel otherModel(m_arena, {}, EditTextMode::Multiline);
     TextAreaState otherState;
     ASSERT_TRUE(otherModel.setText("other\narea"));
@@ -137,7 +137,7 @@ TEST_F(UiTextAreaReentryTests, PublicationResetRejectsBeforeLaterAreaPublication
 
 TEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPublication){
     ASSERT_TRUE(acceptBaseline());
-    const AcceptedAreaFrame before = accepted();
+    const UiWidgetTests::AcceptedInputState<16u> before = accepted();
     AreaReentrySource source;
     ListState list;
     EditModel siblingModel(m_arena, {}, EditTextMode::Multiline);

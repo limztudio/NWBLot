@@ -40,6 +40,14 @@ static_assert(sizeof(FontBinaryHeader) == 24u && alignof(FontBinaryHeader) == 1u
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Uses the source buffer's caller-owned arena for native validation allocations.
+[[nodiscard]] b8 ValidateFontSource(Span<const u8> bytes, u32 faceIndex, Core::Assets::AssetArena& arena);
+[[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Stores one static, scalable SFNT face from a prepared font source; shaping and glyph atlases stay outside this asset.
 class Font final : public Core::Assets::TypedAsset<Font>{
 public:
@@ -58,8 +66,13 @@ public:
 
 public:
     b8 loadBinary(Span<const u8> binary);
-    [[nodiscard]] b8 validatePayload()const;
-    void setFontBytes(Core::Assets::AssetBytes&& bytes, u32 faceIndex = 0u)noexcept;
+    [[nodiscard]] b8 validatePayload()const{
+        return checkVirtualPath(NWB_TEXT("Font::validatePayload")) && ValidateFontSource(m_fontBytes, m_faceIndex);
+    }
+    void setFontBytes(Core::Assets::AssetBytes&& bytes, const u32 faceIndex = 0u)noexcept{
+        m_fontBytes = Move(bytes);
+        m_faceIndex = faceIndex;
+    }
 
 
 public:
@@ -78,10 +91,6 @@ private:
 
 
 NWB_DEFINE_ASSET_CODEC(FontAssetCodec, Font);
-
-// Uses the source buffer's caller-owned arena for native validation allocations.
-[[nodiscard]] b8 ValidateFontSource(Span<const u8> bytes, u32 faceIndex, Core::Assets::AssetArena& arena);
-[[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

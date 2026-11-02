@@ -87,7 +87,7 @@ Expected<MeshCookEntry> ParseMeshCookMetadata(const Name virtualPath, const Path
 
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_MeshMetaText, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MeshMetaText, &MeshCookMetadata::IsAllowedMeshAssetField))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MeshMetaText, &IsAllowedMeshAssetField))
         return MakeUnexpected(Failure{});
     if(!__hidden_assets_mesh_cook::ParseSourceMeshMeta(nwbFilePath, asset, cpuScheduler, scratchArena, entry))
         return MakeUnexpected(Failure{});

@@ -38,7 +38,6 @@
 #include "fixed_vector.h"
 #include "basic_string.h"
 #include "container/adaptor.h"
-#include "filesystem.h"
 #include "name.h"
 #include "sync.h"
 

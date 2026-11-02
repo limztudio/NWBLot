@@ -33,7 +33,7 @@ namespace MeshRefreshParseDetail{
 
     for(const auto& field : asset.asMap()){
         const Core::Metascript::MStringView fieldName(field.first);
-        if(Impl::MeshCookMetadata::IsAllowedMeshAssetField(fieldName))
+        if(Impl::IsAllowedMeshAssetField(fieldName))
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));

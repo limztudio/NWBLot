@@ -4,6 +4,10 @@
 
 #include "edit_host_fixture_support.h"
 
+#include <tests/unit/ui/fixture_text_shaping.h>
+
+#include <gtest/gtest.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,17 +18,31 @@ namespace UiEditHostFixtureSupport{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TextInputAdmission::Enum FakeTextInput::startNativeSession(const TextInputSessionToken, const TextInputSessionDesc&)noexcept{
+    ++starts;
+    return TextInputAdmission::Accepted;
+}
+
+b8 FakeClipboard::deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text){
+    if(!completeNativeRequest(token, status, text))
+        return false;
+    if(status == ClipboardStatus::Success && startedOperation == ClipboardOperation::WriteText && token == startedToken)
+        document = startedText;
+    return true;
+}
+
+void FakeClipboard::startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum, const AStringView text){
+    startedToken = token;
+    startedOperation = operation;
+    startedText.assign(text.data(), text.size());
+    if(!delayed && !deliver(token, ClipboardStatus::Success, operation == ClipboardOperation::ReadText ? AStringView(document) : AStringView{}))
+        ADD_FAILURE() << "Clipboard completion failed";
+}
+
 Expected<Ui::ShapedRun, Ui::TextLayoutStatus::Enum> FixtureShaper::shape(const Ui::ShapeRequest& request){
     Ui::ShapedRun run(m_arena);
     run.metrics = { 8.0f, 2.0f, 2.0f };
-    usize begin = 0u;
-    while(begin < request.text.size()){
-        usize end = begin + 1u;
-        while(end < request.text.size() && IsUtf8Continuation(static_cast<u8>(request.text[end])))
-            ++end;
-        run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { 10.0f, 0.0f }, {} });
-        begin = end;
-    }
+    Tests::UiFixtureText::AppendCodePointGlyphs(request.text, {}, run);
     return run;
 }
 

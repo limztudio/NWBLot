@@ -53,6 +53,8 @@ NWB_IMPL_BEGIN
 
 
 static_assert(SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION, "Skeleton skinning mode values must match the shader ABI");
+static_assert(s_RuntimeRequiredStorageDescriptorCount == static_cast<usize>(RuntimeStorageDescriptorSlot::SkinInfluences), "Runtime required storage descriptor count must match slot enum");
+static_assert(s_RuntimeStorageDescriptorCount == static_cast<usize>(RuntimeStorageDescriptorSlot::kCount), "Runtime storage descriptor count must match slot enum");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,24 +89,7 @@ private:
 private:
     struct RuntimeBindlessHeapHandles{
         Core::GpuDescriptorHandle resourceSlots = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle restPosition = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle skinnedPosition = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle restNormal = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle skinnedNormal = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle restTangent = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle skinnedTangent = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle meshletDesc = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle positionRefDeltas = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle attributeRefDeltas = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle attributeSkins = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle skinInfluences = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle jointPalette = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle localVertexRefs = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle primitiveIndices = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle meshletBounds = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle attributeBuffer = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle meshletLocalBounds = Core::GpuDescriptorHandle::Invalid();
-        Core::GpuDescriptorHandle localBounds = Core::GpuDescriptorHandle::Invalid();
+        Array<Core::GpuDescriptorHandle, s_RuntimeStorageDescriptorCount> storageBuffers{};
     };
 
     struct RuntimeResources{
@@ -132,10 +117,6 @@ private:
     struct TaskGraphSkinningPostDispatchTask;
     struct TaskGraphSkinningFinalizerTask;
     class FramePlanBuilder;
-
-
-private:
-    [[nodiscard]] static Expected<MeshSkinningRestToSkinnedCopyByteCounts> ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance);
 
 
 public:

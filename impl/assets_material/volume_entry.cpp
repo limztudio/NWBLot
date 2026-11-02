@@ -14,6 +14,7 @@
 
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 
 #include <global/text_utils.h>
@@ -94,8 +95,8 @@ static b8 RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
         },
         nullptr,
         [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildMaterialAsset(entry, arena); },
-        registry,
-        false
+        false,
+        registry
     );
 }
 
@@ -109,6 +110,7 @@ static b8 RegisterMaterialCookDependency(Core::Assets::CookDependencyRegistry& r
 
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_MaterialCookEntryRegistrar, RegisterMaterialCookEntry);
 NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_MaterialCookDependencyRegistrar, RegisterMaterialCookDependency);
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MaterialNonStandaloneAssetTypeRegistrar(Material::AssetTypeName(), "material");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

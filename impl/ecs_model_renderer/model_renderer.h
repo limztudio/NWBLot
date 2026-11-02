@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ApplyModelObjectRenderer(Core::ECS::World& world, Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::Entity& entity);
+void ApplyModelObjectRenderer(Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::World& world, Core::ECS::Entity& entity);
 [[nodiscard]] ModelObjectRendererHooks CreateModelObjectRendererHooks()noexcept;
 
 

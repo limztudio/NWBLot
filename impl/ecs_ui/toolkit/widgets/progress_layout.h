@@ -18,12 +18,32 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ProgressLayout final{
-public:
-    // Finite fractions clamp visually to the unit interval.
-    [[nodiscard]] static Expected<ProgressMetrics> Measure(const ProgressOptions& options, const ProgressStyle& style, const UiSkinRegion& track, const UiSkinRegion& fill, f32 density)noexcept;
-    // Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
-    [[nodiscard]] static Expected<ProgressPlacement> Place(const Rect& bounds, const Rect& clip, const ProgressMetrics& metrics, f64 fraction)noexcept;
+namespace ProgressLayout{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Finite fractions clamp visually to the unit interval.
+[[nodiscard]] inline Expected<ProgressMetrics> Measure(const ProgressOptions& options, const ProgressStyle& style, const UiSkinRegion& track, const UiSkinRegion& fill, const f32 density)noexcept{
+    ProgressMetrics candidate;
+    if(!TryMeasureProgress(options, style, track, fill, density, candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+// Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
+[[nodiscard]] inline Expected<ProgressPlacement> Place(const Rect& bounds, const Rect& clip, const ProgressMetrics& metrics, const f64 fraction)noexcept{
+    ProgressPlacement candidate;
+    if(!TryPlaceProgress(bounds, clip, metrics, fraction, candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

@@ -84,6 +84,28 @@ const usize s_RawByteLoadAlignmentBytes = 4u;
 const StringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
 const StringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
 
+const StringView s_RuntimePrefix = ":runtime_";
+const StringView s_RevisionSeparator = "_revision_";
+const StringView s_OwnerSeparator = "_";
+
+const StringView s_RestPositionsSuffix = "rest_positions";
+const StringView s_RestNormalsSuffix = "rest_normals";
+const StringView s_RestTangentsSuffix = "rest_tangents";
+const StringView s_SkinnedPositionsSuffix = "skinned_positions";
+const StringView s_SkinnedNormalsSuffix = "skinned_normals";
+const StringView s_SkinnedTangentsSuffix = "skinned_tangents";
+const StringView s_Uv0Suffix = "uv0";
+const StringView s_ColorsSuffix = "colors";
+const StringView s_MeshletsSuffix = "meshlets";
+const StringView s_MeshletBoundsSuffix = "meshlet_bounds";
+const StringView s_MeshletLocalBoundsSuffix = "meshlet_local_bounds";
+const StringView s_LocalBoundsSuffix = "local_bounds";
+const StringView s_MeshletPositionRefDeltasSuffix = "meshlet_position_ref_deltas";
+const StringView s_MeshletAttributeRefDeltasSuffix = "meshlet_attribute_ref_deltas";
+const StringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
+const StringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
+const StringView s_AttributeSkinsSuffix = "attribute_skins";
+
 const usize s_RuntimeMeshRequestInlineCapacity = 32u;
 const usize s_RuntimeMeshIndexBucketsPerRequest = 2u;
 
@@ -151,6 +173,34 @@ b8 TryComputePaddedRawByteCount(in usize logicalByteCount, mut usize outPaddedBy
 
 usize ExpectedMeshletSolidTriangleWordCount(in u32 meshletPrimitiveIndexCount){
     return (cast<usize>(meshletPrimitiveIndexCount) / cast<usize>(s_MeshletTriangleIndexCount) + cast<usize>(s_MeshletSolidTriangleWordRoundUp)) / cast<usize>(s_MeshletSolidTriangleWordBits);
+}
+
+Name DeriveRuntimeResourceName(in Name sourceName, in u64 ownerId, in u32 editRevision, in StringView label){
+    Name outName = s_NameNone;
+    if(sourceName == s_NameNone || label.empty())
+        return outName;
+    native(in sourceName, in ownerId, in editRevision, in label, mut outName){
+        Array<char, s_DecimalTextBufferBytes> ownerBuffer;
+        Array<char, s_DecimalTextBufferBytes> revisionBuffer;
+        const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
+        const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
+        if(!ownerText.empty() && !revisionText.empty()){
+            if(auto derivedHash = BeginDerivedNameHash(sourceName)){
+                if(
+                    UpdateDerivedNameHashText(*derivedHash, s_RuntimePrefix)
+                    && UpdateDerivedNameHashText(*derivedHash, ownerText)
+                    && UpdateDerivedNameHashText(*derivedHash, s_RevisionSeparator)
+                    && UpdateDerivedNameHashText(*derivedHash, revisionText)
+                    && UpdateDerivedNameHashText(*derivedHash, s_OwnerSeparator)
+                    && UpdateDerivedNameHashText(*derivedHash, label)
+                ){
+                    if(const auto finished = FinishDerivedNameHash(*derivedHash))
+                        outName = *finished;
+                }
+            }
+        }
+    }
+    return outName;
 }
 
 

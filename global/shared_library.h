@@ -32,13 +32,9 @@ public:
     [[nodiscard]] static SharedLibraryFailure FromNativeText(const char* const nativeError)noexcept{
         SharedLibraryFailure failure{ .code = MakeErrorCode(ErrorCondition::io_error), };
         if(nativeError){
-            usize index = 0u;
-            while(nativeError[index] != 0 && index + 1u < LengthOf(failure.detail.value)){
-                failure.detail.value[index] = nativeError[index];
-                ++index;
-            }
-            failure.detail.value[index] = 0;
-            failure.detailTruncated = nativeError[index] != 0;
+            const AStringView text(nativeError, NWB_STRNLEN(nativeError, failure.detail.value.size()));
+            CopyEventText(failure.detail.value, text);
+            failure.detailTruncated = text.size() == failure.detail.value.size();
         }
         return failure;
     }

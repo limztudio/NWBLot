@@ -311,7 +311,6 @@ b8 CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQue
 
 b8 CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer);
     return
         !m_commandRecordingFailed
         && matchesActiveNativeLeaseIdentity()
@@ -319,7 +318,7 @@ b8 CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
         && queueInfo
         && queueInfo->id == m_creationDesc.physicalQueue
         && queueInfo->queueClass == m_creationDesc.queueType
-        && (static_cast<u8>(queueInfo->capabilities) & s_KnownCapabilityBits) != 0u
+        && (static_cast<u8>(queueInfo->capabilities) & GpuQueueCapability::s_KnownCapabilityBits) != 0u
         && queueInfo->timestampValidBits > 0u
         && queueInfo->timestampValidBits <= Device::s_CompleteTimestampValidBits
     ;

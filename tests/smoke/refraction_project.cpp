@@ -165,9 +165,8 @@ public:
         const f32 stripeStart = m_lifecycleEnabled ? -7.05f : -2.85f;
         for(u32 stripe = 0u; stripe < stripeCount; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
-            Float4 position;
-            StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.0f, 0.0f, 0.0f), VectorSet(0.3f, 0.0f, 0.0f, 0.0f), VectorSet(stripeStart, 1.4f, 2.8f, 0.0f)), position);
-            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), position, Float4(0.15f, 1.0f, 2.0f, 0.0f));
+            const f32 x = static_cast<f32>(stripe) * 0.3f + stripeStart;
+            createPanel(s_OpaqueMaterial, Float4(value, value, value, 1.0f), Float4(x, 1.4f, 2.8f, 0.0f), Float4(0.15f, 1.0f, 2.0f, 0.0f));
         }
         // Place the red strip in front of the glass and the blue strip behind it.
         createPanel(s_TransparentMaterial, Float4(1.0f, 0.025f, 0.025f, 0.75f), Float4(0.0f, 0.85f, -1.7f, 0.0f), Float4(1.6f, 1.0f, 0.08f, 0.0f));
@@ -397,14 +396,13 @@ private:
         const auto extent = NWB::QueryProjectFrameClientSize();
         const u32 frameWidth = extent.width;
         const u32 frameHeight = extent.height;
-        // z and w stay 1 so the lane-wise divides below stay finite.
-        const SIMDVectorSingle frameSize = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 1.f, 1.f);
-        const f32 aspect = static_cast<f32>(frameWidth) / static_cast<f32>(frameHeight);
+        const f32 frameWidthFloat = static_cast<f32>(frameWidth);
+        const f32 frameHeightFloat = static_cast<f32>(frameHeight);
+        const f32 aspect = frameWidthFloat / frameHeightFloat;
         const f32 tangent = Tan(s_PI / 6.f);
         const f32 fractionEdge = Sqrt(static_cast<f32>(percent) * 0.01f);
-        const SIMDVectorSingle coveredHalfSize = VectorMultiplyAddExpression(VectorScale(frameSize, fractionEdge), VectorReplicate(0.5f), VectorReplicate(0.5f));
-        const u32 coveredWidth = Min(frameWidth, 2u * static_cast<u32>(VectorGetX(coveredHalfSize)));
-        const u32 coveredHeight = Min(frameHeight, 2u * static_cast<u32>(VectorGetY(coveredHalfSize)));
+        const u32 coveredWidth = Min(frameWidth, 2u * static_cast<u32>(frameWidthFloat * fractionEdge * 0.5f + 0.5f));
+        const u32 coveredHeight = Min(frameHeight, 2u * static_cast<u32>(frameHeightFloat * fractionEdge * 0.5f + 0.5f));
         const u32 left = percent == 0u ? 0u : (frameWidth - coveredWidth) / 2u;
         const u32 top = percent == 0u ? 0u : (frameHeight - coveredHeight) / 2u;
         const u32 right = left + coveredWidth;
@@ -430,24 +428,24 @@ private:
         constexpr f32 s_BackdropDepth = 2.8f;
         const f32 backdropHalfHeight = tangent * (6.f + s_BackdropDepth);
         const f32 backdropHalfWidth = backdropHalfHeight * aspect;
-        // x = padded half width, y = padded half height.
-        const SIMDVectorSingle backdropPanelHalf = VectorScale(VectorSet(backdropHalfWidth, backdropHalfHeight, 0.f, 0.f), 1.05f);
-        createPanel(s_OpaqueMaterial, Float4(0.04f, 0.04f, 0.04f, 1.f), Float4(0.f, 1.4f, s_BackdropDepth, 0.f), Float4(VectorGetX(backdropPanelHalf), 1.f, VectorGetY(backdropPanelHalf), 0.f));
+        const f32 backdropPanelHalfWidth = backdropHalfWidth * 1.05f;
+        const f32 backdropPanelHalfHeight = backdropHalfHeight * 1.05f;
+        createPanel(s_OpaqueMaterial, Float4(0.04f, 0.04f, 0.04f, 1.f), Float4(0.f, 1.4f, s_BackdropDepth, 0.f), Float4(backdropPanelHalfWidth, 1.f, backdropPanelHalfHeight, 0.f));
         constexpr u32 s_StripeCount = 48u;
         const f32 stripeHalfWidth = backdropHalfWidth / static_cast<f32>(s_StripeCount);
         const f32 stripeStart = -backdropHalfWidth;
         for(u32 stripe = 1u; stripe < s_StripeCount; stripe += 2u){
             const f32 stripeSlot = 2.f * static_cast<f32>(stripe) + 1.f;
             const f32 x = stripeSlot * stripeHalfWidth + stripeStart;
-            createPanel(s_OpaqueMaterial, Float4(0.92f, 0.92f, 0.92f, 1.f), Float4(x, 1.4f, s_BackdropDepth - 0.01f, 0.f), Float4(stripeHalfWidth, 1.f, VectorGetY(backdropPanelHalf), 0.f));
+            createPanel(s_OpaqueMaterial, Float4(0.92f, 0.92f, 0.92f, 1.f), Float4(x, 1.4f, s_BackdropDepth - 0.01f, 0.f), Float4(stripeHalfWidth, 1.f, backdropPanelHalfHeight, 0.f));
         }
 
         // Full coverage extends past the viewport while empty coverage hides the refractor behind the wall.
         const f32 frontDepthValue = percent == 0u ? 4.f : 0.f;
-        const SIMDVectorSingle projectedSize = percent == 0u || percent == 100u ? VectorAdd(frameSize, VectorReplicate(2.f)) : VectorSet(static_cast<f32>(coveredWidth), static_cast<f32>(coveredHeight), 1.f, 1.f);
+        const f32 projectedWidth = percent == 0u || percent == 100u ? frameWidthFloat + 2.f : static_cast<f32>(coveredWidth);
+        const f32 projectedHeight = percent == 0u || percent == 100u ? frameHeightFloat + 2.f : static_cast<f32>(coveredHeight);
         const f32 halfHeight = (6.f + frontDepthValue) * tangent;
-        const SIMDVectorSingle scaleLanes = VectorDivide(VectorMultiply(VectorSet(halfHeight * 2.f * aspect, halfHeight * 2.f, 1.f, 1.f), projectedSize), frameSize);
-        const Float4 scale(VectorGetX(scaleLanes), VectorGetY(scaleLanes), 0.2f, 0.f);
+        const Float4 scale((halfHeight * 2.f * aspect * projectedWidth) / frameWidthFloat, (halfHeight * 2.f * projectedHeight) / frameHeightFloat, 0.2f, 0.f);
         m_glass = CreateTintedStaticMeshEntity(s_CubeMesh, s_ClearMaterial, s_MaterialInterface, Float4(1.f, 1.f, 1.f, 0.f), Float4(0.f, 1.4f, frontDepthValue + 0.1f, 0.f), scale, *m_world);
         if(!m_glass.valid())
             return false;

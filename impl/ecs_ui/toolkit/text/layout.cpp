@@ -111,10 +111,6 @@ namespace __hidden_ui_text_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextHit TextLayout::hitTest(Point point)const noexcept{
-    return HitTestTextLayout(m_lines, m_clusters, point);
-}
-
 Expected<Rect> TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge)const noexcept{
     Rect rect;
     if(!TryResolveTextCaretRect(m_lines, m_clusters, m_direction, byteOffset, edge, rect))
@@ -164,10 +160,8 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         line.glyphCount = static_cast<u32>(run.glyphs.size());
         line.firstCluster = static_cast<u32>(result.m_clusters.size());
         line.top = result.m_measure.y;
-        const SIMDVectorDouble baselineAndAscent = VectorDoubleAdd(VectorDoubleSet(line.top, run.metrics.ascender, 0.0, 0.0), VectorDoubleSet(run.metrics.ascender, run.metrics.descender, 0.0, 0.0));
-        const SIMDVectorDouble baselineHeightValue = VectorDoubleSelect(baselineAndAscent, VectorDoubleAdd(baselineAndAscent, VectorDoubleSet(0.0, run.metrics.lineGap, 0.0, 0.0)), s_DoubleSIMDMaskY);
-        const f64 baseline = VectorDoubleGetX(baselineHeightValue);
-        const f64 height = VectorDoubleGetY(baselineHeightValue);
+        const f64 baseline = static_cast<f64>(line.top) + static_cast<f64>(run.metrics.ascender);
+        const f64 height = (static_cast<f64>(run.metrics.ascender) + static_cast<f64>(run.metrics.descender)) + static_cast<f64>(run.metrics.lineGap);
         if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(static_cast<f64>(line.top) + height))
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.baseline = static_cast<f32>(baseline);
@@ -182,10 +176,9 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             const u32 firstGlyph = static_cast<u32>(result.m_glyphs.size());
             for(usize index = first; index < end; ++index){
                 const ShapedGlyph& glyph = run.glyphs[index];
-                const SIMDVectorDouble placement = VectorDoubleAdd(VectorDoubleSet(pen, line.baseline, pen, 0.0), VectorDoubleSet(glyph.offset.x, glyph.offset.y, glyph.advance.x, 0.0));
-                const f64 x = VectorDoubleGetX(placement);
-                const f64 y = VectorDoubleGetY(placement);
-                const f64 nextPen = VectorDoubleGetZ(placement);
+                const f64 x = static_cast<f64>(pen) + static_cast<f64>(glyph.offset.x);
+                const f64 y = static_cast<f64>(line.baseline) + static_cast<f64>(glyph.offset.y);
+                const f64 nextPen = static_cast<f64>(pen) + static_cast<f64>(glyph.advance.x);
                 if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
@@ -214,12 +207,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         line.advance = pen;
         line.clusterCount = static_cast<u32>(result.m_clusters.size()) - line.firstCluster;
         result.m_lines.push_back(line);
-        const SIMDVectorSingle measured = VectorSet(result.m_measure.x, result.m_measure.y, 0.0f, 0.0f);
-        const SIMDVectorSingle advance = VectorSet(pen, line.height, 0.0f, 0.0f);
-        const SIMDVectorSingle widest = VectorSelect(advance, measured, VectorGreater(measured, advance));
-        const SIMDVectorSingle accumulated = VectorAdd(VectorSelect(VectorZero(), measured, s_SIMDMaskY), VectorSelect(VectorZero(), advance, s_SIMDMaskY));
-        const SIMDVectorSingle extent = VectorSelect(widest, accumulated, s_SIMDMaskY);
-        result.m_measure = { VectorGetX(extent), VectorGetY(extent) };
+        result.m_measure = { Max(result.m_measure.x, pen), result.m_measure.y + line.height };
         if(breakEnd == byteEnd)
             break;
         byteBegin = breakEnd;

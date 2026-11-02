@@ -93,7 +93,7 @@ b8 IsReverseListControlAction(in ControlActionKind kind){
 }
 
 class ListMeasureKey{
-    public b8 operator==(in ListMeasureKey rhs)const{
+    private b8 equals(in ListMeasureKey rhs)const{
         if(
             this.sourceGeneration != rhs.sourceGeneration
             || this.sourceRevision != rhs.sourceRevision
@@ -117,28 +117,12 @@ class ListMeasureKey{
         return true;
     }
 
+    public b8 operator==(in ListMeasureKey rhs)const{
+        return this.equals(rhs);
+    }
+
     public b8 operator!=(in ListMeasureKey rhs)const{
-        if(
-            this.sourceGeneration != rhs.sourceGeneration
-            || this.sourceRevision != rhs.sourceRevision
-            || this.rowCount != rhs.rowCount
-            || this.textIdentity != rhs.textIdentity
-            || this.textGeneration != rhs.textGeneration
-            || this.fontSize != rhs.fontSize
-            || this.pixelScaleX != rhs.pixelScaleX
-            || this.pixelScaleY != rhs.pixelScaleY
-            || this.scriptTag != rhs.scriptTag
-        )
-            return true;
-        for(usize i = 0u; i < s_ListRowMetricCount; ++i){
-            if(this.rowMetrics[i] != rhs.rowMetrics[i])
-                return true;
-        }
-        for(usize i = 0u; i < s_ListLanguageBufferBytes; ++i){
-            if(this.language[i] != rhs.language[i])
-                return true;
-        }
-        return false;
+        return !this.equals(rhs);
     }
 
     public u64 sourceGeneration = 0u;

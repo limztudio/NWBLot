@@ -141,8 +141,8 @@ TEST(TextGlyphVisibilityTests, TouchingEdgesAndEmptyAreasAreInvisible){
         Rect{ 10.0f, 20.0f, 0.0f, 1.0f }, Rect{ 10.0f, 20.0f, 1.0f, 0.0f },
     };
     for(const Rect& rectangle : rectangles)
-        EXPECT_EQ(TextGlyphVisibility::Intersect(rectangle, clip), TextGlyphIntersection::Invisible);
-    EXPECT_EQ(TextGlyphVisibility::Intersect(clip, { 10.0f, 20.0f, 0.0f, 40.0f }), TextGlyphIntersection::Invisible);
+        EXPECT_EQ(TryIntersectTextRects(rectangle, clip), TextGlyphIntersection::Invisible);
+    EXPECT_EQ(TryIntersectTextRects(clip, { 10.0f, 20.0f, 0.0f, 40.0f }), TextGlyphIntersection::Invisible);
 }
 
 TEST(TextGlyphVisibilityTests, InvalidRectanglesAndOverflowingEndpointsAreRejected){
@@ -154,8 +154,8 @@ TEST(TextGlyphVisibilityTests, InvalidRectanglesAndOverflowingEndpointsAreReject
         Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
     };
     for(const Rect& rectangle : invalid){
-        EXPECT_EQ(TextGlyphVisibility::Intersect(rectangle, clip), TextGlyphIntersection::Invalid);
-        EXPECT_EQ(TextGlyphVisibility::Intersect(clip, rectangle), TextGlyphIntersection::Invalid);
+        EXPECT_EQ(TryIntersectTextRects(rectangle, clip), TextGlyphIntersection::Invalid);
+        EXPECT_EQ(TryIntersectTextRects(clip, rectangle), TextGlyphIntersection::Invalid);
     }
 }
 
@@ -286,7 +286,7 @@ TEST(TextGlyphVisibilityTests, AnisotropicPhysicalScaleRetainsSnappedNativeFring
     Expected<Rect> rectangle;
     ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, {}, pixelScale));
     UiPaintAssertions::ExpectRect(*rectangle, { 8.0f, 20.0f, 2.0f, 2.0f });
-    EXPECT_EQ(TextGlyphVisibility::Intersect(*rectangle, clip), TextGlyphIntersection::Visible);
+    EXPECT_EQ(TryIntersectTextRects(*rectangle, clip), TextGlyphIntersection::Visible);
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 24.0f, {}, clip, pixelScale), TextGlyphIntersection::Visible);
 }
 

@@ -42,8 +42,7 @@ void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVe
             if(first.color.r != color.r || first.color.g != color.g || first.color.b != color.b || first.color.a != color.a)
                 continue;
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            const SIMDVectorSingle size = VectorSubtract(VectorSet(opposite.position.x, opposite.position.y, 0.0f, 0.0f), VectorSet(first.position.x, first.position.y, 0.0f, 0.0f));
-            output.push_back({ first.position.x, first.position.y, VectorGetX(size), VectorGetY(size) });
+            output.push_back({ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y });
         }
     }
 }
@@ -83,18 +82,8 @@ b8 MultilineViewFixture::place(const f32 width, const f32 height, const Point pr
 }
 
 b8 MultilineViewFixture::loadFont(){
-    Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
-    Core::Assets::AssetBytes bytes(m_arena);
-    auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-    if(!bytesResult)
-        return false;
-    bytes = Move(*bytesResult);
-    m_font.setFontBytes(Move(bytes));
-    if(!m_font.validatePayload())
-        return false;
-    const FontSource source{ Core::Assets::AssetRef<Font>(s_MultilineViewFontPath), m_font, 1u };
-    return m_text.setFonts(fontScratchArena, Span(&source, 1u));
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+    return InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text);
 }
 
 Expected<DrawSnapshot> MultilineViewFixture::paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){

@@ -35,12 +35,6 @@ void ContextMenuState::close()noexcept{
     advanceRevision();
 }
 
-void ContextMenuState::advanceRevision()noexcept{
-    if(m_revision == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_revision;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

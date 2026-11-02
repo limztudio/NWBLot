@@ -158,7 +158,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         const MString virtualPath = __hidden_compile::DeriveVirtualCompilePath(inputPath, inputView, options.includeDirectories, arena);
 
         Adhd::CompileResult result(arena);
-        if(!Adhd::Compiler::Compile(sourceContent, virtualPath, arena, result, &resolver, customNs, options.macroDefinitions)){
+        if(!Adhd::Compiler::Compile(sourceContent, virtualPath, &resolver, customNs, options.macroDefinitions, arena, result)){
             for(const ParseError& err : result.errors)
                 NWB_LOGGER_ERROR(NWB_TEXT("{}:{}:{}: error: {}"), ConvertString(inputView), err.line, err.column, ConvertString(err.message));
             return false;

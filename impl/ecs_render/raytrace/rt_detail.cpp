@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -24,13 +25,12 @@ namespace RayTracingDetail{
 
 
 void InflateSwShadowSceneBounds(SIMDVectorSingle& boundsMin, SIMDVectorSingle& boundsMax)noexcept{
-    Float4 minData;
-    Float4 maxData;
-    StoreFloat(boundsMin, minData);
-    StoreFloat(boundsMax, maxData);
-    InflateSwShadowSceneBoundsData(minData, maxData);
-    boundsMin = LoadFloat(minData);
-    boundsMax = LoadFloat(maxData);
+    const SIMDVectorSingle extent = VectorSubtract(boundsMax, boundsMin);
+    const f32 maxExtent = Max(VectorGetX(extent), Max(VectorGetY(extent), VectorGetZ(extent)));
+    const f32 padding = Max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
+    const SIMDVectorSingle paddingVector = VectorAndInt(VectorReplicate(padding), s_SIMDMask3);
+    boundsMin = VectorSubtract(boundsMin, paddingVector);
+    boundsMax = VectorAdd(boundsMax, paddingVector);
 }
 
 Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, const Core::ECS::EntityID entity){
@@ -48,22 +48,11 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
 }
 
 [[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable){
-    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(descriptorClass);
-    if(!allocated)
-        return MakeUnexpected(allocated.error());
-    const Core::GpuDescriptorHandle handle = *allocated;
-
-    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
-
     const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
         ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
         : (writable ? Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer))
     ;
-    if(!heap.write(handle, item)){
-        return MakeUnexpected(Failure{});
-    }
-    retireUnpublished.release();
-    return handle;
+    return RendererDescriptorRegisterDetail::RegisterDescriptor(heap, descriptorClass, item);
 }
 
 [[nodiscard]] b8 EnsureHeapBuffer(const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){

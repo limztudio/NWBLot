@@ -66,9 +66,7 @@ inline constexpr Core::FormatSupport::Mask s_RequiredSampledTextureSupport = Cor
 
 
 using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_PaintMaxImages + s_GpuRasterFixedResourceUses>;
-using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
-using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
-using GpuTextureGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
+using GpuSampledGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
 
 struct GpuSampledTextureImportDesc{
     usize index = 0u;
@@ -92,8 +90,19 @@ template<typename T, typename... Args>
     return GpuVersion<T>(value, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
+struct GpuPageTextureUploadDesc{
+    Name name;
+    u32 width = 0u;
+    u32 height = 0u;
+    Core::Format::Enum format = Core::Format::UNKNOWN;
+    const void* data = nullptr;
+    usize dataSize = 0u;
+    usize rowPitch = 0u;
+};
+
 void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept;
 [[nodiscard]] b8 PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor);
+[[nodiscard]] b8 CreateAndUploadGpuPageTexture(Core::GraphicsRuntime& graphics, const GpuPageTextureUploadDesc& desc, Core::TextureHandle& outTexture, Core::QueueSubmissionToken& outReadinessToken);
 [[nodiscard]] b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token);
 [[nodiscard]] Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportGpuSampledTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses);
 
@@ -107,7 +116,7 @@ public:
         : m_graphics(graphics)
     {}
     ~GpuSkinVersion()noexcept{
-        TextureAssetLoader::Release(m_texture, m_graphics);
+        TextureAssetLoader::Release(m_graphics, m_texture);
     }
 
 
@@ -117,43 +126,28 @@ public:
     TextureGpuResource m_texture;
 };
 
-class GpuGlyphVersion : NoCopy{
+template<typename TPage>
+class GpuPageVersion : NoCopy{
 public:
-    GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPage page)noexcept
+    GpuPageVersion(Core::GraphicsRuntime& graphics, TPage page)noexcept
         : m_graphics(graphics)
         , m_page(Move(page))
     {}
-    ~GpuGlyphVersion()noexcept{
+    ~GpuPageVersion()noexcept{
         FreeGpuDescriptor(m_graphics, m_sampledImage);
     }
 
 
 public:
     Core::GraphicsRuntime& m_graphics;
-    SharedGlyphPage m_page;
+    TPage m_page;
     Core::TextureHandle m_texture;
     Core::GpuDescriptorHandle m_sampledImage;
     Core::QueueSubmissionToken m_readinessToken;
 };
 
-class GpuSdfAtlasVersion : NoCopy{
-public:
-    GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSdfAtlasPage page)noexcept
-        : m_graphics(graphics)
-        , m_page(Move(page))
-    {}
-    ~GpuSdfAtlasVersion()noexcept{
-        FreeGpuDescriptor(m_graphics, m_sampledImage);
-    }
-
-
-public:
-    Core::GraphicsRuntime& m_graphics;
-    SharedSdfAtlasPage m_page;
-    Core::TextureHandle m_texture;
-    Core::GpuDescriptorHandle m_sampledImage;
-    Core::QueueSubmissionToken m_readinessToken;
-};
+using GpuGlyphVersion = GpuPageVersion<SharedGlyphPage>;
+using GpuSdfAtlasVersion = GpuPageVersion<SharedSdfAtlasPage>;
 
 class GpuTextureImageVersion : NoCopy{
 public:
@@ -162,7 +156,7 @@ public:
         , m_source(Move(source))
     {}
     ~GpuTextureImageVersion()noexcept{
-        TextureAssetLoader::Release(m_texture, m_graphics);
+        TextureAssetLoader::Release(m_graphics, m_texture);
     }
 
 
@@ -292,9 +286,9 @@ struct GpuRasterTask{
         Core::GpuGraphPipelineId pipeline;
         Core::GpuGraphResourceId vertices;
         Core::GpuGraphResourceId indices;
-        GpuGlyphGraphResources glyphPages;
-        GpuSdfGraphResources sdfPages;
-        GpuTextureGraphResources textureImages;
+        GpuSampledGraphResources glyphPages;
+        GpuSampledGraphResources sdfPages;
+        GpuSampledGraphResources textureImages;
     };
 
 
@@ -332,6 +326,9 @@ public:
     }
 };
 
+[[nodiscard]] b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, const Core::GpuTaskRecordContext& context, Core::CommandList& commands);
+[[nodiscard]] b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, const Core::GpuTaskRecordContext& context, Core::CommandList& commands);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -354,13 +351,13 @@ public:
     [[nodiscard]] Expected<GpuVersion<GpuTargetVersion>> createTarget(u32 width, u32 height);
     [[nodiscard]] Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(const SharedGlyphPage& page);
     [[nodiscard]] b8 prepareGlyphPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    [[nodiscard]] Expected<GpuSampledGraphResources> declareGlyphPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     [[nodiscard]] Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(Core::Alloc::ScratchArena& scratchArena, const SharedSdfAtlasPage& page);
     [[nodiscard]] b8 prepareSdfPages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    [[nodiscard]] Expected<GpuSampledGraphResources> declareSdfPages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     [[nodiscard]] Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(const SharedImageSource& source);
     [[nodiscard]] b8 prepareTextureImages(GpuFrameData& frame);
-    [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
+    [[nodiscard]] Expected<GpuSampledGraphResources> declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses);
     void trimImageCache(const DrawSnapshot& snapshot);
     void evictImageCacheEntry()noexcept;
     [[nodiscard]] b8 prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);

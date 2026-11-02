@@ -200,6 +200,7 @@ private:
     void reconcilePointerGestures()noexcept;
     void routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
+    void assignFocus(const HitTarget& target)noexcept;
     [[nodiscard]] b8 moveFocus(b8 reverse)noexcept;
     [[nodiscard]] b8 moveFocusForTraversal(b8 reverse);
 

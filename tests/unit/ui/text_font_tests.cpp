@@ -7,6 +7,8 @@
 
 #include <core/common/log.h>
 
+#include "widget_fixture.h"
+
 #include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
@@ -28,10 +30,10 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
-constexpr AStringView s_LatinFontPath = "tests/ui/fonts/latin";
-constexpr AStringView s_KoreanFontPath = "tests/ui/fonts/korean";
-constexpr AStringView s_SkinPath = "tests/ui/skin";
-constexpr Name s_FontScratchArenaName = Name("tests/ui/fonts/operation_scratch");
+using UiWidgetTests::s_FontScratchArenaName;
+using UiWidgetTests::s_TestKoreanFontPath;
+using UiWidgetTests::s_TestLatinFontPath;
+using UiWidgetTests::s_TestSkinPath;
 constexpr AStringView s_KoreanLanguage = "ko";
 constexpr AStringView s_SampleGlyphText = "A";
 constexpr AStringView s_WideGlyphText = "W";
@@ -85,11 +87,11 @@ class TextFontTests : public testing::Test{
 public:
     TextFontTests()
         : m_arena(Name("tests/ui/text/font"))
-        , m_latin(m_arena, Name(s_LatinFontPath))
-        , m_korean(m_arena, Name(s_KoreanFontPath))
+        , m_latin(m_arena, Name(s_TestLatinFontPath))
+        , m_korean(m_arena, Name(s_TestKoreanFontPath))
         , m_service(m_arena)
         , m_layout(m_arena)
-        , m_skin(m_arena, Name(s_SkinPath))
+        , m_skin(m_arena, Name(s_TestSkinPath))
         , m_paint(m_arena)
     {}
 
@@ -100,8 +102,8 @@ protected:
         ASSERT_TRUE(Tests::LoadBundledFont(m_latin, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         ASSERT_TRUE(Tests::LoadBundledFont(m_korean, m_arena, NWB_TEST_FONT_DIRECTORY, "korean.font"));
         const Array<FontSource, 2> sources{
-            FontSource{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
-            FontSource{ Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
+            FontSource{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u },
+            FontSource{ Core::Assets::AssetRef<Font>(s_TestKoreanFontPath), m_korean, 1u },
         };
         ASSERT_TRUE(m_service.setFonts(fontScratchArena, Span(sources.data(), 2u)));
         UiSkin::RegionVector regions(m_arena);
@@ -109,7 +111,7 @@ protected:
     }
 
     void beginPaint(u64 generation, f32 scale = 1.0f){
-        m_paint.begin({ 800.0f, 600.0f, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+        m_paint.begin({ 800.0f, 600.0f, scale, scale }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     }
 
 
@@ -157,7 +159,7 @@ TEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClust
     }
     ASSERT_EQ(m_layout.clusters().size(), 2u);
     for(const PlacedGlyph& glyph : m_layout.glyphs())
-        EXPECT_EQ(glyph.face->identity().name(), Name(s_KoreanFontPath));
+        EXPECT_EQ(glyph.face->identity().name(), Name(s_TestKoreanFontPath));
 }
 
 TEST_F(TextFontTests, RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart){
@@ -186,7 +188,7 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
     const SharedFontFace oldFace = m_layout.glyphs()[0].face;
     const f32 width = m_layout.measure().x;
     const u64 oldServiceGeneration = m_service.generation();
-    const FontSource replacement{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 2u };
+    const FontSource replacement{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 2u };
     ASSERT_TRUE(m_service.setFonts(fontScratchArena, Span(&replacement, 1u)));
     EXPECT_EQ(m_service.generation(), oldServiceGeneration + 1u);
     Core::Assets::AssetBytes cleared(m_arena);
@@ -280,7 +282,7 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const SharedFontFace face = m_layout.glyphs()[0].face;
     const u32 glyphId = m_layout.glyphs()[0].glyphId;
-    const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u };
+    const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 1u };
     auto otherFaceResult = MakeFontFace(fontScratchArena, m_arena, source);
     ASSERT_TRUE(otherFaceResult && (*otherFaceResult)->valid());
     const SharedFontFace otherFace = Move(*otherFaceResult);
@@ -378,7 +380,7 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
     EXPECT_GT(glyph.coverage.ink.width, 0.0f);
     EXPECT_GT(glyph.coverage.ink.height, 0.0f);
     const Rect saved = glyph.coverage.ink;
-    const FontSource replacement{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 2u };
+    const FontSource replacement{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, 2u };
     ASSERT_TRUE(m_service.setFonts(fontScratchArena, Span(&replacement, 1u)));
     EXPECT_TRUE(glyph.coverage.known);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.x, saved.x);

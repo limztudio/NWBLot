@@ -137,49 +137,49 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
     ExpectCookFailure(MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::s_MismatchedMeshMeta, "mismatched_mesh_streams", testArena);
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta("", AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta("", NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
         "missing_mesh_normal_field",
         testArena
     );
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleMissingNormalVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_NORMAL_VERTEX_REFS),
         "missing_mesh_normal_vertex_ref",
         testArena
     );
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalListField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalListField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
         "empty_list_mesh_normal",
         testArena
     );
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalMapField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalMapField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
         "empty_map_mesh_normal",
         testArena
     );
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, "", AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, "", NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
         "missing_mesh_tangent_field",
         testArena
     );
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleMissingTangentVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS),
         "missing_mesh_tangent_vertex_ref",
         testArena
     );
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_EmptyTangentListField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, AssetsGraphicsFixture::s_EmptyTangentListField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
         "empty_list_mesh_tangent",
         testArena
     );
     ExpectCookFailure(
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
-        AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_EmptyTangentMapField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
+        AssetsGraphicsFixture::BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, AssetsGraphicsFixture::s_EmptyTangentMapField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
         "empty_map_mesh_tangent",
         testArena
     );

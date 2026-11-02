@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "cook_meshlet_candidates.h"
 
 
@@ -81,20 +87,16 @@ void MeshletCandidateSearch::UpdateBestMeshletCandidateIfBetter(
     if(!TryMeshletCanFitTriangle(meshlet, localVertexRefs, triangle, vertexCounts))
         return;
 
-    const MeshletTriangleCalculation& triangleCalculation = trianglePrecompute.triangleCalculations[triangleIndex];
-    const MeshletTriangleVectors triangleVectors{
-        {
-            LoadFloat(triangleCalculation.positions[0u]),
-            LoadFloat(triangleCalculation.positions[1u]),
-            LoadFloat(triangleCalculation.positions[2u]),
-        },
-        LoadFloat(triangleCalculation.centroid),
-        LoadFloat(triangleCalculation.areaNormal),
-    };
-    const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex)noexcept{
-        return LoadFloat(trianglePrecompute.triangleCalculations[otherTriangleIndex].areaNormal);
-    };
-    const f32 score = ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, triangleVectors, triangleAreaNormalAt, vertexCounts.shared, vertexCounts.missing, disconnected);
+    const f32 score = ScoreMeshletCandidate(
+        triangleIndices,
+        scoreState,
+        triangleIndex,
+        trianglePrecompute.loadTriangleVectors(triangleIndex),
+        trianglePrecompute.triangleAreaNormalAt(),
+        vertexCounts.shared,
+        vertexCounts.missing,
+        disconnected
+    );
     if(!IsBetterMeshletCandidate(score, triangleIndex, found, outCandidate))
         return;
 
@@ -210,6 +212,12 @@ Expected<MeshletFrontierCandidate> MeshletCandidateSearch::FindBestDisconnectedM
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,8 +5,7 @@
 #pragma once
 
 
-#include <array>
-
+#include "array.h"
 #include "generic.h"
 #include "not_null.h"
 #include "type.h"
@@ -16,9 +15,9 @@
 
 
 template<typename T, u32 MaxElements>
-class FixedVector : private std::array<T, MaxElements>{
+class FixedVector : private Array<T, MaxElements>{
 public:
-    using Base = std::array<T, MaxElements>;
+    using Base = Array<T, MaxElements>;
 
 
 public:

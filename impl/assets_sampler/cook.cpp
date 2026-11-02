@@ -72,21 +72,20 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         return false;
 
     const Core::SamplerDesc& description = sampler.description();
-    const SamplerBinaryHeader header = BuildSamplerBinaryHeader(
-        description.borderColor.r,
-        description.borderColor.g,
-        description.borderColor.b,
-        description.borderColor.a,
-        description.maxAnisotropy,
-        description.mipBias,
-        description.minFilter,
-        description.magFilter,
-        description.mipFilter,
-        static_cast<u32>(description.addressU),
-        static_cast<u32>(description.addressV),
-        static_cast<u32>(description.addressW),
-        static_cast<u32>(description.reductionType)
-    );
+    SamplerBinaryHeader header;
+    header.borderColorR = description.borderColor.r;
+    header.borderColorG = description.borderColor.g;
+    header.borderColorB = description.borderColor.b;
+    header.borderColorA = description.borderColor.a;
+    header.maxAnisotropy = description.maxAnisotropy;
+    header.mipBias = description.mipBias;
+    header.minFilter = description.minFilter ? 1u : 0u;
+    header.magFilter = description.magFilter ? 1u : 0u;
+    header.mipFilter = description.mipFilter ? 1u : 0u;
+    header.addressU = static_cast<u32>(description.addressU);
+    header.addressV = static_cast<u32>(description.addressV);
+    header.addressW = static_cast<u32>(description.addressW);
+    header.reductionType = static_cast<u32>(description.reductionType);
 
     outBinary.clear();
     outBinary.reserve(sizeof(header));
@@ -98,10 +97,10 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena&, Core::Alloc::ScratchArena&){
     using namespace __hidden_sampler_cook;
 
-    SamplerCookEntry entry(arena);
+    SamplerCookEntry entry;
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SamplerMetaDiagnosticPrefix, entry))

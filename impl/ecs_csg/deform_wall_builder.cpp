@@ -19,12 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchArena = Core::Alloc::ScratchArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 SIMDVectorSingle CsgDeformWallBuilder::TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept{
     const SIMDVectorSingle wNegative = VectorLess(VectorSplatW(tangentVec), VectorZero());
     const SIMDVectorSingle sign = VectorSelect(VectorReplicate(s_OneWeight), VectorReplicate(s_NegativeOne), wNegative);
@@ -38,14 +32,13 @@ void CsgDeformWallBuilder::NormalizeDeformVertex(SIMDVectorSingle& normal, SIMDV
     tangent = Vector4Greater(Vector3LengthSq(tangent), epsilonSq) ? TangentHandednessVec(Vector3Normalize(tangent), tangent) : VectorSet(1.0f, 0.0f, 0.0f, 1.0f);
 }
 
-Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance, CsgDeformVertexVector<ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits){
+Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance, CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits){
     if(vertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure{});
     const u64 edge = CsgDeformEdgeKey(first, second);
     const auto found = edgeSplits.find(edge);
-    if(found != edgeSplits.end()){
+    if(found != edgeSplits.end())
         return found.value();
-    }
     // A zero secondDistance selects the second endpoint.
     f32 blendValue = 0.0f;
     if(!TryComputeCsgDeformEdgeSplitBlend(firstDistance, secondDistance, blendValue))
@@ -79,18 +72,18 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 s
     return created;
 }
 
-// Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.
+// Keep side is distance >= 0; caller snaps |distance| <= boundaryEpsilon to zero first.
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformWallBuilder::ClipShell(
-    ScratchArena& scratchArena,
+    Core::Alloc::ScratchArena& scratchArena,
     const CsgDeformShape& shape,
-    const SIMDVectorSingle epsilon,
+    const f32 boundaryEpsilon,
     const CsgShapeRegistry* shapeRegistry,
-    CsgDeformTriangleVector<ScratchArena>& scratchKept,
-    Vector<f32, ScratchArena>& scratchDistances,
-    CsgDeformVertexVector<ScratchArena>& inOutVertices,
-    CsgDeformTriangleVector<ScratchArena>& inOutTriangles
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
+    Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
+    CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
 ){
-    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, epsilon, shapeRegistry, scratchDistances);
+    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, boundaryEpsilon, shapeRegistry, scratchDistances);
     if(!shapeDistances)
         return MakeUnexpected(shapeDistances.error());
 

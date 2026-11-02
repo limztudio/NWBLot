@@ -29,24 +29,24 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     const GpuTaskGraphQueueAssignmentOptions& options,
     Alloc::ScratchArena& scratchArena
 )
-    : m_taskCosts(graph.taskCount(), scratchArena)
-    , m_taskCostGroups(reachability.m_words.empty() ? 0u : graph.taskCount(), scratchArena)
-    , m_ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
-    , m_ownershipEdges(scratchArena)
-    , m_assignedQueueLoads(scratchArena)
-    , m_assignedCostWords(scratchArena)
-    , m_externalQueueLoads(options.queueLoads)
-    , m_externalQueueLoadCount(options.queueLoadCount)
+    : taskCosts(graph.taskCount(), scratchArena)
+    , taskCostGroups(reachability.m_words.empty() ? 0u : graph.taskCount(), scratchArena)
+    , ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
+    , ownershipEdges(scratchArena)
+    , assignedQueueLoads(scratchArena)
+    , assignedCostWords(scratchArena)
+    , externalQueueLoads(options.queueLoads)
+    , externalQueueLoadCount(options.queueLoadCount)
 {
     for(usize costGroup = 0u; costGroup < GpuTaskCostHint::Count; ++costGroup)
-        m_costGroupWeights[costGroup] = QueueCostWeight(static_cast<GpuTaskCostHint::Enum>(costGroup));
-    for(usize taskIndex = 0u; taskIndex < m_taskCosts.size(); ++taskIndex){
+        costGroupWeights[costGroup] = QueueCostWeight(static_cast<GpuTaskCostHint::Enum>(costGroup));
+    for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex){
         const GpuTaskSchedulingHint& scheduling = graph.taskAt(taskIndex).scheduling;
         const auto costGroup = scheduling.cost;
-        if(!m_taskCostGroups.empty())
-            m_taskCostGroups[taskIndex] = static_cast<u8>(costGroup);
+        if(!taskCostGroups.empty())
+            taskCostGroups[taskIndex] = static_cast<u8>(costGroup);
         // Recovery joins accepted work only after normal execution fails, so it supplies no expected normal overlap or load.
-        m_taskCosts[taskIndex] = scheduling.isRecoverySubmission ? 0u : m_costGroupWeights[costGroup];
+        taskCosts[taskIndex] = scheduling.isRecoverySubmission ? 0u : costGroupWeights[costGroup];
     }
 
     // Hazard kinds and ranges remain available in analysis for diagnostics.
@@ -77,30 +77,30 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
         }
         uniqueEdges[uniqueEdgeCount] = edge;
         ++uniqueEdgeCount;
-        ++m_ownershipEdgeOffsets[edge->producer.index + 1u];
-        ++m_ownershipEdgeOffsets[edge->consumer.index + 1u];
+        ++ownershipEdgeOffsets[edge->producer.index + 1u];
+        ++ownershipEdgeOffsets[edge->consumer.index + 1u];
     }
     uniqueEdges.erase(uniqueEdges.begin() + uniqueEdgeCount, uniqueEdges.end());
-    for(usize taskIndex = 1u; taskIndex < m_ownershipEdgeOffsets.size(); ++taskIndex)
-        m_ownershipEdgeOffsets[taskIndex] += m_ownershipEdgeOffsets[taskIndex - 1u];
+    for(usize taskIndex = 1u; taskIndex < ownershipEdgeOffsets.size(); ++taskIndex)
+        ownershipEdgeOffsets[taskIndex] += ownershipEdgeOffsets[taskIndex - 1u];
 
-    m_ownershipEdges.resize(m_ownershipEdgeOffsets.back(), uniqueEdges.front());
+    ownershipEdges.resize(ownershipEdgeOffsets.back(), uniqueEdges.front());
     Vector<usize, Alloc::ScratchArena> writeOffsets(graph.taskCount(), scratchArena);
     for(usize taskIndex = 0u; taskIndex < writeOffsets.size(); ++taskIndex)
-        writeOffsets[taskIndex] = m_ownershipEdgeOffsets[taskIndex];
+        writeOffsets[taskIndex] = ownershipEdgeOffsets[taskIndex];
     for(const auto edge : uniqueEdges){
-        m_ownershipEdges[writeOffsets[edge->producer.index]] = edge;
-        m_ownershipEdges[writeOffsets[edge->consumer.index]] = edge;
+        ownershipEdges[writeOffsets[edge->producer.index]] = edge;
+        ownershipEdges[writeOffsets[edge->consumer.index]] = edge;
         ++writeOffsets[edge->producer.index];
         ++writeOffsets[edge->consumer.index];
     }
 }
 
 u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept{
-    if(!m_externalQueueLoads)
+    if(!externalQueueLoads)
         return 0u;
-    for(usize queueLoadIndex = 0u; queueLoadIndex < m_externalQueueLoadCount; ++queueLoadIndex){
-        const GpuTaskQueueLoad& externalLoad = m_externalQueueLoads[queueLoadIndex];
+    for(usize queueLoadIndex = 0u; queueLoadIndex < externalQueueLoadCount; ++queueLoadIndex){
+        const GpuTaskQueueLoad& externalLoad = externalQueueLoads[queueLoadIndex];
         if(externalLoad.queue == queue)
             return externalLoad.estimatedCost;
     }
@@ -108,21 +108,21 @@ u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)c
 }
 
 void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology){
-    m_assignedQueueLoads.resize(topology.queueCount);
+    assignedQueueLoads.resize(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
-        m_assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
+        assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
 
     // Edge-free, totally ordered, and unused reachability paths never query relation masks.
-    if(m_taskCostGroups.empty()){
-        m_assignedCostWords.clear();
-        m_costWordsPerGroup = 0u;
-        m_totalAssignedCost = 0u;
+    if(taskCostGroups.empty()){
+        assignedCostWords.clear();
+        costWordsPerGroup = 0u;
+        totalAssignedCost = 0u;
         for(const GpuTaskQueueAssignment& assignment : assignments){
-            const u64 cost = m_taskCosts[assignment.task.index];
+            const u64 cost = taskCosts[assignment.task.index];
             if(cost == 0u)
                 continue;
-            m_totalAssignedCost += cost;
-            for(GpuTaskQueueLoad& load : m_assignedQueueLoads){
+            totalAssignedCost += cost;
+            for(GpuTaskQueueLoad& load : assignedQueueLoads){
                 if(load.queue == assignment.queue){
                     load.estimatedCost += cost;
                     break;
@@ -132,32 +132,32 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
         return;
     }
 
-    m_costWordsPerGroup = m_taskCosts.empty() ? 0u : (m_taskCosts.size() - 1u) / s_BitsPerWord + 1u;
-    const auto wordsPerQueue = TryMultiply<usize>(m_costWordsPerGroup, GpuTaskCostHint::Count);
+    costWordsPerGroup = taskCosts.empty() ? 0u : (taskCosts.size() - 1u) / s_BitsPerWord + 1u;
+    const auto wordsPerQueue = TryMultiply<usize>(costWordsPerGroup, GpuTaskCostHint::Count);
     if(!wordsPerQueue)
         throw AllocationSizeException{};
     const auto wordCount = TryMultiply<usize>(AddSize(topology.queueCount, 1u), *wordsPerQueue);
     if(!wordCount)
         throw AllocationSizeException{};
-    m_assignedCostWords.resize(*wordCount);
-    for(u64& word : m_assignedCostWords)
+    assignedCostWords.resize(*wordCount);
+    for(u64& word : assignedCostWords)
         word = 0u;
 
-    m_totalAssignedCost = 0u;
+    totalAssignedCost = 0u;
     // Valid graph indices are u32 and each task cost is at most eight, so graph-only totals fit in u64.
     for(const GpuTaskQueueAssignment& assignment : assignments){
-        const u64 cost = m_taskCosts[assignment.task.index];
+        const u64 cost = taskCosts[assignment.task.index];
         if(cost == 0u)
             continue;
-        m_totalAssignedCost += cost;
-        const usize wordIndex = m_taskCostGroups[assignment.task.index] * m_costWordsPerGroup + assignment.task.index / s_BitsPerWord;
+        totalAssignedCost += cost;
+        const usize wordIndex = taskCostGroups[assignment.task.index] * costWordsPerGroup + assignment.task.index / s_BitsPerWord;
         const u64 mask = static_cast<u64>(1u) << (assignment.task.index % s_BitsPerWord);
-        m_assignedCostWords[wordIndex] |= mask;
-        for(usize queueIndex = 0u; queueIndex < m_assignedQueueLoads.size(); ++queueIndex){
-            GpuTaskQueueLoad& load = m_assignedQueueLoads[queueIndex];
+        assignedCostWords[wordIndex] |= mask;
+        for(usize queueIndex = 0u; queueIndex < assignedQueueLoads.size(); ++queueIndex){
+            GpuTaskQueueLoad& load = assignedQueueLoads[queueIndex];
             if(load.queue == assignment.queue){
                 load.estimatedCost += cost;
-                m_assignedCostWords[(queueIndex + 1u) * *wordsPerQueue + wordIndex] |= mask;
+                assignedCostWords[(queueIndex + 1u) * *wordsPerQueue + wordIndex] |= mask;
                 break;
             }
         }
@@ -167,11 +167,11 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
 void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept{
     if(previousQueue == selectedQueue)
         return;
-    const u64 cost = m_taskCosts[task.index];
+    const u64 cost = taskCosts[task.index];
     if(cost == 0u)
         return;
-    if(m_assignedCostWords.empty()){
-        for(GpuTaskQueueLoad& load : m_assignedQueueLoads){
+    if(assignedCostWords.empty()){
+        for(GpuTaskQueueLoad& load : assignedQueueLoads){
             if(load.queue == previousQueue){
                 NWB_ASSERT(load.estimatedCost >= cost);
                 load.estimatedCost -= cost;
@@ -181,12 +181,12 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const
         }
         return;
     }
-    const usize wordsPerQueue = m_costWordsPerGroup * GpuTaskCostHint::Count;
-    const usize wordIndex = m_taskCostGroups[task.index] * m_costWordsPerGroup + task.index / s_BitsPerWord;
+    const usize wordsPerQueue = costWordsPerGroup * GpuTaskCostHint::Count;
+    const usize wordIndex = taskCostGroups[task.index] * costWordsPerGroup + task.index / s_BitsPerWord;
     const u64 mask = static_cast<u64>(1u) << (task.index % s_BitsPerWord);
-    for(usize queueIndex = 0u; queueIndex < m_assignedQueueLoads.size(); ++queueIndex){
-        GpuTaskQueueLoad& load = m_assignedQueueLoads[queueIndex];
-        u64& word = m_assignedCostWords[(queueIndex + 1u) * wordsPerQueue + wordIndex];
+    for(usize queueIndex = 0u; queueIndex < assignedQueueLoads.size(); ++queueIndex){
+        GpuTaskQueueLoad& load = assignedQueueLoads[queueIndex];
+        u64& word = assignedCostWords[(queueIndex + 1u) * wordsPerQueue + wordIndex];
         if(load.queue == previousQueue){
             NWB_ASSERT(load.estimatedCost >= cost);
             load.estimatedCost -= cost;
@@ -200,7 +200,7 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const
 }
 
 u64 GpuTaskQueueScoringData::assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept{
-    for(const GpuTaskQueueLoad& load : m_assignedQueueLoads){
+    for(const GpuTaskQueueLoad& load : assignedQueueLoads){
         if(load.queue == queue)
             return load.estimatedCost;
     }
@@ -218,49 +218,49 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
     }
 #endif
     usize queueIndex = 0u;
-    while(queueIndex < m_assignedQueueLoads.size() && m_assignedQueueLoads[queueIndex].queue != queue)
+    while(queueIndex < assignedQueueLoads.size() && assignedQueueLoads[queueIndex].queue != queue)
         ++queueIndex;
-    if(queueIndex == m_assignedQueueLoads.size())
+    if(queueIndex == assignedQueueLoads.size())
         return 0u;
-    u64 independentCost = m_totalAssignedCost - m_assignedQueueLoads[queueIndex].estimatedCost;
+    u64 independentCost = totalAssignedCost - assignedQueueLoads[queueIndex].estimatedCost;
     if(independentCost == 0u)
         return 0u;
     if(reachability.m_words.empty()){
         for(const GpuTaskQueueAssignment& member : members){
             if(member.queue != queue)
-                independentCost -= m_taskCosts[member.task.index];
+                independentCost -= taskCosts[member.task.index];
         }
         return independentCost;
     }
-    NWB_ASSERT(m_costWordsPerGroup == reachability.m_wordsPerRow);
-    usize firstWord = m_costWordsPerGroup;
+    NWB_ASSERT(costWordsPerGroup == reachability.m_wordsPerRow);
+    usize firstWord = costWordsPerGroup;
     usize lastWord = 0u;
     for(const GpuTaskQueueAssignment& member : members){
         const auto& range = reachability.m_relatedWordRanges[member.task.index];
-        firstWord = Min(firstWord, range.m_begin);
-        lastWord = Max(lastWord, range.m_end);
+        firstWord = Min(firstWord, range.begin);
+        lastWord = Max(lastWord, range.end);
     }
-    const usize queueOffset = (queueIndex + 1u) * GpuTaskCostHint::Count * m_costWordsPerGroup;
+    const usize queueOffset = (queueIndex + 1u) * GpuTaskCostHint::Count * costWordsPerGroup;
     for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
         u64 related = 0u;
         if(reachability.m_rowOffsets.empty()){
             for(const GpuTaskQueueAssignment& member : members)
-                related |= reachability.m_words[member.task.index * m_costWordsPerGroup + wordIndex];
+                related |= reachability.m_words[member.task.index * costWordsPerGroup + wordIndex];
         }
         else{
             for(const GpuTaskQueueAssignment& member : members){
                 const usize taskIndex = member.task.index;
                 const auto& range = reachability.m_relatedWordRanges[taskIndex];
-                if(wordIndex >= range.m_begin && wordIndex < range.m_end)
-                    related |= reachability.m_words[reachability.m_rowOffsets[taskIndex] + wordIndex - range.m_begin];
+                if(wordIndex >= range.begin && wordIndex < range.end)
+                    related |= reachability.m_words[reachability.m_rowOffsets[taskIndex] + wordIndex - range.begin];
             }
         }
         if(related == 0u)
             continue;
         for(usize costGroup = 0u; costGroup < GpuTaskCostHint::Count; ++costGroup){
-            const usize costWord = costGroup * m_costWordsPerGroup + wordIndex;
-            const u64 offQueue = m_assignedCostWords[costWord] & ~m_assignedCostWords[queueOffset + costWord];
-            independentCost -= static_cast<u64>(CountSetBits(related & offQueue)) * m_costGroupWeights[costGroup];
+            const usize costWord = costGroup * costWordsPerGroup + wordIndex;
+            const u64 offQueue = assignedCostWords[costWord] & ~assignedCostWords[queueOffset + costWord];
+            independentCost -= static_cast<u64>(CountSetBits(related & offQueue)) * costGroupWeights[costGroup];
         }
     }
     return independentCost;

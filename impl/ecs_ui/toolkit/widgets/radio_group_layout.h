@@ -5,8 +5,8 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/radio_group_style.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/widgets/radio_group_style.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,10 +18,30 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RadioGroupLayout final{
-public:
-    [[nodiscard]] static Expected<RadioGroupMetrics> Measure(u32 count, const Point& maximumLabel, const RadioGroupOptions& options, const RadioGroupStyle& style)noexcept;
-    [[nodiscard]] static Expected<RadioGroupPlacement> Place(const Rect& bounds, const Rect& clip, const RadioGroupChoices& choices, const RadioGroupMetrics& metrics)noexcept;
+namespace RadioGroupLayout{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline Expected<RadioGroupMetrics> Measure(const u32 count, const Point& maximumLabel, const RadioGroupOptions& options, const RadioGroupStyle& style)noexcept{
+    RadioGroupMetrics candidate;
+    if(!TryMeasureRadioGroup(count, maximumLabel, options, style, candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+[[nodiscard]] inline Expected<RadioGroupPlacement> Place(const Rect& bounds, const Rect& clip, const RadioGroupChoices& choices, const RadioGroupMetrics& metrics)noexcept{
+    RadioGroupPlacement candidate;
+    if(!TryPlaceRadioGroup(bounds, clip, choices, metrics, candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

@@ -5,22 +5,16 @@
 #pragma once
 
 
-#include <engine_namespace.h>
+#include "root_discovery.h"
 
 #include <core/alloc/scratch.h>
 #include <core/assets/global.h>
+#include <core/common/application_entry.h>
 
 #include <global/optional.h>
 #include <global/terminal_entry.h>
 
 #include <CLI.hpp>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#define NWB_PIPELINE_BEGIN NWB_BEGIN namespace Pipeline{
-#define NWB_PIPELINE_END }; NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

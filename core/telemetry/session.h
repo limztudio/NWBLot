@@ -63,8 +63,6 @@ public:
 
     [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
 
-    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
-
     [[nodiscard]] usize eventCount()const noexcept{ return m_recorder.eventCount(); }
 
     [[nodiscard]] EventView view()const noexcept{ return m_recorder.view(); }
@@ -85,12 +83,6 @@ public:
 
 
 private:
-    void setForwardLogger(Common::ILogger* const forwardLogger)noexcept{ m_textLogCapture.setForwardLogger(forwardLogger); }
-
-    [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger()noexcept{ return m_textLogCapture; }
-
-
-private:
     u64 m_frameIndex = 0u;
     Recorder m_recorder;
     TextLogCaptureLogger m_textLogCapture;
@@ -105,18 +97,18 @@ class CaptureSessionCaptureScope final : NoCopy{
 public:
     explicit CaptureSessionCaptureScope(CaptureSession& session)
         : m_session(session)
-        , m_previousForwardLogger(session.textLogCaptureLogger().forwardLogger())
-        , m_logRegistration(session.textLogCaptureLogger())
+        , m_previousForwardLogger(session.m_textLogCapture.forwardLogger())
+        , m_logRegistration(session.m_textLogCapture)
         , m_diagnostic(session.recorder())
     {
-        Common::ILogger* const forwardLogger = m_logRegistration.previousLogger() == &m_session.textLogCaptureLogger() ? m_previousForwardLogger : m_logRegistration.previousLogger();
-        m_session.setForwardLogger(forwardLogger);
+        Common::ILogger* const forwardLogger = m_logRegistration.previousLogger() == &m_session.m_textLogCapture ? m_previousForwardLogger : m_logRegistration.previousLogger();
+        m_session.m_textLogCapture.setForwardLogger(forwardLogger);
         m_diagnostic.setFrameIndex(session.frameIndex());
-        m_diagnostic.setStreamId(session.streamId());
+        m_diagnostic.setStreamId(session.m_streamId);
     }
     CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;
     ~CaptureSessionCaptureScope()noexcept{
-        m_session.setForwardLogger(m_previousForwardLogger);
+        m_session.m_textLogCapture.setForwardLogger(m_previousForwardLogger);
     }
 
 

@@ -25,8 +25,8 @@ namespace MeshRefreshParseDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName);
-[[nodiscard]] Expected<SourceMeshStreams> ParseMeshValue(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, AStringView skinVariableName);
+[[nodiscard]] Expected<SourceMeshStreams> ParseMeshValue(const ScratchPath& nwbFilePath, AStringView meshVariableName, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

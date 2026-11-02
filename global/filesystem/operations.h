@@ -66,9 +66,9 @@ inline constexpr FileFormatFlags s_FileFormatFloatField = std::ios::floatfield;
 
 [[nodiscard]] inline ErrorCode LastSystemError()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
-    return ErrorCode(static_cast<i32>(GetLastError()), std::system_category());
+    return ErrorCode(static_cast<i32>(GetLastError()), SystemCategory());
 #else
-    return ErrorCode(errno, std::generic_category());
+    return ErrorCode(errno, GenericCategory());
 #endif
 }
 
@@ -167,7 +167,7 @@ template<typename ArenaT>
         if(static_cast<usize>(copiedBytes) < buffer.size())
             return Path<ArenaT>(path.arena(), TStringView(buffer.data(), static_cast<usize>(copiedBytes)));
         if(capacity > Limit<usize>::s_Max / 2u)
-            return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
         capacity *= 2u;
     }
 #endif
@@ -186,7 +186,7 @@ template<typename ArenaT>
         if(copiedLength < capacity)
             return Path<ArenaT>(arena, TStringView(buffer.data(), static_cast<usize>(copiedLength)));
         if(copiedLength == Limit<DWORD>::s_Max)
-            return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
         capacity = copiedLength + 1u;
     }
 #else
@@ -194,11 +194,11 @@ template<typename ArenaT>
     for(;;){
         buffer.resize(capacity);
         if(getcwd(buffer.data(), buffer.size()) != nullptr)
-            return Path<ArenaT>(arena, TStringView(buffer.data(), std::char_traits<tchar>::length(buffer.data())));
+            return Path<ArenaT>(arena, TStringView(buffer.data(), CharTraits<tchar>::length(buffer.data())));
         if(errno != ERANGE)
             return MakeUnexpected(LastSystemError());
         if(capacity > Limit<usize>::s_Max / 2u)
-            return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
         capacity *= 2u;
     }
 #endif
@@ -247,14 +247,14 @@ template<typename ArenaT>
     if(copiedLength == 0u)
         return MakeUnexpected(LastSystemError());
     if(copiedLength >= static_cast<DWORD>(s_MaxPathLength))
-        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     return Path<ArenaT>(arena, TStringView(executablePathBuffer.data(), static_cast<usize>(copiedLength)));
 #elif defined(NWB_PLATFORM_LINUX)
     const auto path = ReadSymlink(Path<ArenaT>(arena, "/proc/self/exe"));
     if(!path)
         return MakeUnexpected(path.error());
     if(path->empty())
-        return MakeUnexpected(std::make_error_code(std::errc::no_such_file_or_directory));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::no_such_file_or_directory));
     return LexicallyNormal(*path);
 #else
     return GetCurrentPath(arena);
@@ -268,7 +268,7 @@ template<typename ArenaT>
         return MakeUnexpected(executablePath.error());
     Path<ArenaT> result = executablePath->parentPath();
     if(result.empty())
-        return MakeUnexpected(std::make_error_code(std::errc::no_such_file_or_directory));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::no_such_file_or_directory));
     return result;
 }
 
@@ -279,7 +279,7 @@ template<typename ArenaT>
         return MakeUnexpected(executablePath.error());
     Path<ArenaT> result = executablePath->stem();
     if(result.empty())
-        return MakeUnexpected(std::make_error_code(std::errc::no_such_file_or_directory));
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::no_such_file_or_directory));
     return result;
 }
 
@@ -302,7 +302,7 @@ template<typename ArenaT>
     const DWORD error = GetLastError();
     if(error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)
         return INVALID_FILE_ATTRIBUTES;
-    return MakeUnexpected(ErrorCode(static_cast<i32>(error), std::system_category()));
+    return MakeUnexpected(ErrorCode(static_cast<i32>(error), SystemCategory()));
 }
 #else
 template<typename ArenaT>
@@ -342,7 +342,7 @@ template<typename ArenaT>
 #else
     const auto pathStat = GlobalFilesystemDetail::StatPath(path);
     if(!pathStat){
-        if(pathStat.error() == std::errc::no_such_file_or_directory || pathStat.error() == std::errc::not_a_directory)
+        if(pathStat.error() == ErrorCondition::no_such_file_or_directory || pathStat.error() == ErrorCondition::not_a_directory)
             return false;
         return MakeUnexpected(pathStat.error());
     }
@@ -360,7 +360,7 @@ template<typename ArenaT>
 #else
     const auto pathStat = GlobalFilesystemDetail::LStatPath(path);
     if(!pathStat){
-        if(pathStat.error() == std::errc::no_such_file_or_directory || pathStat.error() == std::errc::not_a_directory)
+        if(pathStat.error() == ErrorCondition::no_such_file_or_directory || pathStat.error() == ErrorCondition::not_a_directory)
             return false;
         return MakeUnexpected(pathStat.error());
     }
@@ -378,7 +378,7 @@ template<typename ArenaT>
 #else
     const auto pathStat = GlobalFilesystemDetail::StatPath(path);
     if(!pathStat){
-        if(pathStat.error() == std::errc::no_such_file_or_directory || pathStat.error() == std::errc::not_a_directory)
+        if(pathStat.error() == ErrorCondition::no_such_file_or_directory || pathStat.error() == ErrorCondition::not_a_directory)
             return false;
         return MakeUnexpected(pathStat.error());
     }
@@ -396,7 +396,7 @@ template<typename ArenaT>
 #else
     const auto pathStat = GlobalFilesystemDetail::LStatPath(path);
     if(!pathStat){
-        if(pathStat.error() == std::errc::no_such_file_or_directory || pathStat.error() == std::errc::not_a_directory)
+        if(pathStat.error() == ErrorCondition::no_such_file_or_directory || pathStat.error() == ErrorCondition::not_a_directory)
             return false;
         return MakeUnexpected(pathStat.error());
     }
@@ -414,7 +414,7 @@ template<typename ArenaT>
 #else
     const auto pathStat = GlobalFilesystemDetail::StatPath(path);
     if(!pathStat){
-        if(pathStat.error() == std::errc::no_such_file_or_directory || pathStat.error() == std::errc::not_a_directory)
+        if(pathStat.error() == ErrorCondition::no_such_file_or_directory || pathStat.error() == ErrorCondition::not_a_directory)
             return false;
         return MakeUnexpected(pathStat.error());
     }
@@ -424,9 +424,9 @@ template<typename ArenaT>
 
 [[nodiscard]] inline b8 IsMissingPathError(const ErrorCode& error)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
-    return error.category() == std::system_category() && (error.value() == ERROR_FILE_NOT_FOUND || error.value() == ERROR_PATH_NOT_FOUND || error.value() == ERROR_DIRECTORY);
+    return error.category() == SystemCategory() && (error.value() == ERROR_FILE_NOT_FOUND || error.value() == ERROR_PATH_NOT_FOUND || error.value() == ERROR_DIRECTORY);
 #else
-    return error == std::errc::no_such_file_or_directory || error == std::errc::not_a_directory;
+    return error == ErrorCondition::no_such_file_or_directory || error == ErrorCondition::not_a_directory;
 #endif
 }
 
@@ -466,7 +466,7 @@ template<typename ArenaT>
     if(mkdir(path.c_str(), static_cast<mode_t>(s_CreateDirectoryPermissionMask)) == 0)
         return true;
     const ErrorCode createError = LastSystemError();
-    if(createError != std::errc::file_exists)
+    if(createError != ErrorCondition::file_exists)
         return MakeUnexpected(createError);
 #endif
     const auto directory = IsDirectory(path);

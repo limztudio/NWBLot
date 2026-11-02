@@ -113,10 +113,6 @@ using ReflectionCsgDispatchControl = RefCounter<ReflectionCsgDispatchState>;
 using ReflectionCsgDispatchHandle = RefCountPtr< ReflectionCsgDispatchControl, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena> >;
 
 class RendererReflectionSystem final : NoCopy{
-private:
-    static constexpr usize s_ReflectionDescriptorCount = ::NWB::Impl::s_ReflectionDescriptorCount;
-
-
 public:
     RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
         : m_arena(arena)

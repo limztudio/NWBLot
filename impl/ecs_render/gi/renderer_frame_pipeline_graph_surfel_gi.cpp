@@ -132,24 +132,14 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
             resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
 
-    const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state) -> Expected<Core::GpuGraphResourceId>{
+    const auto appendOptionalBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state, const b8 writable = false) -> Expected<Core::GpuGraphResourceId>{
         if(!buffer)
             return Core::GpuGraphResourceId{};
         const auto resourceResult = ImportExternalBuffer(m_deferredLightingTaskGraph, buffer, identity, label);
         if(!resourceResult)
             return MakeUnexpected(Failure{});
         const Core::GpuGraphResourceId resource = *resourceResult;
-        resourceUses.push_back(ReadUse(resource, state));
-        return resource;
-    };
-    const auto appendOptionalWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state) -> Expected<Core::GpuGraphResourceId>{
-        if(!buffer)
-            return Core::GpuGraphResourceId{};
-        const auto resourceResult = ImportExternalBuffer(m_deferredLightingTaskGraph, buffer, identity, label);
-        if(!resourceResult)
-            return MakeUnexpected(Failure{});
-        const Core::GpuGraphResourceId resource = *resourceResult;
-        resourceUses.push_back(WriteUse(resource, state));
+        resourceUses.push_back(writable ? WriteUse(resource, state) : ReadUse(resource, state));
         return resource;
     };
     Core::GpuGraphResourceId shadowInstanceMaterials;
@@ -169,7 +159,7 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     Core::GpuGraphResourceId sceneInstances;
     Core::GpuGraphResourceId tlas;
     const auto importOptionalResources = [&]() -> Expected<void>{
-        const auto shadowInstanceMaterialsResult = appendOptionalReadBuffer(
+        const auto shadowInstanceMaterialsResult = appendOptionalBuffer(
             rayTracingResources.shadowInstanceMaterialBuffer,
             Name(s_SceneShadowInstanceMaterialName),
             s_SceneShadowInstanceMaterialLabel,
@@ -178,7 +168,7 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
         if(!shadowInstanceMaterialsResult)
             return MakeUnexpected(Failure{});
         shadowInstanceMaterials = *shadowInstanceMaterialsResult;
-        const auto shadowMaterialTypedResult = appendOptionalReadBuffer(
+        const auto shadowMaterialTypedResult = appendOptionalBuffer(
             rayTracingResources.shadowMaterialTypedBuffer,
             Name(s_SceneShadowMaterialTypedName),
             s_SceneShadowMaterialTypedLabel,
@@ -187,7 +177,7 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
         if(!shadowMaterialTypedResult)
             return MakeUnexpected(Failure{});
         shadowMaterialTyped = *shadowMaterialTypedResult;
-        const auto shadowInstancesResult = appendOptionalReadBuffer(
+        const auto shadowInstancesResult = appendOptionalBuffer(
             rayTracingResources.shadowInstanceBuffer,
             Name(s_SceneShadowInstancesName),
             s_SceneShadowInstancesLabel,
@@ -196,35 +186,35 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
         if(!shadowInstancesResult)
             return MakeUnexpected(Failure{});
         shadowInstances = *shadowInstancesResult;
-        const auto surfelConstantsResult = appendOptionalReadBuffer(rayTracingSurfelResources.constantsBuffer, Name(s_SurfelConstantsName), s_SurfelConstantsLabel, Core::ResourceStates::ConstantBuffer);
+        const auto surfelConstantsResult = appendOptionalBuffer(rayTracingSurfelResources.constantsBuffer, Name(s_SurfelConstantsName), s_SurfelConstantsLabel, Core::ResourceStates::ConstantBuffer);
         if(!surfelConstantsResult)
             return MakeUnexpected(Failure{});
         surfelConstants = *surfelConstantsResult;
-        const auto surfelPoolResult = appendOptionalWriteBuffer(rayTracingSurfelResources.poolBuffer, Name("render.surfel_gi.pool"), "Surfel Pool", Core::ResourceStates::UnorderedAccess);
+        const auto surfelPoolResult = appendOptionalBuffer(rayTracingSurfelResources.poolBuffer, Name("render.surfel_gi.pool"), "Surfel Pool", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelPoolResult)
             return MakeUnexpected(Failure{});
         surfelPool = *surfelPoolResult;
-        const auto surfelGuidePoolResult = appendOptionalWriteBuffer(rayTracingSurfelResources.guidePoolBuffer, Name("render.surfel_gi.guide_pool"), "Surfel Guide Pool", Core::ResourceStates::UnorderedAccess);
+        const auto surfelGuidePoolResult = appendOptionalBuffer(rayTracingSurfelResources.guidePoolBuffer, Name("render.surfel_gi.guide_pool"), "Surfel Guide Pool", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelGuidePoolResult)
             return MakeUnexpected(Failure{});
         surfelGuidePool = *surfelGuidePoolResult;
-        const auto surfelCellHeadResult = appendOptionalWriteBuffer(rayTracingSurfelResources.cellHeadBuffer, Name("render.surfel_gi.cell_heads"), "Surfel Cell Heads", Core::ResourceStates::UnorderedAccess);
+        const auto surfelCellHeadResult = appendOptionalBuffer(rayTracingSurfelResources.cellHeadBuffer, Name("render.surfel_gi.cell_heads"), "Surfel Cell Heads", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelCellHeadResult)
             return MakeUnexpected(Failure{});
         surfelCellHead = *surfelCellHeadResult;
-        const auto surfelCounterResult = appendOptionalWriteBuffer(rayTracingSurfelResources.counterBuffer, Name(s_SurfelCounterName), s_SurfelCounterLabel, Core::ResourceStates::UnorderedAccess);
+        const auto surfelCounterResult = appendOptionalBuffer(rayTracingSurfelResources.counterBuffer, Name(s_SurfelCounterName), s_SurfelCounterLabel, Core::ResourceStates::UnorderedAccess, true);
         if(!surfelCounterResult)
             return MakeUnexpected(Failure{});
         surfelCounter = *surfelCounterResult;
-        const auto surfelFreeListResult = appendOptionalWriteBuffer(rayTracingSurfelResources.freeListBuffer, Name("render.surfel_gi.free_list"), "Surfel Free List", Core::ResourceStates::UnorderedAccess);
+        const auto surfelFreeListResult = appendOptionalBuffer(rayTracingSurfelResources.freeListBuffer, Name("render.surfel_gi.free_list"), "Surfel Free List", Core::ResourceStates::UnorderedAccess, true);
         if(!surfelFreeListResult)
             return MakeUnexpected(Failure{});
         surfelFreeList = *surfelFreeListResult;
-        const auto surfelPoolSnapshotResult = appendOptionalReadBuffer(rayTracingSurfelResources.poolSnapshotBuffer, Name("render.surfel_gi.pool_snapshot"), "Surfel Pool Snapshot", Core::ResourceStates::ShaderResource);
+        const auto surfelPoolSnapshotResult = appendOptionalBuffer(rayTracingSurfelResources.poolSnapshotBuffer, Name("render.surfel_gi.pool_snapshot"), "Surfel Pool Snapshot", Core::ResourceStates::ShaderResource);
         if(!surfelPoolSnapshotResult)
             return MakeUnexpected(Failure{});
         surfelPoolSnapshot = *surfelPoolSnapshotResult;
-        const auto surfelCellHeadSnapshotResult = appendOptionalReadBuffer(rayTracingSurfelResources.cellHeadSnapshotBuffer, Name("render.surfel_gi.cell_head_snapshot"), "Surfel Cell Head Snapshot", Core::ResourceStates::ShaderResource);
+        const auto surfelCellHeadSnapshotResult = appendOptionalBuffer(rayTracingSurfelResources.cellHeadSnapshotBuffer, Name("render.surfel_gi.cell_head_snapshot"), "Surfel Cell Head Snapshot", Core::ResourceStates::ShaderResource);
         if(!surfelCellHeadSnapshotResult)
             return MakeUnexpected(Failure{});
         surfelCellHeadSnapshot = *surfelCellHeadSnapshotResult;
@@ -247,13 +237,13 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
         optionalResourcesImported = surfelTraceIndirectArgsResult.has_value();
     }
     if(optionalResourcesImported && !useHwTrace){
-        const auto sceneBvhNodesResult = appendOptionalReadBuffer(rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel, Core::ResourceStates::ShaderResource);
+        const auto sceneBvhNodesResult = appendOptionalBuffer(rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel, Core::ResourceStates::ShaderResource);
         if(sceneBvhNodesResult)
             sceneBvhNodes = *sceneBvhNodesResult;
         optionalResourcesImported = sceneBvhNodesResult.has_value();
     }
     if(optionalResourcesImported && !useHwTrace){
-        const auto sceneInstancesResult = appendOptionalReadBuffer(rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel, Core::ResourceStates::ShaderResource);
+        const auto sceneInstancesResult = appendOptionalBuffer(rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel, Core::ResourceStates::ShaderResource);
         if(sceneInstancesResult)
             sceneInstances = *sceneInstancesResult;
         optionalResourcesImported = sceneInstancesResult.has_value();

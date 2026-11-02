@@ -16,6 +16,10 @@
 using ErrorCondition = std::errc;
 using ErrorCategory = std::error_category;
 
+[[nodiscard]] inline const ErrorCategory& GenericCategory()noexcept{
+    return std::generic_category();
+}
+
 [[nodiscard]] inline const ErrorCategory& SystemCategory()noexcept{
     return std::system_category();
 }

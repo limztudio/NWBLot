@@ -90,7 +90,7 @@ using namespace SceneAssetCook;
 
 
 b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    const IComponent* const component = CastComponent(&asset);
+    const IComponent* const component = ComponentTypeAutoRegistrar::Cast(&asset);
     if(!component){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: unexpected asset type '{}'"), ConvertString(s_ComponentSerializeContext), ConvertString(asset.assetType().resolvedText()));
         return false;
@@ -117,10 +117,9 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
     if(!component.serializeComponentPayload(payload))
         return false;
 
-    const ComponentHeaderBinary header = BuildComponentHeaderBinary(
-        component.assetType().hash(),
-        static_cast<u64>(payload.size())
-    );
+    ComponentHeaderBinary header;
+    header.componentTypeHash = component.assetType().hash();
+    header.payloadByteCount = static_cast<u64>(payload.size());
 
     outBinary.clear();
     outBinary.reserve(sizeof(header) + payload.size());
@@ -141,12 +140,12 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
 
 
 b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
+    const TransformComponentPayloadBinary binaryPayload(component.position, component.rotation, component.scale);
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
 
 b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
+    const CameraComponentPayloadBinary binaryPayload(component.projection);
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
 
@@ -260,9 +259,9 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(const Name v
         f32 farPlane = entry.component.farPlane();
         f32 aspectRatio = entry.component.aspectRatio();
         if(
-            !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraNearPlaneField, nearPlane)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraFarPlaneField, farPlane)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraAspectRatioField, aspectRatio)
+            !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraNearPlaneField, nearPlane)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraFarPlaneField, farPlane)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraAspectRatioField, aspectRatio)
         )
             return MakeUnexpected(Failure{});
         entry.component.setNearPlane(nearPlane);
@@ -321,18 +320,18 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(const Name vir
 
         f32 intensity = entry.component.intensity();
         if(
-            !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightIntensityField, intensity)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightRangeField, entry.component.range)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightInnerConeCosField, entry.component.innerConeCos)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightOuterConeCosField, entry.component.outerConeCos)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightAngularRadiusField, entry.component.angularRadius)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightSourceRadiusField, entry.component.sourceRadius)
+            !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightIntensityField, intensity)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightRangeField, entry.component.range)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightInnerConeCosField, entry.component.innerConeCos)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightOuterConeCosField, entry.component.outerConeCos)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightAngularRadiusField, entry.component.angularRadius)
+            || !Core::Assets::ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightSourceRadiusField, entry.component.sourceRadius)
         )
             return MakeUnexpected(Failure{});
         entry.component.setIntensity(intensity);
 
         if(const Core::Metascript::Value* enableCausticsValue = asset.findField(s_LightEnableCausticsField)){
-            const auto enableCaustics = ParseMetadataBoolField(nwbFilePath, s_LightDiagnosticPrefix, *enableCausticsValue, s_LightEnableCausticsField);
+            const auto enableCaustics = Core::Assets::ParseMetadataBoolField(nwbFilePath, s_LightDiagnosticPrefix, *enableCausticsValue, s_LightEnableCausticsField);
             if(!enableCaustics)
                 return MakeUnexpected(Failure{});
             entry.component.enableCaustics = *enableCaustics;

@@ -24,9 +24,39 @@ namespace __hidden_assets_graphics_runtime_components{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_RendererSubsystemAssetAutoRegistrar, RendererSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_MeshSubsystemAssetAutoRegistrar, MeshSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_DeferredSubsystemAssetAutoRegistrar, DeferredSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_BvhSubsystemAssetAutoRegistrar, BvhSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_GiSubsystemAssetAutoRegistrar, GiSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_ReflectionSubsystemAssetAutoRegistrar, ReflectionSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_ShadowSubsystemAssetAutoRegistrar, ShadowSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_TransparentSubsystemAssetAutoRegistrar, TransparentSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_RefractiveSubsystemAssetAutoRegistrar, RefractiveSubsystem);
+NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_CsgSubsystemAssetAutoRegistrar, CsgSubsystem);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_ModelComponentAssetAutoRegistrar, ModelComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
+
+template<typename AssetRefT>
+[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(const Span<const u8> payload, const TStringView context, AssetRefT& outRef){
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, context);
+    if(!binaryPayload)
+        return false;
+    outRef.virtualPath = Name(binaryPayload->assetHash);
+    return true;
+}
+
+template<typename ComponentAssetT, typename AssetRefT>
+[[nodiscard]] static b8 ValidateSingleAssetRefComponentPayload(const ComponentAssetT& componentAsset, const AssetRefT& assetRef, const TStringView context, const TStringView kindLabel){
+    if(!componentAsset.checkVirtualPath(context))
+        return false;
+    if(!assetRef.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: {} '{}' asset must not be empty"), context, kindLabel, ConvertString(componentAsset.virtualPath().resolvedText()));
+        return false;
+    }
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,21 +69,11 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, Rend
 
 
 b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, NWB_TEXT("ModelComponentAsset::loadComponentPayload"));
-    if(!binaryPayload)
-        return false;
-    component.model.virtualPath = Name(binaryPayload->assetHash);
-    return true;
+    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("ModelComponentAsset::loadComponentPayload"), component.model);
 }
 
 b8 ModelComponentAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("ModelComponentAsset::validatePayload")))
-        return false;
-    if(!component.model.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelComponentAsset::validatePayload failed: model_component '{}' asset must not be empty"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.model, NWB_TEXT("ModelComponentAsset::validatePayload"), NWB_TEXT("model_component"));
 }
 
 
@@ -61,21 +81,11 @@ b8 ModelComponentAsset::validatePayload()const{
 
 
 b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, NWB_TEXT("MeshComponentAsset::loadComponentPayload"));
-    if(!binaryPayload)
-        return false;
-    component.mesh.virtualPath = Name(binaryPayload->assetHash);
-    return true;
+    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("MeshComponentAsset::loadComponentPayload"), component.mesh);
 }
 
 b8 MeshComponentAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("MeshComponentAsset::validatePayload")))
-        return false;
-    if(!component.mesh.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshComponentAsset::validatePayload failed: mesh_component '{}' asset must not be empty"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.mesh, NWB_TEXT("MeshComponentAsset::validatePayload"), NWB_TEXT("mesh_component"));
 }
 
 

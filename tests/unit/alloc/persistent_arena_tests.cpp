@@ -47,14 +47,13 @@ void ExpectPattern(const Span<const u8> bytes){
 
 
 TEST(PersistentArenaTests, StructureAlignedSizeFitsExactPayloadAndReusesTheFixedPool){
-    constexpr usize s_Bytes = s_PersistentArenaHighAlignment;
     const auto structureAlignedSize = static_cast<usize(*)(usize)>(&PersistentArena::StructureAlignedSize);
-    PersistentArena arena(Name{"tests/persistent_arena/exact_payload"}, structureAlignedSize(s_Bytes));
+    PersistentArena arena(Name{"tests/persistent_arena/exact_payload"}, structureAlignedSize(s_PersistentArenaHighAlignment));
 
     const ArenaMemoryStats initial = arena.memoryStats();
-    auto* const first = static_cast<u8*>(arena.allocate(1u, s_Bytes));
+    auto* const first = static_cast<u8*>(arena.allocate(1u, s_PersistentArenaHighAlignment));
     ASSERT_NE(first, nullptr);
-    FillPattern(Span<u8>(first, s_Bytes));
+    FillPattern(Span<u8>(first, s_PersistentArenaHighAlignment));
     const ArenaMemoryStats allocated = arena.memoryStats();
     EXPECT_EQ(allocated.reservedBytes, initial.reservedBytes);
     EXPECT_GT(allocated.usedBytes, 0u);
@@ -63,25 +62,24 @@ TEST(PersistentArenaTests, StructureAlignedSizeFitsExactPayloadAndReusesTheFixed
     EXPECT_EQ(arena.allocate(1u, 1u), nullptr);
     ArenaOwnerTestSupport::ExpectMemoryStatsEqual(allocated, arena.memoryStats());
 
-    arena.deallocate(first, 1u, s_Bytes);
+    arena.deallocate(first, 1u, s_PersistentArenaHighAlignment);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
-    auto* const reused = static_cast<u8*>(arena.allocate(1u, s_Bytes));
+    auto* const reused = static_cast<u8*>(arena.allocate(1u, s_PersistentArenaHighAlignment));
     ASSERT_NE(reused, nullptr);
-    FillPattern(Span<u8>(reused, s_Bytes));
-    ExpectPattern(Span<const u8>(reused, s_Bytes));
-    arena.deallocate(reused, 1u, s_Bytes);
+    FillPattern(Span<u8>(reused, s_PersistentArenaHighAlignment));
+    ExpectPattern(Span<const u8>(reused, s_PersistentArenaHighAlignment));
+    arena.deallocate(reused, 1u, s_PersistentArenaHighAlignment);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 
 TEST(PersistentArenaTests, StructureAlignedSizeFitsAnExactOverAlignedPayload){
-    constexpr usize s_Alignment = s_PersistentArenaHighAlignment;
-    PersistentArena arena(Name{"tests/persistent_arena/exact_overaligned_payload"}, PersistentArena::StructureAlignedSize(1u, s_Alignment));
+    PersistentArena arena(Name{"tests/persistent_arena/exact_overaligned_payload"}, PersistentArena::StructureAlignedSize(1u, s_PersistentArenaHighAlignment));
 
-    auto* const allocation = static_cast<u8*>(arena.allocate(s_Alignment, 1u));
+    auto* const allocation = static_cast<u8*>(arena.allocate(s_PersistentArenaHighAlignment, 1u));
     ASSERT_NE(allocation, nullptr);
-    EXPECT_EQ(reinterpret_cast<usize>(allocation) % s_Alignment, 0u);
-    arena.deallocate(allocation, s_Alignment, 1u);
+    EXPECT_EQ(reinterpret_cast<usize>(allocation) % s_PersistentArenaHighAlignment, 0u);
+    arena.deallocate(allocation, s_PersistentArenaHighAlignment, 1u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
@@ -201,10 +199,9 @@ TEST(PersistentArenaTests, FailedAlignedReallocationRetainsPayloadAndStats){
 
 
 TEST(PersistentArenaTests, ReallocationMaintainsRequestedAlignmentAcrossShrinkAndGrowth){
-    constexpr usize s_HighAlignment = s_PersistentArenaHighAlignment;
     constexpr usize s_InitialBytes = 512u;
     constexpr usize s_GrownBytes = 1024u;
-    PersistentArena arena(Name{"tests/persistent_arena/reallocation_alignment"}, PersistentArena::StructureAlignedSize(4096u, s_HighAlignment));
+    PersistentArena arena(Name{"tests/persistent_arena/reallocation_alignment"}, PersistentArena::StructureAlignedSize(4096u, s_PersistentArenaHighAlignment));
 
     auto* const initial = static_cast<u8*>(arena.allocate(1u, s_InitialBytes));
     ASSERT_NE(initial, nullptr);
@@ -215,20 +212,19 @@ TEST(PersistentArenaTests, ReallocationMaintainsRequestedAlignmentAcrossShrinkAn
     EXPECT_EQ(reinterpret_cast<usize>(shrunk) % 256u, 0u);
     ExpectPattern(Span<const u8>(shrunk, 256u));
 
-    auto* const grown = static_cast<u8*>(arena.reallocate(shrunk, s_HighAlignment, s_GrownBytes));
+    auto* const grown = static_cast<u8*>(arena.reallocate(shrunk, s_PersistentArenaHighAlignment, s_GrownBytes));
     ASSERT_NE(grown, nullptr);
-    EXPECT_EQ(reinterpret_cast<usize>(grown) % s_HighAlignment, 0u);
+    EXPECT_EQ(reinterpret_cast<usize>(grown) % s_PersistentArenaHighAlignment, 0u);
     ExpectPattern(Span<const u8>(grown, 256u));
-    arena.deallocate(grown, s_HighAlignment, s_GrownBytes);
+    arena.deallocate(grown, s_PersistentArenaHighAlignment, s_GrownBytes);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 
 TEST(PersistentArenaTests, ReallocationRetainsAHighAlignedBlockForLowerAlignment){
-    constexpr usize s_HighAlignment = s_PersistentArenaHighAlignment;
-    PersistentArena arena(Name{"tests/persistent_arena/reallocation_lower_alignment"}, PersistentArena::StructureAlignedSize(1u, s_HighAlignment));
+    PersistentArena arena(Name{"tests/persistent_arena/reallocation_lower_alignment"}, PersistentArena::StructureAlignedSize(1u, s_PersistentArenaHighAlignment));
 
-    auto* const allocation = static_cast<u8*>(arena.allocate(s_HighAlignment, 1u));
+    auto* const allocation = static_cast<u8*>(arena.allocate(s_PersistentArenaHighAlignment, 1u));
     ASSERT_NE(allocation, nullptr);
     allocation[0u] = 93u;
 

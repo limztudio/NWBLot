@@ -4,7 +4,6 @@
 
 const StringView s_DefaultPipelineConfig = "default";
 const StringView s_AssetCacheDirectory = "__asset_cache";
-const StringView s_DefaultRepoRoot = ".";
 const Name s_AssetBuilderArena = "pipeline/asset_builder";
 const u32 s_MinParallelCoreCount = 1u;
 

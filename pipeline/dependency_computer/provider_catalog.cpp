@@ -63,27 +63,21 @@ namespace Assets = Core::Assets;
 
 b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_provider_catalog;
-    const AStringView repoText = options.repoRoot.empty() ? s_DefaultRepoRoot : AStringView(options.repoRoot);
-    const auto absoluteRoot = AbsolutePath(Path(m_arena, repoText));
-    if(!absoluteRoot){
-        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve repository root"));
+    auto resolvedRepoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), NWB_TEXT("DependencyComputer"), m_arena);
+    if(!resolvedRepoRoot)
         return false;
-    }
-    Path repoRoot = absoluteRoot->lexicallyNormal();
-    const auto& sources = options.assetRoots.empty() ? options.inputs : options.assetRoots;
-    auto roots = Assets::ResolveAssetRoots(repoRoot, sources, options.assetRoots.empty(), Assets::AssetRootDuplicatePolicy::HostFilesystem, scratchArena);
-    if(!roots){
-        const auto& error = roots.error();
-        if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(error.inputPath));
-        else
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), ConvertString(sources[error.sourceIndex]));
+    Path repoRoot = Move(*resolvedRepoRoot);
+    auto roots = ResolvePipelineAssetRoots(
+        repoRoot,
+        options.inputs,
+        options.assetRoots,
+        Assets::AssetRootDuplicatePolicy::HostFilesystem,
+        NWB_TEXT("DependencyComputer"),
+        NWB_TEXT("no asset roots available for dependency resolution"),
+        scratchArena
+    );
+    if(!roots)
         return false;
-    }
-    if(roots->empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no asset roots available for dependency resolution"));
-        return false;
-    }
     auto files = Assets::DiscoverFilesWithExtension(*roots, Assets::s_NwbExtension, m_arena, scratchArena);
     if(!files)
         return false;
@@ -124,8 +118,8 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
             defaultEntry.virtualPath,
             defaultEntry.assetType,
             defaultEntry.virtualPathText,
-            scratchArena,
-            &dependencyRegistry
+            &dependencyRegistry,
+            scratchArena
         );
         if(!projectProvider){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no project root '{}' found in asset roots"), ConvertString(defaultEntry.virtualPathText));
@@ -138,20 +132,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
 
     const auto selectionResult = Assets::SelectDiscoveredNwbInputs(m_repoRoot, m_roots, m_files, options.inputs, true, scratchArena, selected, &order);
     if(!selectionResult){
-        const auto& error = selectionResult.error();
-        switch(error.reason){
-            case Assets::CookInputSelectionFailure::ResolveInput:
-                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), ConvertString(error.rawInput));
-                break;
-            case Assets::CookInputSelectionFailure::NotFileOrDirectory:
-                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input is not a file or directory '{}'"), PathToString<tchar>(error.resolvedPath));
-                break;
-            case Assets::CookInputSelectionFailure::DirectoryOutsideAssetRoots:
-            case Assets::CookInputSelectionFailure::NoMatchingAsset:
-            case Assets::CookInputSelectionFailure::None:
-                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'"), PathToString<tchar>(error.resolvedPath));
-                break;
-        }
+        LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("DependencyComputer"));
         return MakeUnexpected(Failure{});
     }
     return selection;
@@ -171,8 +152,8 @@ Expected<usize> DependencyProviderCatalog::resolve(
     const Name& virtualPath,
     const Name& assetType,
     const AStringView virtualPathTextHint,
-    Core::Alloc::ScratchArena& scratchArena,
-    const Core::Assets::CookDependencyRegistry* const dependencyRegistry
+    const Core::Assets::CookDependencyRegistry* const dependencyRegistry,
+    Core::Alloc::ScratchArena& scratchArena
 )const{
     using namespace __hidden_dependency_provider_catalog;
     if(!virtualPath)

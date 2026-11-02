@@ -48,7 +48,7 @@ public:
 
 
 private:
-    void advanceRevision()noexcept;
+    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
 
 
 private:

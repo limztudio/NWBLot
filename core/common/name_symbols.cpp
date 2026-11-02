@@ -50,9 +50,9 @@ inline constexpr AStringView s_NamesymEscapedTab = "\\t";
 
 template<typename ArenaT>
 void AppendDebugHashText(AString<ArenaT>& outText, const NameHash& hash){
-    Array<char, ::NameDetail::s_DebugHashTextLength + 1u> hashText;
-    NameDetail::HashToDebugString(hashText.data(), hashText.size(), hash);
-    outText += AStringView(hashText.data(), ::NameDetail::s_DebugHashTextLength);
+    Array<char, s_DebugHashTextLength + 1u> hashText;
+    HashToDebugString(hashText.data(), hashText.size(), hash);
+    outText += AStringView(hashText.data(), s_DebugHashTextLength);
 }
 
 template<typename ArenaT>
@@ -88,7 +88,7 @@ public:
 
 public:
     [[nodiscard]] b8 insert(const NameHash& hash, const AStringView text){
-        if(NameDetail::IsZeroHash(hash))
+        if(IsZeroHash(hash))
             return false;
 
         SymbolString canonicalText(m_arena);
@@ -103,7 +103,7 @@ public:
     }
 
     [[nodiscard]] b8 resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
-        if(outText == nullptr || outTextSize == 0u || NameDetail::IsZeroHash(hash))
+        if(outText == nullptr || outTextSize == 0u || IsZeroHash(hash))
             return false;
 
         const auto it = m_symbols.find(hash);
@@ -164,7 +164,7 @@ public:
         if(sourceEnd == AStringView::npos)
             return false;
 
-        const auto hash = ::NameDetail::DecodeDebugHashText(line.substr(0u, hashEnd));
+        const auto hash = DecodeDebugHashText(line.substr(0u, hashEnd));
         if(!hash)
             return false;
 
@@ -211,7 +211,7 @@ private:
         usize requiredSize = AddSize(outText.size(), NameSymbols::s_FileHeader.size());
         requiredSize = AddSize(requiredSize, s_NamesymProducerSuffix.size());
         for(const SymbolRecordView& record : records){
-            requiredSize = AddSize(requiredSize, ::NameDetail::s_DebugHashTextLength);
+            requiredSize = AddSize(requiredSize, s_DebugHashTextLength);
             requiredSize = AddSize(requiredSize, s_NamesymRuntimeSource.size());
             for(const char ch : *record.text){
                 const usize encodedSize = ch == '\\' || ch == '\n' || ch == '\r' || ch == '\t' ? s_NamesymEscapedCharBytes : 1u;

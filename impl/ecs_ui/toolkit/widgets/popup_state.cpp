@@ -41,9 +41,7 @@ PopupState::PopupState()noexcept
 void PopupState::open()noexcept{
     if(m_open)
         return;
-    if(m_openGeneration == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++m_openGeneration;
+    AdvanceRevision(m_openGeneration);
     m_open = true;
 }
 

@@ -66,7 +66,7 @@ struct HardwareCausticsStageResult{
     Core::GpuTaskId causticPhotonTask;
     Core::GpuTaskId causticGeometryTask;
     Core::GpuTaskId causticResolvePrepareTask;
-    Array<Core::GpuTaskId, s_CausticResolveWaveletPassCount> causticResolveWaveletTasks{};
+    Array<Core::GpuTaskId, NWB_CAUSTIC_RESOLVE_PASS_COUNT> causticResolveWaveletTasks{};
     Core::GpuTaskId causticResolveUpsampleTask;
 };
 

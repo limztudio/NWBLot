@@ -6,8 +6,6 @@
 
 #include <tests/unit/ui/native_input.h>
 
-#include <global/simdmath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -94,8 +92,7 @@ void HorizontalNavigationFixture::press(const Core::Key::Enum key){
 
 void HorizontalNavigationFixture::focusTarget(const usize index){
     const Rect& rectangle = m_targets[index].rectangle;
-    const SIMDVectorSingle pointValue = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorReplicate(10.0f));
-    const Point point{ VectorGetX(pointValue), VectorGetY(pointValue) };
+    const Point point{ rectangle.x + 10.0f, rectangle.y + 10.0f };
     EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
     EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     EXPECT_EQ(m_router.focus(), m_targets[index].id);

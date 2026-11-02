@@ -120,8 +120,8 @@ static void ExpectDelta(const Perf::MemoryDelta& actual, const Perf::MemoryDelta
 }
 
 [[nodiscard]] static AStringView FindOwnerJsonRecord(const AStringView json, const Name& owner, const AStringView sourceField){
-    Array<char, NameDetail::s_DebugHashTextLength + 1u> identityText = {};
-    NameDetail::HashToDebugString(identityText.data(), sizeof(identityText), owner.hash());
+    Array<char, s_DebugHashTextLength + 1u> identityText = {};
+    HashToDebugString(identityText.data(), sizeof(identityText), owner.hash());
     usize cursor = json.find("\"memoryRecords\": [");
     while(cursor != AStringView::npos && cursor < json.size()){
         const usize nextLine = json.find('\n', cursor);
@@ -515,21 +515,21 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     NameSymbols::InstallRuntimeRegistry();
     NameSymbols::ClearRuntimeSymbols();
     NameHash firstHash{};
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
         firstHash.qwords[lane] = 0xBD876543210ACDEFuLL + lane;
     NameHash secondHash = firstHash;
-    ++secondHash.qwords[NameDetail::s_HashLaneCount - 1u];
+    ++secondHash.qwords[s_NameHashLaneCount - 1u];
     NameHash unknownHash = secondHash;
-    ++unknownHash.qwords[NameDetail::s_HashLaneCount - 1u];
+    ++unknownHash.qwords[s_NameHashLaneCount - 1u];
     const Name firstOwner(firstHash);
     const Name secondOwner(secondHash);
     const Name unknownOwner(unknownHash);
-    Array<char, NameDetail::s_DebugHashTextLength + 1u> firstHashText = {};
-    Array<char, NameDetail::s_DebugHashTextLength + 1u> secondHashText = {};
-    Array<char, NameDetail::s_DebugHashTextLength + 1u> unknownHashText = {};
-    NameDetail::HashToDebugString(firstHashText.data(), sizeof(firstHashText), firstHash);
-    NameDetail::HashToDebugString(secondHashText.data(), sizeof(secondHashText), secondHash);
-    NameDetail::HashToDebugString(unknownHashText.data(), sizeof(unknownHashText), unknownHash);
+    Array<char, s_DebugHashTextLength + 1u> firstHashText = {};
+    Array<char, s_DebugHashTextLength + 1u> secondHashText = {};
+    Array<char, s_DebugHashTextLength + 1u> unknownHashText = {};
+    HashToDebugString(firstHashText.data(), sizeof(firstHashText), firstHash);
+    HashToDebugString(secondHashText.data(), sizeof(secondHashText), secondHash);
+    HashToDebugString(unknownHashText.data(), sizeof(unknownHashText), unknownHash);
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());

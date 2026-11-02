@@ -55,7 +55,9 @@ b8 FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!font.validatePayload())
         return false;
 
-    const FontBinaryHeader header = BuildFontBinaryHeader(font.faceIndex(), font.fontBytes().size());
+    FontBinaryHeader header;
+    header.faceIndex = font.faceIndex();
+    header.byteCount = static_cast<u64>(font.fontBytes().size());
     outBinary.clear();
     outBinary.reserve(sizeof(header) + font.fontBytes().size());
     AppendPOD(outBinary, header);
@@ -100,23 +102,15 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const
     return entry;
 }
 
-Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena){
-    Font candidate(arena, entry.virtualPath);
-    Core::Assets::AssetBytes bytes(entry.fontBytes.begin(), entry.fontBytes.end(), arena);
-    candidate.setFontBytes(Move(bytes), entry.faceIndex);
-    if(!candidate.validatePayload())
-        return MakeUnexpected(Failure{});
-    return candidate;
-}
-
 Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena){
-    if(&entry.fontBytes.get_allocator().arena() != &arena){
-        const FontCookEntry& constEntry = entry;
-        return BuildFontAsset(constEntry, arena);
-    }
-
     Font candidate(arena, entry.virtualPath);
-    candidate.setFontBytes(Move(entry.fontBytes), entry.faceIndex);
+    if(&entry.fontBytes.get_allocator().arena() == &arena){
+        candidate.setFontBytes(Move(entry.fontBytes), entry.faceIndex);
+    }
+    else{
+        Core::Assets::AssetBytes bytes(entry.fontBytes.begin(), entry.fontBytes.end(), arena);
+        candidate.setFontBytes(Move(bytes), entry.faceIndex);
+    }
     if(!candidate.validatePayload())
         return MakeUnexpected(Failure{});
     return candidate;

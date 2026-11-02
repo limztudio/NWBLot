@@ -9,7 +9,7 @@
 #include "texture_contract_types.h"
 
 #if NWB_GRAPHICS_BACKEND_VULKAN
-#include "../vulkan/selected_texture_clear_contract.h"
+#include "../vulkan/texture_clear_contract.h"
 #endif
 
 

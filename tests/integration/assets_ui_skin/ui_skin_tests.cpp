@@ -81,12 +81,12 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
 
 [[nodiscard]] static Core::Assets::AssetBytes MakeBinary(const UiSkinHeaderBinary& header, const UiSkinRegionBinary& region, SkinTestArena& testArena){
     Core::Assets::AssetBytes binary(testArena.arena);
-    binary.reserve(sizeof(header) + sizeof(region) + UiSkinColorRole::kCount * sizeof(UiSkinColorBinary) + sizeof(UiSkinTypographyBinary));
+    binary.reserve(sizeof(header) + sizeof(region) + UiSkinColorRole::kCount * sizeof(UiSkinColor) + sizeof(UiSkinTypography));
     AppendPOD(binary, header);
     AppendPOD(binary, region);
     for(const UiSkinColor& color : UiSkinPalette{}.colors)
-        AppendPOD(binary, UiSkinColorBinary{ color.r, color.g, color.b, color.a });
-    AppendPOD(binary, UiSkinTypographyBinary{});
+        AppendPOD(binary, color);
+    AppendPOD(binary, UiSkinTypography{});
     return binary;
 }
 
@@ -145,13 +145,13 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::kCount, "UI skin 
     return metadata;
 }
 
-[[nodiscard]] static Core::Assets::AssetBytes MakeTypographyBinary(const UiSkinColorBinary& color, const f32 defaultFontSize, SkinTestArena& testArena){
+[[nodiscard]] static Core::Assets::AssetBytes MakeTypographyBinary(const UiSkinColor& color, const f32 defaultFontSize, SkinTestArena& testArena){
     UiSkinHeaderBinary header = ValidHeader();
     Core::Assets::AssetBytes binary = MakeBinary(header, ValidRegion(), testArena);
     binary.resize(sizeof(header) + sizeof(UiSkinRegionBinary));
     for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index)
         AppendPOD(binary, color);
-    UiSkinTypographyBinary typography;
+    UiSkinTypography typography;
     typography.defaultFontSize = defaultFontSize;
     AppendPOD(binary, typography);
     return binary;
@@ -165,7 +165,7 @@ TEST(AssetsUiSkin, TypographyRejectsMalformedFooterWithoutReplacingSkin){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    const UiSkinColorBinary color{ 0.25f, 0.5f, 0.75f, 1.0f };
+    const UiSkinColor color(0.25f, 0.5f, 0.75f, 1.0f);
     UiSkin skin(testArena.arena, Name(s_AtlasPath));
     ASSERT_TRUE(skin.loadBinary(MakeTypographyBinary(color, 21.5f, testArena)));
 
@@ -196,7 +196,7 @@ TEST(AssetsUiSkin, PaletteRejectsMalformedFooterWithoutReplacingSkin){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    UiSkinColorBinary color;
+    UiSkinColor color;
     color.r = 0.25f;
     color.g = 0.5f;
     color.b = 0.75f;
@@ -205,7 +205,7 @@ TEST(AssetsUiSkin, PaletteRejectsMalformedFooterWithoutReplacingSkin){
     ASSERT_TRUE(skin.loadBinary(MakeTypographyBinary(color, 16.0f, testArena)));
 
     for(u32 variant = 0u; variant < 6u; ++variant){
-        UiSkinColorBinary candidateColor = color;
+        UiSkinColor candidateColor = color;
         if(variant == 2u)
             candidateColor.r = Limit<f32>::s_QuietNaN;
         if(variant == 3u)
@@ -216,7 +216,7 @@ TEST(AssetsUiSkin, PaletteRejectsMalformedFooterWithoutReplacingSkin){
             candidateColor.a = 1.1f;
         Core::Assets::AssetBytes binary = MakeTypographyBinary(candidateColor, 16.0f, testArena);
         if(variant == 0u)
-            binary.resize(binary.size() - sizeof(UiSkinTypographyBinary) - 1u);
+            binary.resize(binary.size() - sizeof(UiSkinTypography) - 1u);
         if(variant == 1u)
             binary.push_back(0u);
         EXPECT_FALSE(skin.loadBinary(binary)) << variant;
@@ -247,7 +247,7 @@ TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
         header.version = version;
         Core::Assets::AssetBytes binary = MakeBinary(header, ValidRegion(), testArena);
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
-        binary.resize(sizeof(header) + sizeof(UiSkinRegionBinary) + (version == 2u ? UiSkinColorRole::kCount * sizeof(UiSkinColorBinary) : 0u));
+        binary.resize(sizeof(header) + sizeof(UiSkinRegionBinary) + (version == 2u ? UiSkinColorRole::kCount * sizeof(UiSkinColor) : 0u));
         EXPECT_FALSE(skin.loadBinary(binary)) << version;
         EXPECT_EQ(skin.regions().size(), 1u);
         EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);

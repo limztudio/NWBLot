@@ -45,7 +45,7 @@ private:
     [[nodiscard]] Stmt* parseParallelStatement(SourceSpan span, Span<const ParsedAttribute> attributes);
     [[nodiscard]] Stmt* parseNativeStatement(SourceSpan span);
     [[nodiscard]] Stmt* parseDiagnosticStatement(SourceSpan span, DiagnosticKind::Enum kind, Span<const ParsedAttribute> attributes);
-    [[nodiscard]] Stmt* parseVarDeclWithType(TypeRef* varType, SourceSpan span, b8 isConst);
+    [[nodiscard]] Stmt* parseVarDeclWithType(TypeRef& varType, SourceSpan span, b8 isConst);
     [[nodiscard]] b8 applySchedulingAttributes(Span<const ParsedAttribute> attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority);
 
 

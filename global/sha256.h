@@ -6,6 +6,7 @@
 
 
 #include "binary.h"
+#include "binary_big_endian.h"
 #include "expected.h"
 #include "not_null.h"
 #include "numeric_text.h"
@@ -16,6 +17,7 @@
 
 struct Sha256Digest{
     static constexpr u32 s_ByteCount = 32u;
+    static constexpr u32 s_HexTextLength = 64u;
 
     u8 bytes[s_ByteCount] = {};
 };
@@ -47,15 +49,10 @@ inline constexpr u32 s_LengthFieldByteCount = 8u;
 inline constexpr u32 s_LengthFieldOffset = s_BlockByteCount - s_LengthFieldByteCount;
 inline constexpr u8 s_PaddingMarker = 0x80u;
 inline constexpr u32 s_HexDigitsPerByte = 2u;
-inline constexpr u32 s_FirstByteShift = 24u;
-inline constexpr u32 s_SecondByteShift = 16u;
-inline constexpr u32 s_ThirdByteShift = 8u;
 
 inline void UnpackBlockWords(const Array<u8, s_BlockByteCount>& block, u32* const outWords)noexcept{
-    for(u32 index = 0u; index < s_BlockWordCount; ++index){
-        const auto bytes = MakeNotNull(block.data() + index * s_WordByteCount);
-        outWords[index] = (static_cast<u32>(bytes.get()[0u]) << s_FirstByteShift) | (static_cast<u32>(bytes.get()[1u]) << s_SecondByteShift) | (static_cast<u32>(bytes.get()[2u]) << s_ThirdByteShift) | static_cast<u32>(bytes.get()[3u]);
-    }
+    for(u32 index = 0u; index < s_BlockWordCount; ++index)
+        outWords[index] = ReadU32BigEndian(MakeNotNull(block.data() + index * s_WordByteCount));
 }
 
 template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, StateWordCount>&, const Array<u8, s_BlockByteCount>&)>
@@ -105,16 +102,10 @@ namespace Sha256Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShaBe32Detail::s_WordBits;
-using ShaBe32Detail::s_BlockByteCount;
-using ShaBe32Detail::s_BlockWordCount;
-using ShaBe32Detail::s_HexDigitsPerByte;
-
 inline constexpr u32 s_StateWordCount = 8u;
 inline constexpr u32 s_RoundCount = 64u;
 inline constexpr u32 s_HexRadix = 16u;
 inline constexpr u32 s_HexLetterBase = 10u;
-inline constexpr u32 s_HexTextLength = s_HexDigitsPerByte * Sha256Digest::s_ByteCount;
 inline constexpr u32 s_ScheduleLagSigma0 = 15u;
 inline constexpr u32 s_ScheduleLagSigma1 = 2u;
 inline constexpr u32 s_ScheduleLagPrevious = 16u;
@@ -154,28 +145,47 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = { 0x6a09e667u, 0x
 
 
 [[nodiscard]] inline u32 Rotate(const u32 value, const u32 count)noexcept{
-    return (value >> count) | (value << (s_WordBits - count));
+    return (value >> count) | (value << (ShaBe32Detail::s_WordBits - count));
 }
 
-inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, s_BlockByteCount>& block)noexcept{
+inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, ShaBe32Detail::s_BlockByteCount>& block)noexcept{
     Array<u32, s_RoundCount> words = {};
     ShaBe32Detail::UnpackBlockWords(block, words.data());
-    for(u32 index = s_BlockWordCount; index < s_RoundCount; ++index){
+    for(u32 index = ShaBe32Detail::s_BlockWordCount; index < s_RoundCount; ++index){
         const u32 a = words[index - s_ScheduleLagSigma0];
         const u32 b = words[index - s_ScheduleLagSigma1];
         const u32 sigma0 = Rotate(a, s_ScheduleSigma0RotateA) ^ Rotate(a, s_ScheduleSigma0RotateB) ^ (a >> s_ScheduleSigma0Shift);
         const u32 sigma1 = Rotate(b, s_ScheduleSigma1RotateA) ^ Rotate(b, s_ScheduleSigma1RotateB) ^ (b >> s_ScheduleSigma1Shift);
         words[index] = words[index - s_ScheduleLagPrevious] + sigma0 + words[index - s_ScheduleLagAdded] + sigma1;
     }
-    u32 a = state[0u], b = state[1u], c = state[2u], d = state[3u];
-    u32 e = state[4u], f = state[5u], g = state[6u], h = state[7u];
+    u32 a = state[0u];
+    u32 b = state[1u];
+    u32 c = state[2u];
+    u32 d = state[3u];
+    u32 e = state[4u];
+    u32 f = state[5u];
+    u32 g = state[6u];
+    u32 h = state[7u];
     for(u32 index = 0u; index < s_RoundCount; ++index){
         const u32 first = h + (Rotate(e, s_RoundSigma1RotateA) ^ Rotate(e, s_RoundSigma1RotateB) ^ Rotate(e, s_RoundSigma1RotateC)) + ((e & f) ^ (~e & g)) + s_RoundConstants[index] + words[index];
         const u32 second = (Rotate(a, s_RoundSigma0RotateA) ^ Rotate(a, s_RoundSigma0RotateB) ^ Rotate(a, s_RoundSigma0RotateC)) + ((a & b) ^ (a & c) ^ (b & c));
-        h = g; g = f; f = e; e = d + first; d = c; c = b; b = a; a = first + second;
+        h = g;
+        g = f;
+        f = e;
+        e = d + first;
+        d = c;
+        c = b;
+        b = a;
+        a = first + second;
     }
-    state[0u] += a; state[1u] += b; state[2u] += c; state[3u] += d;
-    state[4u] += e; state[5u] += f; state[6u] += g; state[7u] += h;
+    state[0u] += a;
+    state[1u] += b;
+    state[2u] += c;
+    state[3u] += d;
+    state[4u] += e;
+    state[5u] += f;
+    state[6u] += g;
+    state[7u] += h;
 }
 
 
@@ -194,13 +204,13 @@ inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, s_Bloc
 }
 
 [[nodiscard]] inline Expected<Sha256Digest> ParseSha256(const AStringView text)noexcept{
-    if(text.size() != Sha256Detail::s_HexTextLength)
+    if(text.size() != Sha256Digest::s_HexTextLength)
         return MakeUnexpected(Failure{});
     Sha256Digest parsed;
     for(u32 index = 0u; index < Sha256Digest::s_ByteCount; ++index){
         u32 value = 0u;
-        for(u32 digit = 0u; digit < Sha256Detail::s_HexDigitsPerByte; ++digit){
-            const char character = text[index * Sha256Detail::s_HexDigitsPerByte + digit];
+        for(u32 digit = 0u; digit < ShaBe32Detail::s_HexDigitsPerByte; ++digit){
+            const char character = text[index * ShaBe32Detail::s_HexDigitsPerByte + digit];
             if(character >= '0' && character <= '9')
                 value = value * Sha256Detail::s_HexRadix + static_cast<u32>(character - '0');
             else if(character >= 'a' && character <= 'f')

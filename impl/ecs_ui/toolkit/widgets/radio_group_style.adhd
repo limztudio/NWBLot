@@ -32,8 +32,6 @@ class RadioGroupStyle{
 
 const u32 s_RadioGroupMaxChoices = 64u;
 const u32 s_RadioGroupStampFencePassCount = 2u;
-// Metric rows 0..2 carry data; row 3 is padding.
-const u32 s_RadioGroupMetricRowCount = 3u;
 const f32 s_RadioGroupMaxMarkInset = 0.5f;
 const f64 s_RadioGroupMaxMarkInsetF64 = 0.5;
 
@@ -181,11 +179,7 @@ u64 FindEnabledRadioGroupChoice(in RadioGroupChoices choices, in u32 start, in b
 }
 
 b8 IsValidRadioGroupOptions(in RadioGroupOptions options){
-    return options.enabled
-        && options.width.policy <= LayoutSizePolicy::Stretch
-        && isFinite(options.width.value)
-        && options.width.value >= 0.0f
-        && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f);
+    return options.enabled && IsValidLayoutSize(options.width);
 }
 
 u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 cursor, in ControlActionKind kind){
@@ -269,10 +263,7 @@ b8 TryMeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOption
         count > s_RadioGroupMaxChoices
         || !IsValidUiExtent(maximumLabel)
         || !IsValidUiPadding(style.padding)
-        || options.width.policy > LayoutSizePolicy::Stretch
-        || !isFinite(options.width.value)
-        || options.width.value < 0.0f
-        || (options.width.policy == LayoutSizePolicy::Stretch && options.width.value <= 0.0f)
+        || !IsValidLayoutSize(options.width)
         || !isFinite(style.indicatorExtent) || style.indicatorExtent <= 0.0f
         || !isFinite(style.gap) || style.gap < 0.0f
         || !isFinite(style.rowGap) || style.rowGap < 0.0f

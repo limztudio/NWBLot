@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<AvboitComputeEmulationCaptureResult> AvboitComputeEmulationCapture::capture(
+Expected<AvboitComputeEmulationCaptureResult> AvboitComputeEmulationCapture::capture(
     const AvboitComputeEmulationCaptureInputs& inputs,
     const usize instanceCount,
     const usize materialTypedByteCount,

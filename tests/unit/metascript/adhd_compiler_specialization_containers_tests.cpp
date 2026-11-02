@@ -15,7 +15,7 @@ namespace __hidden_adhd_compiler_specialization_containers_tests{
 
 
 using namespace NWB::AdhdCompilerTestsDetail;
-using NWB::Core::Metascript::Adhd::Compiler;
+namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
 using NWB::Core::Metascript::Adhd::CompileResult;
 using NWB::Core::Metascript::MString;
 using NWB::Core::Metascript::MStringView;

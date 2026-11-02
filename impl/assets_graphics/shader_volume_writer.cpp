@@ -177,7 +177,7 @@ static b8 AppendShaderIndexToManifest(
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& inOutManifest,
     CookEntryPathHashSet& inOutSeenVirtualPathHashes
 ){
-    const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
+    const Name& shaderIndexVirtualPath = Core::ShaderArchive::s_IndexVirtualPathName;
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate shader archive index virtual path '{}'"), ConvertString(shaderIndexVirtualPath.resolvedText()));
         return false;

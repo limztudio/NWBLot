@@ -16,64 +16,79 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
+namespace __hidden_ui_gpu_image_cache{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename TCached, typename TRequested, typename TSameKey>
+[[nodiscard]] static usize CountMissingCacheEntries(
+    const Vector<TCached, Core::Alloc::GlobalArena>& cache,
+    const PaintVector<TRequested>& requested,
+    TSameKey&& sameKey
+)noexcept{
     usize missing = 0u;
-    for(const SharedGlyphPage& page : snapshot.glyphPages()){
-        const auto found = FindIf(m_glyphCache.begin(), m_glyphCache.end(), [&page](const GpuVersion<GpuGlyphVersion>& cached)noexcept{
-            return SameGlyphPageKey(cached->m_page->binding(), page->binding());
+    for(const TRequested& item : requested){
+        const auto found = FindIf(cache.begin(), cache.end(), [&item, &sameKey](const TCached& cached)noexcept{
+            return sameKey(cached, item);
         });
-        if(found == m_glyphCache.end())
+        if(found == cache.end())
             ++missing;
     }
-    for(const SharedSdfAtlasPage& page : snapshot.sdfPages()){
-        const auto found = FindIf(m_sdfCache.begin(), m_sdfCache.end(), [&page](const GpuVersion<GpuSdfAtlasVersion>& cached)noexcept{
-            return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
+    return missing;
+}
+
+template<typename TCached, typename TRequested, typename TSameKey>
+static void RetainReferencedCacheEntries(
+    const PaintVector<TRequested>& requested,
+    TSameKey&& sameKey,
+    Vector<TCached, Core::Alloc::GlobalArena>& cache
+)noexcept{
+    for(usize index = 0u; index < cache.size();){
+        const TCached& cached = cache[index];
+        const auto found = FindIf(requested.begin(), requested.end(), [&cached, &sameKey](const TRequested& item)noexcept{
+            return sameKey(cached, item);
         });
-        if(found == m_sdfCache.end())
-            ++missing;
+        if(found == requested.end())
+            cache.erase(cache.begin() + static_cast<isize>(index));
+        else
+            ++index;
     }
-    for(const SharedImageSource& source : snapshot.textureImages()){
-        const auto found = FindIf(m_textureCache.begin(), m_textureCache.end(), [&source](const GpuVersion<GpuTextureImageVersion>& cached)noexcept{
-            return SameTextureImageKey(*cached->m_source, *source);
-        });
-        if(found == m_textureCache.end())
-            ++missing;
-    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
+    using namespace __hidden_ui_gpu_image_cache;
+    const auto sameGlyphKey = [](const GpuVersion<GpuGlyphVersion>& cached, const SharedGlyphPage& page)noexcept{
+        return SameGlyphPageKey(cached->m_page->binding(), page->binding());
+    };
+    const auto sameSdfKey = [](const GpuVersion<GpuSdfAtlasVersion>& cached, const SharedSdfAtlasPage& page)noexcept{
+        return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
+    };
+    const auto sameTextureKey = [](const GpuVersion<GpuTextureImageVersion>& cached, const SharedImageSource& source)noexcept{
+        return SameTextureImageKey(*cached->m_source, *source);
+    };
+    const usize missing = CountMissingCacheEntries(m_glyphCache, snapshot.glyphPages(), sameGlyphKey)
+        + CountMissingCacheEntries(m_sdfCache, snapshot.sdfPages(), sameSdfKey)
+        + CountMissingCacheEntries(m_textureCache, snapshot.textureImages(), sameTextureKey);
     if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() + missing <= s_PaintMaxImages)
         return;
     // Retain requested logical keys even when their immutable metadata conflicts; preparation must reject that conflict.
     // Live frames retain evicted versions.
     // Removing only cache ownership never changes sampled pixels or live descriptors.
-    for(usize index = 0u; index < m_glyphCache.size();){
-        const auto& cached = m_glyphCache[index];
-        const auto found = FindIf(snapshot.glyphPages().begin(), snapshot.glyphPages().end(), [&cached](const SharedGlyphPage& page)noexcept{
-            return SameGlyphPageKey(cached->m_page->binding(), page->binding());
-        });
-        if(found == snapshot.glyphPages().end())
-            m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(index));
-        else
-            ++index;
-    }
-    for(usize index = 0u; index < m_sdfCache.size();){
-        const auto& cached = m_sdfCache[index];
-        const auto found = FindIf(snapshot.sdfPages().begin(), snapshot.sdfPages().end(), [&cached](const SharedSdfAtlasPage& page)noexcept{
-            return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
-        });
-        if(found == snapshot.sdfPages().end())
-            m_sdfCache.erase(m_sdfCache.begin() + static_cast<isize>(index));
-        else
-            ++index;
-    }
-    for(usize index = 0u; index < m_textureCache.size();){
-        const auto& cached = m_textureCache[index];
-        const auto found = FindIf(snapshot.textureImages().begin(), snapshot.textureImages().end(), [&cached](const SharedImageSource& source)noexcept{
-            return SameTextureImageKey(*cached->m_source, *source);
-        });
-        if(found == snapshot.textureImages().end())
-            m_textureCache.erase(m_textureCache.begin() + static_cast<isize>(index));
-        else
-            ++index;
-    }
+    RetainReferencedCacheEntries(snapshot.glyphPages(), sameGlyphKey, m_glyphCache);
+    RetainReferencedCacheEntries(snapshot.sdfPages(), sameSdfKey, m_sdfCache);
+    RetainReferencedCacheEntries(snapshot.textureImages(), sameTextureKey, m_textureCache);
 }
 
 void GpuRendererState::evictImageCacheEntry()noexcept{

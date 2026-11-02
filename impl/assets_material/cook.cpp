@@ -111,57 +111,8 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         return false;
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.checkVirtualPath(s_SerializeFailureContext))
+    if(!material.validatePayload(s_SerializeFailureContext))
         return false;
-    if(material.stageShaderCount() == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));
-        return false;
-    }
-    if(!material.materialInterface()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material interface is required"));
-        return false;
-    }
-    if(material.shaderVariant().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is empty"));
-        return false;
-    }
-    if(!HasValidMaterialAvboitPixelShaderContract(material.transparent(), material.avboitAccumulatePixelShader(), material.avboitOccupancyPixelShader(), material.avboitExtinctionPixelShader())){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: AVBOIT pixel shaders must be present if and only if the material is transparent"));
-        return false;
-    }
-    if(material.typedLayoutHash() == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: interface material is missing typed layout data"));
-        return false;
-    }
-    if(material.typedLayoutBlocks().size() > Limit<u32>::s_Max || material.typedLayoutFields().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed layout count exceeds u32 range"));
-        return false;
-    }
-    if(material.typedBlockBytes().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block byte count exceeds u32 range"));
-        return false;
-    }
-    if(material.resourceReferences().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource reference count exceeds u32 range"));
-        return false;
-    }
-    if(ComputeMaterialTypedLayoutHash(material.typedLayoutBlocks(), material.typedLayoutFields()) != material.typedLayoutHash()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed layout hash mismatch"));
-        return false;
-    }
-    usize expectedTypedBlockByteSize = 0u;
-    if(!ComputeMaterialTypedBlockByteSize(material.typedLayoutBlocks(), expectedTypedBlockByteSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
-        return false;
-    }
-    if(expectedTypedBlockByteSize != material.typedBlockBytes().size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
-        return false;
-    }
-    if(!ValidateMaterialResourceReferences(material.typedLayoutBlocks(), material.typedLayoutFields(), material.resourceReferences())){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource references do not match typed layout"));
-        return false;
-    }
     usize reserveBytes = sizeof(u32);
     b8 canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
         && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))

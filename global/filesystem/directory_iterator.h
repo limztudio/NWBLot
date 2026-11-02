@@ -5,9 +5,7 @@
 #pragma once
 
 
-#include <vector>
-
-#include "../container/adaptor.h"
+#include "../containers.h"
 #include "operations.h"
 
 
@@ -36,7 +34,7 @@ template<typename ArenaT>
 class DirectoryIteratorBase{
 public:
     using Entry = DirectoryEntry<ArenaT>;
-    using EntryVector = std::vector<Entry, ContainerDetail::ArenaAllocator<Entry, ArenaT>>;
+    using EntryVector = Vector<Entry, ArenaT>;
     using iterator = typename EntryVector::const_iterator;
 
 

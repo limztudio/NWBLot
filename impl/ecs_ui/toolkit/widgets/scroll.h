@@ -34,9 +34,9 @@ public:
 
     [[nodiscard]] f64 offset()const noexcept{ return m_offset; }
     [[nodiscard]] b8 setOffset(f64 offset)noexcept;
-    [[nodiscard]] b8 ensureVisible(f64 start, f64 end, f64 viewportHeight)noexcept;
-    [[nodiscard]] b8 scrollBy(f64 delta, f64 contentHeight, f64 viewportHeight)noexcept;
-    [[nodiscard]] b8 clamp(f64 contentHeight, f64 viewportHeight)noexcept;
+    [[nodiscard]] b8 ensureVisible(const f64 start, const f64 end, const f64 viewportHeight)noexcept{ return TryEnsureScrollVisible(m_offset, start, end, viewportHeight, m_offset); }
+    [[nodiscard]] b8 scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{ return TryScrollByOffset(m_offset, delta, contentHeight, viewportHeight, m_offset); }
+    [[nodiscard]] b8 clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{ return TryClampScrollOffset(m_offset, contentHeight, viewportHeight, m_offset); }
 
 
 private:
@@ -44,12 +44,41 @@ private:
     f64 m_offset = 0.0;
 };
 
-class ScrollLayout final{
-public:
-    // Extents and offsets are logical doubles; only the clipped visible row interval reaches float paint geometry.
-    // Reject viewports that cannot be represented within the double content extent.
-    [[nodiscard]] static Expected<ScrollPlacement> Calculate(const Rect& bounds, const Rect& inheritedClip, const Insets& padding, f32 scrollbarWidth, f32 minimumThumb, u64 rowCount, f32 rowHeight, f64 offset)noexcept;
-    [[nodiscard]] static Expected<Rect> RowBounds(u64 index, const ScrollPlacement& placement, f32 rowHeight)noexcept;
+namespace ScrollLayout{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Extents and offsets are logical doubles; only the clipped visible row interval reaches float paint geometry.
+// Reject viewports that cannot be represented within the double content extent.
+[[nodiscard]] inline Expected<ScrollPlacement> Calculate(
+    const Rect& bounds,
+    const Rect& inheritedClip,
+    const Insets& padding,
+    const f32 scrollbarWidth,
+    const f32 minimumThumb,
+    const u64 rowCount,
+    const f32 rowHeight,
+    const f64 offset
+)noexcept{
+    ScrollPlacement placement;
+    if(!TryCalculateScrollPlacement(bounds, inheritedClip, padding, scrollbarWidth, minimumThumb, rowCount, rowHeight, offset, placement))
+        return MakeUnexpected(Failure{});
+    return placement;
+}
+
+[[nodiscard]] inline Expected<Rect> RowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight)noexcept{
+    Rect row;
+    if(!TryCalculateScrollRowBounds(index, placement, rowHeight, row))
+        return MakeUnexpected(Failure{});
+    return row;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

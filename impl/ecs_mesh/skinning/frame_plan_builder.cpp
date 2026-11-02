@@ -231,12 +231,10 @@ b8 MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinningR
 
     boundsPipelineResult = importComputePipeline(m_system.m_boundsComputePipeline, s_GraphBoundsPipelineName, s_BoundsPipelineLabel);
     localBoundsPipelineResult = importComputePipeline(m_system.m_localBoundsComputePipeline, s_GraphLocalBoundsPipelineName, s_LocalBoundsPipelineLabel);
-    if(hasActiveSkin){
+    if(hasActiveSkin)
         skinningPipelineResult = importComputePipeline(m_system.m_skinningComputePipeline, s_GraphSkinningPipelineName, s_SkinningPipelineLabel);
-    }
-    if(plan.repacksNormals){
+    if(plan.repacksNormals)
         repackPipelineResult = importComputePipeline(m_system.m_repackComputePipeline, s_GraphRepackPipelineName, s_RepackPipelineLabel);
-    }
 
     const b8 importsValid =
         bindlessResourceSlotsResourceResult.has_value()
@@ -378,20 +376,20 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSk
 }
 
 b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan){
-    const auto copyByteCounts = MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(instance);
-    if(!copyByteCounts || copyByteCounts->positionBytes == 0u || copyByteCounts->normalBytes == 0u || copyByteCounts->tangentBytes == 0u){
+    MeshSkinningRestToSkinnedCopyByteCounts copyByteCounts;
+    if(!TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size(), copyByteCounts)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
     const Array<Core::GpuCopyBufferTaskRegion, 3> copyRegions = {
-        Core::GpuCopyBufferTaskRegion{ .source = plan.restPositionResource, .destination = plan.skinnedPositionResource, .dataSizeBytes = copyByteCounts->positionBytes, },
+        Core::GpuCopyBufferTaskRegion{ .source = plan.restPositionResource, .destination = plan.skinnedPositionResource, .dataSizeBytes = copyByteCounts.positionBytes, },
         Core::GpuCopyBufferTaskRegion{
             .source = plan.restNormalResource,
             .destination = plan.skinnedNormalResource,
-            .dataSizeBytes = copyByteCounts->normalBytes,
+            .dataSizeBytes = copyByteCounts.normalBytes,
         },
-        Core::GpuCopyBufferTaskRegion{ .source = plan.restTangentResource, .destination = plan.skinnedTangentResource, .dataSizeBytes = copyByteCounts->tangentBytes, },
+        Core::GpuCopyBufferTaskRegion{ .source = plan.restTangentResource, .destination = plan.skinnedTangentResource, .dataSizeBytes = copyByteCounts.tangentBytes, },
     };
     Core::GpuTaskDesc copyDesc;
     const auto copyDescIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_RestToSkinnedCopySuffix);

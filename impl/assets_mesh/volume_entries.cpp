@@ -11,7 +11,6 @@
 #include "cook.h"
 #include "skin_cook.h"
 #include "binary_payload_io.h"
-#include <impl/assets_mesh/skin_types.adhd.h>
 
 #include <impl/assets_subsystem/cook.h>
 
@@ -58,6 +57,7 @@ static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
                 return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.cpuScheduler, context.scratchArena);
             },
             &BuildMeshAsset,
+            true,
             registry
         )
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
@@ -69,6 +69,7 @@ static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
                 return ParseSkinCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena);
             },
             [](SkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSkinAsset(entry, arena); },
+            true,
             registry
         )
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<SkinningSubsystem>(registry)

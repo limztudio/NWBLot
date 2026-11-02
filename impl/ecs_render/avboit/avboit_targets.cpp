@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
@@ -130,33 +131,11 @@ static Expected<Core::BufferHandle> CreateU32Buffer(Core::GraphicsRuntime& graph
 }
 
 static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
-    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!allocated)
-        return MakeUnexpected(allocated.error());
-    const Core::GpuDescriptorHandle handle = *allocated;
-    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
-
-    if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer))){
-        return MakeUnexpected(Failure{});
-    }
-
-    retireUnpublished.release();
-    return handle;
+    return RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer));
 }
 
 static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(Core::GpuDescriptorHeap& heap, Core::Texture& texture, const Core::Format::Enum format){
-    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(Core::GpuDescriptorClass::StorageImage);
-    if(!allocated)
-        return MakeUnexpected(allocated.error());
-    const Core::GpuDescriptorHandle handle = *allocated;
-    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
-
-    if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(0u, &texture, format, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D))){
-        return MakeUnexpected(Failure{});
-    }
-
-    retireUnpublished.release();
-    return handle;
+    return RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageImage, Core::DescriptorWriteItem::TextureUav(0u, &texture, format, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D));
 }
 
 static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTargets& targets){

@@ -42,7 +42,6 @@ public:
     explicit MaterialPassEmulationOutputIndex(Core::Alloc::ScratchArena& scratchArena)noexcept
         : m_scratchArena(scratchArena)
     {}
-    MaterialPassEmulationOutputIndex(MaterialPassEmulationOutputIndex&&) = delete;
 
 
 public:

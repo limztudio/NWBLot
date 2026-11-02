@@ -3,7 +3,8 @@
 
 
 #include "project.h"
-#include "ui_gallery_constants.h"
+#include "CoolStuff/Testbed/scene_constants.adhd.h"
+#include "CoolStuff/Testbed/ui_gallery_constants.adhd.h"
 
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/skinning/system.h>
@@ -67,7 +68,7 @@ static void ResolveFlyCameraInput(
     const SIMDVectorSingle currentAngles,
     const SIMDVectorSingle moveAxes,
     const SIMDVectorSingle mouseDelta,
-    const SIMDVectorSingle delta,
+    const f32 deltaSeconds,
     const b8 boosted,
     SIMDVectorSingle& outRotation,
     SIMDVectorSingle& outPosition
@@ -75,7 +76,7 @@ static void ResolveFlyCameraInput(
     const SIMDVectorSingle angles = VectorSelect(currentAngles, VectorZero(), VectorOrInt(VectorIsNaN(currentAngles), VectorIsInfinite(currentAngles)));
     const SIMDVectorSingle sanitizedMouseDelta = VectorSelect(mouseDelta, VectorZero(), VectorOrInt(VectorIsNaN(mouseDelta), VectorIsInfinite(mouseDelta)));
     const SIMDVectorSingle sanitizedAxes = VectorClamp(VectorSelect(moveAxes, VectorZero(), VectorOrInt(VectorIsNaN(moveAxes), VectorIsInfinite(moveAxes))), s_SIMDNegativeOne, s_SIMDOne);
-    const SIMDVectorSingle safeDelta = VectorMax(VectorSelect(delta, VectorZero(), VectorOrInt(VectorIsNaN(delta), VectorIsInfinite(delta))), VectorZero());
+    const f32 safeDelta = IsFinite(deltaSeconds) ? Max(deltaSeconds, 0.0f) : 0.0f;
 
     const SIMDVectorSingle updatedAngles = VectorMultiplyAddExpression(sanitizedMouseDelta, VectorReplicate(s_FlyCameraMouseSensitivityRadiansPerPixel), angles);
     const SIMDVectorSingle yawCandidate = VectorSplatX(updatedAngles);
@@ -90,7 +91,7 @@ static void ResolveFlyCameraInput(
     if(Vector4Greater(moveLengthSqVector, VectorReplicate(s_CameraMoveEpsilon))){
         const SIMDVectorSingle boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? s_SELECT_1 : s_SELECT_0));
         const SIMDVectorSingle speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
-        const SIMDVectorSingle speedDeltaLanes = VectorMultiply(speedLanes, VectorSplatX(safeDelta));
+        const SIMDVectorSingle speedDeltaLanes = VectorMultiply(speedLanes, VectorReplicate(safeDelta));
         const SIMDVectorSingle moveScale = VectorMultiply(speedDeltaLanes, VectorReciprocalSqrt(moveLengthSqVector));
         if(!VectorIsFinite(moveScale, VectorComponentMask::s_XYZW))
             return;
@@ -106,14 +107,14 @@ static void ResolveFlyCameraInput(
     }
 }
 
-static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const SIMDVectorSingle delta)noexcept{
+static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const f32 deltaSeconds)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
     NWB_ASSERT(cameraView.valid());
 
     const SIMDVectorSingle angles = ResolveFlyCameraAnglesFromRotation(LoadFloat(cameraView.transform->rotation));
     SIMDVectorSingle resolvedRotation;
     SIMDVectorSingle resolvedPosition;
-    ResolveFlyCameraInput(LoadFloat(cameraView.transform->position), angles, moveAxes, mouseDelta, delta, boosted, resolvedRotation, resolvedPosition);
+    ResolveFlyCameraInput(LoadFloat(cameraView.transform->position), angles, moveAxes, mouseDelta, deltaSeconds, boosted, resolvedRotation, resolvedPosition);
     StoreFloat(resolvedRotation, cameraView.transform->rotation);
     StoreFloat(resolvedPosition, cameraView.transform->position);
 }
@@ -160,7 +161,7 @@ b8 Project::onStartup(){
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     NWB_ASSERT(activeCamera.camera.valid());
     auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera));
-    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_CameraStartYaw, 0.0f), cameraTransform.rotation);
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), cameraTransform.rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
         s_DefaultDirectionalLightPitch,
@@ -257,14 +258,13 @@ b8 Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
         return false;
     }
 
-    const SIMDVectorDouble mousePosition = VectorDoubleSet(xpos, ypos, 0.0, 0.0);
-    const SIMDVectorDouble previousMousePosition = VectorDoubleSet(m_lastMouseX, m_lastMouseY, 0.0, 0.0);
-    const SIMDVectorDouble deltaPosition = VectorDoubleSubtract(mousePosition, previousMousePosition);
-    const SIMDVectorSingle mouseDelta = ConvertVectorDoubleToSingle(deltaPosition);
-    const SIMDVectorSingle pendingDelta = VectorAdd(VectorSet(m_pendingMouseDeltaX, m_pendingMouseDeltaY, 0.0f, 0.0f), mouseDelta);
-    if(VectorIsFinite(mouseDelta, VectorComponentMask::s_XY) && VectorIsFinite(pendingDelta, VectorComponentMask::s_XY)){
-        m_pendingMouseDeltaX = VectorGetX(pendingDelta);
-        m_pendingMouseDeltaY = VectorGetY(pendingDelta);
+    const f32 deltaX = static_cast<f32>(xpos - m_lastMouseX);
+    const f32 deltaY = static_cast<f32>(ypos - m_lastMouseY);
+    const f32 pendingDeltaX = m_pendingMouseDeltaX + deltaX;
+    const f32 pendingDeltaY = m_pendingMouseDeltaY + deltaY;
+    if(IsFinite(deltaX) && IsFinite(deltaY) && IsFinite(pendingDeltaX) && IsFinite(pendingDeltaY)){
+        m_pendingMouseDeltaX = pendingDeltaX;
+        m_pendingMouseDeltaY = pendingDeltaY;
     }
     m_lastMouseX = xpos;
     m_lastMouseY = ypos;
@@ -368,13 +368,15 @@ void Project::updateMainCamera(const f32 delta)noexcept{
     const b8 keyboardCaptured = MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsKeyboard();
     const SIMDVectorSingle moveAxes = keyboardCaptured
         ? VectorZero()
-        : VectorSubtract(
-            VectorSet(static_cast<f32>(keyPressed(NWB::Core::Key::D)), static_cast<f32>(keyPressed(NWB::Core::Key::W)), 0.0f, 0.0f),
-            VectorSet(static_cast<f32>(keyPressed(NWB::Core::Key::A)), static_cast<f32>(keyPressed(NWB::Core::Key::S)), 0.0f, 0.0f)
+        : VectorSet(
+            static_cast<f32>(keyPressed(NWB::Core::Key::D)) - static_cast<f32>(keyPressed(NWB::Core::Key::A)),
+            static_cast<f32>(keyPressed(NWB::Core::Key::W)) - static_cast<f32>(keyPressed(NWB::Core::Key::S)),
+            0.0f,
+            0.0f
         );
     const b8 boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
-    __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), VectorSet(delta, 0.0f, 0.0f, 0.0f));
+    __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), delta);
 }
 
 void Project::destroyWorld()noexcept{
@@ -382,6 +384,26 @@ void Project::destroyWorld()noexcept{
         return;
 
     DestroyInitialProjectWorld(m_context, m_world.owner());
+}
+
+void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
+    NWB::Impl::Ui::WindowOptions options;
+    options.initialBounds = { s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight };
+    options.contentHeightFirstUse = true;
+    const auto gallery = m_uiPreview.galleryBounds(context);
+    if(!gallery)
+        return;
+    const auto& overview = options.initialBounds;
+    if(gallery->x < overview.x + overview.width && gallery->y < overview.y + overview.height)
+        return;
+    NWB::Impl::Ui::SeparatorOptions separator;
+    separator.thickness = 1.0f;
+    if(context.ui.beginWindow("testbed_window", s_WindowTitleText, m_uiWindow, options)){
+        const b8 declared = context.ui.label("renderer", s_RendererLine) && context.ui.separator("separator", separator) && context.ui.label("character", s_CharacterLine);
+        NWB_FATAL_ASSERT(declared);
+    }
+    const b8 ended = context.ui.endWindow();
+    NWB_FATAL_ASSERT(ended);
 }
 
 

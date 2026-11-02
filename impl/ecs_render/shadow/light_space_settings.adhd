@@ -210,6 +210,7 @@ class LightSpaceCaptureHistory{
 
 
 // A point light renders one view per cube face.
+const u32 s_SceneMaxLights = 64u;
 const u32 s_PointLightViewCount = 6u;
 const usize s_LightSpaceMaxViews = 48u;
 const u64 s_LightSpaceEventsPerTexel = 16u;
@@ -426,25 +427,19 @@ class LightSpaceCsgInstanceGpu{
 }
 
 LightSpaceCsgInstanceGpu BuildLightSpaceCsgInstanceGpu(
-    in f32x3x4 worldToObject,
     in u32 meshletPrimitiveIndexCount,
     in b8 hasRuntimeBounds,
     in u32 runtimeBoundsSlot,
     in b8 hardware,
     in b8 hasSwBvhNode,
-    in u32 swBvhNodeSlot,
-    in f32x4 localMin,
-    in f32x4 localMax
+    in u32 swBvhNodeSlot
 ){
     LightSpaceCsgInstanceGpu instance;
-    instance.worldToObject = worldToObject;
     instance.primitiveCount = meshletPrimitiveIndexCount / s_LightSpaceTriangleCornerCount;
     if(hasRuntimeBounds)
         instance.runtimeBoundsSlot = runtimeBoundsSlot;
     if(!hardware && hasSwBvhNode)
         instance.meshRootSlot = swBvhNodeSlot;
-    instance.localMin = localMin;
-    instance.localMax = localMax;
     return instance;
 }
 

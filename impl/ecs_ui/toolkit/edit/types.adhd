@@ -451,11 +451,11 @@ f64 AdvanceCaretPhase(in f64 phase, in f64 deltaSeconds){
     f64 deltaIn = 0.0;
     if(validDelta)
         deltaIn = deltaSeconds;
-    const f64x4 inputs = f64x4(phaseIn, deltaIn, 0.0, 0.0);
-    const f64x4 wrapped = inputs - floor(inputs);
+    const f64 wrappedPhase = phaseIn - floor(phaseIn);
     if(!validDelta)
-        return wrapped.x;
-    const f64 next = wrapped.x + wrapped.y;
+        return wrappedPhase;
+    const f64 wrappedDelta = deltaIn - floor(deltaIn);
+    const f64 next = wrappedPhase + wrappedDelta;
     if(next >= 1.0)
         return next - 1.0;
     return next;

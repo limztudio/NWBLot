@@ -9,6 +9,31 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> RuntimeStorageDescriptorSlot{
+    RestPosition = 0u,
+    SkinnedPosition,
+    RestNormal,
+    SkinnedNormal,
+    RestTangent,
+    SkinnedTangent,
+    MeshletDesc,
+    PositionRefDeltas,
+    AttributeRefDeltas,
+    AttributeSkins,
+    LocalVertexRefs,
+    PrimitiveIndices,
+    MeshletBounds,
+    MeshletLocalBounds,
+    LocalBounds,
+    SkinInfluences,
+    JointPalette,
+    AttributeBuffer,
+    kCount
+}
+
+const usize s_RuntimeRequiredStorageDescriptorCount = 15u;
+const usize s_RuntimeStorageDescriptorCount = 18u;
+
 const usize s_MeshSkinningResourceBufferCount = 19u;
 const usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
 
@@ -53,10 +78,6 @@ const StringView s_FrameBoundsRepackTaskLabel = "Runtime Skinning Bounds and Rep
 const StringView s_FrameLocalBoundsTaskLabel = "Runtime Skinning Local Bounds";
 const StringView s_FrameFinalizeStatesTaskLabel = "Runtime Skinning Finalize States";
 
-const StringView s_RuntimePrefix = ":runtime_";
-const StringView s_RevisionSeparator = "_revision_";
-const StringView s_OwnerSeparator = "_";
-
 const StringView s_BindlessSlotsLabel = "Skinning Bindless Slots";
 const StringView s_RestPositionsLabel = "Runtime Rest Positions";
 const StringView s_RestNormalsLabel = "Runtime Rest Normals";
@@ -86,23 +107,6 @@ const StringView s_BindlessSlotsUploadLabel = "Skinning Bindless Slots Upload";
 const StringView s_RestToSkinnedCopyLabel = "Skinning Rest-to-Skinned Copy";
 const StringView s_JointPaletteUploadLabel = "Skinning Joint Palette Upload";
 
-const StringView s_RestPositionsSuffix = "rest_positions";
-const StringView s_RestNormalsSuffix = "rest_normals";
-const StringView s_RestTangentsSuffix = "rest_tangents";
-const StringView s_SkinnedPositionsSuffix = "skinned_positions";
-const StringView s_SkinnedNormalsSuffix = "skinned_normals";
-const StringView s_SkinnedTangentsSuffix = "skinned_tangents";
-const StringView s_Uv0Suffix = "uv0";
-const StringView s_ColorsSuffix = "colors";
-const StringView s_MeshletsSuffix = "meshlets";
-const StringView s_MeshletBoundsSuffix = "meshlet_bounds";
-const StringView s_MeshletLocalBoundsSuffix = "meshlet_local_bounds";
-const StringView s_LocalBoundsSuffix = "local_bounds";
-const StringView s_MeshletPositionRefDeltasSuffix = "meshlet_position_ref_deltas";
-const StringView s_MeshletAttributeRefDeltasSuffix = "meshlet_attribute_ref_deltas";
-const StringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
-const StringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
-const StringView s_AttributeSkinsSuffix = "attribute_skins";
 const StringView s_SkinBufferSuffix = "mesh_skinning_skin";
 const StringView s_JointPaletteBufferSuffix = "mesh_skinning_joints";
 const StringView s_BindlessSlotsBufferSuffix = "mesh_skinning_bindless_slots";
@@ -266,34 +270,6 @@ b8 TryResolveMeshSkinningRestToSkinnedCopyByteCounts(in usize positionCount, in 
     outCounts.normalBytes = normalBytes;
     outCounts.tangentBytes = tangentBytes;
     return true;
-}
-
-Name DeriveRuntimeResourceName(in Name sourceName, in u64 ownerId, in u32 editRevision, in StringView label){
-    Name outName = s_NameNone;
-    if(sourceName == s_NameNone || label.empty())
-        return outName;
-    native(in sourceName, in ownerId, in editRevision, in label, mut outName){
-        Array<char, s_DecimalTextBufferBytes> ownerBuffer;
-        Array<char, s_DecimalTextBufferBytes> revisionBuffer;
-        const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
-        const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
-        if(!ownerText.empty() && !revisionText.empty()){
-            if(auto derivedHash = BeginDerivedNameHash(sourceName)){
-                if(
-                    UpdateDerivedNameHashText(*derivedHash, s_RuntimePrefix)
-                    && UpdateDerivedNameHashText(*derivedHash, ownerText)
-                    && UpdateDerivedNameHashText(*derivedHash, s_RevisionSeparator)
-                    && UpdateDerivedNameHashText(*derivedHash, revisionText)
-                    && UpdateDerivedNameHashText(*derivedHash, s_OwnerSeparator)
-                    && UpdateDerivedNameHashText(*derivedHash, label)
-                ){
-                    if(const auto finished = FinishDerivedNameHash(*derivedHash))
-                        outName = *finished;
-                }
-            }
-        }
-    }
-    return outName;
 }
 
 

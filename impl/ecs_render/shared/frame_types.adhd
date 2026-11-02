@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_csg/shape_types.adhd>
 #include <impl/ecs_render/avboit/types.adhd>
 
 
@@ -9,7 +10,6 @@
 
 
 const u32 s_RtInvalidSlot = 0xffffffffu;
-const u32 s_RtMaxI32AsU32 = 2147483647u;
 
 const usize s_SmallInlineIndexCapacity = 32u;
 const usize s_PromotedInlineIndexCapacity = s_SmallInlineIndexCapacity * 4u;
@@ -106,6 +106,22 @@ class StatisticsReservationKey{
     public u32 slot;
 }
 
+// Summarizes one owner-serialized ledger drain at the compiler boundary.
+class RendererTaskTimingFeedbackDrainResult{
+    public usize acceptedAssignmentCount = 0u;
+    public usize recordedSampleCount = 0u;
+    public usize retiredSampleCount = 0u;
+    public usize rejectedAssignmentCount = 0u;
+    public usize rejectedSampleCount = 0u;
+}
+
+enum<u8> RendererTaskTimingFeedbackCollectionAction{
+    None = 0u,
+    Enable = 1u,
+    Disable = 2u,
+    kCount = 3u
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -119,9 +135,6 @@ enum<u8> SharedComputeEmulationPhase{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const f32 s_SceneDefaultDirectionalAngularRadius = 0.00465f;
-const f32 s_SceneDefaultPunctualSourceRadius = 0.05f;
 
 [serialize]
 class MeshFrameHeapSlots{
@@ -176,7 +189,7 @@ class SceneLightGpuData{
     // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
     public f32x4 params(0.0f, 0.0f, -1.0f, -1.0f);
     // Soft-shadow source size: x = angular radius, y = punctual radius; z/w reserved.
-    public f32x4 params2(s_SceneDefaultDirectionalAngularRadius, s_SceneDefaultPunctualSourceRadius, 0.0f, 0.0f);
+    public f32x4 params2(0.00465f, 0.05f, 0.0f, 0.0f);
 }
 
 void HashCombineF32x4(in f32x4 value, mut usize seed){
@@ -218,7 +231,6 @@ class MeshComputePushConstants{
 const usize s_SharedComputeEmulationPhasesPerDraw = 2u;
 const usize s_SharedComputeEmulationMinimumDrawCount = 2u;
 const usize s_SharedComputeEmulationMaximumDrawCount = 5u;
-const usize s_SharedComputeEmulationMinimumPhaseCount = s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
 const usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
 
 b8 IsSupportedSharedComputeEmulationDrawCount(in usize drawCount){
@@ -230,7 +242,7 @@ usize SharedComputeEmulationPhaseCountForDrawCount(in usize drawCount){
 }
 
 b8 IsSupportedSharedComputeEmulationPhaseCount(in usize phaseCount){
-    return phaseCount >= s_SharedComputeEmulationMinimumPhaseCount && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
+    return phaseCount >= s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
 }
 
 // Immutable frame facts for graph declaration; queue assignment stays a compiler result.
@@ -248,35 +260,12 @@ class RendererFrameGraphFeatures{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Summarizes one owner-serialized ledger drain at the compiler boundary.
-class RendererTaskTimingFeedbackDrainResult{
-    public usize acceptedAssignmentCount = 0u;
-    public usize recordedSampleCount = 0u;
-    public usize retiredSampleCount = 0u;
-    public usize rejectedAssignmentCount = 0u;
-    public usize rejectedSampleCount = 0u;
-}
-
-enum<u8> RendererTaskTimingFeedbackCollectionAction{
-    None = 0u,
-    Enable = 1u,
-    Disable = 2u,
-    kCount = 3u
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_PrepareArena = "impl/ecs_render/prepare";
 const Name s_RenderArena = "impl/ecs_render/render";
 const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
 
 const u32 s_FullscreenTriangleVertexCount = 3u;
 const u32 s_EmulatedVertexStride = 64u;
-
-const Name s_InstanceBufferName = "ecs_render/instance_data";
-const Name s_MaterialTypedBufferName = "ecs_render/material_typed_data";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -336,11 +325,6 @@ TransparentDrawPushConstants ResolveTransparentDrawPushConstants(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_SceneMaxLights = 64u;
-
-const f32 s_Rec709LuminanceRed = 0.2126f;
-const f32 s_Rec709LuminanceGreen = 0.7152f;
-const f32 s_Rec709LuminanceBlue = 0.0722f;
 const f32 s_LightTypeDirectionalMax = 0.5f;
 const f32 s_LightTypePointMax = 1.5f;
 
@@ -353,8 +337,8 @@ class SceneShadingBufferUploads{
     public b8 sceneShadingUploadRequired = false;
 }
 
-f32 CausticSlotImportanceData(in f32x4 colorIntensity){
-    const f32 luminance = dot(colorIntensity, f32x4(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f));
+f32 SceneLightRadiantImportance(in f32x4 colorIntensity){
+    const f32 luminance = dot(colorIntensity, f32x4(0.2126f, 0.7152f, 0.0722f, 0.0f));
     const f32 intensity = max(colorIntensity.w, 0.0f);
     return luminance * intensity;
 }
@@ -387,24 +371,10 @@ const StringView s_RendererFrameTitle = "Renderer Frame";
 const f64 s_MillisecondsPerSecondTelemetry = 1000.0;
 const f64 s_PercentScaleTelemetry = 100.0;
 
-const usize s_CsgReceiverSpanResourceUseCapacity = 6u;
-const usize s_CsgIntervalCombineResourceUseCapacity = 11u;
 const usize s_OpaqueDrawResourceUseCount = 8u;
 const usize s_NoOpaqueDrawResourceUseCount = 6u;
-const usize s_OpaqueCsgFrameResourceUseCount = 5u;
 const usize s_GbufferMaterialResourceSetUseCapacity = 4u;
 const usize s_NormalizeResourceUseCapacity = 9u;
-
-const StringView s_PassAvboitDepthWarpName = "render.avboit.depth_warp";
-const StringView s_PassAvboitDepthWarpLabel = "AVBOIT Depth Warp";
-const StringView s_PassAvboitExtinctionName = "render.avboit.extinction";
-const StringView s_PassAvboitExtinctionLabel = "AVBOIT Extinction";
-const StringView s_PassAvboitIntegrationLabel = "AVBOIT Integration";
-const StringView s_PassTransparentCsgIntervalsLabel = "Transparent CSG Intervals";
-const StringView s_PassShadowVisibilityLabel = "Shadow Visibility";
-const StringView s_PassDeferredLightingLabel = "Deferred Lighting";
-const StringView s_PassDeferredCompositeLabel = "Deferred Composite";
-const StringView s_PassDeferredPresentLabel = "Deferred Present";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

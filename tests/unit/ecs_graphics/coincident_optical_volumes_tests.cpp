@@ -158,10 +158,10 @@ TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBounda
     Array<CoincidentOpticalVolumeCandidate, 8> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u) };
     for(auto& candidate : candidates)
         candidate.group = Name("tests/coincident_optical_volumes/transforms");
-    candidates[1].rotation = Float4U(0.6f, 0.f, 0.f, 0.8f);
-    candidates[2].rotation = Float4U(0.f, 0.6f, 0.f, 0.8f);
-    candidates[3].rotation = Float4U(0.f, 0.f, 0.6f, 0.8f);
-    candidates[4].rotation = Float4U(0.6f, 0.f, 0.f, -0.8f);
+    candidates[1].rotation = Float4(0.6f, 0.f, 0.f, 0.8f);
+    candidates[2].rotation = Float4(0.f, 0.6f, 0.f, 0.8f);
+    candidates[3].rotation = Float4(0.f, 0.f, 0.6f, 0.8f);
+    candidates[4].rotation = Float4(0.6f, 0.f, 0.f, -0.8f);
     candidates[5].scale.x = 1.000001f;
     candidates[6].scale.y = 1.000001f;
     candidates[7].scale.z = 1.000001f;
@@ -175,10 +175,10 @@ TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBounda
 TEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity){
     SelectionContext context;
     Array<CoincidentOpticalVolumeCandidate, 2> candidates = { MakeCandidate(20u), MakeCandidate(10u) };
-    candidates[0].position = Float3U(-0.f, 0.f, -0.f);
-    candidates[0].rotation = Float4U(-0.f, 0.f, -0.f, 1.f);
-    candidates[1].position = Float3U(0.f, -0.f, 0.f);
-    candidates[1].rotation = Float4U(0.f, -0.f, 0.f, 1.f);
+    candidates[0].position = Float4(-0.f, 0.f, -0.f, 0.f);
+    candidates[0].rotation = Float4(-0.f, 0.f, -0.f, 1.f);
+    candidates[1].position = Float4(0.f, -0.f, 0.f, 0.f);
+    candidates[1].rotation = Float4(0.f, -0.f, 0.f, 1.f);
 
     context.selection.select(candidates, context.scratch);
 
@@ -203,7 +203,7 @@ TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGe
     invalidCases[7].scale.x = 0.f;
     invalidCases[8].scale.y = -0.f;
     invalidCases[9].scale.z = 0.f;
-    invalidCases[10].rotation = Float4U(0.f, 0.f, 0.f, 0.f);
+    invalidCases[10].rotation = Float4(0.f, 0.f, 0.f, 0.f);
 
     for(const auto& invalidCase : invalidCases){
         Array<CoincidentOpticalVolumeCandidate, 3> candidates = { MakeCandidate(10u), invalidCase, invalidCase };

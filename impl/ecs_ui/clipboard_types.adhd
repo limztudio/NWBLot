@@ -1,0 +1,55 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_UiClipboardMaxPublications = 16u;
+
+enum<u8> UiClipboardPublicationStatus{
+    Idle,
+    Pending,
+    Published,
+    Unsupported,
+    InvalidText,
+    TooLarge,
+    NativeFailure,
+    WrongThread,
+    QueueFull,
+}
+
+class UiClipboardPublicationResult{
+    public UiClipboardPublicationStatus status = UiClipboardPublicationStatus::Idle;
+    public usize published = 0u;
+    public usize failed = 0u;
+}
+
+enum<u8> UiEditClipboardStatus{
+    Idle,
+    Pending,
+    Applied,
+    Published,
+    Cancelled,
+    StaleOwner,
+    StaleModel,
+    InvalidOwner,
+    InvalidAction,
+    ReadOnly,
+    NoSelection,
+    Unsupported,
+    CompositionActive,
+    InvalidText,
+    TooLarge,
+    ModelRejected,
+    NativeFailure,
+    WrongThread,
+    QueueFull,
+}
+
+class UiEditClipboardResult{
+    public UiEditClipboardStatus status = UiEditClipboardStatus::Idle;
+    public b8 textChanged = false;
+    public b8 selectionChanged = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -5,10 +5,11 @@
 #pragma once
 
 
-#include "renderer_material_state.h"
+#include "renderer_draw_types.h"
 
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 
+#include <global/containers.h>
 #include <global/scope_exit.h>
 
 
@@ -16,6 +17,12 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RendererMaterialResourceState;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +55,6 @@ public:
             m_index->insert(identity);
         }
     }
-    MaterialSampledTextureCollector(MaterialSampledTextureCollector&&) = delete;
 
 
 public:
@@ -128,52 +134,6 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::G
     Span<const MaterialPassDrawItemsView> drawItemSets,
     Core::Alloc::ScratchArena& scratchArena
 );
-// Names check sequentially; a missing name preserves the published prefix.
-[[nodiscard]] b8 MergePreparedShadowMaterialSampledTextures(Span<const Core::TextureHandle> sampledTextures, MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector);
-
-
-// Materials validate into reused storage before textures enter the output.
-class ShadowMaterialSampledTextureCollector final : NoCopy{
-private:
-    struct PendingTextures{
-        Vector<Core::TextureHandle, Core::Alloc::ScratchArena> textures;
-        MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector;
-
-
-    public:
-        explicit PendingTextures(Core::Alloc::ScratchArena& scratchArena)noexcept
-            : textures(scratchArena)
-            , collector(textures, scratchArena)
-        {}
-    };
-
-
-public:
-    ShadowMaterialSampledTextureCollector(Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures, Core::Alloc::ScratchArena& scratchArena)
-        : m_output(textures, scratchArena)
-        , m_scratchArena(scratchArena)
-    {}
-    ShadowMaterialSampledTextureCollector(ShadowMaterialSampledTextureCollector&&) = delete;
-
-
-public:
-    template<typename ResolveSurface>
-    [[nodiscard]] b8 collect(const MaterialSurfaceInfo& materialInfo, ResolveSurface&& resolveSurface){
-        if(!m_pending)
-            m_pending.emplace(m_scratchArena);
-        ScopeExit clearPending([&]()noexcept{ m_pending->collector.clear(); });
-
-        if(!resolveSurface(materialInfo, m_pending->collector))
-            return false;
-        return MergePreparedShadowMaterialSampledTextures(m_pending->textures, m_output);
-    }
-
-
-private:
-    MaterialSampledTextureCollector<Core::Alloc::GlobalArena> m_output;
-    Core::Alloc::ScratchArena& m_scratchArena;
-    Optional<PendingTextures> m_pending;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

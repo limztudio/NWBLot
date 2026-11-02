@@ -69,7 +69,7 @@ public:
 
     [[nodiscard]] const PaintVector<TextLine>& lines()const noexcept{ return m_lines; }
 
-    [[nodiscard]] TextHit hitTest(Point point)const noexcept;
+    [[nodiscard]] TextHit hitTest(const Point point)const noexcept{ return HitTestTextLayout(m_lines, m_clusters, point); }
     [[nodiscard]] Expected<Rect> caretRect(u32 byteOffset, TextCaretEdge::Enum edge)const noexcept;
 
 

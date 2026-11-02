@@ -56,7 +56,7 @@ void SceneShadingSetupGraphTask::Accepted(Payload& payload, [[maybe_unused]] con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(const PrefixSceneUploadInputs& inputs){
+Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(const PrefixSceneUploadInputs& inputs){
     PrefixSceneUploadResult result{};
     if(!inputs.meshView.valid() || !inputs.lights.valid() || !inputs.sceneShading.valid() || !inputs.shadowPrepareTask.valid())
         return MakeUnexpected(Failure{});

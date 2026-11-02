@@ -198,18 +198,6 @@ class InputRoutingResult{
     public WidgetId capture;
 }
 
-class ContextOwnedTarget{
-    public ContextOwnedTarget(){}
-
-    public ContextOwnedTarget(in HitTarget inTarget, in WidgetRoot inRoot){
-        this.target = inTarget;
-        this.root = inRoot;
-    }
-
-    public HitTarget target;
-    public WidgetRoot root;
-}
-
 class PointerGestureRecord{
     public PointerGestureRecord(){
         this.pendingUpdate = true;

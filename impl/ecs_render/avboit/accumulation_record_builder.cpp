@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitAccumulationRecordBuilder::declare(
+b8 AvboitAccumulationRecordBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     ObjectGeometryCacheGraph& objectGeometry,
@@ -44,7 +44,7 @@ NWB_IMPL_BEGIN
         ReadWriteUse(inputs.avboitAccumColor, Core::ResourceStates::RenderTarget),
         ReadWriteUse(inputs.avboitAccumExtinction, Core::ResourceStates::RenderTarget),
     };
-    NWB_DEFINE_AVBOIT_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.avboit.accumulation", "AVBOIT Accumulation");
+    NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.avboit.accumulation", "AVBOIT Accumulation");
 
     RendererAvboitTaskGraphStageState& stage = m_avboitSystem.taskGraphStage();
     if(!DeclareAvboitRasterRecordPhase<AvboitAccumulationComputeEmulationGraphTask, AvboitAccumulationSharedComputeEmulationGraphTask, AvboitAccumulationGraphTask>(
@@ -64,7 +64,7 @@ NWB_IMPL_BEGIN
             "AVBOIT Accumulation",
             Name("render.avboit.accumulation"),
             "AVBOIT Accumulation",
-            AvboitRecordInputsBase::s_ResourceBaseCount
+            s_AvboitResourceBaseCount
         ),
         accumulationPayload,
         computeEmulationPayload,

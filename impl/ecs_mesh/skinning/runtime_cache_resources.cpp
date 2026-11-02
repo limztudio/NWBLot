@@ -125,7 +125,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
 }
 
 [[nodiscard]] Name DeriveNamedRuntimeBuffer(const MeshSkinningRuntimeInstance& instance, const AStringView suffix, const TStringView label){
-    const Name bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.entity.id, instance.editRevision, suffix);
+    const Name bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, suffix);
     if(!bufferName)
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
     return bufferName;
@@ -166,11 +166,11 @@ template<typename PayloadT>
     const b8 canHaveUavs,
     const TStringView label,
     Core::GraphicsRuntime& graphics,
-    Core::BufferHandle& outBuffer,
-    const b8 canHaveRawViews = false,
-    const b8 accelStructBuildInput = false,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
-    const b8 isIndexBuffer = false
+    const b8 canHaveRawViews,
+    const b8 accelStructBuildInput,
+    const Core::ResourceQueueSharing::Mask queueSharing,
+    const b8 isIndexBuffer,
+    Core::BufferHandle& outBuffer
 ){
     const Name bufferName = DeriveNamedRuntimeBuffer(instance, suffix, label);
     if(!bufferName){
@@ -227,6 +227,10 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         false,
         __hidden_runtime_cache_resources::s_RestPositionLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.restPositionBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
@@ -236,6 +240,10 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         false,
         __hidden_runtime_cache_resources::s_RestNormalLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.restNormalBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
@@ -245,6 +253,10 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         false,
         __hidden_runtime_cache_resources::s_RestTangentLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.restTangentBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
@@ -254,9 +266,11 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         true,
         __hidden_runtime_cache_resources::s_SkinnedPositionLabel,
         m_graphics,
-        instance.skinnedPositionBuffer,
         true,
-        rtSupported
+        rtSupported,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
+        instance.skinnedPositionBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
         instance,
@@ -265,6 +279,10 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         true,
         __hidden_runtime_cache_resources::s_SkinnedNormalLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.skinnedNormalBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
@@ -274,10 +292,38 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         true,
         __hidden_runtime_cache_resources::s_SkinnedTangentLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.skinnedTangentBuffer
     ) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(instance, s_Uv0Suffix, instance.uv0, false, __hidden_runtime_cache_resources::s_Uv0Label, m_graphics, instance.uv0Buffer) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(instance, s_ColorsSuffix, instance.colors, false, __hidden_runtime_cache_resources::s_ColorLabel, m_graphics, instance.colorBuffer) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(
+        instance,
+        s_Uv0Suffix,
+        instance.uv0,
+        false,
+        __hidden_runtime_cache_resources::s_Uv0Label,
+        m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
+        instance.uv0Buffer
+    ) && uploaded;
+    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
+        instance,
+        s_ColorsSuffix,
+        instance.colors,
+        false,
+        __hidden_runtime_cache_resources::s_ColorLabel,
+        m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
+        instance.colorBuffer
+    ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletDesc>(
         instance,
         s_MeshletsSuffix,
@@ -285,6 +331,10 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         false,
         __hidden_runtime_cache_resources::s_MeshletDescriptorLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.meshletDescBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletBounds>(
@@ -294,8 +344,11 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         true,
         __hidden_runtime_cache_resources::s_MeshletBoundsLabel,
         m_graphics,
-        instance.meshletBoundsBuffer,
-        true
+        true,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
+        instance.meshletBoundsBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         instance,
@@ -324,6 +377,10 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         false,
         __hidden_runtime_cache_resources::s_MeshletLocalVertexRefLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.meshletLocalVertexRefBuffer
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
@@ -343,6 +400,10 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         false,
         __hidden_runtime_cache_resources::s_AttributeSkinLabel,
         m_graphics,
+        false,
+        false,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false,
         instance.attributeSkinBuffer
     ) && uploaded;
 
@@ -366,11 +427,11 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
             false,
             __hidden_runtime_cache_resources::s_RtTriangleIndexLabel,
             m_graphics,
-            instance.triangleIndexBuffer,
             true,
             rtSupported,
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
-            true
+            true,
+            instance.triangleIndexBuffer
         ) && uploaded;
     }
 
@@ -389,8 +450,11 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
             __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel,
             m_graphics,
-            instance.attributeBuffer,
-            true
+            true,
+            false,
+            Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+            false,
+            instance.attributeBuffer
         ) && uploaded;
     }
 

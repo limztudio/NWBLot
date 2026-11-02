@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> UiSkinSelectionResult{
+    Failed,
+    Selected,
+    DefaultFallback,
+}
+
+class UiSkinSelectionState{
+    public AssetRef<UiSkin> requested;
+    public AssetRef<UiSkin> selected;
+    public u64 generation = 1u;
+}
+
+UiSkinSelectionState MakeUiSkinSelectionState(in AssetRef<UiSkin> requested){
+    UiSkinSelectionState state;
+    state.requested = requested;
+    return state;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

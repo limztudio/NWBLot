@@ -115,23 +115,23 @@ b8 UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
     Impl::Ui::PaintBuilder& paint = context.paint;
     // Lanes are width, height, width and height of the display.
     const SIMDVectorSingle extent = VectorSet(context.display.logicalWidth, context.display.logicalHeight, context.display.logicalWidth, context.display.logicalHeight);
-    if(!m_latin.paint(context.text, paint, StoreSmokeRect(VectorMultiply(extent, VectorSet(0.04f, 0.80f, 0.28f, 0.075f)))) || !m_korean.paint(context.text, paint, StoreSmokeRect(VectorMultiply(extent, VectorSet(0.04f, 0.875f, 0.28f, 0.075f)))))
+    if(!m_latin.paint(context.text, paint, Impl::Ui::StoreRect(VectorMultiply(extent, VectorSet(0.04f, 0.80f, 0.28f, 0.075f)))) || !m_korean.paint(context.text, paint, Impl::Ui::StoreRect(VectorMultiply(extent, VectorSet(0.04f, 0.875f, 0.28f, 0.075f)))))
         return false;
 
-    if(!m_clipped.paint(context.text, paint, StoreSmokeRect(VectorMultiply(extent, VectorSet(0.34f, 0.82f, 0.21f, 0.08f)))))
+    if(!m_clipped.paint(context.text, paint, Impl::Ui::StoreRect(VectorMultiply(extent, VectorSet(0.34f, 0.82f, 0.21f, 0.08f)))))
         return false;
 
     const Impl::Ui::Color tint{ 1.0f, 0.2f, 0.6f, 0.5f };
     for(u32 i = 0u; i < 3u; ++i){
         const SIMDVectorSingle factors = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(i), 0.0f, 0.0f, 0.0f), VectorSet(0.08f, 0.0f, 0.0f, 0.0f), VectorSet(0.64f, 0.84f, 0.05f, 0.06f));
-        const Impl::Ui::Rect rectangle = StoreSmokeRect(VectorMultiply(extent, factors));
+        const Impl::Ui::Rect rectangle = Impl::Ui::StoreRect(VectorMultiply(extent, factors));
         const Impl::Ui::Rect uv{ static_cast<f32>(i) / 3.0f, 0.0f, 1.0f / 3.0f, 1.0f };
         if(!paint.drawGlyph(m_coverage, rectangle, uv, tint))
             return false;
     }
     for(u32 channel = 0u; channel < 4u; ++channel){
         const SIMDVectorSingle factors = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(channel), 0.0f, 0.0f, 0.0f), VectorSet(0.08f, 0.0f, 0.0f, 0.0f), VectorSet(0.64f, 0.94f, 0.05f, 0.045f));
-        const Impl::Ui::Rect rectangle = StoreSmokeRect(VectorMultiply(extent, factors));
+        const Impl::Ui::Rect rectangle = Impl::Ui::StoreRect(VectorMultiply(extent, factors));
         if(!paint.drawSdfGlyph(m_sdf[channel], channel, rectangle, { 0.f, 0.f, 1.f, 1.f }, { 0.2f, 1.f, 0.4f, 0.5f }))
             return false;
     }

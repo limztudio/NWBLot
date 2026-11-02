@@ -3,7 +3,6 @@
 
 
 #include "renderer_internal.h"
-#include "renderer_command_ir.h"
 
 #include <core/task/gpu/compiled_graph.h>
 

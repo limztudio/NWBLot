@@ -141,8 +141,8 @@ b8 GpuRendererState::prepareTextureImages(GpuFrameData& frame){
     return true;
 }
 
-Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
-    Expected<GpuTextureGraphResources> resources{s_InPlace};
+Expected<GpuSampledGraphResources> GpuRendererState::declareTextureImages(Core::GpuTaskGraph& graph, const GpuFrame& frame, GpuRasterResourceUses& uses){
+    Expected<GpuSampledGraphResources> resources{s_InPlace};
     if(frame->m_textureImages.size() != frame->m_snapshot.textureImages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
         return MakeUnexpected(Failure{});

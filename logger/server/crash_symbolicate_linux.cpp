@@ -90,27 +90,13 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<u64> ParseCallstackFrameAddress(const AStringView line)noexcept{
-    const usize prefix = line.find(s_HexAddressPrefix);
-    if(prefix == AStringView::npos)
-        return MakeUnexpected(Failure{});
-
-    usize end = prefix + s_HexAddressPrefix.size();
-    while(end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '\r' && line[end] != '\n')
-        ++end;
-    if(end == prefix + s_HexAddressPrefix.size())
-        return MakeUnexpected(Failure{});
-
-    return ::ParseVariableHexU64(AStringView(line.data() + prefix + s_HexAddressPrefix.size(), end - prefix - s_HexAddressPrefix.size()));
-}
-
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 [[nodiscard]] static b8 IsUnknownSymbolLine(const AStringView line)noexcept{
     const AStringView trimmed = TrimView(line);
     return trimmed.empty() || trimmed == s_LinuxUnknownSymbolText || StartsWith(trimmed, s_LinuxUnknownLocationPrefix);
 }
 
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ExtractSymbolizerResult(Core::Alloc::ScratchArena& arena, const AStringView outputText){
+[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ExtractSymbolizerResult(const AStringView outputText, Core::Alloc::ScratchArena& arena){
     AString<Core::Alloc::ScratchArena> outSymbol(arena);
     outSymbol.reserve(AddSize(outputText.size(), SizeOf<s_SymbolizerResultReserveMultiplier>(outputText.size())));
 
@@ -144,7 +130,7 @@ public:
     return outSymbol;
 }
 
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> RunLinuxSymbolizerCommand(Core::Alloc::ScratchArena& arena, const Span<const AStringView> arguments){
+[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> RunLinuxSymbolizerCommand(const Span<const AStringView> arguments, Core::Alloc::ScratchArena& arena){
     AString<Core::Alloc::ScratchArena> output{arena};
     output.reserve(ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes);
     const auto captured = CaptureProcessOutput(output, arena, arguments);
@@ -161,10 +147,10 @@ public:
         return MakeUnexpected(Failure{});
     }
 
-    return ExtractSymbolizerResult(arena, AStringView(output.data(), output.size()));
+    return ExtractSymbolizerResult(AStringView(output.data(), output.size()), arena);
 }
 
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> TryRunLinuxSymbolizer(Core::Alloc::ScratchArena& arena, const AStringView toolName, const AStringView modulePathText, const u64 moduleOffset){
+[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> TryRunLinuxSymbolizer(const AStringView toolName, const AStringView modulePathText, const u64 moduleOffset, Core::Alloc::ScratchArena& arena){
     AString<Core::Alloc::ScratchArena> addressArgument{arena};
     addressArgument.reserve(s_HexAddressPrefix.size() + ::s_HexU64DigitCount);
     addressArgument += s_HexAddressPrefix;
@@ -178,7 +164,7 @@ public:
 
         const Array<AStringView, 6> arguments = {{ s_LlvmSymbolizerTool, s_LlvmSymbolizerDemangleFlag, s_LlvmSymbolizerFunctionsFlag, s_LlvmSymbolizerInliningFlag, AStringView(objectArgument), AStringView(addressArgument) }};
 
-        return RunLinuxSymbolizerCommand(arena, arguments);
+        return RunLinuxSymbolizerCommand(arguments, arena);
     }
 
     AString<Core::Alloc::ScratchArena> modulePathArgument{arena};
@@ -187,10 +173,10 @@ public:
 
     const Array<AStringView, 7> arguments = {{ s_Addr2LineTool, s_Addr2LineFunctionsFlag, s_Addr2LineDemangleFlag, s_Addr2LineInlineFlag, s_Addr2LineExeFlag, AStringView(modulePathArgument), AStringView(addressArgument) }};
 
-    return RunLinuxSymbolizerCommand(arena, arguments);
+    return RunLinuxSymbolizerCommand(arguments, arena);
 }
 
-[[nodiscard]] static Expected<CrashScratchPath> FindLinuxSymbolFile(Core::Alloc::ScratchArena& arena, const AStringView modulePathText, const CrashSymbolicationConfig& config){
+[[nodiscard]] static Expected<CrashScratchPath> FindLinuxSymbolFile(const AStringView modulePathText, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena){
     if(modulePathText.empty() || modulePathText == s_AnonymousModulePath)
         return MakeUnexpected(Failure{});
 
@@ -203,7 +189,7 @@ public:
     if(*regularModule)
         return modulePath;
 
-    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
+    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(config, arena);
     if(symbolStoreDirectory.empty())
         return MakeUnexpected(Failure{});
 
@@ -237,7 +223,7 @@ public:
     LinuxSymbolFileCacheEntry& entry = cache.entries.emplace_back(cache.entries.get_allocator().arena());
     entry.modulePath.assign(modulePathText.data(), modulePathText.size());
 
-    const auto symbolPath = FindLinuxSymbolFile(arena, modulePathText, config);
+    const auto symbolPath = FindLinuxSymbolFile(modulePathText, config, arena);
     entry.found = symbolPath.has_value();
     if(!entry.found)
         return MakeUnexpected(Failure{});
@@ -252,14 +238,14 @@ public:
     if(!symbolPathText)
         return MakeUnexpected(Failure{});
 
-    auto llvmSymbol = TryRunLinuxSymbolizer(arena, s_LlvmSymbolizerTool, *symbolPathText, moduleOffset);
+    auto llvmSymbol = TryRunLinuxSymbolizer(s_LlvmSymbolizerTool, *symbolPathText, moduleOffset, arena);
     if(llvmSymbol)
         return Move(*llvmSymbol);
-    return TryRunLinuxSymbolizer(arena, s_Addr2LineTool, *symbolPathText, moduleOffset);
+    return TryRunLinuxSymbolizer(s_Addr2LineTool, *symbolPathText, moduleOffset, arena);
 }
 #endif
 
-static void AppendLinuxClientCallstack([[maybe_unused]] Core::Alloc::ScratchArena& arena, const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, [[maybe_unused]] const CrashSymbolicationConfig& config, CrashReportText& outReport){
+static void AppendLinuxClientCallstack(const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     outReport += s_CallstackSectionHeader;
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -270,6 +256,9 @@ static void AppendLinuxClientCallstack([[maybe_unused]] Core::Alloc::ScratchAren
             ++frameLineCount;
     }
     symbolFileCache.entries.reserve(frameLineCount);
+#else
+    static_cast<void>(arena);
+    static_cast<void>(config);
 #endif
 
     usize cursor = 0u;
@@ -291,14 +280,14 @@ static void AppendLinuxClientCallstack([[maybe_unused]] Core::Alloc::ScratchAren
                 outReport += "+";
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
                 const u64 symbolOffset = moduleOffset + mapEntry->fileOffset;
-                AppendHexAddress(outReport, moduleOffset);
+                AppendHexAddress(moduleOffset, outReport);
                 const auto symbol = ResolveLinuxFrameSymbol(modulePath, symbolOffset, config, arena, symbolFileCache);
                 if(symbol){
                     outReport += " ";
                     outReport += *symbol;
                 }
 #else
-                AppendHexAddress(outReport, moduleOffset);
+                AppendHexAddress(moduleOffset, outReport);
 #endif
             }
         }
@@ -314,7 +303,7 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
 
     outReport += clientCallstackPresent ? "status=callstack_captured\nresolver=linux_client_callstack\n" : "status=not_decoded\nresolver=elf_dwarf_core\n";
     if(!clientCallstackRead && clientCallstackRead.error() != ErrorCondition::no_such_file_or_directory)
-        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_linux_client_callstack", .code = clientCallstackRead.error(), });
+        AppendNativeFailure(CrashSymbolicationFailure{ .operation = "read_linux_client_callstack", .code = clientCallstackRead.error(), }, outReport);
 
     const auto corePath = packageDirectory / CrashNames::s_LinuxCoreFileName;
     const auto corePresent = IsRegularFile(corePath);
@@ -333,9 +322,9 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
     const b8 procMapsPresent = procMapsRead && !procMaps.empty();
     outReport += procMapsPresent ? "proc_maps=present\n" : "proc_maps=missing\n";
     if(!cpuContextRead && cpuContextRead.error() != ErrorCondition::no_such_file_or_directory)
-        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_linux_cpu_context", .code = cpuContextRead.error(), });
+        AppendNativeFailure(CrashSymbolicationFailure{ .operation = "read_linux_cpu_context", .code = cpuContextRead.error(), }, outReport);
     if(!procMapsRead && procMapsRead.error() != ErrorCondition::no_such_file_or_directory)
-        AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_linux_proc_maps", .code = procMapsRead.error(), });
+        AppendNativeFailure(CrashSymbolicationFailure{ .operation = "read_linux_proc_maps", .code = procMapsRead.error(), }, outReport);
 
     LinuxProcessMemoryMapTable procMapTable(scratchArena);
     if(procMapsPresent){
@@ -353,18 +342,18 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
     if(!cpuContextPresent || !instructionPointer || *instructionPointer == 0u){
         outReport += "detail=ELF/DWARF stack resolver requires a Linux core artifact; instruction pointer mapping unavailable\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(scratchArena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
+            AppendLinuxClientCallstack(AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, scratchArena, outReport);
         return;
     }
 
     outReport += "instruction_pointer=";
-    AppendHexAddress(outReport, *instructionPointer);
+    AppendHexAddress(*instructionPointer, outReport);
     outReport += s_ReportLineEnd;
 
     if(!procMapsPresent){
         outReport += "detail=proc maps missing for module lookup; symbolic frame resolution unavailable\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(scratchArena, AStringView(clientCallstack.data(), clientCallstack.size()), nullptr, config, outReport);
+            AppendLinuxClientCallstack(AStringView(clientCallstack.data(), clientCallstack.size()), nullptr, config, scratchArena, outReport);
         return;
     }
 
@@ -372,7 +361,7 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
     if(!instructionMapEntry){
         outReport += "detail=instruction pointer was not found in proc maps\n";
         if(clientCallstackPresent)
-            AppendLinuxClientCallstack(scratchArena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
+            AppendLinuxClientCallstack(AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, scratchArena, outReport);
         return;
     }
 
@@ -380,17 +369,17 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
     outReport += "instruction_pointer_module=";
     outReport.append(modulePath.data(), modulePath.size());
     outReport += "\nmodule_relative_ip=";
-    AppendHexAddress(outReport, *instructionPointer - instructionMapEntry->begin);
+    AppendHexAddress(*instructionPointer - instructionMapEntry->begin, outReport);
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     outReport += "\nsymbolication_relative_ip=";
-    AppendHexAddress(outReport, *instructionPointer - instructionMapEntry->begin + instructionMapEntry->fileOffset);
+    AppendHexAddress(*instructionPointer - instructionMapEntry->begin + instructionMapEntry->fileOffset, outReport);
 #endif
     outReport += clientCallstackPresent
         ? "\ndetail=client callstack captured; module frames are symbolized with DWARF when symbols are reachable\n"
         : "\ndetail=module-relative crash address captured; full Linux callstack requires a Linux core artifact and DWARF resolver\n"
     ;
     if(clientCallstackPresent)
-        AppendLinuxClientCallstack(scratchArena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
+        AppendLinuxClientCallstack(AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, scratchArena, outReport);
 }
 
 

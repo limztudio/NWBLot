@@ -129,7 +129,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
             u64 totalCost = 0u;
             for(const Core::GpuTaskQueueAssignment& assignment : assignments)
                 totalCost += costs[assignment.task.index];
-            EXPECT_EQ(scoringData.m_totalAssignedCost, totalCost);
+            EXPECT_EQ(scoringData.totalAssignedCost, totalCost);
             for(const Core::GpuPhysicalQueueInfo& candidate : queues){
                 u64 assignedCost = 0u;
                 for(const Core::GpuTaskQueueAssignment& assignment : assignments)
@@ -205,7 +205,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
         }
         Core::GraphicsVector<Core::GpuTaskQueueAssignment> emptyAssignments(testArena.arena);
         scoringData.rebuildAssignmentLoads(emptyAssignments, topology);
-        EXPECT_EQ(scoringData.m_totalAssignedCost, 0u);
+        EXPECT_EQ(scoringData.totalAssignedCost, 0u);
         for(const Core::GpuPhysicalQueueInfo& queue : queues)
             EXPECT_EQ(scoringData.assignedQueueLoad(queue.id), 0u);
         scoringData.rebuildAssignmentLoads(assignments, topology);

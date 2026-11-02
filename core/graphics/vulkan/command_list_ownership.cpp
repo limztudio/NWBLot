@@ -94,7 +94,7 @@ b8 CommandList::GraphRecordingOwnership::finish(const b8 semanticSuccess, Comman
         return false;
     }
     m_commandList.closeInternal(finalStates);
-    if(m_commandList.commandRecordingFailedUnchecked() || m_commandList.isRecordingUnchecked() || !m_commandList.hasCommandBufferUnchecked()){
+    if(m_commandList.commandRecordingFailedUnchecked() || m_commandList.isRecordingUnchecked() || !m_commandList.matchesNativeLeaseIdentity()){
         if(finalStates)
             finalStates->reset();
         release();

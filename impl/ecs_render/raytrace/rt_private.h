@@ -8,6 +8,7 @@
 #include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/material_typed_private.h>
@@ -79,6 +80,14 @@ static_assert(offsetof(BvhBuildPushConstants, aabbMax) == 48u);
 static_assert(offsetof(BvhBuildPushConstants, visitCounterHeapSlot) == 60u);
 static_assert(IsStandardLayout_V<BvhBuildPushConstants>);
 static_assert(IsTriviallyCopyable_V<BvhBuildPushConstants>);
+
+// Scratch scene-BVH build records. They stay in memory during the build, so they use Float storage.
+struct SceneBvhPrimitiveCalculation{
+    Float4 aabbMin{};
+    Float4 aabbMax{};
+    Float4 centroid{};
+    b8 transparentOccluder = false;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,6 +4,7 @@
 
 #include "cpu_topology.h"
 
+#include "filesystem.h"
 #include "not_null.h"
 #include "platform.h"
 #include "simplemath.h"

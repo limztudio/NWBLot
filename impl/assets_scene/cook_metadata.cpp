@@ -31,7 +31,6 @@ namespace __hidden_scene_cook_metadata{
 
 
 using namespace Core::Metascript;
-using namespace SceneAssetCook;
 
 [[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(const Path& nwbFilePath, const Value& mapValue, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!mapValue.isMap()){

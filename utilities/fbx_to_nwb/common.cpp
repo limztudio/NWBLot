@@ -14,6 +14,27 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace UtilityDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::Alloc::GlobalArena& Arena(){
+    static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
+    return s_Arena;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_common{
 
 
@@ -67,6 +88,15 @@ b8 ValidateOptionText(TextFunction textFunction, ParseFunction parseValue, AStri
     return false;
 }
 
+template<typename OptionsTextFunction>
+[[nodiscard]] ScratchString BuildOptionErrorText(const AStringView prefix, OptionsTextFunction optionsTextFunction, Core::Alloc::ScratchArena& scratchArena){
+    const ScratchString options = optionsTextFunction(scratchArena);
+    ScratchString message(prefix, scratchArena);
+    message.reserve(AddSize(message.size(), options.size()));
+    message += options;
+    return message;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -82,11 +112,7 @@ ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena
 }
 
 ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
-    const ScratchString options = OutputAssetTypeOptionsText(scratchArena);
-    ScratchString message("Asset type must be ", scratchArena);
-    message.reserve(AddSize(message.size(), options.size()));
-    message += options;
-    return message;
+    return __hidden_common::BuildOptionErrorText("Asset type must be ", OutputAssetTypeOptionsText, scratchArena);
 }
 
 Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexcept{
@@ -102,11 +128,7 @@ ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
-    const ScratchString options = NormalModeOptionsText(scratchArena);
-    ScratchString message("normal mode must be ", scratchArena);
-    message.reserve(AddSize(message.size(), options.size()));
-    message += options;
-    return message;
+    return __hidden_common::BuildOptionErrorText("normal mode must be ", NormalModeOptionsText, scratchArena);
 }
 
 Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{

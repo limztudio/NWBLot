@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const SurfelGiLifecycleInputs& inputs){
+Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const SurfelGiLifecycleInputs& inputs){
     SurfelGiLifecycleResult result{};
     if(!inputs.targets)
         return MakeUnexpected(Failure{});

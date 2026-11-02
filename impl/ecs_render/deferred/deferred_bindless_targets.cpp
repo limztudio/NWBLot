@@ -5,7 +5,7 @@
 #include "deferred_system.h"
 
 #include <impl/ecs_render/deferred/deferred_bindless_registrar.h>
-#include <impl/ecs_render/deferred/deferred_descriptor_register.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -106,7 +106,7 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
 
     // The indirection payload is itself heap-addressable.
     // Every consumer takes this one slot in push constants, not a local selector; the heap stays the binding surface.
-    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = DeferredDescriptorRegisterDetail::RegisterConstantBuffer(heap, bindless.slotsBuffer);
+    const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RendererDescriptorRegisterDetail::RegisterConstantBuffer(heap, bindless.slotsBuffer);
     bindless.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
     if(!slotsBufferDescriptor){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap"));

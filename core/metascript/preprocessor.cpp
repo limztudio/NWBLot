@@ -496,7 +496,7 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
                 m_errors.push_back(ParseError{line, 1u, MString("unexpected tokens after macro name in #ifdef/#ifndef", m_arena)});
                 return false;
             }
-            const b8 defined = isMacroDefined(macroName);
+            const b8 defined = m_macros.find(macroName) != m_macros.end();
             condResult = (cmd == "ifdef") ? defined : !defined;
         }
         frame.currentActive = condResult;
@@ -726,5 +726,4 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

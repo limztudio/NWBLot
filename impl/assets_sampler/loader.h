@@ -44,7 +44,7 @@ namespace SamplerAssetLoader{
 
 [[nodiscard]] b8 Create(const Sampler& samplerAsset, const Name& debugName, TStringView ownerName, Core::GraphicsRuntime& graphics, SamplerGpuResource& outResource);
 [[nodiscard]] b8 Load(const Core::Assets::AssetRef<Sampler>& samplerAsset, const Name& debugName, TStringView ownerName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, SamplerGpuResource& outResource);
-void Release(SamplerGpuResource& inOutResource, Core::GraphicsRuntime& graphics);
+void Release(Core::GraphicsRuntime& graphics, SamplerGpuResource& inOutResource);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

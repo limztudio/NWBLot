@@ -214,14 +214,6 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const ISubsystem* CastSubsystem(const Core::Assets::IAsset* const asset)noexcept{
-    return SubsystemTypeAutoRegistrar::Cast(asset);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
     usize cursor = 0u;
     const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemHeaderBinary>(binary, s_SubsystemMagic, s_SubsystemLoadBinaryContext, s_SubsystemAssetKindLabel, cursor);

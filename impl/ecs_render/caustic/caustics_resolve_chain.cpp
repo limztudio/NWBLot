@@ -41,7 +41,7 @@ struct ResolveStageDesc{
 };
 
 // One activity read of the previous stage and one activity write of this stage.
-inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 2u;
+inline constexpr usize s_ResolveStageCount = NWB_CAUSTIC_RESOLVE_PASS_COUNT + 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +53,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(const DeferredFrameTargets& targets, const b8 hardwareCaustics){
+Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(const DeferredFrameTargets& targets, const b8 hardwareCaustics){
     using namespace RendererTaskGraphDetail;
     const CausticsStageTargetNaming naming = hardwareCaustics
         ? CausticsStageTargetNaming{
@@ -93,7 +93,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
     };
 }
 
-[[nodiscard]] Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTasks(const CausticsStagePrefixInputs& inputs){
+Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTasks(const CausticsStagePrefixInputs& inputs){
     using namespace RendererTaskGraphDetail;
     CausticsStagePrefixResult result{};
 
@@ -209,7 +209,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
     return result;
 }
 
-[[nodiscard]] Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareGeometryAndResolve(const CausticsGeometryAndResolveInputs& inputs){
+Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareGeometryAndResolve(const CausticsGeometryAndResolveInputs& inputs){
     using namespace RendererTaskGraphDetail;
     const Array<Core::GpuTaskResourceUse, 3u> geometryResourceUses = {
         ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
@@ -276,7 +276,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
     resolveChainInputs.geometryTask = *causticGeometryTaskResult;
     resolveChainInputs.baseScheduling = geometryScheduling;
     resolveChainInputs.prepare = resolvePrepareResourceUses;
-    for(usize index = 0u; index < s_CausticResolveWaveletPassCount; ++index)
+    for(usize index = 0u; index < NWB_CAUSTIC_RESOLVE_PASS_COUNT; ++index)
         resolveChainInputs.wavelets[index] = (index % 2u == 0u) ? CausticsResolveStageUses(resolveOddWaveletResourceUses) : CausticsResolveStageUses(resolveEvenWaveletResourceUses);
     resolveChainInputs.upsample = resolveUpsampleResourceUses;
     resolveChainInputs.stateSources = inputs.resolveStateSources;
@@ -297,7 +297,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
     return result;
 }
 
-[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming){
+Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming){
     using namespace RendererTaskGraphDetail;
     CausticsResolveChainResult result{};
     if(!inputs.geometryTask.valid())
@@ -342,7 +342,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
             // Prepare publishes A; every wavelet alternates masks with its quantized color output.
             if(stageIndex > 0u)
                 activityUses[activityUseCount++] = ReadUse(activityResources[(stageIndex - 1u) % s_CausticResolveActivityBufferCount], Core::ResourceStates::ShaderResource);
-            if(stageIndex <= s_CausticResolveWaveletPassCount)
+            if(stageIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT)
                 activityUses[activityUseCount++] = WriteUse(activityResources[stageIndex % s_CausticResolveActivityBufferCount], Core::ResourceStates::UnorderedAccess);
             stageDesc.setResourceUses({ activityUses.data(), activityUseCount });
         }
@@ -370,7 +370,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
     return result;
 }
 
-[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareHardware(const CausticsResolveChainInputs& inputs){
+Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareHardware(const CausticsResolveChainInputs& inputs){
     const CausticsResolveChainNaming naming{
         .prepare = { Name("render.hardware_caustics.resolve_prepare"), "Hardware Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve-prepare graph task") },
         .wavelets = {{
@@ -386,7 +386,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
     return declare(inputs, naming);
 }
 
-[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareSoftware(const CausticsResolveChainInputs& inputs){
+Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareSoftware(const CausticsResolveChainInputs& inputs){
     const CausticsResolveChainNaming naming{
         .prepare = { Name("render.software_caustics.resolve_prepare"), "Software Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task") },
         .wavelets = {{

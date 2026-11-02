@@ -360,6 +360,7 @@ public:
             graphics,
             m_context.assetManager,
             m_context.shaderPathResolver,
+            nullptr,
             m_shader
         ))
             return false;

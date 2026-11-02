@@ -39,7 +39,7 @@ using namespace NWB::ModelTests;
     pose.parentJoints.reserve(jointCount);
     pose.localJoints.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        pose.parentJoints.push_back(jointIndex == 0u ? s_SkeletonRootParent : static_cast<u32>(jointIndex - 1u));
+        pose.parentJoints.push_back(jointIndex == 0u ? s_SkeletonInvalidJointIndex : static_cast<u32>(jointIndex - 1u));
         pose.localJoints.push_back(Translation(jointTranslation));
     }
     return skeleton;
@@ -67,7 +67,7 @@ TEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate){
     world.entity(parent).getComponent<SkeletonPoseComponent>().localJoints[1u] = Translation(3.0f);
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 11.0f);
-    world.entity(parent).getComponent<SkeletonPoseComponent>().parentJoints[1u] = s_SkeletonRootParent;
+    world.entity(parent).getComponent<SkeletonPoseComponent>().parentJoints[1u] = s_SkeletonInvalidJointIndex;
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 10.0f);
     world.entity(attached).getComponent<ModelStaticMeshAttachmentComponent>().parentEntity = replacement;
@@ -78,7 +78,7 @@ TEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate){
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 20.0f);
     auto& restored = world.entity(replacement).addComponent<SkeletonPoseComponent>();
-    restored.parentJoints = { s_SkeletonRootParent, 0u };
+    restored.parentJoints = { s_SkeletonInvalidJointIndex, 0u };
     restored.localJoints = { Translation(2.0f), Translation(3.0f) };
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 17.0f);
@@ -111,7 +111,7 @@ TEST(ModelAttachment, PreservesOriginalAttachmentTransformWriteOrder){
     const auto first = MakeAttachment(context, owner, Core::ECS::s_InvalidEntityId, s_SkeletonInvalidJointIndex, 2.0f);
     const auto second = MakeAttachment(context, owner, first, s_SkeletonInvalidJointIndex, 3.0f);
     auto& pose = world.entity(first).addComponent<SkeletonPoseComponent>();
-    pose.parentJoints = { s_SkeletonRootParent };
+    pose.parentJoints = { s_SkeletonInvalidJointIndex };
     pose.localJoints = { Translation(1.0f) };
     const auto jointFirst = MakeAttachment(context, owner, first, 0u, 4.0f);
     const auto jointSecond = MakeAttachment(context, owner, first, 0u, 5.0f);
@@ -148,7 +148,7 @@ TEST(ModelAttachment, GroupedQueriesRejectShrunkAndEmptyPalettesAndRecover){
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 1.0f);
     EXPECT_FLOAT_EQ(world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x, 123.0f);
-    pose.parentJoints = { s_SkeletonRootParent, 0u };
+    pose.parentJoints = { s_SkeletonInvalidJointIndex, 0u };
     pose.localJoints = { Translation(2.0f), Translation(3.0f) };
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 2.0f);
@@ -181,7 +181,7 @@ TEST(ModelAttachment, SingleQueryRejectsMissingJointBoundsAndRetainsReusableCapa
     pose.localJoints.clear();
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 123.0f);
-    pose.parentJoints = { s_SkeletonRootParent, 0u };
+    pose.parentJoints = { s_SkeletonInvalidJointIndex, 0u };
     pose.localJoints = { Translation(2.0f), Translation(3.0f) };
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 5.0f);

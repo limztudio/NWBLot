@@ -30,6 +30,7 @@ namespace ShaderBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_COOK)
 template<typename PayloadContainer>
 [[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(const AStringView entryPoint, const Span<const u8> bytecode, PayloadContainer& outPayload){
     if(entryPoint.empty() || entryPoint.size() > s_MaxShaderEntryPointBytes)
@@ -50,6 +51,7 @@ template<typename PayloadContainer>
     AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
     return AssetPayloadEncodeFailure::None;
 }
+#endif
 
 // The result borrows the serialized payload, which must outlive both views.
 [[nodiscard]] Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(Span<const u8> payload)noexcept;

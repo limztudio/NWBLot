@@ -98,22 +98,22 @@ public:
 
 
 public:
-    [[nodiscard]] static b8 PrepareShadowPrepareTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static b8 AcceptShadowPrepareTask( void* const rawContext, const Core::QueueSubmissionToken& token );
-    [[nodiscard]] static b8 PrepareShadowVisibilityTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static b8 AcceptShadowVisibilityTask( void* const rawContext, const Core::QueueSubmissionToken& token );
-    [[nodiscard]] static b8 PrepareSoftwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static b8 AcceptSoftwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
-    [[nodiscard]] static b8 PrepareSurfelGiTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static b8 AcceptSurfelGiTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
-    [[nodiscard]] static b8 PrepareHardwareCausticsTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static b8 AcceptHardwareCausticsTask( void* const rawContext, const Core::QueueSubmissionToken& token )noexcept;
-    [[nodiscard]] static b8 PrepareDeferredLightingTask( void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState );
-    [[nodiscard]] static b8 AcceptDeferredLightingTask( void* const rawContext, const Core::QueueSubmissionToken& token );
+    FrameExecuteLifecycle() = delete;
 
 
 public:
-    FrameExecuteLifecycle() = delete;
+    [[nodiscard]] static b8 PrepareShadowPrepareTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState);
+    [[nodiscard]] static b8 AcceptShadowPrepareTask(void* const rawContext, const Core::QueueSubmissionToken& token);
+    [[nodiscard]] static b8 PrepareShadowVisibilityTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState);
+    [[nodiscard]] static b8 AcceptShadowVisibilityTask(void* const rawContext, const Core::QueueSubmissionToken& token);
+    [[nodiscard]] static b8 PrepareSoftwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState);
+    [[nodiscard]] static b8 AcceptSoftwareCausticsTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] static b8 PrepareSurfelGiTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState);
+    [[nodiscard]] static b8 AcceptSurfelGiTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] static b8 PrepareHardwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState);
+    [[nodiscard]] static b8 AcceptHardwareCausticsTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept;
+    [[nodiscard]] static b8 PrepareDeferredLightingTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState);
+    [[nodiscard]] static b8 AcceptDeferredLightingTask(void* const rawContext, const Core::QueueSubmissionToken& token);
 };
 
 

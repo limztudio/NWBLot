@@ -78,7 +78,7 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarR
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': cube resolution must be square"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    return MakeTextureResolution(dimensions[0u], dimensions[1u], dimensions[2u]);
+    return TextureResolution(dimensions[0u], dimensions[1u], dimensions[2u]);
 }
 
 

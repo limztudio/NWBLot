@@ -330,7 +330,8 @@ TEST(Telemetry, GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicitNameF
     using NWB::Core::Perf::ScopeNameAt;
     using NWB::Core::Perf::TimingScopeId;
     GenericScopeRecord record{ Name("perf/generic/scope"), 3u };
-    const Array<BorrowedScopePointer, 1u> owners{ BorrowedScopePointer{ &record } };
+    const Array<BorrowedScopePointer, 1u> ownerStorage{ BorrowedScopePointer{ &record } };
+    const Span<const BorrowedScopePointer> owners(ownerStorage);
     const TimingScopeId scope{ 0u, 3u };
     static_assert(IsSame_V<decltype(FindNamedScope<TimingScopeId>(owners, scope)), GenericScopeRecord*>);
     static_assert(noexcept(FindNamedScope<TimingScopeId>(owners, scope)));
@@ -338,12 +339,14 @@ TEST(Telemetry, GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicitNameF
     EXPECT_EQ(FindNamedScope<TimingScopeId>(owners, TimingScopeId{ 0u, 4u }), nullptr);
     EXPECT_EQ(FindNamedScope<TimingScopeId>(owners, TimingScopeId{ 1u, 3u }), nullptr);
 
-    const Array<NotNull<GenericScopeRecord*>, 1u> records{ MakeNotNull(&record) };
+    const Array<NotNull<GenericScopeRecord*>, 1u> recordStorage{ MakeNotNull(&record) };
+    const Span<const NotNull<GenericScopeRecord*>> records(recordStorage);
     static_assert(noexcept(ScopeNameAt(records, 0u)));
     EXPECT_EQ(ScopeNameAt(records, 0u), record.name);
 
     ThrowingScopeRecord throwing{};
-    const Array<NotNull<ThrowingScopeRecord*>, 1u> throwingRecords{ MakeNotNull(&throwing) };
+    const Array<NotNull<ThrowingScopeRecord*>, 1u> throwingRecordStorage{ MakeNotNull(&throwing) };
+    const Span<const NotNull<ThrowingScopeRecord*>> throwingRecords(throwingRecordStorage);
     static_assert(noexcept(Name(throwing.name)));
     static_assert(!noexcept(DeclVal<void(*)(Name)noexcept>()(throwing.name)));
     static_assert(!noexcept(ScopeNameAt(throwingRecords, 0u)));

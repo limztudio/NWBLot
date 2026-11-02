@@ -68,7 +68,6 @@ using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 using NWB::Tests::Smoke::TickSmokeWorld;
-using NWB::Tests::Smoke::s_SmokeTwoPi;
 
 using StressModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using StressMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -491,7 +490,7 @@ public:
         spinCharacters();
         if(!m_csgScene.update(m_yaw.yaw(), *m_world))
             return false;
-        SetSmokeYawWindowTitle(m_yaw.yaw(), m_yaw.manualControl(), s_SmokeTwoPi, m_context);
+        SetSmokeYawWindowTitle(m_yaw.yaw(), m_yaw.manualControl(), s_2PI, m_context);
         if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
         reportReflectionStatistics();
@@ -551,8 +550,7 @@ private:
     // Face the ceiling downward so it bounces light into the crowd.
     [[nodiscard]] NWB::Core::ECS::EntityID createCeiling(const Float4& colorTint){
         const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
-        Float4 ceilingScale;
-        StoreFloat(VectorMultiply(VectorSet(2.0f, 1.0f, 2.0f, 0.0f), VectorSet(s_BoxHalf.x, 1.0f, s_BoxHalf.y, 0.0f)), ceilingScale);
+        const Float4 ceilingScale(2.0f * s_BoxHalf.x, 1.0f, 2.0f * s_BoxHalf.y, 0.0f);
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale, *m_world);
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
@@ -563,7 +561,7 @@ private:
 
     void spinCharacters()noexcept{
         const f32 yawBase = m_yaw.yaw();
-        const f32 phaseStep = s_SmokeTwoPi / static_cast<f32>(m_charactersPerClass * 2u);
+        const f32 phaseStep = s_2PI / static_cast<f32>(m_charactersPerClass * 2u);
         for(usize index = 0u; index < m_characterOwners.size(); ++index){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
             if(!transform)

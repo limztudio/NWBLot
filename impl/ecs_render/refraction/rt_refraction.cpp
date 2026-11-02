@@ -32,39 +32,35 @@ b8 RendererRayTracingSystem::prepareRefractionResources(){
     if(!heap.isInitialized())
         return false;
 
-    if(!m_rayTracingState.m_refractionBindingLayout){
-        Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(RefractionPushConstants)));
-        auto refractionBindingLayoutResult = device.createBindingLayout(desc);
-        if(refractionBindingLayoutResult)
-            m_rayTracingState.m_refractionBindingLayout = Move(*refractionBindingLayoutResult);
-        else
-            m_rayTracingState.m_refractionBindingLayout.reset();
-        if(!refractionBindingLayoutResult)
-            return false;
-    }
-
-    if(!m_rayTracingState.m_refractionClassifyTilesPipeline){
-        if(!m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::refractionClassifyTilesCs, Core::ShaderArchive::s_DefaultVariant, s_RefractionClassifyTilesDebugName, m_rayTracingState.m_refractionClassifyTilesShader))
-            return false;
-        Core::ComputePipelineDesc desc;
-        desc.setComputeShader(m_rayTracingState.m_refractionClassifyTilesShader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto pipeline = device.createComputePipeline(desc);
-        if(!pipeline)
-            return false;
-        m_rayTracingState.m_refractionClassifyTilesPipeline = Move(*pipeline);
-    }
-    if(!m_rayTracingState.m_refractionFinalizeTilesPipeline){
-        if(!m_shaderSystem.loadShader<ComputeShader>(&RefractiveSubsystem::refractionFinalizeTilesCs, Core::ShaderArchive::s_DefaultVariant, s_RefractionFinalizeTilesDebugName, m_rayTracingState.m_refractionFinalizeTilesShader))
-            return false;
-        Core::ComputePipelineDesc desc;
-        desc.setComputeShader(m_rayTracingState.m_refractionFinalizeTilesShader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        auto pipeline = device.createComputePipeline(desc);
-        if(!pipeline)
-            return false;
-        m_rayTracingState.m_refractionFinalizeTilesPipeline = Move(*pipeline);
-    }
+    if(
+        !RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+            m_arena,
+            device,
+            m_shaderSystem,
+            &RefractiveSubsystem::refractionClassifyTilesCs,
+            Core::ShaderArchive::s_DefaultVariant,
+            s_RefractionClassifyTilesDebugName,
+            sizeof(RefractionPushConstants),
+            false,
+            m_rayTracingState.m_refractionBindingLayout,
+            m_rayTracingState.m_refractionClassifyTilesShader,
+            m_rayTracingState.m_refractionClassifyTilesPipeline
+        )
+        || !RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+            m_arena,
+            device,
+            m_shaderSystem,
+            &RefractiveSubsystem::refractionFinalizeTilesCs,
+            Core::ShaderArchive::s_DefaultVariant,
+            s_RefractionFinalizeTilesDebugName,
+            sizeof(RefractionPushConstants),
+            false,
+            m_rayTracingState.m_refractionBindingLayout,
+            m_rayTracingState.m_refractionFinalizeTilesShader,
+            m_rayTracingState.m_refractionFinalizeTilesPipeline
+        )
+    )
+        return false;
 
     if(m_refractionDiagnosticsEnabled && !m_refractionStatistics.prepareResources())
         return false;
@@ -85,21 +81,13 @@ b8 RendererRayTracingSystem::prepareRefractionResources(){
         if(failed)
             return false;
         const AStringView variant = ResolveRefractionVariant(hardware, diagnostics, csg, dense);
-        if(!m_shaderSystem.loadShader<ComputeShader>(hardware ? &RefractiveSubsystem::refractionResolveHwCs : &RefractiveSubsystem::refractionResolveScreenCs, variant, ResolveRefractionPipelineDebugName(hardware, dense), shader)){
+        if(
+            !m_shaderSystem.loadShader<ComputeShader>(hardware ? &RefractiveSubsystem::refractionResolveHwCs : &RefractiveSubsystem::refractionResolveScreenCs, variant, ResolveRefractionPipelineDebugName(hardware, dense), shader)
+            || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, shader, m_rayTracingState.m_refractionBindingLayout, hardware, pipeline)
+        ){
             failed = true;
             return false;
         }
-        Core::ComputePipelineDesc desc;
-        desc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_refractionBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        if(hardware)
-            desc.addBindingLayout(heap.getAccelStructLayout());
-        auto pipelineResult = device.createComputePipeline(desc);
-        if(!pipelineResult){
-            pipeline.reset();
-            failed = true;
-            return false;
-        }
-        pipeline = Move(*pipelineResult);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created refraction resolve pipeline ({}, {})"), hardware ? NWB_TEXT("hardware ray query") : NWB_TEXT("screen space"), dense ? NWB_TEXT("dense grid") : NWB_TEXT("sparse queue"));
         return true;
     };
@@ -116,10 +104,6 @@ b8 RendererRayTracingSystem::prepareRefractionResources(){
     if(hardwareReady && ensureRayTraceMaterialContextSlotsHeapHandle() && ensurePipeline(true, false) && ensurePipeline(true, true))
         m_rayTracingState.m_refractionUseHardwareTrace = true;
     return true;
-}
-
-void RendererRayTracingSystem::setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{
-    m_rayTracingState.m_refractionHardwareTracingEnabled = enabled;
 }
 
 RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionGraphResources(const u32 width, const u32 height, const u32 frameIndex)const noexcept{

@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_LightWhiteColorComponent = 1.0f;
+const f32 s_LightIntensity = 1.0f;
+const f32 s_LightRange = 10.0f;
+const f32 s_LightInnerConeCos = 0.95f;
+const f32 s_LightOuterConeCos = 0.90f;
+const f32 s_LightDirectionalAngularRadius = 0.00465f;
+const f32 s_LightPunctualSourceRadius = 0.1f;
+const b8 s_LightEnableCaustics = true;
+const f32 s_ConeCosineMin = -1.0f;
+const f32 s_ConeCosineMax = 1.0f;
+const f32 s_NormalizeLengthSquaredEpsilon = 0.0001f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidLightCone(in f32 innerConeCos, in f32 outerConeCos){
+    return isFinite(innerConeCos) && isFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> LightType{
+    Directional,
+    Point,
+    Spot,
+    kCount
+}
+
+[reflect]
+class SceneLight{
+    // xyz = world position (point/spot); w = spot inner cone cosine.
+    public f32x4 position(0.0f, 0.0f, 0.0f, 1.0f);
+    // Directional: direction toward light. Spot: emission axis. w = outer cone cosine.
+    public f32x4 direction(0.0f, 0.0f, -1.0f, 1.0f);
+    // xyz = color, w = intensity.
+    public f32x4 colorIntensity(s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightIntensity);
+    public f32 range = 0.0f;
+    // Soft-shadow source size: angular radius (radians) / punctual radius (world units).
+    public f32 angularRadius = s_LightDirectionalAngularRadius;
+    public f32 sourceRadius = s_LightPunctualSourceRadius;
+    public LightType type = LightType::Directional;
+    public b8 enableCaustics = s_LightEnableCaustics;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SceneLight MakeDefaultSceneLight(in f32x4 direction){
+    SceneLight out;
+    out.direction = direction;
+    out.colorIntensity = f32x4(1.0f, 1.0f, 1.0f, 1.0f);
+    return out;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

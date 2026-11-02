@@ -50,7 +50,6 @@ using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
-using NWB::Tests::Smoke::s_SmokeTwoPi;
 using NWB::Tests::Smoke::TickSmokeWorld;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
@@ -284,11 +283,11 @@ private:
     }
 
     void updateWindowTitle(){
-        f32 wrappedYaw = FMod(m_yaw.yaw(), s_SmokeTwoPi);
+        f32 wrappedYaw = FMod(m_yaw.yaw(), s_2PI);
         if(wrappedYaw < 0.0f)
-            wrappedYaw += s_SmokeTwoPi;
-        const f32 yawDegrees = wrappedYaw * (360.0f / s_SmokeTwoPi);
-        const f32 angleDegrees = ConfiguredAngularRadius() * 360.0f / s_SmokeTwoPi;
+            wrappedYaw += s_2PI;
+        const f32 yawDegrees = wrappedYaw * (360.0f / s_2PI);
+        const f32 angleDegrees = ConfiguredAngularRadius() * 360.0f / s_2PI;
 
         static constexpr usize s_TitleCapacity = 256u;
         Array<tchar, s_TitleCapacity> title{};

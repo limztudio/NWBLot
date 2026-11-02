@@ -44,7 +44,7 @@ namespace __hidden_pipeline{
     const Core::Assets::AssetRef<ComputeShader>& resolved = skinningSubsystem->*member;
     if(!resolved.valid())
         return false;
-    return ShaderAssetLoader::Load<ComputeShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, debugName, NWB_TEXT("MeshSkinningSystem"), graphics, assetManager, shaderPathResolver, shader);
+    return ShaderAssetLoader::Load<ComputeShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, debugName, NWB_TEXT("MeshSkinningSystem"), graphics, assetManager, shaderPathResolver, nullptr, shader);
 }
 
 [[nodiscard]] static b8 EnsurePushConstantBindingLayout(

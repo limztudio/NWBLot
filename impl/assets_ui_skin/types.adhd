@@ -53,42 +53,6 @@ enum<u8> UiSkinDrawMode{
     NineSlice
 }
 
-UiSkinRect MakeUiSkinRect(in u32 x, in u32 y, in u32 width, in u32 height){
-    UiSkinRect rect;
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-UiSkinSliceInsets MakeUiSkinSliceInsets(in u32 left, in u32 top, in u32 right, in u32 bottom){
-    UiSkinSliceInsets insets;
-    insets.left = left;
-    insets.top = top;
-    insets.right = right;
-    insets.bottom = bottom;
-    return insets;
-}
-
-UiSkinInsets MakeUiSkinInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
-    UiSkinInsets insets;
-    insets.left = left;
-    insets.top = top;
-    insets.right = right;
-    insets.bottom = bottom;
-    return insets;
-}
-
-UiSkinColor MakeUiSkinColor(in f32 r, in f32 g, in f32 b, in f32 a){
-    UiSkinColor color;
-    color.r = r;
-    color.g = g;
-    color.b = b;
-    color.a = a;
-    return color;
-}
-
 // Atlas rectangles and slice borders use top-left-origin pixels; padding and minimum sizes use logical units.
 [reflect]
 class UiSkinRect{
@@ -147,7 +111,7 @@ enum<u8> UiSkinColorRole{
     kCount
 }
 
-[reflect]
+[serialize, reflect]
 class UiSkinColor{
     public f32 r = 0.0f;
     public f32 g = 0.0f;
@@ -155,7 +119,7 @@ class UiSkinColor{
     public f32 a = 0.0f;
 }
 
-[reflect]
+[serialize, reflect]
 class UiSkinTypography{
     public f32 defaultFontSize = s_UiSkinDefaultFontSize;
 }
@@ -192,19 +156,6 @@ class UiSkinRegionBinary{
     public f32 minimumHeight = 0.0f;
     public u32 drawMode = 0u;
     public u32 reserved = 0u;
-}
-
-[serialize]
-class UiSkinColorBinary{
-    public f32 r = 0.0f;
-    public f32 g = 0.0f;
-    public f32 b = 0.0f;
-    public f32 a = 0.0f;
-}
-
-[serialize]
-class UiSkinTypographyBinary{
-    public f32 defaultFontSize = s_UiSkinDefaultFontSize;
 }
 
 const UiSkinColor s_DefaultTextNormalColor(0.92f, 0.94f, 0.98f, 1.0f);
@@ -465,16 +416,6 @@ b8 TryFindUiSkinRegionIndex(
     return true;
 }
 
-UiSkinHeaderBinary BuildUiSkinHeaderBinary(in NameHash textureNameHash, in u32 atlasWidth, in u32 atlasHeight, in f32 referenceDensity, in u32 regionCount){
-    UiSkinHeaderBinary header;
-    header.textureNameHash = textureNameHash;
-    header.atlasWidth = atlasWidth;
-    header.atlasHeight = atlasHeight;
-    header.referenceDensity = referenceDensity;
-    header.regionCount = regionCount;
-    return header;
-}
-
 UiSkinRegionBinary PackUiSkinRegionBinary(in UiSkinRegion region){
     UiSkinRegionBinary packed;
     packed.nameHash = region.name.hash();
@@ -518,36 +459,6 @@ UiSkinRegion UnpackUiSkinRegionBinary(in UiSkinRegionBinary packed){
     else
         region.drawMode = UiSkinDrawMode::Sprite;
     return region;
-}
-
-UiSkinColorBinary PackUiSkinColorBinary(in UiSkinColor color){
-    UiSkinColorBinary packed;
-    packed.r = color.r;
-    packed.g = color.g;
-    packed.b = color.b;
-    packed.a = color.a;
-    return packed;
-}
-
-UiSkinColor UnpackUiSkinColorBinary(in UiSkinColorBinary packed){
-    UiSkinColor color;
-    color.r = packed.r;
-    color.g = packed.g;
-    color.b = packed.b;
-    color.a = packed.a;
-    return color;
-}
-
-UiSkinTypographyBinary PackUiSkinTypographyBinary(in UiSkinTypography typography){
-    UiSkinTypographyBinary packed;
-    packed.defaultFontSize = typography.defaultFontSize;
-    return packed;
-}
-
-UiSkinTypography UnpackUiSkinTypographyBinary(in UiSkinTypographyBinary packed){
-    UiSkinTypography typography;
-    typography.defaultFontSize = packed.defaultFontSize;
-    return typography;
 }
 
 f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region){

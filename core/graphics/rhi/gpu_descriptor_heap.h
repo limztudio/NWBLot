@@ -100,41 +100,39 @@ static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "Gpu
 // Values connecting the generic descriptor heap to the shared shader ABI.
 // Core validates this payload without depending on the implementation-owned macro contract; stricter layout checks run at initialize().
 struct GpuDescriptorHeapAbi{
-    static constexpr u32 s_Unspecified = s_MaxU32;
-
-    u32 resourceSetIndex = s_Unspecified;
-    u32 samplerSetIndex = s_Unspecified;
-    u32 accelStructSetIndex = s_Unspecified;
-    u32 sampledImageBinding = s_Unspecified;
-    u32 storageImageBinding = s_Unspecified;
-    u32 sampledBufferBinding = s_Unspecified;
-    u32 storageBufferBinding = s_Unspecified;
-    u32 uniformBufferBinding = s_Unspecified;
-    u32 sampledImage2DArrayBinding = s_Unspecified;
-    u32 sampledImage3DBinding = s_Unspecified;
-    u32 sampledImage2DArrayUintBinding = s_Unspecified;
-    u32 sampledImageCubeBinding = s_Unspecified;
-    u32 samplerBinding = s_Unspecified;
-    u32 accelStructBinding = s_Unspecified;
+    u32 resourceSetIndex = s_MaxU32;
+    u32 samplerSetIndex = s_MaxU32;
+    u32 accelStructSetIndex = s_MaxU32;
+    u32 sampledImageBinding = s_MaxU32;
+    u32 storageImageBinding = s_MaxU32;
+    u32 sampledBufferBinding = s_MaxU32;
+    u32 storageBufferBinding = s_MaxU32;
+    u32 uniformBufferBinding = s_MaxU32;
+    u32 sampledImage2DArrayBinding = s_MaxU32;
+    u32 sampledImage3DBinding = s_MaxU32;
+    u32 sampledImage2DArrayUintBinding = s_MaxU32;
+    u32 sampledImageCubeBinding = s_MaxU32;
+    u32 samplerBinding = s_MaxU32;
+    u32 accelStructBinding = s_MaxU32;
 
 
 public:
     [[nodiscard]] constexpr b8 valid()const noexcept{
         return
-            resourceSetIndex != s_Unspecified
-            && samplerSetIndex != s_Unspecified
-            && accelStructSetIndex != s_Unspecified
-            && sampledImageBinding != s_Unspecified
-            && storageImageBinding != s_Unspecified
-            && sampledBufferBinding != s_Unspecified
-            && storageBufferBinding != s_Unspecified
-            && uniformBufferBinding != s_Unspecified
-            && sampledImage2DArrayBinding != s_Unspecified
-            && sampledImage3DBinding != s_Unspecified
-            && sampledImage2DArrayUintBinding != s_Unspecified
-            && sampledImageCubeBinding != s_Unspecified
-            && samplerBinding != s_Unspecified
-            && accelStructBinding != s_Unspecified
+            resourceSetIndex != s_MaxU32
+            && samplerSetIndex != s_MaxU32
+            && accelStructSetIndex != s_MaxU32
+            && sampledImageBinding != s_MaxU32
+            && storageImageBinding != s_MaxU32
+            && sampledBufferBinding != s_MaxU32
+            && storageBufferBinding != s_MaxU32
+            && uniformBufferBinding != s_MaxU32
+            && sampledImage2DArrayBinding != s_MaxU32
+            && sampledImage3DBinding != s_MaxU32
+            && sampledImage2DArrayUintBinding != s_MaxU32
+            && sampledImageCubeBinding != s_MaxU32
+            && samplerBinding != s_MaxU32
+            && accelStructBinding != s_MaxU32
         ;
     }
 };

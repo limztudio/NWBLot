@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_ui/components.adhd.h>
+#include <impl/ecs_ui/edit_types.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/model_snapshot.h>
 
 #include <core/os/text_input.h>
@@ -36,7 +36,7 @@ public:
         : m_service(service)
         , m_event(arena)
         , m_expectedModel(arena)
-        , m_publishedText(arena)
+        , m_publishedModel(arena)
     {}
     ~UiTextEditSession()noexcept;
 
@@ -44,12 +44,16 @@ public:
 public:
     [[nodiscard]] Core::TextInputAdmission::Enum begin(const UiTextEditOwner& owner, Core::TextInputRect caret, Ui::EditModel& model);
     // Only a model matching the last applied event can refresh the native snapshot; external edits require a new session.
-    [[nodiscard]] Core::TextInputAdmission::Enum refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret);
+    [[nodiscard]] Core::TextInputAdmission::Enum refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
+        return syncSession(owner, model, caret, Core::TextInputChangeCause::InputMethod, false);
+    }
     [[nodiscard]] UiTextEditResult drain(const UiTextEditOwner& owner, Ui::EditModel& model);
     // Collects an owned event without lending a model. The ordered host queue validates token and sequence.
     [[nodiscard]] Core::TextInputPollResult::Enum pollOwned(Core::TextInputEvent& event);
     // Explicitly trusts a synchronous local/ordered edit; refresh remains strict for ordinary callers.
-    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other);
+    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret, const Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other){
+        return syncSession(owner, model, caret, cause, true);
+    }
     [[nodiscard]] b8 end(const UiTextEditOwner& owner, Ui::EditModel& model);
     // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
     [[nodiscard]] b8 cancel();
@@ -60,12 +64,12 @@ public:
     [[nodiscard]] u64 surroundingRevision()const noexcept{ return m_token.valid() ? m_surroundingRevision : 0u; }
 
     [[nodiscard]] b8 matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const noexcept{
-        return m_token.valid() && m_owner == owner && m_expectedModel.matches(model) && matchesPublishedModel(model);
+        return m_token.valid() && m_owner == owner && m_expectedModel.matches(model) && m_publishedModel.matchesSurrounding(model);
     }
 
 
 private:
-    [[nodiscard]] b8 matchesPublishedModel(const Ui::EditModel& model)const noexcept;
+    [[nodiscard]] Core::TextInputAdmission::Enum syncSession(const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret, Core::TextInputChangeCause::Enum cause, b8 adoptExpected);
     [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(const Ui::EditModel& model, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod);
 
 
@@ -73,14 +77,9 @@ private:
     Core::ITextInputService& m_service;
     Core::TextInputEvent m_event;
     Ui::EditModelSnapshot m_expectedModel;
-    AString<Core::Alloc::GlobalArena> m_publishedText;
+    Ui::EditModelSnapshot m_publishedModel;
     UiTextEditOwner m_owner;
     Core::TextInputSessionToken m_token;
-    usize m_publishedAnchor = 0u;
-    usize m_publishedCaret = 0u;
-    u64 m_publishedModelRevision = 0u;
-    u64 m_publishedExternalRevision = 0u;
-    u64 m_publishedSelectionGeneration = 0u;
     u64 m_surroundingRevision = 0u;
     u64 m_lastSequence = 0u;
 };

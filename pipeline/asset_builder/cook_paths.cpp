@@ -9,6 +9,7 @@
 
 
 #include "build.h"
+#include "../root_discovery.h"
 
 #include <core/common/log.h>
 
@@ -42,13 +43,10 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     if(!options.resolvedRepoRoot.empty())
         paths.repoRoot = options.resolvedRepoRoot;
     else{
-        const Path requestedRepoRoot(arena, options.repoRoot.empty() ? s_DefaultRepoRoot : AStringView(options.repoRoot));
-        auto repoRoot = AbsolutePath(requestedRepoRoot);
-        if(!repoRoot){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), ConvertString(repoRoot.error().message()));
+        auto repoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), NWB_TEXT("AssetBuilder"), arena);
+        if(!repoRoot)
             return MakeUnexpected(Failure{});
-        }
-        paths.repoRoot = repoRoot->lexicallyNormal();
+        paths.repoRoot = Move(*repoRoot);
     }
 
     paths.assetRoots.reserve(options.assetRoots.size());

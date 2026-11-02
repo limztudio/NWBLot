@@ -23,36 +23,48 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShaderArchive{
-public:
-    static constexpr StringView s_IndexVirtualPath = "shader/index.bin";
-    static constexpr StringView s_DefaultVariant = "default";
-    inline static constexpr Name s_IndexVirtualPathName = Name(s_IndexVirtualPath);
+namespace ShaderArchive{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr StringView s_IndexVirtualPath = "shader/index.bin";
+inline constexpr StringView s_DefaultVariant = "default";
+inline constexpr Name s_IndexVirtualPathName = Name(s_IndexVirtualPath);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct Record{
+    Name shaderName = s_NameNone;
+    GraphicsString variantName;
+    Name stage = s_NameNone;
+    u64 sourceChecksum = 0;
+    u64 bytecodeChecksum = 0;
+    NameHash virtualPathHash = {};
 
 
 public:
-    struct Record{
-        Name shaderName = s_NameNone;
-        GraphicsString variantName;
-        Name stage = s_NameNone;
-        u64 sourceChecksum = 0;
-        u64 bytecodeChecksum = 0;
-        NameHash virtualPathHash = {};
+    explicit Record(GraphicsArena& arena)noexcept
+        : variantName(arena)
+    {}
+};
 
 
-    public:
-        explicit Record(GraphicsArena& arena)noexcept
-            : variantName(arena)
-        {}
-    };
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-public:
-    [[nodiscard]] static const Name& IndexVirtualPathName()noexcept{ return s_IndexVirtualPathName; }
-    [[nodiscard]] static Expected<Name> BuildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
-    [[nodiscard]] static Expected<GraphicsBytes> SerializeIndex(Span<const Record> records, GraphicsArena& arena, Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<GraphicsVector<Record>> DeserializeIndex(GraphicsArena& arena, BinaryByteView binary);
-    [[nodiscard]] static Expected<Name> FindVirtualPath(Span<const Record> records, const Name& shaderName, AStringView variantName, const Name& stageName);
+[[nodiscard]] Expected<Name> BuildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
+[[nodiscard]] Expected<GraphicsBytes> SerializeIndex(Span<const Record> records, GraphicsArena& arena, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<GraphicsVector<Record>> DeserializeIndex(GraphicsArena& arena, BinaryByteView binary);
+[[nodiscard]] Expected<Name> FindVirtualPath(Span<const Record> records, const Name& shaderName, AStringView variantName, const Name& stageName);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

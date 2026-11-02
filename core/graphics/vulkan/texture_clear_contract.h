@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <core/graphics/backend_selection/texture_contract_types.h>
+
 #include "texture_resource_detail.h"
 
 
@@ -22,30 +24,6 @@ namespace VulkanTextureDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace TextureClearValueKind{
-    static constexpr u8 s_TextureClearValueKindFloatBase = 0u;
-    enum Enum : u8{
-        Float = s_TextureClearValueKindFloatBase,
-        UInt,
-        Int,
-        DepthStencil,
-    };
-};
-
-namespace TextureClearQueueRequirement{
-    static constexpr u8 s_TextureClearQueueRequirementTransferBase = 0u;
-    enum Enum : u8{
-        Transfer = s_TextureClearQueueRequirementTransferBase,
-        ComputeOrGraphics,
-        Graphics,
-    };
-};
-
-struct TextureClearContract{
-    TextureSubresourceSet subresources;
-    TextureClearQueueRequirement::Enum queueRequirement = TextureClearQueueRequirement::Transfer;
-};
 
 [[nodiscard]] constexpr b8 TextureClearStagedEncodingSupportsFormat(const Format::Enum format)noexcept{
     return format >= Format::BC1_UNORM && format <= Format::BC5_SNORM;
@@ -104,6 +82,17 @@ struct TextureClearContract{
     return Box(Max<i32>(0, Min<i32>(box.minX, width)), Max<i32>(0, Min<i32>(box.maxX, width)), Max<i32>(0, Min<i32>(box.minY, height)), Max<i32>(0, Min<i32>(box.maxY, height)), Max<i32>(0, Min<i32>(box.minZ, depth)), Max<i32>(0, Min<i32>(box.maxZ, depth)));
 }
 
+[[nodiscard]] inline b8 BoxCoversWholeMipExtent(const TextureDesc& description, const MipLevel mipLevel, const Box& resolvedBox)noexcept{
+    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(description, mipLevel);
+    return resolvedBox.minX == 0
+        && resolvedBox.minY == 0
+        && resolvedBox.minZ == 0
+        && resolvedBox.maxX == static_cast<i32>(mipExtent.width)
+        && resolvedBox.maxY == static_cast<i32>(mipExtent.height)
+        && resolvedBox.maxZ == static_cast<i32>(mipExtent.depth)
+    ;
+}
+
 [[nodiscard]] inline TextureClearQueueRequirement::Enum TextureClearBoxQueueRequirement(const TextureDesc& description, const TextureSubresourceSet& subresources, const Box& box)noexcept{
     const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
     for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
@@ -111,8 +100,7 @@ struct TextureClearContract{
         if(TextureClearBoxEmpty(resolvedBox))
             continue;
 
-        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(description, mipLevel);
-        if(resolvedBox.minX != 0 || resolvedBox.minY != 0 || resolvedBox.minZ != 0 || resolvedBox.maxX != static_cast<i32>(mipExtent.width) || resolvedBox.maxY != static_cast<i32>(mipExtent.height) || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth))
+        if(!BoxCoversWholeMipExtent(description, mipLevel, resolvedBox))
             return TextureClearQueueRequirement::ComputeOrGraphics;
     }
     return TextureClearQueueRequirement::Transfer;
@@ -122,29 +110,10 @@ struct TextureClearContract{
     const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
     for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
         const Box resolvedBox = ResolveTextureClearBox(description, mipLevel, box);
-        if(TextureClearBoxEmpty(resolvedBox))
-            return false;
-
-        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(description, mipLevel);
-        if(resolvedBox.minX != 0 || resolvedBox.minY != 0 || resolvedBox.minZ != 0 || resolvedBox.maxX != static_cast<i32>(mipExtent.width) || resolvedBox.maxY != static_cast<i32>(mipExtent.height) || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth))
+        if(TextureClearBoxEmpty(resolvedBox) || !BoxCoversWholeMipExtent(description, mipLevel, resolvedBox))
             return false;
     }
     return true;
-}
-
-[[nodiscard]] inline b8 TextureClearQueueRequirementSatisfied(const TextureClearQueueRequirement::Enum requirement, const GpuQueueCapability::Mask declaredCapabilities, const GpuQueueCapability::Mask physicalCapabilities)noexcept{
-    const u8 declaredBits = static_cast<u8>(declaredCapabilities);
-    const u8 physicalBits = static_cast<u8>(physicalCapabilities);
-    switch(requirement){
-    case TextureClearQueueRequirement::Transfer:
-        return (declaredBits & physicalBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
-    case TextureClearQueueRequirement::ComputeOrGraphics:
-        return (declaredBits & physicalBits & static_cast<u8>(GpuQueueCapability::Compute | GpuQueueCapability::Graphics)) != 0u;
-    case TextureClearQueueRequirement::Graphics:
-        return (declaredBits & physicalBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-    default:
-        return false;
-    }
 }
 
 
@@ -152,6 +121,9 @@ struct TextureClearContract{
 
 
 };
+
+using VulkanTextureDetail::ResolveTextureClearContract;
+using VulkanTextureDetail::TextureClearBoxQueueRequirement;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

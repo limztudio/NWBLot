@@ -62,7 +62,7 @@ void AppendPascalCaseSegment(const MStringView segment, MString& out){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions){
+b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions, MetaArena& arena, CompileResult& outResult){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
     Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver, false);
@@ -175,5 +175,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

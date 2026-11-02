@@ -59,9 +59,8 @@ namespace __hidden_task_graph_light_space_shadow{
         appendRead(use);
     for(const Core::GpuTaskResourceSetUse& use : inputs.sceneReadSets){
         const Core::GpuTaskGraphResourceSetView members = declarations.resourceSetAt(use.resourceSet.index);
-        for(usize member = 0u; member < members.memberCount; ++member){
+        for(usize member = 0u; member < members.memberCount; ++member)
             appendRead(Core::GpuTaskResourceUse{ .resource = members.members[member], .range = use.range, .requiredState = use.requiredState, .access = use.access, .hasIndependentStateSource = use.hasIndependentStateSource, });
-        }
     }
     for(const auto& caster : inputs.snapshot.casters){
         // The scene geometry importer already retains this exact frozen canonical index buffer.

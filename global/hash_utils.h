@@ -16,6 +16,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_Fnv32OffsetBasis = 2166136261u;
+inline constexpr u32 s_Fnv32Prime = 16777619u;
 inline constexpr u64 s_Fnv64OffsetBasis = 14695981039346656037ull;
 inline constexpr u64 s_Fnv64Prime = 1099511628211ull;
 inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
@@ -26,6 +28,17 @@ inline constexpr usize s_HashCombineRightShift = 2u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] inline constexpr u32 UpdateFnv32Byte(const u32 hash, const u8 byte)noexcept{
+    return (hash ^ byte) * s_Fnv32Prime;
+}
+
+[[nodiscard]] inline constexpr u32 ComputeFnv32TextHash(const AStringView text)noexcept{
+    u32 hash = s_Fnv32OffsetBasis;
+    for(const char value : text)
+        hash = UpdateFnv32Byte(hash, static_cast<u8>(value));
+    return hash;
+}
 
 [[nodiscard]] inline constexpr u64 UpdateFnv64Byte(const u64 hash, const u8 byte)noexcept{
     return (hash ^ byte) * s_Fnv64Prime;

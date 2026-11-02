@@ -235,7 +235,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
                 rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
                 return false;
             }
-            VulkanTextureDetail::FillTextureClearBytes(stagingBytes, uploadLayout.clearByteCount, clearPattern);
+            VulkanTextureDetail::FillTextureClearBytes(uploadLayout.clearByteCount, clearPattern, stagingBytes);
 
             Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
             VulkanTextureDetail::BuildArrayLayerBufferImageCopies(resolvedSubresources, aspect, mipLevel, mipPlan.resolvedBox, stagingOffset, uploadLayout, regions);

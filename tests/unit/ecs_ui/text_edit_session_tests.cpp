@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/text_edit_session.h>
+#include "edit_host_fixture_support.h"
 
-#include <core/os/text_input_service.h>
+#include <impl/ecs_ui/text_edit_session.h>
 
 #include <tests/common/test_context.h>
 
@@ -23,27 +23,7 @@ namespace __hidden_ui_text_edit_session_tests{
 using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
-
-class FakeTextInput final : public QueuedTextInputService{
-public:
-    explicit FakeTextInput(Alloc::GlobalArena& arena)
-        : QueuedTextInputService(arena)
-    {}
-
-
-public:
-    [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
-
-    [[nodiscard]] TextInputAdmission::Enum commit(AStringView text){ return emitCommit(activeSession(), text); }
-
-    [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, b8 visible = true){
-        return emitPreedit(activeSession(), text, anchor, caret, visible);
-    }
-
-    [[nodiscard]] TextInputAdmission::Enum erase(usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis){
-        return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
-    }
-};
+using UiEditHostFixtureSupport::FakeTextInput;
 
 inline constexpr UiTextEditOwner s_Owner{ { 17u }, 1u, 1u };
 inline constexpr TextInputRect s_Caret{ 100, 32, 1, 18 };

@@ -466,7 +466,7 @@ template<typename ArenaT>
 
 // The caller owns g_State.mutex and has completed its normal-context mutation.
 void PublishCrashStateSnapshot()noexcept;
-void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
+void SnapshotCrashState(CrashReasonKind::Enum reasonKind, u32 reasonCode, CrashRequest& outRequest)noexcept;
 void SuppressNextPlatformCrashCapture()noexcept;
 [[nodiscard]] b8 TryConsumeSuppressedPlatformCrashCapture()noexcept;
 void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept;

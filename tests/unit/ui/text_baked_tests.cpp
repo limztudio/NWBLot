@@ -11,6 +11,7 @@
 #include <global/simdmath.h>
 
 #include "baked_font_fixture.h"
+#include "widget_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -28,8 +29,8 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
-constexpr AStringView s_LatinFontPath = "tests/ui/fonts/latin";
-constexpr AStringView s_SkinPath = "tests/ui/skin";
+using UiWidgetTests::s_TestLatinFontPath;
+using UiWidgetTests::s_TestSkinPath;
 constexpr AStringView s_SampleGlyphText = "A";
 
 class TextBakedTests : public testing::Test{
@@ -38,11 +39,11 @@ public:
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
         , m_arena(Name("tests/ui/text/baked"))
         , m_scratchArena(Name("tests/ui/text/baked_scratch"))
-        , m_font(m_arena, Name(s_LatinFontPath))
+        , m_font(m_arena, Name(s_TestLatinFontPath))
         , m_atlas(m_arena, Name("tests/ui/fonts/latin_atlas"))
         , m_text(m_arena)
         , m_layout(m_arena)
-        , m_skin(m_arena, Name(s_SkinPath))
+        , m_skin(m_arena, Name(s_TestSkinPath))
         , m_paint(m_arena)
     {}
 
@@ -50,7 +51,7 @@ public:
 protected:
     virtual void SetUp()override{
         ASSERT_TRUE(Tests::LoadBundledFont(m_font, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
-        const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_font, 1u };
+        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u };
         ASSERT_TRUE(m_text.setFonts(m_scratchArena, Span(&source, 1u)));
         {
             auto layoutResult = m_text.layout({ .text = "A ", .fontSize = 24.f });
@@ -97,12 +98,12 @@ protected:
     }
 
     [[nodiscard]] b8 installAtlas(){
-        const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_font, 1u, &m_atlas };
+        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u, &m_atlas };
         return m_text.setFonts(m_scratchArena, Span(&source, 1u));
     }
 
     [[nodiscard]] DrawSnapshot paint(f32 scale = 1.f){
-        m_paint.begin({ 800.f, 600.f, scale, scale }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
+        m_paint.begin({ 800.f, 600.f, scale, scale }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         EXPECT_TRUE(m_text.paint(m_paint, m_layout, { 20.f, 20.f }));
         return m_paint.freeze();
     }
@@ -142,7 +143,7 @@ TEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace){
     const DrawSnapshot snapshot = paint();
     EXPECT_TRUE(snapshot.sdfPages().empty());
     EXPECT_FALSE(snapshot.glyphPages().empty());
-    EXPECT_EQ(m_layout.glyphs()[0u].face->identity().name(), Name(s_LatinFontPath));
+    EXPECT_EQ(m_layout.glyphs()[0u].face->identity().name(), Name(s_TestLatinFontPath));
 }
 
 TEST_F(TextBakedTests, LogicalFontIdentityMustMatchEvenWhenTheBytesMatch){
@@ -172,7 +173,7 @@ TEST_F(TextBakedTests, OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndA
     const SharedBakedFontAtlas retained = m_layout.glyphs()[0u].face->bakedAtlas();
     const DrawSnapshot first = paint();
     ASSERT_EQ(first.sdfPages().size(), 1u);
-    const FontSource source{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_font, 2u };
+    const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 2u };
     ASSERT_TRUE(m_text.setFonts(m_scratchArena, Span(&source, 1u)));
     m_atlas.setPayload(FontAtlasPayload(m_arena));
     const DrawSnapshot second = paint();

@@ -180,6 +180,13 @@ Rect IntersectUiRectsBounds(in Rect lhs, in Rect rhs){
     return Rect(origin.x, origin.y, size.x, size.y);
 }
 
+Rect InsetUiRectBounds(in Rect rectangle, in Insets padding){
+    const f32x4 origin = f32x4(rectangle.x, rectangle.y, 0.0f, 0.0f) + f32x4(padding.left, padding.top, 0.0f, 0.0f);
+    const f32x4 extent = f32x4(rectangle.width, rectangle.height, 0.0f, 0.0f) - f32x4(padding.left, padding.top, 0.0f, 0.0f) - f32x4(padding.right, padding.bottom, 0.0f, 0.0f);
+    const f32x4 size = max(f32x4(0.0f, 0.0f, 0.0f, 0.0f), extent);
+    return Rect(origin.x, origin.y, size.x, size.y);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

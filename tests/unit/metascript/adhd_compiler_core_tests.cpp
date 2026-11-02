@@ -523,6 +523,17 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
         "Expected<i32, Failure, u8> badExpected() { return 0; }\r\n";
     CompileResult badExpectedRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_BadExpectedThreeArgs, "impl/bad_expected_args.adhd", arena.arena, badExpectedRes));
+
+    static constexpr MStringView s_NativeBlockParamNoShadowForwardDecl =
+        "native{\r\n"
+        "#include <impl/assets_ui_skin/asset.h>\r\n"
+        "}\r\n"
+        "b8 checkSkin(in UiSkin skin, in Name region) {\r\n"
+        "    return skin.hasRegion(region);\r\n"
+        "}\r\n";
+    CompileResult nativeParamRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_NativeBlockParamNoShadowForwardDecl, "impl/ecs_ui/skin_check.adhd", arena.arena, nativeParamRes));
+    EXPECT_EQ(MStringView(nativeParamRes.generatedHeader.data(), nativeParamRes.generatedHeader.size()).find("class UiSkin;"), MStringView::npos);
 }
 
 

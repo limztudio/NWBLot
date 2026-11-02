@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
-#include "selectable_paint.h"
 
 #include <global/simplemath.h>
 
@@ -213,7 +212,7 @@ b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const Scroll
         if(!rectangle)
             return false;
         const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
-        if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, row.text, row.textBounds, frame.style.row.padding, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
+        if(!PaintSelectable(m_paint, m_text, *m_skin, row.text, row.textBounds, frame.style.row.padding, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
             return false;
         if(item.enabled){
             HitTarget target;

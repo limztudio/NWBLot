@@ -70,6 +70,14 @@ public:
     [[nodiscard]] const UiSkinPalette& palette()const noexcept{ return m_palette; }
     [[nodiscard]] const UiSkinTypography& typography()const noexcept{ return m_typography; }
     [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const noexcept;
+    [[nodiscard]] b8 hasRegion(const Name& name)const noexcept{ return findRegion(name) != nullptr; }
+    [[nodiscard]] b8 tryFindRegion(const Name& name, UiSkinRegion& outRegion)const noexcept{
+        const UiSkinRegion* const region = findRegion(name);
+        if(!region)
+            return false;
+        outRegion = *region;
+        return true;
+    }
 
 
 private:
@@ -86,6 +94,9 @@ private:
     UiSkinPalette m_palette;
     UiSkinTypography m_typography;
 };
+
+// The stock widget styles use this fixed region contract. Generic UiSkin assets may contain fewer regions.
+[[nodiscard]] b8 ValidateUiSkinToolkitContract(const UiSkin& skin);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

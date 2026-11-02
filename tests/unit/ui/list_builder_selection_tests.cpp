@@ -4,8 +4,6 @@
 
 #include "list_builder_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/selectable_paint.h>
-
 #include <global/simdmath.h>
 
 

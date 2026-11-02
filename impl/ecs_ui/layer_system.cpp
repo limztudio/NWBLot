@@ -4,8 +4,6 @@
 
 #include "layer_system.h"
 
-#include <impl/assets_ui_skin/toolkit_contract.h>
-
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 

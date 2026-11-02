@@ -3,7 +3,6 @@
 
 
 #include <impl/assets_ui_skin/cook.h>
-#include <impl/assets_ui_skin/toolkit_contract.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>

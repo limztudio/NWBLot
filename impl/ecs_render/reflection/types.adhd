@@ -219,6 +219,38 @@ class ReflectionStatistics{
     public b8 schedulingCounterValid = false;
 }
 
+void CopyReflectionDiagnosticCounters(in Span<u32> completedCounters, in ReflectionStatistics metadata, mut ReflectionStatistics latest){
+    latest.candidates = completedCounters[0u];
+    latest.hardwareRays = completedCounters[1u];
+    latest.exteriorEligibleRays = completedCounters[23u];
+    latest.hardwareHits = completedCounters[2u];
+    latest.opaquePixels = completedCounters[3u];
+    latest.glassPixels = completedCounters[4u];
+    latest.fallbackPixels = completedCounters[5u];
+    latest.screenAttempts = completedCounters[6u];
+    latest.screenHits = completedCounters[7u];
+    latest.queryBudgetUnits = completedCounters[8u];
+    if(metadata.csgHardwareEnabled)
+        latest.physicalQueries = completedCounters[24u];
+    else
+        latest.physicalQueries = latest.queryBudgetUnits;
+    latest.bootstrapEvents = completedCounters[9u];
+    latest.transparentPaths = completedCounters[10u];
+    latest.unsupportedPaths = completedCounters[11u];
+    latest.limitedPaths = completedCounters[12u];
+    latest.ambiguousPaths = completedCounters[13u];
+    latest.tirEvents = completedCounters[14u];
+    latest.mediumOverflowPaths = completedCounters[15u];
+    latest.potentialReceivers = completedCounters[16u];
+    latest.screenReturns = completedCounters[17u];
+    latest.feedbackBypassedPixels = completedCounters[18u];
+    latest.feedbackProbeTiles = completedCounters[19u];
+    const u64 screenIterationsLow = cast<u64>(completedCounters[20u]);
+    const u64 screenIterationsHigh = cast<u64>(completedCounters[21u]);
+    latest.screenIterations = screenIterationsLow | (screenIterationsHigh << s_ReflectionCounterHighWordShiftBits);
+    latest.screenLimitMisses = completedCounters[22u];
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -217,6 +217,75 @@ class UiSkinRequiredRegion{
     public StringView text;
 }
 
+const usize s_UiSkinRequiredRegionCount = 30u;
+
+UiSkinRequiredRegion ResolveUiSkinRequiredRegion(in usize index){
+    switch(index){
+    case 0u:
+        return UiSkinRequiredRegion(Name("panel.normal"), "panel.normal");
+    case 1u:
+        return UiSkinRequiredRegion(Name("window.normal"), "window.normal");
+    case 2u:
+        return UiSkinRequiredRegion(Name("window.title"), "window.title");
+    case 3u:
+        return UiSkinRequiredRegion(Name("window.collapse"), "window.collapse");
+    case 4u:
+        return UiSkinRequiredRegion(Name("separator"), "separator");
+    case 5u:
+        return UiSkinRequiredRegion(Name("button.normal"), "button.normal");
+    case 6u:
+        return UiSkinRequiredRegion(Name("checkbox.normal"), "checkbox.normal");
+    case 7u:
+        return UiSkinRequiredRegion(Name("checkbox.mark"), "checkbox.mark");
+    case 8u:
+        return UiSkinRequiredRegion(Name("edit.normal"), "edit.normal");
+    case 9u:
+        return UiSkinRequiredRegion(Name("list.background"), "list.background");
+    case 10u:
+        return UiSkinRequiredRegion(Name("list.row.normal"), "list.row.normal");
+    case 11u:
+        return UiSkinRequiredRegion(Name("list.row.hover"), "list.row.hover");
+    case 12u:
+        return UiSkinRequiredRegion(Name("list.row.selected"), "list.row.selected");
+    case 13u:
+        return UiSkinRequiredRegion(Name("list.row.disabled"), "list.row.disabled");
+    case 14u:
+        return UiSkinRequiredRegion(Name("scroll.track"), "scroll.track");
+    case 15u:
+        return UiSkinRequiredRegion(Name("scroll.thumb"), "scroll.thumb");
+    case 16u:
+        return UiSkinRequiredRegion(Name("scrollbar.track"), "scrollbar.track");
+    case 17u:
+        return UiSkinRequiredRegion(Name("scrollbar.thumb.normal"), "scrollbar.thumb.normal");
+    case 18u:
+        return UiSkinRequiredRegion(Name("popup.normal"), "popup.normal");
+    case 19u:
+        return UiSkinRequiredRegion(Name("tooltip.normal"), "tooltip.normal");
+    case 20u:
+        return UiSkinRequiredRegion(Name("combo.normal"), "combo.normal");
+    case 21u:
+        return UiSkinRequiredRegion(Name("combo.arrow"), "combo.arrow");
+    case 22u:
+        return UiSkinRequiredRegion(Name("radio.normal"), "radio.normal");
+    case 23u:
+        return UiSkinRequiredRegion(Name("radio.checked"), "radio.checked");
+    case 24u:
+        return UiSkinRequiredRegion(Name("radio.mark"), "radio.mark");
+    case 25u:
+        return UiSkinRequiredRegion(Name("slider.track"), "slider.track");
+    case 26u:
+        return UiSkinRequiredRegion(Name("slider.thumb.normal"), "slider.thumb.normal");
+    case 27u:
+        return UiSkinRequiredRegion(Name("progress.track"), "progress.track");
+    case 28u:
+        return UiSkinRequiredRegion(Name("progress.fill"), "progress.fill");
+    case 29u:
+        return UiSkinRequiredRegion(Name("focus.overlay"), "focus.overlay");
+    default:
+        return UiSkinRequiredRegion();
+    }
+}
+
 b8 IsAllowedUiSkinMetadataField(in StringView field){
     return
         field == s_UiSkinTextureField

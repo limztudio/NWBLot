@@ -4,8 +4,6 @@
 
 #include "builder.h"
 
-#include "widgets/selectable_paint.h"
-
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -247,7 +245,7 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
     SIMDVectorSingle minimum = VectorZero();
     SIMDVectorSingle measured = VectorSet(item.textBounds.width, item.textBounds.height, item.textBounds.width, item.textBounds.height);
     if(kind == WidgetKind::Selectable){
-        const auto metrics = SelectablePainter::Measure(*m_skin, m_listStyle.row);
+        const auto metrics = MeasureSelectable(*m_skin, m_listStyle.row);
         if(!metrics){
             m_context.fail();
             return MakeUnexpected(Failure{});

@@ -40,9 +40,7 @@ void RefractionStatisticsState::complete(const StatisticsReservationKey& key, co
         token,
         counters,
         [](RefractionStatistics& latest, [[maybe_unused]] const RefractionStatistics& metadata, const Span<const u32> completedCounters)noexcept{
-#define NWB_REFRACTION_READ_COUNTER(name, offset) latest.name = completedCounters[offset / sizeof(u32)];
-            NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_REFRACTION_READ_COUNTER)
-#undef NWB_REFRACTION_READ_COUNTER
+            CopyRefractionDiagnosticCounters(completedCounters, latest);
         }
     );
 }

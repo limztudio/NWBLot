@@ -4,8 +4,6 @@
 
 #include "list_builder_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/selectable_paint.h>
-
 #include <global/simdmath.h>
 
 
@@ -67,7 +65,7 @@ TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixel
     EXPECT_NEAR(tall->rectangle.y, static_cast<f64>(placement.viewport.y) - within, 0.0001);
     EXPECT_DOUBLE_EQ(m_state.scrollOffset(), static_cast<f64>(m_source.specialIndex) * grown + within);
     EXPECT_DOUBLE_EQ(placement.contentHeight, static_cast<f64>(m_source.count) * grown);
-    const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+    const auto metrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
     const auto layout = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
     ASSERT_TRUE(metrics);
     ASSERT_TRUE(layout);
@@ -132,7 +130,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         ASSERT_NE(target(row(1u)), nullptr);
         const f32 refreshed = target(row(1u))->rectangle.height;
         EXPECT_LT(refreshed, grown);
-        const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+        const auto metrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
         ASSERT_TRUE(metrics);
         f32 expected = metrics->minimum.y;
         const StringView language = change == 3u ? "ko" : "en";
@@ -268,7 +266,7 @@ TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScr
     m_source.specialIndex = 1u;
     ListOptions options = Options();
     options.height = { LayoutSizePolicy::Content, 0.0f };
-    const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+    const auto metrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
     const auto ordinary = m_text.layout({ .text = s_FirstRowText, .fontSize = m_builder.style().fontSize });
     const auto tall = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
     ASSERT_TRUE(metrics);

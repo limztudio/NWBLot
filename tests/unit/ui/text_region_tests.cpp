@@ -7,7 +7,6 @@
 #include "combo_fixture.h"
 
 #include <impl/ecs_ui/toolkit/widgets/label.h>
-#include <impl/ecs_ui/toolkit/widgets/selectable_paint.h>
 
 #include <core/alloc/scratch.h>
 
@@ -185,7 +184,7 @@ protected:
     void checkIntrinsicRowCoverage(const b8 popup, const f32 fontSize, const DisplayMetrics& display, const u64 generation, IntrinsicRowSource& source, ListState& list, ComboState& combo){
         SCOPED_TRACE(testing::Message() << "popup=" << popup << ", fontSize=" << fontSize << ", scale=" << display.pixelScaleX << "/" << display.pixelScaleY);
         m_builder.style().fontSize = fontSize;
-        const auto rowMetrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
+        const auto rowMetrics = MeasureSelectable(m_skin, m_builder.listStyle().row);
         ASSERT_TRUE(rowMetrics);
         ASSERT_TRUE(begin(generation, display));
         ASSERT_TRUE(m_builder.beginPanel("rows_panel", { 10.0f, 20.0f, 600.0f, 540.0f }));
@@ -726,7 +725,7 @@ TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithout
     ASSERT_TRUE(m_skin.validatePayload());
     m_builder.setSkin(m_skin);
     const SelectableStyle style;
-    const auto metrics = SelectablePainter::Measure(m_skin, style);
+    const auto metrics = MeasureSelectable(m_skin, style);
     ASSERT_TRUE(metrics);
     EXPECT_FLOAT_EQ(metrics->padding.left, 9.0f);
     EXPECT_FLOAT_EQ(metrics->padding.top, 11.0f);
@@ -743,7 +742,7 @@ TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithout
     u64 generation = 1u;
     for(const SelectablePaintFlags flags : { SelectablePaintFlags{}, SelectablePaintFlags{ true, false, true, false }, SelectablePaintFlags{ true, true, false, false }, SelectablePaintFlags{ false, false, false, false } }){
         m_paint.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, generation++, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        ASSERT_TRUE(SelectablePainter::Paint(m_paint, m_text, m_skin, *layout, *textBounds, metrics->padding, { 20.0f, 30.0f, 180.0f, 70.0f }, { 0.0f, 0.0f, 800.0f, 600.0f }, style, flags, {}, {}));
+        ASSERT_TRUE(PaintSelectable(m_paint, m_text, m_skin, *layout, *textBounds, metrics->padding, { 20.0f, 30.0f, 180.0f, 70.0f }, { 0.0f, 0.0f, 800.0f, 600.0f }, style, flags, {}, {}));
         const DrawSnapshot snapshot = m_paint.freeze();
         ExpectGlyphRegion(snapshot, { 29.0f, 41.0f, 158.0f, 44.0f });
         Vector<Vertex, Core::Alloc::ScratchArena> glyphs(scratch);

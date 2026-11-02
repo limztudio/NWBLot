@@ -8,6 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
+}
+
+
 class SelectableStyle{
     public Name normal = Name("list.row.normal");
     public Name hover = Name("list.row.hover");
@@ -165,6 +172,93 @@ b8 TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 m
         return false;
     outOffset = candidate;
     return true;
+}
+
+b8 TryResolveSelectableStateRegion(in UiSkin skin, in Name preferred, in Name fallback, mut UiSkinRegion outRegion){
+    if(skin.tryFindRegion(preferred, outRegion))
+        return true;
+    return skin.tryFindRegion(fallback, outRegion);
+}
+
+b8 AccumulateSelectableStateMetrics(in UiSkin skin, in Name preferred, in Name fallback, mut SelectableMetrics metrics){
+    UiSkinRegion region;
+    if(!TryResolveSelectableStateRegion(skin, preferred, fallback, region))
+        return false;
+    const Insets padding(region.padding.left, region.padding.top, region.padding.right, region.padding.bottom);
+    const Point minimum(region.minimumWidth, region.minimumHeight);
+    if(!IsBoundedUiPadding(padding) || !IsValidUiExtent(minimum))
+        return false;
+    metrics.padding = MaxUiPadding(metrics.padding, padding);
+    metrics.minimum = Point(max(metrics.minimum.x, minimum.x), max(metrics.minimum.y, minimum.y));
+    return true;
+}
+
+Expected<SelectableMetrics> MeasureSelectable(in UiSkin skin, in SelectableStyle style){
+    if(!IsBoundedUiPadding(style.padding))
+        return makeUnexpected(Failure());
+    SelectableMetrics metrics;
+    metrics.padding = style.padding;
+    if(
+        !AccumulateSelectableStateMetrics(skin, style.normal, style.fallback, metrics)
+        || !AccumulateSelectableStateMetrics(skin, style.hover, style.hoverFallback, metrics)
+        || !AccumulateSelectableStateMetrics(skin, style.selected, style.selectedFallback, metrics)
+        || !AccumulateSelectableStateMetrics(skin, style.disabled, style.disabledFallback, metrics)
+        || !IsBoundedUiPadding(metrics.padding)
+    )
+        return makeUnexpected(Failure());
+    return metrics;
+}
+
+// Use the same display-scale visual bounds and resolved padding that sized the control.
+b8 PaintSelectable(
+    mut PaintBuilder paint,
+    mut TextService text,
+    in UiSkin skin,
+    in TextLayout layout,
+    in Rect textBounds,
+    in Insets padding,
+    in Rect bounds,
+    in Rect clip,
+    in SelectableStyle style,
+    in SelectablePaintFlags flags,
+    in Color textColor,
+    in Color disabledTextColor
+){
+    Name preferred = style.normal;
+    Name fallback = style.fallback;
+    if(!flags.enabled){
+        preferred = style.disabled;
+        fallback = style.disabledFallback;
+    }
+    else if(flags.selected){
+        preferred = style.selected;
+        fallback = style.selectedFallback;
+    }
+    else if(flags.hover){
+        preferred = style.hover;
+        fallback = style.hoverFallback;
+    }
+    UiSkinRegion region;
+    if(!TryResolveSelectableStateRegion(skin, preferred, fallback, region))
+        return false;
+    paint.pushClip(clip);
+    paint.pushClip(bounds);
+    b8 painted = paint.drawRegion(region.name, bounds);
+    if(painted && flags.enabled && flags.focused && skin.hasRegion(style.focus))
+        painted = paint.drawRegion(style.focus, bounds);
+    const Rect content = InsetUiRectBounds(bounds, padding);
+    const Point origin = ResolveCenteredTextOrigin(content, 0.0f, textBounds);
+    paint.pushClip(content);
+    if(painted){
+        Color activeColor = disabledTextColor;
+        if(flags.enabled)
+            activeColor = textColor;
+        painted = text.paint(paint, layout, origin, activeColor);
+    }
+    const b8 textPopped = paint.popClip();
+    const b8 rowPopped = paint.popClip();
+    const b8 clipPopped = paint.popClip();
+    return painted && textPopped && rowPopped && clipPopped;
 }
 
 

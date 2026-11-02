@@ -102,13 +102,14 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             emitEnumDecl(out, *enumDecl);
     }
 
+    const b8 forwardDeclParamTypes = unit.topLevelNativeBlocks.empty();
     MVector<MStringView> externalForwardClasses(m_arena);
     const auto collectCallableForwardDeclClasses = [&](const MethodDecl& callable, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams){
         if(callable.returnType)
             CollectExternalForwardDeclClasses(*callable.returnType, m_symbols, outerTemplateParams, innerTemplateParams, false, 0u, externalForwardClasses);
         for(const ParamDecl& p : callable.params){
             if(p.type)
-                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, true, 0u, externalForwardClasses);
+                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, forwardDeclParamTypes, 0u, externalForwardClasses);
         }
     };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){

@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "toolkit_contract.h"
 
 #include <core/common/log.h>
 

@@ -162,9 +162,38 @@ private:
     [[nodiscard]] b8 rejectBorrowedMutation()noexcept;
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
     void synchronizeSession(const Ui::EditBoxOptions& options, b8 inputMethod, Entry& entry, Ui::EditModel& model);
-    [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept;
-    [[nodiscard]] Expected<usize> hit(const Entry& entry, Ui::Point position)const noexcept;
-    [[nodiscard]] Expected<usize> hitWord(const Entry& entry, Ui::Point position)const noexcept;
+    [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept{
+        const Int4 bounds = ResolveUiEditNativeCaretBounds(geometry.placement.caret, m_display);
+        return { bounds.x, bounds.y, bounds.z, bounds.w };
+    }
+    [[nodiscard]] Expected<usize> hit(const Entry& entry, const Ui::Point position)const noexcept{
+        return HitUiEditBoxGeometry(
+            entry.displayed.generation,
+            entry.displayed.stops,
+            entry.displayed.lines,
+            entry.displayed.modelGeneration,
+            entry.displayed.popup,
+            entry.displayed.textMode,
+            entry.displayed.placement,
+            entry.owner,
+            entry.popup,
+            position
+        );
+    }
+    [[nodiscard]] Expected<usize> hitWord(const Entry& entry, const Ui::Point position)const noexcept{
+        return HitUiEditBoxWordGeometry(
+            entry.displayed.generation,
+            entry.displayed.stops,
+            entry.displayed.lines,
+            entry.displayed.modelGeneration,
+            entry.displayed.popup,
+            entry.displayed.textMode,
+            entry.displayed.placement,
+            entry.owner,
+            entry.popup,
+            position
+        );
+    }
     void cancelTransfers();
     void drainPublications();
 

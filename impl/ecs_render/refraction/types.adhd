@@ -8,6 +8,95 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <core/graphics/rhi/command.h>
+#include <impl/assets/graphics/refraction/diagnostics_layout.h>
+namespace NWB::Impl{
+using QueueSubmissionToken = Core::QueueSubmissionToken;
+}
+}
+
+
+// A completed accepted diagnostic copy, regardless of later presentation outcome.
+class RefractionStatistics{
+    public u64 sequence = 0u;
+    public u64 generation = 0u;
+    public u64 graphicsFrameIndex = 0u;
+    public QueueSubmissionToken acceptedToken = QueueSubmissionToken();
+    public u32 frameIndex = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 hardwarePixels = 0u;
+    public u32 entryQueries = 0u;
+    public u32 entryAssociationMisses = 0u;
+    public u32 entryWrongEntities = 0u;
+    public u32 entryFailures = 0u;
+    public u32 associatedEntries = 0u;
+    public u32 invalidEntryDirections = 0u;
+    public u32 exitQueries = 0u;
+    public u32 exitMisses = 0u;
+    public u32 exitFailures = 0u;
+    public u32 tirEvents = 0u;
+    public u32 tirCappedPixels = 0u;
+    public u32 volumeExits = 0u;
+    public u32 backgroundQueries = 0u;
+    public u32 backgroundMisses = 0u;
+    public u32 backgroundFailures = 0u;
+    public u32 secondaryGlassPixels = 0u;
+    public u32 transparentHits = 0u;
+    public u32 backgroundLayerCapPixels = 0u;
+    public u32 cachedOpaqueReturns = 0u;
+    public u32 shadedOpaqueReturns = 0u;
+    public u32 exitScreenBackgroundReturns = 0u;
+    public u32 exitStraightFallbackPixels = 0u;
+    public u32 materialShadeCalls = 0u;
+    public u32 cachedHitAttempts = 0u;
+    public u32 cachedHitMisses = 0u;
+    public u32 physicalQueries = 0u;
+    public u32 queryBudgetUnits = 0u;
+    public u32 overflowFlags = 0u;
+    public b8 hardwareRequested = false;
+    public b8 hardwareAvailable = false;
+    public b8 hardwareReady = false;
+    public b8 csgHardwareEnabled = false;
+}
+
+void CopyRefractionDiagnosticCounters(in Span<u32> completedCounters, mut RefractionStatistics latest){
+    latest.hardwarePixels = completedCounters[0u];
+    latest.entryQueries = completedCounters[1u];
+    latest.entryAssociationMisses = completedCounters[2u];
+    latest.entryWrongEntities = completedCounters[3u];
+    latest.entryFailures = completedCounters[4u];
+    latest.associatedEntries = completedCounters[5u];
+    latest.invalidEntryDirections = completedCounters[6u];
+    latest.exitQueries = completedCounters[7u];
+    latest.exitMisses = completedCounters[8u];
+    latest.exitFailures = completedCounters[9u];
+    latest.tirEvents = completedCounters[10u];
+    latest.tirCappedPixels = completedCounters[11u];
+    latest.volumeExits = completedCounters[12u];
+    latest.backgroundQueries = completedCounters[13u];
+    latest.backgroundMisses = completedCounters[14u];
+    latest.backgroundFailures = completedCounters[15u];
+    latest.secondaryGlassPixels = completedCounters[16u];
+    latest.transparentHits = completedCounters[17u];
+    latest.backgroundLayerCapPixels = completedCounters[18u];
+    latest.cachedOpaqueReturns = completedCounters[19u];
+    latest.shadedOpaqueReturns = completedCounters[20u];
+    latest.exitScreenBackgroundReturns = completedCounters[21u];
+    latest.exitStraightFallbackPixels = completedCounters[22u];
+    latest.materialShadeCalls = completedCounters[23u];
+    latest.cachedHitAttempts = completedCounters[24u];
+    latest.cachedHitMisses = completedCounters[25u];
+    latest.physicalQueries = completedCounters[26u];
+    latest.queryBudgetUnits = completedCounters[27u];
+    latest.overflowFlags = completedCounters[28u];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const usize s_RefractionDiagnosticCsgVariantCount = 2u;
 const Name s_RefractionStatisticsReadback0Name = "engine/refraction/statistics_readback_0";
 const Name s_RefractionStatisticsReadback1Name = "engine/refraction/statistics_readback_1";

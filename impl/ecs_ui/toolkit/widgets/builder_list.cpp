@@ -2,8 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "selectable_paint.h"
-
 #include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simplemath.h>
@@ -134,7 +132,7 @@ const UiSkinRegion* Builder::prepareListFrame(
 b8 Builder::prepareListMetrics(ListFrame& frame){
     if(!listMatches(frame) || !m_skin)
         return false;
-    const auto metrics = SelectablePainter::Measure(*m_skin, frame.style.row);
+    const auto metrics = MeasureSelectable(*m_skin, frame.style.row);
     if(!metrics)
         return false;
     frame.style.row.padding = metrics->padding;

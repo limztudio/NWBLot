@@ -202,6 +202,23 @@ void UiSkin::rebuildRegionIndex(){
     m_regionIndex = Move(index);
 }
 
+b8 ValidateUiSkinToolkitContract(const UiSkin& skin){
+    if(!skin.validatePayload())
+        return false;
+    for(usize index = 0u; index < s_UiSkinRequiredRegionCount; ++index){
+        const UiSkinRequiredRegion required = ResolveUiSkinRequiredRegion(index);
+        if(!skin.hasRegion(required.name)){
+            NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: missing required region '{}'"), ConvertString(required.text));
+            return false;
+        }
+    }
+    if(!skin.hasRegion(s_WindowResizeRegionName) && !skin.hasRegion(s_WhiteRegionName)){
+        NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: window resizing requires 'window.resize' or 'white'"));
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

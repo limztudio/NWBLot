@@ -57,32 +57,7 @@ void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, co
         token,
         counters,
         [](ReflectionStatistics& latest, const ReflectionStatistics& metadata, const Span<const u32> completedCounters)noexcept{
-            latest.candidates = completedCounters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)];
-            latest.hardwareRays = completedCounters[NWB_REFLECTION_COUNTER_HARDWARE_RAYS / sizeof(u32)];
-            latest.exteriorEligibleRays = completedCounters[NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS / sizeof(u32)];
-            latest.hardwareHits = completedCounters[NWB_REFLECTION_COUNTER_HARDWARE_HITS / sizeof(u32)];
-            latest.opaquePixels = completedCounters[NWB_REFLECTION_COUNTER_OPAQUE_PIXELS / sizeof(u32)];
-            latest.glassPixels = completedCounters[NWB_REFLECTION_COUNTER_GLASS_PIXELS / sizeof(u32)];
-            latest.fallbackPixels = completedCounters[NWB_REFLECTION_COUNTER_FALLBACK_PIXELS / sizeof(u32)];
-            latest.screenAttempts = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS / sizeof(u32)];
-            latest.screenHits = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_HITS / sizeof(u32)];
-            latest.queryBudgetUnits = completedCounters[NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS / sizeof(u32)];
-            latest.physicalQueries = metadata.csgHardwareEnabled ? completedCounters[NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES / sizeof(u32)] : latest.queryBudgetUnits;
-            latest.bootstrapEvents = completedCounters[NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS / sizeof(u32)];
-            latest.transparentPaths = completedCounters[NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS / sizeof(u32)];
-            latest.unsupportedPaths = completedCounters[NWB_REFLECTION_COUNTER_UNSUPPORTED_PATHS / sizeof(u32)];
-            latest.limitedPaths = completedCounters[NWB_REFLECTION_COUNTER_LIMITED_PATHS / sizeof(u32)];
-            latest.ambiguousPaths = completedCounters[NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS / sizeof(u32)];
-            latest.tirEvents = completedCounters[NWB_REFLECTION_COUNTER_TIR_EVENTS / sizeof(u32)];
-            latest.mediumOverflowPaths = completedCounters[NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS / sizeof(u32)];
-            latest.potentialReceivers = completedCounters[NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS / sizeof(u32)];
-            latest.screenReturns = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_RETURNS / sizeof(u32)];
-            latest.feedbackBypassedPixels = completedCounters[NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS / sizeof(u32)];
-            latest.feedbackProbeTiles = completedCounters[NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES / sizeof(u32)];
-            const u64 screenIterationsLow = static_cast<u64>(completedCounters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW / sizeof(u32)]);
-            const u64 screenIterationsHigh = static_cast<u64>(completedCounters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]);
-            latest.screenIterations = screenIterationsLow | (screenIterationsHigh << s_ReflectionCounterHighWordShiftBits);
-            latest.screenLimitMisses = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES / sizeof(u32)];
+            CopyReflectionDiagnosticCounters(completedCounters, metadata, latest);
         }
     );
 }

@@ -5,8 +5,7 @@
 #pragma once
 
 
-#include "statistics.h"
-
+#include <impl/ecs_render/refraction/types.adhd.h>
 #include <impl/ecs_render/shared/statistics_readback_state.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>

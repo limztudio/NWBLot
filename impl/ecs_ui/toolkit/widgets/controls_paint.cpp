@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_ui/toolkit/builder.h>
-#include "selectable_paint.h"
 
 #include <global/simplemath.h>
 
@@ -127,7 +126,7 @@ b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
     const Rect clip = visibleClip(box.clip);
-    if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
+    if(!PaintSelectable(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
         return false;
     HitTarget target;
     target.rectangle = box.rectangle;

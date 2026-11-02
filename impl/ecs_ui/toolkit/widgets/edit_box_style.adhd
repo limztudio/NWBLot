@@ -359,6 +359,55 @@ Expected<usize> HitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditB
     return committedByte;
 }
 
+b8 TryFindEditCaretStopByCommittedByte(in Span<EditBoxCaretStop> stops, in usize committedByte, mut EditBoxCaretStop outStop){
+    outStop = EditBoxCaretStop();
+    for(usize i = 0u; i < stops.size(); ++i){
+        if(stops[i].committedByte == committedByte){
+            outStop = stops[i];
+            return true;
+        }
+    }
+    return false;
+}
+
+Expected<usize> ResolveEditCaretPageTarget(
+    in Span<EditCaretLine> lines,
+    in Span<EditBoxCaretStop> stops,
+    in usize activeCaret,
+    in Rect caret,
+    in b8 down,
+    in f32 preferredX,
+    in f32 viewportHeight
+){
+    EditBoxCaretStop current;
+    if(lines.empty() || !TryFindEditCaretStopByCommittedByte(stops, activeCaret, current) || cast<usize>(current.lineIndex) >= lines.size())
+        return makeUnexpected(Failure());
+    const f64 center = cast<f64>(caret.y) + (cast<f64>(caret.height) * s_RectCenterFractionF64);
+    const f64 pageStep = cast<f64>(viewportHeight);
+    f64 target = center - pageStep;
+    if(down)
+        target = center + pageStep;
+    const EditCaretLine first = lines[0u];
+    const EditCaretLine last = lines[lines.size() - 1u];
+    const f64 minimum = cast<f64>(first.top) + (cast<f64>(first.height) * s_RectCenterFractionF64);
+    const f64 maximum = cast<f64>(last.top) + (cast<f64>(last.height) * s_RectCenterFractionF64);
+    if(!isFinite(target) || !isFinite(minimum) || !isFinite(maximum) || minimum > maximum)
+        return makeUnexpected(Failure());
+    const Point point(preferredX, cast<f32>(clamp(target, minimum, maximum)));
+    if(!isFinite(point.y))
+        return makeUnexpected(Failure());
+    const Expected<usize> result = HitEditCaretGeometry(lines, stops, point);
+    if(!result.has_value())
+        return makeUnexpected(Failure());
+    EditBoxCaretStop resolved;
+    if(!TryFindEditCaretStopByCommittedByte(stops, result.value(), resolved) || cast<usize>(resolved.lineIndex) >= lines.size())
+        return makeUnexpected(Failure());
+    // A page that cannot reach another row preserves the active caret, including a short document boundary.
+    if(resolved.lineIndex == current.lineIndex)
+        return activeCaret;
+    return result.value();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

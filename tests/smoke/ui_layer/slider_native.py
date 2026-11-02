@@ -42,6 +42,10 @@ class SliderNativeInput(GuardedNativeInput):
         super().key(name, down, repeat=repeat, shift=shift, control=control)
         self.record("key", name=name, down=down, repeat=repeat, shift=shift, control=control)
 
+    def native_chord_key(self, name, down, *, repeat=False, shift=False, control=False):
+        super().native_chord_key(name, down, repeat=repeat, shift=shift, control=control)
+        self.record("key", name=name, down=down, repeat=repeat, shift=shift, control=control)
+
     def maintain_pointer(self):
         before = self.observe_window()
         super().maintain_pointer()

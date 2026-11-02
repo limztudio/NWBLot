@@ -21,8 +21,8 @@ LIT_TAB = "Tab"
 TEXT_SETTLE_SECONDS = 0.15
 POINTER_SETTLE_SECONDS = 0.15
 
-KEYS = { "Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B, "BackSpace": 0x08, "Insert": 0x2D, "Delete": 0x2E, "Left": 0x25, "Right": 0x27, "Home": 0x24, "End": 0x23, "F5": 0x74, "F6": 0x75, "F7": 0x76,
-    **{letter: ord(letter.upper()) for letter in "abcdefghijklmnopqrstuvwxyz"}, }
+KEYS = { "Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B, "BackSpace": 0x08, "Insert": 0x2D, "Delete": 0x2E, "Left": 0x25, "Right": 0x27, "Up": 0x26, "Down": 0x28, "Page_Up": 0x21, "Page_Down": 0x22, "Home": 0x24, "End": 0x23, "F4": 0x73, "F5": 0x74, "F6": 0x75, "F7": 0x76, "F8": 0x77, "F9": 0x78, "F10": 0x79, "F11": 0x7A, "F12": 0x7B, "Menu": 0x5D, "minus": 0xBD, "period": 0xBE, "plus": 0xBB,
+    **{letter: ord(letter.upper()) for letter in "abcdefghijklmnopqrstuvwxyz"}, **{digit: ord(digit) for digit in "0123456789"}, }
 
 
 class EditNativeInput(NativeInput):
@@ -53,11 +53,16 @@ class EditNativeInput(NativeInput):
             if not user32.SetCursorPos(original.x, original.y):
                 raise SmokeFailure("SetCursorPos failed to restore the original cursor")
 
-    def _modifier(self, virtual_key, down):
+    def _native_key(self, virtual_key, down, *, extended=False):
         event = WinInput(type=1)
-        event.data.keyboard = WinKeyboardInput(virtual_key, 0, 0 if down else 0x0002, 0, None)
+        flags = (0x0001 if extended else 0) | (0 if down else 0x0002)
+        event.data.keyboard = WinKeyboardInput(virtual_key, 0, flags, 0, None)
         if self.backend.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(WinInput)) != 1:
-            raise SmokeFailure(f"SendInput failed for modifier {virtual_key:#x}")
+            raise SmokeFailure(f"SendInput failed for native key {virtual_key:#x}")
+
+    def native_chord_key(self, name, down, *, repeat=False, shift=False, control=False):
+        extended = name in ("Insert", "Delete", "Left", "Right", "Up", "Down", "Page_Up", "Page_Down", "Home", "End")
+        self._native_key(KEYS[name], down, extended=extended)
 
     def key(self, name, down, *, repeat=False, shift=False, control=False, count=1):
         if not 1 <= count <= 0xFFFF or (not down and count != 1):
@@ -87,6 +92,8 @@ class EditNativeInput(NativeInput):
 
     def tap(self, name, *, repeat_count=0, shift=False, control=False):
         modifiers = []
+        # Keep modifier chords in one native queue; F10 retains its posted-key path.
+        native_chord = self.windows and (shift or control) and name != "F10"
         if self.windows and (shift or control):
             self.backend.focus_window(self.handle)
             time.sleep(INPUT_SETTLE_SECONDS)
@@ -95,23 +102,46 @@ class EditNativeInput(NativeInput):
             try:
                 for enabled, key in ((shift, 0x10), (control, 0x11)):
                     if enabled:
-                        self._modifier(key, True)
+                        self._native_key(key, True)
                         modifiers.append(key)
                 time.sleep(PRESS_HOLD_SECONDS)
             except BaseException:
-                for key in reversed(modifiers):
-                    self._modifier(key, False)
+                try:
+                    if 0x11 in modifiers:
+                        self._native_key(0x11, False)
+                finally:
+                    if 0x10 in modifiers:
+                        self._native_key(0x10, False)
                 raise
+        key_down = False
         try:
-            self.key(name, True, shift=shift, control=control)
+            if native_chord:
+                key_down = True
+                self.native_chord_key(name, True, shift=shift, control=control)
+            else:
+                self.key(name, True, shift=shift, control=control)
+                key_down = True
             for _ in range(repeat_count):
                 time.sleep(KEY_REPEAT_INTERVAL_SECONDS)
-                self.key(name, True, repeat=True, shift=shift, control=control)
+                if native_chord:
+                    self.native_chord_key(name, True, repeat=True, shift=shift, control=control)
+                else:
+                    self.key(name, True, repeat=True, shift=shift, control=control)
             time.sleep(PRESS_HOLD_SECONDS)
-            self.key(name, False, shift=shift, control=control)
         finally:
-            for key in reversed(modifiers):
-                self._modifier(key, False)
+            try:
+                if key_down:
+                    if native_chord:
+                        self.native_chord_key(name, False, shift=shift, control=control)
+                    else:
+                        self.key(name, False, shift=shift, control=control)
+            finally:
+                try:
+                    if 0x11 in modifiers:
+                        self._native_key(0x11, False)
+                finally:
+                    if 0x10 in modifiers:
+                        self._native_key(0x10, False)
         time.sleep(INPUT_SETTLE_SECONDS)
 
     def aggregate_tap(self, name, count, *, repeat=False):

@@ -8,7 +8,8 @@ from __future__ import annotations
 import ctypes
 import time
 
-from edit_native import TEXT_SETTLE_SECONDS
+from edit_native import KEYS, TEXT_SETTLE_SECONDS
+from interaction_smoke import WinInput, WinKeyboardInput
 from popup_tools_native import PopupToolsNativeInput
 from window_capture_smoke import SmokeFailure
 
@@ -21,6 +22,7 @@ LIT_PLUS = "plus"
 CLIPBOARD_READ_TIMEOUT_SECONDS = 2.0
 CLIPBOARD_POLL_SECONDS = 0.02
 CLIPBOARD_MAX_BYTES = 65536
+SUPPORTED_TEXT = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-.+ "
 
 
 class NumericSelectionEvent(ctypes.Structure):
@@ -81,8 +83,7 @@ class NumericEditNativeInput(PopupToolsNativeInput):
         super().key(name, down, repeat=repeat, shift=shift, control=control)
 
     def text(self, value, *, settle=True):
-        supported = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-.+ "
-        if any(character not in supported for character in value):
+        if any(character not in SUPPORTED_TEXT for character in value):
             raise SmokeFailure("numeric native text supports ASCII digits, letters, signs, period, and space")
         if self.windows:
             super().text(value, settle=settle)
@@ -96,11 +97,36 @@ class NumericEditNativeInput(PopupToolsNativeInput):
             time.sleep(TEXT_SETTLE_SECONDS)
 
     def replace_text(self, value):
+        if any(character not in SUPPORTED_TEXT for character in value):
+            raise SmokeFailure("numeric native text supports ASCII digits, letters, signs, period, and space")
         self.tap("a", control=True)
+        if not self.windows:
+            if value:
+                self.text(value)
+            else:
+                self.tap("BackSpace")
+            return
+        # Keep the replacement in the same native input queue as Ctrl+A.
         if value:
-            self.text(value)
+            encoded = value.encode("utf-16-le")
+            for offset in range(0, len(encoded), 2):
+                unit = int.from_bytes(encoded[offset:offset + 2], "little")
+                event = WinInput(type=1)
+                event.data.keyboard = WinKeyboardInput(0, unit, 0x0004, 0, None)
+                if self.backend.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(WinInput)) != 1:
+                    raise SmokeFailure("SendInput failed for numeric text")
+                event.data.keyboard.flags |= 0x0002
+                if self.backend.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(WinInput)) != 1:
+                    retried = self.backend.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(WinInput))
+                    raise SmokeFailure(f"SendInput failed for numeric text release; retry returned {retried}")
         else:
-            self.tap("BackSpace")
+            try:
+                self._native_key(KEYS["BackSpace"], True)
+            finally:
+                self._native_key(KEYS["BackSpace"], False)
+            time.sleep(TEXT_SETTLE_SECONDS)
+            return
+        time.sleep(TEXT_SETTLE_SECONDS)
 
     def clipboard_text(self, *, timeout=CLIPBOARD_READ_TIMEOUT_SECONDS, max_bytes=CLIPBOARD_MAX_BYTES):
         """Read CLIPBOARD/CF_UNICODETEXT without replacing its owner or data."""

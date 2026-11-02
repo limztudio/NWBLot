@@ -15,6 +15,11 @@
 
 #include <global/exception.h>
 #include <global/termination.h>
+#include <global/platform.h>
+
+#if defined(NWB_PLATFORM_WINDOWS) && (defined(__x86_64__) || defined(_M_X64))
+#include <windows.h>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,6 +113,13 @@ GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler&
     , m_windowTitle(m_allocator.getObjectArena())
 {
     m_deviceCreationParams.hardwareRayTracingPolicy = HardwareRayTracingPolicy::Automatic;
+#if defined(NWB_PLATFORM_WINDOWS) && (defined(__x86_64__) || defined(_M_X64))
+    // Match the conservative ARM64 default when this x64 process runs under emulation.
+    USHORT processMachine = IMAGE_FILE_MACHINE_UNKNOWN;
+    USHORT nativeMachine = IMAGE_FILE_MACHINE_UNKNOWN;
+    if(IsWow64Process2(GetCurrentProcess(), &processMachine, &nativeMachine) && nativeMachine == IMAGE_FILE_MACHINE_ARM64)
+        m_deviceCreationParams.enableNativeMeshShaders = false;
+#endif
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }
 

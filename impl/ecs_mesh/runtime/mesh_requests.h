@@ -53,22 +53,69 @@ private:
 
 
 public:
-    RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, usize expectedRequestCount);
+    RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, const usize expectedRequestCount)
+        : m_scratchArena(scratchArena)
+        , m_expectedRequestCount(expectedRequestCount)
+    {
+        if(expectedRequestCount > s_RuntimeMeshRequestInlineCapacity)
+            m_index.emplace(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(expectedRequestCount), KeyHash{}, KeyEqual{}, m_scratchArena);
+    }
 
 
 public:
-    void add(const Name& meshKey, u64 version);
-    void markLive(const Name& meshKey, u64 version)noexcept;
+    void add(const Name& meshKey, const u64 version){
+        if(!meshKey)
+            return;
+        if(!m_index){
+            if(TryAddInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, m_remainingCount, meshKey.identityHash(), version))
+                return;
+            promoteIndex();
+        }
+        if(m_index->try_emplace(Key(meshKey.identityHash(), version), false).second)
+            ++m_remainingCount;
+    }
+    void markLive(const Name& meshKey, const u64 version)noexcept{
+        if(!meshKey)
+            return;
+        if(m_index){
+            markIndexedLive(meshKey, version);
+            return;
+        }
+        MarkInlineRuntimeMeshRequestLive(m_inlineEntries, m_inlineCount, m_remainingCount, meshKey.identityHash(), version);
+    }
 
-    [[nodiscard]] b8 containsLive(const Name& meshKey, u64 version)const noexcept;
+    [[nodiscard]] b8 containsLive(const Name& meshKey, const u64 version)const noexcept{
+        if(!meshKey)
+            return false;
+        if(m_index)
+            return containsIndexedLive(meshKey, version);
+        return ContainsInlineRuntimeMeshRequestLive(m_inlineEntries, m_inlineCount, meshKey.identityHash(), version);
+    }
 
     [[nodiscard]] b8 complete()const noexcept{ return m_remainingCount == 0u; }
 
 
 private:
-    void promoteIndex();
-    void markIndexedLive(const Name& meshKey, u64 version)noexcept;
-    [[nodiscard]] b8 containsIndexedLive(const Name& meshKey, u64 version)const noexcept;
+    void promoteIndex(){
+        Index index(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(Max(m_expectedRequestCount, s_RuntimeMeshRequestInlineCapacity + 1u)), KeyHash{}, KeyEqual{}, m_scratchArena);
+        for(usize entryIndex = 0u; entryIndex < m_inlineCount; ++entryIndex){
+            const Entry& entry = m_inlineEntries[entryIndex];
+            index[entry.key] = entry.found;
+        }
+        static_assert(IsNothrowMoveConstructible_V<Index>);
+        m_index.emplace(Move(index));
+    }
+    void markIndexedLive(const Name& meshKey, const u64 version)noexcept{
+        const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
+        if(found != m_index->end() && !found.value()){
+            found.value() = true;
+            --m_remainingCount;
+        }
+    }
+    [[nodiscard]] b8 containsIndexedLive(const Name& meshKey, const u64 version)const noexcept{
+        const auto found = m_index->find(Lookup{ meshKey.identityHash(), version });
+        return found != m_index->end() && found.value();
+    }
 
 
 private:

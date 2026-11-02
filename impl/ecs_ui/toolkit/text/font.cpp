@@ -39,10 +39,6 @@ namespace __hidden_ui_text_font{
     return present;
 }
 
-[[nodiscard]] static constexpr i32 FixedPointScale(const f32 fontSize)noexcept{
-    return static_cast<i32>(fontSize * s_TextFixedPointScale + s_TextFixedPointRoundBiasF32);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -201,35 +197,7 @@ private:
         FT_BBox box{};
         FT_Outline_Get_CBox(&slot->outline, &box);
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
-        const SIMDVectorDouble scale = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(fontSize), static_cast<f64>(fontSize), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_face->units_per_EM), static_cast<f64>(m_face->units_per_EM), 1.0, 1.0));
-        const SIMDVectorDouble leftTopUnits = VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMax), 0.0, 0.0);
-        const SIMDVectorDouble leftTopBounds = VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(s_TextOutlineBoundsMargin, s_TextOutlineBoundsMargin, 0.0, 0.0));
-        const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(leftTopBounds, scale);
-        const f64 left = VectorDoubleGetX(leftTopValue);
-        const f64 top = VectorDoubleGetY(leftTopValue);
-        const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(
-            VectorDoubleAdd(
-                VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMax), static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMin), 0.0, 0.0)),
-                VectorDoubleSet(s_TextOutlineBoundsMarginBothSides, s_TextOutlineBoundsMarginBothSides, 0.0, 0.0)
-            ),
-            scale
-        );
-        const f64 width = VectorDoubleGetX(widthHeightValue);
-        const f64 height = VectorDoubleGetY(widthHeightValue);
-        const f64 limit = Limit<f32>::s_Max;
-        const SIMDVectorDouble limitValue = VectorDoubleReplicate(limit);
-        // The end sums run last, on finite and bounded inputs, like the old chain.
-        if(
-            !IsFinite(left) || !IsFinite(top) || !IsFinite(width) || !IsFinite(height)
-            || VectorDoubleMoveMask(VectorDoubleGreater(VectorDoubleAbs(leftTopValue), limitValue)) != 0u
-            || width < 0.0 || height < 0.0 || width > limit || height > limit
-            || VectorDoubleMoveMask(VectorDoubleGreater(VectorDoubleAbs(VectorDoubleAdd(leftTopValue, widthHeightValue)), limitValue)) != 0u
-        )
-            return {};
-        const Rect ink{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(width), static_cast<f32>(height) };
-        if(!IsFinite(ink.x + ink.width) || !IsFinite(ink.y + ink.height))
-            return {};
-        return { ink, true };
+        return ComputeOutlineCoverageBounds(box.xMin, box.yMin, box.xMax, box.yMax, fontSize, m_face->units_per_EM);
     }
 
 
@@ -277,17 +245,10 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     FontMetrics metrics{};
     if(!valid() || !IsValidTextFontSize(fontSize))
         return MakeUnexpected(Failure{});
-    const i32 scale = __hidden_ui_text_font::FixedPointScale(fontSize);
+    const i32 scale = ComputeTextFixedPointScale(fontSize);
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     hb_font_extents_t extents{};
-    if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents))
-        return MakeUnexpected(Failure{});
-    const SIMDVectorSingle scaledExtents = VectorScale(VectorXorInt(VectorSet(static_cast<f32>(extents.ascender), static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), s_SIMDFlipY), 1.0f / s_TextFixedPointScale);
-    const SIMDVectorSingle positiveExtents = VectorSelect(scaledExtents, VectorZero(), VectorGreater(VectorZero(), scaledExtents));
-    metrics.ascender = VectorGetX(positiveExtents);
-    metrics.descender = VectorGetY(positiveExtents);
-    metrics.lineGap = VectorGetZ(positiveExtents);
-    if(!(metrics.ascender + metrics.descender > 0.0f))
+    if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents) || !TryResolveFontExtentsMetrics(extents.ascender, extents.descender, extents.line_gap, metrics))
         return MakeUnexpected(Failure{});
     return metrics;
 }
@@ -295,7 +256,7 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
 b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
     if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsValidTextFontSize(request.fontSize))
         return false;
-    const i32 scale = __hidden_ui_text_font::FixedPointScale(request.fontSize);
+    const i32 scale = ComputeTextFixedPointScale(request.fontSize);
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     const hb_script_t script = hb_script_from_iso15924_tag(request.scriptTag);
     if(script == HB_SCRIPT_INVALID)
@@ -342,21 +303,12 @@ b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pain
         for(u32 index = first; index < end; ++index){
             hb_glyph_extents_t extents{};
             Rect ink;
-            if(hb_font_get_glyph_extents(m_state->m_scaledFont, infos[index].codepoint, &extents)){
-                const SIMDVectorSingle bearing = VectorSet(static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing), static_cast<f32>(extents.x_bearing), static_cast<f32>(extents.y_bearing));
-                const SIMDVectorSingle origin = VectorScale(VectorXorInt(bearing, s_SIMDFlipYW), 1.0f / s_TextFixedPointScale);
-                const SIMDVectorSingle width = VectorReplicate(static_cast<f32>(extents.width));
-                const SIMDVectorSingle height = VectorReplicate(static_cast<f32>(extents.height));
-                const SIMDVectorSingle scale = VectorReplicate(1.0f / s_TextFixedPointScale);
-                const SIMDVectorSingle end = VectorPermute<0, 5, 2, 7>(VectorMultiplyAddExpression(width, scale, origin), VectorNegativeMultiplySubtractExpression(height, scale, origin));
-                const SIMDVectorSingle minimum = VectorSelect(end, origin, VectorLess(origin, end));
-                const SIMDVectorSingle delta = VectorSubtract(end, origin);
-                const SIMDVectorSingle size = VectorSelect(delta, VectorNegate(delta), VectorLess(delta, VectorZero()));
-                ink = { VectorGetX(minimum), VectorGetY(minimum), VectorGetX(size), VectorGetY(size) };
-            }
-            const SIMDVectorSingle placement = VectorSet(static_cast<f32>(positions[index].x_offset), static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance), static_cast<f32>(positions[index].y_advance));
-            const SIMDVectorSingle position = VectorScale(VectorXorInt(placement, s_SIMDFlipYW), 1.0f / s_TextFixedPointScale);
-            output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd, { VectorGetX(position), VectorGetY(position) }, { VectorGetZ(position), VectorGetW(position) }, ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
+            if(hb_font_get_glyph_extents(m_state->m_scaledFont, infos[index].codepoint, &extents))
+                ink = ResolveHbGlyphExtentsInk(extents.x_bearing, extents.y_bearing, extents.width, extents.height);
+            Point offset;
+            Point advance;
+            ResolveHbGlyphPlacement(positions[index].x_offset, positions[index].y_offset, positions[index].x_advance, positions[index].y_advance, offset, advance);
+            output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd, offset, advance, ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
         }
         previousBegin = clusterBegin;
         first = end;

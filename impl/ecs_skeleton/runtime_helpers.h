@@ -23,9 +23,55 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, b8 hasInverseBind, const SIMDMatrix& inverseBind, f32 inverseBindDeterminantEpsilon)noexcept;
-[[nodiscard]] Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint, const SIMDMatrix* parentJoint)noexcept;
-[[nodiscard]] Expected<SIMDMatrix> EvaluateSkeletonPoseJointMatrix(const SkeletonPoseComponent& pose, u32 targetJointIndex)noexcept;
+[[nodiscard]] inline Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, const b8 hasInverseBind, const SIMDMatrix& inverseBind, const f32 inverseBindDeterminantEpsilon)noexcept{
+    SIMDMatrix matrix = poseJoint;
+    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+        return MakeUnexpected(Failure{});
+    if(!hasInverseBind)
+        return matrix;
+    if(!MatrixIsInvertibleAffine(inverseBind, s_SkeletonAffineEpsilon, inverseBindDeterminantEpsilon))
+        return MakeUnexpected(Failure{});
+
+    matrix = MatrixMultiply(matrix, inverseBind);
+    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+        return MakeUnexpected(Failure{});
+    return matrix;
+}
+
+[[nodiscard]] inline Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint, const SIMDMatrix* parentJoint)noexcept{
+    SIMDMatrix matrix = localJoint;
+    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+        return MakeUnexpected(Failure{});
+
+    if(parentJoint){
+        matrix = MatrixMultiply(*parentJoint, matrix);
+        if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+            return MakeUnexpected(Failure{});
+    }
+    return matrix;
+}
+
+[[nodiscard]] inline Expected<SIMDMatrix> EvaluateSkeletonPoseJointMatrix(const SkeletonPoseComponent& pose, const u32 targetJointIndex)noexcept{
+    if(!CanEvaluateSkeletonPoseJoint(pose, targetJointIndex))
+        return MakeUnexpected(Failure{});
+
+    const usize jointCount = pose.localJoints.size();
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        if(!MatrixIsInvertibleAffine(LoadFloat(pose.localJoints[jointIndex]), s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+            return MakeUnexpected(Failure{});
+    }
+
+    SIMDMatrix matrix = LoadFloat(pose.localJoints[targetJointIndex]);
+    u32 currentJoint = targetJointIndex;
+    while(pose.parentJoints[currentJoint] != s_SkeletonInvalidJointIndex){
+        const u32 parentJoint = pose.parentJoints[currentJoint];
+        matrix = MatrixMultiply(LoadFloat(pose.localJoints[parentJoint]), matrix);
+        if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
+            return MakeUnexpected(Failure{});
+        currentJoint = parentJoint;
+    }
+    return matrix;
+}
 
 template<typename JointMatrixVector>
 [[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, JointMatrixVector& outJointPalette)noexcept(

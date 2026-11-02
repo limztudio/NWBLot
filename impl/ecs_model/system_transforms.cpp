@@ -27,24 +27,17 @@ namespace __hidden_model_system_transforms{
 
 static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, const Span<ModelAttachmentJointQuery> queries){
     const usize queryCount = queries.size();
-    const auto queryAt = [&](const usize index)noexcept -> ModelAttachmentJointQuery&{
-        return queries[!parentOrder.empty() ? parentOrder[index] : index];
-    };
+    const Span<const ModelAttachmentJointQuery> constQueries(queries.data(), queryCount);
     usize groupBegin = 0u;
     while(groupBegin < queryCount){
-        const Core::ECS::EntityID parentEntity = queryAt(groupBegin).parentEntity;
-        usize groupEnd = groupBegin + 1u;
-        while(groupEnd < queryCount && queryAt(groupEnd).parentEntity == parentEntity)
-            ++groupEnd;
+        const Core::ECS::EntityID parentEntity = queries[ResolveModelAttachmentQueryIndex(parentOrder, groupBegin)].parentEntity;
+        const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, constQueries, groupBegin);
 
         const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
         if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette)){
+            const Span<const SkeletonJointMatrix> paletteSpan(jointPalette.data(), jointPalette.size());
             for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
-                ModelAttachmentJointQuery& query = queryAt(queryIndex);
-                if(query.parentJointIndex >= jointPalette.size())
-                    continue;
-                query.jointMatrix = jointPalette[query.parentJointIndex];
-                query.resolved = true;
+                (void)TryResolveModelAttachmentJointQuery(paletteSpan, queries[ResolveModelAttachmentQueryIndex(parentOrder, queryIndex)]);
             }
         }
         groupBegin = groupEnd;

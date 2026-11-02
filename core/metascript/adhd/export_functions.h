@@ -77,6 +77,7 @@ NWB_ADHD_EXPORT_FUNCTION("parseF32",               "::ParseF32FromChars",       
 NWB_ADHD_EXPORT_FUNCTION("parseF64",               "::ParseF64FromChars",        1u, ExpectedF64)
 NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8CodePoint", "::TryDecodeUtf8CodePoint",   3u, Bool)
 NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8Scalar",    "::TryDecodeUtf8Scalar",      3u, Bool)
+NWB_ADHD_EXPORT_FUNCTION("isUtf8ScalarBoundary",   "::IsUtf8ScalarBoundary",     2u, Bool)
 
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("min",     "::VectorMin(",                  "::VectorDoubleMin(")
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("max",     "::VectorMax(",                  "::VectorDoubleMax(")

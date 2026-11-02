@@ -138,7 +138,7 @@ b8 TypeChecker::checkCallableArguments(
                 else if(i == 1u || i == 2u)
                     paramIsMut = true;
             }
-            else if(i == 0u && (calledMemberName == "trimView" || calledMemberName == "trimLeftView" || calledMemberName == "parseI64" || calledMemberName == "parseU64" || calledMemberName == "parseF32" || calledMemberName == "parseF64")){
+            else if(i == 0u && (calledMemberName == "trimView" || calledMemberName == "trimLeftView" || calledMemberName == "parseI64" || calledMemberName == "parseU64" || calledMemberName == "parseF32" || calledMemberName == "parseF64" || calledMemberName == "isUtf8ScalarBoundary")){
                 expectedParamType = "StringView";
             }
         }
@@ -159,6 +159,17 @@ b8 TypeChecker::checkCallableArguments(
             }
             else if(i == 2u && actualArgType != "usize"){
                 reportError(errors, arg->span, "third argument to UTF-8 decode built-in must be a mutable 'usize' variable");
+                ok = false;
+            }
+        }
+        else if(!recvTypeRef && calledMemberName == "isUtf8ScalarBoundary"){
+            const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
+            if(i == 0u && !actualArgType.empty() && actualArgType != "StringView" && actualArgType != "String" && actualArgType != "CompactString"){
+                reportError(errors, arg->span, "first argument to 'isUtf8ScalarBoundary' must be StringView, String, or CompactString");
+                ok = false;
+            }
+            else if(i == 1u && !actualArgType.empty() && !IsIntegerScalarType(actualArgType)){
+                reportError(errors, arg->span, "second argument to 'isUtf8ScalarBoundary' must be an integer type");
                 ok = false;
             }
         }

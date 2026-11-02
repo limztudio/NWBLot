@@ -548,14 +548,18 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
         "        if(!tryDecodeUtf8CodePoint(text.substr(offset), outLastScalar, byteCount)) {\r\n"
         "            return false;\r\n"
         "        }\r\n"
+        "        if(!isUtf8ScalarBoundary(text, offset)) {\r\n"
+        "            return false;\r\n"
+        "        }\r\n"
         "        offset += byteCount;\r\n"
         "    }\r\n"
-        "    return true;\r\n"
+        "    return isUtf8ScalarBoundary(text, offset);\r\n"
         "}\r\n";
     CompileResult utf8DecodeRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_Utf8DecodeBuiltinsValid, "impl/utf8_decode.adhd", arena.arena, utf8DecodeRes));
     EXPECT_NE(MStringView(utf8DecodeRes.generatedSource.data(), utf8DecodeRes.generatedSource.size()).find("::TryDecodeUtf8Scalar("), MStringView::npos);
     EXPECT_NE(MStringView(utf8DecodeRes.generatedSource.data(), utf8DecodeRes.generatedSource.size()).find("::TryDecodeUtf8CodePoint("), MStringView::npos);
+    EXPECT_NE(MStringView(utf8DecodeRes.generatedSource.data(), utf8DecodeRes.generatedSource.size()).find("::IsUtf8ScalarBoundary("), MStringView::npos);
 
     static constexpr MStringView s_BadUtf8DecodeConstOut =
         "b8 badUtf8(in StringView text) {\r\n"
@@ -565,6 +569,13 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
         "}\r\n";
     CompileResult badUtf8ConstRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_BadUtf8DecodeConstOut, "impl/bad_utf8_const.adhd", arena.arena, badUtf8ConstRes));
+
+    static constexpr MStringView s_BadUtf8BoundaryArg =
+        "b8 badUtf8Boundary(in StringView text) {\r\n"
+        "    return isUtf8ScalarBoundary(text, 1.0f);\r\n"
+        "}\r\n";
+    CompileResult badUtf8BoundaryRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadUtf8BoundaryArg, "impl/bad_utf8_boundary.adhd", arena.arena, badUtf8BoundaryRes));
 }
 
 

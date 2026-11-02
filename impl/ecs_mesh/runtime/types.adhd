@@ -159,6 +159,43 @@ usize FindInlineRuntimeMeshRequest(in Span<RuntimeMeshRequestEntry> entries, in 
     return inlineCount;
 }
 
+b8 TryAddInlineRuntimeMeshRequest(
+    mut Array<RuntimeMeshRequestEntry, s_RuntimeMeshRequestInlineCapacity> entries,
+    mut usize inoutInlineCount,
+    mut usize inoutRemainingCount,
+    in NameHash name,
+    in u64 version
+){
+    if(FindInlineRuntimeMeshRequest(entries, inoutInlineCount, name, version) < inoutInlineCount)
+        return true;
+    if(inoutInlineCount < s_RuntimeMeshRequestInlineCapacity){
+        entries[inoutInlineCount] = RuntimeMeshRequestEntry(RuntimeMeshRequestKey(name, version), false);
+        ++inoutInlineCount;
+        ++inoutRemainingCount;
+        return true;
+    }
+    return false;
+}
+
+void MarkInlineRuntimeMeshRequestLive(
+    mut Array<RuntimeMeshRequestEntry, s_RuntimeMeshRequestInlineCapacity> entries,
+    in usize inlineCount,
+    mut usize inoutRemainingCount,
+    in NameHash name,
+    in u64 version
+){
+    const usize index = FindInlineRuntimeMeshRequest(entries, inlineCount, name, version);
+    if(index < inlineCount && !entries[index].found){
+        entries[index].found = true;
+        --inoutRemainingCount;
+    }
+}
+
+b8 ContainsInlineRuntimeMeshRequestLive(in Span<RuntimeMeshRequestEntry> entries, in usize inlineCount, in NameHash name, in u64 version){
+    const usize index = FindInlineRuntimeMeshRequest(entries, inlineCount, name, version);
+    return index < inlineCount && entries[index].found;
+}
+
 b8 TryComputePaddedRawByteCount(in usize logicalByteCount, mut usize outPaddedByteCount){
     outPaddedByteCount = 0u;
     if(logicalByteCount == 0u)

@@ -102,11 +102,7 @@ b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const
     if(region->drawMode == UiSkinDrawMode::NineSlice)
         emitNineSlice(*region, rectangle, tint);
     else{
-        const f32 atlasWidth = static_cast<f32>(m_snapshot.m_skinBinding.atlasWidth);
-        const f32 atlasHeight = static_cast<f32>(m_snapshot.m_skinBinding.atlasHeight);
-        const auto& pixels = region->rectangle;
-        const SIMDVectorSingle normalized = VectorDivide(VectorSet(static_cast<f32>(pixels.x), static_cast<f32>(pixels.y), static_cast<f32>(pixels.width), static_cast<f32>(pixels.height)), VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
-        const Rect uv = StoreRect(normalized);
+        const Rect uv = ResolveSkinRegionUv(region->rectangle, m_snapshot.m_skinBinding.atlasWidth, m_snapshot.m_skinBinding.atlasHeight);
         emitQuad(rectangle, uv, tint, PaintMaterial::Skin);
     }
     return true;
@@ -143,24 +139,16 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
         NWB_ASSERT(false);
         return;
     }
-    const SIMDVectorSingle visibleOrigin = VectorSet(visible.x, visible.y, visible.x, visible.y);
-    const SIMDVectorSingle visibleEnd = VectorAdd(visibleOrigin, VectorSet(visible.width, visible.height, visible.width, visible.height));
-    const SIMDVectorSingle coordinates = VectorPermute<0, 1, 6, 7>(visibleOrigin, visibleEnd);
-    const SIMDVectorSingle delta = VectorSubtract(coordinates, VectorSet(rectangle.x, rectangle.y, rectangle.x, rectangle.y));
-    const SIMDVectorSingle fraction = VectorDivide(delta, VectorSet(rectangle.width, rectangle.height, rectangle.width, rectangle.height));
-    const SIMDVectorSingle textureScale = VectorSet(uv.width, uv.height, uv.width, uv.height);
-    const SIMDVectorSingle textureOrigin = VectorSet(uv.x, uv.y, uv.x, uv.y);
-    const SIMDVectorSingle textureCoordinates = VectorMultiplyAddExpression(fraction, textureScale, textureOrigin);
-    const f32 left = VectorGetX(textureCoordinates);
-    const f32 top = VectorGetY(textureCoordinates);
-    const f32 right = VectorGetZ(textureCoordinates);
-    const f32 bottom = VectorGetW(textureCoordinates);
-    const SIMDVectorSingle rgb = VectorScale(VectorSet(color.r, color.g, color.b, color.b), color.a);
-    const Color premultiplied{ VectorGetX(rgb), VectorGetY(rgb), VectorGetZ(rgb), color.a };
+    const Float4 textureCoordinates = ResolveQuadTextureCoords(rectangle, visible, uv);
+    const f32 left = textureCoordinates.x;
+    const f32 top = textureCoordinates.y;
+    const f32 right = textureCoordinates.z;
+    const f32 bottom = textureCoordinates.w;
+    const Color premultiplied = PremultiplyPaintColor(color);
     const u32 vertexBase = static_cast<u32>(m_snapshot.m_vertices.size());
     const u32 firstIndex = static_cast<u32>(m_snapshot.m_indices.size());
-    const f32 visibleRight = VectorGetX(visibleEnd);
-    const f32 visibleBottom = VectorGetY(visibleEnd);
+    const f32 visibleRight = visible.x + visible.width;
+    const f32 visibleBottom = visible.y + visible.height;
     m_snapshot.m_vertices.push_back({ { visible.x, visible.y }, { left, top }, premultiplied });
     m_snapshot.m_vertices.push_back({ { visibleRight, visible.y }, { right, top }, premultiplied });
     m_snapshot.m_vertices.push_back({ { visibleRight, visibleBottom }, { right, bottom }, premultiplied });
@@ -199,35 +187,21 @@ void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectang
     if(!HasUiRectArea(rectangle))
         return;
     const auto& binding = m_snapshot.m_skinBinding;
-    const auto& pixels = region.rectangle;
-    const auto& borders = region.sliceInsets;
-    const SIMDVectorSingle borderSize = VectorDivide(VectorSet(static_cast<f32>(borders.left), static_cast<f32>(borders.right), static_cast<f32>(borders.top), static_cast<f32>(borders.bottom)), VectorReplicate(binding.referenceDensity));
-    const SIMDVectorSingle origin = VectorSet(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
-    const SIMDVectorSingle size = VectorSet(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
-    const SIMDVectorSingle firstBorder = VectorSwizzle<0, 2, 0, 2>(borderSize);
-    const SIMDVectorSingle lastBorder = VectorSwizzle<1, 3, 1, 3>(borderSize);
-    const SIMDVectorSingle borderExtent = VectorAdd(firstBorder, lastBorder);
-    const SIMDVectorSingle shrink = VectorLess(size, borderExtent);
-    // Nonshrinking axes must not evaluate the conditional ratio, including a zero-width border pair.
-    const SIMDVectorSingle numerator = VectorSelect(VectorZero(), firstBorder, shrink);
-    const SIMDVectorSingle denominator = VectorSelect(VectorReplicate(1.0f), borderExtent, shrink);
-    const SIMDVectorSingle scaledBorder = VectorMultiply(VectorSelect(VectorZero(), size, shrink), VectorDivide(numerator, denominator));
-    const SIMDVectorSingle first = VectorAdd(origin, VectorSelect(firstBorder, scaledBorder, shrink));
-    const SIMDVectorSingle end = VectorAdd(origin, size);
-    const SIMDVectorSingle second = VectorSelect(VectorSubtract(end, VectorSelect(lastBorder, VectorZero(), shrink)), first, shrink);
-    const Array<f32, s_PaintNineSliceAxisCells + 1u> x = { rectangle.x, VectorGetX(first), VectorGetX(second), VectorGetX(end) };
-    const Array<f32, s_PaintNineSliceAxisCells + 1u> y = { rectangle.y, VectorGetY(first), VectorGetY(second), VectorGetY(end) };
-    const Array<f32, s_PaintNineSliceAxisCells + 1u> u = { static_cast<f32>(pixels.x), static_cast<f32>(pixels.x + borders.left), static_cast<f32>(pixels.x + pixels.width - borders.right), static_cast<f32>(pixels.x + pixels.width) };
-    const Array<f32, s_PaintNineSliceAxisCells + 1u> v = { static_cast<f32>(pixels.y), static_cast<f32>(pixels.y + borders.top), static_cast<f32>(pixels.y + pixels.height - borders.bottom), static_cast<f32>(pixels.y + pixels.height) };
+    Float4 xVec;
+    Float4 yVec;
+    Float4 uVec;
+    Float4 vVec;
+    ResolveNineSliceCoordinates(region.rectangle, region.sliceInsets, rectangle, binding.referenceDensity, xVec, yVec, uVec, vVec);
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> x = { xVec.x, xVec.y, xVec.z, xVec.w };
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> y = { yVec.x, yVec.y, yVec.z, yVec.w };
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> u = { uVec.x, uVec.y, uVec.z, uVec.w };
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> v = { vVec.x, vVec.y, vVec.z, vVec.w };
     const f32 atlasWidth = static_cast<f32>(binding.atlasWidth);
     const f32 atlasHeight = static_cast<f32>(binding.atlasHeight);
     for(u32 row = 0u; row < s_PaintNineSliceAxisCells; ++row){
         for(u32 column = 0u; column < s_PaintNineSliceAxisCells; ++column){
             const Rect target{ x[column], y[row], x[column + 1u] - x[column], y[row + 1u] - y[row] };
-            const SIMDVectorSingle textureSize = VectorSubtract(VectorSet(u[column + 1u], v[row + 1u], u[column + 1u], v[row + 1u]), VectorSet(u[column], v[row], u[column], v[row]));
-            const SIMDVectorSingle textureCoordinates = VectorPermute<0, 1, 4, 5>(VectorSet(u[column], v[row], 0.0f, 0.0f), textureSize);
-            const SIMDVectorSingle normalized = VectorDivide(textureCoordinates, VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
-            const Rect uv = StoreRect(normalized);
+            const Rect uv{ u[column] / atlasWidth, v[row] / atlasHeight, (u[column + 1u] - u[column]) / atlasWidth, (v[row + 1u] - v[row]) / atlasHeight };
             emitQuad(target, uv, tint, PaintMaterial::Skin);
         }
     }

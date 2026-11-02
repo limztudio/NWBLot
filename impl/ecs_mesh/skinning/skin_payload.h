@@ -65,10 +65,38 @@ namespace MeshSkinningPayload{
 
 
 // Encode mesh-owned data only when creating its GPU buffer.
-[[nodiscard]] Expected<Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>> BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& arena);
+[[nodiscard]] inline Expected<Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>> BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& arena){
+    Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> influences(arena);
+    if(instance.skin.empty())
+        return influences;
+    if(!CanBuildMeshSkinningInfluences(instance.skeletonJointCount, instance.skin.size())){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence counts are invalid"), instance.handle.value);
+        return MakeUnexpected(Failure{});
+    }
+
+    influences.reserve(instance.skin.size());
+    for(usize vertexIndex = 0u; vertexIndex < instance.skin.size(); ++vertexIndex){
+        const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
+        if(!ValidSkinInfluenceWeights(sourceSkin.weight) || !SkinInfluenceFitsSkeleton(sourceSkin, instance.skeletonJointCount)){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid"), instance.handle.value, vertexIndex);
+            return MakeUnexpected(Failure{});
+        }
+
+        MeshSkinningInfluenceGpu gpuSkin;
+        gpuSkin.packedJoint = PackSkinInfluenceJoints(sourceSkin);
+        gpuSkin.weight = sourceSkin.weight;
+        influences.push_back(gpuSkin);
+    }
+    return influences;
+}
 
 // Source validation and deformation snapshots keep every row; GPU reads only joints referenced by this Skin.
-[[nodiscard]] Expected<Span<const SkeletonJointMatrix>> ResolveGpuJointPalette(const MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload)noexcept;
+[[nodiscard]] inline Expected<Span<const SkeletonJointMatrix>> ResolveGpuJointPalette(const MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload)noexcept{
+    const usize jointCount = instance.skeletonJointCount;
+    if(!CanResolveGpuJointPalette(payload.hasActiveSkin(), payload.skinInfluenceCount, instance.skin.size(), jointCount, payload.jointMatrices.size()))
+        return MakeUnexpected(Failure{});
+    return Span<const SkeletonJointMatrix>(payload.jointMatrices.data(), jointCount);
+}
 
 template<typename JointPaletteVector>
 [[nodiscard]] b8 BuildSkinJointPalette(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> sourceJoints, const u32 skinningMode, JointPaletteVector& outJointPalette){
@@ -138,7 +166,31 @@ template<typename JointPaletteVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload);
+[[nodiscard]] inline b8 BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload){
+    payload.skinInfluenceCount = 0u;
+    payload.jointMatrices.clear();
+    payload.poseJoints.clear();
+    payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
+    if(skeletonPose && HasSkeletonPoseData(*skeletonPose)){
+        const auto skinningMode = SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints);
+        if(!skinningMode){
+            payload.poseJoints.clear();
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
+            return false;
+        }
+        payload.resolvedSkinningMode = *skinningMode;
+        if(!BuildSkinJointPalette(instance, payload.poseJoints, payload.resolvedSkinningMode, payload.jointMatrices)){
+            payload.poseJoints.clear();
+            return false;
+        }
+    }
+    else if(jointPalette && !BuildSkinJointPalette(instance, jointPalette->joints, payload.resolvedSkinningMode, payload.jointMatrices))
+        return false;
+
+    if(!payload.jointMatrices.empty())
+        payload.skinInfluenceCount = instance.skin.size();
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

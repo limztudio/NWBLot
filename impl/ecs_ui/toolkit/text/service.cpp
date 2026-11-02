@@ -34,13 +34,6 @@ namespace __hidden_ui_text_service{
 
 static Atomic<u64> s_NextServiceIdentity{ 1u };
 
-[[nodiscard]] static Expected<SIMDVectorDoubleResult> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
-    Rect measured;
-    if(!TryMakeMeasuredTextRect(VectorDoubleGetX(minimum), VectorDoubleGetY(minimum), VectorDoubleGetX(maximum), VectorDoubleGetY(maximum), measured))
-        return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ VectorDoubleSet(measured.x, measured.y, measured.width, measured.height) };
-}
-
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display)noexcept{
     const auto plane = TextGlyphVisibility::LoadAtlasRectangle(placed, atlas, fontSize, {});
     if(!plane)
@@ -52,71 +45,12 @@ static Atomic<u64> s_NextServiceIdentity{ 1u };
     const SdfAtlasPage& page = *atlas.page(glyph.group);
     const SdfAtlasPageBinding& binding = page.binding();
     const auto& pixels = page.pixels();
-    const SIMDVectorDouble texelSize = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleSplatOne(), planeSize, s_DoubleSIMDMaskXY), VectorDoubleSet(glyph.width, glyph.height, 1.0, 1.0));
-    const SIMDVectorDouble physicalStep = VectorDoubleDivide(VectorDoubleReplicate(1.0), VectorDoubleMultiply(texelSize, VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0)));
-    const f64 physicalStepX = VectorDoubleGetX(physicalStep);
-    const f64 physicalStepY = VectorDoubleGetY(physicalStep);
-    if(!IsFinite(physicalStepX) || !IsFinite(physicalStepY))
+    Double4 planeVec;
+    StoreDouble(plane->value, planeVec);
+    Double4 support;
+    if(!TryLoadSdfGlyphSupport(planeVec, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<const u8>(pixels.data(), pixels.size()), display, support))
         return MakeUnexpected(Failure{});
-    const auto sample = [&](const u32 x, const u32 y)noexcept -> i32{
-        return pixels[(static_cast<usize>(y) * binding.width + x) * binding.channelCount + glyph.channel];
-    };
-    // A derivative lane can sample one physical pixel beyond the quad; one additional texel covers both bilinear neighbors there.
-    const SIMDVectorDouble haloLimit = VectorDoubleSet(binding.width, binding.height, 0.0, 0.0);
-    const SIMDVectorDouble haloCandidate = VectorDoubleAdd(VectorDoubleCeiling(physicalStep), VectorDoubleReplicate(1.0));
-    const SIMDVectorDouble halo = VectorDoubleSelect(haloCandidate, haloLimit, VectorDoubleLess(haloLimit, haloCandidate));
-    const u32 haloX = static_cast<u32>(VectorDoubleGetX(halo));
-    const u32 haloY = static_cast<u32>(VectorDoubleGetY(halo));
-    const u32 firstX = glyph.x > haloX ? glyph.x - haloX : 0u;
-    const u32 firstY = glyph.y > haloY ? glyph.y - haloY : 0u;
-    const u32 lastX = Min(binding.width - 1u, glyph.x + glyph.width + haloX);
-    const u32 lastY = Min(binding.height - 1u, glyph.y + glyph.height + haloY);
-    i32 gradientX = 0;
-    i32 gradientY = 0;
-    for(u32 y = firstY; y <= lastY; ++y){
-        for(u32 x = firstX; x <= lastX; ++x){
-            const i32 value = sample(x, y);
-            if(x != lastX)
-                gradientX = Max(gradientX, Abs(sample(x + 1u, y) - value));
-            if(y != lastY)
-                gradientY = Max(gradientY, Abs(sample(x, y + 1u) - value));
-        }
-    }
-    // Bilinear directional slopes are bounded by adjacent-texel differences, including helper lanes outside the visible quad.
-    // The shader decodes distance = (encoded - 128) * spread / 128, then uses max(fwidth(distance), 0.001).
-    const f64 derivative = static_cast<f64>(gradientX) * physicalStepX + static_cast<f64>(gradientY) * physicalStepY;
-    const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / static_cast<f64>(binding.spreadPixels);
-    const f64 halfWidth = s_TextHalfPixel * Max(derivative, minimumDerivative);
-    const SIMDVectorDouble glyphSize = VectorDoubleSet(glyph.width, glyph.height, 0.0, 0.0);
-    const SIMDVectorDouble halfTexel = VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0);
-    SIMDVectorDouble supportMinimum = glyphSize;
-    SIMDVectorDouble supportMaximum = VectorDoubleZero();
-    b8 visible = false;
-    for(u32 y = 0u; y <= glyph.height; ++y){
-        const u32 y0 = glyph.y + y == 0u ? 0u : glyph.y + y - 1u;
-        const u32 y1 = Min(binding.height - 1u, glyph.y + y);
-        for(u32 x = 0u; x <= glyph.width; ++x){
-            const u32 x0 = glyph.x + x == 0u ? 0u : glyph.x + x - 1u;
-            const u32 x1 = Min(binding.width - 1u, glyph.x + x);
-            const i32 maximum = Max(Max(sample(x0, y0), sample(x1, y0)), Max(sample(x0, y1), sample(x1, y1)));
-            if(static_cast<f64>(maximum) + halfWidth < s_TextSdfEncodedHalfRange)
-                continue;
-            // Texel centers lie at n + 0.5; retain exactly the candidate cell's intersection with the drawn plane.
-            const SIMDVectorDouble position = VectorDoubleSet(x, y, 0.0, 0.0);
-            const SIMDVectorDouble first = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(position, halfTexel));
-            const SIMDVectorDouble last = VectorDoubleMin(glyphSize, VectorDoubleAdd(position, halfTexel));
-            supportMinimum = VectorDoubleSelect(first, supportMinimum, VectorDoubleLess(supportMinimum, first));
-            supportMaximum = VectorDoubleSelect(last, supportMaximum, VectorDoubleGreater(supportMaximum, last));
-            visible = true;
-        }
-    }
-    if(!visible)
-        return SIMDVectorDoubleResult{ VectorDoubleZero() };
-    const SIMDVectorDouble origin = VectorDoubleAndInt(plane->value, s_DoubleSIMDMaskXY);
-    const SIMDVectorDouble scale = VectorDoubleSelect(VectorDoubleZero(), texelSize, s_DoubleSIMDMaskXY);
-    const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(supportMinimum, scale, origin);
-    const SIMDVectorDouble maximum = VectorDoubleMultiplyAddExpression(supportMaximum, scale, origin);
-    return MeasuredRectangle(minimum, maximum);
+    return SIMDVectorDoubleResult{ LoadDouble(support) };
 }
 
 template<typename TPage, typename TValue>
@@ -143,19 +77,6 @@ struct PreparedGlyph{
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels)noexcept{
-    if(!ValidGlyphPageBinding(binding, pixels.size()))
-        return MakeUnexpected(Failure{});
-    auto* const page = NewArenaObject<RefCounter<GlyphPage>>(arena, binding, Move(pixels));
-    if(!page)
-        return MakeUnexpected(Failure{});
-    return SharedGlyphPage(page, ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -296,10 +217,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
                 item.sdfPage = &atlas->page(record.group);
                 item.channel = record.channel;
                 const SdfAtlasPageBinding& binding = (*item.sdfPage)->binding();
-                const SIMDVectorSingle coordinates = VectorSet(static_cast<f32>(record.x), static_cast<f32>(record.y), static_cast<f32>(record.width), static_cast<f32>(record.height));
-                const SIMDVectorSingle atlasSize = VectorSet(static_cast<f32>(binding.width), static_cast<f32>(binding.height), static_cast<f32>(binding.width), static_cast<f32>(binding.height));
-                const SIMDVectorSingle normalized = VectorDivide(coordinates, atlasSize);
-                item.uv = { VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
+                item.uv = ResolveSdfGlyphUv(record, binding.width, binding.height);
             }
         }
         else{
@@ -313,9 +231,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
                 return false;
             item.rectangle = *rectangle;
             item.pageIndex = record->pageIndex;
-            const SIMDVectorSingle coordinates = VectorSet(record->pixels.x, record->pixels.y, record->pixels.width, record->pixels.height);
-            const SIMDVectorSingle normalized = VectorDivide(coordinates, VectorReplicate(static_cast<f32>(s_GlyphAtlasPageExtent)));
-            item.uv = { VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
+            item.uv = ResolveCoverageGlyphUv(record->pixels);
         }
         const TextGlyphIntersection::Enum status = TryIntersectTextRects(item.rectangle, clip);
         if(status == TextGlyphIntersection::Invalid)

@@ -53,6 +53,10 @@ b8 ValidSkeletonPoseTopology(in SkeletonPoseComponent pose){
     return true;
 }
 
+b8 CanEvaluateSkeletonPoseJoint(in SkeletonPoseComponent pose, in u32 targetJointIndex){
+    return HasSkeletonPoseData(pose) && ValidSkeletonPoseTopology(pose) && cast<usize>(targetJointIndex) < pose.localJoints.size();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

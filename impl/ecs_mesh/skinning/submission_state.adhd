@@ -255,6 +255,87 @@ b8 TryResolveMeshSkinningRestToSkinnedCopyByteCounts(in usize positionCount, in 
     return true;
 }
 
+const usize s_MaxSkeletonJointMatrixSpanCount = usize.max / 48u;
+
+b8 EqualSkeletonJointMatrixRowBits(in f32x4 lhs, in f32x4 rhs){
+    return
+        bit_cast<u32>(lhs.x) == bit_cast<u32>(rhs.x)
+        && bit_cast<u32>(lhs.y) == bit_cast<u32>(rhs.y)
+        && bit_cast<u32>(lhs.z) == bit_cast<u32>(rhs.z)
+        && bit_cast<u32>(lhs.w) == bit_cast<u32>(rhs.w)
+    ;
+}
+
+b8 EqualSkeletonJointMatrixSpan(in Span<SkeletonJointMatrix> lhs, in Span<SkeletonJointMatrix> rhs){
+    if(lhs.size() != rhs.size())
+        return false;
+    for(usize i = 0u; i < lhs.size(); ++i){
+        const f32x3x4 a = lhs[i];
+        const f32x3x4 b = rhs[i];
+        for(u32 row = 0u; row < s_SkeletonJointMatrixRowCount; ++row){
+            if(!EqualSkeletonJointMatrixRowBits(a[row], b[row]))
+                return false;
+        }
+    }
+    return true;
+}
+
+b8 CanStageMeshSkinningDeformationCandidate(in b8 hasResourceSlotsBuffer, in usize jointCount, in b8 hasJointData, in u64 candidateSerial, in u64 acceptedRevision){
+    return
+        hasResourceSlotsBuffer
+        && (jointCount == 0u || hasJointData)
+        && jointCount <= s_MaxSkeletonJointMatrixSpanCount
+        && candidateSerial != u64.max
+        && acceptedRevision != u64.max
+    ;
+}
+
+b8 TryAcceptMeshSkinningDeformationCandidate(in u64 candidate, mut u64 inoutPendingCandidate, mut u64 inoutAcceptedRevision, mut b8 outCurrent){
+    if(candidate == 0u || candidate != inoutPendingCandidate)
+        return false;
+    ++inoutAcceptedRevision;
+    inoutPendingCandidate = 0u;
+    outCurrent = true;
+    return true;
+}
+
+b8 TryResolveSkinnedRuntimeMeshIdentity(
+    in EntityID entity,
+    in RuntimeMeshHandle runtimeMesh,
+    in EntityID instanceEntity,
+    in RuntimeMeshDirtyFlag dirtyFlags,
+    in Name sourceName,
+    in u64 handleValue,
+    in u32 editRevision,
+    mut SkinnedRuntimeMeshIdentity outIdentity
+){
+    outIdentity = SkinnedRuntimeMeshIdentity();
+    if(!runtimeMesh.valid() || instanceEntity != entity)
+        return false;
+    if((dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != RuntimeMeshDirtyFlag::None)
+        return false;
+    const Name meshKey = DeriveRuntimeResourceName(sourceName, handleValue, editRevision, s_SkinnedDrawSuffix);
+    if(meshKey == s_NameNone)
+        return false;
+    outIdentity.meshKey = meshKey;
+    outIdentity.version = cast<u64>(editRevision);
+    return true;
+}
+
+b8 CanBuildMeshSkinningInfluences(in u32 skeletonJointCount, in usize skinSize){
+    return skeletonJointCount > 0u && skeletonJointCount <= cast<u32>(u16.max) + 1u && skinSize <= cast<usize>(u32.max);
+}
+
+b8 CanResolveGpuJointPalette(in b8 hasActiveSkin, in usize payloadSkinInfluenceCount, in usize instanceSkinSize, in usize jointCount, in usize payloadJointMatrixCount){
+    return
+        hasActiveSkin
+        && payloadSkinInfluenceCount == instanceSkinSize
+        && jointCount > 0u
+        && jointCount <= cast<usize>(u16.max) + 1u
+        && payloadJointMatrixCount >= jointCount
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

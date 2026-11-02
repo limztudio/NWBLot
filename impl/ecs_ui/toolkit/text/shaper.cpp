@@ -111,12 +111,7 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
             const auto metrics = face->metrics(request.fontSize);
             if(!metrics)
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
-            const SIMDVectorSingle currentMetrics = VectorSet(run.metrics.ascender, run.metrics.descender, run.metrics.lineGap, 0.0f);
-            const SIMDVectorSingle candidateMetrics = VectorSet(metrics->ascender, metrics->descender, metrics->lineGap, 0.0f);
-            const SIMDVectorSingle maximumMetrics = VectorSelect(candidateMetrics, currentMetrics, VectorGreater(currentMetrics, candidateMetrics));
-            run.metrics.ascender = VectorGetX(maximumMetrics);
-            run.metrics.descender = VectorGetY(maximumMetrics);
-            run.metrics.lineGap = VectorGetZ(maximumMetrics);
+            run.metrics = MaxFontMetrics(run.metrics, *metrics);
             __hidden_ui_text_shaper::Append(face, m_fallback, 0u, m_fallback.size(), run);
         }
     }

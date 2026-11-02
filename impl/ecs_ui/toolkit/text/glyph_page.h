@@ -53,7 +53,14 @@ private:
 
 using SharedGlyphPage = RefCountPtr<RefCounter<GlyphPage>, ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>>;
 
-[[nodiscard]] Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels)noexcept;
+[[nodiscard]] inline Expected<SharedGlyphPage> CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, GlyphPage::Pixels&& pixels)noexcept{
+    if(!ValidGlyphPageBinding(binding, pixels.size()))
+        return MakeUnexpected(Failure{});
+    auto* const page = NewArenaObject<RefCounter<GlyphPage>>(arena, binding, Move(pixels));
+    if(!page)
+        return MakeUnexpected(Failure{});
+    return SharedGlyphPage(page, ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

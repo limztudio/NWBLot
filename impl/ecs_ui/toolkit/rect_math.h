@@ -22,12 +22,38 @@ NWB_IMPL_UI_BEGIN
 
 
 // Rectangle lanes are x, y, width, height; comparisons preserve scalar Min/Max ties and NaNs on every backend.
-[[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL IntersectRectBoundsValue(SIMDVectorSingle lhs, SIMDVectorSingle rhs)noexcept;
-[[nodiscard]] b8 NWB_SIMD_CALL HasVisibleRectIntersection(SIMDVectorSingle rectangle, SIMDVectorSingle clip)noexcept;
-[[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL IntersectRectValue(SIMDVectorSingle lhs, SIMDVectorSingle rhs)noexcept;
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL IntersectRectBoundsValue(const SIMDVectorSingle lhs, const SIMDVectorSingle rhs)noexcept{
+    Float4 lhsVec;
+    Float4 rhsVec;
+    StoreFloat(lhs, lhsVec);
+    StoreFloat(rhs, rhsVec);
+    return LoadFloat(IntersectRectBoundsVec(lhsVec, rhsVec));
+}
+
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL HasVisibleRectIntersection(const SIMDVectorSingle rectangle, const SIMDVectorSingle clip)noexcept{
+    Float4 rectangleVec;
+    Float4 clipVec;
+    StoreFloat(rectangle, rectangleVec);
+    StoreFloat(clip, clipVec);
+    return HasVisibleRectIntersectionVec(rectangleVec, clipVec);
+}
+
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL IntersectRectValue(const SIMDVectorSingle lhs, const SIMDVectorSingle rhs)noexcept{
+    Float4 lhsVec;
+    Float4 rhsVec;
+    StoreFloat(lhs, lhsVec);
+    StoreFloat(rhs, rhsVec);
+    return LoadFloat(IntersectRectVec(lhsVec, rhsVec));
+}
 
 // Padding lanes are left, top, right, bottom; retain the two separately rounded size subtractions.
-[[nodiscard]] SIMDVectorSingle NWB_SIMD_CALL InsetRectValue(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept;
+[[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL InsetRectValue(const SIMDVectorSingle rectangle, const SIMDVectorSingle padding)noexcept{
+    Float4 rectangleVec;
+    Float4 paddingVec;
+    StoreFloat(rectangle, rectangleVec);
+    StoreFloat(padding, paddingVec);
+    return LoadFloat(InsetRectVec(rectangleVec, paddingVec));
+}
 
 [[nodiscard]] NWB_INLINE SIMDVectorSingle LoadRect(const Rect& rectangle)noexcept{
     return VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height);

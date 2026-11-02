@@ -755,8 +755,293 @@ b8 TryResolveGlyphCoverageRectangle(
     const f64 width = cast<f64>(recordPixels.width) / scaleF64;
     const f64 height = cast<f64>(recordPixels.height) / scaleF64;
     return TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints, outRect);
+}
 
+b8 FitsTextCoordinateXY(in f64x4 value){
+    return FitsTextCoordinate(value.x) && FitsTextCoordinate(value.y);
+}
 
+b8 TryTranslateTextInk(in Point position, in Rect ink, mut f64x4 outInk){
+    outInk = f64x4(0.0, 0.0, 0.0, 0.0);
+    const f64 originX = cast<f64>(position.x) + cast<f64>(ink.x);
+    const f64 originY = cast<f64>(position.y) + cast<f64>(ink.y);
+    const f64 endX = originX + cast<f64>(ink.width);
+    const f64 endY = originY + cast<f64>(ink.height);
+    if(!FitsTextCoordinate(originX) || !FitsTextCoordinate(originY) || !FitsTextCoordinate(endX) || !FitsTextCoordinate(endY))
+        return false;
+    const f32 rectX = cast<f32>(originX);
+    const f32 rectY = cast<f32>(originY);
+    const f32 rectW = ink.width;
+    const f32 rectH = ink.height;
+    if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
+        return false;
+    outInk = f64x4(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+    return true;
+}
+
+b8 ValidateShapedRunMetrics(in FontMetrics metrics, in usize glyphCount){
+    return
+        isFinite(metrics.ascender) && isFinite(metrics.descender) && isFinite(metrics.lineGap)
+        && metrics.ascender >= 0.0f && metrics.descender >= 0.0f && metrics.lineGap >= 0.0f
+        && metrics.ascender + metrics.descender > 0.0f && glyphCount <= s_TextMaxBytes
+        && FitsTextCoordinate((cast<f64>(metrics.ascender) + cast<f64>(metrics.descender)) + cast<f64>(metrics.lineGap))
+    ;
+}
+
+b8 ValidateShapedGlyph(
+    in u32 byteBegin,
+    in u32 byteEnd,
+    in Point offset,
+    in Point advance,
+    in Rect ink,
+    in GlyphCoverageBounds coverage,
+    in StringView text,
+    in TextDirection direction,
+    mut u32 inoutPreviousByteBegin
+){
+    if(
+        byteBegin >= byteEnd || !isUtf8ScalarBoundary(text, cast<usize>(byteBegin)) || !isUtf8ScalarBoundary(text, cast<usize>(byteEnd))
+        || !isFinite(advance.x) || !isFinite(advance.y) || advance.x < 0.0f || advance.y != 0.0f
+        || !isFinite(offset.x) || !isFinite(offset.y) || !HasValidUiRectDimensions(ink)
+        || !FitsTextCoordinate(cast<f64>(ink.x) + cast<f64>(ink.width))
+        || !FitsTextCoordinate(cast<f64>(ink.y) + cast<f64>(ink.height))
+    )
+        return false;
+    if(coverage.known){
+        const Rect cov = coverage.ink;
+        if(
+            !HasValidUiRectDimensions(cov)
+            || !FitsTextCoordinate(cast<f64>(cov.x) + cast<f64>(cov.width))
+            || !FitsTextCoordinate(cast<f64>(cov.y) + cast<f64>(cov.height))
+        )
+            return false;
+    }
+    if(direction == TextDirection::LeftToRight){
+        if(byteBegin < inoutPreviousByteBegin)
+            return false;
+    }
+    else{
+        if(byteBegin > inoutPreviousByteBegin)
+            return false;
+    }
+    inoutPreviousByteBegin = byteBegin;
+    return true;
+}
+
+b8 TryIncludeTextInk(in f64x4 ink, mut f64x4 inoutBounds, mut b8 inoutHasInk){
+    if(ink.z <= 0.0 || ink.w <= 0.0)
+        return true;
+    if(!inoutHasInk){
+        inoutBounds = ink;
+        inoutHasInk = true;
+        return true;
+    }
+    f64 originX = ink.x;
+    if(inoutBounds.x < ink.x)
+        originX = inoutBounds.x;
+    f64 originY = ink.y;
+    if(inoutBounds.y < ink.y)
+        originY = inoutBounds.y;
+    const f64 boundsEndX = inoutBounds.x + inoutBounds.z;
+    const f64 boundsEndY = inoutBounds.y + inoutBounds.w;
+    const f64 inkEndX = ink.x + ink.z;
+    const f64 inkEndY = ink.y + ink.w;
+    f64 endX = inkEndX;
+    if(boundsEndX > inkEndX)
+        endX = boundsEndX;
+    f64 endY = inkEndY;
+    if(boundsEndY > inkEndY)
+        endY = boundsEndY;
+    const f64 sizeX = endX - originX;
+    const f64 sizeY = endY - originY;
+    if(!FitsTextCoordinate(sizeX) || !FitsTextCoordinate(sizeY))
+        return false;
+    const f32 rectX = cast<f32>(originX);
+    const f32 rectY = cast<f32>(originY);
+    const f32 rectW = cast<f32>(sizeX);
+    const f32 rectH = cast<f32>(sizeY);
+    if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
+        return false;
+    inoutBounds = f64x4(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+    return true;
+}
+
+FontMetrics MaxFontMetrics(in FontMetrics lhs, in FontMetrics rhs){
+    FontMetrics out;
+    out.ascender = max(lhs.ascender, rhs.ascender);
+    out.descender = max(lhs.descender, rhs.descender);
+    out.lineGap = max(lhs.lineGap, rhs.lineGap);
+    return out;
+}
+
+i32 ComputeTextFixedPointScale(in f32 fontSize){
+    return cast<i32>(fontSize * s_TextFixedPointScale + s_TextFixedPointRoundBiasF32);
+}
+
+GlyphCoverageBounds ComputeOutlineCoverageBounds(in i64 xMin, in i64 yMin, in i64 xMax, in i64 yMax, in f32 fontSize, in u32 unitsPerEm){
+    const f64 scale = cast<f64>(fontSize) / cast<f64>(unitsPerEm);
+    const f64 left = (cast<f64>(xMin) - s_TextOutlineBoundsMargin) * scale;
+    const f64 top = (-cast<f64>(yMax) - s_TextOutlineBoundsMargin) * scale;
+    const f64 width = ((cast<f64>(xMax) - cast<f64>(xMin)) + s_TextOutlineBoundsMarginBothSides) * scale;
+    const f64 height = ((cast<f64>(yMax) - cast<f64>(yMin)) + s_TextOutlineBoundsMarginBothSides) * scale;
+    if(
+        !isFinite(left) || !isFinite(top) || !isFinite(width) || !isFinite(height)
+        || abs(left) > s_TextMaxCoordinateF64 || abs(top) > s_TextMaxCoordinateF64
+        || width < 0.0 || height < 0.0 || width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64
+        || abs(left + width) > s_TextMaxCoordinateF64 || abs(top + height) > s_TextMaxCoordinateF64
+    )
+        return GlyphCoverageBounds();
+    const Rect ink(cast<f32>(left), cast<f32>(top), cast<f32>(width), cast<f32>(height));
+    if(!isFinite(ink.x + ink.width) || !isFinite(ink.y + ink.height))
+        return GlyphCoverageBounds();
+    return GlyphCoverageBounds(ink, true);
+}
+
+b8 TryResolveFontExtentsMetrics(in i32 ascender, in i32 descender, in i32 lineGap, mut FontMetrics outMetrics){
+    outMetrics = FontMetrics();
+    const f32 invScale = 1.0f / s_TextFixedPointScale;
+    const f32 scaledAsc = cast<f32>(ascender) * invScale;
+    const f32 scaledDesc = (-cast<f32>(descender)) * invScale;
+    const f32 scaledGap = cast<f32>(lineGap) * invScale;
+    outMetrics.ascender = max(0.0f, scaledAsc);
+    outMetrics.descender = max(0.0f, scaledDesc);
+    outMetrics.lineGap = max(0.0f, scaledGap);
+    return outMetrics.ascender + outMetrics.descender > 0.0f;
+}
+
+Rect ResolveHbGlyphExtentsInk(in i32 xBearing, in i32 yBearing, in i32 width, in i32 height){
+    const f32 scale = 1.0f / s_TextFixedPointScale;
+    const f32 originX = cast<f32>(xBearing) * scale;
+    const f32 originY = (-cast<f32>(yBearing)) * scale;
+    const f32 endX = cast<f32>(width) * scale + originX;
+    const f32 endY = originY - cast<f32>(height) * scale;
+    const f32 minX = min(originX, endX);
+    const f32 minY = min(originY, endY);
+    const f32 deltaX = endX - originX;
+    const f32 deltaY = endY - originY;
+    return Rect(minX, minY, abs(deltaX), abs(deltaY));
+}
+
+void ResolveHbGlyphPlacement(in i32 xOffset, in i32 yOffset, in i32 xAdvance, in i32 yAdvance, mut Point outOffset, mut Point outAdvance){
+    const f32 scale = 1.0f / s_TextFixedPointScale;
+    outOffset = Point(cast<f32>(xOffset) * scale, (-cast<f32>(yOffset)) * scale);
+    outAdvance = Point(cast<f32>(xAdvance) * scale, (-cast<f32>(yAdvance)) * scale);
+}
+
+b8 TryLoadSdfGlyphSupport(
+    in f64x4 plane,
+    in FontAtlasGlyph glyph,
+    in u32 pageWidth,
+    in u32 pageHeight,
+    in u32 channelCount,
+    in u32 spreadPixels,
+    in Span<u8> pixels,
+    in DisplayMetrics display,
+    mut f64x4 outSupport
+){
+    outSupport = plane;
+    if(plane.z <= 0.0 || plane.w <= 0.0)
+        return true;
+    const f64 texelSizeX = plane.z / cast<f64>(glyph.width);
+    const f64 texelSizeY = plane.w / cast<f64>(glyph.height);
+    const f64 physicalStepX = 1.0 / (texelSizeX * cast<f64>(display.pixelScaleX));
+    const f64 physicalStepY = 1.0 / (texelSizeY * cast<f64>(display.pixelScaleY));
+    if(!isFinite(physicalStepX) || !isFinite(physicalStepY))
+        return false;
+    const f64 haloCandidateX = ceil(physicalStepX) + 1.0;
+    const f64 haloCandidateY = ceil(physicalStepY) + 1.0;
+    const u32 haloX = cast<u32>(min(cast<f64>(pageWidth), haloCandidateX));
+    const u32 haloY = cast<u32>(min(cast<f64>(pageHeight), haloCandidateY));
+    u32 firstX = 0u;
+    if(glyph.x > haloX)
+        firstX = glyph.x - haloX;
+    u32 firstY = 0u;
+    if(glyph.y > haloY)
+        firstY = glyph.y - haloY;
+    const u32 lastX = min(pageWidth - 1u, glyph.x + glyph.width + haloX);
+    const u32 lastY = min(pageHeight - 1u, glyph.y + glyph.height + haloY);
+    const usize stride = cast<usize>(pageWidth);
+    const usize channels = cast<usize>(channelCount);
+    const usize ch = cast<usize>(glyph.channel);
+    i32 gradientX = 0;
+    i32 gradientY = 0;
+    for(u32 y = firstY; y <= lastY; ++y){
+        for(u32 x = firstX; x <= lastX; ++x){
+            const i32 value = cast<i32>(pixels[((cast<usize>(y) * stride) + cast<usize>(x)) * channels + ch]);
+            if(x != lastX){
+                const i32 rightValue = cast<i32>(pixels[((cast<usize>(y) * stride) + cast<usize>(x + 1u)) * channels + ch]);
+                gradientX = max(gradientX, abs(rightValue - value));
+            }
+            if(y != lastY){
+                const i32 downValue = cast<i32>(pixels[((cast<usize>(y + 1u) * stride) + cast<usize>(x)) * channels + ch]);
+                gradientY = max(gradientY, abs(downValue - value));
+            }
+        }
+    }
+    const f64 derivative = (cast<f64>(gradientX) * physicalStepX) + (cast<f64>(gradientY) * physicalStepY);
+    const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / cast<f64>(spreadPixels);
+    const f64 halfWidth = s_TextHalfPixel * max(derivative, minimumDerivative);
+    const f64 glyphWidthF64 = cast<f64>(glyph.width);
+    const f64 glyphHeightF64 = cast<f64>(glyph.height);
+    f64 supportMinX = glyphWidthF64;
+    f64 supportMinY = glyphHeightF64;
+    f64 supportMaxX = 0.0;
+    f64 supportMaxY = 0.0;
+    b8 visible = false;
+    for(u32 y = 0u; y <= glyph.height; ++y){
+        u32 y0 = 0u;
+        if(glyph.y + y != 0u)
+            y0 = glyph.y + y - 1u;
+        const u32 y1 = min(pageHeight - 1u, glyph.y + y);
+        for(u32 x = 0u; x <= glyph.width; ++x){
+            u32 x0 = 0u;
+            if(glyph.x + x != 0u)
+                x0 = glyph.x + x - 1u;
+            const u32 x1 = min(pageWidth - 1u, glyph.x + x);
+            const i32 s00 = cast<i32>(pixels[((cast<usize>(y0) * stride) + cast<usize>(x0)) * channels + ch]);
+            const i32 s10 = cast<i32>(pixels[((cast<usize>(y0) * stride) + cast<usize>(x1)) * channels + ch]);
+            const i32 s01 = cast<i32>(pixels[((cast<usize>(y1) * stride) + cast<usize>(x0)) * channels + ch]);
+            const i32 s11 = cast<i32>(pixels[((cast<usize>(y1) * stride) + cast<usize>(x1)) * channels + ch]);
+            const i32 maximum = max(max(s00, s10), max(s01, s11));
+            if(cast<f64>(maximum) + halfWidth < s_TextSdfEncodedHalfRange)
+                continue;
+            const f64 posX = cast<f64>(x);
+            const f64 posY = cast<f64>(y);
+            const f64 firstCellX = max(0.0, posX - s_TextHalfPixel);
+            const f64 firstCellY = max(0.0, posY - s_TextHalfPixel);
+            const f64 lastCellX = min(glyphWidthF64, posX + s_TextHalfPixel);
+            const f64 lastCellY = min(glyphHeightF64, posY + s_TextHalfPixel);
+            supportMinX = min(supportMinX, firstCellX);
+            supportMinY = min(supportMinY, firstCellY);
+            supportMaxX = max(supportMaxX, lastCellX);
+            supportMaxY = max(supportMaxY, lastCellY);
+            visible = true;
+        }
+    }
+    if(!visible){
+        outSupport = f64x4(0.0, 0.0, 0.0, 0.0);
+        return true;
+    }
+    const f64 minX = supportMinX * texelSizeX + plane.x;
+    const f64 minY = supportMinY * texelSizeY + plane.y;
+    const f64 maxX = supportMaxX * texelSizeX + plane.x;
+    const f64 maxY = supportMaxY * texelSizeY + plane.y;
+    Rect measured;
+    if(!TryMakeMeasuredTextRect(minX, minY, maxX, maxY, measured))
+        return false;
+    outSupport = f64x4(cast<f64>(measured.x), cast<f64>(measured.y), cast<f64>(measured.width), cast<f64>(measured.height));
+    return true;
+}
+
+Rect ResolveSdfGlyphUv(in FontAtlasGlyph record, in u32 atlasWidth, in u32 atlasHeight){
+    const f32 width = cast<f32>(atlasWidth);
+    const f32 height = cast<f32>(atlasHeight);
+    return Rect(cast<f32>(record.x) / width, cast<f32>(record.y) / height, cast<f32>(record.width) / width, cast<f32>(record.height) / height);
+}
+
+Rect ResolveCoverageGlyphUv(in Rect pixels){
+    const f32 extent = cast<f32>(s_GlyphAtlasPageExtent);
+    return Rect(pixels.x / extent, pixels.y / extent, pixels.width / extent, pixels.height / extent);
 }
 
 

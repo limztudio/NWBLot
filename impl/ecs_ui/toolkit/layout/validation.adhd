@@ -187,6 +187,194 @@ Rect InsetUiRectBounds(in Rect rectangle, in Insets padding){
     return Rect(origin.x, origin.y, size.x, size.y);
 }
 
+b8 CanAddLayoutTreeNode(in Span<LayoutTreeNode> nodes, in u32 maxNodes, in b8 buildFailed, in u32 parent, in LayoutNodeDesc description){
+    if(buildFailed || nodes.size() >= cast<usize>(maxNodes) || !IsValidLayoutNodeDesc(description))
+        return false;
+    if(nodes.empty())
+        return parent == s_LayoutNoParent;
+    if(cast<usize>(parent) >= nodes.size())
+        return false;
+    return nodes[cast<usize>(parent)].description.direction != LayoutDirection::Leaf;
+}
+
+b8 MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<LayoutTreeWork> work, in u32 index, mut Point outMeasuredSize){
+    outMeasuredSize = Point();
+    const LayoutTreeNode node = nodes[cast<usize>(index)];
+    const LayoutNodeDesc description = node.description;
+    f64 extentX = 0.0;
+    f64 extentY = 0.0;
+    u32 childCount = 0u;
+    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+        const Point measured = work[cast<usize>(child)].box.measuredSize;
+        const f64 candidateX = cast<f64>(measured.x);
+        const f64 candidateY = cast<f64>(measured.y);
+        f64 maxX = candidateX;
+        if(extentX > candidateX)
+            maxX = extentX;
+        f64 maxY = candidateY;
+        if(extentY > candidateY)
+            maxY = extentY;
+        if(description.direction == LayoutDirection::Row){
+            extentX = extentX + candidateX;
+            extentY = maxY;
+        }
+        else if(description.direction == LayoutDirection::Column){
+            extentX = maxX;
+            extentY = extentY + candidateY;
+        }
+        else{
+            extentX = maxX;
+            extentY = maxY;
+        }
+        ++childCount;
+    }
+    if(childCount > 1u){
+        const f64 spacing = cast<f64>(description.gap) * cast<f64>(childCount - 1u);
+        if(description.direction == LayoutDirection::Row)
+            extentX += spacing;
+        else if(description.direction == LayoutDirection::Column)
+            extentY += spacing;
+    }
+    const f64 intrinsicX = cast<f64>(description.intrinsicSize.x);
+    const f64 intrinsicY = cast<f64>(description.intrinsicSize.y);
+    f64 maxX = intrinsicX;
+    if(extentX > intrinsicX)
+        maxX = extentX;
+    f64 maxY = intrinsicY;
+    if(extentY > intrinsicY)
+        maxY = extentY;
+    const f64 width = (maxX + cast<f64>(description.padding.left)) + cast<f64>(description.padding.right);
+    const f64 height = (maxY + cast<f64>(description.padding.top)) + cast<f64>(description.padding.bottom);
+    if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
+        return false;
+    f32 resolvedWidth = cast<f32>(width);
+    if(description.width.policy == LayoutSizePolicy::Fixed)
+        resolvedWidth = description.width.value;
+    f32 resolvedHeight = cast<f32>(height);
+    if(description.height.policy == LayoutSizePolicy::Fixed)
+        resolvedHeight = description.height.value;
+    outMeasuredSize = Point(resolvedWidth, resolvedHeight);
+    return true;
+}
+
+b8 TryBeginArrangeLayoutTreeNode(
+    in Span<LayoutTreeNode> nodes,
+    in Span<LayoutTreeWork> work,
+    in u32 index,
+    mut LayoutBox inoutBox,
+    mut Rect outChildClip,
+    mut f64 outAvailable,
+    mut f64 outWeight,
+    mut f64 outCursor
+){
+    outChildClip = Rect();
+    outAvailable = 0.0;
+    outWeight = 0.0;
+    outCursor = 0.0;
+    if(!IsValidUiRect(inoutBox.rectangle))
+        return false;
+    const LayoutTreeNode node = nodes[cast<usize>(index)];
+    const LayoutNodeDesc description = node.description;
+    const Rect inheritedClip = work[cast<usize>(index)].inheritedClip;
+    const f32x4 rectangleVec(inoutBox.rectangle.x, inoutBox.rectangle.y, inoutBox.rectangle.width, inoutBox.rectangle.height);
+    const f32x4 inheritedClipVec(inheritedClip.x, inheritedClip.y, inheritedClip.width, inheritedClip.height);
+    const f64x4 contentBounds = ComputeInsetUiRectBounds(inoutBox.rectangle, description.padding);
+    const f32x4 contentVec(cast<f32>(contentBounds.x), cast<f32>(contentBounds.y), cast<f32>(contentBounds.z), cast<f32>(contentBounds.w));
+    const f32x4 clipVec = IntersectRectVec(rectangleVec, inheritedClipVec);
+    inoutBox.content = Rect(contentVec.x, contentVec.y, contentVec.z, contentVec.w);
+    inoutBox.clip = Rect(clipVec.x, clipVec.y, clipVec.z, clipVec.w);
+    inoutBox.hit = inoutBox.clip;
+    if(!IsValidUiRect(inoutBox.content) || !IsValidUiRect(inoutBox.clip))
+        return false;
+    f32x4 childClipVec = inheritedClipVec;
+    if(description.clipChildren)
+        childClipVec = IntersectRectVec(inheritedClipVec, contentVec);
+    outChildClip = Rect(childClipVec.x, childClipVec.y, childClipVec.z, childClipVec.w);
+    const b8 row = description.direction == LayoutDirection::Row;
+    const b8 column = description.direction == LayoutDirection::Column;
+    f64 consumed = 0.0;
+    f64 weight = 0.0;
+    u32 childCount = 0u;
+    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+        const LayoutNodeDesc childDescription = nodes[cast<usize>(child)].description;
+        if(row || column){
+            LayoutSize main = childDescription.height;
+            if(row)
+                main = childDescription.width;
+            if(main.policy == LayoutSizePolicy::Stretch)
+                weight += cast<f64>(main.value);
+            else{
+                f32 measuredMain = work[cast<usize>(child)].box.measuredSize.y;
+                if(row)
+                    measuredMain = work[cast<usize>(child)].box.measuredSize.x;
+                consumed += cast<f64>(measuredMain);
+            }
+        }
+        ++childCount;
+    }
+    const f64 gap = cast<f64>(description.gap);
+    f64 spacing = 0.0;
+    if(childCount > 1u)
+        spacing = gap * cast<f64>(childCount - 1u);
+    f32 mainExtent = inoutBox.content.height;
+    if(row)
+        mainExtent = inoutBox.content.width;
+    const f64 mainSize = cast<f64>(mainExtent);
+    outAvailable = max(0.0, (mainSize - consumed) - spacing);
+    outWeight = weight;
+    f32 startCoord = inoutBox.content.y;
+    if(row)
+        startCoord = inoutBox.content.x;
+    outCursor = cast<f64>(startCoord);
+    return true;
+}
+
+b8 TryArrangeLayoutTreeChild(
+    in LayoutDirection parentDirection,
+    in f32 parentGap,
+    in Rect parentContent,
+    in LayoutNodeDesc childDescription,
+    in Point childMeasured,
+    in f64 available,
+    in f64 weight,
+    mut f64 inoutCursor,
+    mut Rect outChildRect
+){
+    outChildRect = Rect();
+    const b8 row = parentDirection == LayoutDirection::Row;
+    const b8 column = parentDirection == LayoutDirection::Column;
+    f32 width = childMeasured.x;
+    f32 height = childMeasured.y;
+    if(childDescription.width.policy == LayoutSizePolicy::Stretch){
+        if(row)
+            width = cast<f32>(available * (cast<f64>(childDescription.width.value) / weight));
+        else
+            width = parentContent.width;
+    }
+    if(childDescription.height.policy == LayoutSizePolicy::Stretch){
+        if(column)
+            height = cast<f32>(available * (cast<f64>(childDescription.height.value) / weight));
+        else
+            height = parentContent.height;
+    }
+    f32 x = parentContent.x;
+    if(row)
+        x = cast<f32>(inoutCursor);
+    f32 y = parentContent.y;
+    if(column)
+        y = cast<f32>(inoutCursor);
+    const Rect rectangle(x, y, width, height);
+    if(!IsValidUiRect(rectangle))
+        return false;
+    outChildRect = rectangle;
+    const f64 gap = cast<f64>(parentGap);
+    if(row)
+        inoutCursor += cast<f64>(width) + gap;
+    else if(column)
+        inoutCursor += cast<f64>(height) + gap;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

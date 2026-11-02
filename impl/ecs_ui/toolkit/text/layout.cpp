@@ -26,78 +26,14 @@ namespace __hidden_ui_text_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 FitsCoordinateXY(const SIMDVectorDouble value)noexcept{
-    const SIMDVectorDouble limit = VectorDoubleReplicate(static_cast<f64>(Limit<f32>::s_Max));
-    return VectorDoubleIsFinite(value, VectorDoubleComponentMask::s_DoubleXY) && (VectorDoubleMoveMask(VectorDoubleInBounds(value, limit)) & VectorDoubleComponentMask::s_DoubleXY) == VectorDoubleComponentMask::s_DoubleXY;
-}
-
-[[nodiscard]] static Expected<SIMDVectorDoubleResult> TranslateInk(const SIMDVectorDouble position, const SIMDVectorDouble ink)noexcept{
-    const SIMDVectorDouble origin = VectorDoubleAdd(position, ink);
-    const SIMDVectorDouble end = VectorDoubleAdd(origin, VectorDoubleSwizzle<2, 3, 2, 3>(ink));
-    if(!FitsCoordinateXY(origin) || !FitsCoordinateXY(end))
-        return MakeUnexpected(Failure{});
-    const SIMDVectorSingle rectangle = ConvertVectorDoubleToSingle(VectorDoubleSelect(ink, origin, s_DoubleSIMDMaskXY));
-    const SIMDVectorSingle roundedEnd = VectorAdd(VectorSelect(VectorZero(), rectangle, s_SIMDMaskXY), VectorSwizzle<2, 3, 2, 3>(rectangle));
-    if(!VectorIsFinite(roundedEnd, VectorComponentMask::s_XY))
-        return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ ConvertVectorSingleToDouble(rectangle) };
-}
-
-[[nodiscard]] static b8 ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction)noexcept{
-    if(
-        !IsFinite(run.metrics.ascender) || !IsFinite(run.metrics.descender) || !IsFinite(run.metrics.lineGap)
-        || run.metrics.ascender < 0.0f || run.metrics.descender < 0.0f || run.metrics.lineGap < 0.0f
-        || run.metrics.ascender + run.metrics.descender <= 0.0f || run.glyphs.size() > s_TextMaxBytes
-        || !FitsTextCoordinate(static_cast<f64>(run.metrics.ascender) + static_cast<f64>(run.metrics.descender) + static_cast<f64>(run.metrics.lineGap))
-    )
+[[nodiscard]] static b8 ValidateRun(const ShapedRun& run, const StringView text, const TextDirection::Enum direction)noexcept{
+    if(!ValidateShapedRunMetrics(run.metrics, run.glyphs.size()))
         return false;
     u32 previous = direction == TextDirection::LeftToRight ? 0u : static_cast<u32>(text.size());
     for(const ShapedGlyph& glyph : run.glyphs){
-        if(
-            glyph.byteBegin >= glyph.byteEnd || !IsUtf8ScalarBoundary(text, glyph.byteBegin) || !IsUtf8ScalarBoundary(text, glyph.byteEnd)
-            || !IsFinite(glyph.advance.x) || !IsFinite(glyph.advance.y) || glyph.advance.x < 0.0f || glyph.advance.y != 0.0f
-            || !IsFinite(glyph.offset.x) || !IsFinite(glyph.offset.y) || !HasValidUiRectDimensions(glyph.ink)
-            || !FitsTextCoordinate(static_cast<f64>(glyph.ink.x) + static_cast<f64>(glyph.ink.width))
-            || !FitsTextCoordinate(static_cast<f64>(glyph.ink.y) + static_cast<f64>(glyph.ink.height))
-        )
+        if(!ValidateShapedGlyph(glyph.byteBegin, glyph.byteEnd, glyph.offset, glyph.advance, glyph.ink, glyph.coverage, text, direction, previous))
             return false;
-        if(glyph.coverage.known){
-            const Rect& coverage = glyph.coverage.ink;
-            if(
-                !HasValidUiRectDimensions(coverage)
-                || !FitsTextCoordinate(static_cast<f64>(coverage.x) + static_cast<f64>(coverage.width))
-                || !FitsTextCoordinate(static_cast<f64>(coverage.y) + static_cast<f64>(coverage.height))
-            )
-                return false;
-        }
-        if(direction == TextDirection::LeftToRight ? glyph.byteBegin < previous : glyph.byteBegin > previous)
-            return false;
-        previous = glyph.byteBegin;
     }
-    return true;
-}
-
-[[nodiscard]] static b8 IncludeInk(const SIMDVectorDouble ink, SIMDVectorDouble& bounds, b8& hasInk)noexcept{
-    if((VectorDoubleMoveMask(VectorDoubleLessOrEqual(VectorDoubleSwizzle<2, 3, 2, 3>(ink), VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXY) != 0u)
-        return true;
-    if(!hasInk){
-        bounds = ink;
-        hasInk = true;
-        return true;
-    }
-    const SIMDVectorDouble origin = VectorDoubleSelect(ink, bounds, VectorDoubleLess(bounds, ink));
-    const SIMDVectorDouble boundsEnd = VectorDoubleAdd(bounds, VectorDoubleSwizzle<2, 3, 2, 3>(bounds));
-    const SIMDVectorDouble inkEnd = VectorDoubleAdd(ink, VectorDoubleSwizzle<2, 3, 2, 3>(ink));
-    const SIMDVectorDouble end = VectorDoubleSelect(inkEnd, boundsEnd, VectorDoubleGreater(boundsEnd, inkEnd));
-    const SIMDVectorDouble size = VectorDoubleSubtract(end, origin);
-    if(!FitsCoordinateXY(size))
-        return false;
-    const SIMDVectorDouble rectangle = VectorDoubleSelect(VectorDoubleSwizzle<0, 1, 0, 1>(size), origin, s_DoubleSIMDMaskXY);
-    const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(rectangle);
-    const SIMDVectorSingle roundedEnd = VectorAdd(VectorSelect(VectorZero(), rounded, s_SIMDMaskXY), VectorSwizzle<2, 3, 2, 3>(rounded));
-    if(!VectorIsFinite(roundedEnd, VectorComponentMask::s_XY))
-        return false;
-    bounds = ConvertVectorSingleToDouble(rounded);
     return true;
 }
 
@@ -106,17 +42,6 @@ namespace __hidden_ui_text_layout{
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Rect> TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge)const noexcept{
-    Rect rect;
-    if(!TryResolveTextCaretRect(m_lines, m_clusters, m_direction, byteOffset, edge, rect))
-        return MakeUnexpected(Failure{});
-    return rect;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,7 +60,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
     result.m_clusters.reserve(request.text.size());
     result.m_lines.reserve(1u);
     b8 hasInk = false;
-    SIMDVectorDouble inkBounds = VectorDoubleZero();
+    Double4 inkBounds(0.0, 0.0, 0.0, 0.0);
     usize byteBegin = 0u;
     while(true){
         usize byteEnd = byteBegin;
@@ -182,11 +107,11 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
                 if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
-                const SIMDVectorDouble positionValue = VectorDoubleSet(position.x, position.y, 0.0, 0.0);
-                const auto ink = __hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.ink.x, glyph.ink.y, glyph.ink.width, glyph.ink.height));
-                if(!ink || !__hidden_ui_text_layout::IncludeInk(ink->value, inkBounds, hasInk))
+                Double4 ink;
+                if(!TryTranslateTextInk(position, glyph.ink, ink) || !TryIncludeTextInk(ink, inkBounds, hasInk))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.coverage.ink.x, glyph.coverage.ink.y, glyph.coverage.ink.width, glyph.coverage.ink.height)))
+                Double4 translatedCoverage;
+                if(glyph.coverage.known && !TryTranslateTextInk(position, glyph.coverage.ink, translatedCoverage))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 result.m_glyphs.push_back({ glyph.face, glyph.glyphId, line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage });
                 pen = static_cast<f32>(nextPen);
@@ -212,7 +137,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             break;
         byteBegin = breakEnd;
     }
-    result.m_inkBounds = { static_cast<f32>(VectorDoubleGetX(inkBounds)), static_cast<f32>(VectorDoubleGetY(inkBounds)), static_cast<f32>(VectorDoubleGetZ(inkBounds)), static_cast<f32>(VectorDoubleGetW(inkBounds)) };
+    result.m_inkBounds = { static_cast<f32>(inkBounds.x), static_cast<f32>(inkBounds.y), static_cast<f32>(inkBounds.z), static_cast<f32>(inkBounds.w) };
     return result;
 }
 

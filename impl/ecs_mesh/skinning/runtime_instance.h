@@ -176,6 +176,30 @@ public:
     }
 };
 
+inline MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept{
+    return {
+        instance.restPositionBuffer,
+        instance.restNormalBuffer,
+        instance.restTangentBuffer,
+        instance.skinnedPositionBuffer,
+        instance.skinnedNormalBuffer,
+        instance.skinnedTangentBuffer,
+        instance.uv0Buffer,
+        instance.colorBuffer,
+        instance.meshletDescBuffer,
+        instance.meshletBoundsBuffer,
+        instance.meshletPositionRefDeltaBuffer,
+        instance.meshletAttributeRefDeltaBuffer,
+        instance.meshletLocalVertexRefBuffer,
+        instance.meshletPrimitiveIndexBuffer,
+        instance.attributeSkinBuffer,
+        instance.triangleIndexBuffer,
+        instance.attributeBuffer,
+        instance.meshletLocalBoundsBuffer,
+        instance.localBoundsBuffer,
+    };
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

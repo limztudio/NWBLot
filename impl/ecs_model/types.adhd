@@ -37,6 +37,29 @@ ModelAttachmentJointQuery MakeModelAttachmentJointQuery(in EntityID parentEntity
     return out;
 }
 
+usize ResolveModelAttachmentQueryIndex(in Span<usize> parentOrder, in usize index){
+    if(!parentOrder.empty())
+        return parentOrder[index];
+    return index;
+}
+
+usize FindModelAttachmentJointQueryGroupEnd(in Span<usize> parentOrder, in Span<ModelAttachmentJointQuery> queries, in usize groupBegin){
+    const usize queryCount = queries.size();
+    const EntityID parentEntity = queries[ResolveModelAttachmentQueryIndex(parentOrder, groupBegin)].parentEntity;
+    usize groupEnd = groupBegin + 1u;
+    while(groupEnd < queryCount && queries[ResolveModelAttachmentQueryIndex(parentOrder, groupEnd)].parentEntity == parentEntity)
+        ++groupEnd;
+    return groupEnd;
+}
+
+b8 TryResolveModelAttachmentJointQuery(in Span<SkeletonJointMatrix> jointPalette, mut ModelAttachmentJointQuery inoutQuery){
+    if(cast<usize>(inoutQuery.parentJointIndex) >= jointPalette.size())
+        return false;
+    inoutQuery.jointMatrix = jointPalette[cast<usize>(inoutQuery.parentJointIndex)];
+    inoutQuery.resolved = true;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

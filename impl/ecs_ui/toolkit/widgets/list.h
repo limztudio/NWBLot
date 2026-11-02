@@ -9,11 +9,31 @@
 #include <impl/ecs_ui/toolkit/widgets/list_style.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_list{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +68,9 @@ class ListState final : NoCopy{
 
 
 public:
-    ListState()noexcept;
+    ListState()noexcept
+        : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_list::s_NextIdentity))
+    {}
     ListState(ListState&&) = delete;
 
 
@@ -69,8 +91,19 @@ public:
 
     [[nodiscard]] const ScrollPlacement& placement()const noexcept{ return m_placement; }
     // Explicit application changes start a new input lifetime even when the value is unchanged.
-    void select(u64 key)noexcept;
-    [[nodiscard]] b8 scrollTo(f64 offset)noexcept;
+    void select(const u64 key)noexcept{
+        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list::s_NextIdentity);
+        m_selected = key;
+        m_cursor = key;
+        m_ensureCursor = key != 0u;
+    }
+    [[nodiscard]] b8 scrollTo(const f64 offset)noexcept{
+        if(!m_scroll.setOffset(offset))
+            return false;
+        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list::s_NextIdentity);
+        m_ensureCursor = false;
+        return true;
+    }
 
 
 private:
@@ -90,15 +123,126 @@ private:
 
 class ListBehavior final{
 public:
-    [[nodiscard]] static Expected<ListKeyResolution> ResolveKey(const IListDataSource& source, u64 count, u64 key);
+    [[nodiscard]] static Expected<ListKeyResolution> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
+        if(key == 0u || count == 0u)
+            return ListKeyResolution{};
+        const auto index = source.indexOf(key);
+        if(!index)
+            return ListKeyResolution{};
+        if(*index >= count || source.key(*index) != key)
+            return MakeUnexpected(Failure{});
+        return ListKeyResolution(*index, source.enabled(*index));
+    }
+
     [[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision){
         return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision;
     }
+
     [[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision, const u64 count){
         return SourceMatches(source, generation, revision) && source.rowCount() == count;
     }
-    [[nodiscard]] static b8 Reconcile(ListState& state, const IListDataSource& source);
-    [[nodiscard]] static b8 Apply(const IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result);
+
+    [[nodiscard]] static b8 Reconcile(ListState& state, const IListDataSource& source){
+        const u64 inputGeneration = state.m_inputGeneration;
+        const u64 generation = source.instanceGeneration();
+        const u64 revision = source.revision();
+        if(generation == 0u || revision == 0u)
+            return false;
+        const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
+        u64 selected = replacement ? 0u : state.m_selected;
+        u64 cursor = replacement ? 0u : state.m_cursor;
+        const u64 count = source.rowCount();
+        const auto selectedResolution = ResolveKey(source, count, selected);
+        if(!selectedResolution)
+            return false;
+        b8 cursorPresent = selectedResolution->present;
+        if(cursor != selected){
+            const auto cursorResolution = ResolveKey(source, count, cursor);
+            if(!cursorResolution)
+                return false;
+            cursorPresent = cursorResolution->present;
+        }
+        selected = selectedResolution->present ? selected : 0u;
+        cursor = cursorPresent ? cursor : 0u;
+        if(!SourceMatches(source, generation, revision) || state.m_inputGeneration != inputGeneration)
+            return false;
+        if(replacement && !state.m_scroll.setOffset(0.0))
+            return false;
+        const b8 changed = state.m_sourceGeneration != generation || state.m_sourceRevision != revision;
+        state.m_selected = selected;
+        state.m_cursor = cursor;
+        state.m_ensureCursor = cursor != 0u && (state.m_ensureCursor || changed);
+        state.m_sourceGeneration = generation;
+        state.m_sourceRevision = revision;
+        return true;
+    }
+
+    [[nodiscard]] static b8 Apply(const IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
+        const u64 inputGeneration = state.m_inputGeneration;
+        const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
+        if(
+            !ValidateListControlActionHeader(options, token, action)
+            || !SourceMatches(source, token.contentGeneration, token.contentRevision)
+            || state.m_inputGeneration != inputGeneration
+        )
+            return false;
+        if(action.kind == ControlActionKind::Wheel){
+            f64 offset = 0.0;
+            if(!TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum, offset) || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(offset))
+                return false;
+            state.m_ensureCursor = false;
+            result.valid = true;
+            return true;
+        }
+        const u64 count = source.rowCount();
+        u64 candidate = 0u;
+        const b8 activate = action.kind == ControlActionKind::Activate || action.kind == ControlActionKind::Submit;
+        if(activate){
+            candidate = action.kind == ControlActionKind::Activate ? action.value : state.m_cursor;
+            const auto resolved = ResolveKey(source, count, candidate);
+            if(!resolved)
+                return false;
+            if(!resolved->present){
+                if(action.kind == ControlActionKind::Activate)
+                    return false;
+                candidate = 0u;
+            }
+        }
+        else{
+            const auto cursor = FindCursor(source, count, state.m_cursor, action);
+            if(!cursor)
+                return false;
+            candidate = *cursor;
+        }
+        if(!SourceMatches(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
+            return false;
+        ApplyListCandidateSelection(options, activate, candidate, state.m_selected, state.m_cursor, state.m_ensureCursor, result);
+        return true;
+    }
+
+
+private:
+    [[nodiscard]] static Expected<u64> FindCursor(const IListDataSource& source, const u64 count, const u64 cursor, const ControlAction& action){
+        if(count == 0u)
+            return 0u;
+        const auto current = ResolveKey(source, count, cursor);
+        if(!current)
+            return MakeUnexpected(current.error());
+        const b8 reverse = IsReverseListControlAction(action.kind);
+        const u64 start = ResolveListNavigationStartIndex(count, *current, action);
+        const auto index = source.findEnabled(start, reverse);
+        if(!index)
+            return 0u;
+        if(!ValidateListEnabledSearchIndex(*index, count, start, reverse))
+            return MakeUnexpected(Failure{});
+        const u64 key = source.key(*index);
+        if(key == 0u)
+            return MakeUnexpected(Failure{});
+        const auto resolved = ResolveKey(source, count, key);
+        if(!resolved || !resolved->present || resolved->index != *index)
+            return MakeUnexpected(Failure{});
+        return key;
+    }
 };
 
 
@@ -109,4 +253,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

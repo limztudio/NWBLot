@@ -9,11 +9,31 @@
 #include "list.h"
 #include "popup.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_combo{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +47,9 @@ class ComboState final : NoCopy{
 
 
 public:
-    ComboState()noexcept;
+    ComboState()noexcept
+        : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity))
+    {}
     ComboState(ComboState&&) = delete;
 
 
@@ -68,13 +90,87 @@ private:
 class ComboBehavior final{
 public:
     // Rebinding after omission or to another field retires popup interaction while preserving committed selection.
-    [[nodiscard]] static b8 Bind(ComboState& state, WidgetId owner, u64 declarationGeneration)noexcept;
-    [[nodiscard]] static b8 Reconcile(ComboState& state, const IListDataSource& source);
-    static void Open(ComboState& state)noexcept;
-    static void Close(ComboState& state)noexcept;
-    [[nodiscard]] static b8 Commit(ComboState& state, const IListDataSource& source, u64 key);
+    [[nodiscard]] static b8 Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
+        b8 shouldClose = false;
+        if(!TryBindComboOwner(owner, declarationGeneration, state.m_owner, state.m_ownerDeclaration, shouldClose))
+            return false;
+        if(shouldClose)
+            Close(state);
+        return true;
+    }
+
+    [[nodiscard]] static b8 Reconcile(ComboState& state, const IListDataSource& source){
+        const u64 inputGeneration = state.m_inputGeneration;
+        const u64 generation = source.instanceGeneration();
+        const u64 revision = source.revision();
+        const u64 count = source.rowCount();
+        if(generation == 0u || revision == 0u)
+            return false;
+        const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
+        const u64 selected = replacement ? 0u : state.m_selectedKey;
+        const auto present = ListBehavior::ResolveKey(source, count, selected);
+        if(!present)
+            return false;
+        if(!ListBehavior::SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
+            return false;
+        if(replacement && !state.m_list.scrollTo(0.0))
+            return false;
+        state.m_selectedKey = present->present ? selected : 0u;
+        state.m_sourceGeneration = generation;
+        state.m_sourceRevision = revision;
+        if(replacement)
+            Close(state);
+        return true;
+    }
+
+    static void Open(ComboState& state)noexcept{
+        state.m_list.select(state.m_selectedKey);
+        state.m_popup.close();
+        state.m_popup.open();
+    }
+
+    static void Close(ComboState& state)noexcept{
+        state.m_list.select(state.m_selectedKey);
+        state.m_popup.close();
+    }
+
+    [[nodiscard]] static b8 Commit(ComboState& state, const IListDataSource& source, const u64 key){
+        if(!state.m_popup.isOpen() || key == 0u)
+            return false;
+        const u64 inputGeneration = state.m_inputGeneration;
+        const u64 generation = state.m_sourceGeneration;
+        const u64 revision = state.m_sourceRevision;
+        const u64 count = source.rowCount();
+        if(!ListBehavior::SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
+            return false;
+        const auto present = ListBehavior::ResolveKey(source, count, key);
+        if(!present || !present->present)
+            return false;
+        if(!ListBehavior::SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration || !state.m_popup.isOpen())
+            return false;
+        state.m_selectedKey = key;
+        Close(state);
+        return true;
+    }
+
     [[nodiscard]] static ListState& Preview(ComboState& state)noexcept{ return state.m_list; }
 };
+
+inline void ComboState::select(const u64 key)noexcept{
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity);
+    m_selectedKey = key;
+    ComboBehavior::Close(*this);
+}
+
+inline void ComboState::open()noexcept{
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity);
+    ComboBehavior::Open(*this);
+}
+
+inline void ComboState::close()noexcept{
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity);
+    ComboBehavior::Close(*this);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,4 +180,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

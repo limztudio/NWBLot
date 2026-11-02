@@ -191,6 +191,13 @@ b8 TryMakeWidgetId(in WidgetId parent, in StringView stableKey, mut WidgetId out
     return true;
 }
 
+b8 ValidateWidgetStateTouchRequest(in WidgetId id, in WidgetRoot root, in WidgetKind kind, in u64 frameGeneration){
+    return id.valid() && root.generation != 0u && frameGeneration != 0u && cast<u8>(kind) <= cast<u8>(WidgetKind::Image);
+}
+
+b8 CanTouchExistingWidgetState(in WidgetState entry, in WidgetRoot root, in u64 frameGeneration){
+    return entry.root == root && entry.lastSeenFrame != frameGeneration;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

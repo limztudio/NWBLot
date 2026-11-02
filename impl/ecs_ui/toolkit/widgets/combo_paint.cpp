@@ -4,8 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
-#include <global/simplemath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +23,7 @@ b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const b8 focused = input.focus() == item.state.id;
     const b8 hovered = input.hover() == item.state.id;
-    const Name& name = !item.enabled ? frame.style.disabled : frame.open ? frame.style.open : focused ? frame.style.focused : hovered ? frame.style.hover : frame.style.normal;
+    const Name name = ResolveComboFieldRegionName(frame.style, item.enabled, frame.open, focused, hovered);
     const UiSkinRegion* field = region(name, frame.style.fallback);
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!field || !arrow)
@@ -33,17 +31,10 @@ b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
     const Rect clip = visibleClip(box.clip);
     m_paint.pushClip(clip);
     const b8 fieldPainted = m_paint.drawRegion(field->name, box.rectangle);
-    const SIMDVectorSingle content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
-    const f32 contentWidth = VectorGetZ(content);
-    const f32 contentHeight = VectorGetW(content);
-    const f32 extent = Min(frame.arrowExtent, Min(contentWidth, contentHeight));
-    const f32 iconOffsetY = Max(0.0f, (contentHeight - extent) * s_RectCenterFraction);
-    const Rect icon{ ((box.rectangle.x + box.rectangle.width) - item.padding.right) - extent, (box.rectangle.y + item.padding.top) + iconOffsetY, extent, extent };
+    Rect icon;
+    Rect textClip;
+    ResolveComboFieldLayout(box.rectangle, item.padding, frame.arrowExtent, frame.style.arrowGap, icon, textClip);
     const b8 arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon, item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha });
-    const f32 textX = box.rectangle.x + item.padding.left;
-    const f32 textY = box.rectangle.y + item.padding.top;
-    const f32 textWidth = Max(0.0f, (icon.x - frame.style.arrowGap) - textX);
-    const Rect textClip{ textX, textY, textWidth, contentHeight };
     m_paint.pushClip(textClip);
     const Point origin = ResolveCenteredTextOrigin(textClip, 0.0f, item.textBounds);
     const b8 textPainted = arrowPainted && m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
@@ -65,7 +56,7 @@ b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
     if(!m_context.addTarget(item.state, target))
         return false;
     frame.state->m_bounds = box.rectangle;
-    frame.visibleField = StoreRect(IntersectRectValue(LoadRect(box.rectangle), LoadRect(clip)));
+    frame.visibleField = IntersectUiRectsBounds(box.rectangle, clip);
     return true;
 }
 
@@ -132,8 +123,7 @@ b8 Builder::paintComboPopup(ComboFrame& frame){
         listItem.state = frame.rows;
         listItem.list = frame.list;
         LayoutBox box;
-        const SIMDVectorSingle inset = InsetRectValue(LoadRect(placement->bounds), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
-        box.rectangle = StoreRect(inset);
+        box.rectangle = InsetUiRectBounds(placement->bounds, padding);
         box.clip = placement->bounds;
         painted = (!frame.search || paintComboQuery(frame, box)) && paintList(listItem, box) && comboMatches(frame);
     }
@@ -152,4 +142,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

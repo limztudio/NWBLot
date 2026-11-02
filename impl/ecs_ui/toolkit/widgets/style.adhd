@@ -112,6 +112,53 @@ Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in Rect textBound
     return Point(origin.x - textBounds.x, origin.y - textBounds.y);
 }
 
+Name ResolveButtonPreferredName(in WidgetStyle style, in b8 enabled, in b8 pressed, in b8 hover){
+    if(!enabled)
+        return style.buttonDisabled;
+    if(pressed)
+        return style.buttonPressed;
+    if(hover)
+        return style.buttonHover;
+    return style.button;
+}
+
+void ResolveButtonTextPlacement(in Rect bounds, in Insets padding, in Point measured, mut Rect outTextClip, mut Point outOrigin){
+    outTextClip = InsetUiRectBounds(bounds, padding);
+    outOrigin = ResolveCenteredTextOrigin(outTextClip, max(0.0f, (outTextClip.width - measured.x) * s_RectCenterFraction), measured.y);
+}
+
+Name ResolveCheckboxPreferredName(in WidgetStyle style, in b8 enabled, in b8 checked, in b8 hover){
+    if(!enabled)
+        return style.checkboxDisabled;
+    if(checked)
+        return style.checkboxChecked;
+    if(hover)
+        return style.checkboxHover;
+    return style.checkbox;
+}
+
+void ResolveCheckboxPlacement(
+    in Rect bounds,
+    in f32 checkboxExtent,
+    in f32 gap,
+    in Point measured,
+    mut Rect outSquare,
+    mut Rect outMark,
+    mut Rect outTextClip,
+    mut Point outOrigin
+){
+    const f32 squareOffsetY = max(0.0f, (bounds.height - checkboxExtent) * s_RectCenterFraction);
+    outSquare = Rect(bounds.x, bounds.y + squareOffsetY, checkboxExtent, checkboxExtent);
+    const f32 inset = checkboxExtent * s_CheckmarkInsetFraction;
+    const f32 markExtent = checkboxExtent - (s_CheckmarkInsetSides * inset);
+    outMark = Rect(outSquare.x + inset, outSquare.y + inset, markExtent, markExtent);
+    const f32 textOffsetX = checkboxExtent + gap;
+    outOrigin = ResolveCenteredTextOrigin(bounds, textOffsetX, measured.y);
+    const f32 clipWidth = max(0.0f, bounds.width - textOffsetX);
+    outTextClip = Rect(outOrigin.x, bounds.y, clipWidth, bounds.height);
+
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

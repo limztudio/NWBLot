@@ -604,6 +604,161 @@ b8 ValidSdfAtlasPageBinding<TFont>(in SdfAtlasPageBindingRecord<TFont> binding, 
         && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height) * cast<usize>(binding.channelCount);
 }
 
+b8 SameShapeRequest(in ShapeRequest lhs, in ShapeRequest rhs){
+    return lhs.text == rhs.text && lhs.language == rhs.language && lhs.fontSize == rhs.fontSize && lhs.scriptTag == rhs.scriptTag && lhs.direction == rhs.direction;
+}
+
+Point ResolveLabelPaintOrigin(in Rect bounds, in Rect measured){
+    return Point(bounds.x - measured.x, bounds.y - measured.y);
+}
+
+SdfAtlasPageBindingRecord<TFont> MakeSdfAtlasPageGroupBinding<TFont>(
+    in AssetRef<TFont> font,
+    in Sha256Digest fontSha256,
+    in u64 fontGeneration,
+    in u64 atlasIdentity,
+    in u32 groupIndex,
+    in u32 width,
+    in u32 height,
+    in u32 channelCount,
+    in u32 spreadPixels
+){
+    SdfAtlasPageBindingRecord<TFont> binding;
+    binding.font = font;
+    binding.fontSha256 = fontSha256;
+    binding.pixelsSha256 = Sha256Digest();
+    binding.fontGeneration = fontGeneration;
+    binding.atlasIdentity = atlasIdentity;
+    binding.generation = 1u;
+    binding.index = groupIndex;
+    binding.width = width;
+    binding.height = height;
+    binding.channelCount = channelCount;
+    binding.spreadPixels = spreadPixels;
+    return binding;
+}
+
+b8 CanUseBakedFontAtlasAtPhysicalSize(in u32 bakePpem, in f32 physicalSize){
+    if(!isFinite(physicalSize) || physicalSize <= 0.0f)
+        return false;
+    const f32 ppem = cast<f32>(bakePpem);
+    return physicalSize >= ppem * s_BakedFontAtlasMinScale && physicalSize <= ppem * s_BakedFontAtlasMaxScale;
+}
+
+b8 IsValidTextGlyphLocation(in Point glyphPosition, in Point topLeft){
+    return isFinite(glyphPosition.x) && isFinite(glyphPosition.y) && isFinite(topLeft.x) && isFinite(topLeft.y);
+}
+
+b8 TryLoadGlyphAtlasRectangle(
+    in Point glyphPosition,
+    in Point topLeft,
+    in f32 fontSize,
+    in u32 unitsPerEm,
+    in FontAtlasGlyph record,
+    mut f64x4 outRectangle
+){
+    outRectangle = f64x4(0.0, 0.0, 0.0, 0.0);
+    if(!IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || unitsPerEm == 0u)
+        return false;
+    if(record.drawable == 0u)
+        return true;
+    if(
+        !isFinite(record.planeLeft) || !isFinite(record.planeTop)
+        || !isFinite(record.planeRight) || !isFinite(record.planeBottom)
+        || record.planeRight <= record.planeLeft || record.planeBottom <= record.planeTop
+    )
+        return false;
+    const f64 scale = cast<f64>(fontSize) / cast<f64>(unitsPerEm);
+    const f64 x = (cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x)) + (cast<f64>(record.planeLeft) * scale);
+    const f64 y = (cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y)) + (cast<f64>(record.planeTop) * scale);
+    const f64 width = (cast<f64>(record.planeRight) - cast<f64>(record.planeLeft)) * scale;
+    const f64 height = (cast<f64>(record.planeBottom) - cast<f64>(record.planeTop)) * scale;
+    if(
+        !FitsTextCoordinate(x) || !FitsTextCoordinate(y)
+        || !FitsTextCoordinate(width) || !FitsTextCoordinate(height)
+        || width < 0.0 || height < 0.0
+        || !FitsTextCoordinate(x + width) || !FitsTextCoordinate(y + height)
+    )
+        return false;
+    const f32x4 rounded(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
+    if(!isFinite(rounded.x) || !isFinite(rounded.y) || !isFinite(rounded.z) || !isFinite(rounded.w) || !isFinite(rounded.x + rounded.z) || !isFinite(rounded.y + rounded.w))
+        return false;
+    outRectangle = f64x4(cast<f64>(rounded.x), cast<f64>(rounded.y), cast<f64>(rounded.z), cast<f64>(rounded.w));
+    return true;
+}
+
+TextGlyphIntersection IntersectTextCoverageInk(
+    in Point glyphPosition,
+    in Point topLeft,
+    in Rect ink,
+    in b8 coverageKnown,
+    in u32 unitsPerEm,
+    in f32 fontSize,
+    in f32 physicalSize,
+    in Rect clip,
+    in Point pixelScale
+){
+    const f64 fontSizeF64 = cast<f64>(fontSize);
+    const f64 shapedSize = floor((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel) / s_TextFixedPointScaleF64;
+    f64 correctionScalar = 1.0;
+    if(!coverageKnown)
+        correctionScalar = fontSizeF64 / shapedSize;
+    const f64 rasterScale = cast<f64>(physicalSize) / fontSizeF64;
+    f64 outlineAllowance = 0.0;
+    if(!coverageKnown)
+        outlineAllowance = fontSizeF64 / cast<f64>(unitsPerEm);
+    // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
+    const f64 rasterMarginScalar = ((max(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
+    const f64 marginX = rasterMarginScalar + (s_TextHalfPixel / cast<f64>(pixelScale.x));
+    const f64 marginY = rasterMarginScalar + (s_TextHalfPixel / cast<f64>(pixelScale.y));
+    const f64 inkOriginX = cast<f64>(ink.x);
+    const f64 inkOriginY = cast<f64>(ink.y);
+    const f64 inkEndX = inkOriginX + cast<f64>(ink.width);
+    const f64 inkEndY = inkOriginY + cast<f64>(ink.height);
+    const f64 posX = cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x);
+    const f64 posY = cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y);
+    const f64 minX = (posX + min(inkOriginX, inkOriginX * correctionScalar)) - marginX;
+    const f64 minY = (posY + min(inkOriginY, inkOriginY * correctionScalar)) - marginY;
+    const f64 maxX = (posX + max(inkEndX, inkEndX * correctionScalar)) + marginX;
+    const f64 maxY = (posY + max(inkEndY, inkEndY * correctionScalar)) + marginY;
+    return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
+}
+
+b8 TryResolveGlyphCoverageRectangle(
+    in Point glyphPosition,
+    in u32 pageIndex,
+    in Rect recordPixels,
+    in i32 bearingX,
+    in i32 bearingY,
+    in f32 rasterScale,
+    in Point topLeft,
+    in Point pixelScale,
+    mut Rect outRect
+){
+    outRect = Rect();
+    if(
+        !IsValidTextGlyphLocation(glyphPosition, topLeft)
+        || !isFinite(rasterScale) || rasterScale <= 0.0f
+        || !IsValidUiRect(recordPixels)
+        || !isFinite(pixelScale.x) || !isFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
+    )
+        return false;
+    if(pageIndex == s_GlyphAtlasNoPage)
+        return true;
+    const f64 scaleF64 = cast<f64>(rasterScale);
+    const f64 posX = (cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x)) + (cast<f64>(bearingX) / scaleF64);
+    const f64 posY = (cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y)) - (cast<f64>(bearingY) / scaleF64);
+    const f64 scaleX = cast<f64>(pixelScale.x);
+    const f64 scaleY = cast<f64>(pixelScale.y);
+    const f64 alignedX = floor((posX * scaleX) + s_TextHalfPixel) / scaleX;
+    const f64 alignedY = floor((posY * scaleY) + s_TextHalfPixel) / scaleY;
+    const f64 width = cast<f64>(recordPixels.width) / scaleF64;
+    const f64 height = cast<f64>(recordPixels.height) / scaleF64;
+    return TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints, outRect);
+
+
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

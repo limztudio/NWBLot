@@ -880,6 +880,44 @@ b8 DifferentFloatEditValues(in f64 lhs, in f64 rhs){
     return bit_cast<u64>(lhs) != bit_cast<u64>(rhs);
 }
 
+b8 TryMapEditCommandToMove(in EditCommand command, mut EditMove outMove){
+    outMove = EditMove::Left;
+    switch(command){
+    case EditCommand::Left: outMove = EditMove::Left; return true;
+    case EditCommand::Right: outMove = EditMove::Right; return true;
+    case EditCommand::Home: outMove = EditMove::Home; return true;
+    case EditCommand::End: outMove = EditMove::End; return true;
+    case EditCommand::WordLeft: outMove = EditMove::WordLeft; return true;
+    case EditCommand::WordRight: outMove = EditMove::WordRight; return true;
+    case EditCommand::DocumentHome: outMove = EditMove::DocumentHome; return true;
+    case EditCommand::DocumentEnd: outMove = EditMove::DocumentEnd; return true;
+    default: return false;
+    }
+}
+
+b8 TryMapEditCommandToPassiveResult(in EditCommand command, mut EditCommandResult inOutResult){
+    switch(command){
+    case EditCommand::Copy: inOutResult.clipboard = EditClipboardAction::Copy; return true;
+    case EditCommand::Cut: inOutResult.clipboard = EditClipboardAction::Cut; return true;
+    case EditCommand::Paste: inOutResult.clipboard = EditClipboardAction::Paste; return true;
+    case EditCommand::Submit: inOutResult.submitted = true; return true;
+    case EditCommand::Cancel: inOutResult.cancelled = true; return true;
+    default: return false;
+    }
+}
+
+void ComputeEditWordEraseDistances(in b8 forward, in usize caret, in usize boundary, mut usize outBeforeBytes, mut usize outAfterBytes){
+    if(forward){
+        outBeforeBytes = 0u;
+        outAfterBytes = boundary - caret;
+    }
+    else{
+        outBeforeBytes = caret - boundary;
+        outAfterBytes = 0u;
+    }
+
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

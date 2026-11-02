@@ -878,6 +878,105 @@ Name ResolvePreferredEditBoxBackgroundName(in EditBoxStyle style, in EditBoxPain
     return style.normal;
 }
 
+b8 ValidateTextAreaNavigationInputs(
+    in EditTextMode textMode,
+    in b8 compositionActive,
+    in EditNavigationDirection direction,
+    in f32 fontSize,
+    in f32 viewportHeight,
+    in EditNavigationSnapshot preferred,
+    mut b8 outPage
+){
+    outPage = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
+    return textMode == EditTextMode::Multiline
+        && !compositionActive
+        && cast<u8>(direction) <= cast<u8>(EditNavigationDirection::PageDown)
+        && isFinite(fontSize)
+        && fontSize > 0.0f
+        && isFinite(viewportHeight)
+        && viewportHeight >= 0.0f
+        && !(outPage && viewportHeight == 0.0f)
+        && isFinite(preferred.preferredX);
+}
+
+b8 TryResolveTextAreaPreferredX(in EditNavigationSnapshot preferred, in Rect caret, mut f32 outPreferredX){
+    outPreferredX = caret.x;
+    if(preferred.valid)
+        outPreferredX = preferred.preferredX;
+    return isFinite(outPreferredX);
+}
+
+b8 TryResolveEditBoxSnapshotSizes(
+    in usize committedBytes,
+    in EditCompositionView composition,
+    mut usize outReplaced,
+    mut usize outPreeditBytes,
+    mut usize outDisplayBytes
+){
+    outReplaced = 0u;
+    outPreeditBytes = 0u;
+    outDisplayBytes = 0u;
+    if(composition.active){
+        outReplaced = composition.replacementEnd - composition.replacementStart;
+        outPreeditBytes = composition.text.size();
+    }
+    if(committedBytes > s_TextMaxBytes || outPreeditBytes > s_TextMaxBytes - (committedBytes - outReplaced))
+        return false;
+    outDisplayBytes = (committedBytes - outReplaced) + outPreeditBytes;
+    return true;
+}
+
+b8 ValidateEditBoxDisplayText(in StringView candidateText, in EditTextMode textMode){
+    if(textMode == EditTextMode::Multiline)
+        return ValidateMultilineText(candidateText);
+    return ValidateGraphemeText(candidateText, true);
+}
+
+void ResolveEditBoxSnapshotRanges(
+    in EditCompositionView composition,
+    in usize preeditBytes,
+    in usize modelSelectionStart,
+    in usize modelSelectionEnd,
+    in usize modelCaret,
+    mut EditBoxRange outPreedit,
+    mut EditBoxRange outReplacement,
+    mut EditBoxRange outSelection,
+    mut usize outCaret
+){
+    outPreedit = EditBoxRange();
+    outReplacement = EditBoxRange();
+    outSelection = EditBoxRange();
+    outCaret = modelCaret;
+    if(composition.active){
+        outPreedit.begin = composition.replacementStart;
+        outPreedit.end = composition.replacementStart + preeditBytes;
+        outReplacement.begin = composition.replacementStart;
+        outReplacement.end = composition.replacementEnd;
+        outSelection.begin = outPreedit.begin + min(composition.anchor, composition.caret);
+        outSelection.end = outPreedit.begin + max(composition.anchor, composition.caret);
+        outCaret = outPreedit.begin + composition.caret;
+    }
+    else{
+        outSelection.begin = modelSelectionStart;
+        outSelection.end = modelSelectionEnd;
+    }
+}
+
+b8 ShouldPaintEditBoxCaret(in EditBoxPaintFlags flags, in b8 composing){
+    if(!flags.focused || !flags.enabled || flags.readOnly)
+        return false;
+    if(composing)
+        return flags.preeditCaretVisible;
+    return flags.caretVisible;
+}
+
+void OffsetEditBoxSegmentOrigin(in Point textOrigin, mut Rect inOutSegment){
+    inOutSegment.x += textOrigin.x;
+    inOutSegment.y += textOrigin.y;
+
+
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

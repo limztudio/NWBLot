@@ -3,6 +3,8 @@
 
 
 #include "list_style.adhd"
+#include <impl/ecs_ui/toolkit/id.adhd>
+#include <impl/ecs_ui/toolkit/edit/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +74,74 @@ class SearchComboSourceSnapshot{
     public u64 count;
 }
 
+b8 TryBindComboOwner(in WidgetId owner, in u64 declarationGeneration, mut WidgetId inOutOwner, mut u64 inOutOwnerDeclaration, mut b8 outShouldClose){
+    outShouldClose = false;
+    if(!owner.valid() || declarationGeneration == 0u)
+        return false;
+    if(inOutOwner.valid() && (inOutOwner != owner || inOutOwnerDeclaration != declarationGeneration))
+        outShouldClose = true;
+    inOutOwner = owner;
+    inOutOwnerDeclaration = declarationGeneration;
+    return true;
+}
+
+b8 EvaluateSearchComboRebuildNeed(
+    in b8 filterValid,
+    in u64 stateSourceGeneration,
+    in u64 stateSourceRevision,
+    in u64 stateSourceCount,
+    in SearchComboSourceSnapshot full,
+    in u64 stateViewGeneration,
+    in u64 stateViewRevision,
+    in u64 stateViewCount,
+    in SearchComboSourceSnapshot previous,
+    in StringView cachedQuery,
+    in StringView currentQuery
+){
+    const b8 fullChanged = !filterValid || stateSourceGeneration != full.generation || stateSourceRevision != full.revision || stateSourceCount != full.count;
+    const b8 viewChanged = !filterValid || stateViewGeneration != previous.generation || stateViewRevision != previous.revision || stateViewCount != previous.count;
+    const b8 queryChanged = !filterValid || cachedQuery != currentQuery;
+    return fullChanged || viewChanged || queryChanged;
+}
+
+b8 ValidateSearchComboFilteredSnapshot(in SearchComboSourceSnapshot full, in SearchComboSourceSnapshot filtered){
+    return filtered.generation != 0u && filtered.revision != 0u && filtered.count <= full.count;
+}
+
+b8 ShouldResetSearchComboPreviewOnFilter(
+    in b8 rebuild,
+    in b8 filterValid,
+    in u64 stateQueryGeneration,
+    in u64 stateQueryExternalRevision,
+    in TextAreaModelStamp query
+){
+    const b8 externalQueryChange = filterValid && (stateQueryGeneration != query.instanceGeneration || stateQueryExternalRevision != query.externalRevision);
+    return rebuild || externalQueryChange;
+}
+
+Name ResolveComboFieldRegionName(in ComboStyle style, in b8 enabled, in b8 open, in b8 focused, in b8 hovered){
+    if(!enabled)
+        return style.disabled;
+    if(open)
+        return style.open;
+    if(focused)
+        return style.focused;
+    if(hovered)
+        return style.hover;
+    return style.normal;
+}
+
+void ResolveComboFieldLayout(in Rect bounds, in Insets padding, in f32 arrowExtent, in f32 arrowGap, mut Rect outIcon, mut Rect outTextClip){
+    const Rect content = InsetUiRectBounds(bounds, padding);
+    const f32 extent = min(arrowExtent, min(content.width, content.height));
+    const f32 iconOffsetY = max(0.0f, (content.height - extent) * s_RectCenterFraction);
+    outIcon = Rect(((bounds.x + bounds.width) - padding.right) - extent, (bounds.y + padding.top) + iconOffsetY, extent, extent);
+    const f32 textX = bounds.x + padding.left;
+    const f32 textY = bounds.y + padding.top;
+    const f32 textWidth = max(0.0f, (outIcon.x - arrowGap) - textX);
+    outTextClip = Rect(textX, textY, textWidth, content.height);
+
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

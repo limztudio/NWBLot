@@ -4,8 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
-#include <global/simplemath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -75,32 +73,26 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
         return painted && popped;
     }
     if(item.state.kind == WidgetKind::Button){
-        const Name& preferred = !item.enabled ? item.style.buttonDisabled : pressed ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
+        const Name preferred = ResolveButtonPreferredName(item.style, item.enabled, pressed, hover);
         const UiSkinRegion* skinRegion = region(preferred, item.style.button);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, box.rectangle);
-        textClip = StoreRect(InsetRectValue(LoadRect(box.rectangle), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom)));
-        origin = ResolveCenteredTextOrigin(textClip, Max(0.0f, (textClip.width - measured.x) * s_RectCenterFraction), measured.y);
+        ResolveButtonTextPlacement(box.rectangle, item.padding, measured, textClip, origin);
     }
     else if(item.state.kind == WidgetKind::Checkbox){
-        const Name& preferred = !item.enabled ? item.style.checkboxDisabled : item.checked ? item.style.checkboxChecked : hover ? item.style.checkboxHover : item.style.checkbox;
+        const Name preferred = ResolveCheckboxPreferredName(item.style, item.enabled, item.checked, hover);
         const UiSkinRegion* skinRegion = region(preferred, item.style.checkbox);
-        const f32 squareOffsetY = Max(0.0f, (box.rectangle.height - item.checkboxExtent) * s_RectCenterFraction);
-        const Rect square{ origin.x, origin.y + squareOffsetY, item.checkboxExtent, item.checkboxExtent };
+        Rect square;
+        Rect mark;
+        ResolveCheckboxPlacement(box.rectangle, item.checkboxExtent, item.style.gap, measured, square, mark, textClip, origin);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, square);
         if(painted && item.checked && m_skin->findRegion(item.style.checkboxMark)){
-            const f32 inset = item.checkboxExtent * s_CheckmarkInsetFraction;
             const Color tint = item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha };
-            const f32 markExtent = item.checkboxExtent - (s_CheckmarkInsetSides * inset);
-            painted = m_paint.drawRegion(item.style.checkboxMark, { square.x + inset, square.y + inset, markExtent, markExtent }, tint);
+            painted = m_paint.drawRegion(item.style.checkboxMark, mark, tint);
         }
-        const f32 textOffsetX = item.checkboxExtent + item.style.gap;
-        origin = ResolveCenteredTextOrigin(box.rectangle, textOffsetX, measured.y);
-        const f32 clipWidth = Max(0.0f, box.rectangle.width - textOffsetX);
-        textClip = { origin.x, box.rectangle.y, clipWidth, box.rectangle.height };
     }
     if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
         painted = m_paint.drawRegion(item.style.focus, box.rectangle);
-    origin = { origin.x - item.textBounds.x, origin.y - item.textBounds.y };
+    origin = ResolveLabelPaintOrigin(Rect(origin.x, origin.y, 0.0f, 0.0f), item.textBounds);
     m_paint.pushClip(textClip);
     if(painted)
         painted = m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
@@ -161,4 +153,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

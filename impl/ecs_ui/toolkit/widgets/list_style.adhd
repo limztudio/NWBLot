@@ -3,6 +3,7 @@
 
 
 #include "style.adhd"
+#include <impl/ecs_ui/toolkit/input/input.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -259,6 +260,88 @@ b8 PaintSelectable(
     const b8 rowPopped = paint.popClip();
     const b8 clipPopped = paint.popClip();
     return painted && textPopped && rowPopped && clipPopped;
+}
+
+u64 ResolveListNavigationStartIndex(in u64 count, in ListKeyResolution current, in ControlAction action){
+    const b8 reverse = IsReverseListControlAction(action.kind);
+    u64 start = 0u;
+    if(reverse)
+        start = count - 1u;
+    if(action.kind == ControlActionKind::Home)
+        start = 0u;
+    else if(action.kind == ControlActionKind::End)
+        start = count - 1u;
+    else if(current.present){
+        u64 distance = 1u;
+        if(action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown)
+            distance = action.pageRows;
+        if(reverse)
+            start = current.index - min(distance, current.index);
+        else
+            start = current.index + min(distance, count - 1u - current.index);
+    }
+    return start;
+}
+
+b8 ValidateListEnabledSearchIndex(in u64 index, in u64 count, in u64 start, in b8 reverse){
+    if(index >= count)
+        return false;
+    if(reverse)
+        return index <= start;
+    return index >= start;
+}
+
+b8 ValidateListControlActionHeader(in ListOptions options, in ControlToken token, in ControlAction action){
+    return IsValidListOptions(options)
+        && token.valid()
+        && action.control == token
+        && cast<u8>(action.kind) <= cast<u8>(ControlActionKind::Activate)
+        && !((action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown) && action.pageRows == 0u);
+}
+
+void ApplyListCandidateSelection(
+    in ListOptions options,
+    in b8 activate,
+    in u64 candidate,
+    mut u64 inOutSelected,
+    mut u64 outCursor,
+    mut b8 outEnsureCursor,
+    mut ListResult inOutResult
+){
+    if(candidate != 0u){
+        outCursor = candidate;
+        outEnsureCursor = true;
+        if(activate || options.selectOnNavigate){
+            inOutResult.selectionChanged = inOutResult.selectionChanged || inOutSelected != candidate;
+            inOutSelected = candidate;
+        }
+        inOutResult.activated = inOutResult.activated || activate;
+    }
+    inOutResult.valid = true;
+}
+
+u64 ComputeListHostPageRows(in f32 viewportHeight, in f32 rowHeight, in u64 rowCount){
+    const f64 page = floor(cast<f64>(viewportHeight) / cast<f64>(rowHeight));
+    if(page >= cast<f64>(rowCount))
+        return max(cast<u64>(1u), rowCount);
+    return max(cast<u64>(1u), cast<u64>(page));
+}
+
+f64 ComputeListExpandedScrollOffset(
+    in f32 contentClipY,
+    in f32 viewportY,
+    in f64 candidateOffset,
+    in u64 candidateFirstRow,
+    in f32 oldRowHeight,
+    in f32 newRowHeight
+){
+    const f64 clippedTop = cast<f64>(contentClipY) - cast<f64>(viewportY);
+    const f64 firstRow = cast<f64>(candidateFirstRow);
+    const f64 within = (candidateOffset + clippedTop) - (firstRow * cast<f64>(oldRowHeight));
+    const f64 offset = ((firstRow * cast<f64>(newRowHeight)) + within) - clippedTop;
+    return max(0.0, offset);
+
+
 }
 
 

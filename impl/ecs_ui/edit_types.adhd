@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "clipboard_types.adhd"
 #include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd>
 
 
@@ -11,9 +12,11 @@
 native{
 namespace NWB::Impl{
 using Ui::DisplayMetrics;
+namespace EditClipboardAction = Ui::EditClipboardAction;
 using Ui::EditBoxCaretStop;
 using Ui::EditBoxPlacement;
 using Ui::EditCaretLine;
+using Ui::EditCompositionView;
 namespace EditTextMode = Ui::EditTextMode;
 using Ui::HitEditCaretGeometry;
 using Ui::Point;
@@ -257,6 +260,51 @@ Expected<usize> HitUiEditBoxWordGeometry(
     return committedByte;
 }
 
+usize ComputeUiTextEditRetainedBytes(in EditCompositionView composition, in usize textLength, in usize selectionStart, in usize selectionEnd){
+    usize replaced = selectionEnd - selectionStart;
+    if(composition.active)
+        replaced = composition.replacementEnd - composition.replacementStart;
+    return textLength - replaced;
+}
+
+b8 ValidateUiTextEditSurroundingDeleteRange(in usize deleteBeforeBytes, in usize deleteAfterBytes, in usize startOffset, in usize endOffset, in usize textLength){
+    return deleteBeforeBytes <= startOffset && deleteAfterBytes <= textLength - endOffset;
+}
+
+b8 ValidateUiTextEditPollSequence(in u64 eventSequence, in u64 lastSequence, in usize eventIndex, in usize maxEvents){
+    return eventSequence > lastSequence && eventIndex < maxEvents;
+}
+
+b8 ValidateUiEditClipboardActionMode(
+    in EditClipboardAction action,
+    in b8 readOnly,
+    in b8 compositionActive,
+    in b8 hasSelection,
+    mut b8 outReads,
+    mut UiEditClipboardStatus outStatus
+){
+    outReads = false;
+    outStatus = UiEditClipboardStatus::Idle;
+    if(action == EditClipboardAction::None || cast<u8>(action) > cast<u8>(EditClipboardAction::PublishSelection)){
+        outStatus = UiEditClipboardStatus::InvalidAction;
+        return false;
+    }
+    outReads = action == EditClipboardAction::Paste;
+    const b8 mutates = outReads || action == EditClipboardAction::Cut;
+    if(readOnly && mutates){
+        outStatus = UiEditClipboardStatus::ReadOnly;
+        return false;
+    }
+    if(compositionActive){
+        outStatus = UiEditClipboardStatus::CompositionActive;
+        return false;
+    }
+    if(!outReads && !hasSelection){
+        outStatus = UiEditClipboardStatus::NoSelection;
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

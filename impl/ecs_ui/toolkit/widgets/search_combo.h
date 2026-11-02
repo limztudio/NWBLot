@@ -82,7 +82,72 @@ private:
 class SearchComboBehavior final{
 public:
     // Reconcile the committed combo against the full source first; reconcile its preview against filtered() afterward.
-    [[nodiscard]] static b8 Filter(SearchComboState& state, ISearchableListDataSource& source);
+    [[nodiscard]] static b8 Filter(SearchComboState& state, ISearchableListDataSource& source){
+        const TextAreaModelStamp query = state.m_query.stamp();
+        const u64 comboGeneration = state.m_combo.inputGeneration();
+        const u64 previewGeneration = state.m_combo.listState().inputGeneration();
+        const SearchComboSourceSnapshot full(source.instanceGeneration(), source.revision(), source.rowCount());
+        const IListDataSource& previousView = source.filtered();
+        const SearchComboSourceSnapshot previous(previousView.instanceGeneration(), previousView.revision(), previousView.rowCount());
+        if(full.generation == 0u || full.revision == 0u || !Matches(state, query, comboGeneration, previewGeneration))
+            return false;
+        const StringView cachedQuery(state.m_filteredQuery.data(), state.m_filteredQuery.size());
+        const b8 rebuild = EvaluateSearchComboRebuildNeed(
+            state.m_filterValid,
+            state.m_sourceGeneration,
+            state.m_sourceRevision,
+            state.m_sourceCount,
+            full,
+            state.m_viewGeneration,
+            state.m_viewRevision,
+            state.m_viewCount,
+            previous,
+            cachedQuery,
+            state.m_query.text()
+        );
+        AString<Core::Alloc::GlobalArena> candidate(state.m_arena);
+        if(rebuild){
+            const AStringView text = state.m_query.text();
+            if(!text.empty())
+                candidate.assign(text.data(), text.size());
+            if(!source.filter({ candidate.data(), candidate.size() }))
+                return false;
+        }
+        const IListDataSource& view = source.filtered();
+        const SearchComboSourceSnapshot filtered(view.instanceGeneration(), view.revision(), view.rowCount());
+        if(
+            !ValidateSearchComboFilteredSnapshot(full, filtered)
+            || !ListBehavior::SourceMatches(view, filtered.generation, filtered.revision, filtered.count)
+            || !ListBehavior::SourceMatches(source, full.generation, full.revision, full.count)
+            || !Matches(state, query, comboGeneration, previewGeneration)
+        )
+            return false;
+        if(ShouldResetSearchComboPreviewOnFilter(rebuild, state.m_filterValid, state.m_queryGeneration, state.m_queryExternalRevision, query)){
+            if(!state.m_combo.m_list.scrollTo(0.0))
+                return false;
+            state.m_combo.m_list.select(state.m_combo.selectedKey());
+        }
+        if(rebuild)
+            state.m_filteredQuery = Move(candidate);
+        state.m_sourceGeneration = full.generation;
+        state.m_sourceRevision = full.revision;
+        state.m_sourceCount = full.count;
+        state.m_viewGeneration = filtered.generation;
+        state.m_viewRevision = filtered.revision;
+        state.m_viewCount = filtered.count;
+        state.m_queryGeneration = query.instanceGeneration;
+        state.m_queryExternalRevision = query.externalRevision;
+        state.m_filterValid = true;
+        return true;
+    }
+
+
+private:
+    [[nodiscard]] static b8 Matches(const SearchComboState& state, const TextAreaModelStamp& query, const u64 comboGeneration, const u64 previewGeneration)noexcept{
+        return state.query().matchesStamp(query)
+            && state.combo().inputGeneration() == comboGeneration
+            && state.combo().listState().inputGeneration() == previewGeneration;
+    }
 };
 
 
@@ -93,4 +158,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

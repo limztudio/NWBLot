@@ -4,8 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/builder.h>
 
-#include <global/simd/vector_arithmetic.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -57,9 +55,7 @@ b8 Builder::paintWindowTitle(){
             painted = m_paint.drawRegion(style.focus, collapse);
     }
     const Rect& titleBounds = m_scope->m_window.titleBounds;
-    const f32 collapseReservation = m_scope->m_window.options.collapsible ? metrics.collapseExtent + style.gap : 0.0f;
-    const SIMDVectorSingle padding = VectorSet(metrics.titlePadding.left + collapseReservation, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom);
-    const Rect content = StoreRect(InsetRectValue(LoadRect(header), padding));
+    const Rect content = ResolveWindowTitleContentBounds(header, metrics, m_scope->m_window.options.collapsible, style.gap);
     const Point origin = ResolveCenteredTextOrigin(content, 0.0f, titleBounds);
     m_paint.pushClip(content);
     if(painted)
@@ -120,4 +116,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -50,6 +50,16 @@ class UiEditClipboardResult{
     public b8 selectionChanged = false;
 }
 
+void FinalizeUiClipboardPublicationDrainStatus(in usize pendingCount, mut UiClipboardPublicationResult inOutResult){
+    if(inOutResult.failed == 0u){
+        if(inOutResult.published != 0u)
+            inOutResult.status = UiClipboardPublicationStatus::Published;
+        else if(pendingCount == 0u)
+            inOutResult.status = UiClipboardPublicationStatus::Idle;
+        else
+            inOutResult.status = UiClipboardPublicationStatus::Pending;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

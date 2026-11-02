@@ -104,11 +104,15 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
             return *candidate;
         }
         // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.
-        const f64 clippedTop = static_cast<f64>(candidate->contentClip.y) - static_cast<f64>(candidate->viewport.y);
-        const f64 firstRow = static_cast<f64>(candidate->firstRow);
-        const f64 within = (candidate->offset + clippedTop) - (firstRow * static_cast<f64>(frame.rowHeight));
-        const f64 offset = ((firstRow * static_cast<f64>(height)) + within) - clippedTop;
-        if(!scroll.setOffset(Max(0.0, offset)))
+        const f64 offset = ComputeListExpandedScrollOffset(
+            candidate->contentClip.y,
+            candidate->viewport.y,
+            candidate->offset,
+            candidate->firstRow,
+            frame.rowHeight,
+            height
+        );
+        if(!scroll.setOffset(offset))
             return MakeUnexpected(Failure{});
         frame.rowHeight = height;
     }
@@ -150,8 +154,7 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
     host.navigable = item.enabled;
     host.scrollable = item.enabled;
     host.scrollStep = static_cast<f64>(frame.rowHeight) * static_cast<f64>(frame.options.wheelRows);
-    const f64 page = Floor(static_cast<f64>(placement.viewport.height) / static_cast<f64>(frame.rowHeight));
-    host.pageRows = page >= static_cast<f64>(frame.rowCount) ? Max<u64>(1u, frame.rowCount) : Max<u64>(1u, static_cast<u64>(page));
+    host.pageRows = ComputeListHostPageRows(placement.viewport.height, frame.rowHeight, frame.rowCount);
     host.gestureMaximum = placement.maxOffset;
     host.focusOnCommit = frame.focusOnCommit;
     if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement))
@@ -237,4 +240,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

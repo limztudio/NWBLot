@@ -40,7 +40,55 @@ public:
 
 
 public:
-    [[nodiscard]] b8 snapshot(const EditModel& model);
+    [[nodiscard]] b8 snapshot(const EditModel& model){
+        const AStringView committed = model.text();
+        const EditCompositionView composition = model.composition();
+        usize replaced = 0u;
+        usize preeditBytes = 0u;
+        usize displayBytes = 0u;
+        if(!TryResolveEditBoxSnapshotSizes(committed.size(), composition, replaced, preeditBytes, displayBytes))
+            return false;
+        AString<Core::Alloc::GlobalArena> display(*m_arena);
+        display.reserve(displayBytes);
+        if(composition.active){
+            display.append(committed.data(), composition.replacementStart);
+            if(preeditBytes != 0u)
+                display.append(composition.text.data(), preeditBytes);
+            display.append(committed.data() + composition.replacementEnd, committed.size() - composition.replacementEnd);
+        }
+        else if(!committed.empty())
+            display.assign(committed.data(), committed.size());
+        const StringView candidateText(display.data(), display.size());
+        if(!ValidateEditBoxDisplayText(candidateText, model.textMode()))
+            return false;
+        PaintVector<EditCaretMapping> stops(*m_arena);
+        stops.reserve(model.graphemeBoundaries().size() + 1u);
+        for(const usize boundary : model.graphemeBoundaries()){
+            if(!composition.active || boundary <= composition.replacementStart)
+                stops.push_back({ boundary, boundary });
+            if(composition.active && boundary >= composition.replacementEnd)
+                stops.push_back({ boundary, boundary - replaced + preeditBytes });
+        }
+        m_display = Move(display);
+        m_mapping = Move(stops);
+        m_composing = composition.active;
+        ResolveEditBoxSnapshotRanges(
+            composition,
+            preeditBytes,
+            model.selectionStart(),
+            model.selectionEnd(),
+            model.caret(),
+            m_preedit,
+            m_replacement,
+            m_selection,
+            m_caret
+        );
+        m_committedBytes = committed.size();
+        m_revision = model.revision();
+        m_textMode = model.textMode();
+        m_ready = false;
+        return true;
+    }
 
     // request.text is supplied by the owned snapshot. Font size remains logical; TextService applies paint DPI.
     [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {}){
@@ -119,7 +167,56 @@ public:
         return m_geometry.hitTest({ point.x - placement.textOrigin.x, point.y - placement.textOrigin.y });
     }
 
-    [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const;
+    [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const{
+        if(!m_ready || !IsValidEditBoxPaintStyle(style))
+            return false;
+        paint.pushClip(placement.frameClip);
+        b8 painted = true;
+        if(const UiSkinRegion* background = ResolveBackground(skin, style, flags))
+            painted = paint.drawRegion(background->name, placement.bounds);
+        else
+            paint.fillRect(placement.bounds, style.background);
+        if(painted && flags.focused && flags.enabled && skin.findRegion(style.focus))
+            painted = paint.drawRegion(style.focus, placement.bounds);
+        paint.pushClip(placement.clip);
+        if(painted){
+            const Color& selection = flags.focused && flags.enabled ? style.selection : style.inactiveSelection;
+            if(m_selection.begin == m_selection.end)
+                painted = static_cast<b8>(m_geometry.rangeOnLine(m_selection, 0u, placement.caret.width));
+            else{
+                for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
+                    auto segment = m_geometry.rangeOnLine(m_selection, line, placement.caret.width);
+                    if(!segment){
+                        painted = false;
+                        break;
+                    }
+                    if(segment->width > 0.0f){
+                        OffsetEditBoxSegmentOrigin(placement.textOrigin, *segment);
+                        paint.fillRect(*segment, selection);
+                    }
+                }
+            }
+            painted = painted && text.paint(paint, layout(), placement.textOrigin, flags.enabled ? style.text : style.disabledText);
+        }
+        if(painted && m_composing && flags.focused && flags.enabled){
+            for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
+                auto segment = m_geometry.rangeOnLine(m_preedit, line, placement.caret.width);
+                if(!segment){
+                    painted = false;
+                    break;
+                }
+                if(segment->width > 0.0f){
+                    PlaceEditPreeditUnderline(placement.textOrigin, placement.caret.width, *segment);
+                    paint.fillRect(*segment, style.preedit);
+                }
+            }
+        }
+        if(painted && ShouldPaintEditBoxCaret(flags, m_composing))
+            paint.fillRect(placement.caret, style.caret);
+        const b8 contentPopped = paint.popClip();
+        const b8 framePopped = paint.popClip();
+        return painted && contentPopped && framePopped;
+    }
 
     [[nodiscard]] StringView displayText()const noexcept{ return { m_display.data(), m_display.size() }; }
 
@@ -151,6 +248,18 @@ public:
 
 
 private:
+    [[nodiscard]] static const UiSkinRegion* ResolveBackground(const UiSkin& skin, const EditBoxStyle& style, const EditBoxPaintFlags& flags)noexcept{
+        const Name preferred = ResolvePreferredEditBoxBackgroundName(style, flags);
+        const UiSkinRegion* region = skin.findRegion(preferred);
+        if(!region)
+            region = skin.findRegion(style.normal);
+        if(!region)
+            region = skin.findRegion(style.fallback);
+        return region;
+    }
+
+
+private:
     NotNull<Core::Alloc::GlobalArena*> m_arena;
     AString<Core::Alloc::GlobalArena> m_display;
     PaintVector<EditCaretMapping> m_mapping;
@@ -175,4 +284,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

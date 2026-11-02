@@ -256,6 +256,15 @@ Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion tit
     return metrics;
 }
 
+Rect ResolveWindowTitleContentBounds(in Rect header, in WindowMetrics metrics, in b8 collapsible, in f32 gap){
+    f32 collapseReservation = 0.0f;
+    if(collapsible)
+        collapseReservation = metrics.collapseExtent + gap;
+    const Insets padding(metrics.titlePadding.left + collapseReservation, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom);
+    return InsetUiRectBounds(header, padding);
+
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -86,7 +86,7 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationNormal(SIMDVec
     const SIMDVectorDouble n = VectorDoubleSelect(s_DoubleSIMDIdentityR3, normalAxis, s_DoubleSIMDSelect1110);
     SIMDVectorDouble sinAngle{};
     SIMDVectorDouble cosAngle{};
-#if defined(NWB_HAS_AVX2) || defined(NWB_HAS_NEON64)
+#if defined(NWB_HAS_NEON64)
     SIMDVectorDoubleDetail::SinCosReplicated(sinAngle, cosAngle, VectorDoubleScale(VectorDoubleReplicate(angle), SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale));
 #else
     VectorDoubleSinCos(sinAngle, cosAngle, VectorDoubleScale(VectorDoubleReplicate(angle), SIMDQuaternionDoubleDetail::s_DoubleQuaternionHalfAngleScale));

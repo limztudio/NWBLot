@@ -45,18 +45,22 @@ b8 EqualBits(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     return true;
 }
 
+// The references use the same floating-point environment as the candidates.
 SIMDVectorDouble NWB_SIMD_CALL BaselineDot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY), VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY));
     return VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
 }
 
 SIMDVectorDouble NWB_SIMD_CALL BaselineDot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMask3), VectorDoubleAndInt(rhs, s_DoubleSIMDMask3));
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
     return VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
 }
 
 SIMDVectorDouble NWB_SIMD_CALL BaselineDot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(lhs, rhs);
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
     const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
@@ -64,6 +68,7 @@ SIMDVectorDouble NWB_SIMD_CALL BaselineDot4(const SIMDVectorDouble lhs, const SI
 }
 
 SIMDVectorDouble NWB_SIMD_CALL BaselineSum(const SIMDVectorDouble value)noexcept{
+#pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(value), VectorDoubleSplatY(value));
     const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(value));
     return VectorDoubleAdd(xyz, VectorDoubleSplatW(value));

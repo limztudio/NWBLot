@@ -267,6 +267,17 @@ const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
 const u32 s_FullscreenTriangleVertexCount = 3u;
 const u32 s_EmulatedVertexStride = 64u;
 
+const StringView s_AvboitDepthWarpName = "render.avboit.depth_warp";
+const StringView s_AvboitDepthWarpLabel = "AVBOIT Depth Warp";
+const StringView s_AvboitExtinctionName = "render.avboit.extinction";
+const StringView s_AvboitExtinctionLabel = "AVBOIT Extinction";
+const StringView s_AvboitIntegrationLabel = "AVBOIT Integration";
+const StringView s_TransparentCsgIntervalsLabel = "Transparent CSG Intervals";
+const StringView s_ShadowVisibilityLabel = "Shadow Visibility";
+const StringView s_DeferredLightingLabel = "Deferred Lighting";
+const StringView s_DeferredCompositeLabel = "Deferred Composite";
+const StringView s_DeferredPresentLabel = "Deferred Present";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

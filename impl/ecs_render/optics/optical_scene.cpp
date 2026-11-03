@@ -18,29 +18,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_optical_scene{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static_assert(OpticalBoundaryMode::Unspecified == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED);
 static_assert(OpticalBoundaryMode::ClosedNested == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED);
 static_assert(OpticalBoundaryMode::ClosedPriority == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY);
-
-constexpr f64 s_UnitRoundoff = 0x1p-24;
-constexpr f64 s_TransformError = (8.0 * s_UnitRoundoff) / (1.0 - 8.0 * s_UnitRoundoff);
-constexpr f64 s_UnderflowMargin = 8.0 * 0x1p-126;
-constexpr u32 s_OpticalBoxCornerCount = 8u;
-constexpr u32 s_CornerMaxXBit = 1u;
-constexpr u32 s_CornerMaxYBit = 2u;
-constexpr u32 s_CornerMaxZBit = 4u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +82,6 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 
 
 Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, const SIMDVectorSingle localMin, const SIMDVectorSingle localMax)noexcept{
-    using namespace __hidden_optical_scene;
     const SIMDVectorSingle localMinVec = VectorAndInt(localMin, s_SIMDMask3);
     const SIMDVectorSingle localMaxVec = VectorAndInt(localMax, s_SIMDMask3);
     if(!VectorIsFinite(localMinVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(localMaxVec, VectorComponentMask::s_XYZ) || !Vector3LessOrEqual(localMinVec, localMaxVec))
@@ -139,7 +118,7 @@ Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDM
     }
 
     const SIMDVectorSingle magnitudeSum = VectorAdd(VectorAdd(VectorSplatX(laneMagnitude), VectorSplatY(laneMagnitude)), VectorSplatZ(laneMagnitude));
-    const SIMDVectorSingle marginVec = VectorAdd(VectorMultiply(VectorReplicate(static_cast<f32>(s_TransformError)), magnitudeSum), VectorReplicate(static_cast<f32>(s_UnderflowMargin)));
+    const SIMDVectorSingle marginVec = VectorAdd(VectorMultiply(VectorReplicate(static_cast<f32>(s_OpticalTransformError)), magnitudeSum), VectorReplicate(static_cast<f32>(s_OpticalUnderflowMargin)));
     const SIMDVectorSingle minimum = VectorSubtract(laneMin, marginVec);
     const SIMDVectorSingle maximum = VectorAdd(laneMax, marginVec);
     if(!VectorIsFinite(minimum, VectorComponentMask::s_XYZ) || !VectorIsFinite(maximum, VectorComponentMask::s_XYZ))

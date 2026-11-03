@@ -11,6 +11,13 @@
 
 const u32 s_RtOpticalSceneFlagBoundsValid = 1u;
 const u32 s_RtOpticalBoundaryUnspecified = 0u;
+const f64 s_OpticalUnitRoundoff = 1.0 / 16777216.0;
+const f64 s_OpticalTransformError = (8.0 * s_OpticalUnitRoundoff) / (1.0 - 8.0 * s_OpticalUnitRoundoff);
+const f64 s_OpticalUnderflowMargin = 9.40395480657830006375e-38;
+const u32 s_OpticalBoxCornerCount = 8u;
+const u32 s_CornerMaxXBit = 1u;
+const u32 s_CornerMaxYBit = 2u;
+const u32 s_CornerMaxZBit = 4u;
 
 [serialize]
 class RayTracingOpticalRuntimeInputGpu{

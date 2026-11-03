@@ -48,16 +48,8 @@ namespace __hidden_font_atlas_validation{
                 const usize begin = planePixels * glyph.channel + static_cast<usize>(row) * group.width + firstX;
                 const usize last = begin + endX - firstX - 1u;
                 for(usize word = begin / s_BitsPerU64; word <= last / s_BitsPerU64; ++word){
-                    u64 mask = Limit<u64>::s_Max;
-                    if(word == begin / s_BitsPerU64)
-                        mask &= Limit<u64>::s_Max << (begin % s_BitsPerU64);
-                    if(word == last / s_BitsPerU64)
-                        mask &= Limit<u64>::s_Max >> (s_FontAtlasOccupiedWordLastBit - last % s_BitsPerU64);
-                    if((occupied[word] & mask) != 0u){
-                        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} overlaps another guarded region"), glyph.glyphId);
+                    if(!TryMarkFontAtlasGuardedWordOccupied(glyph.glyphId, begin, last, word, occupied[word]))
                         return false;
-                    }
-                    occupied[word] |= mask;
                 }
             }
         }
@@ -116,25 +108,10 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
     const f32 unitsPerPixel = ComputeFontAtlasUnitsPerPixel(payload.unitsPerEm, payload.bakePpem);
     for(usize index = 0u; index < payload.glyphs.size(); ++index){
         const FontAtlasGlyph& glyph = payload.glyphs[index];
-        if(glyph.glyphId != index || glyph.drawable > 1u || !IsFinite(glyph.advanceUnits) || !IsFinite(glyph.planeLeft) || !IsFinite(glyph.planeTop) || !IsFinite(glyph.planeRight) || !IsFinite(glyph.planeBottom)){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph ID, flags, or metrics at {}"), index);
+        if(!ValidateFontAtlasGlyphRecord(glyph, index, payload.groups.size(), unitsPerPixel))
             return false;
-        }
-        if(glyph.drawable == 0u){
-            if(!IsValidNondrawableFontAtlasGlyph(glyph)){
-                NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: nondrawable glyph {} carries a bitmap"), index);
-                return false;
-            }
+        if(glyph.drawable == 0u)
             continue;
-        }
-        if(glyph.group >= payload.groups.size() || glyph.width == 0u || glyph.height == 0u || glyph.planeLeft >= glyph.planeRight || glyph.planeTop >= glyph.planeBottom){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
-            return false;
-        }
-        if(!IsValidFontAtlasGlyphPlaneBounds(glyph, unitsPerPixel)){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} plane bounds disagree with bitmap size"), index);
-            return false;
-        }
         const FontAtlasGroup& group = payload.groups[glyph.group];
         if(!IsValidFontAtlasGlyphGroupRect(glyph, group.width, group.height, group.channelCount, payload.guardTexels)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} exceeds guarded page bounds"), index);

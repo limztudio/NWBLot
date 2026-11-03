@@ -414,6 +414,53 @@ u32 PackMeshletConeCutoffUnorm8(in f32 value){
     return cast<u32>(clamp(value, 0.0f, 1.0f) * s_MeshletUnorm8Max);
 }
 
+f32x4 FoldMeshletConeOctAxisVec(in f32x4 axis){
+    if(axis.z >= 0.0f)
+        return axis;
+    const f32 absX = abs(axis.x);
+    const f32 absY = abs(axis.y);
+    f32 signX = 1.0f;
+    if(axis.x < 0.0f)
+        signX = -1.0f;
+    f32 signY = 1.0f;
+    if(axis.y < 0.0f)
+        signY = -1.0f;
+    return f32x4((1.0f - absY) * signX, (1.0f - absX) * signY, axis.z, axis.w);
+}
+
+f32 ConservativePackedMeshletConeCutoffVec(in f32x4 axis, in f32 cutoff, in f32x4 unpackedAxis){
+    f32x4 normalizedAxis = unpackedAxis;
+    if(lengthSq(axis.xyz) > s_MeshletConeAxisLengthSquaredEpsilon)
+        normalizedAxis = normalize(axis.xyz);
+    const f32 axisDot = clamp(dot(normalizedAxis.xyz, unpackedAxis.xyz), -1.0f, 1.0f);
+    const f32 safeCutoff = clamp(cutoff, 0.0f, 1.0f);
+    const f32 cutoffSin = sqrt(max(0.0f, 1.0f - safeCutoff * safeCutoff));
+    const f32 axisSin = sqrt(max(0.0f, 1.0f - axisDot * axisDot));
+    return safeCutoff * axisDot - cutoffSin * axisSin;
+}
+
+u32 PackMeshletConeFromAxisAndCutoff(in u32 packedAxis, in f32 conservativeCutoff){
+    const u32 packedCutoff = PackMeshletConeCutoffUnorm8(conservativeCutoff);
+    if(packedCutoff == 0u)
+        return 0u;
+    return packedAxis | (packedCutoff << s_MeshletConeCutoffShift) | (s_MeshletConeFlagEnabled << s_MeshletConeFlagShift);
+}
+
+b8 IsValidMeshDirectionVector(in f32x4 direction){
+    if(!isFinite(direction.x) || !isFinite(direction.y) || !isFinite(direction.z))
+        return false;
+    return abs(lengthSq(direction.xyz) - 1.0f) <= s_DirectionLengthTolerance;
+}
+
+b8 IsValidMeshTangentVector(in f32x4 tangent){
+    if(!isFinite(tangent.x) || !isFinite(tangent.y) || !isFinite(tangent.z) || !isFinite(tangent.w))
+        return false;
+    return
+        abs(lengthSq(tangent.xyz) - 1.0f) <= s_DirectionLengthTolerance
+        && abs(abs(tangent.w) - 1.0f) <= s_TangentHandednessTolerance
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

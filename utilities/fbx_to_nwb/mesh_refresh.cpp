@@ -39,68 +39,37 @@ struct StreamSortEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 LessEmittedF32(const f32 lhs, const f32 rhs)noexcept{
-    return FloatingHashBits(CleanFloat(lhs)) < FloatingHashBits(CleanFloat(rhs));
-}
-
-[[nodiscard]] b8 SameEmittedF32(const f32 lhs, const f32 rhs)noexcept{
-    return FloatingHashBits(CleanFloat(lhs)) == FloatingHashBits(CleanFloat(rhs));
-}
-
 [[nodiscard]] b8 LessValue(const Vec2& lhs, const Vec2& rhs)noexcept{
-    if(!SameEmittedF32(lhs.x, rhs.x))
-        return LessEmittedF32(lhs.x, rhs.x);
-    return LessEmittedF32(lhs.y, rhs.y);
+    return LessEmittedVec2(lhs, rhs);
 }
 
 [[nodiscard]] b8 LessValue(const Vec3& lhs, const Vec3& rhs)noexcept{
-    if(!SameEmittedF32(lhs.x, rhs.x))
-        return LessEmittedF32(lhs.x, rhs.x);
-    if(!SameEmittedF32(lhs.y, rhs.y))
-        return LessEmittedF32(lhs.y, rhs.y);
-    return LessEmittedF32(lhs.z, rhs.z);
+    return LessEmittedVec3(lhs, rhs);
 }
 
 [[nodiscard]] b8 LessValue(const Vec4& lhs, const Vec4& rhs)noexcept{
-    if(!SameEmittedF32(lhs.x, rhs.x))
-        return LessEmittedF32(lhs.x, rhs.x);
-    if(!SameEmittedF32(lhs.y, rhs.y))
-        return LessEmittedF32(lhs.y, rhs.y);
-    if(!SameEmittedF32(lhs.z, rhs.z))
-        return LessEmittedF32(lhs.z, rhs.z);
-    return LessEmittedF32(lhs.w, rhs.w);
+    return LessEmittedVec4(lhs, rhs);
 }
 
 [[nodiscard]] b8 LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
-    for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
-        if(lhs.joint[i] != rhs.joint[i])
-            return lhs.joint[i] < rhs.joint[i];
-    }
-    for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
-        const u32 lhsBits = FloatingHashBits(lhs.weight.raw[i]);
-        const u32 rhsBits = FloatingHashBits(rhs.weight.raw[i]);
-        if(lhsBits != rhsBits)
-            return lhsBits < rhsBits;
-    }
-    return false;
+    return LessMeshSkinInfluence(lhs, rhs);
 }
 
 [[nodiscard]] b8 SameValue(const Vec2& lhs, const Vec2& rhs)noexcept{
-    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y);
+    return SameEmittedVec2(lhs, rhs);
 }
 
 [[nodiscard]] b8 SameValue(const Vec3& lhs, const Vec3& rhs)noexcept{
-    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z);
+    return SameEmittedVec3(lhs, rhs);
 }
 
 [[nodiscard]] b8 SameValue(const Vec4& lhs, const Vec4& rhs)noexcept{
-    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
+    return SameEmittedVec4(lhs, rhs);
 }
 
 
 [[nodiscard]] b8 SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
-    MeshSkinInfluenceEqual equal;
-    return equal(lhs, rhs);
+    return EqualMeshSkinInfluence(lhs, rhs);
 }
 
 template<typename Value>

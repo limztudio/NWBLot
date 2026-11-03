@@ -34,7 +34,7 @@ static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, C
         const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, constQueries, groupBegin);
 
         const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
-        if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette)){
+        if(pose && TryBuildStoredJointPaletteVectorFromSkeletonPose(*pose, jointPalette)){
             const Span<const SkeletonJointMatrix> paletteSpan(jointPalette.data(), jointPalette.size());
             for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
                 (void)TryResolveModelAttachmentJointQuery(paletteSpan, queries[ResolveModelAttachmentQueryIndex(parentOrder, queryIndex)]);
@@ -97,10 +97,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             __hidden_model_system_transforms::ResolveAttachmentJointQueries({}, m_world, m_scratchJoints, queries);
         else{
             Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
-            parentOrder.clear();
-            parentOrder.reserve(queryCount);
-            for(usize queryIndex = 0u; queryIndex < queryCount; ++queryIndex)
-                parentOrder.push_back(queryIndex);
+            BuildModelAttachmentIdentityOrder(queryCount, parentOrder);
             Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
                 return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
             });

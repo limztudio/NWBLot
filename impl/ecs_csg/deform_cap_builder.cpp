@@ -54,41 +54,28 @@ b8 CsgDeformCapBuilder::OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchAren
     // Boundary edges keep source-triangle winding, so consecutive edges meet head-to-tail or tail-to-tail. Walk them undirected for one closed ring.
     Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena> remaining(scratchArena);
     remaining.assign(edges.begin(), edges.end());
-    u32 start = remaining.front().first;
+    const u32 start = FindInitialCsgDeformBoundaryLoopVertex(remaining);
     u32 cursor = start;
-    for(const CsgDeformCutLoopEdge& edge : remaining){
-        if(edge.first < start)
-            start = edge.first;
-        if(edge.second < start)
-            start = edge.second;
-    }
-    cursor = start;
     outLoop.reserve(edges.size());
     outLoop.push_back(cursor);
     {
-        const auto seed = ::FindIf(remaining.begin(), remaining.end(), [cursor](const CsgDeformCutLoopEdge& edge)noexcept{ return edge.first == cursor || edge.second == cursor; });
-        if(seed == remaining.end())
+        const auto seedIndex = TryFindIncidentCsgDeformLoopEdge(remaining, cursor);
+        if(!seedIndex)
             return false;
-        cursor = seed->first == cursor ? seed->second : seed->first;
+        cursor = OtherCsgDeformLoopEdgeVertex(remaining[*seedIndex], cursor);
         outLoop.push_back(cursor);
-        remaining.erase(seed);
+        remaining.erase(remaining.begin() + static_cast<isize>(*seedIndex));
     }
     while(!remaining.empty()){
-        b8 advanced = false;
-        for(auto it = remaining.begin(); it != remaining.end(); ++it){
-            if(it->first == cursor || it->second == cursor){
-                const u32 next = it->first == cursor ? it->second : it->first;
-                remaining.erase(it);
-                cursor = next;
-                if(cursor == start)
-                    break;
-                outLoop.push_back(cursor);
-                advanced = true;
-                break;
-            }
-        }
-        if(cursor == start || !advanced)
+        const auto nextIndex = TryFindIncidentCsgDeformLoopEdge(remaining, cursor);
+        if(!nextIndex)
             break;
+        const u32 next = OtherCsgDeformLoopEdgeVertex(remaining[*nextIndex], cursor);
+        remaining.erase(remaining.begin() + static_cast<isize>(*nextIndex));
+        cursor = next;
+        if(cursor == start)
+            break;
+        outLoop.push_back(cursor);
     }
     if(cursor != start || !remaining.empty())
         return false;

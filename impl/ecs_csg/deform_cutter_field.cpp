@@ -49,13 +49,9 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     outDistances.clear();
     outDistances.resize(vertexCount, s_KeepDistanceZero);
 
-    const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
-
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
-        const SIMDVectorSingle shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-        Float4 shapePositionFloat4;
-        StoreFloat(shapePosition, shapePositionFloat4);
+        const Float4 shapePositionFloat4 = TransformCsgDeformVertexPosition(vertex, shape.worldToShape);
 
         f32 distance = 0.0f;
         if(registryDistanceCallback){
@@ -67,12 +63,10 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
         else
             distance = EvaluateBuiltInCsgShapeSignedDistance(builtInKind, shapePositionFloat4, inlineParameters);
 
-        if(!IsFinite(distance))
-            return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
-
-        if(Abs(distance) <= boundaryEpsilon)
-            distance = s_KeepDistanceZero;
-        outDistances[vertexIndex] = distance;
+        const auto snapped = TrySnapCsgDeformSignedDistance(distance, boundaryEpsilon);
+        if(!snapped)
+            return MakeUnexpected(snapped.error());
+        outDistances[vertexIndex] = *snapped;
     }
     return {};
 }

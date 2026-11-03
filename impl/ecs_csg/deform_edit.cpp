@@ -50,18 +50,11 @@ Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     outTriangles.clear();
     stats.inputVertexCount = static_cast<u32>(inputVertexCount);
     stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
-    if(inputVertexCount == 0u || inputTriangleCount == 0u)
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::EmptyInput, stats));
-    if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles)
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::TooLarge, stats));
-    if(!CsgDeformValidOptions(options))
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidCutter, stats));
-    if(!IsFiniteCsgDeformVertices(inputVertices))
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, stats));
-    if(!CsgDeformValidTopology(inputTriangles, inputVertexCount))
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidTopology, stats));
+    const auto boundaryEpsilonResult = TryValidateCsgDeformPreviewInputs(inputVertices, inputTriangles, options);
+    if(!boundaryEpsilonResult)
+        return MakeUnexpected(MakeCsgDeformFailure(boundaryEpsilonResult.error(), stats));
 
-    const f32 boundaryEpsilon = Max(options.distanceEpsilon, s_MinEpsilon);
+    const f32 boundaryEpsilon = *boundaryEpsilonResult;
     outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
     outTriangles.reserve(inputTriangleCount * s_KeptReserveMultiplier + cutCount * s_RebuildReservePerCut);
     AssignVector(outVertices, inputVertices);

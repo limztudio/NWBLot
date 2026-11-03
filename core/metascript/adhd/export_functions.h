@@ -204,6 +204,7 @@ NWB_ADHD_EXPORT_RECEIVER_METHOD("CompactString", "assign",       "b8",          
 NWB_ADHD_EXPORT_RECEIVER_METHOD("CompactString", "append",       "b8",            false)
 
 NWB_ADHD_EXPORT_BUILTIN_FIELD("AssetRef", "virtualPath", "Name",  "",    "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("EntityID", "id",          "u32",   "",    "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("NameHash", "qwords",      "Array", "u64", "8u")
 
 NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_InvalidEntityId", "::NWB::Core::ECS::s_InvalidEntityId", "EntityID")

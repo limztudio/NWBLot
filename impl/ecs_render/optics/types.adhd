@@ -147,6 +147,121 @@ b8 CoincidentOpticalVolumeTransformsEqual(
     ;
 }
 
+const u32 s_RtOpticalInstanceFlagTransparent = 1u;
+const u32 s_RtOpticalInstanceFlagBoundsValid = 2u;
+const u64 s_OpticalFnv64OffsetBasis = 14695981039346656037u;
+const u64 s_OpticalFnv64Prime = 1099511628211u;
+
+u32 OpticalFloatingHashBits(in f32 value){
+    if(value == 0.0f)
+        return 0u;
+    return bit_cast<u32>(value);
+}
+
+u64 ComputeOpticalFnv64Bytes(in Span<u8> bytes){
+    u64 hash = s_OpticalFnv64OffsetBasis;
+    for(in u8 byte : bytes)
+        hash = (hash ^ cast<u64>(byte)) * s_OpticalFnv64Prime;
+    return hash;
+}
+
+usize HashCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate candidate){
+    usize hash = hashValue(candidate.mesh.name());
+    hash = hashCombineValue(hash, candidate.material.name());
+    hash = hashCombineValue(hash, candidate.group);
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.x));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.y));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.z));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.x));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.y));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.z));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.w));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.x));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.y));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.z));
+    if(candidate.group == s_NameNone){
+        hash = hashCombineValue(hash, candidate.boundaryMode);
+        hash = hashCombineValue(hash, candidate.mediumPriority);
+        hash = hashCombineValue(hash, candidate.mutableTypedBytes.size());
+        hash = hashCombineValue(hash, ComputeOpticalFnv64Bytes(candidate.mutableTypedBytes));
+    }
+    return hash;
+}
+
+b8 EqualCoincidentOpticalVolumeCandidates(in CoincidentOpticalVolumeCandidate lhs, in CoincidentOpticalVolumeCandidate rhs){
+    if(
+        lhs.mesh != rhs.mesh || lhs.material != rhs.material || lhs.group != rhs.group
+        || !CoincidentOpticalVolumeTransformsEqual(lhs.position, lhs.rotation, lhs.scale, rhs.position, rhs.rotation, rhs.scale)
+    )
+        return false;
+    if(lhs.group != s_NameNone)
+        return true;
+    if(
+        lhs.boundaryMode != rhs.boundaryMode
+        || lhs.mediumPriority != rhs.mediumPriority
+        || lhs.mutableTypedBytes.size() != rhs.mutableTypedBytes.size()
+    )
+        return false;
+    for(usize i = 0u; i < lhs.mutableTypedBytes.size(); ++i){
+        if(lhs.mutableTypedBytes[i] != rhs.mutableTypedBytes[i])
+            return false;
+    }
+    return true;
+}
+
+void MarkRayTracingOpticalSceneIncomplete(mut RayTracingOpticalSceneHeaderGpu inOutHeader, mut b8 outBoundsCompleteExceptRuntime){
+    inOutHeader.flags &= ~s_RtOpticalSceneFlagBoundsValid;
+    outBoundsCompleteExceptRuntime = false;
+}
+
+RayTracingOpticalInstanceGpu BuildRayTracingOpticalInstance(
+    in EntityID entity,
+    in RendererComponent renderer,
+    in b8 transparent,
+    in f32x4 boundsMin,
+    in f32x4 boundsMax,
+    in b8 boundsValid,
+    mut RayTracingOpticalSceneHeaderGpu inOutHeader,
+    mut b8 inOutHasBounds,
+    mut b8 inOutBoundsCompleteExceptRuntime,
+    mut b8 inOutUnspecifiedBoundariesOnly
+){
+    RayTracingOpticalInstanceGpu instance;
+    instance.entityId = entity.id;
+    instance.mediumPriority = renderer.opticalMediumPriority;
+    instance.boundaryMode = cast<u32>(renderer.opticalBoundaryMode);
+    if(transparent){
+        if(renderer.opticalBoundaryMode != OpticalBoundaryMode::Unspecified)
+            inOutUnspecifiedBoundariesOnly = false;
+        instance.flags |= s_RtOpticalInstanceFlagTransparent;
+        ++inOutHeader.transparentCount;
+        const b8 finiteBounds = boundsValid
+            && isFinite(boundsMin.x) && isFinite(boundsMin.y) && isFinite(boundsMin.z)
+            && isFinite(boundsMax.x) && isFinite(boundsMax.y) && isFinite(boundsMax.z)
+            && boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
+        if(finiteBounds){
+            instance.flags |= s_RtOpticalInstanceFlagBoundsValid;
+            if(!inOutHasBounds){
+                inOutHeader.boundsMin = f32x3u(boundsMin.x, boundsMin.y, boundsMin.z);
+                inOutHeader.boundsMax = f32x3u(boundsMax.x, boundsMax.y, boundsMax.z);
+                inOutHasBounds = true;
+            }
+            else{
+                const f32x4 currentMin(inOutHeader.boundsMin.x, inOutHeader.boundsMin.y, inOutHeader.boundsMin.z, 0.0f);
+                const f32x4 currentMax(inOutHeader.boundsMax.x, inOutHeader.boundsMax.y, inOutHeader.boundsMax.z, 0.0f);
+                const f32x4 nextMin = min(currentMin, boundsMin);
+                const f32x4 nextMax = max(currentMax, boundsMax);
+                inOutHeader.boundsMin = f32x3u(nextMin.x, nextMin.y, nextMin.z);
+                inOutHeader.boundsMax = f32x3u(nextMax.x, nextMax.y, nextMax.z);
+            }
+        }
+        else{
+            MarkRayTracingOpticalSceneIncomplete(inOutHeader, inOutBoundsCompleteExceptRuntime);
+        }
+    }
+    return instance;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

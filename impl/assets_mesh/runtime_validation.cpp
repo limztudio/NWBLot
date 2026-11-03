@@ -61,18 +61,15 @@ void LogMeshletPrimitivePayloadValidation(const TStringView contextText, const T
 
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidDirectionVector(const SIMDVectorSingle direction)noexcept{
-    if(!VectorIsFinite(direction, VectorComponentMask::s_XYZ))
-        return false;
-    return Abs(VectorGetX(Vector3LengthSq(direction)) - 1.0f) <= s_DirectionLengthTolerance;
+    Float4 directionVec;
+    StoreFloat(direction, directionVec);
+    return IsValidMeshDirectionVector(directionVec);
 }
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidTangentVector(const SIMDVectorSingle tangent)noexcept{
-    if(!VectorIsFinite(tangent, VectorComponentMask::s_XYZW))
-        return false;
-    return
-        Abs(VectorGetX(Vector3LengthSq(tangent)) - 1.0f) <= s_DirectionLengthTolerance
-        && Abs(Abs(VectorGetW(tangent)) - 1.0f) <= s_TangentHandednessTolerance
-    ;
+    Float4 tangentVec;
+    StoreFloat(tangent, tangentVec);
+    return IsValidMeshTangentVector(tangentVec);
 }
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshStreams(

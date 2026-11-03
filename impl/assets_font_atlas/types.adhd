@@ -324,6 +324,67 @@ void OffsetFontAtlasGroupGlyph(in u32 groupIndex, in u32 firstX, in u32 firstY, 
     }
 }
 
+b8 ValidateFontAtlasGlyphRecord(
+    in FontAtlasGlyph glyph,
+    in usize expectedIndex,
+    in usize groupCount,
+    in f32 unitsPerPixel
+){
+    if(
+        cast<usize>(glyph.glyphId) != expectedIndex
+        || glyph.drawable > 1u
+        || !isFinite(glyph.advanceUnits)
+        || !isFinite(glyph.planeLeft)
+        || !isFinite(glyph.planeTop)
+        || !isFinite(glyph.planeRight)
+        || !isFinite(glyph.planeBottom)
+    ){
+        error("FontAtlas validation failed: invalid glyph ID, flags, or metrics at {}", expectedIndex);
+        return false;
+    }
+    if(glyph.drawable == 0u){
+        if(!IsValidNondrawableFontAtlasGlyph(glyph)){
+            error("FontAtlas validation failed: nondrawable glyph {} carries a bitmap", expectedIndex);
+            return false;
+        }
+        return true;
+    }
+    if(
+        cast<usize>(glyph.group) >= groupCount
+        || glyph.width == 0u
+        || glyph.height == 0u
+        || glyph.planeLeft >= glyph.planeRight
+        || glyph.planeTop >= glyph.planeBottom
+    ){
+        error("FontAtlas validation failed: invalid glyph {} page or padded bounds", expectedIndex);
+        return false;
+    }
+    if(!IsValidFontAtlasGlyphPlaneBounds(glyph, unitsPerPixel)){
+        error("FontAtlas validation failed: glyph {} plane bounds disagree with bitmap size", expectedIndex);
+        return false;
+    }
+    return true;
+}
+
+u64 ComputeFontAtlasGuardedWordMask(in usize begin, in usize last, in usize word){
+    u64 mask = u64.max;
+    if(word == begin / s_BitsPerU64)
+        mask &= u64.max << (begin % s_BitsPerU64);
+    if(word == last / s_BitsPerU64)
+        mask &= u64.max >> (s_FontAtlasOccupiedWordLastBit - (last % s_BitsPerU64));
+    return mask;
+}
+
+b8 TryMarkFontAtlasGuardedWordOccupied(in u32 glyphId, in usize begin, in usize last, in usize word, mut u64 inOutOccupiedWord){
+    const u64 mask = ComputeFontAtlasGuardedWordMask(begin, last, word);
+    if((inOutOccupiedWord & mask) != 0u){
+        error("FontAtlas validation failed: glyph {} overlaps another guarded region", glyphId);
+        return false;
+    }
+    inOutOccupiedWord |= mask;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

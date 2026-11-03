@@ -47,31 +47,22 @@ constexpr u32 s_CornerMaxZBit = 4u;
 
 
 void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const b8 transparent, const SIMDVectorSingle boundsMin, const SIMDVectorSingle boundsMax, const b8 boundsValid){
-    RayTracingOpticalInstanceGpu instance;
-    instance.entityId = entity.id;
-    instance.mediumPriority = renderer.opticalMediumPriority;
-    instance.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
-    if(transparent){
-        if(renderer.opticalBoundaryMode != OpticalBoundaryMode::Unspecified)
-            unspecifiedBoundariesOnly = false;
-        instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT;
-        ++header.transparentCount;
-        const b8 finiteBounds = boundsValid && Vector3IsFinite(boundsMin) && Vector3IsFinite(boundsMax) && Vector3LessOrEqual(boundsMin, boundsMax);
-        if(finiteBounds){
-            instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
-            if(!hasBounds){
-                StoreFloat(boundsMin, header.boundsMin);
-                StoreFloat(boundsMax, header.boundsMax);
-                hasBounds = true;
-            }
-            else{
-                StoreFloat(VectorMin(LoadFloat(header.boundsMin), boundsMin), header.boundsMin);
-                StoreFloat(VectorMax(LoadFloat(header.boundsMax), boundsMax), header.boundsMax);
-            }
-        }
-        else
-            markIncomplete();
-    }
+    Float4 minVec;
+    Float4 maxVec;
+    StoreFloat(boundsMin, minVec);
+    StoreFloat(boundsMax, maxVec);
+    const RayTracingOpticalInstanceGpu instance = BuildRayTracingOpticalInstance(
+        entity,
+        renderer,
+        transparent,
+        minVec,
+        maxVec,
+        boundsValid,
+        header,
+        hasBounds,
+        boundsCompleteExceptRuntime,
+        unspecifiedBoundariesOnly
+    );
     instances.push_back(instance);
 }
 
@@ -89,8 +80,7 @@ void RayTracingOpticalSceneGather::appendRuntime(const Core::ECS::EntityID entit
 }
 
 void RayTracingOpticalSceneGather::markIncomplete()noexcept{
-    header.flags &= ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;
-    boundsCompleteExceptRuntime = false;
+    MarkRayTracingOpticalSceneIncomplete(header, boundsCompleteExceptRuntime);
 }
 
 u64 RayTracingOpticalSceneGather::contentHash()const noexcept{

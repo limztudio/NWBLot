@@ -68,6 +68,81 @@ void InitializeSkeletonPoseFromJoints(in Span<SkeletonJoint> joints, mut Skeleto
     }
 }
 
+b8 IsFiniteSkeletonJointRow(in f32x4 row){
+    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+}
+
+b8 IsInvertibleSkeletonJointMatrix(in SkeletonJointMatrix matrix, in f32 determinantEpsilon){
+    const f32x4 row0 = matrix[0u];
+    const f32x4 row1 = matrix[1u];
+    const f32x4 row2 = matrix[2u];
+    if(!IsFiniteSkeletonJointRow(row0) || !IsFiniteSkeletonJointRow(row1) || !IsFiniteSkeletonJointRow(row2))
+        return false;
+    const f32 determinant = dot(row0.xyz, cross(row1.xyz, row2.xyz));
+    return isFinite(determinant) && abs(determinant) > determinantEpsilon;
+}
+
+Expected<SkeletonJointMatrix> TryResolveSkeletonPoseJointMatrix(
+    in SkeletonJointMatrix localJoint,
+    in b8 hasParentJoint,
+    in SkeletonJointMatrix parentJoint
+){
+    if(!IsInvertibleSkeletonJointMatrix(localJoint, s_SkeletonJointDeterminantEpsilon))
+        return makeUnexpected(Failure());
+    if(!hasParentJoint)
+        return localJoint;
+    const SkeletonJointMatrix combined = mul(parentJoint, localJoint);
+    if(!IsInvertibleSkeletonJointMatrix(combined, s_SkeletonJointDeterminantEpsilon))
+        return makeUnexpected(Failure());
+    return combined;
+}
+
+Expected<SkeletonJointMatrix> TryEvaluateSkeletonPoseJointMatrix(in SkeletonPoseComponent pose, in u32 targetJointIndex){
+    if(!CanEvaluateSkeletonPoseJoint(pose, targetJointIndex))
+        return makeUnexpected(Failure());
+    const usize jointCount = pose.localJoints.size();
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        if(!IsInvertibleSkeletonJointMatrix(pose.localJoints[jointIndex], s_SkeletonJointDeterminantEpsilon))
+            return makeUnexpected(Failure());
+    }
+    SkeletonJointMatrix matrix = pose.localJoints[cast<usize>(targetJointIndex)];
+    u32 currentJoint = targetJointIndex;
+    while(pose.parentJoints[cast<usize>(currentJoint)] != s_SkeletonInvalidJointIndex){
+        const u32 parentJoint = pose.parentJoints[cast<usize>(currentJoint)];
+        matrix = mul(pose.localJoints[cast<usize>(parentJoint)], matrix);
+        if(!IsInvertibleSkeletonJointMatrix(matrix, s_SkeletonJointDeterminantEpsilon))
+            return makeUnexpected(Failure());
+        currentJoint = parentJoint;
+    }
+    return matrix;
+}
+
+Expected<u32> TryBuildStoredJointPaletteVectorFromSkeletonPose(
+    in SkeletonPoseComponent pose,
+    mut Vector<SkeletonJointMatrix> outJointPalette
+){
+    outJointPalette.clear();
+    if(!HasSkeletonPoseData(pose))
+        return cast<u32>(SkeletonSkinningMode::LinearBlend);
+    if(!ValidSkeletonPoseTopology(pose))
+        return makeUnexpected(Failure());
+    const usize jointCount = pose.localJoints.size();
+    outJointPalette.reserve(jointCount);
+    const SkeletonJointMatrix identityJoint(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const u32 parentJoint = pose.parentJoints[jointIndex];
+        const b8 hasParent = parentJoint != s_SkeletonInvalidJointIndex;
+        SkeletonJointMatrix parentMatrix = identityJoint;
+        if(hasParent)
+            parentMatrix = outJointPalette[cast<usize>(parentJoint)];
+        const Expected<SkeletonJointMatrix> resolved = TryResolveSkeletonPoseJointMatrix(pose.localJoints[jointIndex], hasParent, parentMatrix);
+        if(!resolved.has_value())
+            return makeUnexpected(Failure());
+        outJointPalette.push_back(resolved.value());
+    }
+    return pose.skinningMode;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

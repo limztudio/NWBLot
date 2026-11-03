@@ -93,6 +93,13 @@ b8 ValidateModelSkinnedMeshSkeletonEntity(in Name objectName, in b8 skeletonEnti
     return false;
 }
 
+void BuildModelAttachmentIdentityOrder(in usize queryCount, mut Vector<usize> outOrder){
+    outOrder.clear();
+    outOrder.reserve(queryCount);
+    for(usize queryIndex = 0u; queryIndex < queryCount; ++queryIndex)
+        outOrder.push_back(queryIndex);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

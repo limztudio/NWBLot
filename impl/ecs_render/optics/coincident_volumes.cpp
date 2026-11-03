@@ -34,47 +34,14 @@ using CandidatePointer = NotNull<const Candidate*>;
 struct CandidateHasher{
 public:
     usize operator()(const CandidatePointer candidate)const noexcept{
-        usize hash = Hasher<Name>{}(candidate->mesh.name());
-        HashCombine(hash, candidate->material.name());
-        HashCombine(hash, candidate->group);
-        HashCombineFloating(hash, candidate->position.x);
-        HashCombineFloating(hash, candidate->position.y);
-        HashCombineFloating(hash, candidate->position.z);
-        HashCombineFloating(hash, candidate->rotation.x);
-        HashCombineFloating(hash, candidate->rotation.y);
-        HashCombineFloating(hash, candidate->rotation.z);
-        HashCombineFloating(hash, candidate->rotation.w);
-        HashCombineFloating(hash, candidate->scale.x);
-        HashCombineFloating(hash, candidate->scale.y);
-        HashCombineFloating(hash, candidate->scale.z);
-        if(candidate->group == s_NameNone){
-            HashCombine(hash, candidate->boundaryMode);
-            HashCombine(hash, candidate->mediumPriority);
-            HashCombine(hash, candidate->mutableTypedBytes.size());
-            HashCombine(hash, ComputeFnv64Bytes(candidate->mutableTypedBytes.data(), candidate->mutableTypedBytes.size()));
-        }
-        return hash;
+        return HashCoincidentOpticalVolumeCandidate(*candidate);
     }
 };
 
 struct CandidateEqual{
 public:
     b8 operator()(const CandidatePointer lhs, const CandidatePointer rhs)const noexcept{
-        if(
-            lhs->mesh != rhs->mesh || lhs->material != rhs->material || lhs->group != rhs->group
-            || !CoincidentOpticalVolumeTransformsEqual(lhs->position, lhs->rotation, lhs->scale, rhs->position, rhs->rotation, rhs->scale)
-        )
-            return false;
-        // Shared groups assert preserved boundaries; otherwise all material bytes must agree.
-        return
-            lhs->group != s_NameNone
-            || (
-                lhs->boundaryMode == rhs->boundaryMode
-                && lhs->mediumPriority == rhs->mediumPriority
-                && lhs->mutableTypedBytes.size() == rhs->mutableTypedBytes.size()
-                && (lhs->mutableTypedBytes.empty() || NWB_MEMCMP(lhs->mutableTypedBytes.data(), rhs->mutableTypedBytes.data(), lhs->mutableTypedBytes.size()) == 0)
-            )
-        ;
+        return EqualCoincidentOpticalVolumeCandidates(*lhs, *rhs);
     }
 };
 

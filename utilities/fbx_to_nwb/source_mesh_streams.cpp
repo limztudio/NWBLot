@@ -48,20 +48,11 @@ template<typename Value, typename Lookup>
 
 
 b8 MeshSkinInfluenceEqual::operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept{
-    for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
-        if(lhs.joint[i] != rhs.joint[i] || FloatingHashBits(lhs.weight.raw[i]) != FloatingHashBits(rhs.weight.raw[i]))
-            return false;
-    }
-    return true;
+    return EqualMeshSkinInfluence(lhs, rhs);
 }
 
 usize MeshSkinInfluenceHasher::operator()(const MeshSkinInfluence& value)const noexcept{
-    usize seed = Hasher<u16>{}(value.joint[0u]);
-    for(usize i = 1u; i < Impl::s_SkinInfluenceJointCount; ++i)
-        HashCombine(seed, value.joint[i]);
-    for(const f32 weight : value.weight.raw)
-        HashCombine(seed, FloatingHashBits(weight));
-    return seed;
+    return HashMeshSkinInfluence(value);
 }
 
 SourceMeshBuildContext::SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)

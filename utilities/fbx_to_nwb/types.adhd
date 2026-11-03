@@ -495,6 +495,95 @@ b8 RemapSourceVertexRef(
     return RemapOptionalSourceStreamIndex(skin, s_SkinStreamLabel, inOutRef.skin);
 }
 
+u32 FbxFloatingHashBits(in f32 value){
+    if(value == 0.0f)
+        return 0u;
+    return bit_cast<u32>(value);
+}
+
+b8 EqualMeshSkinInfluence(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        if(lhs.joint[i] != rhs.joint[i] || FbxFloatingHashBits(lhs.weight[i]) != FbxFloatingHashBits(rhs.weight[i]))
+            return false;
+    }
+    return true;
+}
+
+usize HashMeshSkinInfluence(in MeshSkinInfluence value){
+    usize seed = hashValue(value.joint[0u]);
+    for(usize i = 1u; i < s_SkinInfluenceJointCount; ++i)
+        seed = hashCombineValue(seed, value.joint[i]);
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i)
+        seed = hashCombineValue(seed, FbxFloatingHashBits(value.weight[i]));
+    return seed;
+}
+
+PositionKey MakePositionKeyFromVec(in f32x4 position){
+    PositionKey key;
+    key.x = FbxFloatingHashBits(position.x);
+    key.y = FbxFloatingHashBits(position.y);
+    key.z = FbxFloatingHashBits(position.z);
+    return key;
+}
+
+b8 LessEmittedF32(in f32 lhs, in f32 rhs){
+    return FbxFloatingHashBits(CleanFloat(lhs)) < FbxFloatingHashBits(CleanFloat(rhs));
+}
+
+b8 SameEmittedF32(in f32 lhs, in f32 rhs){
+    return FbxFloatingHashBits(CleanFloat(lhs)) == FbxFloatingHashBits(CleanFloat(rhs));
+}
+
+b8 LessEmittedVec2(in Vec2 lhs, in Vec2 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    return LessEmittedF32(lhs.y, rhs.y);
+}
+
+b8 LessEmittedVec3(in Vec3 lhs, in Vec3 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    return LessEmittedF32(lhs.z, rhs.z);
+}
+
+b8 LessEmittedVec4(in Vec4 lhs, in Vec4 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    if(!SameEmittedF32(lhs.z, rhs.z))
+        return LessEmittedF32(lhs.z, rhs.z);
+    return LessEmittedF32(lhs.w, rhs.w);
+}
+
+b8 LessMeshSkinInfluence(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        if(lhs.joint[i] != rhs.joint[i])
+            return lhs.joint[i] < rhs.joint[i];
+    }
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        const u32 lhsBits = FbxFloatingHashBits(lhs.weight[i]);
+        const u32 rhsBits = FbxFloatingHashBits(rhs.weight[i]);
+        if(lhsBits != rhsBits)
+            return lhsBits < rhsBits;
+    }
+    return false;
+}
+
+b8 SameEmittedVec2(in Vec2 lhs, in Vec2 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y);
+}
+
+b8 SameEmittedVec3(in Vec3 lhs, in Vec3 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z);
+}
+
+b8 SameEmittedVec4(in Vec4 lhs, in Vec4 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

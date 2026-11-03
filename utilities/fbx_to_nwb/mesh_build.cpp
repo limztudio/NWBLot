@@ -68,7 +68,9 @@ template<typename VisitTriangle>
 }
 
 [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position)noexcept{
-    return PositionKey{ FloatingHashBits(VectorGetX(position)), FloatingHashBits(VectorGetY(position)), FloatingHashBits(VectorGetZ(position)) };
+    Float4 positionVec;
+    StoreFloat(position, positionVec);
+    return MakePositionKeyFromVec(positionVec);
 }
 
 [[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{

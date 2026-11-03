@@ -67,59 +67,22 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformWallBuilder::ClipShell(
         NWB_ASSERT(triangle.indices[0u] < inOutVertices.size());
         NWB_ASSERT(triangle.indices[1u] < inOutVertices.size());
         NWB_ASSERT(triangle.indices[2u] < inOutVertices.size());
-        const Array<f32, s_TriangleCornerCount> distances = {{ scratchDistances[triangle.indices[0u]], scratchDistances[triangle.indices[1u]], scratchDistances[triangle.indices[2u]] }};
-        const Array<b8, s_TriangleCornerCount> kept = {{ distances[0u] >= s_KeepDistanceZero, distances[1u] >= s_KeepDistanceZero, distances[2u] >= s_KeepDistanceZero }};
-        const u32 keepCount = (kept[0u] ? 1u : 0u) + (kept[1u] ? 1u : 0u) + (kept[2u] ? 1u : 0u);
-        if(keepCount == s_TriangleCornerCount){
+        const CsgDeformTriangleClipPlan plan = ClassifyCsgDeformTriangleClip(triangle, scratchDistances);
+        if(plan.keepCount == s_TriangleCornerCount){
             scratchKept.push_back(MakeCsgDeformTriangle(triangle.indices[0u], triangle.indices[1u], triangle.indices[2u]));
             continue;
         }
-        if(keepCount == 0u)
+        if(plan.keepCount == 0u)
             continue;
-        if(keepCount == 1u){
-            u32 keepCorner = 0u;
-            for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
-                if(kept[corner]){
-                    keepCorner = corner;
-                    break;
-                }
-            }
-            const u32 keepVertex = triangle.indices[keepCorner];
-            const u32 dropA = triangle.indices[(keepCorner + 1u) % s_TriangleCornerCount];
-            const u32 dropB = triangle.indices[(keepCorner + 2u) % s_TriangleCornerCount];
-            const f32 keepDistance = distances[keepCorner];
-            const f32 dropDistanceA = distances[(keepCorner + 1u) % s_TriangleCornerCount];
-            const f32 dropDistanceB = distances[(keepCorner + 2u) % s_TriangleCornerCount];
-            const auto splitA = CsgDeformWallBuilder::SplitEdgeVertex(keepVertex, dropA, keepDistance, dropDistanceA, inOutVertices, edgeSplits);
-            if(!splitA)
-                return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
-            const auto splitB = CsgDeformWallBuilder::SplitEdgeVertex(keepVertex, dropB, keepDistance, dropDistanceB, inOutVertices, edgeSplits);
-            if(!splitB)
-                return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
-            scratchKept.push_back(MakeCsgDeformTriangle(keepVertex, *splitA, *splitB));
-            continue;
-        }
-        u32 dropCorner = 0u;
-        for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
-            if(!kept[corner]){
-                dropCorner = corner;
-                break;
-            }
-        }
-        const u32 dropVertex = triangle.indices[dropCorner];
-        const u32 keepA = triangle.indices[(dropCorner + 1u) % s_TriangleCornerCount];
-        const u32 keepB = triangle.indices[(dropCorner + 2u) % s_TriangleCornerCount];
-        const f32 dropDistance = distances[dropCorner];
-        const f32 keepDistanceA = distances[(dropCorner + 1u) % s_TriangleCornerCount];
-        const f32 keepDistanceB = distances[(dropCorner + 2u) % s_TriangleCornerCount];
-        const auto splitA = CsgDeformWallBuilder::SplitEdgeVertex(keepA, dropVertex, keepDistanceA, dropDistance, inOutVertices, edgeSplits);
+        const auto splitA = CsgDeformWallBuilder::SplitEdgeVertex(plan.firstEdgeStart, plan.firstEdgeEnd, plan.firstEdgeStartDistance, plan.firstEdgeEndDistance, inOutVertices, edgeSplits);
         if(!splitA)
             return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
-        const auto splitB = CsgDeformWallBuilder::SplitEdgeVertex(keepB, dropVertex, keepDistanceB, dropDistance, inOutVertices, edgeSplits);
+        const auto splitB = CsgDeformWallBuilder::SplitEdgeVertex(plan.secondEdgeStart, plan.secondEdgeEnd, plan.secondEdgeStartDistance, plan.secondEdgeEndDistance, inOutVertices, edgeSplits);
         if(!splitB)
             return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
-        scratchKept.push_back(MakeCsgDeformTriangle(keepA, *splitA, *splitB));
-        scratchKept.push_back(MakeCsgDeformTriangle(keepA, *splitB, keepB));
+        scratchKept.push_back(MakeCsgDeformTriangle(plan.primaryCorner, *splitA, *splitB));
+        if(plan.keepCount == 2u)
+            scratchKept.push_back(MakeCsgDeformTriangle(plan.primaryCorner, *splitB, plan.secondKeepVertex));
         if(scratchKept.size() > s_MaxDeformTriangles)
             return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
     }

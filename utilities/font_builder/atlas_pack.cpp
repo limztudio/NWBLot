@@ -51,18 +51,7 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
             group.pixels.resize(static_cast<usize>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount, 0u);
             outPayload.groups.push_back(Move(group));
         }
-        auto& record = outPayload.glyphs[index];
-        record.group = groupIndex;
-        record.channel = placed->channel;
-        record.x = placed->x;
-        record.y = placed->y;
-        auto& pixels = outPayload.groups[groupIndex].pixels;
-        for(u32 y = 0u; y < glyph.record.height; ++y){
-            for(u32 x = 0u; x < glyph.record.width; ++x){
-                const usize destination = (static_cast<usize>(record.y + y) * options.extent + record.x + x) * Impl::s_FontAtlasMaxChannelCount + record.channel;
-                pixels[destination] = glyph.pixels[static_cast<usize>(y) * glyph.record.width + x];
-            }
-        }
+        CopyGlyphToAtlasGroup(glyph.pixels, options.extent, *placed, outPayload.glyphs[index], outPayload.groups[groupIndex].pixels);
         lastPage = Max(lastPage, placed->page);
     }
     CompactAtlasGroups(outPayload);

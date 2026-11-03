@@ -167,17 +167,21 @@ b8 UiEditBoxHost::applyAction(const Ui::EditBoxOptions& options, const Ui::EditA
     if(m_borrowRejected || !actions.apply(model, action, options.readOnly) || m_borrowRejected)
         return false;
     if(
-        navigation && (
-            action == Ui::EditAction::Cancel || action == Ui::EditAction::Blur || action == Ui::EditAction::Abandon
-            || model.revision() != revision || model.externalRevision() != externalRevision
-            || model.selectionGeneration() != selectionGeneration || model.compositionGeneration() != compositionGeneration
+        navigation
+        && ShouldResetUiEditNavigationAfterAction(
+            action,
+            revision,
+            externalRevision,
+            selectionGeneration,
+            compositionGeneration,
+            model.revision(),
+            model.externalRevision(),
+            model.selectionGeneration(),
+            model.compositionGeneration()
         )
     )
         navigation->state.reset();
-    result.submitted |= action == Ui::EditAction::Submit;
-    result.cancelled |= action == Ui::EditAction::Cancel;
-    result.blurred |= action == Ui::EditAction::Blur;
-    result.abandoned |= action == Ui::EditAction::Abandon;
+    MergeUiEditActionToResult(action, result);
     if(action != Ui::EditAction::Submit || model.externalRevision() != externalRevision){
         // Copied commits still apply at their ordered position; surrounding deletion cannot address this retired session.
         if(m_session.owner() == entry.owner && !m_session.cancel())

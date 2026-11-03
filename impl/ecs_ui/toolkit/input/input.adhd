@@ -3044,6 +3044,373 @@ b8 RouteRouterPrimary(
     return true;
 }
 
+void ObserveRouterPointer(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in InputEvent event,
+    in b8 hasHit,
+    in HitTarget hit,
+    mut Point inOutPointer,
+    mut b8 inOutPointerKnown,
+    mut InputSource inOutHoverPointerSource,
+    mut HoverIdentity inOutHoverIdentity,
+    mut WidgetId inOutHover,
+    mut b8 outChangedOwner
+){
+    outChangedOwner = false;
+    if(!event.hoverCapable)
+        return;
+    inOutHoverPointerSource = event.source;
+    inOutPointer = event.position;
+    inOutPointerKnown = true;
+    UpdateRouterHoverTarget(targets, lookup, popups, hasHit, hit, inOutHoverIdentity, inOutHover, outChangedOwner);
+}
+
+b8 WantsRouterCommands(in Span<PopupRecord> popups, in WidgetId focus, in Span<CommandSource> commandSources){
+    if(!popups.empty() || focus.valid())
+        return true;
+    for(in CommandSource source : commandSources){
+        if(source.consumed)
+            return true;
+    }
+    return false;
+}
+
+void CancelRouterInteraction(
+    mut Vector<InputAction> actions,
+    mut Vector<ControlAction> controlActions,
+    mut Vector<ContextMenuAction> contextMenuActions,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut Vector<CommandSource> commandSources,
+    mut u64 outActiveGestureSequence,
+    mut WidgetId outHover,
+    mut HoverIdentity outHoverIdentity,
+    mut WidgetId outFocus,
+    mut WidgetId outCapture,
+    mut PopupToken outCapturePopup,
+    mut ControlToken outCaptureControl,
+    mut ControlToken outFocusControl,
+    mut u64 outFocusDeclaration,
+    mut u64 outCaptureDeclaration,
+    mut b8 outPointerKnown,
+    mut TargetOwner outSecondaryOwner,
+    mut b8 outPointerSubmitArmed
+){
+    actions.clear();
+    controlActions.clear();
+    contextMenuActions.clear();
+    pointerGestures.clear();
+    outActiveGestureSequence = 0u;
+    outHover = WidgetId();
+    outHoverIdentity = HoverIdentity();
+    outFocus = WidgetId();
+    outCapture = WidgetId();
+    outCapturePopup = PopupToken();
+    outCaptureControl = ControlToken();
+    outFocusControl = ControlToken();
+    outFocusDeclaration = 0u;
+    outCaptureDeclaration = 0u;
+    outPointerKnown = false;
+    outSecondaryOwner = TargetOwner();
+    outPointerSubmitArmed = false;
+    RetireRouterCommandFocus(commandSources);
+}
+
+void RouteRouterCommand(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in b8 windowFocused,
+    in u64 layoutGeneration,
+    in InputEvent event,
+    in b8 pointerSequenceConsumed,
+    in b8 secondarySequenceConsumed,
+    in Span<PointerSource> pointerSources,
+    mut Vector<PopupRecord> popups,
+    mut Vector<PopupDismissal> popupDismissals,
+    mut Vector<CommandSource> commandSources,
+    mut Vector<InputAction> actions,
+    mut Vector<ControlAction> controlActions,
+    mut Vector<ContextMenuAction> contextMenuActions,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut u64 inOutActiveGestureSequence,
+    mut u64 inOutNextActionSequence,
+    mut b8 inOutPointerSubmitArmed,
+    mut TargetOwner inOutSecondaryOwner,
+    mut WidgetId inOutHover,
+    mut WidgetId inOutFocus,
+    mut u64 inOutFocusDeclaration,
+    mut ControlToken inOutFocusControl,
+    mut WidgetId inOutCapture,
+    mut PopupToken inOutCapturePopup,
+    mut u64 inOutCaptureDeclaration,
+    mut ControlToken inOutCaptureControl,
+    mut InputRoutingResult inOutResult,
+    mut b8 outDismissedPopup
+){
+    outDismissedPopup = false;
+    const Expected<usize> existingSourceIndex = FindRouterCommandSourceIndex(commandSources, event.source);
+    if(event.type == InputEventType::CommandUp){
+        if(existingSourceIndex.has_value()){
+            const usize foundIndex = existingSourceIndex.value();
+            const CommandSource held = commandSources[foundIndex];
+            inOutResult.commandConsumed = inOutResult.commandConsumed || held.consumed;
+            ReleaseRouterCommand(
+                targets,
+                lookup,
+                popups,
+                windowFocused,
+                inOutFocus,
+                inOutFocusDeclaration,
+                layoutGeneration,
+                event,
+                held,
+                actions,
+                controlActions,
+                contextMenuActions,
+                inOutNextActionSequence,
+                inOutResult
+            );
+            for(usize moveIndex = foundIndex + 1u; moveIndex < commandSources.size(); ++moveIndex)
+                commandSources[moveIndex - 1u] = commandSources[moveIndex];
+            commandSources.pop_back();
+        }
+        return;
+    }
+    const b8 alreadyPressed = existingSourceIndex.has_value();
+    usize sourceIndex = 0u;
+    if(alreadyPressed)
+        sourceIndex = existingSourceIndex.value();
+    else{
+        if(commandSources.size() == s_InputMaxSources){
+            inOutResult.activationOverflow = true;
+            return;
+        }
+        CommandSource admitted;
+        admitted.source = event.source;
+        const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
+        if(windowFocused && !event.repeat && focusedIndex.has_value()){
+            const HitTarget focused = targets[focusedIndex.value()];
+            if(IsRouterTargetInteractive(targets, lookup, popups, focused))
+                admitted.focusOwner = TargetOwner(focused.id, focused.declarationGeneration, focused.popup, focused.control);
+        }
+        commandSources.push_back(admitted);
+        sourceIndex = commandSources.size() - 1u;
+    }
+    CommandSource source = commandSources[sourceIndex];
+    // Blurred and orphan repeat sequences remain inert until released and pressed again.
+    inOutResult.commandConsumed = inOutResult.commandConsumed || source.consumed;
+    if(!windowFocused || (!alreadyPressed && event.repeat))
+        return;
+    b8 consumed = source.consumed;
+    if(alreadyPressed && !consumed)
+        return;
+    const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
+    b8 hasFocused = false;
+    HitTarget focused;
+    if(focusedIndex.has_value()){
+        hasFocused = true;
+        focused = targets[focusedIndex.value()];
+    }
+    if(hasFocused && windowFocused && IsRouterTargetInteractive(targets, lookup, popups, focused) && TryRouteRouterContextMenuCommand(event, focused, alreadyPressed, source)){
+        commandSources[sourceIndex] = source;
+        consumed = true;
+    }
+    else if(event.command == InputCommand::FocusNext || event.command == InputCommand::FocusPrevious){
+        const b8 moved = TryMoveRouterFocusForTraversal(
+            targets,
+            lookup,
+            event.command == InputCommand::FocusPrevious,
+            popups,
+            popupDismissals,
+            commandSources,
+            inOutFocus,
+            inOutFocusDeclaration,
+            inOutFocusControl,
+            outDismissedPopup
+        );
+        source = commandSources[sourceIndex];
+        consumed = consumed || moved || !popups.empty();
+    }
+    else if(event.command == InputCommand::Cancel){
+        consumed = consumed
+            || WantsRouterCommands(popups, inOutFocus, commandSources)
+            || inOutCapture.valid()
+            || pointerSequenceConsumed
+            || secondarySequenceConsumed
+            || (!pointerSources.empty() && WantsRouterPointer(pointerSources, !popups.empty(), inOutHover));
+        if(!event.repeat && !alreadyPressed){
+            CancelRouterCommandPresses(commandSources);
+            CancelRouterPointerPress(
+                pointerGestures,
+                inOutActiveGestureSequence,
+                inOutPointerSubmitArmed,
+                inOutSecondaryOwner,
+                inOutCapture,
+                inOutCapturePopup,
+                inOutCaptureDeclaration,
+                inOutCaptureControl
+            );
+            source = commandSources[sourceIndex];
+        }
+        if(!popups.empty() && !(hasFocused && focused.textEditable)){
+            outDismissedPopup = !event.repeat && !alreadyPressed && TryDismissRouterPopup(PopupDismissReason::Cancel, popups, popupDismissals);
+            consumed = true;
+        }
+        else if(!event.repeat && !alreadyPressed && !(hasFocused && focused.textEditable)){
+            RetireRouterCommandFocus(commandSources);
+            inOutFocus = WidgetId();
+            inOutFocusDeclaration = 0u;
+            inOutFocusControl = ControlToken();
+            source = commandSources[sourceIndex];
+        }
+    }
+    else{
+        consumed = consumed || !popups.empty() || hasFocused;
+        RouteRouterActiveCommandAction(
+            targets,
+            lookup,
+            popups,
+            event,
+            hasFocused,
+            focused,
+            alreadyPressed,
+            layoutGeneration,
+            source,
+            controlActions,
+            inOutNextActionSequence,
+            inOutResult
+        );
+        commandSources[sourceIndex] = source;
+    }
+    if(consumed){
+        source.consumed = true;
+        commandSources[sourceIndex] = source;
+        inOutResult.commandConsumed = true;
+    }
+}
+
+b8 TryBeginContextFrame(
+    in u64 generation,
+    in u64 focusLossGeneration,
+    in u64 readyGeneration,
+    mut u64 inOutLastFrameGeneration,
+    mut u64 inOutFrameGeneration,
+    mut u64 outFocusLossGeneration,
+    mut b8 outFailed,
+    mut usize outDeclarationCount,
+    mut usize outStateClaimCount,
+    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<ContextOwnedPopup> popups,
+    mut usize outPopupDepth,
+    mut PopupToken outCurrentPopup,
+    mut u32 outPopupLayer
+){
+    if(generation <= inOutLastFrameGeneration || inOutFrameGeneration != 0u || readyGeneration != 0u)
+        return false;
+    inOutLastFrameGeneration = generation;
+    inOutFrameGeneration = generation;
+    outFocusLossGeneration = focusLossGeneration;
+    outFailed = false;
+    outDeclarationCount = 0u;
+    outStateClaimCount = 0u;
+    targets.clear();
+    popups.clear();
+    outPopupDepth = 0u;
+    outCurrentPopup = PopupToken();
+    outPopupLayer = 0u;
+    return true;
+}
+
+b8 TryBeginContextRoot(
+    in b8 failed,
+    in u64 frameGeneration,
+    in b8 rootActive,
+    in WidgetRoot root,
+    mut WidgetRoot outRoot,
+    mut b8 outRootActive,
+    mut Vector<WidgetId> scopes
+){
+    if(failed || frameGeneration == 0u || rootActive || root.generation == 0u)
+        return false;
+    const Expected<WidgetId> rootId = TryMakeRootId(root);
+    if(!rootId.has_value())
+        return false;
+    outRoot = root;
+    outRootActive = true;
+    scopes.clear();
+    scopes.push_back(rootId.value());
+    return true;
+}
+
+b8 TryEndContextRoot(
+    in b8 failed,
+    in usize popupDepth,
+    in PopupToken currentPopup,
+    mut b8 inOutRootActive,
+    mut Vector<WidgetId> scopes
+){
+    const b8 valid = inOutRootActive && scopes.size() == 1u && popupDepth == 0u && !currentPopup.valid();
+    inOutRootActive = false;
+    scopes.clear();
+    return valid && !failed;
+}
+
+b8 TryPushContextScope(
+    in b8 failed,
+    in b8 rootActive,
+    in StringView stableKey,
+    mut Vector<WidgetId> scopes
+){
+    if(failed || !rootActive || scopes.size() >= s_ContextMaxScopeDepth || scopes.size() == 0u)
+        return false;
+    const Expected<WidgetId> id = TryMakeWidgetId(scopes[scopes.size() - 1u], stableKey);
+    if(!id.has_value())
+        return false;
+    scopes.push_back(id.value());
+    return true;
+}
+
+b8 TryPopContextScope(
+    in b8 failed,
+    in b8 rootActive,
+    mut Vector<WidgetId> scopes
+){
+    if(!rootActive || scopes.size() <= 1u)
+        return false;
+    scopes.pop_back();
+    return !failed;
+}
+
+b8 CanFinishContextFrame(
+    in b8 failed,
+    in u64 frameGeneration,
+    in b8 rootActive,
+    in usize popupDepth,
+    in PopupToken currentPopup
+){
+    return !failed && frameGeneration != 0u && !rootActive && popupDepth == 0u && !currentPopup.valid();
+}
+
+void ResetContextPopupAndTargetState(
+    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<ContextOwnedPopup> popups,
+    mut PopupToken outCurrentPopup,
+    mut usize outPopupDepth,
+    mut Array<PopupToken, s_InputMaxPopups> outPopupStack,
+    mut u32 outPopupLayer,
+    mut u64 outReadyGeneration
+){
+    targets.clear();
+    popups.clear();
+    outCurrentPopup = PopupToken();
+    outPopupDepth = 0u;
+    for(usize index = 0u; index < s_InputMaxPopups; ++index)
+        outPopupStack[index] = PopupToken();
+    outPopupLayer = 0u;
+    outReadyGeneration = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

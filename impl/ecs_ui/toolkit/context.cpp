@@ -33,69 +33,54 @@ Context::Context(Core::Alloc::GlobalArena& arena)
 }
 
 b8 Context::beginFrame(const u64 generation)noexcept{
-    if(generation <= m_lastFrameGeneration || m_frameGeneration != 0u || ready())
-        return false;
-    m_lastFrameGeneration = generation;
-    m_frameGeneration = generation;
-    m_focusLossGeneration = m_input.focusLossGeneration();
-    m_failed = false;
-    m_declarationCount = 0u;
-    m_stateClaimCount = 0u;
-    m_targets.clear();
-    m_popups.clear();
-    m_popupDepth = 0u;
-    m_currentPopup = {};
-    m_popupLayer = 0u;
-    return true;
+    return TryBeginContextFrame(
+        generation,
+        m_input.focusLossGeneration(),
+        m_readyGeneration,
+        m_lastFrameGeneration,
+        m_frameGeneration,
+        m_focusLossGeneration,
+        m_failed,
+        m_declarationCount,
+        m_stateClaimCount,
+        m_targets,
+        m_popups,
+        m_popupDepth,
+        m_currentPopup,
+        m_popupLayer
+    );
 }
 
 b8 Context::beginRoot(const WidgetRoot& root){
-    if(m_failed || m_frameGeneration == 0u || m_rootActive || root.generation == 0u){
+    if(!TryBeginContextRoot(m_failed, m_frameGeneration, m_rootActive, root, m_root, m_rootActive, m_scopes)){
         fail();
         return false;
     }
-    const auto rootId = TryMakeRootId(root);
-    if(!rootId){
-        fail();
-        return false;
-    }
-    m_root = root;
-    m_rootActive = true;
-    m_scopes.clear();
-    m_scopes.push_back(*rootId);
     return true;
 }
 
 b8 Context::endRoot()noexcept{
-    const b8 valid = m_rootActive && m_scopes.size() == 1u && m_popupDepth == 0u && !m_currentPopup.valid();
-    m_rootActive = false;
-    m_scopes.clear();
-    if(!valid)
+    if(!TryEndContextRoot(m_failed, m_popupDepth, m_currentPopup, m_rootActive, m_scopes)){
         fail();
-    return valid && !m_failed;
+        return false;
+    }
+    return true;
 }
 
 b8 Context::pushScope(const AStringView stableKey){
-    if(m_failed || !m_rootActive || m_scopes.size() >= s_ContextMaxScopeDepth){
+    if(!TryPushContextScope(m_failed, m_rootActive, stableKey, m_scopes)){
         fail();
         return false;
     }
-    const auto id = TryMakeWidgetId(m_scopes.back(), stableKey);
-    if(!id){
-        fail();
-        return false;
-    }
-    m_scopes.push_back(*id);
     return true;
 }
 
 b8 Context::popScope()noexcept{
-    if(!m_rootActive || m_scopes.size() <= 1u){
+    if(!TryPopContextScope(m_failed, m_rootActive, m_scopes)){
         fail();
         return false;
     }
-    m_scopes.pop_back();
-    return !m_failed;
+    return true;
 }
 
 Expected<NotNull<WidgetState*>> Context::declare(const AStringView stableKey, const WidgetKind::Enum kind){
@@ -223,7 +208,7 @@ Expected<PointerGesture> Context::takePartPointerGesture(const WidgetState& owne
 }
 
 b8 Context::finishFrame(){
-    if(m_failed || m_frameGeneration == 0u || m_rootActive || m_popupDepth != 0u || m_currentPopup.valid()){
+    if(!CanFinishContextFrame(m_failed, m_frameGeneration, m_rootActive, m_popupDepth, m_currentPopup)){
         fail();
         return false;
     }
@@ -256,13 +241,15 @@ void Context::abandonFrame(){
 
 void Context::resetInput()noexcept{
     m_input.reset();
-    m_targets.clear();
-    m_popups.clear();
-    m_currentPopup = {};
-    m_popupDepth = 0u;
-    m_popupStack.fill({});
-    m_popupLayer = 0u;
-    m_readyGeneration = 0u;
+    ResetContextPopupAndTargetState(
+        m_targets,
+        m_popups,
+        m_currentPopup,
+        m_popupDepth,
+        m_popupStack,
+        m_popupLayer,
+        m_readyGeneration
+    );
 }
 
 void Context::retainRoots(const Span<const WidgetRoot> roots){

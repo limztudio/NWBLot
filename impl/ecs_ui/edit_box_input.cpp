@@ -254,7 +254,7 @@ b8 UiEditBoxHost::compositionActive(const Entry& entry)const noexcept{
 }
 
 b8 UiEditBoxHost::append(Event&& event){
-    if(m_events.size() == Ui::s_InputMaxEvents || event.native.text.size() > Core::s_TextInputMaxQueuedTextBytes - m_queuedTextBytes){
+    if(!CanAppendUiEditBoxEvent(m_events.size(), Ui::s_InputMaxEvents, event.native.text.size(), m_queuedTextBytes, Core::s_TextInputMaxQueuedTextBytes)){
         reset();
         return false;
     }

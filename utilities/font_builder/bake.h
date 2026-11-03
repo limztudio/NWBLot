@@ -72,24 +72,7 @@ inline void CompactAtlasGroups(Impl::FontAtlasPayload& payload){
             continue;
 
         Core::Assets::AssetBytes compactPixels(group.pixels.get_allocator().arena());
-        compactPixels.resize(static_cast<usize>(bounds.width) * bounds.height * bounds.channelCount);
-        if(bounds.channelCount == group.channelCount){
-            const usize rowBytes = static_cast<usize>(bounds.width) * bounds.channelCount;
-            for(u32 y = 0u; y < bounds.height; ++y){
-                const usize source = (static_cast<usize>(bounds.firstY + y) * group.width + bounds.firstX) * bounds.channelCount;
-                NWB_MEMCPY(compactPixels.data() + static_cast<usize>(y) * rowBytes, rowBytes, group.pixels.data() + source, rowBytes);
-            }
-        }
-        else{
-            for(u32 y = 0u; y < bounds.height; ++y){
-                for(u32 x = 0u; x < bounds.width; ++x){
-                    const usize source = (static_cast<usize>(bounds.firstY + y) * group.width + bounds.firstX + x) * group.channelCount;
-                    const usize destination = (static_cast<usize>(y) * bounds.width + x) * bounds.channelCount;
-                    for(u32 channel = 0u; channel < bounds.channelCount; ++channel)
-                        compactPixels[destination + channel] = group.pixels[source + channel];
-                }
-            }
-        }
+        CompactFontAtlasGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
         for(auto& glyph : payload.glyphs)
             Impl::OffsetFontAtlasGroupGlyph(static_cast<u32>(groupIndex), bounds.firstX, bounds.firstY, glyph);
         group.width = bounds.width;

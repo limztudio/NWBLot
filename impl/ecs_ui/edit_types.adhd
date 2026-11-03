@@ -12,9 +12,11 @@
 native{
 namespace NWB::Impl{
 using Ui::DisplayMetrics;
+namespace EditAction = Ui::EditAction;
 namespace EditClipboardAction = Ui::EditClipboardAction;
 using Ui::EditBoxCaretStop;
 using Ui::EditBoxPlacement;
+using Ui::EditBoxResult;
 using Ui::EditCaretLine;
 using Ui::EditCompositionView;
 namespace EditNavigationDirection = Ui::EditNavigationDirection;
@@ -323,6 +325,43 @@ b8 IsValidUiEditNavigationViewportHeight(in EditNavigationDirection direction, i
     if((direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown) && viewportHeight == 0.0f)
         return false;
     return true;
+}
+
+void MergeUiEditActionToResult(in EditAction action, mut EditBoxResult inOutResult){
+    inOutResult.submitted = inOutResult.submitted || action == EditAction::Submit;
+    inOutResult.cancelled = inOutResult.cancelled || action == EditAction::Cancel;
+    inOutResult.blurred = inOutResult.blurred || action == EditAction::Blur;
+    inOutResult.abandoned = inOutResult.abandoned || action == EditAction::Abandon;
+}
+
+b8 ShouldResetUiEditNavigationAfterAction(
+    in EditAction action,
+    in u64 beforeRevision,
+    in u64 beforeExternalRevision,
+    in u64 beforeSelectionGeneration,
+    in u64 beforeCompositionGeneration,
+    in u64 afterRevision,
+    in u64 afterExternalRevision,
+    in u64 afterSelectionGeneration,
+    in u64 afterCompositionGeneration
+){
+    return action == EditAction::Cancel
+        || action == EditAction::Blur
+        || action == EditAction::Abandon
+        || afterRevision != beforeRevision
+        || afterExternalRevision != beforeExternalRevision
+        || afterSelectionGeneration != beforeSelectionGeneration
+        || afterCompositionGeneration != beforeCompositionGeneration;
+}
+
+b8 CanAppendUiEditBoxEvent(
+    in usize currentEventCount,
+    in usize maxEvents,
+    in usize eventTextSize,
+    in usize queuedTextBytes,
+    in usize maxQueuedTextBytes
+){
+    return currentEventCount < maxEvents && eventTextSize <= maxQueuedTextBytes - queuedTextBytes;
 }
 
 

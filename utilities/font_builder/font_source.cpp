@@ -75,7 +75,7 @@ b8 FontSource::open(const BakeOptions& options, Core::Alloc::ScratchArena& scrat
     }
     const FT_Library library = m_freeType.library();
     const FT_Face face = m_freeType.face();
-    if(face->num_glyphs <= 0 || static_cast<u64>(face->num_glyphs) > Impl::s_FontAtlasMaxGlyphCount || face->units_per_EM == 0u){
+    if(!IsValidBakeFontFaceMetrics(face->num_glyphs, face->units_per_EM)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unsupported glyph count or units per em"));
         return false;
     }
@@ -105,7 +105,7 @@ b8 FontSource::open(const BakeOptions& options, Core::Alloc::ScratchArena& scrat
     payload.bakePpem = options.ppem;
     payload.spreadPixels = options.spread;
     payload.guardTexels = 1u;
-    payload.rasterMode = options.outline ? Impl::FontAtlasRasterMode::Outline : Impl::FontAtlasRasterMode::Bitmap;
+    payload.rasterMode = ResolveBakeFontAtlasRasterMode(options.outline);
     payload.ascenderUnits = static_cast<f32>(face->ascender);
     payload.descenderUnits = static_cast<f32>(face->descender);
     payload.lineGapUnits = ComputeBakeFontLineGapUnits(face->height, face->ascender, face->descender);

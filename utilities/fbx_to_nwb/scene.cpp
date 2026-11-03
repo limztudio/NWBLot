@@ -148,10 +148,10 @@ void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::S
 
 Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance> instances, const AStringView selector){
     UtilityVector<usize> outSelection;
+    outSelection.reserve(instances.size() > 1u ? instances.size() : 1u);
 
     const AStringView normalized = TrimView(selector);
     if(normalized.empty() || EqualsAsciiIgnoreCase(normalized, s_DefaultMeshSelectorText)){
-        outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
             outSelection.push_back(instanceIndex);
         return outSelection;
@@ -176,7 +176,6 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
     }
 
     UtilityVector<usize> partialSelection;
-    outSelection.reserve(instances.size());
     for(const MeshInstance& instance : instances){
         if(EqualsAsciiIgnoreCase(UfbxStringView(instance.node->name), normalized) || EqualsAsciiIgnoreCase(UfbxStringView(instance.mesh->name), normalized)){
             outSelection.push_back(instance.index);

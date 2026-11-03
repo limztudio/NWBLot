@@ -142,17 +142,19 @@ namespace MeshAssetBinaryPayload{
 
 
 void FillMeshBaseHeader(const Mesh& mesh, MeshBinaryHeader& outHeader)noexcept{
-    outHeader.positionCount = static_cast<u64>(mesh.positionStream().size());
-    outHeader.normalCount = static_cast<u64>(mesh.normalStream().size());
-    outHeader.tangentCount = static_cast<u64>(mesh.tangentStream().size());
-    outHeader.uv0Count = static_cast<u64>(mesh.uv0Stream().size());
-    outHeader.colorCount = static_cast<u64>(mesh.colorStream().size());
-    outHeader.meshletCount = static_cast<u64>(mesh.meshlets().size());
-    outHeader.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size());
-    outHeader.meshletPositionRefDeltaByteCount = static_cast<u64>(mesh.meshletPositionRefDeltas().size());
-    outHeader.meshletAttributeRefDeltaByteCount = static_cast<u64>(mesh.meshletAttributeRefDeltas().size());
-    outHeader.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size());
-    outHeader.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size());
+    outHeader = MakeMeshBinaryHeader(
+        mesh.positionStream().size(),
+        mesh.normalStream().size(),
+        mesh.tangentStream().size(),
+        mesh.uv0Stream().size(),
+        mesh.colorStream().size(),
+        mesh.meshlets().size(),
+        mesh.meshletBounds().size(),
+        mesh.meshletPositionRefDeltas().size(),
+        mesh.meshletAttributeRefDeltas().size(),
+        mesh.meshletLocalVertexRefs().size(),
+        mesh.meshletPrimitiveIndices().size()
+    );
 }
 
 [[nodiscard]] b8 AppendMeshAttributeStreams(const Mesh& mesh, const TStringView failureContext, Core::Assets::AssetBytes& outBinary){

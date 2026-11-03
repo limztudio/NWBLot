@@ -36,40 +36,23 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 
 
 [[nodiscard]] b8 BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
-    instance.localBounds = RuntimeMeshLocalBounds{};
-    if(instance.restPositions.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds"), ConvertString(instance.sourceName.resolvedText()));
+    const auto bounds = TryBuildRuntimeMeshLocalBounds(instance.sourceName, instance.restPositions);
+    if(!bounds){
+        instance.localBounds = RuntimeMeshLocalBounds{};
         return false;
     }
-
-    SIMDVectorSingle minBounds;
-    SIMDVectorSingle maxBounds;
-    AabbTests::Reset(minBounds, maxBounds);
-    for(const Float3U& position : instance.restPositions)
-        AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
-
-    if(!AabbTests::Valid(minBounds, maxBounds)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds"), ConvertString(instance.sourceName.resolvedText()));
-        return false;
-    }
-
-    // CPU cache holds bind-pose only; keep bounds valid but not finite for CSG.
-    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_RuntimeMeshBoundsValidFlag, instance.localBounds.minBounds);
-    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, instance.localBounds.maxBounds);
+    instance.localBounds = *bounds;
     return true;
 }
 
 [[nodiscard]] b8 BuildRuntimeZippedPayload(const Mesh& mesh, const Span<const SkinInfluence4> skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
-    usize positionRefCount = 0u;
-    usize attributeRefCount = 0u;
-    for(const MeshletDesc& meshlet : mesh.meshlets()){
-        positionRefCount += MeshletPositionCount(meshlet);
-        attributeRefCount += MeshletAttributeCount(meshlet);
-    }
-    if(positionRefCount > static_cast<usize>(Limit<u32>::s_Max) || attributeRefCount > static_cast<usize>(Limit<u32>::s_Max))
+    const auto totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
+    if(!totalCounts)
         return false;
+    const usize positionRefCount = totalCounts->positionRefCount;
+    const usize attributeRefCount = totalCounts->attributeRefCount;
 
     instance.restPositions.clear();
     instance.restNormals.clear();
@@ -93,39 +76,40 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
         instance.meshlets.push_back(runtimeMeshlet);
 
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(sourceMeshlet); ++localPositionIndex){
-            const Expected<MeshletPositionStreamRef> sourceRef = TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), sourceMeshlet, localPositionIndex, false);
-            if(
-                !sourceRef
-                || !MeshletPositionRefInRange(*sourceRef, mesh.positionStream().size(), skinStream.size(), false)
-                || sourceRef->position >= skinStream.size()
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid"), meshletIndex, localPositionIndex);
+            const Expected<MeshletPositionStreamRef> sourceRef = TryDecodeSourceMeshletPositionRef(
+                mesh.meshletPositionRefDeltas(),
+                sourceMeshlet,
+                meshletIndex,
+                localPositionIndex,
+                mesh.positionStream().size(),
+                skinStream.size()
+            );
+            if(!sourceRef)
                 return false;
-            }
 
-            MeshletPositionStreamRef runtimeRef = *sourceRef;
-            runtimeRef.position = static_cast<u32>(runtimePositionRefs.size());
-            runtimeRef.skin = sourceRef->position;
+            const MeshletPositionStreamRef runtimeRef = MakeRuntimeMeshletPositionStreamRef(*sourceRef, runtimePositionRefs.size());
             instance.restPositions.push_back(mesh.positionStream()[sourceRef->position]);
             runtimePositionRefs.push_back(runtimeRef);
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(sourceMeshlet); ++localAttributeIndex){
-            const Expected<MeshletAttributeStreamRef> sourceRef = TryDecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas(), sourceMeshlet, localAttributeIndex);
-            if(
-                !sourceRef
-                || !MeshletAttributeRefInRange(*sourceRef, mesh.normalStream().size(), mesh.tangentStream().size(), mesh.uv0Stream().size(), mesh.colorStream().size())
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid"), meshletIndex, localAttributeIndex);
+            const Expected<MeshletAttributeStreamRef> sourceRef = TryDecodeSourceMeshletAttributeRef(
+                mesh.meshletAttributeRefDeltas(),
+                sourceMeshlet,
+                meshletIndex,
+                localAttributeIndex,
+                mesh.normalStream().size(),
+                mesh.tangentStream().size(),
+                mesh.uv0Stream().size(),
+                mesh.colorStream().size()
+            );
+            if(!sourceRef)
                 return false;
-            }
 
             instance.restNormals.push_back(mesh.normalStream()[sourceRef->normal]);
             instance.restTangents.push_back(mesh.tangentStream()[sourceRef->tangent]);
 
-            MeshletAttributeStreamRef runtimeRef = *sourceRef;
-            runtimeRef.normal = static_cast<u32>(runtimeAttributeRefs.size());
-            runtimeRef.tangent = static_cast<u32>(runtimeAttributeRefs.size());
+            const MeshletAttributeStreamRef runtimeRef = MakeRuntimeMeshletAttributeStreamRef(*sourceRef, runtimeAttributeRefs.size());
             runtimeAttributeRefs.push_back(runtimeRef);
         }
     }

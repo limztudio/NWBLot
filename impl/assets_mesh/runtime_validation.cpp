@@ -205,54 +205,35 @@ void LogMeshletPrimitivePayloadValidation(const TStringView contextText, const T
         }
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
-        const SIMDVectorSingle sphere = LoadFloat(bounds.sphere);
-        if(!VectorIsFinite(sphere, VectorComponentMask::s_XYZW) || VectorGetW(sphere) < 0.0f){
+        if(!IsValidMeshletBoundsSphere(bounds)){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid bounds"));
             return false;
         }
-        if(MeshletConeFlags(bounds) & ~s_MeshletConeFlagEnabled){
+        if(!HasValidMeshletConeFlags(bounds)){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone flags"));
             return false;
         }
-        if(MeshletConeEnabled(bounds) && MeshletConePackedCutoff(bounds) == 0u){
+        if(!HasValidMeshletConeCutoff(bounds)){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone cutoff"));
             return false;
         }
 
-        for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
-            const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, false);
-            if(ref && MeshletPositionRefInRange(*ref, positionCount, 0u, false))
-                continue;
-
+        if(!ValidateMeshletEncodedPositionRefs(positionRefDeltas, meshlet, encodedPositionCount, positionCount)){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedPositionRefReason);
             return false;
         }
 
-        for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
-            const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
-            if(ref && MeshletAttributeRefInRange(*ref, normalCount, tangentCount, uv0Count, colorCount))
-                continue;
-
+        if(!ValidateMeshletEncodedAttributeRefs(attributeRefDeltas, meshlet, attributeCount, normalCount, tangentCount, uv0Count, colorCount)){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedAttributeRefReason);
             return false;
         }
-        for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
-            const MeshletLocalVertexRef& ref = localVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-            if(ref.localDeformedPosition < encodedPositionCount && ref.localAttribute < attributeCount)
-                continue;
-
+        if(!ValidateMeshletLocalVertexRefsRange(localVertexRefs, meshlet, vertexCount, encodedPositionCount, attributeCount)){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("local vertex ref is out of range"));
             return false;
         }
-        for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * s_MeshletTriangleIndexCount;
-            for(usize corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
-                if(meshletPrimitiveIndices[primitiveOffset + corner] < vertexCount)
-                    continue;
-
-                __hidden_mesh_runtime_validation::LogMeshletPrimitivePayloadValidation(contextText, meshPathText, meshletIndex, primitiveIndex, NWB_TEXT("has an out-of-range local vertex"));
-                return false;
-            }
+        if(const auto invalidPrimitive = TryFindInvalidMeshletPrimitiveIndex(meshletPrimitiveIndices, meshlet, primitiveCount, vertexCount)){
+            __hidden_mesh_runtime_validation::LogMeshletPrimitivePayloadValidation(contextText, meshPathText, meshletIndex, *invalidPrimitive, NWB_TEXT("has an out-of-range local vertex"));
+            return false;
         }
     }
 

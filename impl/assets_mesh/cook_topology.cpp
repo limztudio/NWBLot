@@ -65,12 +65,8 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
     if(triangleIndices.empty() || triangleIndices.size() % s_MeshletTriangleIndexCount != 0u)
         return MakeUnexpected(Failure{});
     const usize triangleCount = triangleIndices.size() / s_MeshletTriangleIndexCount;
-    if(triangleCount > Limit<u32>::s_Max)
+    if(triangleCount > Limit<u32>::s_Max || !AreAllMeshPositionsFinite(positions))
         return MakeUnexpected(Failure{});
-    for(const Float3U& position : positions){
-        if(!VectorIsFinite(LoadFloat(position), VectorComponentMask::s_XYZ))
-            return MakeUnexpected(Failure{});
-    }
 
     Vector<u32, Core::Alloc::ScratchArena> words(DivideUp(triangleCount, usize(s_MeshletSolidTriangleWordBits)), 0u, scratchArena);
     Vector<u32, Core::Alloc::ScratchArena> parents(triangleCount, scratchArena);
@@ -86,15 +82,8 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
         const u32 c = triangleIndices[base + 2u];
         if(a >= positions.size() || b >= positions.size() || c >= positions.size())
             return MakeUnexpected(Failure{});
-        if(a == b || b == c || c == a)
+        if(IsTriangleDegenerateAtIndices(positions, a, b, c))
             invalidTriangles[triangle] = 1u;
-        else{
-            const Double4 aValue = LoadTrianglePositionDouble(positions[a]);
-            const Double4 bValue = LoadTrianglePositionDouble(positions[b]);
-            const Double4 cValue = LoadTrianglePositionDouble(positions[c]);
-            if(DegenerateTriangle(aValue, bValue, cValue))
-                invalidTriangles[triangle] = 1u;
-        }
         for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
             const u32 first = triangleIndices[base + corner];
             const u32 second = triangleIndices[base + (corner + 1u) % s_MeshletTriangleIndexCount];
@@ -132,10 +121,13 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
             origin = LoadTrianglePositionDouble(positions[triangleIndices[static_cast<usize>(component) * s_MeshletTriangleIndexCount]]);
             originComponent = component;
         }
-        const Double4 aValue = LoadTrianglePositionDouble(positions[triangleIndices[base]]);
-        const Double4 bValue = LoadTrianglePositionDouble(positions[triangleIndices[base + 1u]]);
-        const Double4 cValue = LoadTrianglePositionDouble(positions[triangleIndices[base + 2u]]);
-        componentVolumes[component] += RelativeTriangleVolume(aValue, bValue, cValue, origin);
+        componentVolumes[component] += ComputeTriangleRelativeVolumeAtIndices(
+            positions,
+            triangleIndices[base],
+            triangleIndices[base + 1u],
+            triangleIndices[base + 2u],
+            origin
+        );
     }
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         const u32 component = FindComponent(triangle, parents);

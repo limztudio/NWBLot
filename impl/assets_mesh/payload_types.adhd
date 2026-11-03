@@ -461,6 +461,108 @@ b8 IsValidMeshTangentVector(in f32x4 tangent){
     ;
 }
 
+MeshBinaryHeader MakeMeshBinaryHeader(
+    in usize positionCount,
+    in usize normalCount,
+    in usize tangentCount,
+    in usize uv0Count,
+    in usize colorCount,
+    in usize meshletCount,
+    in usize meshletBoundCount,
+    in usize meshletPositionRefDeltaByteCount,
+    in usize meshletAttributeRefDeltaByteCount,
+    in usize meshletLocalVertexRefCount,
+    in usize meshletPrimitiveIndexCount
+){
+    MeshBinaryHeader outHeader;
+    outHeader.positionCount = cast<u64>(positionCount);
+    outHeader.normalCount = cast<u64>(normalCount);
+    outHeader.tangentCount = cast<u64>(tangentCount);
+    outHeader.uv0Count = cast<u64>(uv0Count);
+    outHeader.colorCount = cast<u64>(colorCount);
+    outHeader.meshletCount = cast<u64>(meshletCount);
+    outHeader.meshletBoundCount = cast<u64>(meshletBoundCount);
+    outHeader.meshletPositionRefDeltaByteCount = cast<u64>(meshletPositionRefDeltaByteCount);
+    outHeader.meshletAttributeRefDeltaByteCount = cast<u64>(meshletAttributeRefDeltaByteCount);
+    outHeader.meshletLocalVertexRefCount = cast<u64>(meshletLocalVertexRefCount);
+    outHeader.meshletPrimitiveIndexCount = cast<u64>(meshletPrimitiveIndexCount);
+    return outHeader;
+}
+
+b8 IsValidMeshletBoundsSphere(in MeshletBounds bounds){
+    return isFinite(bounds.sphere.x) && isFinite(bounds.sphere.y) && isFinite(bounds.sphere.z) && isFinite(bounds.sphere.w) && bounds.sphere.w >= 0.0f;
+}
+
+b8 HasValidMeshletConeFlags(in MeshletBounds bounds){
+    return (MeshletConeFlags(bounds) & ~s_MeshletConeFlagEnabled) == 0u;
+}
+
+b8 HasValidMeshletConeCutoff(in MeshletBounds bounds){
+    return !MeshletConeEnabled(bounds) || MeshletConePackedCutoff(bounds) != 0u;
+}
+
+b8 ValidateMeshletEncodedPositionRefs(
+    in Span<u8> positionRefDeltas,
+    in MeshletDesc meshlet,
+    in u32 encodedPositionCount,
+    in usize positionCount
+){
+    for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
+        const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, false);
+        if(!ref.has_value() || !MeshletPositionRefInRange(ref.value(), positionCount, 0u, false))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidateMeshletEncodedAttributeRefs(
+    in Span<u8> attributeRefDeltas,
+    in MeshletDesc meshlet,
+    in u32 attributeCount,
+    in usize normalCount,
+    in usize tangentCount,
+    in usize uv0Count,
+    in usize colorCount
+){
+    for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
+        const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
+        if(!ref.has_value() || !MeshletAttributeRefInRange(ref.value(), normalCount, tangentCount, uv0Count, colorCount))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidateMeshletLocalVertexRefsRange(
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in MeshletDesc meshlet,
+    in u32 vertexCount,
+    in u32 encodedPositionCount,
+    in u32 attributeCount
+){
+    for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
+        const MeshletLocalVertexRef ref = localVertexRefs[cast<usize>(meshlet.localVertexOffset + localVertexIndex)];
+        if(cast<u32>(ref.localDeformedPosition) >= encodedPositionCount || cast<u32>(ref.localAttribute) >= attributeCount)
+            return false;
+    }
+    return true;
+}
+
+Expected<usize> TryFindInvalidMeshletPrimitiveIndex(
+    in Span<u8> meshletPrimitiveIndices,
+    in MeshletDesc meshlet,
+    in u32 primitiveCount,
+    in u32 vertexCount
+){
+    for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
+        const usize primitiveOffset = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitiveIndex) * cast<usize>(s_MeshletTriangleIndexCount);
+        for(usize corner = 0u; corner < cast<usize>(s_MeshletTriangleIndexCount); ++corner){
+            if(cast<u32>(meshletPrimitiveIndices[primitiveOffset + corner]) >= vertexCount)
+                return cast<usize>(primitiveIndex);
+        }
+    }
+    return makeUnexpected(Failure());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

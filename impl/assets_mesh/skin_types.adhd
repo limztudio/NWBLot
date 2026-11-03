@@ -56,6 +56,60 @@ b8 ValidInverseBindMatrixCount(in usize inverseBindMatrixCount, in u32 skeletonJ
     return skeletonJointCount != 0u && inverseBindMatrixCount == cast<usize>(skeletonJointCount);
 }
 
+SkinHeaderBinary MakeSkinHeaderBinary(
+    in NameHash meshNameHash,
+    in NameHash skeletonNameHash,
+    in usize influenceCount,
+    in usize inverseBindMatrixCount
+){
+    SkinHeaderBinary header;
+    header.meshNameHash = meshNameHash;
+    header.skeletonNameHash = skeletonNameHash;
+    header.influenceCount = cast<u64>(influenceCount);
+    header.inverseBindMatrixCount = cast<u64>(inverseBindMatrixCount);
+    return header;
+}
+
+b8 ValidateSkinAssetHeaderAndCounts(
+    in b8 meshValid,
+    in b8 skeletonValid,
+    in usize influenceCount,
+    in usize inverseBindMatrixCount
+){
+    if(!meshValid){
+        error("Skin::validatePayload failed: mesh reference is empty");
+        return false;
+    }
+    if(!skeletonValid){
+        error("Skin::validatePayload failed: skeleton reference is empty");
+        return false;
+    }
+    if(influenceCount == 0u){
+        error("Skin::validatePayload failed: skin influence stream is empty");
+        return false;
+    }
+    if(inverseBindMatrixCount == 0u){
+        error("Skin::validatePayload failed: inverse bind matrix stream is empty");
+        return false;
+    }
+    if(inverseBindMatrixCount > cast<usize>(u16.max) + 1u){
+        error("Skin::validatePayload failed: inverse bind matrix count exceeds u16 joint index range");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSkinInfluenceStream(in Span<SkinInfluence4> influences, in u32 jointCount){
+    for(usize index = 0u; index < influences.size(); ++index){
+        const SkinInfluence4 influence = influences[index];
+        if(!ValidSkinInfluenceWeights(influence.weight) || !SkinInfluenceFitsSkeleton(influence, jointCount)){
+            error("Skin::validatePayload failed: influence {} has invalid weights or joint indices", index);
+            return false;
+        }
+    }
+    return true;
+}
+
 [subsystem("skinning_subsystem")]
 class SkinningSubsystem{
     public AssetRef<ComputeShader> localBoundsCs;

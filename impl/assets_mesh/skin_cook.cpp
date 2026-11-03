@@ -44,11 +44,12 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    SkinHeaderBinary header;
-    header.meshNameHash = skin.mesh().name().hash();
-    header.skeletonNameHash = skin.skeleton().name().hash();
-    header.influenceCount = static_cast<u64>(skin.influences().size());
-    header.inverseBindMatrixCount = static_cast<u64>(skin.inverseBindMatrices().size());
+    const SkinHeaderBinary header = MakeSkinHeaderBinary(
+        skin.mesh().name().hash(),
+        skin.skeleton().name().hash(),
+        skin.influences().size(),
+        skin.inverseBindMatrices().size()
+    );
     AppendPOD(outBinary, header);
 
     return

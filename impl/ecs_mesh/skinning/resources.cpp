@@ -71,10 +71,8 @@ static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(Core::GpuDescri
 
 Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
     const b8 hasSkinPayload = !instance.skin.empty();
-    if(instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max) || (hasSkinPayload && (instance.skeletonJointCount == 0u || instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u))){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has invalid skin resource counts"), instance.handle.value);
+    if(!ValidateMeshSkinningRuntimeResourceCounts(instance.handle.value, instance.skin.size(), instance.skeletonJointCount))
         return MakeUnexpected(Failure{});
-    }
 
     MeshSkinningResourceBuffers buffers = CaptureMeshSkinningResourceBuffers(instance);
     auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
@@ -84,18 +82,25 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
     const u32 meshletCount = static_cast<u32>(instance.meshlets.size());
     const u32 skinCount = static_cast<u32>(instance.skin.size());
     const u32 jointCount = hasSkinPayload ? instance.skeletonJointCount : 0u;
-    const b8 rebuild =
-        inserted
-        || resources.buffers != buffers
-        || resources.editRevision != instance.editRevision
-        || resources.positionCount != positionCount
-        || resources.attributeCount != attributeCount
-        || resources.meshletCount != meshletCount
-        || resources.skinCount != skinCount
-        || resources.jointCount != jointCount
-        || !resources.hasPersistentHeapDescriptors(hasSkinPayload, instance.attributeBuffer != nullptr)
-        || (hasSkinPayload && (!resources.skinBuffer || !resources.jointPaletteBuffer))
-    ;
+    const b8 rebuild = NeedsMeshSkinningRuntimeResourcesRebuild(
+        inserted,
+        resources.buffers == buffers,
+        resources.editRevision,
+        instance.editRevision,
+        resources.positionCount,
+        positionCount,
+        resources.attributeCount,
+        attributeCount,
+        resources.meshletCount,
+        meshletCount,
+        resources.skinCount,
+        skinCount,
+        resources.jointCount,
+        jointCount,
+        resources.hasPersistentHeapDescriptors(hasSkinPayload, instance.attributeBuffer != nullptr),
+        hasSkinPayload,
+        resources.skinBuffer != nullptr && resources.jointPaletteBuffer != nullptr
+    );
     if(!rebuild)
         return false;
 

@@ -478,6 +478,33 @@ f64 RelativeTriangleVolume(in f64x4 a, in f64x4 b, in f64x4 c, in f64x4 origin){
     return dot((a - origin).xyz, cross((b - origin).xyz, (c - origin).xyz));
 }
 
+b8 AreAllMeshPositionsFinite(in Span<f32x3u> positions){
+    for(in f32x3u position : positions){
+        if(!isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z))
+            return false;
+    }
+    return true;
+}
+
+b8 IsTriangleDegenerateAtIndices(in Span<f32x3u> positions, in u32 a, in u32 b, in u32 c){
+    if(a == b || b == c || c == a)
+        return true;
+    return DegenerateTriangle(
+        LoadTrianglePositionDouble(positions[cast<usize>(a)]),
+        LoadTrianglePositionDouble(positions[cast<usize>(b)]),
+        LoadTrianglePositionDouble(positions[cast<usize>(c)])
+    );
+}
+
+f64 ComputeTriangleRelativeVolumeAtIndices(in Span<f32x3u> positions, in u32 a, in u32 b, in u32 c, in f64x4 origin){
+    return RelativeTriangleVolume(
+        LoadTrianglePositionDouble(positions[cast<usize>(a)]),
+        LoadTrianglePositionDouble(positions[cast<usize>(b)]),
+        LoadTrianglePositionDouble(positions[cast<usize>(c)]),
+        origin
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -66,34 +66,11 @@ b8 Skin::loadBinary(const Span<const u8> binary){
 b8 Skin::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("Skin::validatePayload")))
         return false;
-    if(!m_mesh.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: mesh reference is empty"));
+    if(!ValidateSkinAssetHeaderAndCounts(m_mesh.valid(), m_skeleton.valid(), m_influences.size(), m_inverseBindMatrices.size()))
         return false;
-    }
-    if(!m_skeleton.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: skeleton reference is empty"));
-        return false;
-    }
-    if(m_influences.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: skin influence stream is empty"));
-        return false;
-    }
-    if(m_inverseBindMatrices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: inverse bind matrix stream is empty"));
-        return false;
-    }
-    if(m_inverseBindMatrices.size() > static_cast<usize>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: inverse bind matrix count exceeds u16 joint index range"));
-        return false;
-    }
     const u32 jointCount = static_cast<u32>(m_inverseBindMatrices.size());
-    for(usize index = 0u; index < m_influences.size(); ++index){
-        const SkinInfluence4& influence = m_influences[index];
-        if(!ValidSkinInfluenceWeights(influence.weight) || !SkinInfluenceFitsSkeleton(influence, jointCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: influence {} has invalid weights or joint indices"), index);
-            return false;
-        }
-    }
+    if(!ValidateSkinInfluenceStream(m_influences, jointCount))
+        return false;
     for(usize index = 0u; index < m_inverseBindMatrices.size(); ++index){
         if(!MatrixIsInvertibleAffine(LoadFloat(m_inverseBindMatrices[index]), s_SkinValidationEpsilon, s_SkinValidationEpsilon)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: inverse bind matrix {} is not a finite invertible affine matrix"), index);

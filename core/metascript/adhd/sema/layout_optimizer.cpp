@@ -20,6 +20,9 @@ namespace __hidden_adhd_layout_optimizer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_BareOptionalFallbackBytes = 16u;
+inline constexpr usize s_BareExpectedFallbackBytes = 24u;
+
 [[nodiscard]] b8 IsInlineValueGenericType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
         return info->byteSize == 0u;
@@ -422,7 +425,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
                 outSize = ::AlignUp(innerSize + 1u, innerAlign);
                 return;
             }
-            outSize = 16u;
+            outSize = __hidden_adhd_layout_optimizer::s_BareOptionalFallbackBytes;
             outAlign = 8u;
             return;
         }
@@ -440,7 +443,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
                 outSize = ::AlignUp(payloadSize + 1u, outAlign);
                 return;
             }
-            outSize = 24u;
+            outSize = __hidden_adhd_layout_optimizer::s_BareExpectedFallbackBytes;
             outAlign = 8u;
             return;
         }

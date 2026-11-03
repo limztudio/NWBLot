@@ -21,6 +21,10 @@ NWB_METASCRIPT_BEGIN
 
 inline constexpr MStringView s_IncludePushMarker = "/*__adhd_inc_push__*/";
 inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
+inline constexpr u64 s_MaxUnicodeScalarCodePoint = 0x10FFFFu;
+inline constexpr u64 s_UnicodeSurrogateRangeMin = 0xD800u;
+inline constexpr u64 s_UnicodeSurrogateRangeMax = 0xDFFFu;
+inline constexpr usize s_MaxSavedIncludeDepth = 64u;
 
 [[nodiscard]] constexpr b8 IsHexDigit(const MChar c)noexcept{
     return IsAsciiDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
@@ -43,7 +47,7 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
 }
 
 [[nodiscard]] constexpr b8 IsValidUnicodeScalarCodePoint(const u64 val)noexcept{
-    return val <= 0x10FFFFu && (val < 0xD800u || val > 0xDFFFu);
+    return val <= s_MaxUnicodeScalarCodePoint && (val < s_UnicodeSurrogateRangeMin || val > s_UnicodeSurrogateRangeMax);
 }
 
 [[nodiscard]] constexpr b8 TryDecodeSimpleEscapeChar(const MChar esc, MChar* outDecoded = nullptr)noexcept{
@@ -321,7 +325,7 @@ private:
     u32 m_column = 1;
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
-    Array<u32, 64> m_savedLines{};
+    Array<u32, s_MaxSavedIncludeDepth> m_savedLines{};
     u32 m_savedLineDepth = 0;
     b8 m_hasPendingError = false;
 };

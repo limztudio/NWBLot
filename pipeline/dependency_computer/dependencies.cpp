@@ -121,7 +121,9 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
     const Span<u8> included = selection->selected;
     Vector<u8, Assets::ScratchArena> processed(files.size(), u8(0), scratchArena);
     Vector<usize, Assets::ScratchArena> fileQueue(selection->order, scratchArena);
+    fileQueue.reserve(files.size());
     KnownVirtualPathTextMap knownVirtualPathTexts(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
+    knownVirtualPathTexts.reserve(files.size());
 
     const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> b8{
         if(!depVirtualPath)

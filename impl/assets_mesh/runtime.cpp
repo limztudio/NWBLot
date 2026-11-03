@@ -69,8 +69,7 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
     return true;
 }
 
-b8 Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    (void)scratchArena;
+b8 Mesh::validatePayload([[maybe_unused]] Core::Alloc::ScratchArena& scratchArena)const{
     const AStringView meshPathText = ResolveMeshVirtualPathText(virtualPath());
 
     if(hasIncompleteGeometryPayload()){

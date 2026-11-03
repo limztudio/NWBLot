@@ -210,6 +210,10 @@ enum<u8> PreparedShadowMaterialContextRoute{
 }
 
 const usize s_SoftwareTransparentSamplingPushPrevWorldToClipOffset = 48u;
+const usize s_ShadowRqSoftReceiverFactorOffset = 36u;
+const usize s_ShadowGeometryDownsampleReceiverFactorOffset = 36u;
+const usize s_ShadowCombinedTemporalReceiverFactorOffset = 64u;
+const usize s_SoftwareTransparentSamplingReceiverFactorOffset = 112u;
 
 // Dedicated transparent trace ABI leaves all opaque, hardware and coarse software kernels unchanged.
 [serialize]

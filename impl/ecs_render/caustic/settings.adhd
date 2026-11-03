@@ -156,6 +156,8 @@ CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
 // The caustic resolve chain works on targets reduced by this factor in each axis.
 const u32 s_CausticResolveDownscaleFactor = 2u;
 const u32 s_CausticResolveGroupSize = 8u;
+const u32 s_CausticResolveGroupThreadCount = s_CausticResolveGroupSize;
+const u32 s_CausticResolveGroupLaneCount = s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount;
 const usize s_CausticResolveActivityBufferCount = 2u;
 const Name s_CausticResolveActivityBufferAName = "caustic_resolve_activity_a";
 const Name s_CausticResolveActivityBufferBName = "caustic_resolve_activity_b";

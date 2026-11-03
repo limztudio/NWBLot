@@ -108,7 +108,8 @@ template<typename T>
 }
 
 inline void AppendAdhdUnsigned(MString& out, usize value){
-    Array<char, 32> buf;
+    constexpr usize s_MaxUnsignedDecimalDigits = 32u;
+    Array<char, s_MaxUnsignedDecimalDigits> buf;
     usize idx = 0u;
     if(value == 0u){
         out.push_back('0');
@@ -426,6 +427,12 @@ struct BuiltinScalarTypeInfo{
 }
 
 [[nodiscard]] constexpr b8 TryGetMemberOperatorArityRules(const MStringView opSym, usize& outMinParams, usize& outMaxParams, b8& outProhibitsUnary)noexcept{
+    if(opSym == "[]"){
+        outMinParams = 1u;
+        outMaxParams = 1u;
+        outProhibitsUnary = false;
+        return true;
+    }
 #define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, returnsBool, isBitwiseFlagOp, isPrefixUnary, isIncDec, binaryPrecedence, minMemberParams, maxMemberParams, prohibitsUnaryOverload) \
     if constexpr(isOverloadable){ \
         if(opSym == symbol){ \

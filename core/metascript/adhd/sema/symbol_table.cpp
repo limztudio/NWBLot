@@ -21,6 +21,10 @@ namespace __hidden_adhd_symbol_table{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr i32 s_OverloadExactArityScore = 64;
+constexpr i32 s_OverloadPublicBonusScore = 32;
+constexpr i32 s_OverloadConstMatchScore = 1;
+
 TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena){
     const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
     for(usize p = 0u; p < count; ++p){
@@ -135,7 +139,7 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
 }
 
 [[nodiscard]] i32 ScoreCandidateParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
-    i32 score = (!preferredArgCount || params.size() == *preferredArgCount) ? 64 : 0;
+    i32 score = (!preferredArgCount || params.size() == *preferredArgCount) ? s_OverloadExactArityScore : 0;
     score += ScoreCallableParams(symbols, params, argTypeNames, argIsMut);
     return score;
 }
@@ -184,9 +188,9 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
             continue;
         i32 score = ScoreCandidateParams(symbols, m->params, preferredArgCount, argTypeNames, argIsMut);
         if(!requirePublic || m->access == AccessSpecifier::Public)
-            score += 32;
+            score += s_OverloadPublicBonusScore;
         if(m->isConst == preferConst)
-            score += 1;
+            score += s_OverloadConstMatchScore;
         if(score > bestScore){
             bestScore = score;
             bestMatch = m;
@@ -393,7 +397,7 @@ const MethodDecl* SymbolTable::findClassConstructor(const ClassDecl& classDecl, 
     for(const MethodDecl* m : classDecl.methods){
         if(!m || !m->isConstructor || m->params.size() != argCount)
             continue;
-        i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? 32 : 1;
+        i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? __hidden_adhd_symbol_table::s_OverloadPublicBonusScore : __hidden_adhd_symbol_table::s_OverloadConstMatchScore;
         score += ScoreCallableParams(*this, m->params, argTypeNames, argIsMut);
         if(score > bestScore){
             bestScore = score;

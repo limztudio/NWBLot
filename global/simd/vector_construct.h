@@ -15,11 +15,11 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return ((value.u[0] >> s_F32SignBitShift) & 1u) | (((value.u[1] >> s_F32SignBitShift) & 1u) << 1) | (((value.u[2] >> s_F32SignBitShift) & 1u) << 2) | (((value.u[3] >> s_F32SignBitShift) & 1u) << 3);
 #elif defined(NWB_HAS_NEON64)
-    const uint32x4_t bits = vshrq_n_u32(vreinterpretq_u32_f32(value), 31);
+    const uint32x4_t bits = vshrq_n_u32(vreinterpretq_u32_f32(value), s_F32SignBitShift);
     const int32x4_t shifts = { 0, 1, 2, 3 };
     return vaddvq_u32(vshlq_u32(bits, shifts));
 #elif defined(NWB_HAS_NEON)
-    const uint32x4_t bits = vshrq_n_u32(vreinterpretq_u32_f32(value), 31);
+    const uint32x4_t bits = vshrq_n_u32(vreinterpretq_u32_f32(value), s_F32SignBitShift);
     return vgetq_lane_u32(bits, 0) | (vgetq_lane_u32(bits, 1) << 1) | (vgetq_lane_u32(bits, 2) << 2) | (vgetq_lane_u32(bits, 3) << 3);
 #else
     return static_cast<u32>(_mm_movemask_ps(value));
@@ -29,7 +29,7 @@ NWB_INLINE u32 NWB_SIMD_CALL VectorMoveMask(SIMDVectorSingle value)noexcept{
 NWB_INLINE u32 NWB_SIMD_CALL VectorDoubleMoveMask(SIMDVectorDouble value)noexcept{
 #if defined(NWB_HAS_NEON64)
     const uint32x4_t highWords = vuzp2q_u32(BitCast<uint32x4_t>(SIMDVectorDoubleDetail::GetLowBits(value)), BitCast<uint32x4_t>(SIMDVectorDoubleDetail::GetHighBits(value)));
-    const uint32x4_t bits = vshrq_n_u32(highWords, 31u);
+    const uint32x4_t bits = vshrq_n_u32(highWords, s_F32SignBitShift);
     const int32x4_t shifts = { 0, 1, 2, 3 };
     return vaddvq_u32(vshlq_u32(bits, shifts));
 #elif defined(NWB_HAS_AVX)

@@ -9,6 +9,7 @@
 
 
 namespace __hidden_string_literal_runtime{
+constexpr usize s_RecordHeaderBytes = 24;
 struct StringLiteralRecordHeader{
     u32 magic;
     u32 byteCount;
@@ -17,7 +18,7 @@ struct StringLiteralRecordHeader{
     u64 seed;
 };
 
-static_assert(sizeof(StringLiteralRecordHeader) == 24);
+static_assert(sizeof(StringLiteralRecordHeader) == s_RecordHeaderBytes);
 static_assert(alignof(StringLiteralRecordHeader) <= 16);
 
 constexpr u32 s_RecordMagic = 0x474c4253;

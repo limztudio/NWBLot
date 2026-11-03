@@ -27,6 +27,7 @@ namespace __hidden_compile{
 [[nodiscard]] static Expected<Path<Core::Metascript::MetaArena>, ErrorCode> ResolveComparisonPath(const Path<Core::Metascript::MetaArena>& path){
 #if defined(NWB_PLATFORM_WINDOWS)
     Core::Metascript::MVector<tchar> buffer(path.arena());
+    buffer.reserve(GlobalFilesystemDetail::s_InitialPathBufferCapacity);
     DWORD capacity = static_cast<DWORD>(GlobalFilesystemDetail::s_InitialPathBufferCapacity);
     for(;;){
         buffer.resize(static_cast<usize>(capacity));
@@ -296,6 +297,8 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     const Path<MetaArena> outDir(arena, options.outputDirectory);
     MVector<Path<MetaArena>> inputPaths(arena);
     MVector<Path<MetaArena>> outputPaths(arena);
+    inputPaths.reserve(options.inputs.size());
+    outputPaths.reserve(options.inputs.size() * 2u + (options.depfilePath.empty() ? 0u : 1u));
     for(const MString& input : options.inputs){
         auto absoluteInput = __hidden_compile::ResolveComparisonPath(Path<MetaArena>(arena, input));
         auto absoluteHeader = __hidden_compile::ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveHeaderFilename(input, arena)));
@@ -359,6 +362,8 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     MString combinedDepContent(arena);
     MVector<MString> generatedHeaders(arena);
     MVector<MString> generatedSources(arena);
+    generatedHeaders.reserve(options.inputs.size());
+    generatedSources.reserve(options.inputs.size());
 
     for(usize inputIndex = 0u; inputIndex < options.inputs.size(); ++inputIndex){
         const MString& inputPathText = options.inputs[inputIndex];

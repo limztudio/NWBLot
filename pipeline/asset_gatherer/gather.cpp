@@ -34,6 +34,7 @@ namespace __hidden_gather{
 [[nodiscard]] static Expected<Assets::AssetVector<Assets::AssetString>> CollectBuiltFiles(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena){
     Assets::AssetArena& arena = options.inputs.get_allocator().arena();
     Assets::AssetVector<Assets::AssetString> files(arena);
+    files.reserve(options.inputs.size());
     for(const Assets::AssetString& input : options.inputs){
         const auto absolutePath = AbsolutePath(Path(arena, input));
         if(!absolutePath){

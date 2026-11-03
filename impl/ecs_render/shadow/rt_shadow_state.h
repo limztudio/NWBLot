@@ -36,6 +36,10 @@ namespace ECSRenderDetail{
 
 inline constexpr Core::Color s_ShadowVisibilityAllLitClearColor = Core::Color(1.f, 1.f, 1.f, 1.f);
 inline constexpr Core::TextureSubresourceSet s_ShadowVisibilitySubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_SCENE_SHADOW_SLOT_COUNT);
+using Impl::s_ShadowRqSoftReceiverFactorOffset;
+using Impl::s_ShadowGeometryDownsampleReceiverFactorOffset;
+using Impl::s_ShadowCombinedTemporalReceiverFactorOffset;
+using Impl::s_SoftwareTransparentSamplingReceiverFactorOffset;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +58,7 @@ static_assert(offsetof(SwShadowHeapPushConstants, receiverFactor) == 76u);
 static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32) * 6u, "ShadowRqPushConstants must match the shader push-constant layout");
 
 static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 10u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
-static_assert(offsetof(ShadowRqSoftPushConstants, receiverFactor) == 36u);
+static_assert(offsetof(ShadowRqSoftPushConstants, receiverFactor) == ECSRenderDetail::s_ShadowRqSoftReceiverFactorOffset);
 
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 21u, "ShadowResolvePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowResolvePushConstants, receiverFactor) == 80u);
@@ -66,13 +70,13 @@ static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsValid) =
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset);
 
 static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 10u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
-static_assert(offsetof(ShadowGeometryDownsamplePushConstants, receiverFactor) == 36u);
+static_assert(offsetof(ShadowGeometryDownsamplePushConstants, receiverFactor) == ECSRenderDetail::s_ShadowGeometryDownsampleReceiverFactorOffset);
 
 static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowReprojectMergePushConstants, receiverFactor) == 124u);
 
 static_assert(sizeof(ShadowCombinedTemporalPushConstants) == 128u);
-static_assert(offsetof(ShadowCombinedTemporalPushConstants, receiverFactor) == 64u);
+static_assert(offsetof(ShadowCombinedTemporalPushConstants, receiverFactor) == ECSRenderDetail::s_ShadowCombinedTemporalReceiverFactorOffset);
 static_assert(offsetof(ShadowCombinedTemporalPushConstants, opaqueSoftTraceSlot) == 88u);
 static_assert(offsetof(ShadowCombinedTemporalPushConstants, transparentSoftTraceSlot) == 108u);
 static_assert(offsetof(ShadowCombinedTemporalPushConstants, transparentMomentsOutSlot) == 124u);
@@ -103,7 +107,7 @@ struct SoftwareTransparentSamplingState{
 };
 
 static_assert(sizeof(SoftwareTransparentSamplingPush) == 116u);
-static_assert(offsetof(SoftwareTransparentSamplingPush, receiverFactor) == 112u);
+static_assert(offsetof(SoftwareTransparentSamplingPush, receiverFactor) == ECSRenderDetail::s_SoftwareTransparentSamplingReceiverFactorOffset);
 static_assert(offsetof(SoftwareTransparentSamplingPush, prevWorldToClip) == s_SoftwareTransparentSamplingPushPrevWorldToClipOffset);
 
 

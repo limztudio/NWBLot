@@ -164,11 +164,13 @@ public:
     [[nodiscard]] b8 replaceSelection(const AStringView value){ return replaceRange(selectionStart(), selectionEnd(), value); }
 
     [[nodiscard]] b8 backspace(){
-        return replaceRange(hasSelection() ? selectionStart() : previousBoundary(m_caret), hasSelection() ? selectionEnd() : m_caret, {});
+        const EditWordRange range = ResolveEditBackspaceRange(m_boundaries, m_anchor, m_caret);
+        return replaceRange(range.begin, range.end, {});
     }
 
     [[nodiscard]] b8 eraseForward(){
-        return replaceRange(hasSelection() ? selectionStart() : m_caret, hasSelection() ? selectionEnd() : nextBoundary(m_caret), {});
+        const EditWordRange range = ResolveEditEraseForwardRange(m_boundaries, m_text.size(), m_anchor, m_caret);
+        return replaceRange(range.begin, range.end, {});
     }
 
     // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
@@ -188,14 +190,9 @@ public:
             return beforeBytes <= start && afterBytes <= m_text.size() - end;
         if(!CanEraseAroundEditSelection(beforeBytes, afterBytes, start, end, m_text.size(), m_boundaries))
             return false;
-        const usize prefixEnd = start - beforeBytes;
-        const usize suffixStart = end + afterBytes;
 
         AString<Core::Alloc::GlobalArena> candidate(m_arena);
-        candidate.reserve(m_text.size() - beforeBytes - afterBytes);
-        candidate.append(m_text.data(), prefixEnd);
-        candidate.append(m_text.data() + start, end - start);
-        candidate.append(m_text.data() + suffixStart, m_text.size() - suffixStart);
+        BuildErasedAroundSelectionEditString(text(), beforeBytes, afterBytes, start, end, candidate);
         const AStringView after(candidate.data(), candidate.size());
         auto boundaries = buildBoundaries(after);
         if(!boundaries)
@@ -292,13 +289,8 @@ private:
     [[nodiscard]] b8 replaceRange(const usize begin, const usize end, const AStringView replacement){
         if(!CanReplaceEditRange(begin, end, replacement.size(), m_text.size(), m_limits.maxBytes, m_boundaries) || !validateText(replacement))
             return false;
-        const usize retainedBytes = m_text.size() - (end - begin);
         AString<Core::Alloc::GlobalArena> candidate(m_arena);
-        candidate.reserve(retainedBytes + replacement.size());
-        candidate.append(m_text.data(), begin);
-        if(!replacement.empty())
-            candidate.append(replacement.data(), replacement.size());
-        candidate.append(m_text.data() + end, m_text.size() - end);
+        BuildReplacedEditString(text(), begin, end, replacement, candidate);
         auto boundaries = buildBoundaries({ candidate.data(), candidate.size() });
         if(!boundaries)
             return false;
@@ -320,7 +312,7 @@ private:
     }
 
     [[nodiscard]] b8 validateText(const AStringView value)const noexcept{
-        return m_textMode == EditTextMode::SingleLine ? GraphemeSegmentation::Validate(value, true) : ValidateMultilineText(value);
+        return ValidateEditTextForMode(value, m_textMode);
     }
 
     [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(const AStringView value)const{

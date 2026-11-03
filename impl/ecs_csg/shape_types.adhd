@@ -224,6 +224,50 @@ Expected<CsgShapeLocalBounds> ComputeCsgShapeLocalBoundsFromBytes(in ICsgShape s
     return shape.computeLocalBounds(parameters);
 }
 
+void LogCsgShapeInvalidParameterSize(in Name name){
+    error("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI", name.resolvedText());
+}
+
+b8 ValidateCsgShaderModuleInclude(in Name name, in Name shaderModule, in StringView shaderModuleInclude){
+    if(shaderModule == s_NameNone)
+        return true;
+    if(shaderModuleInclude.empty()){
+        error("CsgShapeRegistry: rejected shape type '{}' with empty shader module include", name.resolvedText());
+        return false;
+    }
+    if(!ValidCsgShaderModuleIncludeText(shaderModuleInclude)){
+        error("CsgShapeRegistry: rejected shape type '{}' with invalid shader module include '{}'", name.resolvedText(), shaderModuleInclude);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateCsgShapeTypeDescFields(
+    in Name name,
+    in Name shaderModule,
+    in StringView shaderModuleInclude,
+    in u32 parameterByteSize,
+    in usize defaultParameterByteCount,
+    in b8 hasBoundsCallback
+){
+    if(name == s_NameNone){
+        error("CsgShapeRegistry: rejected shape type with empty name");
+        return false;
+    }
+    if(!hasBoundsCallback){
+        error("CsgShapeRegistry: rejected shape type '{}' with null bounds callback", name.resolvedText());
+        return false;
+    }
+    if(!ValidCsgShapeParameterByteCounts(parameterByteSize, defaultParameterByteCount)){
+        if(cast<usize>(parameterByteSize) > s_CsgShapeInlineParameterMaxBytes)
+            LogCsgShapeInvalidParameterSize(name);
+        else
+            error("CsgShapeRegistry: rejected shape type '{}' with default parameter size mismatch", name.resolvedText());
+        return false;
+    }
+    return ValidateCsgShaderModuleInclude(name, shaderModule, shaderModuleInclude);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

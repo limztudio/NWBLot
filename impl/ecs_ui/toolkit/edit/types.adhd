@@ -637,6 +637,121 @@ Expected<MultilineTextStep> ReadMultilineTextStep(in StringView source, in usize
     return TryBuildMultilineTextStep(source, offset, scalar, byteCount);
 }
 
+b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
+    if(textMode == EditTextMode::Multiline)
+        return ValidateMultilineText(text);
+    return ValidateGraphemeText(text, true);
+}
+
+Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
+    if(!ValidateGraphemeText(source, false))
+        return makeUnexpected(EditTextStatus::InvalidText);
+    usize normalizedBytes = 0u;
+    usize offset = 0u;
+    while(offset < source.size()){
+        const Expected<SingleLineTextStep> step = ReadSingleLineTextStep(source, offset);
+        if(!step.has_value())
+            return makeUnexpected(EditTextStatus::InvalidText);
+        if(step.value().outputBytes > maxBytes - normalizedBytes)
+            return makeUnexpected(EditTextStatus::TooLarge);
+        normalizedBytes += step.value().outputBytes;
+        offset += step.value().sourceBytes;
+    }
+    outCandidate.clear();
+    outCandidate.reserve(normalizedBytes);
+    offset = 0u;
+    while(offset < source.size()){
+        const Expected<SingleLineTextStep> step = ReadSingleLineTextStep(source, offset);
+        assert(step.has_value());
+        if(step.value().space)
+            outCandidate += " ";
+        else
+            outCandidate.append(source.substr(offset, step.value().sourceBytes));
+        offset += step.value().sourceBytes;
+    }
+    return normalizedBytes;
+}
+
+Expected<usize, EditTextStatus> NormalizeMultilineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
+    if(!ValidateGraphemeText(source, false))
+        return makeUnexpected(EditTextStatus::InvalidText);
+    usize normalizedBytes = 0u;
+    usize offset = 0u;
+    while(offset < source.size()){
+        const Expected<MultilineTextStep> step = ReadMultilineTextStep(source, offset);
+        if(!step.has_value())
+            return makeUnexpected(EditTextStatus::InvalidText);
+        if(step.value().outputBytes > maxBytes - normalizedBytes)
+            return makeUnexpected(EditTextStatus::TooLarge);
+        normalizedBytes += step.value().outputBytes;
+        offset += step.value().sourceBytes;
+    }
+    outCandidate.clear();
+    outCandidate.reserve(normalizedBytes);
+    offset = 0u;
+    while(offset < source.size()){
+        const Expected<MultilineTextStep> step = ReadMultilineTextStep(source, offset);
+        assert(step.has_value());
+        if(step.value().replacement != 0u){
+            if(cast<u32>(step.value().replacement) == s_EditUnicodeLineFeed)
+                outCandidate += "\n";
+            else
+                outCandidate += " ";
+        }
+        else{
+            outCandidate.append(source.substr(offset, step.value().sourceBytes));
+        }
+        offset += step.value().sourceBytes;
+    }
+    return normalizedBytes;
+}
+
+void BuildReplacedEditString(in StringView currentText, in usize begin, in usize end, in StringView replacement, mut String outCandidate){
+    const usize retainedBytes = currentText.size() - (end - begin);
+    outCandidate.clear();
+    outCandidate.reserve(retainedBytes + replacement.size());
+    outCandidate.append(currentText.substr(0u, begin));
+    if(!replacement.empty())
+        outCandidate.append(replacement);
+    outCandidate.append(currentText.substr(end, currentText.size() - end));
+}
+
+void BuildErasedAroundSelectionEditString(in StringView currentText, in usize beforeBytes, in usize afterBytes, in usize start, in usize end, mut String outCandidate){
+    const usize prefixEnd = start - beforeBytes;
+    const usize suffixStart = end + afterBytes;
+    outCandidate.clear();
+    outCandidate.reserve(currentText.size() - beforeBytes - afterBytes);
+    outCandidate.append(currentText.substr(0u, prefixEnd));
+    outCandidate.append(currentText.substr(start, end - start));
+    outCandidate.append(currentText.substr(suffixStart, currentText.size() - suffixStart));
+}
+
+EditWordRange ResolveEditBackspaceRange(in Span<usize> boundaries, in usize anchor, in usize caret){
+    EditWordRange range;
+    if(anchor != caret){
+        range.begin = min(anchor, caret);
+        range.end = max(anchor, caret);
+    }
+    else{
+        range.begin = PreviousEditBoundary(boundaries, caret);
+        range.end = caret;
+    }
+    return range;
+}
+
+EditWordRange ResolveEditEraseForwardRange(in Span<usize> boundaries, in usize textSize, in usize anchor, in usize caret){
+    EditWordRange range;
+    if(anchor != caret){
+        range.begin = min(anchor, caret);
+        range.end = max(anchor, caret);
+    }
+    else{
+        range.begin = caret;
+        range.end = NextEditBoundary(boundaries, textSize, caret);
+    }
+    return range;
+}
+
 usize LowerBoundEditBoundaryIndex(in Span<usize> boundaries, in usize position){
     usize first = 0u;
     usize count = boundaries.size();
@@ -796,12 +911,10 @@ Expected<usize> TryResolveEditMoveTarget(
     return target;
 }
 
-b8 TryResolveEditNavigationPreferredX(in f32 preferredX, mut f32 outPreferredX, mut b8 outValid){
+Expected<f32> TryResolveEditNavigationPreferredX(in f32 preferredX){
     if(!isFinite(preferredX))
-        return false;
-    outPreferredX = preferredX;
-    outValid = true;
-    return true;
+        return makeUnexpected(Failure());
+    return preferredX;
 }
 
 void ClearEditNavigationPreferredX(mut f32 outPreferredX, mut b8 outValid){

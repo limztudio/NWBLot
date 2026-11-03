@@ -49,6 +49,7 @@ private:
     [[nodiscard]] b8 tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitParallelStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitSimdVectorCtorReg(MString& out, MStringView simdType, Span<const Expr* const> arguments)const;
+    [[nodiscard]] b8 isDirectSimdRegExpr(const Expr& expr)const noexcept;
     [[nodiscard]] const SimdVarBinding* findSimdBinding(b8 isThisMember, MStringView name)const noexcept;
     [[nodiscard]] const SimdVarBinding* findSimdBindingForExpr(const Expr* expr)const noexcept;
     [[nodiscard]] const SimdVarBinding* findSimdRootBindingForExpr(const Expr* expr)const noexcept;

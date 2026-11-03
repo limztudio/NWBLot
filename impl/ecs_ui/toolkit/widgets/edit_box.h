@@ -43,32 +43,11 @@ public:
     [[nodiscard]] b8 snapshot(const EditModel& model){
         const AStringView committed = model.text();
         const EditCompositionView composition = model.composition();
-        usize replaced = 0u;
-        usize preeditBytes = 0u;
-        usize displayBytes = 0u;
-        if(!TryResolveEditBoxSnapshotSizes(committed.size(), composition, replaced, preeditBytes, displayBytes))
-            return false;
         AString<Core::Alloc::GlobalArena> display(*m_arena);
-        display.reserve(displayBytes);
-        if(composition.active){
-            display.append(committed.data(), composition.replacementStart);
-            if(preeditBytes != 0u)
-                display.append(composition.text.data(), preeditBytes);
-            display.append(committed.data() + composition.replacementEnd, committed.size() - composition.replacementEnd);
-        }
-        else if(!committed.empty())
-            display.assign(committed.data(), committed.size());
-        const StringView candidateText(display.data(), display.size());
-        if(!ValidateEditBoxDisplayText(candidateText, model.textMode()))
-            return false;
         PaintVector<EditCaretMapping> stops(*m_arena);
-        stops.reserve(model.graphemeBoundaries().size() + 1u);
-        for(const usize boundary : model.graphemeBoundaries()){
-            if(!composition.active || boundary <= composition.replacementStart)
-                stops.push_back({ boundary, boundary });
-            if(composition.active && boundary >= composition.replacementEnd)
-                stops.push_back({ boundary, boundary - replaced + preeditBytes });
-        }
+        usize preeditBytes = 0u;
+        if(!BuildEditBoxSnapshotInto(committed, model.graphemeBoundaries(), composition, model.textMode(), display, stops, preeditBytes))
+            return false;
         m_display = Move(display);
         m_mapping = Move(stops);
         m_composing = composition.active;
@@ -284,3 +263,4 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

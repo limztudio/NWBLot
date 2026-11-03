@@ -377,6 +377,103 @@ Expected<Rect> TryArrangeLayoutTreeChild(
     return rectangle;
 }
 
+Expected<u32> TryAppendLayoutTreeNode(
+    mut Vector<LayoutTreeNode> nodes,
+    in u32 maxNodes,
+    in b8 buildFailed,
+    in u32 parent,
+    in LayoutNodeDesc description
+){
+    if(!CanAddLayoutTreeNode(nodes, maxNodes, buildFailed, parent, description))
+        return makeUnexpected(Failure());
+    const u32 index = cast<u32>(nodes.size());
+    nodes.push_back(LayoutTreeNode(description));
+    if(parent != s_LayoutNoParent){
+        const u32 previousLastChild = nodes[cast<usize>(parent)].lastChild;
+        if(previousLastChild == s_LayoutNoParent)
+            nodes[cast<usize>(parent)].firstChild = index;
+        else
+            nodes[cast<usize>(previousLastChild)].nextSibling = index;
+        nodes[cast<usize>(parent)].lastChild = index;
+    }
+    return index;
+}
+
+b8 MeasureLayoutTreeNodes(in Span<LayoutTreeNode> nodes, mut Vector<LayoutTreeWork> work){
+    for(usize reverse = nodes.size(); reverse > 0u; --reverse){
+        const u32 index = cast<u32>(reverse - 1u);
+        const Expected<Point> measuredSize = MeasureLayoutTreeNode(nodes, work, index);
+        if(!measuredSize.has_value())
+            return false;
+        work[cast<usize>(index)].box.measuredSize = measuredSize.value();
+    }
+    return true;
+}
+
+b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vector<LayoutTreeWork> work){
+    Rect childClip;
+    f64 available = 0.0;
+    f64 weight = 0.0;
+    f64 cursor = 0.0;
+    if(!TryBeginArrangeLayoutTreeNode(nodes, work, index, work[cast<usize>(index)].box, childClip, available, weight, cursor))
+        return false;
+    const LayoutTreeNode node = nodes[cast<usize>(index)];
+    const LayoutNodeDesc description = node.description;
+    const Rect content = work[cast<usize>(index)].box.content;
+    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+        const Expected<Rect> childRect = TryArrangeLayoutTreeChild(
+            description.direction,
+            description.gap,
+            content,
+            nodes[cast<usize>(child)].description,
+            work[cast<usize>(child)].box.measuredSize,
+            available,
+            weight,
+            cursor
+        );
+        if(!childRect.has_value())
+            return false;
+        work[cast<usize>(child)].box.rectangle = childRect.value();
+        work[cast<usize>(child)].inheritedClip = childClip;
+    }
+    return true;
+}
+
+b8 ArrangeLayoutTree(
+    in Span<LayoutTreeNode> nodes,
+    in b8 buildFailed,
+    in Rect viewport,
+    mut Vector<LayoutTreeWork> work,
+    mut Vector<LayoutBox> stagedBoxes,
+    mut Vector<LayoutBox> boxes
+){
+    if(buildFailed || nodes.empty() || !IsValidUiRect(viewport))
+        return false;
+    work.clear();
+    work.resize(nodes.size());
+    if(!MeasureLayoutTreeNodes(nodes, work))
+        return false;
+    const LayoutNodeDesc root = nodes[0u].description;
+    const Point measured = work[0u].box.measuredSize;
+    f32 width = measured.x;
+    if(root.width.policy == LayoutSizePolicy::Stretch)
+        width = viewport.width;
+    f32 height = measured.y;
+    if(root.height.policy == LayoutSizePolicy::Stretch)
+        height = viewport.height;
+    work[0u].box.rectangle = Rect(viewport.x, viewport.y, width, height);
+    work[0u].inheritedClip = viewport;
+    for(u32 index = 0u; cast<usize>(index) < nodes.size(); ++index){
+        if(!ArrangeLayoutTreeNodeAt(nodes, index, work))
+            return false;
+    }
+    stagedBoxes.clear();
+    for(in LayoutTreeWork item : work)
+        stagedBoxes.push_back(item.box);
+    boxes.swap(stagedBoxes);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

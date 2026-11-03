@@ -180,6 +180,29 @@ TEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonica
     EXPECT_NE(mutCondView.find("__adhd_simd_trackMin = ::LoadFloat(trackMin);"), MStringView::npos);
     EXPECT_NE(mutCondView.find("::VectorSaturate("), MStringView::npos);
     EXPECT_NE(mutCondView.find("mat.rows[0]"), MStringView::npos);
+
+    static constexpr MStringView s_SimdLaneInsertAndPermuteSource =
+        "f32x4 normalizeTangentWithSign(in f32x4 tangent, in f32x4 normal, in f32x3u posIn, mut f32x3u outPos) {\r\n"
+        "    const f32x4 loadedPos = f32x4(posIn.x, posIn.y, posIn.z, 0.0f);\r\n"
+        "    outPos = f32x3u(loadedPos.x, loadedPos.y, loadedPos.z);\r\n"
+        "    if(lengthSq(tangent.xyz) > 0.0001f) {\r\n"
+        "        const f32x4 normalized = normalize(tangent.xyz);\r\n"
+        "        f32 sign = 1.0f;\r\n"
+        "        if(tangent.w < 0.0f)\r\n"
+        "            sign = -1.0f;\r\n"
+        "        return f32x4(normalized.x, normalized.y, normalized.z, sign);\r\n"
+        "    }\r\n"
+        "    const f32x4 fallback = normalize(normal.xyz);\r\n"
+        "    return f32x4(fallback.x, fallback.y, fallback.z, normal.w);\r\n"
+        "}\r\n";
+    CompileResult laneInsertRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SimdLaneInsertAndPermuteSource, "impl/sim/lane_insert.adhd", arena.arena, laneInsertRes));
+    const MStringView laneInsertView(laneInsertRes.generatedSource.data(), laneInsertRes.generatedSource.size());
+    EXPECT_NE(laneInsertView.find("::LoadFloat(posIn)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::StoreFloat(__adhd_simd_loadedPos, outPos)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::VectorSetW(__adhd_simd_normalized, sign)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::VectorPermute<0u, 1u, 2u, 7u>(__adhd_simd_fallback, __adhd_simd_normal)"), MStringView::npos);
+    EXPECT_EQ(laneInsertView.find("::VectorSet("), MStringView::npos);
 }
 
 

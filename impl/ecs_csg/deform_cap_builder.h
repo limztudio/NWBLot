@@ -26,8 +26,7 @@ namespace CsgDeformCapBuilder{
 
 void CollectBoundaryEdges(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& outEdges);
 [[nodiscard]] b8 OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchArena, Span<const CsgDeformCutLoopEdge> edges, Vector<u32, Core::Alloc::ScratchArena>& outLoop);
-[[nodiscard]] Expected<SIMDVectorSingleResult> CapNormal(SIMDVectorSingle areaVec)noexcept;
-[[nodiscard]] Expected<u32> FillCapLoop(SIMDVectorSingle loopNormalVec, Span<const u32> loop, CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices, CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles);
+[[nodiscard]] Expected<u32> FillCapLoop(const Float4& loopNormal, Span<const u32> loop, CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices, CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles);
 [[nodiscard]] Expected<u32> FillCutCaps(
     Core::Alloc::ScratchArena& scratchArena,
     Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges,

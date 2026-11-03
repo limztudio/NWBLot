@@ -19,19 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVectorSingle CsgDeformWallBuilder::TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept{
-    const SIMDVectorSingle wNegative = VectorLess(VectorSplatW(tangentVec), VectorZero());
-    const SIMDVectorSingle sign = VectorSelect(VectorReplicate(s_OneWeight), VectorReplicate(s_NegativeOne), wNegative);
-    return VectorSelect(normalizedTangent, sign, s_SIMDMaskW);
-}
-
-void CsgDeformWallBuilder::NormalizeDeformVertex(SIMDVectorSingle& normal, SIMDVectorSingle& tangent)noexcept{
-    // Preview and commit share the same degenerate fallback and tangent handedness.
-    const SIMDVectorSingle epsilonSq = VectorReplicate(s_NormalizeEpsilonSq);
-    normal = Vector4Greater(Vector3LengthSq(normal), epsilonSq) ? VectorSelect(Vector3Normalize(normal), normal, s_SIMDMaskW) : VectorSelect(normal, s_SIMDIdentityR1, s_SIMDMask3);
-    tangent = Vector4Greater(Vector3LengthSq(tangent), epsilonSq) ? TangentHandednessVec(Vector3Normalize(tangent), tangent) : VectorSet(1.0f, 0.0f, 0.0f, 1.0f);
-}
-
 Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance, CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits){
     if(vertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure{});
@@ -40,30 +27,11 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 s
     if(found != edgeSplits.end())
         return found.value();
     // A zero secondDistance selects the second endpoint.
-    const Expected<f32> blendResult = TryComputeCsgDeformEdgeSplitBlend(firstDistance, secondDistance);
-    if(!blendResult)
-        return MakeUnexpected(Failure{});
-    const f32 blendValue = *blendResult;
-    const SIMDVectorSingle blend = VectorReplicate(blendValue);
-    const SIMDVectorSingle other = VectorSubtract(s_SIMDOne, blend);
-    const CsgDeformVertex& firstVertex = vertices[first];
-    const CsgDeformVertex& secondVertex = vertices[second];
-    const SIMDVectorSingle position = MixAttributeVec(LoadFloat(firstVertex.position), LoadFloat(secondVertex.position), blend, other);
-    SIMDVectorSingle normal = MixAttributeVec(LoadFloat(firstVertex.normal), LoadFloat(secondVertex.normal), blend, other);
-    SIMDVectorSingle tangent = MixAttributeVec(LoadFloat(firstVertex.tangent), LoadFloat(secondVertex.tangent), blend, other);
-    const SIMDVectorSingle uv = MixAttributeVec(LoadFloat(firstVertex.uv0), LoadFloat(secondVertex.uv0), blend, other);
-    const SIMDVectorSingle color = MixAttributeVec(LoadFloat(firstVertex.color), LoadFloat(secondVertex.color), blend, other);
-    NormalizeDeformVertex(normal, tangent);
-    CsgDeformVertex mixed;
-    StoreFloat(position, mixed.position);
-    StoreFloat(normal, mixed.normal);
-    StoreFloat(tangent, mixed.tangent);
-    StoreFloat(uv, mixed.uv0);
-    StoreFloat(color, mixed.color);
-    if(!IsFiniteCsgDeformVertex(mixed))
+    const Expected<CsgDeformVertex> mixed = TryBuildInterpolatedCsgDeformVertex(vertices[first], vertices[second], firstDistance, secondDistance);
+    if(!mixed)
         return MakeUnexpected(Failure{});
     const u32 created = static_cast<u32>(vertices.size());
-    vertices.push_back(mixed);
+    vertices.push_back(*mixed);
     ScopeExit discardVertex([&]()noexcept{ vertices.pop_back(); });
     if(!edgeSplits.emplace(edge, created).second){
         NWB_ASSERT(false);

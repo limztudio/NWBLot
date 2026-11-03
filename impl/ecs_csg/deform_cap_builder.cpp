@@ -101,46 +101,15 @@ b8 CsgDeformCapBuilder::OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchAren
     return true;
 }
 
-Expected<SIMDVectorSingleResult> CsgDeformCapBuilder::CapNormal(const SIMDVectorSingle areaVec)noexcept{
-    if(!Vector4Greater(Vector3LengthSq(areaVec), VectorReplicate(s_LoopAreaEpsilonSq)))
-        return MakeUnexpected(Failure{});
-    const SIMDVectorSingle normalized = Vector3Normalize(areaVec);
-    return SIMDVectorSingleResult{ VectorSelect(normalized, s_SIMDIdentityR1, s_SIMDMaskW) };
-}
-
-Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, const Span<const u32> loop, CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices, CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles){
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(const Float4& loopNormal, const Span<const u32> loop, CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices, CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles){
     u32 capTriangles = 0u;
-    if(loop.size() < s_MinLoopVertices)
-        return MakeUnexpected(Failure{});
     if(inOutVertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure{});
-    SIMDVectorSingle centerPositionVec = VectorZero();
-    SIMDVectorSingle centerUvVec = VectorZero();
-    SIMDVectorSingle centerColorVec = VectorZero();
-    for(const u32 vertexIndex : loop){
-        NWB_ASSERT(vertexIndex < inOutVertices.size());
-        const CsgDeformVertex& vertex = inOutVertices[vertexIndex];
-        centerPositionVec = VectorAdd(centerPositionVec, LoadFloat(vertex.position));
-        centerUvVec = VectorAdd(centerUvVec, LoadFloat(vertex.uv0));
-        centerColorVec = VectorAdd(centerColorVec, LoadFloat(vertex.color));
-    }
-    const SIMDVectorSingle loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
-    const SIMDVectorSingle position = VectorDivide(centerPositionVec, loopSizeVec);
-    SIMDVectorSingle normal = loopNormalVec;
-    SIMDVectorSingle tangent = VectorSet(1.0f, 0.0f, 0.0f, 1.0f);
-    const SIMDVectorSingle uv = VectorDivide(centerUvVec, loopSizeVec);
-    const SIMDVectorSingle color = VectorDivide(centerColorVec, loopSizeVec);
-    CsgDeformWallBuilder::NormalizeDeformVertex(normal, tangent);
-    CsgDeformVertex center;
-    StoreFloat(position, center.position);
-    StoreFloat(normal, center.normal);
-    StoreFloat(tangent, center.tangent);
-    StoreFloat(uv, center.uv0);
-    StoreFloat(color, center.color);
-    if(!IsFiniteCsgDeformVertex(center))
+    const Expected<CsgDeformVertex> center = TryBuildCsgDeformCapCenterVertex(inOutVertices, loop, loopNormal);
+    if(!center)
         return MakeUnexpected(Failure{});
     const u32 centerIndex = static_cast<u32>(inOutVertices.size());
-    inOutVertices.push_back(center);
+    inOutVertices.push_back(*center);
 
     // One orientation rule for every loop: reverse kept winding so caps face the cut.
     for(usize vertexIndex = 0u; vertexIndex < loop.size(); ++vertexIndex){
@@ -199,19 +168,10 @@ Expected<u32> CsgDeformCapBuilder::FillCutCaps(
         // Open chains carry no closable loop; they stay viable cap-free. Only a closed degenerate loop fails.
         if(!CsgDeformCapBuilder::OrderBoundaryLoop(scratchArena, loopEdges, loop))
             continue;
-        if(loop.size() < s_MinLoopVertices)
-            return MakeUnexpected(Failure{});
-        const SIMDVectorSingle origin = LoadFloat(inOutVertices[loop[0u]].position);
-        SIMDVectorSingle area = VectorZero();
-        for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
-            const SIMDVectorSingle first = LoadFloat(inOutVertices[loop[vertexIndex]].position);
-            const SIMDVectorSingle second = LoadFloat(inOutVertices[loop[vertexIndex + 1u]].position);
-            area = VectorAdd(area, Vector3Cross(VectorSubtract(first, origin), VectorSubtract(second, origin)));
-        }
-        const auto loopNormal = CapNormal(area);
+        const auto loopNormal = TryComputeCsgDeformLoopNormal(inOutVertices, loop);
         if(!loopNormal)
             return MakeUnexpected(Failure{});
-        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(loopNormal->value, loop, inOutVertices, inOutTriangles);
+        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(*loopNormal, loop, inOutVertices, inOutTriangles);
         if(!loopCaps)
             return MakeUnexpected(Failure{});
         capTriangles += *loopCaps;

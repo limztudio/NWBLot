@@ -46,12 +46,6 @@ namespace CsgDeformWallBuilder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
-[[nodiscard]] inline SIMDVectorSingle MixAttributeVec(const SIMDVectorSingle firstVec, const SIMDVectorSingle secondVec, const SIMDVectorSingle blendVec, const SIMDVectorSingle otherVec)noexcept{
-    return VectorAdd(VectorMultiply(firstVec, blendVec), VectorMultiply(secondVec, otherVec));
-}
-[[nodiscard]] SIMDVectorSingle TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept;
-void NormalizeDeformVertex(SIMDVectorSingle& normal, SIMDVectorSingle& tangent)noexcept;
 [[nodiscard]] Expected<u32> SplitEdgeVertex(u32 first, u32 second, f32 firstDistance, f32 secondDistance, CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits);
 // Keep side is distance >= 0; caller snaps |distance| <= boundaryEpsilon to zero first.
 [[nodiscard]] Expected<void, CsgDeformViabilityReason::Enum> ClipShell(

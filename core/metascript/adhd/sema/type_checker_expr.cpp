@@ -465,6 +465,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
     const MStringView inferredType = inferExprTypeName(ownerClass, &method, expr, scope);
     if(SymbolTable::IsSimdType(inferredType))
         expr.resolvedSimdType = inferredType;
+    else if(u32 unalignedLanes = 0u; SymbolTable::IsUnalignedVectorType(inferredType, unalignedLanes))
+        expr.resolvedUnalignedType = inferredType;
 
     return ok;
 }

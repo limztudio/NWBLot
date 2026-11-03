@@ -32,8 +32,6 @@ static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes);
 using CsgShapeSignedDistanceCallback = Expected<f32>(*)(const Float4& shapePosition, const CsgShapeInlineParameters& parameters);
 
-void LogCsgShapeInvalidParameterSize(const Name& name);
-
 [[nodiscard]] Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept;
 
 template<typename ShapeT>

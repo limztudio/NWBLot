@@ -62,7 +62,14 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         return;
     }
 
-    if(arguments.empty()){
+    b8 allZeroArgs = true;
+    for(const Expr* arg : arguments){
+        if(!arg || !IsZeroScalarLiteral(*arg)){
+            allZeroArgs = false;
+            break;
+        }
+    }
+    if(arguments.empty() || allZeroArgs){
         if(isInt)
             out.append(isDouble ? "::VectorDoubleFalseInt()" : "::VectorFalseInt()");
         else
@@ -70,6 +77,205 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         return;
     }
     if(arguments.size() == 1u && arguments[0]){
+        emitSimdRegExpr(out, *arguments[0], simdType);
+        return;
+    }
+
+    const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(simdType);
+    const Expr* unalignedBase = nullptr;
+    u32 firstUnalignedLane = 0u;
+    if(
+        simdVecInfo
+        && !simdVecInfo->isMixed
+        && TryMatchSingleLaneAccess(arguments[0], unalignedBase, firstUnalignedLane)
+        && firstUnalignedLane == 0u
+        && !unalignedBase->resolvedUnalignedType.empty()
+    ){
+        const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(unalignedBase->resolvedUnalignedType);
+        if(unalignedInfo && !unalignedInfo->isHalfFloat && unalignedInfo->laneScalarType == simdVecInfo->xyzScalarType && arguments.size() >= unalignedInfo->lanes){
+            b8 matchesUnalignedPrefix = true;
+            for(u32 i = 1u; i < unalignedInfo->lanes; ++i){
+                const Expr* laneBase = nullptr;
+                u32 laneIdx = 0u;
+                if(!TryMatchSingleLaneAccess(arguments[i], laneBase, laneIdx) || laneIdx != i || !AreSamePureSimdExpr(*unalignedBase, *laneBase)){
+                    matchesUnalignedPrefix = false;
+                    break;
+                }
+            }
+            if(matchesUnalignedPrefix){
+                b8 trailingAllZero = true;
+                for(usize i = unalignedInfo->lanes; i < arguments.size(); ++i){
+                    if(!arguments[i] || !IsZeroScalarLiteral(*arguments[i])){
+                        trailingAllZero = false;
+                        break;
+                    }
+                }
+                if(trailingAllZero){
+                    out.append(simdVecInfo->loadCppFunc.data(), simdVecInfo->loadCppFunc.size());
+                    out.push_back('(');
+                    emitExpr(out, *unalignedBase);
+                    out.push_back(')');
+                    return;
+                }
+                if(unalignedInfo->lanes == 3u && arguments.size() == 4u && arguments[3]){
+                    if(isInt)
+                        out.append(isDouble ? "::VectorDoubleSetIntW(" : "::VectorSetIntW(");
+                    else
+                        out.append(isDouble ? "::VectorDoubleSetW(" : "::VectorSetW(");
+                    out.append(simdVecInfo->loadCppFunc.data(), simdVecInfo->loadCppFunc.size());
+                    out.push_back('(');
+                    emitExpr(out, *unalignedBase);
+                    out.append("), ");
+                    if(isInt)
+                        out.append(isDouble ? "static_cast<u64>(" : "static_cast<u32>(");
+                    emitExpr(out, *arguments[3]);
+                    if(isInt)
+                        out.push_back(')');
+                    out.push_back(')');
+                    return;
+                }
+            }
+        }
+    }
+
+    Array<const Expr*, 4> laneBases{};
+    Array<u32, 4> laneIndices{};
+    for(usize i = 0u; i < 4u && i < arguments.size(); ++i){
+        const Expr* base = nullptr;
+        u32 idx = 0u;
+        if(TryMatchSingleLaneAccess(arguments[i], base, idx) && base->resolvedSimdType == simdType){
+            laneBases[i] = base;
+            laneIndices[i] = idx;
+        }
+    }
+
+    if(arguments.size() == 4u){
+        for(u32 replaceLane = 0u; replaceLane < 4u; ++replaceLane){
+            if(laneBases[replaceLane] != nullptr || !arguments[replaceLane])
+                continue;
+            const Expr* v0 = nullptr;
+            b8 threeNaturalMatch = true;
+            for(u32 i = 0u; i < 4u; ++i){
+                if(i == replaceLane)
+                    continue;
+                if(!laneBases[i] || laneIndices[i] != i){
+                    threeNaturalMatch = false;
+                    break;
+                }
+                if(!v0)
+                    v0 = laneBases[i];
+                else if(!AreSamePureSimdExpr(*v0, *laneBases[i])){
+                    threeNaturalMatch = false;
+                    break;
+                }
+            }
+            if(threeNaturalMatch && v0){
+                if(isInt)
+                    out.append(isDouble ? "::VectorDoubleSetInt" : "::VectorSetInt");
+                else
+                    out.append(isDouble ? "::VectorDoubleSet" : "::VectorSet");
+                const MStringView laneSuffix = SimdLaneCallSuffix(replaceLane);
+                out.append(laneSuffix.data(), laneSuffix.size());
+                emitSimdRegExpr(out, *v0, simdType);
+                out.append(", ");
+                if(isInt)
+                    out.append(isDouble ? "static_cast<u64>(" : "static_cast<u32>(");
+                emitExpr(out, *arguments[replaceLane]);
+                if(isInt)
+                    out.push_back(')');
+                out.push_back(')');
+                return;
+            }
+        }
+    }
+
+    {
+        const Expr* v0 = nullptr;
+        const Expr* v1 = nullptr;
+        Array<u32, 4> permIdx{};
+        b8 hasZeroLane = false;
+        b8 canSwizzleOrPermute = true;
+        for(u32 i = 0u; i < 4u; ++i){
+            if(laneBases[i]){
+                if(!v0){
+                    v0 = laneBases[i];
+                    permIdx[i] = laneIndices[i];
+                }
+                else if(AreSamePureSimdExpr(*v0, *laneBases[i])){
+                    permIdx[i] = laneIndices[i];
+                }
+                else if(!v1 && !hasZeroLane){
+                    v1 = laneBases[i];
+                    permIdx[i] = 4u + laneIndices[i];
+                }
+                else if(v1 && AreSamePureSimdExpr(*v1, *laneBases[i])){
+                    permIdx[i] = 4u + laneIndices[i];
+                }
+                else{
+                    canSwizzleOrPermute = false;
+                    break;
+                }
+            }
+            else if(!v1 && (i >= arguments.size() || (arguments[i] && IsZeroScalarLiteral(*arguments[i])))){
+                hasZeroLane = true;
+                permIdx[i] = 4u + i;
+            }
+            else{
+                canSwizzleOrPermute = false;
+                break;
+            }
+        }
+        if(canSwizzleOrPermute && v0){
+            if(!v1 && !hasZeroLane){
+                if(permIdx[0] == 0u && permIdx[1] == 1u && permIdx[2] == 2u && permIdx[3] == 3u){
+                    emitSimdRegExpr(out, *v0, simdType);
+                    return;
+                }
+                out.append(isDouble ? "::VectorDoubleSwizzle<" : "::VectorSwizzle<");
+                for(u32 i = 0u; i < 4u; ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    AppendAdhdUnsigned(out, permIdx[i]);
+                    out.push_back('u');
+                }
+                out.append(">(");
+                emitSimdRegExpr(out, *v0, simdType);
+                out.push_back(')');
+                return;
+            }
+            out.append(isDouble ? "::VectorDoublePermute<" : "::VectorPermute<");
+            for(u32 i = 0u; i < 4u; ++i){
+                if(i > 0u)
+                    out.append(", ");
+                AppendAdhdUnsigned(out, permIdx[i]);
+                out.push_back('u');
+            }
+            out.append(">(");
+            emitSimdRegExpr(out, *v0, simdType);
+            out.append(", ");
+            if(v1){
+                emitSimdRegExpr(out, *v1, simdType);
+            }
+            else if(isInt){
+                out.append(isDouble ? "::VectorDoubleFalseInt()" : "::VectorFalseInt()");
+            }
+            else{
+                out.append(isDouble ? "::VectorDoubleZero()" : "::VectorZero()");
+            }
+            out.push_back(')');
+            return;
+        }
+    }
+
+    if(
+        arguments.size() == 4u
+        && arguments[0] && arguments[1] && arguments[2] && arguments[3]
+        && arguments[0]->resolvedSimdType.empty()
+        && IsPureSimdAddressExpr(*arguments[0])
+        && AreSamePureSimdExpr(*arguments[0], *arguments[1])
+        && AreSamePureSimdExpr(*arguments[0], *arguments[2])
+        && AreSamePureSimdExpr(*arguments[0], *arguments[3])
+    ){
         emitSimdRegExpr(out, *arguments[0], simdType);
         return;
     }
@@ -100,6 +306,37 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             out.append(isDouble ? "0.0" : "0.0f");
     }
     out.push_back(')');
+}
+
+b8 SourceEmitter::isDirectSimdRegExpr(const Expr& expr)const noexcept{
+    if(!IsRegisterPromotableSimdType(expr.resolvedSimdType))
+        return false;
+    if(expr.kind == ExprKind::MemberAccess && expr.isSwizzle)
+        return true;
+    if(expr.kind == ExprKind::Unary)
+        return true;
+    if(expr.kind == ExprKind::Binary && expr.op != TokenType::Equal)
+        return true;
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        if(expr.isBuiltinCall)
+            return true;
+        const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
+        if(SymbolTable::IsSimdMatrixType(baseCallee))
+            return true;
+        if(SymbolTable::IsSimdType(baseCallee)){
+            for(const Expr* arg : expr.arguments){
+                if(!arg)
+                    continue;
+                if(findSimdBindingForExpr(arg) || ExprContainsSimdMath(arg, m_symbols))
+                    return true;
+                const Expr* laneBase = nullptr;
+                u32 laneIdx = 0u;
+                if(TryMatchSingleLaneAccess(arg, laneBase, laneIdx) && !laneBase->resolvedUnalignedType.empty())
+                    return true;
+            }
+        }
+    }
+    return false;
 }
 
 const SimdVarBinding* SourceEmitter::findSimdBinding(const b8 isThisMember, const MStringView name)const noexcept{
@@ -323,7 +560,7 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
             const SimdVarBinding* targetBinding = findSimdBindingForExpr(&lhs);
             const SimdVarBinding* rhsBinding = findSimdBindingForExpr(&rhs);
 
-            const b8 shouldLowerNonBindingAssign = !targetBinding && (stmt.expr->op != TokenType::Equal || rhsBinding != nullptr || ExprContainsSimdMath(&rhs, m_symbols));
+            const b8 shouldLowerNonBindingAssign = !targetBinding && (stmt.expr->op != TokenType::Equal || rhsBinding != nullptr || isDirectSimdRegExpr(rhs));
 
             if(targetBinding || shouldLowerNonBindingAssign){
                 emitIndent(out, indent);
@@ -352,6 +589,47 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
                 }
                 emitSimdMutCallReloads(out, rhs, indent);
                 return true;
+            }
+        }
+
+        if(stmt.expr->op == TokenType::Equal && !lhs.resolvedUnalignedType.empty()){
+            const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(lhs.resolvedUnalignedType);
+            if(
+                unalignedInfo
+                && !unalignedInfo->isHalfFloat
+                && rhs.kind == ExprKind::Call
+                && rhs.lhs
+                && rhs.lhs->kind == ExprKind::Identifier
+                && m_symbols.resolveBaseTypeName(rhs.lhs->text) == lhs.resolvedUnalignedType
+                && rhs.arguments.size() == unalignedInfo->lanes
+            ){
+                const Expr* srcSimdVec = nullptr;
+                b8 matchesAllLanes = true;
+                for(u32 i = 0u; i < unalignedInfo->lanes; ++i){
+                    const Expr* laneBase = nullptr;
+                    u32 laneIdx = 0u;
+                    if(!TryMatchSingleLaneAccess(rhs.arguments[i], laneBase, laneIdx) || laneIdx != i){
+                        matchesAllLanes = false;
+                        break;
+                    }
+                    if(!srcSimdVec)
+                        srcSimdVec = laneBase;
+                    else if(!AreSamePureSimdExpr(*srcSimdVec, *laneBase)){
+                        matchesAllLanes = false;
+                        break;
+                    }
+                }
+                const BuiltinSimdVectorInfo* simdVecInfo = srcSimdVec ? FindBuiltinSimdVectorType(srcSimdVec->resolvedSimdType) : nullptr;
+                if(matchesAllLanes && simdVecInfo && !simdVecInfo->isMixed && simdVecInfo->xyzScalarType == unalignedInfo->laneScalarType){
+                    emitIndent(out, indent);
+                    out.append(simdVecInfo->storeCppFunc.data(), simdVecInfo->storeCppFunc.size());
+                    out.push_back('(');
+                    emitSimdRegExpr(out, *srcSimdVec, srcSimdVec->resolvedSimdType);
+                    out.append(", ");
+                    emitExpr(out, lhs);
+                    out.append(");\r\n");
+                    return true;
+                }
             }
         }
 
@@ -428,7 +706,7 @@ b8 SourceEmitter::tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, const u3
         const SimdVarBinding* retBinding = findSimdBindingForExpr(stmt.expr);
 
         const b8 needsRegStore = (retBinding && retBinding->isLocalDecl && !retBinding->needsStorageSync)
-            || ExprContainsSimdMath(stmt.expr, m_symbols);
+            || isDirectSimdRegExpr(*stmt.expr);
         if(needsRegStore){
             const MStringView simdType = stmt.expr->resolvedSimdType;
             const MStringView storeFn = SimdStoreFunctionCpp(simdType);

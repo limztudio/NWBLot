@@ -54,8 +54,11 @@ public:
         return snapshot == this->snapshot();
     }
     [[nodiscard]] b8 setPreferredX(const f32 preferredX)noexcept{
-        if(!TryResolveEditNavigationPreferredX(preferredX, m_preferredX, m_valid))
+        const auto resolved = TryResolveEditNavigationPreferredX(preferredX);
+        if(!resolved)
             return false;
+        m_preferredX = *resolved;
+        m_valid = true;
         advanceGeneration();
         return true;
     }

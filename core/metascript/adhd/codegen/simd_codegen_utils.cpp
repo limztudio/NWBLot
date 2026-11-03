@@ -195,6 +195,90 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     return true;
 }
 
+[[nodiscard]] b8 IsZeroScalarLiteral(const Expr& expr)noexcept{
+    if(expr.text.empty())
+        return false;
+    if(expr.kind == ExprKind::IntegerLiteral){
+        b8 sawZero = false;
+        const b8 isHex = expr.text.size() >= 2u && expr.text[0] == '0' && (expr.text[1] == 'x' || expr.text[1] == 'X');
+        for(usize i = isHex ? 2u : 0u; i < expr.text.size(); ++i){
+            const char c = expr.text[i];
+            if(c == '0'){
+                sawZero = true;
+                continue;
+            }
+            if(c == 'u' || c == 'U' || c == 'l' || c == 'L' || (!isHex && (c == 'b' || c == 'B')))
+                continue;
+            return false;
+        }
+        return sawZero;
+    }
+    if(expr.kind == ExprKind::FloatLiteral || expr.kind == ExprKind::DoubleLiteral){
+        b8 sawZero = false;
+        for(usize i = 0u; i < expr.text.size(); ++i){
+            const char c = expr.text[i];
+            if(c == 'e' || c == 'E')
+                break;
+            if(c == '0'){
+                sawZero = true;
+                continue;
+            }
+            if(c == '.' || c == 'f' || c == 'F')
+                continue;
+            return false;
+        }
+        return sawZero;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 IsPureSimdAddressExpr(const Expr& expr)noexcept{
+    switch(expr.kind){
+    case ExprKind::IntegerLiteral:
+    case ExprKind::FloatLiteral:
+    case ExprKind::DoubleLiteral:
+    case ExprKind::BoolLiteral:
+    case ExprKind::Identifier:
+    case ExprKind::ThisMember:
+        return !expr.isMutArg;
+    case ExprKind::ScopeAccess:
+        return !expr.isMutArg && (!expr.lhs || IsPureSimdAddressExpr(*expr.lhs));
+    case ExprKind::MemberAccess:
+        return !expr.isMutArg && expr.lhs && IsPureSimdAddressExpr(*expr.lhs);
+    case ExprKind::Index:
+        return !expr.isMutArg && expr.lhs && expr.rhs && IsPureSimdAddressExpr(*expr.lhs) && IsPureSimdAddressExpr(*expr.rhs);
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] b8 AreSamePureSimdExpr(const Expr& a, const Expr& b)noexcept{
+    if(a.kind != b.kind || a.text != b.text || a.op != b.op || a.isSwizzle != b.isSwizzle || a.isPointerMemberAccess != b.isPointerMemberAccess)
+        return false;
+    if(a.scopeChain.size() != b.scopeChain.size())
+        return false;
+    for(usize i = 0u; i < a.scopeChain.size(); ++i){
+        if(a.scopeChain[i] != b.scopeChain[i])
+            return false;
+    }
+    if((a.lhs != nullptr) != (b.lhs != nullptr) || (a.rhs != nullptr) != (b.rhs != nullptr))
+        return false;
+    if(a.lhs && !AreSamePureSimdExpr(*a.lhs, *b.lhs))
+        return false;
+    if(a.rhs && !AreSamePureSimdExpr(*a.rhs, *b.rhs))
+        return false;
+    return a.arguments.empty() && b.arguments.empty();
+}
+
+[[nodiscard]] b8 TryMatchSingleLaneAccess(const Expr* expr, const Expr*& outBase, u32& outLane)noexcept{
+    if(!expr || expr->kind != ExprKind::MemberAccess || expr->isSwizzle || expr->isMutArg || !expr->lhs)
+        return false;
+    if(!IsSingleSwizzleLane(expr->text, outLane) || !IsPureSimdAddressExpr(*expr->lhs))
+        return false;
+    outBase = expr->lhs;
+    return true;
+}
+
 [[nodiscard]] MStringView ResolveLocalVarDeclSimdType(const Stmt& stmt, const SymbolTable& symbols)noexcept{
     if(stmt.usesScratchArena || (stmt.varType && stmt.varType->refMode != ParamPassingMode::None))
         return {};

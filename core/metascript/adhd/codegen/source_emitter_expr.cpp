@@ -31,37 +31,20 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         return;
     }
 
-    if(IsRegisterPromotableSimdType(expr.resolvedSimdType)){
-        b8 isSimdCtorWithRegArg = false;
-        if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier && SymbolTable::IsSimdType(m_symbols.resolveBaseTypeName(expr.lhs->text))){
-            for(const Expr* arg : expr.arguments){
-                if(arg && (findSimdBindingForExpr(arg) || ExprContainsSimdMath(arg, m_symbols))){
-                    isSimdCtorWithRegArg = true;
-                    break;
-                }
-            }
-        }
-        const b8 isDirectSimdRegOp = (expr.kind == ExprKind::MemberAccess && expr.isSwizzle)
-            || expr.kind == ExprKind::Unary
-            || (expr.kind == ExprKind::Binary && expr.op != TokenType::Equal)
-            || (expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier
-                && expr.isBuiltinCall)
-            || isSimdCtorWithRegArg;
-        if(isDirectSimdRegOp){
-            const MStringView simdType = expr.resolvedSimdType;
-            const MStringView storeFn = SimdStoreFunctionCpp(simdType);
-            TypeRef tmpType(m_arena);
-            tmpType.name = simdType;
+    if(isDirectSimdRegExpr(expr)){
+        const MStringView simdType = expr.resolvedSimdType;
+        const MStringView storeFn = SimdStoreFunctionCpp(simdType);
+        TypeRef tmpType(m_arena);
+        tmpType.name = simdType;
 
-            out.append("([&]()noexcept{ ");
-            m_typeEmitter.emitTypeCpp(out, tmpType);
-            out.append(" __adhd_tmp{}; ");
-            out.append(storeFn.data(), storeFn.size());
-            out.push_back('(');
-            emitSimdRegExpr(out, expr, simdType);
-            out.append(", __adhd_tmp); return __adhd_tmp; }())");
-            return;
-        }
+        out.append("([&]()noexcept{ ");
+        m_typeEmitter.emitTypeCpp(out, tmpType);
+        out.append(" __adhd_tmp{}; ");
+        out.append(storeFn.data(), storeFn.size());
+        out.push_back('(');
+        emitSimdRegExpr(out, expr, simdType);
+        out.append(", __adhd_tmp); return __adhd_tmp; }())");
+        return;
     }
 
     switch(expr.kind){

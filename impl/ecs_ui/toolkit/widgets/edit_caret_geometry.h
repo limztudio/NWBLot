@@ -60,24 +60,8 @@ public:
             return false;
         PaintVector<EditBoxCaretStop> stops(*m_arena);
         PaintVector<EditCaretLine> lines(*m_arena);
-        stops.reserve(mapping.size());
-        lines.reserve(layout.lines().size());
-        for(const TextLine& line : layout.lines())
-            lines.push_back(MakeEditCaretLine(line));
-        usize previousCommitted = 0u;
-        usize previousDisplay = 0u;
-        for(const EditCaretMapping& item : mapping){
-            const auto stop = TryMakeEditCaretStop(expectedText, layout.lines(), layout.clusters(), *boundaries, committedBytes, item, previousCommitted, previousDisplay);
-            if(!stop)
-                return false;
-            stops.push_back(*stop);
-            ++lines[stop->lineIndex].stopCount;
-        }
-        u32 firstStop = 0u;
-        for(EditCaretLine& line : lines){
-            line.firstStop = firstStop;
-            firstStop += line.stopCount;
-        }
+        if(!BuildEditCaretStopsAndLinesInto(expectedText, layout.lines(), layout.clusters(), *boundaries, committedBytes, mapping, stops, lines))
+            return false;
         m_layout = Move(layout);
         m_boundaries = Move(*boundaries);
         m_stops = Move(stops);

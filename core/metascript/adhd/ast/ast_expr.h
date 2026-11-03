@@ -127,6 +127,7 @@ struct Expr{
     SourceSpan span;
     MStringView text;
     MStringView resolvedSimdType;
+    MStringView resolvedUnalignedType;
     Expr* lhs = nullptr;
     Expr* rhs = nullptr;
     TypeRef* targetType = nullptr;

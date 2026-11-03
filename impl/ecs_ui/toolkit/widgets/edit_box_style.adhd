@@ -830,7 +830,9 @@ Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
     return placement;
 }
 
-b8 ValidateEditBoxArrangedSegments(in EditBoxPlacement placement, in f32 caretWidth, mut Rect selection, mut Rect preeditUnderline, in b8 composing){
+b8 ValidateEditBoxArrangedSegments(in EditBoxPlacement placement, in f32 caretWidth, in Rect selectionIn, in Rect preeditUnderlineIn, in b8 composing){
+    Rect selection = selectionIn;
+    Rect preeditUnderline = preeditUnderlineIn;
     if(selection.width > 0.0f){
         selection.x += placement.textOrigin.x;
         selection.y += placement.textOrigin.y;
@@ -914,9 +916,85 @@ b8 TryResolveEditBoxSnapshotSizes(
 }
 
 b8 ValidateEditBoxDisplayText(in StringView candidateText, in EditTextMode textMode){
-    if(textMode == EditTextMode::Multiline)
-        return ValidateMultilineText(candidateText);
-    return ValidateGraphemeText(candidateText, true);
+    return ValidateEditTextForMode(candidateText, textMode);
+}
+
+EditCaretMapping MakeEditCaretMapping(in usize committedByte, in usize displayByte){
+    EditCaretMapping item;
+    item.committedByte = committedByte;
+    item.displayByte = displayByte;
+    return item;
+}
+
+b8 BuildEditBoxSnapshotInto(
+    in StringView committed,
+    in Span<usize> graphemeBoundaries,
+    in EditCompositionView composition,
+    in EditTextMode textMode,
+    mut String outDisplay,
+    mut Vector<EditCaretMapping> outStops,
+    mut usize outPreeditBytes
+){
+    usize replaced = 0u;
+    usize preeditBytes = 0u;
+    usize displayBytes = 0u;
+    if(!TryResolveEditBoxSnapshotSizes(committed.size(), composition, replaced, preeditBytes, displayBytes))
+        return false;
+    outDisplay.clear();
+    outDisplay.reserve(displayBytes);
+    if(composition.active){
+        outDisplay.append(committed.substr(0u, composition.replacementStart));
+        if(preeditBytes != 0u)
+            outDisplay.append(composition.text.substr(0u, preeditBytes));
+        outDisplay.append(committed.substr(composition.replacementEnd, committed.size() - composition.replacementEnd));
+    }
+    else if(!committed.empty())
+        outDisplay.assign(committed);
+    if(!ValidateEditBoxDisplayText(outDisplay, textMode))
+        return false;
+    outStops.clear();
+    outStops.reserve(graphemeBoundaries.size() + 1u);
+    for(in usize boundary : graphemeBoundaries){
+        if(!composition.active || boundary <= composition.replacementStart)
+            outStops.push_back(MakeEditCaretMapping(boundary, boundary));
+        if(composition.active && boundary >= composition.replacementEnd)
+            outStops.push_back(MakeEditCaretMapping(boundary, boundary - replaced + preeditBytes));
+    }
+    outPreeditBytes = preeditBytes;
+    return true;
+}
+
+b8 BuildEditCaretStopsAndLinesInto(
+    in StringView expectedText,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in usize committedBytes,
+    in Span<EditCaretMapping> mapping,
+    mut Vector<EditBoxCaretStop> outStops,
+    mut Vector<EditCaretLine> outLines
+){
+    outStops.clear();
+    outLines.clear();
+    outStops.reserve(mapping.size());
+    outLines.reserve(textLines.size());
+    for(in TextLine line : textLines)
+        outLines.push_back(MakeEditCaretLine(line));
+    usize previousCommitted = 0u;
+    usize previousDisplay = 0u;
+    for(in EditCaretMapping item : mapping){
+        const Expected<EditBoxCaretStop> stop = TryMakeEditCaretStop(expectedText, textLines, clusters, boundaries, committedBytes, item, previousCommitted, previousDisplay);
+        if(!stop.has_value())
+            return false;
+        outStops.push_back(stop.value());
+        ++outLines[cast<usize>(stop.value().lineIndex)].stopCount;
+    }
+    u32 firstStop = 0u;
+    for(mut EditCaretLine line : outLines){
+        line.firstStop = firstStop;
+        firstStop += line.stopCount;
+    }
+    return true;
 }
 
 void ResolveEditBoxSnapshotRanges(
@@ -960,8 +1038,6 @@ b8 ShouldPaintEditBoxCaret(in EditBoxPaintFlags flags, in b8 composing){
 void OffsetEditBoxSegmentOrigin(in Point textOrigin, mut Rect inOutSegment){
     inOutSegment.x += textOrigin.x;
     inOutSegment.y += textOrigin.y;
-
-
 }
 
 

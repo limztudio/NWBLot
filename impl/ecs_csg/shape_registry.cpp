@@ -24,39 +24,15 @@ namespace __hidden_shape_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ValidShaderModuleInclude(const CsgShapeTypeDesc& desc){
-    if(!desc.shaderModule)
-        return true;
-    if(desc.shaderModuleInclude.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with empty shader module include"), ConvertString(desc.name.resolvedText()));
-        return false;
-    }
-
-    const AStringView include = AStringView(desc.shaderModuleInclude);
-    if(!ValidCsgShaderModuleIncludeText(include)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid shader module include '{}'"), ConvertString(desc.name.resolvedText()), ConvertString(include));
-        return false;
-    }
-    return true;
-}
-
 [[nodiscard]] b8 ValidShapeTypeDesc(const CsgShapeTypeDesc& desc){
-    if(!desc.name){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type with empty name"));
-        return false;
-    }
-    if(!desc.boundsCallback){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), ConvertString(desc.name.resolvedText()));
-        return false;
-    }
-    if(!ValidCsgShapeParameterByteCounts(desc.parameterByteSize, desc.defaultParameterBytes.size())){
-        if(static_cast<usize>(desc.parameterByteSize) > s_CsgShapeInlineParameterMaxBytes)
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI"), ConvertString(desc.name.resolvedText()));
-        else
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with default parameter size mismatch"), ConvertString(desc.name.resolvedText()));
-        return false;
-    }
-    return ValidShaderModuleInclude(desc);
+    return ValidateCsgShapeTypeDescFields(
+        desc.name,
+        desc.shaderModule,
+        AStringView(desc.shaderModuleInclude),
+        desc.parameterByteSize,
+        desc.defaultParameterBytes.size(),
+        desc.boundsCallback != nullptr
+    );
 }
 
 [[nodiscard]] Expected<Span<const u8>> ResolveShapeParameterBytes(const CsgShapeTypeInfo& shapeType, Span<const u8> parameterBytes)noexcept{
@@ -102,10 +78,6 @@ namespace __hidden_shape_registry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void LogCsgShapeInvalidParameterSize(const Name& name){
-    NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI"), ConvertString(name.resolvedText()));
-}
 
 Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
     if(!localBounds.finiteBounds)

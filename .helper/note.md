@@ -128,6 +128,8 @@
 
 103. First-party READMEs and all wiki pages explain current design and operation, following `.helper/standard.md` section 22. Keep ownership, contracts, data flow, usage, current performance tradeoffs and measurement procedures; move substantive dated benchmark results, before/after tables and run-specific qualification history into separate named reports under `docs/` or `tests/`. Rewrite current explanations instead of appending optimization progress, and leave incidental change narration in Git history.
 
+104. In `.adhd` files, fallible value-producing functions and methods must return `Expected<T>` (or `Expected<T, E>`) with `makeUnexpected(...)` on failure rather than returning `b8` (or a status enum) with a `mut outResult` parameter; keep `mut` parameters only for genuine in-out state mutations, reusable caller-owned buffers, or multi-output unpacking helpers. Inside `core/metascript/adhd/`, all built-in keywords, operators, types, `.nwb` value rules, implicit conversions, and built-in functions/methods/constants must be defined in the centralized `export_*.h` X-macro tables (`export_keywords.h`, `export_operators.h`, `export_types.h`, `export_functions.h`) and queried through `ast_common.h` and `type_utils.h` instead of hard-coded checks in parser, sema, or codegen. Follow `.helper/adhd.md` sections 4, 5, and 7.
+
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.

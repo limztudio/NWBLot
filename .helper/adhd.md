@@ -149,14 +149,16 @@ f32 ComputePaddedWidth(in ElementBox box){
   - **Spans**: `Span<T>` in `.adhd` is always read-only (`Span<const T>` in C++). Use `mut Vector<T>` or `mut FixedVector<T, N>` for mutable buffer outputs.
   - **Strings & Text Parsing**: UTF-8 exclusively (`String`, `StringView`, `CompactString`, `Name`, `Path`). Write plain `"..."` literals (never `NWB_TEXT("...")`). Built-in text/number helpers include `trimView`, `trimLeftView`, `parseI64`, `parseU64`, `parseF32`, `parseF64`, `tryDecodeUtf8CodePoint`, `tryDecodeUtf8Scalar`, and `isUtf8ScalarBoundary`, plus `.front()`, `.back()`, `.substr(...)`, `.starts_with(...)`, and `.ends_with(...)`.
   - **Result & Error Types**: `Optional<T>`, `Expected<T>` (defaulting to `Failure`), `Expected<T, E>`, `Failure`, `ErrorCode`, and `makeUnexpected(...)`.
+    - Fallible value producers must return `Expected<T>` (or `Expected<T, E>`) and return `makeUnexpected(Failure())` (or `makeUnexpected(error)`) on failure—never `b8` with a `mut outResult` parameter.
 
 ---
 
 ## 5. Functions, Methods, and Control Flow
 
-- **Mandatory `in` / `mut` Parameters**:
+- **Mandatory `in` / `mut` Parameters & `Expected<T>` Return Shape**:
   - Every parameter must specify `in` (read-only borrow, lowered via `CallTraits<T>::param_type`) or `mut` (mutable reference `T&`).
   - Default parameter values are prohibited; write explicit overloads instead.
+  - Fallible functions and interface/class methods that produce a value must return `Expected<T>` (or `Expected<T, E>`) instead of returning `b8` (or a status enum) with a `mut outResult` parameter. Reserve `mut` parameters for genuine in-out state mutations (`inOutCursor`, `inOutState`), reusable caller-owned buffers, or multi-output unpacking helpers where a dedicated result class is not warranted.
 - **Mandatory `this.` Qualification**:
   - Inside any class method, accessing a member field (`this.position`) or calling a member method (`this.reset()`) must be prefixed with `this.`.
 - **Mandatory Local Initialization & Loop Syntax**:
@@ -187,3 +189,14 @@ f32 ComputePaddedWidth(in ElementBox box){
 - **C++ Interop (`native` Blocks)**:
   - **Top-level `native{ ... }`**: Emits raw C++ `#include` directives and forward declarations into the generated `.adhd.h` header.
   - **Statement-level `native(in x, mut y = this.member){ ... }`**: Binds `.adhd` variables/fields into a scoped C++ block (`in` as `const` reference/value, `mut` as mutable reference) while preserving `.adhd` mutability and concurrency analysis.
+
+---
+
+## 7. Compiler Export Tables (`core/metascript/adhd/export_*.h`)
+
+- All built-in `.adhd` language tables live in the centralized X-macro headers under `core/metascript/adhd/`:
+  - `export_keywords.h`: Access specifiers, parameter passing modes, method qualifiers, nested/prohibited keywords, bool/enum/cast keywords, parallel core/priority kinds, and diagnostic kinds.
+  - `export_operators.h`: Operator tokens, symbols, overloadability, assignment/boolean/bitwise classifications, binary precedence, member arity rules, and prohibited operator diagnostics.
+  - `export_types.h`: Scalar types and limits, SIMD vector/matrix types, unaligned vector types, object types, generic container/wrapper types, binary hash types, `.nwb` value deserialization rules, implicit conversions, swizzle lanes, and literal token mappings.
+  - `export_functions.h`: Built-in function argument rules, math/SIMD/utility/text functions, SIMD float/lane/int/reduction intrinsics, built-in member and receiver methods, built-in fields, and built-in global constants.
+- Query these tables through the helpers in `core/metascript/adhd/ast/ast_common.h` and `core/metascript/adhd/sema/type_utils.h`. Never scatter hard-coded string or token checks for built-in keywords, operators, types, or functions across the lexer, parser, semantic analyzer, or codegen.

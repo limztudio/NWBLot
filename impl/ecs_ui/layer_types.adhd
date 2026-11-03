@@ -69,6 +69,57 @@ void LogUiInputRoutingOverflows(in b8 activationOverflow, in b8 gestureOverflow)
         warning("UiLayerSystem: bounded pointer gesture queue is full");
 }
 
+b8 ValidateUiSubsystemFontCount(in usize fontCount, in usize maxFontSources){
+    if(fontCount > 0u && fontCount <= maxFontSources)
+        return true;
+
+    error("UiLayerSystem: the font stack requires between one and eight font assets");
+    return false;
+}
+
+void ResolveUiNativeKeyAdmission(
+    in u8 storedOwner,
+    in b8 routerOwnsKey,
+    mut b8 outHeld,
+    mut u8 outPreviousOwner,
+    mut b8 outCustomOwned
+){
+    outHeld = storedOwner != 0u;
+    if(outHeld){
+        outPreviousOwner = storedOwner - 1u;
+        outCustomOwned = outPreviousOwner == cast<u8>(UiInputOwner::Custom);
+    }
+    else{
+        outPreviousOwner = cast<u8>(UiInputOwner::Scene);
+        outCustomOwned = routerOwnsKey;
+    }
+}
+
+void FinalizeUiNativeKeyState(
+    in b8 isRelease,
+    in b8 held,
+    in u8 previousOwner,
+    in b8 routerClaimsKey,
+    mut u8 outStoredOwner,
+    mut b8 inOutBlockNativeChars,
+    mut b8 outConsumed
+){
+    u8 owner = previousOwner;
+    if(!held){
+        if(routerClaimsKey)
+            owner = cast<u8>(UiInputOwner::Custom);
+        else
+            owner = cast<u8>(UiInputOwner::Scene);
+    }
+    if(isRelease)
+        outStoredOwner = 0u;
+    else{
+        outStoredOwner = owner + 1u;
+        inOutBlockNativeChars = owner == cast<u8>(UiInputOwner::Custom);
+    }
+    outConsumed = owner == cast<u8>(UiInputOwner::Custom);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

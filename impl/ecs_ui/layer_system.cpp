@@ -172,10 +172,8 @@ b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     if(!uiSubsystem)
         return false;
     const usize fontCount = uiSubsystem->basicFonts.size();
-    if(fontCount == 0u || fontCount > Ui::s_TextMaxFontSources){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: the font stack requires between one and eight font assets"));
+    if(!ValidateUiSubsystemFontCount(fontCount, Ui::s_TextMaxFontSources))
         return false;
-    }
     Array<UniquePtr<Font>, Ui::s_TextMaxFontSources> assets;
     Array<UniquePtr<FontAtlas>, Ui::s_TextMaxFontSources> atlasAssets;
     Vector<Ui::FontSource, Core::Alloc::ScratchArena> sources(scratchArena);

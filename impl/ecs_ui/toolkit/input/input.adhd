@@ -2819,6 +2819,231 @@ void ReconcileRouterFocusCaptureAndActions(
     actions.resize(keptActions);
 }
 
+b8 TryAppendContextTarget(
+    in WidgetState state,
+    in PopupToken currentPopup,
+    in u32 popupLayer,
+    in HitTarget target,
+    mut Vector<ContextOwnedTarget> targets
+){
+    if(targets.size() >= s_InputMaxTargets)
+        return false;
+    HitTarget admitted = target;
+    admitted.id = state.id;
+    admitted.declarationGeneration = state.declarationGeneration;
+    admitted.paintOrder = cast<u32>(targets.size());
+    admitted.popup = currentPopup;
+    admitted.layer = popupLayer;
+    ContextOwnedTarget owned;
+    owned.target = admitted;
+    owned.root = state.root;
+    targets.push_back(owned);
+    return true;
+}
+
+b8 TryAppendContextPartTarget(
+    in WidgetState owner,
+    in WidgetId part,
+    in PopupToken currentPopup,
+    in u32 popupLayer,
+    in HitTarget target,
+    mut Vector<ContextOwnedTarget> targets
+){
+    if(!part.valid() || part == owner.id || targets.size() >= s_InputMaxTargets)
+        return false;
+    HitTarget admitted = target;
+    admitted.id = part;
+    admitted.declarationGeneration = owner.declarationGeneration;
+    admitted.owner = owner.id;
+    admitted.ownerDeclarationGeneration = owner.declarationGeneration;
+    admitted.paintOrder = cast<u32>(targets.size());
+    admitted.popup = currentPopup;
+    admitted.layer = popupLayer;
+    ContextOwnedTarget owned;
+    owned.target = admitted;
+    owned.root = owner.root;
+    targets.push_back(owned);
+    return true;
+}
+
+void ExtractContextCommitPayloads(
+    in Span<ContextOwnedTarget> targets,
+    in Span<ContextOwnedPopup> popups,
+    mut Vector<HitTarget> commitTargets,
+    mut Vector<PopupScope> commitPopups
+){
+    commitTargets.clear();
+    for(in ContextOwnedTarget owned : targets)
+        commitTargets.push_back(owned.target);
+    commitPopups.clear();
+    for(in ContextOwnedPopup owned : popups)
+        commitPopups.push_back(owned.scope);
+}
+
+b8 RouteRouterPrimary(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in InputEvent event,
+    in b8 hasHit,
+    in HitTarget hit,
+    in b8 secondaryDown,
+    in b8 secondarySequenceConsumed,
+    in u64 layoutGeneration,
+    in InputSource activePointerSource,
+    in Point interactionPosition,
+    mut Vector<PopupRecord> popups,
+    mut Vector<PopupDismissal> popupDismissals,
+    mut Vector<CommandSource> commandSources,
+    mut Vector<InputAction> actions,
+    mut Vector<ControlAction> controlActions,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut u64 inOutActiveGestureSequence,
+    mut u64 inOutNextActionSequence,
+    mut b8 inOutPrimaryDown,
+    mut b8 inOutPointerSubmitArmed,
+    mut b8 inOutPointerSequenceConsumed,
+    mut WidgetId inOutFocus,
+    mut u64 inOutFocusDeclaration,
+    mut ControlToken inOutFocusControl,
+    mut WidgetId inOutCapture,
+    mut PopupToken inOutCapturePopup,
+    mut u64 inOutCaptureDeclaration,
+    mut ControlToken inOutCaptureControl,
+    mut InputRoutingResult inOutResult,
+    mut b8 outAdvanceHoverActivity,
+    mut b8 outDismissedPopup
+){
+    outAdvanceHoverActivity = false;
+    outDismissedPopup = false;
+    if(event.type == InputEventType::PointerMove){
+        if(inOutPrimaryDown){
+            if(!TryUpdateRouterPointerGesture(event.position, false, pointerGestures, inOutActiveGestureSequence, inOutNextActionSequence))
+                return false;
+        }
+        if(inOutPrimaryDown)
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSequenceConsumed;
+        else if(secondaryDown)
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || secondarySequenceConsumed;
+        else
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || hasHit;
+        return true;
+    }
+    if(event.type == InputEventType::PrimaryDown){
+        if(inOutPrimaryDown){
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSequenceConsumed;
+            return true;
+        }
+        outAdvanceHoverActivity = true;
+        inOutPrimaryDown = true;
+        inOutPointerSubmitArmed = false;
+        if(secondaryDown)
+            inOutPointerSequenceConsumed = secondarySequenceConsumed;
+        else
+            inOutPointerSequenceConsumed = !popups.empty() || hasHit;
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSequenceConsumed;
+        if(!inOutPointerSequenceConsumed){
+            RetireRouterCommandFocus(commandSources);
+            inOutFocus = WidgetId();
+            inOutFocusDeclaration = 0u;
+            inOutFocusControl = ControlToken();
+            return true;
+        }
+        if(!popups.empty() && !hasHit){
+            outDismissedPopup = TryDismissRouterPopup(PopupDismissReason::OutsideClick, popups, popupDismissals);
+            inOutCapture = WidgetId();
+            inOutCapturePopup = PopupToken();
+            inOutCaptureDeclaration = 0u;
+            inOutCaptureControl = ControlToken();
+            return true;
+        }
+        if(hasHit){
+            inOutCapture = hit.id;
+            inOutCaptureDeclaration = hit.declarationGeneration;
+            inOutCapturePopup = hit.popup;
+            inOutCaptureControl = hit.control;
+            inOutPointerSubmitArmed = hit.activatable;
+        }
+        else{
+            inOutCapture = WidgetId();
+            inOutCaptureDeclaration = 0u;
+            inOutCapturePopup = PopupToken();
+            inOutCaptureControl = ControlToken();
+            inOutPointerSubmitArmed = false;
+        }
+        b8 hasFocused = hasHit;
+        HitTarget focused = hit;
+        if(hasHit && hit.owner.valid()){
+            const Expected<HitTarget> host = TryResolveRouterControlHost(targets, lookup, popups, hit);
+            hasFocused = host.has_value();
+            if(hasFocused)
+                focused = host.value();
+        }
+        if(hasFocused && focused.focusable)
+            AssignRouterFocus(focused, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
+        else{
+            RetireRouterCommandFocus(commandSources);
+            inOutFocus = WidgetId();
+            inOutFocusDeclaration = 0u;
+            inOutFocusControl = ControlToken();
+        }
+        if(hasHit && hit.pointerGesture){
+            AppendRouterPointerGesture(
+                hit,
+                layoutGeneration,
+                activePointerSource,
+                interactionPosition,
+                pointerGestures,
+                inOutActiveGestureSequence,
+                inOutNextActionSequence,
+                inOutResult
+            );
+        }
+        return true;
+    }
+    if(inOutPrimaryDown)
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSequenceConsumed;
+    else if(secondaryDown)
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || secondarySequenceConsumed;
+    else
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || hasHit;
+    if(
+        inOutPrimaryDown
+        && inOutPointerSequenceConsumed
+        && inOutPointerSubmitArmed
+        && hasHit
+        && hit.id == inOutCapture
+        && hit.declarationGeneration == inOutCaptureDeclaration
+        && hit.activatable
+        && hit.popup == inOutCapturePopup
+        && hit.control == inOutCaptureControl
+    ){
+        b8 hasHost = false;
+        HitTarget host;
+        if(hit.owner.valid()){
+            const Expected<HitTarget> resolvedHost = TryResolveRouterControlHost(targets, lookup, popups, hit);
+            hasHost = resolvedHost.has_value();
+            if(hasHost)
+                host = resolvedHost.value();
+        }
+        if(hasHost)
+            AppendRouterControlAction(host, hit, layoutGeneration, ControlActionKind::Activate, 0.0, 0.0, controlActions, inOutNextActionSequence, inOutResult);
+        else
+            AppendRouterActivation(hit, layoutGeneration, InputActionSource::Pointer, event.source, actions, inOutNextActionSequence, inOutResult);
+    }
+    if(inOutPrimaryDown){
+        if(!TryUpdateRouterPointerGesture(event.position, true, pointerGestures, inOutActiveGestureSequence, inOutNextActionSequence))
+            return false;
+    }
+    inOutPrimaryDown = false;
+    inOutPointerSubmitArmed = false;
+    inOutPointerSequenceConsumed = false;
+    inOutCapture = WidgetId();
+    inOutCapturePopup = PopupToken();
+    inOutCaptureDeclaration = 0u;
+    inOutCaptureControl = ControlToken();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -155,32 +155,18 @@ b8 Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
 }
 
 b8 Context::addTarget(const WidgetState& state, HitTarget target){
-    if(m_failed || !currentDeclaration(state) || m_targets.size() >= s_InputMaxTargets){
+    if(m_failed || !currentDeclaration(state) || !TryAppendContextTarget(state, m_currentPopup, m_popupLayer, target, m_targets)){
         fail();
         return false;
     }
-    target.id = state.id;
-    target.declarationGeneration = state.declarationGeneration;
-    target.paintOrder = static_cast<u32>(m_targets.size());
-    target.popup = m_currentPopup;
-    target.layer = m_popupLayer;
-    m_targets.push_back({ target, state.root });
     return true;
 }
 
 b8 Context::addPartTarget(const WidgetState& owner, const WidgetId part, HitTarget target){
-    if(m_failed || !currentDeclaration(owner) || !part.valid() || part == owner.id || m_targets.size() >= s_InputMaxTargets){
+    if(m_failed || !currentDeclaration(owner) || !TryAppendContextPartTarget(owner, part, m_currentPopup, m_popupLayer, target, m_targets)){
         fail();
         return false;
     }
-    target.id = part;
-    target.declarationGeneration = owner.declarationGeneration;
-    target.owner = owner.id;
-    target.ownerDeclarationGeneration = owner.declarationGeneration;
-    target.paintOrder = static_cast<u32>(m_targets.size());
-    target.popup = m_currentPopup;
-    target.layer = m_popupLayer;
-    m_targets.push_back({ target, owner.root });
     return true;
 }
 
@@ -250,12 +236,7 @@ b8 Context::finishFrame(){
 b8 Context::commitFrame(const u64 generation){
     if(generation == 0u || generation != m_readyGeneration)
         return false;
-    m_commitTargets.clear();
-    for(const auto& owned : m_targets)
-        m_commitTargets.push_back(owned.target);
-    m_commitPopups.clear();
-    for(const auto& owned : m_popups)
-        m_commitPopups.push_back(owned.scope);
+    ExtractContextCommitPayloads(m_targets, m_popups, m_commitTargets, m_commitPopups);
     if(!m_input.commitTargets(m_commitTargets, generation, m_commitPopups, m_focusLossGeneration))
         return false;
     m_targets.clear();
@@ -327,10 +308,8 @@ Expected<NotNull<WidgetState*>> Context::declareId(const WidgetId id, const Widg
 }
 
 b8 Context::currentDeclaration(const WidgetState& state)const noexcept{
-    if(!m_rootActive || !(state.root == m_root) || state.lastSeenFrame != m_frameGeneration)
-        return false;
     const WidgetState* current = m_states.find(state.id);
-    return current && current->root == state.root && current->declarationGeneration == state.declarationGeneration && current->lastSeenFrame == state.lastSeenFrame && current->kind == state.kind;
+    return current && IsMatchingWidgetStateDeclaration(m_rootActive, m_root, m_frameGeneration, state, *current);
 }
 
 void Context::retireUnseenStates(){

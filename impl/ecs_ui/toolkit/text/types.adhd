@@ -1028,6 +1028,106 @@ Rect ResolveCoverageGlyphUv(in Rect pixels){
     return Rect(pixels.x / extent, pixels.y / extent, pixels.width / extent, pixels.height / extent);
 }
 
+void ResolveNextTextLineRange(
+    in StringView text,
+    in usize byteBegin,
+    mut usize outByteEnd,
+    mut usize outBreakEnd
+){
+    usize byteEnd = byteBegin;
+    while(byteEnd < text.size() && text[byteEnd] != '\r' && text[byteEnd] != '\n')
+        ++byteEnd;
+    usize breakEnd = byteEnd;
+    if(breakEnd < text.size()){
+        if(text[breakEnd] == '\r')
+            breakEnd += s_TextCarriageReturnLineFeedBytes;
+        else
+            breakEnd += 1u;
+    }
+    outByteEnd = byteEnd;
+    outBreakEnd = breakEnd;
+}
+
+Expected<TextLine> TryBuildInitialTextLine(
+    in usize byteBegin,
+    in usize byteEnd,
+    in usize breakEnd,
+    in usize firstGlyph,
+    in usize glyphCount,
+    in usize firstCluster,
+    in f32 top,
+    in FontMetrics metrics
+){
+    const f64 baseline = cast<f64>(top) + cast<f64>(metrics.ascender);
+    const f64 height = (cast<f64>(metrics.ascender) + cast<f64>(metrics.descender)) + cast<f64>(metrics.lineGap);
+    if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(cast<f64>(top) + height))
+        return makeUnexpected(Failure());
+    TextLine line;
+    line.byteBegin = cast<u32>(byteBegin);
+    line.byteEnd = cast<u32>(byteEnd);
+    line.breakEnd = cast<u32>(breakEnd);
+    line.firstGlyph = cast<u32>(firstGlyph);
+    line.glyphCount = cast<u32>(glyphCount);
+    line.firstCluster = cast<u32>(firstCluster);
+    line.top = top;
+    line.baseline = cast<f32>(baseline);
+    line.height = cast<f32>(height);
+    return line;
+}
+
+Expected<Point> TryAdvanceTextGlyphPosition(
+    in f32 baseline,
+    in Point offset,
+    in Point advance,
+    in Rect ink,
+    in GlyphCoverageBounds coverage,
+    mut f32 inOutPen,
+    mut f64x4 inOutInkBounds,
+    mut b8 inOutHasInk
+){
+    const f64 x = cast<f64>(inOutPen) + cast<f64>(offset.x);
+    const f64 y = cast<f64>(baseline) + cast<f64>(offset.y);
+    const f64 nextPen = cast<f64>(inOutPen) + cast<f64>(advance.x);
+    if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
+        return makeUnexpected(Failure());
+    const Point position(cast<f32>(x), cast<f32>(y));
+    const Expected<f64x4> translatedInk = TryTranslateTextInk(position, ink);
+    if(!translatedInk.has_value() || !TryIncludeTextInk(translatedInk.value(), inOutInkBounds, inOutHasInk))
+        return makeUnexpected(Failure());
+    if(coverage.known && !TryTranslateTextInk(position, coverage.ink).has_value())
+        return makeUnexpected(Failure());
+    inOutPen = cast<f32>(nextPen);
+    return position;
+}
+
+TextCluster MakeTextCluster(
+    in u32 lineByteBegin,
+    in u32 glyphByteBegin,
+    in u32 glyphByteEnd,
+    in u32 firstGlyph,
+    in u32 glyphCount,
+    in u32 lineIndex,
+    in TextDirection direction,
+    in f32 clusterLeft,
+    in f32 pen
+){
+    TextCluster cluster;
+    cluster.byteBegin = lineByteBegin + glyphByteBegin;
+    cluster.byteEnd = lineByteBegin + glyphByteEnd;
+    cluster.firstGlyph = firstGlyph;
+    cluster.glyphCount = glyphCount;
+    cluster.lineIndex = lineIndex;
+    if(direction == TextDirection::LeftToRight){
+        cluster.leadingX = clusterLeft;
+        cluster.trailingX = pen;
+    }
+    else{
+        cluster.leadingX = pen;
+        cluster.trailingX = clusterLeft;
+    }
+    return cluster;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

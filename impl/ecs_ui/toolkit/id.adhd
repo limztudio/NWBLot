@@ -191,6 +191,24 @@ b8 CanTouchExistingWidgetState(in WidgetState entry, in WidgetRoot root, in u64 
     return entry.root == root && entry.lastSeenFrame != frameGeneration;
 }
 
+b8 IsMatchingWidgetStateDeclaration(
+    in b8 rootActive,
+    in WidgetRoot activeRoot,
+    in u64 frameGeneration,
+    in WidgetState state,
+    in WidgetState current
+){
+    return
+        rootActive
+        && state.root == activeRoot
+        && state.lastSeenFrame == frameGeneration
+        && current.root == state.root
+        && current.declarationGeneration == state.declarationGeneration
+        && current.lastSeenFrame == state.lastSeenFrame
+        && current.kind == state.kind
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -25,28 +25,28 @@ NWB_IMPL_BEGIN
         return false;
     synchronizeNativeInput();
     const usize slot = ResolveUiNativeKeySlot(key);
-    const u8 storedOwner = m_nativeKeyOwners[slot];
-    const b8 held = storedOwner != 0u;
-    const u8 previousOwner = held ? static_cast<u8>(storedOwner - 1u) : UiInputOwner::Scene;
-    const b8 customOwned = held ? previousOwner == UiInputOwner::Custom : m_context.input().ownsKey(key);
-    if(action != Core::InputAction::Release)
+    b8 held = false;
+    u8 previousOwner = 0u;
+    b8 customOwned = false;
+    ResolveUiNativeKeyAdmission(m_nativeKeyOwners[slot], m_context.input().ownsKey(key), held, previousOwner, customOwned);
+    const b8 isRelease = action == Core::InputAction::Release;
+    if(!isRelease)
         m_blockCommandChars = false;
-    if(action == Core::InputAction::Release || customOwned || !held){
+    if(isRelease || customOwned || !held){
         Ui::InputEvent event;
-        event.type = action == Core::InputAction::Release ? Ui::InputEventType::KeyUp : Ui::InputEventType::KeyDown;
+        event.type = isRelease ? Ui::InputEventType::KeyUp : Ui::InputEventType::KeyDown;
         event.key = key;
         event.shift = (mods & Core::InputModifier::Shift) != 0;
         event.control = (mods & Core::InputModifier::Control) != 0;
         event.alt = (mods & Core::InputModifier::Alt) != 0;
         event.super = (mods & Core::InputModifier::Super) != 0;
-        event.repeat = action != Core::InputAction::Release && (action == Core::InputAction::Repeat || held);
-        routeInput(event, action == Core::InputAction::Release ? nullptr : &m_blockCommandChars);
+        event.repeat = !isRelease && (action == Core::InputAction::Repeat || held);
+        routeInput(event, isRelease ? nullptr : &m_blockCommandChars);
     }
-    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key) ? UiInputOwner::Custom : UiInputOwner::Scene;
-    m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
-    if(action != Core::InputAction::Release)
-        m_blockNativeChars = owner == UiInputOwner::Custom;
-    return { owner == UiInputOwner::Custom, m_blockCommandChars };
+    const b8 routerClaimsKey = m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key);
+    b8 consumed = false;
+    FinalizeUiNativeKeyState(isRelease, held, previousOwner, routerClaimsKey, m_nativeKeyOwners[slot], m_blockNativeChars, consumed);
+    return { consumed, m_blockCommandChars };
 }
 
 b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){

@@ -535,67 +535,49 @@ void InputRouter::terminatePointerSource(const InputSource source)noexcept{
 }
 
 void InputRouter::routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
-    if(event.type == InputEventType::PointerMove){
-        if(m_primaryDown)
-            updatePointerGesture(event.position, false);
-        result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
-        return;
-    }
-    if(event.type == InputEventType::PrimaryDown){
-        if(m_primaryDown){
-            result.pointerConsumed |= m_pointerSequenceConsumed;
-            return;
-        }
+    b8 advanceHover = false;
+    b8 dismissedPopup = false;
+    const b8 ok = RouteRouterPrimary(
+        m_targets,
+        m_lookup,
+        event,
+        hit != nullptr,
+        hit != nullptr ? *hit : HitTarget{},
+        m_secondaryDown,
+        m_secondarySequenceConsumed,
+        m_layoutGeneration,
+        m_activePointerSource,
+        m_interactionPosition,
+        m_popups,
+        m_popupDismissals,
+        m_commandSources,
+        m_actions,
+        m_controlActions,
+        m_pointerGestures,
+        m_activeGestureSequence,
+        m_nextActionSequence,
+        m_primaryDown,
+        m_pointerSubmitArmed,
+        m_pointerSequenceConsumed,
+        m_focus,
+        m_focusDeclaration,
+        m_focusControl,
+        m_capture,
+        m_capturePopup,
+        m_captureDeclaration,
+        m_captureControl,
+        result,
+        advanceHover,
+        dismissedPopup
+    );
+    if(advanceHover)
         advanceHoverActivity();
-        m_primaryDown = true;
-        m_pointerSubmitArmed = false;
-        m_pointerSequenceConsumed = m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
-        result.pointerConsumed |= m_pointerSequenceConsumed;
-        if(!m_pointerSequenceConsumed){
-            clearFocus();
-            return;
-        }
-        if(hasPopup() && hit == nullptr){
-            const b8 dismissed = dismissPopup(PopupDismissReason::OutsideClick);
-            if(dismissed)
-                updateHover();
-            m_capture = {};
-            m_capturePopup = {};
-            m_captureDeclaration = 0u;
-            m_captureControl = {};
-            return;
-        }
-        m_capture = hit == nullptr ? WidgetId{} : hit->id;
-        m_captureDeclaration = hit == nullptr ? 0u : hit->declarationGeneration;
-        m_capturePopup = hit == nullptr ? PopupToken{} : hit->popup;
-        m_captureControl = hit == nullptr ? ControlToken{} : hit->control;
-        m_pointerSubmitArmed = hit != nullptr && hit->activatable;
-        const HitTarget* focused = hit != nullptr && hit->owner.valid() ? controlHost(*hit) : hit;
-        if(focused != nullptr && focused->focusable)
-            assignFocus(*focused);
-        else
-            clearFocus();
-        if(hit != nullptr && hit->pointerGesture)
-            appendPointerGesture(*hit, result);
-        return;
+    if(dismissedPopup){
+        reconcileTargets();
+        updateHover();
     }
-    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : m_secondaryDown ? m_secondarySequenceConsumed : hit != nullptr;
-    if(m_primaryDown && m_pointerSequenceConsumed && m_pointerSubmitArmed && hit != nullptr && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable && hit->popup == m_capturePopup && hit->control == m_captureControl){
-        const HitTarget* host = hit->owner.valid() ? controlHost(*hit) : nullptr;
-        if(host != nullptr)
-            appendControlAction(*host, *hit, ControlActionKind::Activate, 0.0, result);
-        else
-            appendActivation(*hit, InputActionSource::Pointer, event.source, result);
-    }
-    if(m_primaryDown)
-        updatePointerGesture(event.position, true);
-    m_primaryDown = false;
-    m_pointerSubmitArmed = false;
-    m_pointerSequenceConsumed = false;
-    m_capture = {};
-    m_capturePopup = {};
-    m_captureDeclaration = 0u;
-    m_captureControl = {};
+    if(!ok)
+        TerminateInvariant();
 }
 
 void InputRouter::routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){

@@ -64,11 +64,8 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
     usize byteBegin = 0u;
     while(true){
         usize byteEnd = byteBegin;
-        while(byteEnd < request.text.size() && request.text[byteEnd] != '\r' && request.text[byteEnd] != '\n')
-            ++byteEnd;
-        usize breakEnd = byteEnd;
-        if(breakEnd < request.text.size())
-            breakEnd += request.text[breakEnd] == '\r' ? s_TextCarriageReturnLineFeedBytes : 1u;
+        usize breakEnd = byteBegin;
+        ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
         ShapeRequest lineRequest = request;
         lineRequest.text = request.text.substr(byteBegin, byteEnd - byteBegin);
         const auto shapedRun = m_shaper.shape(lineRequest);
@@ -77,20 +74,19 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         const ShapedRun& run = *shapedRun;
         if(!__hidden_ui_text_layout::ValidateRun(run, lineRequest.text, request.direction))
             return MakeUnexpected(TextLayoutStatus::FontFailure);
-        TextLine line;
-        line.byteBegin = static_cast<u32>(byteBegin);
-        line.byteEnd = static_cast<u32>(byteEnd);
-        line.breakEnd = static_cast<u32>(breakEnd);
-        line.firstGlyph = static_cast<u32>(result.m_glyphs.size());
-        line.glyphCount = static_cast<u32>(run.glyphs.size());
-        line.firstCluster = static_cast<u32>(result.m_clusters.size());
-        line.top = result.m_measure.y;
-        const f64 baseline = static_cast<f64>(line.top) + static_cast<f64>(run.metrics.ascender);
-        const f64 height = (static_cast<f64>(run.metrics.ascender) + static_cast<f64>(run.metrics.descender)) + static_cast<f64>(run.metrics.lineGap);
-        if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(static_cast<f64>(line.top) + height))
+        const auto lineResult = TryBuildInitialTextLine(
+            byteBegin,
+            byteEnd,
+            breakEnd,
+            result.m_glyphs.size(),
+            run.glyphs.size(),
+            result.m_clusters.size(),
+            result.m_measure.y,
+            run.metrics
+        );
+        if(!lineResult)
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-        line.baseline = static_cast<f32>(baseline);
-        line.height = static_cast<f32>(height);
+        TextLine line = *lineResult;
         usize first = 0u;
         f32 pen = 0.0f;
         while(first < run.glyphs.size()){
@@ -101,29 +97,31 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             const u32 firstGlyph = static_cast<u32>(result.m_glyphs.size());
             for(usize index = first; index < end; ++index){
                 const ShapedGlyph& glyph = run.glyphs[index];
-                const f64 x = static_cast<f64>(pen) + static_cast<f64>(glyph.offset.x);
-                const f64 y = static_cast<f64>(line.baseline) + static_cast<f64>(glyph.offset.y);
-                const f64 nextPen = static_cast<f64>(pen) + static_cast<f64>(glyph.advance.x);
-                if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
+                const auto position = TryAdvanceTextGlyphPosition(
+                    line.baseline,
+                    glyph.offset,
+                    glyph.advance,
+                    glyph.ink,
+                    glyph.coverage,
+                    pen,
+                    inkBounds,
+                    hasInk
+                );
+                if(!position)
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
-                const auto ink = TryTranslateTextInk(position, glyph.ink);
-                if(!ink || !TryIncludeTextInk(*ink, inkBounds, hasInk))
-                    return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                if(glyph.coverage.known && !TryTranslateTextInk(position, glyph.coverage.ink))
-                    return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                result.m_glyphs.push_back({ glyph.face, glyph.glyphId, line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage });
-                pen = static_cast<f32>(nextPen);
+                result.m_glyphs.push_back({ glyph.face, glyph.glyphId, line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, *position, glyph.ink, glyph.coverage });
             }
-            TextCluster cluster;
-            cluster.byteBegin = line.byteBegin + run.glyphs[first].byteBegin;
-            cluster.byteEnd = line.byteBegin + run.glyphs[first].byteEnd;
-            cluster.firstGlyph = firstGlyph;
-            cluster.glyphCount = static_cast<u32>(end - first);
-            cluster.lineIndex = static_cast<u32>(result.m_lines.size());
-            cluster.leadingX = request.direction == TextDirection::LeftToRight ? clusterLeft : pen;
-            cluster.trailingX = request.direction == TextDirection::LeftToRight ? pen : clusterLeft;
-            result.m_clusters.push_back(cluster);
+            result.m_clusters.push_back(MakeTextCluster(
+                line.byteBegin,
+                run.glyphs[first].byteBegin,
+                run.glyphs[first].byteEnd,
+                firstGlyph,
+                static_cast<u32>(end - first),
+                static_cast<u32>(result.m_lines.size()),
+                request.direction,
+                clusterLeft,
+                pen
+            ));
             first = end;
         }
         if(!IsFinite(pen) || !IsFinite(line.top + line.height))

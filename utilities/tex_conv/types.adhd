@@ -67,6 +67,16 @@ const i32 s_TexConvExitFailure = 1;
 const i32 s_TexConvExitFatal = -1;
 const usize s_CompletionReportReserveSlack = 128u;
 
+f32 ResolveMaxTexConvRgb(in b8 hdr){
+    if(hdr)
+        return s_UastcHdrMaximum;
+    return 1.0f;
+}
+
+f32x4 QuantizeUnorm(in f32x4 value){
+    return saturate(value) * s_UnormScale + s_UnormRoundingBias;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

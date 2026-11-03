@@ -1,7 +1,5 @@
 nwb_declare_executable(nwb_fbx_to_nwb)
 target_sources(nwb_fbx_to_nwb PRIVATE
-    "${PROJECT_SOURCE_DIR}/impl/assets_mesh/cook_metadata.cpp"
-    "${PROJECT_SOURCE_DIR}/impl/assets_mesh/cook_source_streams.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.c"
     "${CMAKE_CURRENT_LIST_DIR}/*.cc"
     "${CMAKE_CURRENT_LIST_DIR}/*.cxx"

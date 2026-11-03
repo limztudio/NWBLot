@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
     if(!Ui::InputBindings::ValidKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
         return false;
     synchronizeNativeInput();
-    const usize slot = static_cast<usize>(key + 1);
+    const usize slot = ResolveUiNativeKeySlot(key);
     const u8 storedOwner = m_nativeKeyOwners[slot];
     const b8 held = storedOwner != 0u;
     const u8 previousOwner = held ? static_cast<u8>(storedOwner - 1u) : UiInputOwner::Scene;
@@ -63,9 +63,7 @@ b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
 }
 
 b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
-    if(!IsFinite(xpos) || !IsFinite(ypos))
-        return false;
-    if(Abs(xpos) > Limit<f32>::s_Max || Abs(ypos) > Limit<f32>::s_Max)
+    if(!ValidUiMouseCoordinate(xpos, ypos))
         return false;
     synchronizeNativeInput();
     m_pointer = { static_cast<f32>(xpos), static_cast<f32>(ypos) };
@@ -136,7 +134,7 @@ b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i3
 }
 
 b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
-    if(!IsFinite(xoffset) || !IsFinite(yoffset))
+    if(!ValidUiMouseScroll(xoffset, yoffset))
         return false;
     synchronizeNativeInput();
     if(m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Scene)

@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/avboit/avboit_frame_targets.h>
+#include <impl/ecs_render/avboit/types.adhd.h>
 #include <impl/assets/graphics/avboit/constants.h>
 
 

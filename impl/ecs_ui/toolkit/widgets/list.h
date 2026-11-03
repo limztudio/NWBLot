@@ -21,24 +21,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_list{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline Atomic<u64> s_NextIdentity{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Keys are nonzero and unique within an instance. Lookups must avoid scanning the complete dataset per frame.
 interface IListDataSource{
     virtual ~IListDataSource()noexcept = default;
@@ -67,9 +49,16 @@ class ListState final : NoCopy{
     friend class ListBehavior;
 
 
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
     ListState()noexcept
-        : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_list::s_NextIdentity))
+        : m_inputGeneration(NextIdentity())
     {}
     ListState(ListState&&) = delete;
 
@@ -92,7 +81,7 @@ public:
     [[nodiscard]] const ScrollPlacement& placement()const noexcept{ return m_placement; }
     // Explicit application changes start a new input lifetime even when the value is unchanged.
     void select(const u64 key)noexcept{
-        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list::s_NextIdentity);
+        m_inputGeneration = NextIdentity();
         m_selected = key;
         m_cursor = key;
         m_ensureCursor = key != 0u;
@@ -100,7 +89,7 @@ public:
     [[nodiscard]] b8 scrollTo(const f64 offset)noexcept{
         if(!m_scroll.setOffset(offset))
             return false;
-        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list::s_NextIdentity);
+        m_inputGeneration = NextIdentity();
         m_ensureCursor = false;
         return true;
     }
@@ -253,3 +242,4 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

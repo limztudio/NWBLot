@@ -168,9 +168,13 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
     }
     // The last painted offset may belong to a different styled declaration than the measurement cache.
     if(state.m_scrollRowHeight > 0.0f && state.m_scrollSourceGeneration == key.sourceGeneration && state.m_scrollRowHeight != state.m_rowHeight){
-        const f64 clippedTop = static_cast<f64>(state.m_placement.contentClip.y) - static_cast<f64>(state.m_placement.viewport.y);
-        const f64 anchor = Max(0.0, state.scrollOffset() + clippedTop) / static_cast<f64>(state.m_scrollRowHeight);
-        const f64 offset = Max(0.0, anchor * static_cast<f64>(state.m_rowHeight) - clippedTop);
+        const f64 offset = ComputeListRescaledScrollOffset(
+            state.m_placement.contentClip.y,
+            state.m_placement.viewport.y,
+            state.scrollOffset(),
+            state.m_scrollRowHeight,
+            state.m_rowHeight
+        );
         if(!state.m_scroll.setOffset(offset))
             return false;
     }
@@ -184,15 +188,11 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
 }
 
 b8 Builder::applyListGesture(ListState& state, const PointerGesture& gesture)noexcept{
-    const f64 travel = static_cast<f64>(gesture.referenceRectangle.height) - static_cast<f64>(gesture.targetRectangle.height);
-    if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
+    const Expected<f64> offset = TryComputeListGestureScrollOffset(gesture);
+    if(!offset)
         return false;
-    const f64 start = static_cast<f64>(gesture.targetRectangle.y) - static_cast<f64>(gesture.referenceRectangle.y);
-    const f64 delta = static_cast<f64>(gesture.position.y) - static_cast<f64>(gesture.origin.y);
-    const f64 fractionValue = (start + delta) / travel;
-    const f64 fraction = fractionValue > 0.0 ? Min(1.0, fractionValue) : 0.0;
     state.m_ensureCursor = false;
-    return state.m_scroll.setOffset(fraction * gesture.maximum);
+    return state.m_scroll.setOffset(*offset);
 }
 
 b8 Builder::listMatches(const ListFrame& frame)const{

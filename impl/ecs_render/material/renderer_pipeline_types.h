@@ -54,7 +54,22 @@ struct MaterialPipelineKey{
 };
 
 struct MaterialPipelineKeyHasher{
-    usize operator()(const MaterialPipelineKey& key)const noexcept;
+    [[nodiscard]] usize operator()(const MaterialPipelineKey& key)const noexcept{
+        usize seed = ComputeMaterialPipelineBaseHash(
+            key.material,
+            key.pass,
+            key.twoSided,
+            key.csgMode,
+            key.csgEvaluatorVariant,
+            key.csgShapeRegistryRevision,
+            static_cast<u32>(key.framebufferInfo.depthFormat),
+            key.framebufferInfo.sampleCount,
+            key.framebufferInfo.sampleQuality
+        );
+        for(const Core::Format::Enum format : key.framebufferInfo.colorFormats)
+            ::HashCombine(seed, format);
+        return seed;
+    }
 };
 struct MaterialPipelineKeyEqualTo{
     [[nodiscard]] b8 operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const noexcept{

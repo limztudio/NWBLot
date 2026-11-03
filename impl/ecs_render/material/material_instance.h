@@ -8,7 +8,10 @@
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/material/pipeline_types.adhd.h>
 
+#include <core/common/log.h>
 #include <core/ecs/world.h>
+
+#include <global/simd/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,7 +23,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(AStringView parameterName);
+[[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(const AStringView parameterName){
+    const Expected<usize> dotIndex = TryFindMaterialParameterNameDotIndex(parameterName);
+    if(!dotIndex)
+        return MakeUnexpected(Failure{});
+
+    const auto name = Name::FromText(parameterName);
+    const auto blockName = Name::FromText(parameterName.substr(0u, *dotIndex));
+    const auto fieldName = Name::FromText(parameterName.substr(*dotIndex + 1u));
+    if(!name || !blockName || !fieldName){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), ConvertString(parameterName));
+        return MakeUnexpected(Failure{});
+    }
+    MaterialInstanceParameterNames result;
+    result.parameterName = *name;
+    result.blockName = *blockName;
+    result.fieldName = *fieldName;
+    return result;
+}
 
 template<typename TElement>
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const Span<const TElement> elements)noexcept{

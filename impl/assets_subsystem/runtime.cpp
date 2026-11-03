@@ -113,10 +113,10 @@ b8 ValidatePayload(const ISubsystem& subsystem){
             for(usize prevIndex = 0u; prevIndex < elementIndex; ++prevIndex){
                 if(subsystem.fieldValue(i, prevIndex) == value){
                     NWB_LOGGER_ERROR(
-                        NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' array field '{}' has duplicate entry '{}'"),
-                        ConvertString(subsystem.virtualPath().resolvedText()),
-                        ConvertString(descriptor.fieldName),
-                        ConvertString(value.resolvedText())
+                        NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' array field '{}' has duplicate entry '{}'")
+                        , ConvertString(subsystem.virtualPath().resolvedText())
+                        , ConvertString(descriptor.fieldName)
+                        , ConvertString(value.resolvedText())
                     );
                     return false;
                 }

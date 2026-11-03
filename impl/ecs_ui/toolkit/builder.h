@@ -291,8 +291,10 @@ private:
     [[nodiscard]] b8 validatePopupFamily();
     void releasePopupFamily()noexcept;
     [[nodiscard]] b8 reserveCompoundPopup(const WidgetState& widget, const PopupToken& token);
-    [[nodiscard]] SIMDVectorSingle loadVisibleClip(SIMDVectorSingle clip)const noexcept;
-    [[nodiscard]] Rect visibleClip(const Rect& clip)const noexcept{ return StoreRect(loadVisibleClip(LoadRect(clip))); }
+    [[nodiscard]] Rect visibleClip(const Rect& clip)const noexcept{
+        const DisplayMetrics& display = m_paint.displayMetrics();
+        return IntersectUiRectsBounds({ 0.0f, 0.0f, display.logicalWidth, display.logicalHeight }, clip);
+    }
 
 
 private:

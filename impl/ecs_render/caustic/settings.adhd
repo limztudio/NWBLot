@@ -306,6 +306,44 @@ CausticResolvePushConstants ResolveCausticResolvePushConstants(
     return resolvePush;
 }
 
+class CausticResolveActivitySlots{
+    public u32 inputSlot = s_RtInvalidSlot;
+    public u32 outputSlot = s_RtInvalidSlot;
+}
+
+CausticResolveActivitySlots ResolveCausticActivitySlots(
+    in CausticResolveStage stage,
+    in u32 waveletPassIndex,
+    in u32 resolvePassCount,
+    in b8 usesActivity,
+    in u32 descriptorSlot0,
+    in u32 descriptorSlot1
+){
+    CausticResolveActivitySlots slots;
+    if(!usesActivity)
+        return slots;
+
+    u32 activityPassIndex = resolvePassCount + 1u;
+    if(stage == CausticResolveStage::Wavelet)
+        activityPassIndex = waveletPassIndex + 1u;
+    else if(stage == CausticResolveStage::PrepareDownsample)
+        activityPassIndex = 0u;
+
+    if(activityPassIndex > 0u){
+        if(((activityPassIndex - 1u) % 2u) == 0u)
+            slots.inputSlot = descriptorSlot0;
+        else
+            slots.inputSlot = descriptorSlot1;
+    }
+    if(activityPassIndex <= resolvePassCount){
+        if((activityPassIndex % 2u) == 0u)
+            slots.outputSlot = descriptorSlot0;
+        else
+            slots.outputSlot = descriptorSlot1;
+    }
+    return slots;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

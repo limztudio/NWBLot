@@ -230,7 +230,7 @@ b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangl
     )
         return false;
     const Rect clip = m_clips.back();
-    if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip) || tint.a == 0.0f || !HasVisibleRectIntersection(LoadRect(rectangle), LoadRect(clip)))
+    if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip) || tint.a == 0.0f || !HasVisibleUiRectIntersection(rectangle, clip))
         return true;
     u32 index = 0u;
     if(!ResolvePreparedResourceSlot(

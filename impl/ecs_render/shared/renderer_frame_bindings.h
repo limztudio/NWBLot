@@ -60,9 +60,30 @@ struct MeshFrameBindingSnapshot{
 
 
 public:
-    [[nodiscard]] b8 bindingValid()const noexcept;
-    [[nodiscard]] b8 matches(const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer)const noexcept;
-    [[nodiscard]] b8 frameReady(usize instanceCount, usize materialTypedByteCount)const noexcept;
+    [[nodiscard]] b8 bindingValid()const noexcept{
+        return
+            instanceBuffer
+            && materialTypedBuffer
+            && meshView.bindingValid()
+            && instanceHeapHandle.valid()
+            && instanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            && materialTypedHeapHandle.valid()
+            && materialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        ;
+    }
+    [[nodiscard]] b8 matches(const MaterialPassBufferSnapshot& materialBuffers, const Core::BufferHandle& meshViewBuffer)const noexcept{
+        return
+            bindingValid()
+            && instanceBuffer == materialBuffers.instanceBuffer
+            && materialTypedBuffer == materialBuffers.materialTypedBuffer
+            && meshView.buffer == meshViewBuffer
+            && instanceBufferCapacity == materialBuffers.instanceBufferCapacity
+            && materialTypedBufferCapacity == materialBuffers.materialTypedBufferCapacity
+        ;
+    }
+    [[nodiscard]] b8 frameReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
+        return CanAcceptMeshFrameBindingCapacities(bindingValid(), instanceBufferCapacity, materialTypedBufferCapacity, instanceCount, materialTypedByteCount);
+    }
 };
 
 

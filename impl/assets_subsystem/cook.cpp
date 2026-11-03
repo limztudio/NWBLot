@@ -138,11 +138,11 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                 return false;
             if(parsedRef->name() == outSubsystem.virtualPath()){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("{} '{}': '{}' cannot reference subsystem '{}' itself"),
-                    ConvertString(s_SubsystemDiagnosticPrefix),
-                    PathToString<tchar>(nwbFilePath),
-                    ConvertString(s_SubsystemSubsystemsFieldName),
-                    ConvertString(outSubsystem.virtualPath().resolvedText())
+                    NWB_TEXT("{} '{}': '{}' cannot reference subsystem '{}' itself")
+                    , ConvertString(s_SubsystemDiagnosticPrefix)
+                    , PathToString<tchar>(nwbFilePath)
+                    , ConvertString(s_SubsystemSubsystemsFieldName)
+                    , ConvertString(outSubsystem.virtualPath().resolvedText())
                 );
                 return false;
             }
@@ -157,11 +157,11 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
         const Core::Metascript::Value* const fieldValue = asset.findField(descriptor.fieldName);
         if(!fieldValue){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': required field '{}' is missing for '{}'"),
-                ConvertString(s_SubsystemDiagnosticPrefix),
-                PathToString<tchar>(nwbFilePath),
-                ConvertString(descriptor.fieldName),
-                ConvertString(outSubsystem.assetType().resolvedText())
+                NWB_TEXT("{} '{}': required field '{}' is missing for '{}'")
+                , ConvertString(s_SubsystemDiagnosticPrefix)
+                , PathToString<tchar>(nwbFilePath)
+                , ConvertString(descriptor.fieldName)
+                , ConvertString(outSubsystem.assetType().resolvedText())
             );
             return false;
         }
@@ -179,11 +179,11 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                 for(usize prevIndex = 0u; prevIndex < existingCount; ++prevIndex){
                     if(outSubsystem.fieldValue(i, prevIndex) == parsedRef->name()){
                         NWB_LOGGER_ERROR(
-                            NWB_TEXT("{} '{}': '{}' contains duplicate entry '{}'"),
-                            ConvertString(s_SubsystemDiagnosticPrefix),
-                            PathToString<tchar>(nwbFilePath),
-                            ConvertString(descriptor.fieldName),
-                            ConvertString(parsedRef->name().resolvedText())
+                            NWB_TEXT("{} '{}': '{}' contains duplicate entry '{}'")
+                            , ConvertString(s_SubsystemDiagnosticPrefix)
+                            , PathToString<tchar>(nwbFilePath)
+                            , ConvertString(descriptor.fieldName)
+                            , ConvertString(parsedRef->name().resolvedText())
                         );
                         return false;
                     }

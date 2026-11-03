@@ -124,6 +124,106 @@ Expected<StringView> TryFindVariantDefineAssignment(
     return makeUnexpected(Failure());
 }
 
+Expected<String> TryBuildCsgClipShaderVariantText(
+    in StringView baseVariant,
+    in StringView defaultVariant,
+    in Span<ShaderVariantDefineAssignment> defineAssignments
+){
+    String outVariant = "";
+    const usize defineAssignmentCount = defineAssignments.size();
+    if(baseVariant.empty() || defineAssignmentCount == 0u || defineAssignmentCount > s_MaxCsgClipShaderVariantDefineAssignments)
+        return makeUnexpected(Failure());
+    if(baseVariant == defaultVariant){
+        Array<b8, s_MaxCsgClipShaderVariantDefineAssignments> insertedDefines;
+        for(usize outputIndex = 0u; outputIndex < defineAssignmentCount; ++outputIndex){
+            usize selectedIndex = defineAssignmentCount;
+            for(usize i = 0u; i < defineAssignmentCount; ++i){
+                if(insertedDefines[i])
+                    continue;
+                if(selectedIndex == defineAssignmentCount || defineAssignments[i].name < defineAssignments[selectedIndex].name)
+                    selectedIndex = i;
+            }
+            if(selectedIndex == defineAssignmentCount)
+                return makeUnexpected(Failure());
+            if(!outVariant.empty())
+                outVariant += ";";
+            outVariant += defineAssignments[selectedIndex].assignment;
+            insertedDefines[selectedIndex] = true;
+        }
+        return outVariant;
+    }
+
+    usize reserveSize = baseVariant.size();
+    for(usize i = 0u; i < defineAssignmentCount; ++i)
+        reserveSize += 1u + defineAssignments[i].assignment.size();
+    outVariant.reserve(reserveSize);
+
+    Array<b8, s_MaxCsgClipShaderVariantDefineAssignments> insertedDefines;
+    usize begin = 0u;
+    while(begin < baseVariant.size()){
+        usize segmentEnd = baseVariant.find(';', begin);
+        if(segmentEnd >= baseVariant.size())
+            segmentEnd = baseVariant.size();
+
+        const StringView segment = baseVariant.substr(begin, segmentEnd - begin);
+        const StringView defineName = VariantSegmentDefineName(segment);
+        if(defineName.empty())
+            return makeUnexpected(Failure());
+
+        for(usize step = 0u; step < defineAssignmentCount; ++step){
+            usize selectedIndex = defineAssignmentCount;
+            for(usize i = 0u; i < defineAssignmentCount; ++i){
+                if(insertedDefines[i])
+                    continue;
+                if(defineName > defineAssignments[i].name && (selectedIndex == defineAssignmentCount || defineAssignments[i].name < defineAssignments[selectedIndex].name))
+                    selectedIndex = i;
+            }
+            if(selectedIndex == defineAssignmentCount)
+                break;
+            if(!outVariant.empty())
+                outVariant += ";";
+            outVariant += defineAssignments[selectedIndex].assignment;
+            insertedDefines[selectedIndex] = true;
+        }
+
+        b8 replacedExistingSegment = false;
+        for(usize i = 0u; i < defineAssignmentCount; ++i){
+            if(defineName != defineAssignments[i].name)
+                continue;
+            if(!outVariant.empty())
+                outVariant += ";";
+            outVariant += defineAssignments[i].assignment;
+            insertedDefines[i] = true;
+            replacedExistingSegment = true;
+            break;
+        }
+        if(!replacedExistingSegment){
+            if(!outVariant.empty())
+                outVariant += ";";
+            outVariant += segment;
+        }
+
+        begin = segmentEnd + 1u;
+    }
+
+    for(usize step = 0u; step < defineAssignmentCount; ++step){
+        usize selectedIndex = defineAssignmentCount;
+        for(usize i = 0u; i < defineAssignmentCount; ++i){
+            if(insertedDefines[i])
+                continue;
+            if(selectedIndex == defineAssignmentCount || defineAssignments[i].name < defineAssignments[selectedIndex].name)
+                selectedIndex = i;
+        }
+        if(selectedIndex == defineAssignmentCount)
+            break;
+        if(!outVariant.empty())
+            outVariant += ";";
+        outVariant += defineAssignments[selectedIndex].assignment;
+        insertedDefines[selectedIndex] = true;
+    }
+    return outVariant;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -240,6 +340,73 @@ b8 TryStoreMaterialMutableParameter(mut MaterialInstanceComponent component, in 
     component.overrides.push_back(parameter);
     ++component.revision;
     return true;
+}
+
+Expected<usize> TryFindMaterialParameterNameDotIndex(in StringView parameterName){
+    const usize dotIndex = parameterName.find('.');
+    if(parameterName.empty() || dotIndex >= parameterName.size() || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
+        error("MaterialInstanceComponent: parameter '{}' must use block.field form", parameterName);
+        return makeUnexpected(Failure());
+    }
+    if(parameterName.find('.', dotIndex + 1u) < parameterName.size()){
+        error("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator", parameterName);
+        return makeUnexpected(Failure());
+    }
+    return dotIndex;
+}
+
+b8 ValidateMaterialInstanceInterface(in MaterialInstanceComponent component, in Name materialInterface, in StringView parameterNameText){
+    if(materialInterface == s_NameNone){
+        error("MaterialInstanceComponent: parameter '{}' requires a material interface", parameterNameText);
+        return false;
+    }
+    if(component.materialInterface == s_NameNone){
+        error("MaterialInstanceComponent: parameter '{}' requires a component material interface", parameterNameText);
+        return false;
+    }
+    if(component.materialInterface == materialInterface)
+        return true;
+
+    error(
+        "MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'"
+        , parameterNameText
+        , materialInterface.resolvedText()
+        , component.materialInterface.resolvedText()
+    );
+    return false;
+}
+
+b8 StoreMaterialMutableParameter(mut MaterialInstanceComponent component, in MaterialInstanceParameter parameter, in StringView parameterNameText){
+    if(TryStoreMaterialMutableParameter(component, parameter))
+        return true;
+
+    error("MaterialInstanceComponent: parameter '{}' was already set with a different type", parameterNameText);
+    return false;
+}
+
+usize ComputeMaterialPipelineBaseHash(
+    in Name material,
+    in MaterialPipelinePass pass,
+    in b8 twoSided,
+    in MaterialPipelineCsgMode csgMode,
+    in Name csgEvaluatorVariant,
+    in u64 csgShapeRegistryRevision,
+    in u32 depthFormat,
+    in u32 sampleCount,
+    in u32 sampleQuality
+){
+    usize seed = hashValue(material);
+    seed = hashCombineValue(seed, cast<u32>(pass));
+    if(twoSided)
+        seed = hashCombineValue(seed, 1u);
+    else
+        seed = hashCombineValue(seed, 0u);
+    seed = hashCombineValue(seed, cast<u32>(csgMode));
+    seed = hashCombineValue(seed, hashValue(csgEvaluatorVariant));
+    seed = hashCombineValue(seed, csgShapeRegistryRevision);
+    seed = hashCombineValue(seed, depthFormat);
+    seed = hashCombineValue(seed, sampleCount);
+    return hashCombineValue(seed, sampleQuality);
 }
 
 Expected<MaterialInstanceOverrideField> TryFindMaterialInstanceOverrideField(

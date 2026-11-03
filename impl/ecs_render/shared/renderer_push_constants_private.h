@@ -73,38 +73,77 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
     return slots;
 }
 
-[[nodiscard]] ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
-    u32 meshletCount,
-    u32 instanceIndex,
-    u32 materialConstantByteOffset,
+[[nodiscard]] NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
+    const u32 meshletCount,
+    const u32 instanceIndex,
+    const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const MeshFrameHeapSlots& frameHeapSlots,
-    u32 dispatchFlags
-)noexcept;
+    const u32 dispatchFlags
+)noexcept{
+    const b8 hasViewport = !viewportState.viewports.empty();
+    const Core::Viewport viewport = hasViewport ? viewportState.viewports[0] : Core::Viewport{};
+    const Core::Rect scissorRect = hasViewport ? (!viewportState.scissorRects.empty() ? viewportState.scissorRects[0] : Core::Rect::FromViewport(viewport)) : Core::Rect{};
+    return ResolveShaderDrivenPushConstants(
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        hasViewport,
+        Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
+        Float4(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY)),
+        frameHeapSlots,
+        dispatchFlags
+    );
+}
 
-void SetShaderDrivenPushConstants(
+NWB_INLINE void SetShaderDrivenPushConstants(
     Core::CommandList& commandList,
-    u32 meshletCount,
-    u32 instanceIndex,
-    u32 materialConstantByteOffset,
+    const u32 meshletCount,
+    const u32 instanceIndex,
+    const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const MeshFrameHeapSlots& frameHeapSlots,
-    u32 dispatchFlags
-);
+    const u32 dispatchFlags
+){
+    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(
+        meshletCount,
+        instanceIndex,
+        materialConstantByteOffset,
+        viewportState,
+        frameHeapSlots,
+        dispatchFlags
+    );
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+}
 
-void SetTransparentDrawPushConstants(
+NWB_INLINE void SetTransparentDrawPushConstants(
     Core::CommandList& commandList,
-    u32 meshletCount,
-    u32 instanceIndex,
-    u32 materialConstantByteOffset,
+    const u32 meshletCount,
+    const u32 instanceIndex,
+    const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const AvboitFrameTargets& targets,
     const MeshFrameHeapSlots& frameHeapSlots,
-    u32 dispatchFlags,
-    b8 hdr10OutputActive,
-    u32 csgContextHeapSlot = 0u,
-    b8 refractionCapture = false
-);
+    const u32 dispatchFlags,
+    const b8 hdr10OutputActive,
+    const u32 csgContextHeapSlot = 0u,
+    const b8 refractionCapture = false
+){
+    const TransparentDrawPushConstants pushConstants = ResolveTransparentDrawPushConstants(
+        BuildShaderDrivenPushConstants(
+            meshletCount,
+            instanceIndex,
+            materialConstantByteOffset,
+            viewportState,
+            frameHeapSlots,
+            dispatchFlags
+        ),
+        BuildRendererAvboitPushConstants(targets, hdr10OutputActive),
+        csgContextHeapSlot,
+        refractionCapture
+    );
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+}
 
 NWB_INLINE void SetEmulatedVertexAttribute(const Core::Format::Enum format, const u32 offsetByteCount, const NameText<char> name, Core::VertexAttributeDesc& attribute){
     attribute.setFormat(format).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(Name(name));

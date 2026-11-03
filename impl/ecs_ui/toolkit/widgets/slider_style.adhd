@@ -577,6 +577,23 @@ b8 TryDragSliderPointerGesture(
     return true;
 }
 
+Expected<f32> TryResolveSliderTrackContentWidth(in SliderMetrics metrics, in f32 trackMinimumWidth){
+    const f64 width = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right) + cast<f64>(metrics.thumbExtent.x) + cast<f64>(trackMinimumWidth);
+    if(!isFinite(width) || width > s_UiMaxFloatF64)
+        return makeUnexpected(Failure());
+    return max(metrics.contentSize.x, cast<f32>(width));
+}
+
+b8 IsSliderPlacementInteractive(in SliderOptions options, in SliderPlacement placement){
+    return options.enabled
+        && options.minimum != options.maximum
+        && placement.centerTravel.width > 0.0f
+        && placement.thumb.width > 0.0f
+        && placement.thumb.height > 0.0f
+        && placement.clip.width > 0.0f
+        && placement.clip.height > 0.0f;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

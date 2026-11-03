@@ -551,6 +551,20 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
     return MakeNotNull(&inOutCache.entries.back());
 }
 
+b8 ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layout, const Name& materialName, const MaterialBindParameterMap& parameters, Material::TypedBlockByteVector& inOutBlockBytes, Material::ResourceReferenceVector& outResourceReferences){
+    outResourceReferences.clear();
+    for(const auto& [parameterName, parameterValue] : parameters){
+        if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(layout, materialName, parameterName, parameterValue, outResourceReferences, inOutBlockBytes))
+            return false;
+    }
+
+    Sort(outResourceReferences.begin(), outResourceReferences.end(), [](const MaterialResourceReference& lhs, const MaterialResourceReference& rhs)noexcept{
+        return lhs.constantByteOffset < rhs.constantByteOffset;
+    });
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

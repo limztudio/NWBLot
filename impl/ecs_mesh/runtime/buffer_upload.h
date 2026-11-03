@@ -71,13 +71,30 @@ template<typename PayloadT>
     return SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
 }
 
-[[nodiscard]] Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(
+[[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByteBuffer(
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& debugName,
-    Span<const u8> payload,
-    BufferFlags flags
-);
+    const Span<const u8> payload,
+    const BufferFlags flags
+){
+    if(payload.empty())
+        return MakeUnexpected(BufferSetupFailure::EmptyPayload);
+
+    const Expected<usize> paddedByteCount = TryComputePaddedRawByteCount(payload.size());
+    if(!paddedByteCount)
+        return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
+
+    if(*paddedByteCount == payload.size())
+        return SetupBuffer<u8>(graphics, debugName, payload, flags);
+
+    // Upload records before payload dies; explicitly zero the allocated tail.
+    Vector<u8, Core::Alloc::ScratchArena> paddedPayload{scratchArena};
+    paddedPayload.reserve(*paddedByteCount);
+    paddedPayload.assign(payload.begin(), payload.end());
+    paddedPayload.resize(*paddedByteCount, 0u);
+    return SetupBuffer<u8>(graphics, debugName, paddedPayload, flags);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

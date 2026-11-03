@@ -153,17 +153,7 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultF
         Float4 position;
         Float4 direction;
         if(__hidden_lighting::TryBuildSceneLightVectors(transform, light, position, direction)){
-            SceneLight& outLight = outLights[count];
-            outLight = SceneLight{};
-            outLight.position = position;
-            outLight.direction = direction;
-            outLight.colorIntensity = light.colorIntensity;
-            if(light.type != LightType::Directional)
-                outLight.range = light.range;
-            outLight.angularRadius = light.angularRadius;
-            outLight.sourceRadius = light.sourceRadius;
-            outLight.type = light.type;
-            outLight.enableCaustics = light.enableCaustics;
+            outLights[count] = MakeSceneLight(light, position, direction);
             ++count;
         }
     }

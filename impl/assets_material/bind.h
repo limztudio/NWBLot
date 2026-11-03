@@ -97,7 +97,10 @@ public:
     [[nodiscard]] const MaterialBindAttribute* findAttribute(const AStringView attributeName)const noexcept{
         return MaterialBindDetail::FindNamedBindItem<MaterialBindAttribute>(attributes, attributeName);
     }
-    [[nodiscard]] AStringView defaultArgument()const noexcept;
+    [[nodiscard]] AStringView defaultArgument()const noexcept{
+        const MaterialBindAttribute* attribute = findAttribute(s_MaterialDefaultAttribute);
+        return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
+    }
 };
 
 struct MaterialBindStruct{
@@ -201,7 +204,10 @@ public:
 
 
 public:
-    void reserve(usize count);
+    void reserve(const usize count){
+        entries.reserve(count);
+        lookup.reserve(count);
+    }
 };
 
 
@@ -211,7 +217,9 @@ public:
 [[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache);
-void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes);
+inline void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes){
+    CopyMaterialBindTypedLayoutDefaults(layout.layoutHash, layout.typedLayoutBlocks, layout.typedLayoutFields, layout.typedBlockBytes, outLayoutHash, outBlocks, outFields, outBlockBytes);
+}
 [[nodiscard]] b8 ApplyMaterialBindTypedLayoutParameters(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,

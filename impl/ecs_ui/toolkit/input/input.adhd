@@ -523,6 +523,16 @@ b8 ValidateStagedHitTargetCommandOwners(in Span<HitTarget> targets, in Span<Targ
     return true;
 }
 
+b8 ValidStagedPopupTarget(in HitTarget target, in Span<PopupRecord> stagedPopups){
+    if(!target.popup.widget.valid())
+        return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
+    for(usize i = 0u; i < stagedPopups.size(); ++i){
+        if(stagedPopups[i].scope.token == target.popup)
+            return target.layer == stagedPopups[i].scope.layer;
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -133,10 +133,6 @@ struct AlphaTransport{
     return target;
 }
 
-[[nodiscard]] static SIMDVectorSingle QuantizeUnorm(const SIMDVectorSingle value)noexcept{
-    return VectorMultiplyAddExpression(VectorSaturate(value), VectorReplicate(s_UnormScale), VectorReplicate(s_UnormRoundingBias));
-}
-
 [[nodiscard]] static Expected<AlphaTransport> DeriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
     AlphaTransport transport;
     b8 found = false;
@@ -153,7 +149,7 @@ struct AlphaTransport{
                         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip filtering produced non-finite values."));
                         return MakeUnexpected(Failure{});
                     }
-                    const u8 alpha = static_cast<u8>(VectorGetW(QuantizeUnorm(colorVector)));
+                    const u8 alpha = static_cast<u8>(QuantizeUnorm(Float4(color[0u], color[1u], color[2u], color[3u])).w);
                     if(!found){
                         firstAlpha = alpha;
                         found = true;
@@ -239,13 +235,13 @@ struct AlphaTransport{
             for(u32 y = 0u; y < mip.height; ++y){
                 for(u32 x = 0u; x < mip.width; ++x){
                     const basisu::vec4F& color = source(x, y);
-                    const SIMDVectorSingle quantized = QuantizeUnorm(VectorSet(color[0u], color[1u], color[2u], color[3u]));
+                    const Float4 quantized = QuantizeUnorm(Float4(color[0u], color[1u], color[2u], color[3u]));
                     if(alphaOnly){
-                        const u8 alpha = static_cast<u8>(VectorGetW(quantized));
+                        const u8 alpha = static_cast<u8>(quantized.w);
                         target(x, y) = basisu::color_rgba(alpha, alpha, alpha, TextureFormat::s_OpaqueAlphaUnorm8);
                     }
                     else
-                        target(x, y) = basisu::color_rgba(static_cast<u8>(VectorGetX(quantized)), static_cast<u8>(VectorGetY(quantized)), static_cast<u8>(VectorGetZ(quantized)), static_cast<u8>(VectorGetW(quantized)));
+                        target(x, y) = basisu::color_rgba(static_cast<u8>(quantized.x), static_cast<u8>(quantized.y), static_cast<u8>(quantized.z), static_cast<u8>(quantized.w));
                 }
             }
         }

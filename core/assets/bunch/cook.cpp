@@ -273,9 +273,9 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
             }
             if(!assetVariableHashes.insert(*variableHash).second){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("Composite asset '{}': duplicate declaration variable '{}'"),
-                    PathToString<tchar>(nwbFilePath),
-                    ConvertString(declaration.variable)
+                    NWB_TEXT("Composite asset '{}': duplicate declaration variable '{}'")
+                    , PathToString<tchar>(nwbFilePath)
+                    , ConvertString(declaration.variable)
                 );
                 return MakeUnexpected(Failure{});
             }
@@ -302,9 +302,9 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
             const auto variableHash = ComputeNameHash(variableName);
             if(!variableHash || referencedAssetVariableHashes.find(*variableHash) == referencedAssetVariableHashes.end()){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("Composite asset '{}': declaration '{}' is not referenced by 'asset'"),
-                    PathToString<tchar>(nwbFilePath),
-                    ConvertString(variableName)
+                    NWB_TEXT("Composite asset '{}': declaration '{}' is not referenced by 'asset'")
+                    , PathToString<tchar>(nwbFilePath)
+                    , ConvertString(variableName)
                 );
                 return MakeUnexpected(Failure{});
             }

@@ -335,6 +335,42 @@ b8 CanResolveGpuJointPalette(in b8 hasActiveSkin, in usize payloadSkinInfluenceC
     ;
 }
 
+b8 HasCompleteSplitMeshSkinningPayload(
+    in usize restPositionCount,
+    in usize restNormalCount,
+    in usize restTangentCount,
+    in usize uv0Count,
+    in usize colorCount,
+    in usize skinCount,
+    in usize meshletCount,
+    in usize meshletBoundsCount,
+    in usize meshletPositionRefDeltaCount,
+    in usize meshletAttributeRefDeltaCount,
+    in usize meshletLocalVertexRefCount,
+    in usize meshletPrimitiveIndexCount,
+    in u32 meshletPositionRefCount,
+    in u32 meshletAttributeRefCount,
+    in usize attributeSkinCount
+){
+    return
+        restPositionCount != 0u
+        && restNormalCount != 0u
+        && restTangentCount == restNormalCount
+        && uv0Count != 0u
+        && colorCount != 0u
+        && skinCount != 0u
+        && meshletCount != 0u
+        && meshletBoundsCount == meshletCount
+        && meshletPositionRefDeltaCount != 0u
+        && meshletAttributeRefDeltaCount != 0u
+        && meshletLocalVertexRefCount != 0u
+        && meshletPrimitiveIndexCount != 0u
+        && meshletPositionRefCount > 0u
+        && meshletAttributeRefCount > 0u
+        && attributeSkinCount == cast<usize>(meshletAttributeRefCount)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

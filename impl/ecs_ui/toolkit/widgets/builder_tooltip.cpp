@@ -74,17 +74,12 @@ b8 Builder::paintTooltips(){
             continue;
         const Rect clip = visibleClip(box->clip);
         const Point& pointer = m_context.input().pointerPosition();
-        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(LoadRect(box->rectangle), LoadRect(clip));
-        const f32 left = VectorGetX(visibleBounds);
-        const f32 top = VectorGetY(visibleBounds);
-        const f32 right = VectorGetZ(visibleBounds);
-        const f32 bottom = VectorGetW(visibleBounds);
         const InputRouter& input = m_context.input();
         if(
             !anchor.enabled || !input.pointerKnown() || !input.windowFocused() || m_pointerBusy
             || input.primaryDown() || input.secondaryDown()
             || (m_context.topPopupToken().valid() && m_context.topPopupToken() != frame.state->m_popup)
-            || pointer.x < left || pointer.y < top || pointer.x >= right || pointer.y >= bottom
+            || !UiRectIntersectionContainsPoint(box->rectangle, clip, pointer)
         ){
             if(!TooltipBehavior::Update(*frame.state, frame.anchor.id, frame.anchor.declarationGeneration, frame.state->m_popup, input.focusLossGeneration(), input.hoverActivityGeneration(), false, 0.0f, frame.options))
                 return false;
@@ -95,7 +90,6 @@ b8 Builder::paintTooltips(){
         if(!background)
             return false;
         const Insets padding = MaxUiPadding(frame.style.padding, background->padding);
-        const SIMDVectorSingle paddingValue = VectorSet(padding.left, padding.top, padding.right, padding.bottom);
         const auto textBounds = m_text.measure(frame.text, m_paint.displayMetrics());
         if(!textBounds)
             return false;
@@ -112,8 +106,7 @@ b8 Builder::paintTooltips(){
             return false;
         m_paint.pushClip(placement->bounds);
         const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-        const SIMDVectorSingle inset = InsetRectValue(LoadRect(placement->bounds), paddingValue);
-        const Rect content = StoreRect(inset);
+        const Rect content = InsetUiRectBounds(placement->bounds, padding);
         m_paint.pushClip(content);
         b8 painted = false;
         if(backgroundPainted)

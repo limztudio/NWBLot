@@ -24,15 +24,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 b8 ValidateOptions(const BakeOptions& options){
     if(
-        options.ppem < Impl::s_FontAtlasMinBakePpem
-        || options.ppem > Impl::s_FontAtlasMaxBakePpem
-        || options.spread < Impl::s_FontAtlasMinSpreadPixels
-        || options.spread > Impl::s_FontAtlasMaxSpreadPixels
-        || options.extent < s_MinBakeExtent
-        || options.extent > Impl::s_FontAtlasMaxExtent
-        || options.maxGroups == 0u
-        || options.maxGroups > Impl::s_FontAtlasMaxGroupCount
-        || static_cast<u64>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount * options.maxGroups > Impl::s_FontAtlasMaxPixelBytes
+        !IsValidBakeNumericOptions(options.ppem, options.spread, options.extent, options.maxGroups)
         || options.source.empty()
         || options.output.empty()
     ){

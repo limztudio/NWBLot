@@ -31,9 +31,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
         return false;
     frame.m_snapshot = frame.m_state.snapshot();
     frame.m_token = frame.m_state.controlToken();
-    const b8 interactive = frame.m_options.enabled && frame.m_options.minimum != frame.m_options.maximum
-        && placement->centerTravel.width > 0.0f && placement->thumb.width > 0.0f && placement->thumb.height > 0.0f
-        && placement->clip.width > 0.0f && placement->clip.height > 0.0f;
+    const b8 interactive = IsSliderPlacementInteractive(frame.m_options, *placement);
     InputRouter& input = m_context.input();
     const b8 previouslyFocused = input.focus() == item.state.id;
     // Prospective geometry and policy fence the displayed lifetime before any copied intention changes the value.

@@ -220,12 +220,12 @@ Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportGpu
     const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(*readyIdentity).setMarkerLabel(desc.readyMarkerLabel).setToken(desc.readinessToken));
     if(!readyResult){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("GpuRenderer: {} {} upload completion import failed (queue={}, generation={}, value={})"),
-            desc.completionLabel,
-            desc.index,
-            desc.readinessToken.physicalQueueIndex,
-            desc.readinessToken.deviceGeneration,
-            desc.readinessToken.value
+            NWB_TEXT("GpuRenderer: {} {} upload completion import failed (queue={}, generation={}, value={})")
+            , desc.completionLabel
+            , desc.index
+            , desc.readinessToken.physicalQueueIndex
+            , desc.readinessToken.deviceGeneration
+            , desc.readinessToken.value
         );
         return MakeUnexpected(GpuSampledTextureImportError::Completion);
     }

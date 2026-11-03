@@ -17,15 +17,6 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SourceTriangleCorner{
-    Vec3 position;
-    Vec3 normal;
-    Vec4 tangent;
-    Vec2 uv0;
-    Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
-    MeshSkinInfluence skin;
-    b8 hasTangent = false;
-};
 static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
 
 struct MeshSkinInfluenceHasher{

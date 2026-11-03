@@ -104,14 +104,7 @@ void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(const usize estimatedTr
 }
 
 b8 FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept{
-    if(mesh.vertexRefs.empty() || mesh.tangents.empty())
-        return false;
-
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(ref.tangent >= mesh.tangents.size())
-            return false;
-    }
-    return true;
+    return SourceVertexRefsHaveCompleteTangents(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()), mesh.tangents.size());
 }
 
 b8 FbxSourceMeshStreams::DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
@@ -241,7 +234,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(c
     }
     outTangentReport.degenerateUvTriangleCount = rebuildResult->degenerateUvTriangleCount;
     outTangentReport.fallbackTangentVertexCount = rebuildResult->fallbackTangentVertexCount;
-    outTangentReport.mode = usedDefaultUvs || rebuildResult->degenerateUvTriangleCount != 0u || rebuildResult->fallbackTangentVertexCount != 0u ? SourceTangentMode::GeneratedFallback : SourceTangentMode::GeneratedUv;
+    outTangentReport.mode = ResolveGeneratedSourceTangentMode(usedDefaultUvs, rebuildResult->degenerateUvTriangleCount, rebuildResult->fallbackTangentVertexCount);
     return outTangentReport;
 }
 

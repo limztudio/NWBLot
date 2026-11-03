@@ -89,10 +89,10 @@ b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + static_cast<f64>(frame.m_metrics.padding.right) + static_cast<f64>(frame.m_metrics.thumbExtent.x) + static_cast<f64>(trackMinimum->x);
-    if(!IsFinite(width) || width > Limit<f32>::s_Max)
+    const auto contentWidth = TryResolveSliderTrackContentWidth(frame.m_metrics, trackMinimum->x);
+    if(!contentWidth)
         return false;
-    frame.m_metrics.contentSize.x = Max(frame.m_metrics.contentSize.x, static_cast<f32>(width));
+    frame.m_metrics.contentSize.x = *contentWidth;
     return sliderMatches(frame);
 }
 

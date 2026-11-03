@@ -2,6 +2,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font_atlas/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::FontBuilderUtility{
+using NWB::Impl::s_FontAtlasMinBakePpem;
+using NWB::Impl::s_FontAtlasMaxBakePpem;
+using NWB::Impl::s_FontAtlasMinSpreadPixels;
+using NWB::Impl::s_FontAtlasMaxSpreadPixels;
+using NWB::Impl::s_FontAtlasMaxExtent;
+using NWB::Impl::s_FontAtlasMaxGroupCount;
+using NWB::Impl::s_FontAtlasMaxChannelCount;
+using NWB::Impl::s_FontAtlasMaxPixelBytes;
+}
+}
+
+
 const StringView s_TrueTypeExtension = ".ttf";
 const StringView s_OpenTypeExtension = ".otf";
 // One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
@@ -50,6 +70,20 @@ b8 TryPlaceGlyphOnShelf(in u32 width, in u32 height, in u32 extent, mut Shelf in
         next.height = height;
     inOutShelf = next;
     return true;
+}
+
+b8 IsValidBakeNumericOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 maxGroups){
+    return
+        ppem >= s_FontAtlasMinBakePpem
+        && ppem <= s_FontAtlasMaxBakePpem
+        && spread >= s_FontAtlasMinSpreadPixels
+        && spread <= s_FontAtlasMaxSpreadPixels
+        && extent >= s_MinBakeExtent
+        && extent <= s_FontAtlasMaxExtent
+        && maxGroups != 0u
+        && maxGroups <= s_FontAtlasMaxGroupCount
+        && cast<u64>(extent) * cast<u64>(extent) * cast<u64>(s_FontAtlasMaxChannelCount) * cast<u64>(maxGroups) <= s_FontAtlasMaxPixelBytes
+    ;
 }
 
 

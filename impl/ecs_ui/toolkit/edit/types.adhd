@@ -884,14 +884,16 @@ Expected<EditMove> TryMapEditCommandToMove(in EditCommand command){
     }
 }
 
-b8 TryMapEditCommandToPassiveResult(in EditCommand command, mut EditCommandResult inOutResult){
+Expected<EditCommandResult> TryMapEditCommandToPassiveResult(in EditCommand command){
+    EditCommandResult outResult;
+    outResult.handled = true;
     switch(command){
-    case EditCommand::Copy: inOutResult.clipboard = EditClipboardAction::Copy; return true;
-    case EditCommand::Cut: inOutResult.clipboard = EditClipboardAction::Cut; return true;
-    case EditCommand::Paste: inOutResult.clipboard = EditClipboardAction::Paste; return true;
-    case EditCommand::Submit: inOutResult.submitted = true; return true;
-    case EditCommand::Cancel: inOutResult.cancelled = true; return true;
-    default: return false;
+    case EditCommand::Copy: outResult.clipboard = EditClipboardAction::Copy; return outResult;
+    case EditCommand::Cut: outResult.clipboard = EditClipboardAction::Cut; return outResult;
+    case EditCommand::Paste: outResult.clipboard = EditClipboardAction::Paste; return outResult;
+    case EditCommand::Submit: outResult.submitted = true; return outResult;
+    case EditCommand::Cancel: outResult.cancelled = true; return outResult;
+    default: return makeUnexpected(Failure());
     }
 }
 
@@ -904,7 +906,67 @@ void ComputeEditWordEraseDistances(in b8 forward, in usize caret, in usize bound
         outBeforeBytes = caret - boundary;
         outAfterBytes = 0u;
     }
+}
 
+b8 CanEraseAroundEditSelection(
+    in usize beforeBytes,
+    in usize afterBytes,
+    in usize start,
+    in usize end,
+    in usize textSize,
+    in Span<usize> boundaries
+){
+    if(beforeBytes > start || afterBytes > textSize - end)
+        return false;
+    return IsEditBoundary(boundaries, start - beforeBytes) && IsEditBoundary(boundaries, end + afterBytes);
+}
+
+b8 CanUpdateEditComposition(
+    in b8 compositionActive,
+    in StringView value,
+    in usize anchor,
+    in usize caret,
+    in usize textSize,
+    in usize compositionAnchor,
+    in usize compositionCaret,
+    in usize maxBytes
+){
+    if(!compositionActive || value.size() > maxBytes)
+        return false;
+    if(!isUtf8ScalarBoundary(value, anchor) || !isUtf8ScalarBoundary(value, caret))
+        return false;
+    const usize replacedBytes = max(compositionAnchor, compositionCaret) - min(compositionAnchor, compositionCaret);
+    const usize retainedBytes = textSize - replacedBytes;
+    return retainedBytes <= maxBytes - value.size();
+}
+
+b8 CanReplaceEditRange(
+    in usize begin,
+    in usize end,
+    in usize replacementSize,
+    in usize textSize,
+    in usize maxBytes,
+    in Span<usize> boundaries
+){
+    if(begin > end || !IsEditBoundary(boundaries, begin) || !IsEditBoundary(boundaries, end) || replacementSize > maxBytes)
+        return false;
+    const usize retainedBytes = textSize - (end - begin);
+    return retainedBytes <= maxBytes - replacementSize;
+}
+
+usize ResolveReplacedEditCaret(in Span<usize> boundaries, in usize begin, in usize replacementSize){
+    usize caret = begin + replacementSize;
+    for(usize index = 0u; index < boundaries.size(); ++index){
+        if(boundaries[index] >= caret){
+            caret = boundaries[index];
+            break;
+        }
+    }
+    return caret;
+}
+
+b8 CanRecordEditHistory(in usize maxHistoryRecords, in usize maxHistoryBytes, in usize cost){
+    return maxHistoryRecords != 0u && cost <= maxHistoryBytes;
 }
 
 

@@ -21,24 +21,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_combo{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline Atomic<u64> s_NextIdentity{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Hosts own the committed selection; the popup list keeps navigation separate until an explicit activation.
 class ComboState final : NoCopy{
     friend class Builder;
@@ -46,9 +28,16 @@ class ComboState final : NoCopy{
     friend class SearchComboBehavior;
 
 
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
     ComboState()noexcept
-        : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity))
+        : m_inputGeneration(NextIdentity())
     {}
     ComboState(ComboState&&) = delete;
 
@@ -157,18 +146,18 @@ public:
 };
 
 inline void ComboState::select(const u64 key)noexcept{
-    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity);
+    m_inputGeneration = NextIdentity();
     m_selectedKey = key;
     ComboBehavior::Close(*this);
 }
 
 inline void ComboState::open()noexcept{
-    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity);
+    m_inputGeneration = NextIdentity();
     ComboBehavior::Open(*this);
 }
 
 inline void ComboState::close()noexcept{
-    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo::s_NextIdentity);
+    m_inputGeneration = NextIdentity();
     ComboBehavior::Close(*this);
 }
 
@@ -180,3 +169,4 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

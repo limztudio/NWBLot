@@ -24,6 +24,19 @@ const f32 s_PointLightIntensity = 2.0f;
 const f32 s_PointLightRange = 16.0f;
 const StringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
 
+Expected<usize> ResolveKeyIndex(in i32 key, in i32 maxKey){
+    if(key < 0 || key > maxKey)
+        return makeUnexpected(Failure());
+
+    return cast<usize>(key);
+}
+
+f32 SanitizeFlyCameraDelta(in f32 deltaSeconds){
+    if(isFinite(deltaSeconds))
+        return max(deltaSeconds, 0.0f);
+    return 0.0f;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

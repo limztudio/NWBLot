@@ -133,10 +133,10 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult2){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"),
-                ConvertString(spec.passLabel),
-                PathToString<tchar>(outputPath.parentPathView()),
-                ConvertString(ensureDirectoriesResult2.error().message())
+                NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}")
+                , ConvertString(spec.passLabel)
+                , PathToString<tchar>(outputPath.parentPathView())
+                , ConvertString(ensureDirectoriesResult2.error().message())
             );
             return MakeUnexpected(Failure{});
         }

@@ -341,8 +341,31 @@ f64 ComputeListExpandedScrollOffset(
     const f64 within = (candidateOffset + clippedTop) - (firstRow * cast<f64>(oldRowHeight));
     const f64 offset = ((firstRow * cast<f64>(newRowHeight)) + within) - clippedTop;
     return max(0.0, offset);
+}
 
+f64 ComputeListRescaledScrollOffset(
+    in f32 contentClipY,
+    in f32 viewportY,
+    in f64 scrollOffset,
+    in f32 oldRowHeight,
+    in f32 newRowHeight
+){
+    const f64 clippedTop = cast<f64>(contentClipY) - cast<f64>(viewportY);
+    const f64 anchor = max(0.0, scrollOffset + clippedTop) / cast<f64>(oldRowHeight);
+    return max(0.0, anchor * cast<f64>(newRowHeight) - clippedTop);
+}
 
+Expected<f64> TryComputeListGestureScrollOffset(in PointerGesture gesture){
+    const f64 travel = cast<f64>(gesture.referenceRectangle.height) - cast<f64>(gesture.targetRectangle.height);
+    if(!isFinite(travel) || travel <= 0.0 || !isFinite(gesture.maximum) || gesture.maximum < 0.0)
+        return makeUnexpected(Failure());
+    const f64 start = cast<f64>(gesture.targetRectangle.y) - cast<f64>(gesture.referenceRectangle.y);
+    const f64 delta = cast<f64>(gesture.position.y) - cast<f64>(gesture.origin.y);
+    const f64 fractionValue = (start + delta) / travel;
+    f64 fraction = 0.0;
+    if(fractionValue > 0.0)
+        fraction = min(1.0, fractionValue);
+    return fraction * gesture.maximum;
 }
 
 

@@ -194,11 +194,11 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
         for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
             if(published.backedUp[index] && (published.removalErrors[index] || published.restorationErrors[index])){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})"),
-                    PathToString<tchar>(*outputs[index]),
-                    PathToString<tchar>(*backups[index]),
-                    published.removalErrors[index].value(),
-                    published.restorationErrors[index].value()
+                    NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
+                    , PathToString<tchar>(*outputs[index])
+                    , PathToString<tchar>(*backups[index])
+                    , published.removalErrors[index].value()
+                    , published.restorationErrors[index].value()
                 );
             }
             if(!published.backedUp[index] && published.removalErrors[index]){

@@ -81,14 +81,6 @@ static_assert(offsetof(BvhBuildPushConstants, visitCounterHeapSlot) == 60u);
 static_assert(IsStandardLayout_V<BvhBuildPushConstants>);
 static_assert(IsTriviallyCopyable_V<BvhBuildPushConstants>);
 
-// Scratch scene-BVH build records. They stay in memory during the build, so they use Float storage.
-struct SceneBvhPrimitiveCalculation{
-    Float4 aabbMin{};
-    Float4 aabbMax{};
-    Float4 centroid{};
-    b8 transparentOccluder = false;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

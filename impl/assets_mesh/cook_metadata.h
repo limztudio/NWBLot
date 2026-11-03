@@ -47,7 +47,21 @@ namespace MeshCookMetadataDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept;
+[[nodiscard]] inline b8 AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept{
+    if(value.isList()){
+        for(const Core::Metascript::Value& child : value.asList()){
+            if(!AccumulateFlattenedValueLeafCount(child, inOutCount))
+                return false;
+        }
+        return true;
+    }
+
+    if(inOutCount == Limit<usize>::s_Max)
+        return false;
+
+    ++inOutCount;
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,8 +79,27 @@ namespace MeshCookMetadata{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<usize> CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept;
-[[nodiscard]] ScratchString MakeIndexedLabel(AStringView baseLabel, usize index, Core::Alloc::ScratchArena& arena);
+[[nodiscard]] inline Expected<usize> CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept{
+    usize count = 0u;
+    if(!MeshCookMetadataDetail::AccumulateFlattenedValueLeafCount(value, count))
+        return MakeUnexpected(Failure{});
+    return count;
+}
+
+[[nodiscard]] inline ScratchString MakeIndexedLabel(const AStringView baseLabel, const usize index, Core::Alloc::ScratchArena& arena){
+    Array<char, s_DecimalTextBufferBytes> indexBuffer{};
+    const AStringView indexText = FormatDecimal(index, indexBuffer);
+    NWB_ASSERT(!indexText.empty());
+
+    ScratchString label{arena};
+    label.reserve(baseLabel.size() + indexText.size() + s_IndexedLabelBracketReserve);
+    label.append(baseLabel.data(), baseLabel.size());
+    label += '[';
+    label.append(indexText.data(), indexText.size());
+    label += ']';
+    return label;
+}
+
 template<typename PathArenaT>
 [[nodiscard]] Expected<NotNull<const Core::Metascript::Value*>> FindRequiredMetadataListField(
     const ::Path<PathArenaT>& nwbFilePath,
@@ -74,7 +107,12 @@ template<typename PathArenaT>
     TStringView metaKind,
     AStringView fieldName
 );
-[[nodiscard]] Expected<f32, MetadataF32ValueFailure::Enum> ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept;
+
+[[nodiscard]] inline Expected<f32, MetadataF32ValueFailure::Enum> ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept{
+    const b8 isNumeric = value.isNumeric();
+    return ValidateMetadataFiniteF32Number(isNumeric, isNumeric ? value.toDouble() : 0.0);
+}
+
 template<typename PathArenaT>
 void LogMetadataFiniteF32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, AStringView label, MetadataF32ValueFailure::Enum failure);
 template<usize ComponentCount, typename PathArenaT>
@@ -95,7 +133,11 @@ b8 FillMetadataFloatListField(
     Core::Alloc::ScratchArena& scratchArena,
     VectorT& outValues
 );
-[[nodiscard]] Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept;
+
+[[nodiscard]] inline Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept{
+    const b8 isNumeric = value.isNumeric();
+    return ValidateMetadataU32Number(isNumeric, isNumeric ? value.toDouble() : 0.0);
+}
 template<typename PathArenaT>
 void LogMetadataU32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, AStringView label, MetadataU32ValueFailure::Enum failure);
 template<typename IndexVectorT, typename PathArenaT>

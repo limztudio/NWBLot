@@ -106,23 +106,23 @@ public:
 
 public:
     [[nodiscard]] b8 hasCompleteSplitMeshPayload()const noexcept{
-        return
-            !restPositions.empty()
-            && !restNormals.empty()
-            && restTangents.size() == restNormals.size()
-            && !uv0.empty()
-            && !colors.empty()
-            && !skin.empty()
-            && !meshlets.empty()
-            && meshletBounds.size() == meshlets.size()
-            && !meshletPositionRefDeltas.empty()
-            && !meshletAttributeRefDeltas.empty()
-            && !meshletLocalVertexRefs.empty()
-            && !meshletPrimitiveIndices.empty()
-            && meshletPositionRefCount > 0u
-            && meshletAttributeRefCount > 0u
-            && attributeSkins.size() == meshletAttributeRefCount
-        ;
+        return HasCompleteSplitMeshSkinningPayload(
+            restPositions.size(),
+            restNormals.size(),
+            restTangents.size(),
+            uv0.size(),
+            colors.size(),
+            skin.size(),
+            meshlets.size(),
+            meshletBounds.size(),
+            meshletPositionRefDeltas.size(),
+            meshletAttributeRefDeltas.size(),
+            meshletLocalVertexRefs.size(),
+            meshletPrimitiveIndices.size(),
+            meshletPositionRefCount,
+            meshletAttributeRefCount,
+            attributeSkins.size()
+        );
     }
 
     [[nodiscard]] RuntimeMeshBuffers runtimeMeshBuffers()const noexcept{

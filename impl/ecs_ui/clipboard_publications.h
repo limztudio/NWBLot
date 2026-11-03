@@ -23,32 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_clipboard_publications{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline UiClipboardPublicationStatus::Enum Status(const Core::ClipboardStatus::Enum status)noexcept{
-    switch(status){
-    case Core::ClipboardStatus::Success: return UiClipboardPublicationStatus::Published;
-    case Core::ClipboardStatus::Unsupported: return UiClipboardPublicationStatus::Unsupported;
-    case Core::ClipboardStatus::InvalidText: return UiClipboardPublicationStatus::InvalidText;
-    case Core::ClipboardStatus::TooLarge: return UiClipboardPublicationStatus::TooLarge;
-    default: return UiClipboardPublicationStatus::NativeFailure;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Copies are immutable native publications.
 // Their owned OS requests survive later edits, focus and widget removal.
 // Drain on the OS thread; destruction cancels remaining requests.
@@ -59,6 +33,18 @@ private:
         Core::ClipboardRequestToken token;
         Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard;
     };
+
+
+private:
+    [[nodiscard]] static UiClipboardPublicationStatus::Enum Status(const Core::ClipboardStatus::Enum status)noexcept{
+        switch(status){
+        case Core::ClipboardStatus::Success: return UiClipboardPublicationStatus::Published;
+        case Core::ClipboardStatus::Unsupported: return UiClipboardPublicationStatus::Unsupported;
+        case Core::ClipboardStatus::InvalidText: return UiClipboardPublicationStatus::InvalidText;
+        case Core::ClipboardStatus::TooLarge: return UiClipboardPublicationStatus::TooLarge;
+        default: return UiClipboardPublicationStatus::NativeFailure;
+        }
+    }
 
 
 public:
@@ -84,7 +70,7 @@ public:
             return UiClipboardPublicationStatus::Unsupported;
         const auto validation = Core::ValidateClipboardUtf8Text(text);
         if(validation != Core::ClipboardStatus::Success)
-            return __hidden_ui_clipboard_publications::Status(validation);
+            return Status(validation);
         if(m_requests.size() == s_UiClipboardMaxPublications)
             return UiClipboardPublicationStatus::QueueFull;
         const auto result = m_service.requestWriteText(channel, text);
@@ -115,7 +101,7 @@ public:
             }
             UiClipboardPublicationStatus::Enum status = UiClipboardPublicationStatus::NativeFailure;
             if(poll == Core::ClipboardPollResult::Completed && m_completion.token == publication.token && m_completion.operation == Core::ClipboardOperation::WriteText && m_completion.channel == publication.channel)
-                status = __hidden_ui_clipboard_publications::Status(m_completion.status);
+                status = Status(m_completion.status);
             if(status == UiClipboardPublicationStatus::Published)
                 ++result.published;
             else{
@@ -160,3 +146,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

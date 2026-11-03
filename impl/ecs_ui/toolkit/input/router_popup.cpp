@@ -84,13 +84,7 @@ b8 InputRouter::stagePopups(const Span<const PopupScope> scopes){
 }
 
 b8 InputRouter::validPopupTarget(const HitTarget& target)const noexcept{
-    if(!target.popup.widget.valid())
-        return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
-    for(const auto& record : m_stagedPopups){
-        if(record.scope.token == target.popup)
-            return target.layer == record.scope.layer;
-    }
-    return false;
+    return ValidStagedPopupTarget(target, m_stagedPopups);
 }
 
 void InputRouter::installPopups(const u64 expectedFocusLossGeneration){

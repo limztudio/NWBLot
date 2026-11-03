@@ -220,6 +220,21 @@ b8 HasVisibleRectIntersectionVec(in f32x4 rectangle, in f32x4 clip){
     return visibleBounds.z > visibleBounds.x && visibleBounds.w > visibleBounds.y;
 }
 
+b8 HasVisibleUiRectIntersection(in Rect rectangle, in Rect clip){
+    return HasVisibleRectIntersectionVec(
+        f32x4(rectangle.x, rectangle.y, rectangle.width, rectangle.height),
+        f32x4(clip.x, clip.y, clip.width, clip.height)
+    );
+}
+
+b8 UiRectIntersectionContainsPoint(in Rect rectangle, in Rect clip, in Point pointer){
+    const f32x4 visibleBounds = IntersectRectBoundsVec(
+        f32x4(rectangle.x, rectangle.y, rectangle.width, rectangle.height),
+        f32x4(clip.x, clip.y, clip.width, clip.height)
+    );
+    return pointer.x >= visibleBounds.x && pointer.y >= visibleBounds.y && pointer.x < visibleBounds.z && pointer.y < visibleBounds.w;
+}
+
 f32x4 IntersectRectVec(in f32x4 lhs, in f32x4 rhs){
     const f32x4 bounds = IntersectRectBoundsVec(lhs, rhs);
     const f32 extentX = bounds.z - bounds.x;

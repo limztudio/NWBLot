@@ -27,7 +27,6 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MeshSkinInfluence = Impl::SkinInfluence4;
 static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * Impl::s_SkinInfluenceJointCount + sizeof(Float4U));
 static_assert(alignof(MeshSkinInfluence) <= alignof(f32));
 static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);

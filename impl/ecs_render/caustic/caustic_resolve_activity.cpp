@@ -140,13 +140,14 @@ void DispatchCausticResolvePass(
     NWB_ASSERT(output.texture);
     NWB_ASSERT(input.texture != output.texture);
     // Sequence indices match the graph: prepare, five wavelets, then upsample.
-    const u32 activityPassIndex = stage == CausticResolveStage::Wavelet ? static_cast<u32>(CountTrailingZeros(stepWidth)) + 1u : (stage == CausticResolveStage::PrepareDownsample ? 0u : NWB_CAUSTIC_RESOLVE_PASS_COUNT + 1u);
-    const b8 usesActivity = activity.valid();
-    const i32 activityInput = usesActivity && activityPassIndex > 0u ? static_cast<i32>((activityPassIndex - 1u) % 2u) : -1;
-    const i32 activityOutput = usesActivity && activityPassIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT ? static_cast<i32>(activityPassIndex % 2u) : -1;
-
-    const u32 activityInputSlot = activityInput >= 0 ? activity.descriptors[activityInput].slot() : s_RtInvalidSlot;
-    const u32 activityOutputSlot = activityOutput >= 0 ? activity.descriptors[activityOutput].slot() : s_RtInvalidSlot;
+    const CausticResolveActivitySlots activitySlots = ResolveCausticActivitySlots(
+        stage,
+        static_cast<u32>(CountTrailingZeros(stepWidth)),
+        NWB_CAUSTIC_RESOLVE_PASS_COUNT,
+        activity.valid(),
+        activity.descriptors[0u].slot(),
+        activity.descriptors[1u].slot()
+    );
     const CausticResolvePushConstants resolvePush = ResolveCausticResolvePushConstants(
         targets.width,
         targets.height,
@@ -159,8 +160,8 @@ void DispatchCausticResolvePass(
         targets.bindless.causticResolveGeometry.slot(),
         targets.bindless.causticAccumulator.slot(),
         output.storageSlot,
-        activityInputSlot,
-        activityOutputSlot
+        activitySlots.inputSlot,
+        activitySlots.outputSlot
     );
 
     Core::ComputeState computeState;

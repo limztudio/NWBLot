@@ -44,10 +44,10 @@ b8 CookDependencyRegistry::registerType(const Name& assetType, const CookDepende
         const auto [it, inserted] = m_categories.emplace(assetType, categoryAssetType);
         if(!inserted && it.value() != categoryAssetType){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("AssetCook: conflicting category '{}' for cook dependency type '{}' (already '{}')"),
-                ConvertString(categoryAssetType.resolvedText()),
-                ConvertString(assetType.resolvedText()),
-                ConvertString(it.value().resolvedText())
+                NWB_TEXT("AssetCook: conflicting category '{}' for cook dependency type '{}' (already '{}')")
+                , ConvertString(categoryAssetType.resolvedText())
+                , ConvertString(assetType.resolvedText())
+                , ConvertString(it.value().resolvedText())
             );
             return false;
         }
@@ -62,9 +62,9 @@ b8 CookDependencyRegistry::registerDefaultEntryAsset(const Name& virtualPath, co
     }
     if(m_defaultEntryAsset.virtualPath && (m_defaultEntryAsset.virtualPath != virtualPath || m_defaultEntryAsset.assetType != assetType)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("AssetCook: duplicate default cook entry asset registration '{}' (already registered '{}')"),
-            ConvertString(virtualPathText),
-            ConvertString(m_defaultEntryAsset.virtualPathText)
+            NWB_TEXT("AssetCook: duplicate default cook entry asset registration '{}' (already registered '{}')")
+            , ConvertString(virtualPathText)
+            , ConvertString(m_defaultEntryAsset.virtualPathText)
         );
         return false;
     }

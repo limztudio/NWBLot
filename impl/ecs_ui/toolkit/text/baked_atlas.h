@@ -22,26 +22,15 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_text_baked_atlas{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline Atomic<u64> s_NextIdentity{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // This version copies only rendering metadata and image bytes. FontFace keeps it with its exact shaping source.
 class BakedFontAtlas : NoCopy{
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
     BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration)
         : m_glyphs(arena)
@@ -52,7 +41,7 @@ public:
         m_bakePpem = payload.bakePpem;
         m_glyphs.assign(payload.glyphs.begin(), payload.glyphs.end());
         m_pages.reserve(payload.groups.size());
-        const u64 identity = NextNonWrappingIdentity(__hidden_ui_text_baked_atlas::s_NextIdentity);
+        const u64 identity = NextIdentity();
         for(u32 group = 0u; group < payload.groups.size(); ++group){
             auto page = CreateSdfAtlasPage(arena, atlas, fontGeneration, identity, group);
             if(!page)
@@ -105,3 +94,4 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

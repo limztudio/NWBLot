@@ -21,7 +21,7 @@ endif()
 unset(_nwb_fbx_to_nwb_integration_timeout_seconds)
 
 nwb_declare_gtest_executable(nwb_fbx_skin_tests)
-target_sources(nwb_fbx_skin_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/skin_tests.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/skin.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/asset_writer_skeleton.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/source_mesh_streams.cpp" "${PROJECT_SOURCE_DIR}/impl/assets_mesh/cook_source_streams.cpp")
+target_sources(nwb_fbx_skin_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/skin_tests.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/skin.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/asset_writer_skeleton.cpp" "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/source_mesh_streams.cpp")
 nwb_target_adhd_sources(nwb_fbx_skin_tests NAMESPACE "NWB::FbxToNwb" SOURCES "${PROJECT_SOURCE_DIR}/utilities/fbx_to_nwb/types.adhd")
 target_link_libraries(nwb_fbx_skin_tests PRIVATE nwb_assets_mesh nwb_mesh nwb_common nwb_alloc nwb_cpu_task nwb::ufbx)
 

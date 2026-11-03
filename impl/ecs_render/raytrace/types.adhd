@@ -190,6 +190,13 @@ class SceneBvhNodeCalculation{
     public b8 containsTransparentOccluder = false;
 }
 
+class SceneBvhPrimitiveCalculation{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 transparentOccluder = false;
+}
+
 // Shader-mirrored BVH child encoding.
 flag<u32> BvhNodeIndex{
     LeafFlag = 0x80000000u,

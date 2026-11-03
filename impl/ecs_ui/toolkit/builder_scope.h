@@ -247,7 +247,29 @@ private:
 
 
 public:
-    explicit BuilderScopeFrame(Core::Alloc::GlobalArena& arena);
+    explicit BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
+        : m_layout(arena)
+        , m_items(arena)
+        , m_textAreas(arena)
+        , m_integerEdits(arena)
+        , m_floatEdits(arena)
+        , m_lists(arena)
+        , m_radioGroups(arena)
+        , m_sliders(arena)
+        , m_progress(arena)
+        , m_images(arena)
+        , m_combos(arena)
+        , m_comboEditors(arena)
+        , m_tooltips(arena)
+        , m_contextMenus(arena)
+        , m_stack(arena)
+        , m_window(arena)
+    {
+        m_items.reserve(s_LayoutMaxNodes);
+        m_radioGroups.reserve(s_WidgetFrameReserve);
+        m_sliders.reserve(s_WidgetFrameReserve);
+        m_stack.reserve(s_ContextMaxScopeDepth);
+    }
     BuilderScopeFrame(BuilderScopeFrame&&) = delete;
 
 
@@ -256,7 +278,30 @@ public:
 
 
 private:
-    void reset()noexcept;
+    void reset()noexcept{
+        m_panelActive = false;
+        m_windowActive = false;
+        m_window.state = nullptr;
+        m_parent = nullptr;
+        m_popupState = nullptr;
+        m_popupToken = {};
+        m_popupVisible = false;
+        m_items.clear();
+        m_textAreas.clear();
+        m_integerEdits.clear();
+        m_floatEdits.clear();
+        m_lists.clear();
+        m_radioGroups.clear();
+        m_sliders.clear();
+        m_progress.clear();
+        m_images.clear();
+        m_combos.clear();
+        m_comboEditors.clear();
+        m_tooltips.clear();
+        m_contextMenus.clear();
+        m_stack.clear();
+        m_layout.reset();
+    }
 
 
 private:

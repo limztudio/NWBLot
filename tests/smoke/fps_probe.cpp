@@ -53,14 +53,14 @@ void FpsProbe::recordFrame(const f32 delta){
     // Lanes are average, min and max frame time.
     const SIMDVectorDouble frameMs = VectorDoubleScale(VectorDoubleSet(averageFrameSeconds, m_minFrameSeconds, m_maxFrameSeconds, 0.0), s_MillisecondsPerSecond);
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}"),
-        m_label,
-        averageFps,
-        VectorDoubleGetX(frameMs),
-        VectorDoubleGetY(frameMs),
-        VectorDoubleGetZ(frameMs),
-        m_intervalFrames,
-        m_intervalSeconds
+        NWB_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}")
+        , m_label
+        , averageFps
+        , VectorDoubleGetX(frameMs)
+        , VectorDoubleGetY(frameMs)
+        , VectorDoubleGetZ(frameMs)
+        , m_intervalFrames
+        , m_intervalSeconds
     );
 
     m_intervalSeconds = 0.0;

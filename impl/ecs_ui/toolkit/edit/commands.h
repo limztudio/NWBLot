@@ -17,13 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_edit_commands{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline b8 EraseWord(EditModel& model, const b8 forward){
+[[nodiscard]] inline b8 EraseEditWord(EditModel& model, const b8 forward){
     if(model.hasSelection())
         return model.replaceSelection({});
     const usize caret = model.caret();
@@ -37,16 +31,6 @@ namespace __hidden_ui_edit_commands{
     ComputeEditWordEraseDistances(forward, caret, boundary, beforeBytes, afterBytes);
     return model.eraseSurrounding(beforeBytes, afterBytes);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Active preedit owns editing keys and Enter.
 // Escape first cancels preedit without cancelling the widget.
@@ -67,8 +51,8 @@ namespace __hidden_ui_edit_commands{
     }
     if(readOnly && IsMutatingEditCommand(request.command))
         return result;
-    if(TryMapEditCommandToPassiveResult(request.command, result))
-        return result;
+    if(const auto passiveResult = TryMapEditCommandToPassiveResult(request.command))
+        return *passiveResult;
     const u64 revision = model.revision();
     const usize anchor = model.anchor();
     const usize caret = model.caret();
@@ -81,8 +65,8 @@ namespace __hidden_ui_edit_commands{
         case EditCommand::Newline: applied = model.replaceSelection(s_EditNewlineText); break;
         case EditCommand::Backspace: applied = model.backspace(); break;
         case EditCommand::Delete: applied = model.eraseForward(); break;
-        case EditCommand::WordBackspace: applied = __hidden_ui_edit_commands::EraseWord(model, false); break;
-        case EditCommand::WordDelete: applied = __hidden_ui_edit_commands::EraseWord(model, true); break;
+        case EditCommand::WordBackspace: applied = EraseEditWord(model, false); break;
+        case EditCommand::WordDelete: applied = EraseEditWord(model, true); break;
         case EditCommand::SelectAll: applied = model.selectAll(); break;
         case EditCommand::Undo: applied = model.undo(); break;
         case EditCommand::Redo: applied = model.redo(); break;
@@ -104,3 +88,4 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

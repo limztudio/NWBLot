@@ -72,7 +72,7 @@ class InputRouter final : NoCopy{
 private:
     [[nodiscard]] static const HitTarget* FindTargetInTable(Span<const HitTarget> targets, Span<const TargetLookup> lookup, WidgetId id, u64 declarationGeneration = 0u)noexcept;
     [[nodiscard]] static b8 HasVisibleBounds(const HitTarget& target)noexcept{
-        return HasVisibleRectIntersection(LoadRect(target.rectangle), LoadRect(target.clip));
+        return HasVisibleUiRectIntersection(target.rectangle, target.clip);
     }
 
 

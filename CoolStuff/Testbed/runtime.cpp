@@ -45,10 +45,7 @@ static constexpr TStringView s_ShutdownText = NWB_TEXT("ProjectTestbed: shutdown
 
 
 [[nodiscard]] static Expected<usize> ResolveKeyIndex(const i32 key)noexcept{
-    if(key < 0 || key > NWB::Core::Key::Menu)
-        return MakeUnexpected(Failure{});
-
-    return static_cast<usize>(key);
+    return ::Testbed::ResolveKeyIndex(key, NWB::Core::Key::Menu);
 }
 
 [[nodiscard]] static SIMDVectorSingle ResolveFlyCameraAnglesFromRotation(const SIMDVectorSingle rotation)noexcept{
@@ -76,7 +73,7 @@ static void ResolveFlyCameraInput(
     const SIMDVectorSingle angles = VectorSelect(currentAngles, VectorZero(), VectorOrInt(VectorIsNaN(currentAngles), VectorIsInfinite(currentAngles)));
     const SIMDVectorSingle sanitizedMouseDelta = VectorSelect(mouseDelta, VectorZero(), VectorOrInt(VectorIsNaN(mouseDelta), VectorIsInfinite(mouseDelta)));
     const SIMDVectorSingle sanitizedAxes = VectorClamp(VectorSelect(moveAxes, VectorZero(), VectorOrInt(VectorIsNaN(moveAxes), VectorIsInfinite(moveAxes))), s_SIMDNegativeOne, s_SIMDOne);
-    const f32 safeDelta = IsFinite(deltaSeconds) ? Max(deltaSeconds, 0.0f) : 0.0f;
+    const f32 safeDelta = SanitizeFlyCameraDelta(deltaSeconds);
 
     const SIMDVectorSingle updatedAngles = VectorMultiplyAddExpression(sanitizedMouseDelta, VectorReplicate(s_FlyCameraMouseSensitivityRadiansPerPixel), angles);
     const SIMDVectorSingle yawCandidate = VectorSplatX(updatedAngles);
@@ -196,7 +193,7 @@ void Project::onShutdown(){
 }
 
 b8 Project::onUpdate(f32 delta){
-    const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+    const f32 safeDelta = SanitizeFlyCameraDelta(delta);
 
     updateMainCamera(safeDelta);
     const auto updated = m_world->tick(safeDelta);

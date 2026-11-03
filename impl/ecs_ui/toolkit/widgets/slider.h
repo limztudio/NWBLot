@@ -22,34 +22,23 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_slider{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline Atomic<u64> s_NextIdentity{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Public value intents retire copied input; diagnostics are published only after the enclosing Builder scope validates.
 class SliderState final : NoCopy{
     friend class Builder;
     friend class SliderBehavior;
 
 
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
     SliderState()noexcept
-        : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity))
-        , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity))
+        : m_instanceGeneration(NextIdentity())
+        , m_inputGeneration(NextIdentity())
     {}
     SliderState(SliderState&&) = delete;
 
@@ -84,7 +73,7 @@ public:
         if(!IsFinite(value))
             return false;
         advanceRevision();
-        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity);
+        m_inputGeneration = NextIdentity();
         m_value = value;
         m_press = {};
         m_pressMoved = false;
@@ -93,7 +82,7 @@ public:
     void reset()noexcept{
         advanceRevision();
         advanceAdmission();
-        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity);
+        m_inputGeneration = NextIdentity();
         m_value = 0.0;
         m_minimum = 0.0;
         m_maximum = 1.0;

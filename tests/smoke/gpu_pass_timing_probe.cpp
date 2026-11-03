@@ -127,12 +127,12 @@ void GpuPassTimingProbe::report(const Core::Perf::TimingView& gpuTiming){
         const f64 maxMs = accum.maxSeconds * s_MillisecondsPerSecond;
         const f64 totalMs = accum.sumSeconds * s_MillisecondsPerSecond;
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}"),
-            ConvertString(scopeName.resolvedText()),
-            avgMs,
-            minMs,
-            maxMs,
-            accum.frames
+            NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
+            , ConvertString(scopeName.resolvedText())
+            , avgMs
+            , minMs
+            , maxMs
+            , accum.frames
         );
         if(timingFile.is_open()){
             timingFile

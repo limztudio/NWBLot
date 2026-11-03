@@ -64,7 +64,7 @@ b8 ParseSourceVertexRefsInto(
 );
 template<typename PathArenaT>
 b8 ValidateSourceStreamIndex(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, AStringView streamName, u32 index, usize streamCount);
-b8 ValidateSourceStreamIndexWithContext(AStringView context, AStringView streamName, u32 index, usize streamCount);
+using NWB::Impl::ValidateSourceStreamIndexWithContext;
 template<typename PathArenaT>
 b8 ValidateSourceIndexStream(const ::Path<PathArenaT>& nwbFilePath, TStringView metaKind, Span<const u32> indices, usize vertexRefCount);
 template<typename VertexRefT, typename PathArenaT>
@@ -78,7 +78,18 @@ b8 ValidateSourceVertexRefStreams(
     usize uv0Count,
     usize colorCount
 );
-b8 ValidateSourceVertexRefs(const Path& nwbFilePath, TStringView metaKind, const SourceMeshStreams& streams);
+inline b8 ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams){
+    return ValidateSourceVertexRefStreams(
+        nwbFilePath,
+        metaKind,
+        Span<const MeshVertexRef>(streams.vertexRefs.data(), streams.vertexRefs.size()),
+        streams.positions.size(),
+        streams.normals.size(),
+        streams.tangents.size(),
+        streams.uv0.size(),
+        streams.colors.size()
+    );
+}
 template<typename SkinInfluenceVectorT, typename PathArenaT>
 b8 ParseSourceSkinInfluencesInto(
     const ::Path<PathArenaT>& nwbFilePath,
@@ -89,8 +100,60 @@ b8 ParseSourceSkinInfluencesInto(
     SkinInfluenceVectorT& outInfluences
 );
 #if defined(NWB_COOK)
-void CopySourceStreams(const SourceMeshStreams& streams, MeshCookEntry& outEntry);
-Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(const Path& nwbFilePath, const Core::Metascript::Value& asset, TStringView metaKind, Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena);
+inline void CopySourceStreams(const SourceMeshStreams& streams, MeshCookEntry& outEntry){
+    outEntry.positions.clear();
+    outEntry.normals.clear();
+    outEntry.tangents.clear();
+    outEntry.uv0.clear();
+    outEntry.colors.clear();
+    outEntry.vertexRefs.clear();
+
+    outEntry.positions.reserve(streams.positions.size());
+    outEntry.normals.reserve(streams.normals.size());
+    outEntry.tangents.reserve(streams.tangents.size());
+    outEntry.uv0.reserve(streams.uv0.size());
+    outEntry.colors.reserve(streams.colors.size());
+    outEntry.vertexRefs.reserve(streams.vertexRefs.size());
+
+    outEntry.positions.insert(outEntry.positions.end(), streams.positions.begin(), streams.positions.end());
+    for(const Float3U& normal : streams.normals)
+        outEntry.normals.push_back(MakeHalf4U(normal.x, normal.y, normal.z, 0.0f));
+    for(const Float4U& tangent : streams.tangents)
+        outEntry.tangents.push_back(MakeHalf4U(tangent.x, tangent.y, tangent.z, tangent.w));
+    outEntry.uv0.insert(outEntry.uv0.end(), streams.uv0.begin(), streams.uv0.end());
+    for(const Float4U& color : streams.colors)
+        outEntry.colors.push_back(MakeHalf4U(color.x, color.y, color.z, color.w));
+    outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end());
+}
+
+inline Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    const TStringView metaKind,
+    Core::Assets::AssetArena& assetArena,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    SourceMeshStreams streams(assetArena, scratchArena);
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float3U, 3u>(nwbFilePath, asset, metaKind, s_MeshPositionsFieldNameView, scratchArena, streams.positions))
+        return MakeUnexpected(Failure{});
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float3U, 3u>(nwbFilePath, asset, metaKind, s_MeshNormalsFieldNameView, scratchArena, streams.normals))
+        return MakeUnexpected(Failure{});
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float4U, 4u>(nwbFilePath, asset, metaKind, s_MeshTangentsFieldNameView, scratchArena, streams.tangents))
+        return MakeUnexpected(Failure{});
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float2U, 2u>(nwbFilePath, asset, metaKind, s_MeshUv0FieldNameView, scratchArena, streams.uv0))
+        return MakeUnexpected(Failure{});
+    if(!MeshCookMetadata::FillMetadataFloatListField<Float4U, 4u>(nwbFilePath, asset, metaKind, s_MeshColorsFieldNameView, scratchArena, streams.colors))
+        return MakeUnexpected(Failure{});
+    if(!ParseSourceVertexRefsInto(nwbFilePath, asset, metaKind, scratchArena, streams.vertexRefs))
+        return MakeUnexpected(Failure{});
+    if(!MeshCookMetadata::ParseMetadataIndexFieldInto(nwbFilePath, asset, metaKind, scratchArena, streams.indices))
+        return MakeUnexpected(Failure{});
+    if(!ValidateSourceIndexStream(nwbFilePath, metaKind, streams.indices, streams.vertexRefs.size()))
+        return MakeUnexpected(Failure{});
+    if(!ValidateSourceVertexRefs(nwbFilePath, metaKind, streams))
+        return MakeUnexpected(Failure{});
+    return streams;
+}
 #endif
 
 

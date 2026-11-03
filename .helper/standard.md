@@ -119,11 +119,17 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `    value.valid() && value.visible`
   - `;`
 - Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`. The same applies to short nested struct literals such as `.queue = { .index = ..., .deviceGeneration = ... }`; keep them on one line instead of expanding each field across lines.
-- Prefer single-line logger macro calls when they contain a single message and a small number of short formatting arguments.
-- For longer logger macro calls with formatting arguments, keep the message argument on the opener line and put subsequent formatting arguments on continuation lines with leading commas:
+- Prefer single-line logger macro and `.adhd` diagnostic calls (`error`, `warning`, `info`, `assert`) when they contain a single message and a small number of short formatting arguments.
+- For multiline logger macro or `.adhd` diagnostic calls with formatting arguments, never use trailing commas after the message or between formatting arguments; put every subsequent formatting argument on its own continuation line with a leading comma (whether the message is on the opener line or on the first indented line):
   - `NWB_LOGGER_WARNING(NWB_TEXT("message {}")`
   - `    , arg0`
   - `    , arg1`
+  - `);`
+  - `error(`
+  - `    "MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'"`
+  - `    , parameterNameText`
+  - `    , materialInterface.resolvedText()`
+  - `    , component.materialInterface.resolvedText()`
   - `);`
 - Consider splitting function arguments when the complete line is substantially longer than 260 characters or a logical boundary improves readability; argument count alone does not require a split.
 - Prefer single-line function signatures/definitions when the parameter list is still readable. Use the 260-character soft code-line width; do not use the 128-character separator as a signature split point.

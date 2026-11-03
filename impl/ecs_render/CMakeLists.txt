@@ -1,6 +1,5 @@
 nwb_declare_static_library(nwb_ecs_render_components)
 target_sources(nwb_ecs_render_components PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.h"
 )
 nwb_target_adhd_sources(nwb_ecs_render_components
@@ -38,7 +37,6 @@ target_sources(nwb_ecs_render PRIVATE
 )
 get_target_property(_nwb_ecs_render_sources nwb_ecs_render SOURCES)
 list(REMOVE_ITEM _nwb_ecs_render_sources
-    "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.h"
 )
 set_property(TARGET nwb_ecs_render PROPERTY SOURCES ${_nwb_ecs_render_sources})

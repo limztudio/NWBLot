@@ -335,6 +335,64 @@ MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshl
     return metrics;
 }
 
+class MeshletCookSummary{
+    public f64 primitiveCountAverage = 0.0;
+    public f64 vertexCountAverage = 0.0;
+    public f64 positionCountAverage = 0.0;
+    public f64 attributeCountAverage = 0.0;
+    public f64 radiusAverage = 0.0;
+    public f64 coneDisabledPercentage = 0.0;
+    public f64 coneCutoffAverage = 0.0;
+    public f32 worstConeCutoff = 0.0f;
+}
+
+MeshletCookSummary SummarizeMeshletCookMetrics(in MeshletCookMetrics metrics){
+    MeshletCookSummary summary;
+    if(metrics.meshletCount == 0u)
+        return summary;
+
+    const f64 invMeshletCount = 1.0 / cast<f64>(metrics.meshletCount);
+    summary.primitiveCountAverage = cast<f64>(metrics.primitiveCountSum) * invMeshletCount;
+    summary.vertexCountAverage = cast<f64>(metrics.vertexCountSum) * invMeshletCount;
+    summary.positionCountAverage = cast<f64>(metrics.positionCountSum) * invMeshletCount;
+    summary.attributeCountAverage = cast<f64>(metrics.attributeCountSum) * invMeshletCount;
+    summary.radiusAverage = metrics.radiusSum * invMeshletCount;
+    summary.coneDisabledPercentage = cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
+    if(metrics.coneEnabledCount != 0u){
+        summary.coneCutoffAverage = metrics.coneCutoffSum / cast<f64>(metrics.coneEnabledCount);
+        summary.worstConeCutoff = metrics.worstConeCutoff;
+    }
+    return summary;
+}
+
+Expected<f32, MetadataF32ValueFailure> ValidateMetadataFiniteF32Number(in b8 isNumeric, in f64 numericValue){
+    if(!isNumeric)
+        return makeUnexpected(MetadataF32ValueFailure::NotNumeric);
+    if(!isFinite(numericValue))
+        return makeUnexpected(MetadataF32ValueFailure::NonFinite);
+    if(numericValue < cast<f64>(f32.min) || numericValue > cast<f64>(f32.max))
+        return makeUnexpected(MetadataF32ValueFailure::OutOfRange);
+    return cast<f32>(numericValue);
+}
+
+Expected<u32, MetadataU32ValueFailure> ValidateMetadataU32Number(in b8 isNumeric, in f64 numericValue){
+    if(!isNumeric)
+        return makeUnexpected(MetadataU32ValueFailure::NotNumeric);
+    if(!isFinite(numericValue) || numericValue < 0.0 || numericValue != floor(numericValue))
+        return makeUnexpected(MetadataU32ValueFailure::NonIntegerOrNegative);
+    if(numericValue > cast<f64>(u32.max))
+        return makeUnexpected(MetadataU32ValueFailure::OutOfRange);
+    return cast<u32>(numericValue);
+}
+
+b8 ValidateSourceStreamIndexWithContext(in StringView context, in StringView streamName, in u32 index, in usize streamCount){
+    if(cast<usize>(index) < streamCount)
+        return true;
+
+    error("{}: vertex_ref {} index is out of range", context, streamName);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -11,6 +11,8 @@
 native{
 namespace Testbed{
 using NWB::Impl::Ui::Color;
+using NWB::Impl::Ui::DisplayMetrics;
+using NWB::Impl::Ui::Rect;
 }
 }
 
@@ -224,6 +226,15 @@ const Name s_ProgressFill = "progress.fill";
 const Color s_LabelTextColor = Color(0.92f, 0.96f, 1.0f, 1.0f);
 const Color s_DisabledLabelTextColor = Color(0.38f, 0.42f, 0.48f, 1.0f);
 const StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
+
+Rect ResolveWidgetGalleryLayoutBounds(in DisplayMetrics display, in f32 preferredTop){
+    const f32 height = (s_SelectorHeight + s_ContentGap) + s_ContentHeight;
+    const f32 availableX = (display.logicalWidth - s_SelectorWidth) - s_GalleryMargin;
+    const f32 availableY = (display.logicalHeight - height) - s_GalleryMargin;
+    const f32 x = max(s_GalleryMargin, availableX);
+    const f32 y = max(s_GalleryMargin, min(preferredTop, availableY));
+    return Rect(x, y, s_SelectorWidth, height);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -18,12 +18,7 @@ TESTBED_BEGIN
 
 
 NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display, const f32 preferredTop)noexcept{
-    const f32 height = (s_SelectorHeight + s_ContentGap) + s_ContentHeight;
-    const f32 availableX = (display.logicalWidth - s_SelectorWidth) - s_GalleryMargin;
-    const f32 availableY = (display.logicalHeight - height) - s_GalleryMargin;
-    const f32 x = Max(s_GalleryMargin, availableX);
-    const f32 y = Max(s_GalleryMargin, Min(preferredTop, availableY));
-    return { x, y, s_SelectorWidth, height };
+    return ResolveWidgetGalleryLayoutBounds(display, preferredTop);
 }
 
 

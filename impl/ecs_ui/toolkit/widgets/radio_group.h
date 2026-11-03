@@ -21,34 +21,23 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_radio_group{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline Atomic<u64> s_NextIdentity{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Application state is borrowed through its enclosing Builder scope; accepted public intents retire copied input.
 class RadioGroupState final : NoCopy{
     friend class Builder;
     friend class RadioGroupBehavior;
 
 
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
     RadioGroupState()noexcept
-        : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity))
-        , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity))
+        : m_instanceGeneration(NextIdentity())
+        , m_inputGeneration(NextIdentity())
     {}
     RadioGroupState(RadioGroupState&&) = delete;
 
@@ -75,13 +64,13 @@ public:
     [[nodiscard]] b8 matches(const RadioGroupSnapshot& value)const noexcept{ return snapshot() == value; }
     void select(const u64 key)noexcept{
         advanceRevision();
-        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity);
+        m_inputGeneration = NextIdentity();
         m_selected = key;
         m_cursor = key;
     }
     void reset()noexcept{
         advanceRevision();
-        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity);
+        m_inputGeneration = NextIdentity();
         m_selected = 0u;
         m_cursor = 0u;
         m_sourceGeneration = 0u;

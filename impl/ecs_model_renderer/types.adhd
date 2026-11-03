@@ -1,0 +1,39 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<RendererComponent> TryResolveModelObjectRendererComponent(in AssetRef<Material> objectMaterial, in b8 hasOwnerRenderer, in RendererComponent ownerRenderer){
+    AssetRef<Material> resolvedMaterial = objectMaterial;
+    b8 visible = true;
+    if(hasOwnerRenderer){
+        visible = ownerRenderer.visible;
+        if(!resolvedMaterial.valid())
+            resolvedMaterial = ownerRenderer.material;
+    }
+    if(!resolvedMaterial.valid())
+        return makeUnexpected(Failure());
+
+    RendererComponent renderer;
+    renderer.material = resolvedMaterial;
+    renderer.visible = visible;
+    return renderer;
+}
+
+void CopyModelObjectMaterialInstance(in MaterialInstanceComponent ownerMaterialInstance, mut MaterialInstanceComponent outMaterialInstance){
+    outMaterialInstance.materialInterface = ownerMaterialInstance.materialInterface;
+    outMaterialInstance.revision = ownerMaterialInstance.revision;
+    outMaterialInstance.overrides.clear();
+    outMaterialInstance.overrides.reserve(ownerMaterialInstance.overrides.size());
+    for(in MaterialInstanceParameter item : ownerMaterialInstance.overrides)
+        outMaterialInstance.overrides.push_back(item);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -333,11 +333,6 @@ void Builder::loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& paddin
     }
 }
 
-SIMDVectorSingle Builder::loadVisibleClip(const SIMDVectorSingle clip)const noexcept{
-    const DisplayMetrics& display = m_paint.displayMetrics();
-    return IntersectRectValue(VectorSet(0.0f, 0.0f, display.logicalWidth, display.logicalHeight), clip);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

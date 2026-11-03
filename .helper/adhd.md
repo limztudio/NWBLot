@@ -171,6 +171,15 @@ f32 ComputePaddedWidth(in ElementBox box){
 - **Parallelism & Diagnostics**:
   - `parallel_for(...)` and `parallel taskName : dependencyName{ ... }` lower to `Core::CpuTaskScheduler`.
   - Built-in diagnostics: `assert(cond, "msg", ...)`, `info("msg", ...)`, `warning("msg", ...)`, `error("msg", ...)`, optionally prefixed with `[essential]`.
+  - When a diagnostic call with formatting arguments spans multiple lines, place each formatting argument after the message on its own continuation line with a leading comma (never trailing commas):
+    ```cpp
+    error(
+        "MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'"
+        , parameterNameText
+        , materialInterface.resolvedText()
+        , component.materialInterface.resolvedText()
+    );
+    ```
 
 ---
 

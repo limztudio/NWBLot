@@ -143,10 +143,7 @@ b8 InputRouter::commitTargets(const Span<const HitTarget> targets, const u64 lay
         const HitTarget& target = targets[index];
         if(
             !target.id.valid() || target.declarationGeneration == 0u
-            || !IsValidUiRect(target.rectangle)
-            || !IsValidUiRect(target.clip)
-            || !IsValidUiRect(target.gestureReference)
-            || ((target.gestureReference.width == 0.0f) != (target.gestureReference.height == 0.0f))
+            || !HasValidHitTargetGeometry(target.rectangle, target.clip, target.gestureReference)
             || !validPopupTarget(target)
         )
             return false;

@@ -268,6 +268,56 @@ b8 TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes, mut u32 outUnitsPerEm, 
     return true;
 }
 
+class FontAtlasGroupCompactBounds{
+    public u32 firstX = 0u;
+    public u32 firstY = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = 0u;
+    public b8 unchanged = false;
+}
+
+FontAtlasGroupCompactBounds ComputeFontAtlasGroupCompactBounds(
+    in Span<FontAtlasGlyph> glyphs,
+    in u32 groupIndex,
+    in u32 groupWidth,
+    in u32 groupHeight,
+    in u32 groupChannelCount,
+    in u32 guardTexels
+){
+    u32 firstX = groupWidth;
+    u32 firstY = groupHeight;
+    u32 endX = 0u;
+    u32 endY = 0u;
+    u32 channelCount = 0u;
+    for(usize i = 0u; i < glyphs.size(); ++i){
+        const FontAtlasGlyph glyph = glyphs[i];
+        if(glyph.drawable == 0u || glyph.group != groupIndex)
+            continue;
+        firstX = min(firstX, glyph.x - guardTexels);
+        firstY = min(firstY, glyph.y - guardTexels);
+        endX = max(endX, glyph.x + glyph.width + guardTexels);
+        endY = max(endY, glyph.y + glyph.height + guardTexels);
+        channelCount = max(channelCount, glyph.channel + 1u);
+    }
+    assert(channelCount > 0u);
+    FontAtlasGroupCompactBounds out;
+    out.firstX = firstX;
+    out.firstY = firstY;
+    out.width = endX - firstX;
+    out.height = endY - firstY;
+    out.channelCount = channelCount;
+    out.unchanged = firstX == 0u && firstY == 0u && out.width == groupWidth && out.height == groupHeight && channelCount == groupChannelCount;
+    return out;
+}
+
+void OffsetFontAtlasGroupGlyph(in u32 groupIndex, in u32 firstX, in u32 firstY, mut FontAtlasGlyph inoutGlyph){
+    if(inoutGlyph.drawable != 0u && inoutGlyph.group == groupIndex){
+        inoutGlyph.x -= firstX;
+        inoutGlyph.y -= firstY;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

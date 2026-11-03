@@ -41,11 +41,11 @@ namespace Assets = Core::Assets;
 }
 
 [[nodiscard]] static Optional<Name> ExtractParentVirtualPath(const AStringView virtualPathText){
-    const usize lastSlash = virtualPathText.rfind('/');
-    if(lastSlash == AStringView::npos || lastSlash == 0u)
+    const auto parentText = ExtractParentVirtualPathText(virtualPathText);
+    if(!parentText)
         return {};
 
-    const auto parentName = Name::FromText(virtualPathText.substr(0u, lastSlash));
+    const auto parentName = Name::FromText(*parentText);
     if(!parentName || !*parentName)
         return {};
     return Optional<Name>(*parentName);

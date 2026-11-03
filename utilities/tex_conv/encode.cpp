@@ -48,13 +48,14 @@ namespace __hidden_encode{
 }
 
 [[nodiscard]] static b8 PrepareLinearPlane(const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const b8 hdr, const b8 srgb, basisu::imagef& inOutPlane){
-    const SIMDVectorSingle maximumRgb = VectorReplicate(hdr ? s_UastcHdrMaximum : 1.0f);
+    const f32 maxRgb = ResolveMaxTexConvRgb(hdr);
+    const SIMDVectorSingle maximumRgb = VectorReplicate(maxRgb);
     for(u32 y = 0u; y < inOutPlane.get_height(); ++y){
         for(u32 x = 0u; x < inOutPlane.get_width(); ++x){
             basisu::vec4F& pixel = inOutPlane(x, y);
             const SIMDVectorSingle rgb = VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f);
             if(!Vector3IsFinite(rgb) || !Vector3GreaterOrEqual(rgb, VectorZero()) || !Vector3LessOrEqual(rgb, maximumRgb)){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: RGB input must contain finite values in [0, {}]."), hdr ? s_UastcHdrMaximum : 1.0f);
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: RGB input must contain finite values in [0, {}]."), maxRgb);
                 return false;
             }
 

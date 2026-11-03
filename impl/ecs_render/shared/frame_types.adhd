@@ -343,6 +343,32 @@ f32 SceneLightRadiantImportance(in f32x4 colorIntensity){
     return luminance * intensity;
 }
 
+SceneShadingGpuData MakeSceneShadingGpuData(in f32x4 cameraPosition, in u32 lightCount){
+    SceneShadingGpuData state;
+    state.cameraPositionLightCount = f32x4(cameraPosition.x, cameraPosition.y, cameraPosition.z, cast<f32>(lightCount));
+    return state;
+}
+
+SceneLightGpuData MakeSceneLightGpuData(
+    in f32x4 position,
+    in f32x4 direction,
+    in f32x4 colorIntensity,
+    in f32 range,
+    in f32 lightType,
+    in f32 shadowSlot,
+    in f32 causticSlot,
+    in f32 angularRadius,
+    in f32 sourceRadius
+){
+    SceneLightGpuData dst;
+    dst.position = position;
+    dst.direction = direction;
+    dst.colorIntensity = colorIntensity;
+    dst.params = f32x4(range, lightType, shadowSlot, causticSlot);
+    dst.params2 = f32x4(angularRadius, sourceRadius, 0.0f, 0.0f);
+    return dst;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -375,6 +401,18 @@ const usize s_OpaqueDrawResourceUseCount = 8u;
 const usize s_NoOpaqueDrawResourceUseCount = 6u;
 const usize s_GbufferMaterialResourceSetUseCapacity = 4u;
 const usize s_NormalizeResourceUseCapacity = 9u;
+
+b8 CanAcceptMeshFrameBindingCapacities(
+    in b8 bindingValid,
+    in usize instanceBufferCapacity,
+    in usize materialTypedBufferCapacity,
+    in usize instanceCount,
+    in usize materialTypedByteCount
+){
+    if(materialTypedByteCount == 0u || (materialTypedByteCount & 3u) != 0u)
+        return false;
+    return bindingValid && instanceBufferCapacity >= instanceCount && materialTypedBufferCapacity >= materialTypedByteCount;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -44,6 +44,18 @@ enum<u8> UiLayerPresentation{
     Standalone,
 }
 
+b8 ValidUiMouseCoordinate(in f64 xpos, in f64 ypos){
+    return isFinite(xpos) && isFinite(ypos) && abs(xpos) <= s_MaxUiFrameDeltaSeconds && abs(ypos) <= s_MaxUiFrameDeltaSeconds;
+}
+
+b8 ValidUiMouseScroll(in f64 xoffset, in f64 yoffset){
+    return isFinite(xoffset) && isFinite(yoffset);
+}
+
+usize ResolveUiNativeKeySlot(in i32 key){
+    return cast<usize>(key + 1);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

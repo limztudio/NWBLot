@@ -112,10 +112,10 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
             auto loadedComponentAsset = assetManager.loadSync(IComponent::AssetTypeName(), currentComponent.name());
             if(!loadedComponentAsset){
                 NWB_LOGGER_ERROR(
-                    NWB_TEXT("{}: failed to load component asset '{}' for entity '{}'"),
-                    __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                    ConvertString(currentComponent.name().resolvedText()),
-                    ConvertString(currentEntity.name().resolvedText())
+                    NWB_TEXT("{}: failed to load component asset '{}' for entity '{}'")
+                    , __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner
+                    , ConvertString(currentComponent.name().resolvedText())
+                    , ConvertString(currentEntity.name().resolvedText())
                 );
                 return false;
             }
@@ -127,10 +127,10 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
             for(const UniquePtr<IComponent>& existing : loadedComponents){
                 if(existing && existing->assetType() == componentPtr->assetType()){
                     NWB_LOGGER_ERROR(
-                        NWB_TEXT("{}: duplicate component type '{}' on entity '{}'"),
-                        __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                        ConvertString(componentPtr->assetType().resolvedText()),
-                        ConvertString(currentEntity.name().resolvedText())
+                        NWB_TEXT("{}: duplicate component type '{}' on entity '{}'")
+                        , __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner
+                        , ConvertString(componentPtr->assetType().resolvedText())
+                        , ConvertString(currentEntity.name().resolvedText())
                     );
                     return false;
                 }

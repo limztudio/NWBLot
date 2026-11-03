@@ -61,7 +61,7 @@ void PaintBuilder::pushClip(const Rect& clip){
     const Rect& parent = m_clips.back();
     Rect next;
     if(HasUiRectArea(parent) && HasUiRectArea(clip)){
-        next = StoreRect(IntersectRectValue(LoadRect(parent), LoadRect(clip)));
+        next = IntersectUiRectsBounds(parent, clip);
     }
     m_clips.push_back(next);
 }
@@ -132,7 +132,7 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     const Rect clip = m_clips.back();
     if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip))
         return;
-    const Rect visible = StoreRect(IntersectRectValue(LoadRect(rectangle), LoadRect(clip)));
+    const Rect visible = IntersectUiRectsBounds(rectangle, clip);
     if(!HasUiRectArea(visible) || color.a <= 0.0f)
         return;
     if(m_snapshot.m_vertices.size() > Limit<u32>::s_Max - s_PaintQuadVertexCount || m_snapshot.m_indices.size() > Limit<u32>::s_Max - s_PaintQuadIndexCount){

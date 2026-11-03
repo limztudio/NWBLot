@@ -281,8 +281,7 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
         item.state = frame.rows;
         item.list = frame.list;
         LayoutBox box;
-        const SIMDVectorSingle inset = InsetRectValue(LoadRect(placement->bounds), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
-        box.rectangle = StoreRect(inset);
+        box.rectangle = InsetUiRectBounds(placement->bounds, padding);
         box.clip = placement->bounds;
         painted = paintList(item, box) && contextMenuMatches(frame);
     }

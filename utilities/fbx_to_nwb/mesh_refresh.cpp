@@ -217,16 +217,16 @@ template<typename Value>
 
 
 SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept{
-    SourceMeshStreamCounts counts;
-    counts.positions = mesh.positions.size();
-    counts.normals = mesh.normals.size();
-    counts.tangents = mesh.tangents.size();
-    counts.uv0 = mesh.uv0.size();
-    counts.colors = mesh.colors.size();
-    counts.skin = mesh.skin.size();
-    counts.vertexRefs = mesh.vertexRefs.size();
-    counts.indices = mesh.indices.size();
-    return counts;
+    return MakeSourceMeshStreamCounts(
+        mesh.positions.size(),
+        mesh.normals.size(),
+        mesh.tangents.size(),
+        mesh.uv0.size(),
+        mesh.colors.size(),
+        mesh.skin.size(),
+        mesh.vertexRefs.size(),
+        mesh.indices.size()
+    );
 }
 
 Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){

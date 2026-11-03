@@ -143,15 +143,7 @@ void WriteJointMatrix(const JointMatrix& matrix, const AStringView indent, Strea
 b8 ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
     if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_WriteNwbMeshContext))
         return false;
-    if(!mesh.skin.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh asset cannot contain a source skin stream"));
-        return false;
-    }
-    if(!SourceVertexRefsHaveNoSkin(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index"));
-        return false;
-    }
-    return true;
+    return ValidatePlainMeshSourceSkin(mesh.skin.size(), Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()));
 }
 
 template<typename Stream>

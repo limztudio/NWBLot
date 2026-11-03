@@ -29,25 +29,10 @@ void ReflectionStatisticsState::accept(const StatisticsReservationKey& key, cons
     if(!slot)
         return;
     slot->metadata.opticalTransportEnabled = slot->metadata.opticalTransportEnabled && hardwareReady;
-    if(history){
-        slot->metadata.historyEpoch = history->epoch;
-        slot->metadata.historyStartGraphicsFrame = history->historyStartGraphicsFrame;
-        slot->metadata.historySampleCount = history->sampleCount;
-        slot->metadata.sampleIndex = history->sampleIndex;
-        slot->metadata.historyEligible = history->eligible;
-        slot->metadata.historyReused = history->reused;
-        slot->metadata.historyReset = history->reset;
-        slot->metadata.historyResetReason = history->resetReason;
-    }
-    if(feedback){
-        slot->metadata.feedbackEpoch = feedback->epoch;
-        slot->metadata.feedbackStartGraphicsFrame = feedback->startGraphicsFrame;
-        slot->metadata.feedbackProbeIndex = feedback->probeIndex;
-        slot->metadata.feedbackEnabled = feedback->eligible;
-        slot->metadata.feedbackReused = feedback->reused;
-        slot->metadata.feedbackReset = feedback->reset;
-        slot->metadata.feedbackResetReason = feedback->resetReason;
-    }
+    if(history)
+        ApplyReflectionStatisticsHistoryOutcome(*history, slot->metadata);
+    if(feedback)
+        ApplyReflectionStatisticsFeedbackOutcome(*feedback, slot->metadata);
 }
 
 void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters)noexcept{

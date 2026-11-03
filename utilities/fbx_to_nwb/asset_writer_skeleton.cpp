@@ -54,15 +54,7 @@ Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, 
 b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
     if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_WriteNwbModelContext))
         return false;
-    if(mesh.skin.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model source mesh requires skin influences"));
-        return false;
-    }
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(s_WriteNwbModelContext, s_SkinStreamLabel, ref.skin, mesh.skin.size()))
-            return false;
-    }
-    return true;
+    return ValidateSkinnedModelSourceMeshRefs(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()), mesh.skin.size());
 }
 
 
@@ -133,11 +125,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
         sortedJointIndices.push_back(jointIndex);
     Sort(sortedJointIndices.begin(), sortedJointIndices.end(), [&parentDepths, &sortNames](const usize lhs, const usize rhs)noexcept{
-        if(parentDepths[lhs] != parentDepths[rhs])
-            return parentDepths[lhs] < parentDepths[rhs];
-        if(sortNames[lhs] != sortNames[rhs])
-            return sortNames[lhs] < sortNames[rhs];
-        return lhs < rhs;
+        return IsBeforeFbxSkeletonJointSortKey(parentDepths[lhs], parentDepths[rhs], AStringView(sortNames[lhs]), AStringView(sortNames[rhs]), lhs, rhs);
     });
 
     outData.oldToNewJointIndices.resize(joints.size(), 0u);

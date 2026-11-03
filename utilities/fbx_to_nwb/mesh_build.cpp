@@ -131,18 +131,14 @@ template<typename VisitTriangle>
 [[nodiscard]] static b8 IsFiniteSourceTriangleCorner(
     const SIMDVectorSingle position,
     const SIMDVectorSingle normal,
-    const SIMDVectorSingle tangent,
-    const SIMDVectorSingle uv0,
-    const SIMDVectorSingle color,
-    const b8 hasTangent,
-    const b8 wantsSkinning,
-    const SIMDVectorSingle skinWeights
+    const SourceTriangleCorner& corner,
+    const b8 wantsSkinning
 )noexcept{
-    if(!VectorIsFinite(position, VectorComponentMask::s_XYZ) || !VectorIsFinite(normal, VectorComponentMask::s_XYZ) || !VectorIsFinite(uv0, VectorComponentMask::s_XY) || !VectorIsFinite(color, VectorComponentMask::s_XYZW))
-        return false;
-    if(hasTangent && !VectorIsFinite(tangent, VectorComponentMask::s_XYZW))
-        return false;
-    return !wantsSkinning || VectorIsFinite(skinWeights, VectorComponentMask::s_XYZW);
+    Float4 positionVec;
+    Float4 normalVec;
+    StoreFloat(position, positionVec);
+    StoreFloat(normal, normalVec);
+    return IsFiniteSourceTriangleCornerValues(positionVec, normalVec, corner, wantsSkinning);
 }
 
 [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
@@ -325,7 +321,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
                 StoreFloat(skinWeights, corner.skin.weight);
             }
 
-            if(!IsFiniteSourceTriangleCorner(position, normal, tangent, uv0, color, corner.hasTangent, wantsSkinning, skinWeights)){
+            if(!IsFiniteSourceTriangleCorner(position, normal, corner, wantsSkinning)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
                 return false;
             }

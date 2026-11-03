@@ -608,6 +608,109 @@ b8 ValidateFbxSkinVertexWeightRange(in u32 weightBegin, in u32 numWeights, in us
     return false;
 }
 
+b8 IsBeforeFbxSkeletonJointSortKey(
+    in u32 lhsDepth,
+    in u32 rhsDepth,
+    in StringView lhsName,
+    in StringView rhsName,
+    in usize lhsIndex,
+    in usize rhsIndex
+){
+    if(lhsDepth != rhsDepth)
+        return lhsDepth < rhsDepth;
+    if(lhsName != rhsName)
+        return lhsName < rhsName;
+    return lhsIndex < rhsIndex;
+}
+
+b8 ValidateSkinnedModelSourceMeshRefs(in Span<SourceVertexRef> vertexRefs, in usize skinCount){
+    if(skinCount == 0u){
+        error("Failed to write NWB model: skinned model source mesh requires skin influences");
+        return false;
+    }
+    for(in SourceVertexRef ref : vertexRefs){
+        if(!ValidateSourceStreamIndexWithContext(s_WriteNwbModelContext, s_SkinStreamLabel, ref.skin, skinCount))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidatePlainMeshSourceSkin(in usize skinCount, in Span<SourceVertexRef> vertexRefs){
+    if(skinCount != 0u){
+        error("Failed to write NWB mesh: mesh asset cannot contain a source skin stream");
+        return false;
+    }
+    if(!SourceVertexRefsHaveNoSkin(vertexRefs)){
+        error("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index");
+        return false;
+    }
+    return true;
+}
+
+b8 NearlyEqualFbxJointMatrices(in SkeletonJointMatrix lhs, in SkeletonJointMatrix rhs){
+    for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
+        const f32x4 diff = abs(lhs[rowIndex] - rhs[rowIndex]);
+        if(
+            !isFinite(diff.x) || !isFinite(diff.y) || !isFinite(diff.z) || !isFinite(diff.w)
+            || diff.x > s_JointMatrixRowEpsilon
+            || diff.y > s_JointMatrixRowEpsilon
+            || diff.z > s_JointMatrixRowEpsilon
+            || diff.w > s_JointMatrixRowEpsilon
+        )
+            return false;
+    }
+    return true;
+}
+
+b8 IsFiniteSourceTriangleCornerValues(
+    in f32x4 position,
+    in f32x4 normal,
+    in SourceTriangleCorner corner,
+    in b8 wantsSkinning
+){
+    if(
+        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
+        || !isFinite(normal.x) || !isFinite(normal.y) || !isFinite(normal.z)
+        || !isFinite(corner.uv0.x) || !isFinite(corner.uv0.y)
+        || !isFinite(corner.color.x) || !isFinite(corner.color.y) || !isFinite(corner.color.z) || !isFinite(corner.color.w)
+    )
+        return false;
+    if(
+        corner.hasTangent
+        && (!isFinite(corner.tangent.x) || !isFinite(corner.tangent.y) || !isFinite(corner.tangent.z) || !isFinite(corner.tangent.w))
+    )
+        return false;
+    return !wantsSkinning
+        || (
+            isFinite(corner.skin.weight[0u])
+            && isFinite(corner.skin.weight[1u])
+            && isFinite(corner.skin.weight[2u])
+            && isFinite(corner.skin.weight[3u])
+        );
+}
+
+SourceMeshStreamCounts MakeSourceMeshStreamCounts(
+    in usize positions,
+    in usize normals,
+    in usize tangents,
+    in usize uv0,
+    in usize colors,
+    in usize skin,
+    in usize vertexRefs,
+    in usize indices
+){
+    SourceMeshStreamCounts counts;
+    counts.positions = positions;
+    counts.normals = normals;
+    counts.tangents = tangents;
+    counts.uv0 = uv0;
+    counts.colors = colors;
+    counts.skin = skin;
+    counts.vertexRefs = vertexRefs;
+    counts.indices = indices;
+    return counts;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -51,12 +51,11 @@ SIMDMatrix ConvertJointMatrix(const SIMDMatrixDouble& matrix)noexcept{
 }
 
 b8 NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs)noexcept{
-    const SIMDVectorSingle epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
-    for(usize rowIndex = 0u; rowIndex < Impl::s_SkeletonJointMatrixRowCount; ++rowIndex){
-        if(!Vector4NearEqual(lhs.v[rowIndex], rhs.v[rowIndex], epsilon))
-            return false;
-    }
-    return true;
+    JointMatrix lhsStored{};
+    JointMatrix rhsStored{};
+    StoreFloat(lhs, lhsStored);
+    StoreFloat(rhs, rhsStored);
+    return NearlyEqualFbxJointMatrices(lhsStored, rhsStored);
 }
 
 AStringView NodeDisplayName(const ufbx_node* node)noexcept{

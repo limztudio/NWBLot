@@ -440,6 +440,127 @@ ReflectionFrameParameters ResolveReflectionUploadFrameParameters(
     return parameters;
 }
 
+b8 CanReserveReflectionFeedbackPlan(
+    in b8 quarantined,
+    in u16 deviceGeneration,
+    in u64 reservedSequence,
+    in u64 currentGeneration,
+    in u64 currentAcceptedSequence,
+    in ReflectionFeedbackPlan plan
+){
+    return !quarantined
+        && deviceGeneration != 0u
+        && reservedSequence == 0u
+        && plan.generation == currentGeneration
+        && plan.sequence > currentAcceptedSequence
+        && plan.acceptedSequence == currentAcceptedSequence;
+}
+
+void ApplyAcceptedReflectionFeedbackPlan(
+    in ReflectionFeedbackPlan plan,
+    in b8 hardwareReady,
+    mut ReflectionSceneContentStamp outStamp,
+    mut ReflectionSettings outSettings,
+    mut u64 outAcceptedSequence,
+    mut u64 outEpoch,
+    mut u64 outStartGraphicsFrame,
+    mut u32 outNextProbeIndex,
+    mut u32 inOutAcceptedBank,
+    mut b8 outEnabled,
+    mut b8 outEligible,
+    mut b8 outHardwareReady,
+    mut b8 outResourcesChanged
+){
+    const ReflectionFeedbackOutcome outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
+    outStamp = plan.stamp;
+    outSettings = plan.settings;
+    outAcceptedSequence = plan.sequence;
+    outEpoch = outcome.epoch;
+    outStartGraphicsFrame = outcome.startGraphicsFrame;
+    if(outcome.eligible){
+        outNextProbeIndex = outcome.probeIndex + 1u;
+        inOutAcceptedBank = plan.currentBank;
+    }
+    else
+        outNextProbeIndex = 0u;
+    outEnabled = plan.enabled;
+    outEligible = outcome.eligible;
+    outHardwareReady = hardwareReady;
+    outResourcesChanged = false;
+}
+
+b8 CanReserveReflectionHistoryPlan(
+    in u16 deviceGeneration,
+    in u64 reservedSequence,
+    in u64 currentGeneration,
+    in u64 currentAcceptedSequence,
+    in ReflectionHistoryPlan plan
+){
+    return deviceGeneration != 0u
+        && reservedSequence == 0u
+        && plan.generation == currentGeneration
+        && plan.sequence != 0u
+        && plan.acceptedSequence == currentAcceptedSequence;
+}
+
+void ApplyAcceptedReflectionHistoryPlan(
+    in ReflectionHistoryPlan plan,
+    in b8 hardwareReady,
+    mut ReflectionSceneContentStamp outStamp,
+    mut ReflectionSettings outSettings,
+    mut u64 outAcceptedSequence,
+    mut u64 outReservedSequence,
+    mut u64 outEpoch,
+    mut u64 outHistoryStartGraphicsFrame,
+    mut u32 outNextSampleIndex,
+    mut u32 outSampleCount,
+    mut u32 outAcceptedBank,
+    mut b8 outEligible,
+    mut b8 outHardwareReady,
+    mut b8 outResourcesChanged
+){
+    const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(plan, hardwareReady);
+    outStamp = plan.stamp;
+    outSettings = plan.settings;
+    outAcceptedSequence = plan.sequence;
+    outReservedSequence = 0u;
+    outEpoch = outcome.epoch;
+    outHistoryStartGraphicsFrame = outcome.historyStartGraphicsFrame;
+    outNextSampleIndex = outcome.sampleIndex + 1u;
+    outSampleCount = outcome.sampleCount;
+    outAcceptedBank = plan.currentBank;
+    outEligible = outcome.eligible;
+    outHardwareReady = hardwareReady;
+    outResourcesChanged = false;
+}
+
+void ApplyReflectionStatisticsHistoryOutcome(
+    in ReflectionHistoryOutcome history,
+    mut ReflectionStatistics inOutMetadata
+){
+    inOutMetadata.historyEpoch = history.epoch;
+    inOutMetadata.historyStartGraphicsFrame = history.historyStartGraphicsFrame;
+    inOutMetadata.historySampleCount = history.sampleCount;
+    inOutMetadata.sampleIndex = history.sampleIndex;
+    inOutMetadata.historyEligible = history.eligible;
+    inOutMetadata.historyReused = history.reused;
+    inOutMetadata.historyReset = history.reset;
+    inOutMetadata.historyResetReason = history.resetReason;
+}
+
+void ApplyReflectionStatisticsFeedbackOutcome(
+    in ReflectionFeedbackOutcome feedback,
+    mut ReflectionStatistics inOutMetadata
+){
+    inOutMetadata.feedbackEpoch = feedback.epoch;
+    inOutMetadata.feedbackStartGraphicsFrame = feedback.startGraphicsFrame;
+    inOutMetadata.feedbackProbeIndex = feedback.probeIndex;
+    inOutMetadata.feedbackEnabled = feedback.eligible;
+    inOutMetadata.feedbackReused = feedback.reused;
+    inOutMetadata.feedbackReset = feedback.reset;
+    inOutMetadata.feedbackResetReason = feedback.resetReason;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

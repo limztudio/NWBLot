@@ -142,6 +142,13 @@ Expected<usize> TryComputeTextureMipUploadTotalBytes(
     return sliceByteCount * cast<usize>(sliceCount);
 }
 
+u64 ComputeTexturePrimaryPayloadByteCount(in Span<TextureMipLevel> mipLevels){
+    if(mipLevels.empty())
+        return 0u;
+    const TextureMipLevel lastMip = mipLevels[mipLevels.size() - 1u];
+    return lastMip.offsetBytes + lastMip.sizeBytes;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

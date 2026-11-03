@@ -255,14 +255,7 @@ b8 Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
         return false;
     }
 
-    const f32 deltaX = static_cast<f32>(xpos - m_lastMouseX);
-    const f32 deltaY = static_cast<f32>(ypos - m_lastMouseY);
-    const f32 pendingDeltaX = m_pendingMouseDeltaX + deltaX;
-    const f32 pendingDeltaY = m_pendingMouseDeltaY + deltaY;
-    if(IsFinite(deltaX) && IsFinite(deltaY) && IsFinite(pendingDeltaX) && IsFinite(pendingDeltaY)){
-        m_pendingMouseDeltaX = pendingDeltaX;
-        m_pendingMouseDeltaY = pendingDeltaY;
-    }
+    AccumulateFlyCameraMouseDelta(xpos, ypos, m_lastMouseX, m_lastMouseY, m_pendingMouseDeltaX, m_pendingMouseDeltaY);
     m_lastMouseX = xpos;
     m_lastMouseY = ypos;
     return false;
@@ -363,14 +356,13 @@ void Project::updateMainCamera(const f32 delta)noexcept{
     }
 
     const b8 keyboardCaptured = MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsKeyboard();
-    const SIMDVectorSingle moveAxes = keyboardCaptured
-        ? VectorZero()
-        : VectorSet(
-            static_cast<f32>(keyPressed(NWB::Core::Key::D)) - static_cast<f32>(keyPressed(NWB::Core::Key::A)),
-            static_cast<f32>(keyPressed(NWB::Core::Key::W)) - static_cast<f32>(keyPressed(NWB::Core::Key::S)),
-            0.0f,
-            0.0f
-        );
+    const SIMDVectorSingle moveAxes = LoadFloat(BuildFlyCameraMoveAxes(
+        keyboardCaptured,
+        keyPressed(NWB::Core::Key::D),
+        keyPressed(NWB::Core::Key::A),
+        keyPressed(NWB::Core::Key::W),
+        keyPressed(NWB::Core::Key::S)
+    ));
     const b8 boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
     __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), delta);

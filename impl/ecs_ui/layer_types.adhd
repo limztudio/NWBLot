@@ -56,6 +56,19 @@ usize ResolveUiNativeKeySlot(in i32 key){
     return cast<usize>(key + 1);
 }
 
+b8 IsUiLiveRootOrderedBefore(in UiLiveRoot lhs, in UiLiveRoot rhs){
+    if(lhs.order != rhs.order)
+        return lhs.order < rhs.order;
+    return lhs.entity.id < rhs.entity.id;
+}
+
+void LogUiInputRoutingOverflows(in b8 activationOverflow, in b8 gestureOverflow){
+    if(activationOverflow)
+        warning("UiLayerSystem: bounded activation queue is full");
+    if(gestureOverflow)
+        warning("UiLayerSystem: bounded pointer gesture queue is full");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

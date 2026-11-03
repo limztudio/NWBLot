@@ -108,6 +108,16 @@ Expected<b8> TryParseBakeRendererOutline(in StringView rendererArgument){
     return makeUnexpected(Failure());
 }
 
+StringView ResolveBakeFreeTypeSdfModule(in b8 outline){
+    if(outline)
+        return "sdf";
+    return "bsdf";
+}
+
+f32 ComputeBakeFontLineGapUnits(in i32 height, in i32 ascender, in i32 descender){
+    return cast<f32>(height - ascender + descender);
+}
+
 b8 IsFontAtlasGlyphPackOrderBefore(in FontAtlasGlyph lhs, in FontAtlasGlyph rhs){
     if(lhs.height != rhs.height)
         return lhs.height > rhs.height;

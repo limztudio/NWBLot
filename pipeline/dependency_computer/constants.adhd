@@ -32,6 +32,13 @@ b8 RecordDependencyProviderMatch(in Name virtualPath, in usize index, mut usize 
     return true;
 }
 
+Expected<StringView> TryTrimVirtualPathText(in StringView rawText){
+    const StringView trimmed = trimView(rawText);
+    if(trimmed.empty() || trimmed.find('/') >= trimmed.size())
+        return makeUnexpected(Failure());
+    return trimmed;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

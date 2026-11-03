@@ -37,6 +37,40 @@ f32 SanitizeFlyCameraDelta(in f32 deltaSeconds){
     return 0.0f;
 }
 
+void AccumulateFlyCameraMouseDelta(
+    in f64 xpos,
+    in f64 ypos,
+    in f64 lastMouseX,
+    in f64 lastMouseY,
+    mut f32 inOutPendingMouseDeltaX,
+    mut f32 inOutPendingMouseDeltaY
+){
+    const f32 deltaX = cast<f32>(xpos - lastMouseX);
+    const f32 deltaY = cast<f32>(ypos - lastMouseY);
+    const f32 pendingDeltaX = inOutPendingMouseDeltaX + deltaX;
+    const f32 pendingDeltaY = inOutPendingMouseDeltaY + deltaY;
+    if(isFinite(deltaX) && isFinite(deltaY) && isFinite(pendingDeltaX) && isFinite(pendingDeltaY)){
+        inOutPendingMouseDeltaX = pendingDeltaX;
+        inOutPendingMouseDeltaY = pendingDeltaY;
+    }
+}
+
+f32x4 BuildFlyCameraMoveAxes(in b8 keyboardCaptured, in b8 moveRight, in b8 moveLeft, in b8 moveForward, in b8 moveBackward){
+    if(keyboardCaptured)
+        return f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    f32 moveX = 0.0f;
+    if(moveRight)
+        moveX += 1.0f;
+    if(moveLeft)
+        moveX -= 1.0f;
+    f32 moveY = 0.0f;
+    if(moveForward)
+        moveY += 1.0f;
+    if(moveBackward)
+        moveY -= 1.0f;
+    return f32x4(moveX, moveY, 0.0f, 0.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

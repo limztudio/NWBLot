@@ -67,6 +67,7 @@ public:
     [[nodiscard]] u32 atlasHeight()const noexcept{ return m_atlasHeight; }
     [[nodiscard]] f32 referenceDensity()const noexcept{ return m_referenceDensity; }
     [[nodiscard]] const RegionVector& regions()const noexcept{ return m_regions; }
+    [[nodiscard]] Span<const u32> regionIndex()const noexcept{ return m_regionIndex; }
     [[nodiscard]] const UiSkinPalette& palette()const noexcept{ return m_palette; }
     [[nodiscard]] const UiSkinTypography& typography()const noexcept{ return m_typography; }
     [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const noexcept;

@@ -120,7 +120,7 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
         const auto inserted = entryIndices.try_emplace(virtualPath, manifest.entries.size());
         if(!inserted.second){
             auto& existing = manifest.entries[inserted.first.value()];
-            const b8 identical = existing.payloadBytes.size() == payloadBytes.size() && (payloadBytes.empty() || NWB_MEMCMP(existing.payloadBytes.data(), payloadBytes.data(), payloadBytes.size()) == 0);
+            const b8 identical = AreGatheredAssetPayloadsIdentical(existing.payloadBytes, payloadBytes);
             if(!identical){
                 if(!options.mergePayloads || !options.mergePayloads(virtualPath, payloadBytes, scratchArena, existing.payloadBytes)){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), ConvertString(virtualPath.resolvedText()));

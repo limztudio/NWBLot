@@ -32,6 +32,16 @@ class CameraProjection{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+CameraProjection MakeCameraProjection(in f32x4 projectionParams, in f32x4 meta){
+    CameraProjection projection;
+    projection.projectionParams = projectionParams;
+    projection.aspectRatio = meta.x;
+    projection.tanHalfVerticalFov = meta.y;
+    projection.nearPlane = meta.z;
+    projection.farPlane = meta.w;
+    return projection;
+}
+
 CameraProjection MakeFallbackCameraProjection(){
     CameraProjection projection;
     projection.projectionParams = f32x4(1.0f, 1.0f, 1.0f, 0.0f);

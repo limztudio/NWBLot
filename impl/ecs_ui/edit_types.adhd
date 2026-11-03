@@ -17,7 +17,9 @@ using Ui::EditBoxCaretStop;
 using Ui::EditBoxPlacement;
 using Ui::EditCaretLine;
 using Ui::EditCompositionView;
+namespace EditNavigationDirection = Ui::EditNavigationDirection;
 namespace EditTextMode = Ui::EditTextMode;
+using Ui::EditWordRange;
 using Ui::HitEditCaretGeometry;
 using Ui::Point;
 using Ui::PopupToken;
@@ -292,6 +294,35 @@ Expected<b8, UiEditClipboardStatus> ValidateUiEditClipboardActionMode(
     if(!reads && !hasSelection)
         return makeUnexpected(UiEditClipboardStatus::NoSelection);
     return reads;
+}
+
+EditWordRange ResolveUiEditWordDragSelection(
+    in usize wordPosition,
+    in usize wordDragStart,
+    in usize wordDragEnd,
+    in EditWordRange wordRange
+){
+    EditWordRange selection;
+    if(wordPosition < wordDragStart){
+        selection.begin = wordDragEnd;
+        selection.end = wordRange.begin;
+    }
+    else{
+        selection.begin = wordDragStart;
+        if(wordPosition >= wordDragEnd)
+            selection.end = wordRange.end;
+        else
+            selection.end = wordDragEnd;
+    }
+    return selection;
+}
+
+b8 IsValidUiEditNavigationViewportHeight(in EditNavigationDirection direction, in f32 viewportHeight){
+    if(!isFinite(viewportHeight) || viewportHeight < 0.0f)
+        return false;
+    if((direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown) && viewportHeight == 0.0f)
+        return false;
+    return true;
 }
 
 

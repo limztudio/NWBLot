@@ -109,9 +109,8 @@ b8 UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry& 
             const auto range = model.wordRangeAt(event.wordPosition);
             if(!range)
                 return true;
-            const usize anchor = event.wordPosition < entry.wordDragStart ? entry.wordDragEnd : entry.wordDragStart;
-            const usize caret = event.wordPosition < entry.wordDragStart ? range->begin : event.wordPosition >= entry.wordDragEnd ? range->end : entry.wordDragEnd;
-            if(!model.setSelection(anchor, caret))
+            const Ui::EditWordRange selection = ResolveUiEditWordDragSelection(event.wordPosition, entry.wordDragStart, entry.wordDragEnd, *range);
+            if(!model.setSelection(selection.begin, selection.end))
                 return true;
         }
         else{
@@ -192,7 +191,7 @@ b8 UiEditBoxHost::applyNavigation(const Event& event, const Ui::EditNavigationDi
         return false;
     if(model.textMode() != Ui::EditTextMode::Multiline || model.composition().active)
         return true;
-    if(!IsFinite(event.navigationViewportHeight) || event.navigationViewportHeight < 0.0f || ((direction == Ui::EditNavigationDirection::PageUp || direction == Ui::EditNavigationDirection::PageDown) && event.navigationViewportHeight == 0.0f))
+    if(!IsValidUiEditNavigationViewportHeight(direction, event.navigationViewportHeight))
         return false;
     const Ui::TextAreaModelStamp expected = model.stamp();
     const Ui::EditNavigationSnapshot preferred = navigation.state.snapshot();

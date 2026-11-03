@@ -40,15 +40,8 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAsse
 b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
-    if(!IsValidSkeletonJointCount(m_joints.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32"));
+    if(!ValidateSkeletonJointCounts(m_joints.size(), m_jointIndices.size()))
         return false;
-    }
-
-    if(m_jointIndices.size() != m_joints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup count does not match joint count"));
-        return false;
-    }
 
     Vector<u8, Core::Alloc::ScratchArena> namedJoints(scratchArena);
     namedJoints.resize(m_joints.size(), 0u);
@@ -69,19 +62,7 @@ b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         }
         namedJoints[jointIndex] = 1u;
     }
-    for(usize i = 0u; i < m_joints.size(); ++i){
-        const SkeletonJoint& joint = m_joints[i];
-        if(!IsFiniteSkeletonJointMatrix(joint.localBindPose)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has non-finite local bind pose"), i);
-            return false;
-        }
-        if(!IsValidSkeletonJointParentIndex(joint, i)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}"), i, joint.parentIndex);
-            return false;
-        }
-    }
-
-    return true;
+    return ValidateSkeletonJointsArray(m_joints);
 }
 
 b8 Skeleton::loadBinary(const Span<const u8> binary){

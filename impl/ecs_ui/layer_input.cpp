@@ -234,10 +234,7 @@ void UiLayerSystem::synchronizeNativeInput(){
 }
 
 void UiLayerSystem::logInputRoutingOverflows(const Ui::InputRoutingResult& result)const{
-    if(result.activationOverflow)
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
-    if(result.gestureOverflow)
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded pointer gesture queue is full"));
+    LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
 
 

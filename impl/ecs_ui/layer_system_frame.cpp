@@ -44,9 +44,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
     m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u || m_context.input().primaryDown() || m_context.input().secondaryDown());
     UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
-    Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const UiLiveRoot& lhs, const UiLiveRoot& rhs)noexcept{
-        return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.entity.id < rhs.entity.id;
-    });
+    Sort(m_liveRoots.begin(), m_liveRoots.end(), &IsUiLiveRootOrderedBefore);
     for(const auto& root : m_liveRoots){
         UiPaintComponent* component = m_world.tryGetComponent<UiPaintComponent>(root.entity);
         if(!component || !component->visible || !component->paint)

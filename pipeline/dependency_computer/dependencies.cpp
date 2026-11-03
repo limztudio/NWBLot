@@ -34,16 +34,16 @@ using KnownVirtualPathTextMap = HashMap<Name, Assets::AssetString, Assets::Scrat
 
 
 static void RecordVirtualPathText(const AStringView rawText, Assets::AssetArena& arena, KnownVirtualPathTextMap& outMap){
-    const AStringView trimmed = TrimView(rawText);
-    if(trimmed.empty() || trimmed.find('/') == AStringView::npos)
+    const Expected<AStringView> trimmed = TryTrimVirtualPathText(rawText);
+    if(!trimmed)
         return;
 
-    const auto name = Name::FromText(trimmed);
+    const auto name = Name::FromText(*trimmed);
     if(!name || !*name)
         return;
 
     if(outMap.find(*name) == outMap.end())
-        outMap.emplace(*name, Assets::AssetString(trimmed, arena));
+        outMap.emplace(*name, Assets::AssetString(*trimmed, arena));
 }
 
 static void CollectValueVirtualPathTexts(const Core::Metascript::Value& value, Assets::AssetArena& arena, KnownVirtualPathTextMap& outMap){

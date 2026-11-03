@@ -555,6 +555,80 @@ Expected<f32x4> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density)
     return TryLoadUiSkinMinimumSize(region, sliceExtents.value(), f64x4(density, density, 0.0, 0.0));
 }
 
+b8 ValidateUiSkinPayloadData(
+    in AssetRef<Texture> texture,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in Span<UiSkinRegion> regions,
+    in Span<u32> regionIndex,
+    in UiSkinPalette palette,
+    in UiSkinTypography typography
+){
+    if(regions.size() > cast<usize>(s_UiSkinMaxRegionCount)){
+        error("UiSkin::validatePayload failed: region count {} exceeds schema limit {}", regions.size(), s_UiSkinMaxRegionCount);
+        return false;
+    }
+    if(
+        !texture.valid() || texture.name() == Name("")
+        || atlasWidth == 0u || atlasHeight == 0u
+        || !isFinite(referenceDensity) || referenceDensity <= 0.0f
+        || !(isFinite(cast<f32>(atlasWidth) / referenceDensity) && isFinite(cast<f32>(atlasHeight) / referenceDensity))
+        || regions.empty()
+    ){
+        error("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid");
+        return false;
+    }
+    for(usize index = 0u; index < regions.size(); ++index){
+        const UiSkinRegion region = regions[index];
+        if(!IsValidUiSkinRegion(region, atlasWidth, atlasHeight)){
+            error(
+                "UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics"
+                , index
+                , region.name.resolvedText()
+            );
+            return false;
+        }
+    }
+    for(usize index = 1u; index < regionIndex.size(); ++index){
+        const Name name = regions[cast<usize>(regionIndex[index])].name;
+        if(name == regions[cast<usize>(regionIndex[index - 1u])].name){
+            error("UiSkin::validatePayload failed: duplicate region '{}'", name.resolvedText());
+            return false;
+        }
+    }
+    for(usize index = 0u; index < palette.colors.size(); ++index){
+        const UiSkinColor color = palette.colors[index];
+        if(!IsValidUiSkinPaletteColor(color)){
+            error("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]", index);
+            return false;
+        }
+    }
+    if(!isFinite(typography.defaultFontSize) || !IsValidUiSkinDefaultFontSize(typography.defaultFontSize)){
+        error("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateUiSkinToolkitRegions(in Span<UiSkinRegion> regions, in Span<u32> regionIndex){
+    for(usize index = 0u; index < s_UiSkinRequiredRegionCount; ++index){
+        const UiSkinRequiredRegion required = ResolveUiSkinRequiredRegion(index);
+        if(!TryFindUiSkinRegionIndex(regions, regionIndex, required.name).has_value()){
+            error("UI skin toolkit contract 'widgets' failed: missing required region '{}'", required.text);
+            return false;
+        }
+    }
+    if(
+        !TryFindUiSkinRegionIndex(regions, regionIndex, s_WindowResizeRegionName).has_value()
+        && !TryFindUiSkinRegionIndex(regions, regionIndex, s_WhiteRegionName).has_value()
+    ){
+        error("UI skin toolkit contract 'widgets' failed: window resizing requires 'window.resize' or 'white'");
+        return false;
+    }
+    return true;
+}
+
 [subsystem("ui_subsystem")]
 class UiSubsystem{
     public Vector<AssetRef<FontAtlas>> basicFonts;

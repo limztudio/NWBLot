@@ -109,6 +109,33 @@ SkeletonJoint UnpackSkeletonJointBinary(in SkeletonJointBinary jointBinary){
     return joint;
 }
 
+b8 ValidateSkeletonJointCounts(in usize jointCount, in usize lookupCount){
+    if(!IsValidSkeletonJointCount(jointCount)){
+        error("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32");
+        return false;
+    }
+    if(lookupCount != jointCount){
+        error("Skeleton::validatePayload failed: joint lookup count does not match joint count");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSkeletonJointsArray(in Span<SkeletonJoint> joints){
+    for(usize i = 0u; i < joints.size(); ++i){
+        const SkeletonJoint joint = joints[i];
+        if(!IsFiniteSkeletonJointMatrix(joint.localBindPose)){
+            error("Skeleton::validatePayload failed: joint {} has non-finite local bind pose", i);
+            return false;
+        }
+        if(!IsValidSkeletonJointParentIndex(joint, i)){
+            error("Skeleton::validatePayload failed: joint {} has invalid parent {}", i, joint.parentIndex);
+            return false;
+        }
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

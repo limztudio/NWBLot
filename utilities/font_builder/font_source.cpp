@@ -80,7 +80,7 @@ b8 FontSource::open(const BakeOptions& options, Core::Alloc::ScratchArena& scrat
         return false;
     }
     u32 spread = options.spread;
-    const AStringView module = options.outline ? "sdf" : "bsdf";
+    const AStringView module = ResolveBakeFreeTypeSdfModule(options.outline);
     const FT_Error spreadSet = FT_Property_Set(library, module.data(), "spread", &spread);
     if(spreadSet != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected SDF spread, error {}"), spreadSet);
@@ -108,7 +108,7 @@ b8 FontSource::open(const BakeOptions& options, Core::Alloc::ScratchArena& scrat
     payload.rasterMode = options.outline ? Impl::FontAtlasRasterMode::Outline : Impl::FontAtlasRasterMode::Bitmap;
     payload.ascenderUnits = static_cast<f32>(face->ascender);
     payload.descenderUnits = static_cast<f32>(face->descender);
-    payload.lineGapUnits = static_cast<f32>(face->height - face->ascender + face->descender);
+    payload.lineGapUnits = ComputeBakeFontLineGapUnits(face->height, face->ascender, face->descender);
     return true;
 }
 

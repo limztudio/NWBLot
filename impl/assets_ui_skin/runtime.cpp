@@ -114,46 +114,16 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
 b8 UiSkin::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("UiSkin::validatePayload")))
         return false;
-    if(m_regions.size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region count {} exceeds schema limit {}"), m_regions.size(), s_UiSkinMaxRegionCount);
-        return false;
-    }
-    if(
-        !m_texture.valid() || m_texture.name() == Name("")
-        || m_atlasWidth == 0u || m_atlasHeight == 0u
-        || !IsFinite(m_referenceDensity) || m_referenceDensity <= 0.0f
-        || !(IsFinite(static_cast<f32>(m_atlasWidth) / m_referenceDensity) && IsFinite(static_cast<f32>(m_atlasHeight) / m_referenceDensity))
-        || m_regions.empty()
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid"));
-        return false;
-    }
-    for(usize index = 0u; index < m_regions.size(); ++index){
-        const UiSkinRegion& region = m_regions[index];
-        if(!IsValidUiSkinRegion(region, m_atlasWidth, m_atlasHeight)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics"), index, ConvertString(region.name.resolvedText()));
-            return false;
-        }
-    }
-    for(usize index = 1u; index < m_regionIndex.size(); ++index){
-        const Name& name = m_regions[m_regionIndex[index]].name;
-        if(name == m_regions[m_regionIndex[index - 1u]].name){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), ConvertString(name.resolvedText()));
-            return false;
-        }
-    }
-    for(usize index = 0u; index < m_palette.colors.size(); ++index){
-        const UiSkinColor& color = m_palette.colors[index];
-        if(!IsValidUiSkinPaletteColor(color)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
-            return false;
-        }
-    }
-    if(!IsFinite(m_typography.defaultFontSize) || !IsValidUiSkinDefaultFontSize(m_typography.defaultFontSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]"));
-        return false;
-    }
-    return true;
+    return ValidateUiSkinPayloadData(
+        m_texture,
+        m_atlasWidth,
+        m_atlasHeight,
+        m_referenceDensity,
+        Span<const UiSkinRegion>(m_regions),
+        Span<const u32>(m_regionIndex),
+        m_palette,
+        m_typography
+    );
 }
 
 b8 UiSkin::validateTexture(const Texture& texture)const{
@@ -205,18 +175,7 @@ void UiSkin::rebuildRegionIndex(){
 b8 ValidateUiSkinToolkitContract(const UiSkin& skin){
     if(!skin.validatePayload())
         return false;
-    for(usize index = 0u; index < s_UiSkinRequiredRegionCount; ++index){
-        const UiSkinRequiredRegion required = ResolveUiSkinRequiredRegion(index);
-        if(!skin.hasRegion(required.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: missing required region '{}'"), ConvertString(required.text));
-            return false;
-        }
-    }
-    if(!skin.hasRegion(s_WindowResizeRegionName) && !skin.hasRegion(s_WhiteRegionName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: window resizing requires 'window.resize' or 'white'"));
-        return false;
-    }
-    return true;
+    return ValidateUiSkinToolkitRegions(Span<const UiSkinRegion>(skin.regions()), Span<const u32>(skin.regionIndex()));
 }
 
 

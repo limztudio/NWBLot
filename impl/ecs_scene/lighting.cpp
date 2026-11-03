@@ -90,10 +90,7 @@ Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, const 
     auto& transform = lightEntity.addComponent<TransformComponent>();
     StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
 
-    auto& light = lightEntity.addComponent<LightComponent>();
-    light.type = LightType::Directional;
-    light.setColor(color);
-    light.setIntensity(intensity);
+    lightEntity.addComponent<LightComponent>() = MakeDirectionalLightComponent(color, intensity);
     return lightEntity.id();
 }
 
@@ -102,11 +99,7 @@ Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4
     auto& transform = lightEntity.addComponent<TransformComponent>();
     transform.position = position;
 
-    auto& light = lightEntity.addComponent<LightComponent>();
-    light.type = LightType::Point;
-    light.setColor(color);
-    light.setIntensity(intensity);
-    light.range = range;
+    lightEntity.addComponent<LightComponent>() = MakePointLightComponent(color, intensity, range);
     return lightEntity.id();
 }
 
@@ -127,13 +120,7 @@ Core::ECS::EntityID CreateSpotLightEntity(
     transform.position = position;
     StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
 
-    auto& light = lightEntity.addComponent<LightComponent>();
-    light.type = LightType::Spot;
-    light.setColor(color);
-    light.setIntensity(intensity);
-    light.range = range;
-    light.innerConeCos = innerConeCos;
-    light.outerConeCos = outerConeCos;
+    lightEntity.addComponent<LightComponent>() = MakeSpotLightComponent(color, intensity, range, innerConeCos, outerConeCos);
     return lightEntity.id();
 }
 

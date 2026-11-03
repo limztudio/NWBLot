@@ -102,6 +102,40 @@ SceneLight MakeSceneLight(in LightComponent light, in f32x4 position, in f32x4 d
     return outLight;
 }
 
+LightComponent MakeDirectionalLightComponent(in f32x4 color, in f32 intensity){
+    LightComponent light;
+    light.type = LightType::Directional;
+    light.setColor(color);
+    light.setIntensity(intensity);
+    return light;
+}
+
+LightComponent MakePointLightComponent(in f32x4 color, in f32 intensity, in f32 range){
+    LightComponent light;
+    light.type = LightType::Point;
+    light.setColor(color);
+    light.setIntensity(intensity);
+    light.range = range;
+    return light;
+}
+
+LightComponent MakeSpotLightComponent(
+    in f32x4 color,
+    in f32 intensity,
+    in f32 range,
+    in f32 innerConeCos,
+    in f32 outerConeCos
+){
+    LightComponent light;
+    light.type = LightType::Spot;
+    light.setColor(color);
+    light.setIntensity(intensity);
+    light.range = range;
+    light.innerConeCos = innerConeCos;
+    light.outerConeCos = outerConeCos;
+    return light;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

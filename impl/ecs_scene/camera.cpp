@@ -135,13 +135,11 @@ Expected<SIMDMatrix> TryBuildCameraProjection(
 }
 
 CameraProjection StoreCameraProjection(const SIMDMatrix& values)noexcept{
-    CameraProjection projection;
-    StoreFloat(values.v[0], projection.projectionParams);
-    projection.aspectRatio = VectorGetX(values.v[1]);
-    projection.tanHalfVerticalFov = VectorGetY(values.v[1]);
-    projection.nearPlane = VectorGetZ(values.v[1]);
-    projection.farPlane = VectorGetW(values.v[1]);
-    return projection;
+    Float4 projectionParams;
+    Float4 meta;
+    StoreFloat(values.v[0], projectionParams);
+    StoreFloat(values.v[1], meta);
+    return MakeCameraProjection(projectionParams, meta);
 }
 
 CameraProjection StoreDefaultCameraProjection(const f32 fallbackAspectRatio)noexcept{

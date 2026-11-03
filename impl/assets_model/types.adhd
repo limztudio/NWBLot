@@ -232,6 +232,90 @@ b8 IsCompleteModelSkinnedMeshObject(in ModelSkinnedMeshObject object){
     return object.name != s_NameNone && object.skin.valid() && object.skeletonObject != s_NameNone;
 }
 
+b8 ValidateModelSkeletonObject(in ModelSkeletonObject object, in usize index, in b8 nameIsUnique){
+    if(!IsFiniteSkeletonJointMatrix(object.transform)){
+        error("Model::validatePayload failed: skeleton object {} has non-finite transform", index);
+        return false;
+    }
+    if(!IsCompleteModelSkeletonObject(object)){
+        error("Model::validatePayload failed: skeleton object {} is incomplete", index);
+        return false;
+    }
+    if(!nameIsUnique){
+        error("Model::validatePayload failed: skeleton object {} name is duplicated in the model", index);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateModelStaticMeshObject(
+    in ModelStaticMeshObject object,
+    in usize index,
+    in b8 nameIsUnique,
+    in b8 parentExists,
+    in b8 parentIsSkeleton
+){
+    if(!IsFiniteSkeletonJointMatrix(object.transform)){
+        error("Model::validatePayload failed: static mesh object {} has non-finite transform", index);
+        return false;
+    }
+    if(!IsCompleteModelStaticMeshObject(object)){
+        error("Model::validatePayload failed: static mesh object {} is incomplete", index);
+        return false;
+    }
+    if(!IsValidOptionalModelMaterialRef(object.material)){
+        error("Model::validatePayload failed: static mesh object {} has invalid material reference", index);
+        return false;
+    }
+    if(!nameIsUnique){
+        error("Model::validatePayload failed: static mesh object {} name is duplicated in the model", index);
+        return false;
+    }
+    if(object.parentObject == s_NameNone && object.parentJoint != s_NameNone){
+        error("Model::validatePayload failed: static mesh object {} has joint parent without object parent", index);
+        return false;
+    }
+    if(object.parentObject != s_NameNone){
+        if(parentIsSkeleton)
+            return true;
+        if(parentExists)
+            error("Model::validatePayload failed: static mesh object {} parent_object must reference a skeleton object", index);
+        else
+            error("Model::validatePayload failed: static mesh object {} targets a missing skeleton object parent", index);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateModelSkinnedMeshObject(
+    in ModelSkinnedMeshObject object,
+    in usize index,
+    in b8 nameIsUnique,
+    in b8 targetIsSkeleton
+){
+    if(!IsFiniteSkeletonJointMatrix(object.transform)){
+        error("Model::validatePayload failed: skinned mesh object {} has non-finite transform", index);
+        return false;
+    }
+    if(!IsCompleteModelSkinnedMeshObject(object)){
+        error("Model::validatePayload failed: skinned mesh object {} is incomplete", index);
+        return false;
+    }
+    if(!IsValidOptionalModelMaterialRef(object.material)){
+        error("Model::validatePayload failed: skinned mesh object {} has invalid material reference", index);
+        return false;
+    }
+    if(!nameIsUnique){
+        error("Model::validatePayload failed: skinned mesh object {} name is duplicated in the model", index);
+        return false;
+    }
+    if(!targetIsSkeleton){
+        error("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object", index);
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

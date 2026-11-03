@@ -82,87 +82,32 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_skeletonObjects.size(); ++i){
         const ModelSkeletonObject& object = m_skeletonObjects[i];
-        if(!IsFiniteSkeletonJointMatrix(object.transform)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} has non-finite transform"), i);
+        if(!ValidateModelSkeletonObject(object, i, nameIsUnique(object.name)))
             return false;
-        }
-        if(!IsCompleteModelSkeletonObject(object)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} is incomplete"), i);
-            return false;
-        }
-        if(!nameIsUnique(object.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} name is duplicated in the model"), i);
-            return false;
-        }
     }
 
     for(usize i = 0u; i < m_staticMeshObjects.size(); ++i){
         const ModelStaticMeshObject& object = m_staticMeshObjects[i];
-        if(!IsFiniteSkeletonJointMatrix(object.transform)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has non-finite transform"), i);
-            return false;
+        b8 parentExists = object.parentObject == object.name;
+        b8 parentIsSkeleton = false;
+        if(object.parentObject && objectNames){
+            const auto parent = objectNames->find(object.parentObject);
+            parentExists = parent != objectNames->end();
+            parentIsSkeleton = parentExists && (parent.value() & s_ModelSkeletonObjectNameFlag) != 0u;
         }
-        if(!IsCompleteModelStaticMeshObject(object)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} is incomplete"), i);
+        if(!ValidateModelStaticMeshObject(object, i, nameIsUnique(object.name), parentExists, parentIsSkeleton))
             return false;
-        }
-        if(!IsValidOptionalModelMaterialRef(object.material)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has invalid material reference"), i);
-            return false;
-        }
-        if(!nameIsUnique(object.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} name is duplicated in the model"), i);
-            return false;
-        }
-        if(!object.parentObject && object.parentJoint){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has joint parent without object parent"), i);
-            return false;
-        }
-        if(object.parentObject){
-            b8 parentExists = object.parentObject == object.name;
-            if(objectNames){
-                const auto parent = objectNames->find(object.parentObject);
-                if(parent != objectNames->end() && (parent.value() & s_ModelSkeletonObjectNameFlag) != 0u)
-                    continue;
-                parentExists = parent != objectNames->end();
-            }
-            if(parentExists){
-                NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} parent_object must reference a skeleton object"), i);
-            }
-            else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} targets a missing skeleton object parent"), i);
-            }
-            return false;
-        }
     }
 
     for(usize i = 0u; i < m_skinnedMeshObjects.size(); ++i){
         const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
-        if(!IsFiniteSkeletonJointMatrix(object.transform)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has non-finite transform"), i);
-            return false;
+        b8 targetIsSkeleton = false;
+        if(objectNames){
+            const auto parent = objectNames->find(object.skeletonObject);
+            targetIsSkeleton = parent != objectNames->end() && (parent.value() & s_ModelSkeletonObjectNameFlag) != 0u;
         }
-        if(!IsCompleteModelSkinnedMeshObject(object)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} is incomplete"), i);
+        if(!ValidateModelSkinnedMeshObject(object, i, nameIsUnique(object.name), targetIsSkeleton))
             return false;
-        }
-        if(!IsValidOptionalModelMaterialRef(object.material)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has invalid material reference"), i);
-            return false;
-        }
-        if(!nameIsUnique(object.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} name is duplicated in the model"), i);
-            return false;
-        }
-        if(!objectNames){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object"), i);
-            return false;
-        }
-        const auto parent = objectNames->find(object.skeletonObject);
-        if(parent == objectNames->end() || (parent.value() & s_ModelSkeletonObjectNameFlag) == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object"), i);
-            return false;
-        }
     }
 
     return true;

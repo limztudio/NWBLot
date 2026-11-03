@@ -277,10 +277,7 @@ void Texture::setPayload(
 }
 
 u64 Texture::primaryPayloadByteCount()const noexcept{
-    if(m_mipLevels.empty())
-        return 0u;
-    const TextureMipLevel& lastMip = m_mipLevels.back();
-    return lastMip.offsetBytes + lastMip.sizeBytes;
+    return ComputeTexturePrimaryPayloadByteCount(m_mipLevels);
 }
 
 const u8* Texture::alphaUastcBlocks()const noexcept{

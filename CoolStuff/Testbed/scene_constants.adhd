@@ -71,6 +71,59 @@ f32x4 BuildFlyCameraMoveAxes(in b8 keyboardCaptured, in b8 moveRight, in b8 move
     return f32x4(moveX, moveY, 0.0f, 0.0f);
 }
 
+void UpdateFlyCameraMousePosition(
+    in f64 xpos,
+    in f64 ypos,
+    in b8 wantsPointer,
+    in b8 mouseLookActive,
+    mut b8 inOutMousePositionValid,
+    mut f64 inOutLastMouseX,
+    mut f64 inOutLastMouseY,
+    mut f32 inOutPendingMouseDeltaX,
+    mut f32 inOutPendingMouseDeltaY
+){
+    if(!isFinite(xpos) || !isFinite(ypos) || wantsPointer || !mouseLookActive){
+        inOutMousePositionValid = false;
+        return;
+    }
+    if(!inOutMousePositionValid){
+        inOutLastMouseX = xpos;
+        inOutLastMouseY = ypos;
+        inOutMousePositionValid = true;
+        return;
+    }
+    AccumulateFlyCameraMouseDelta(xpos, ypos, inOutLastMouseX, inOutLastMouseY, inOutPendingMouseDeltaX, inOutPendingMouseDeltaY);
+    inOutLastMouseX = xpos;
+    inOutLastMouseY = ypos;
+}
+
+void UpdateFlyCameraMouseButton(
+    in b8 wantsPointer,
+    in b8 isRightButton,
+    in b8 isPress,
+    in b8 isRelease,
+    mut b8 inOutMouseLookActive,
+    mut b8 inOutMousePositionValid
+){
+    if(wantsPointer){
+        if(isRightButton && isRelease){
+            inOutMouseLookActive = false;
+            inOutMousePositionValid = false;
+        }
+        return;
+    }
+    if(!isRightButton)
+        return;
+    if(isPress){
+        inOutMouseLookActive = true;
+        inOutMousePositionValid = false;
+    }
+    else if(isRelease){
+        inOutMouseLookActive = false;
+        inOutMousePositionValid = false;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

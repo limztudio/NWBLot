@@ -680,6 +680,14 @@ b8 ValidateUiSkinAtlasTextureParameters(
     return true;
 }
 
+b8 ValidateUiSkinCookRegionCount(in usize regionCount){
+    if(regionCount <= s_UiSkinMaxRegionCount)
+        return true;
+
+    error("BuildUiSkinAsset failed: region count {} exceeds schema limit {}", regionCount, s_UiSkinMaxRegionCount);
+    return false;
+}
+
 [subsystem("ui_subsystem")]
 class UiSubsystem{
     public Vector<AssetRef<FontAtlas>> basicFonts;

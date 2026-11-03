@@ -159,6 +159,49 @@ b8 ValidateSubsystemBinaryScalarFieldCount(in Name assetType, in SubsystemFieldV
     return false;
 }
 
+void DeduplicateSubsystemRefs<TAsset>(mut Vector<AssetRef<TAsset>> subsystems){
+    usize writeIndex = 0u;
+    for(usize readIndex = 0u; readIndex < subsystems.size(); ++readIndex){
+        const AssetRef<TAsset> candidate = subsystems[readIndex];
+        b8 duplicate = false;
+        for(usize prevIndex = 0u; prevIndex < writeIndex; ++prevIndex){
+            if(subsystems[prevIndex].name() == candidate.name()){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate){
+            if(writeIndex != readIndex)
+                subsystems[writeIndex] = candidate;
+            ++writeIndex;
+        }
+    }
+    subsystems.resize(writeIndex);
+}
+
+b8 ValidateNonEmptySubsystemRefName(in Name subsystemName){
+    if(subsystemName != s_NameNone)
+        return true;
+
+    error("ISubsystem::loadBinary failed: subsystem reference must not be empty");
+    return false;
+}
+
+b8 UnpackSubsystemRefHashes<TAsset>(in Span<NameHash> subsystemHashes, mut Vector<AssetRef<TAsset>> outSubsystems){
+    outSubsystems.clear();
+    outSubsystems.reserve(subsystemHashes.size());
+    for(in NameHash subsystemHash : subsystemHashes){
+        const Name subsystemName(subsystemHash);
+        if(!ValidateNonEmptySubsystemRefName(subsystemName))
+            return false;
+        AssetRef<TAsset> ref;
+        ref.virtualPath = subsystemName;
+        outSubsystems.push_back(ref);
+    }
+    DeduplicateSubsystemRefs(outSubsystems);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

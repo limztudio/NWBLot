@@ -12,6 +12,7 @@ native{
 namespace Testbed{
 using NWB::Impl::Ui::Color;
 using NWB::Impl::Ui::DisplayMetrics;
+using NWB::Impl::Ui::Point;
 using NWB::Impl::Ui::Rect;
 }
 }
@@ -347,6 +348,51 @@ f64 AdvanceProgressGalleryFraction(in f64 fraction){
     if(fraction >= 1.0)
         return 0.0;
     return fraction + s_DefaultProgressFraction;
+}
+
+b8 CanShowTestbedOverviewWindow(in Rect gallery, in Rect overview){
+    return !(gallery.x < overview.x + overview.width && gallery.y < overview.y + overview.height);
+}
+
+u32 StepWidgetGalleryCounter(in u32 count){
+    if(count != u32.max)
+        return count + 1u;
+    return count;
+}
+
+Point ResolveWidgetGalleryContentOrigin(in Rect bounds, in u32 selected){
+    const f32 width = ResolveWidgetGalleryContentWidth(selected);
+    return Point(
+        bounds.x + (bounds.width - width) * 0.5f,
+        bounds.y + s_SelectorHeight + s_ContentGap
+    );
+}
+
+Rect ResolvePopupGalleryAnchorRect(in f32 x, in f32 y){
+    return Rect(
+        x + s_PopupAnchorLeft,
+        y + s_PopupAnchorTop,
+        s_PopupMenuButtonWidth,
+        s_PopupAnchorHeight
+    );
+}
+
+Rect ResolveNestedPopupParentAnchorRect(in f32 x, in f32 y){
+    return Rect(
+        x + s_NestedPopupParentAnchorInset,
+        y + s_NestedPopupParentAnchorTop,
+        s_NestedPopupParentAnchorWidth,
+        s_NestedPopupParentAnchorHeight
+    );
+}
+
+Rect ResolveNestedPopupChildAnchorRect(in Rect parentBounds){
+    return Rect(
+        (parentBounds.x + parentBounds.width) - s_NestedPopupChildAnchorWidth,
+        parentBounds.y + s_NestedPopupChildAnchorTop,
+        s_NestedPopupChildAnchorWidth,
+        s_NestedPopupChildAnchorHeight
+    );
 }
 
 

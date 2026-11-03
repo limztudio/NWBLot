@@ -28,7 +28,7 @@ void UiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     PopupOptions options;
-    options.anchor = { x + s_PopupAnchorLeft, y + s_PopupAnchorTop, s_PopupMenuButtonWidth, s_PopupAnchorHeight };
+    options.anchor = ResolvePopupGalleryAnchorRect(x, y);
     options.size = { s_PopupGalleryWidth, s_PopupGalleryHeight };
     if(!ui.beginPopup("gallery_menu", m_popup, options))
         return;

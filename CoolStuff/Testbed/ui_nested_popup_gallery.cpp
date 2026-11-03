@@ -45,7 +45,7 @@ void UiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
         valid = ui.label(s_HintKey, "Escape/outside closes the top child") && valid;
         valid = ui.endPanel() && valid;
         PopupOptions parent;
-        parent.anchor = { x + s_NestedPopupParentAnchorInset, y + s_NestedPopupParentAnchorTop, s_NestedPopupParentAnchorWidth, s_NestedPopupParentAnchorHeight };
+        parent.anchor = ResolveNestedPopupParentAnchorRect(x, y);
         parent.size = { s_NestedPopupParentWidth, s_NestedPopupParentHeight };
         if(ui.beginPopup("nested_parent", m_parent, parent)){
             valid = paintParent(ui) && valid;
@@ -101,7 +101,7 @@ b8 UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
     using namespace NWB::Impl::Ui;
     const Rect& parent = m_parent.placement().bounds;
     PopupOptions options;
-    options.anchor = { (parent.x + parent.width) - s_NestedPopupChildAnchorWidth, parent.y + s_NestedPopupChildAnchorTop, s_NestedPopupChildAnchorWidth, s_NestedPopupChildAnchorHeight };
+    options.anchor = ResolveNestedPopupChildAnchorRect(parent);
     options.side = PopupPlacementSide::Right;
     options.size = { s_NestedPopupChildWidth, s_NestedPopupChildHeight };
     if(!ui.beginPopup("right_child", m_child, options))

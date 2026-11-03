@@ -214,6 +214,20 @@ SingleAssetRefComponentPayloadBinary PackSingleAssetRefComponentPayloadBinary(in
     return binaryPayload;
 }
 
+AssetRef<TAsset> UnpackSingleAssetRefComponentPayloadBinary<TAsset>(in SingleAssetRefComponentPayloadBinary binaryPayload){
+    AssetRef<TAsset> ref;
+    ref.virtualPath = Name(binaryPayload.assetHash);
+    return ref;
+}
+
+b8 ValidateSingleAssetRefComponentAssetPayload(in b8 validAssetRef, in Name virtualPath, in StringView context, in StringView kindLabel){
+    if(validAssetRef)
+        return true;
+
+    error("{} failed: {} '{}' asset must not be empty", context, kindLabel, virtualPath.resolvedText());
+    return false;
+}
+
 b8 IsAllowedRendererComponentMetadataField(in StringView field){
     return
         field == s_RendererComponentMaterialField

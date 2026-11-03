@@ -69,10 +69,8 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
 
 
 Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::AssetArena& arena){
-    if(entry.regions.size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("BuildUiSkinAsset failed: region count {} exceeds schema limit {}"), entry.regions.size(), s_UiSkinMaxRegionCount);
+    if(!ValidateUiSkinCookRegionCount(entry.regions.size()))
         return MakeUnexpected(Failure{});
-    }
     UiSkin candidate(arena, entry.virtualPath);
     UiSkin::RegionVector regions(entry.regions.begin(), entry.regions.end(), arena);
     candidate.setAtlas(entry.texture, entry.atlasWidth, entry.atlasHeight, entry.referenceDensity, Move(regions));

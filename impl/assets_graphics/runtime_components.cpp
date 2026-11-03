@@ -36,24 +36,20 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_ModelComponentAssetAutoRegistrar, ModelCo
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
 
-template<typename AssetRefT>
-[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(const Span<const u8> payload, const TStringView context, AssetRefT& outRef){
+template<typename TAsset>
+[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(const Span<const u8> payload, const TStringView context, Core::Assets::AssetRef<TAsset>& outRef){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, context);
     if(!binaryPayload)
         return false;
-    outRef.virtualPath = Name(binaryPayload->assetHash);
+    outRef = UnpackSingleAssetRefComponentPayloadBinary<TAsset>(*binaryPayload);
     return true;
 }
 
-template<typename ComponentAssetT, typename AssetRefT>
-[[nodiscard]] static b8 ValidateSingleAssetRefComponentPayload(const ComponentAssetT& componentAsset, const AssetRefT& assetRef, const TStringView context, const TStringView kindLabel){
+template<typename ComponentAssetT, typename TAsset>
+[[nodiscard]] static b8 ValidateSingleAssetRefComponentPayload(const ComponentAssetT& componentAsset, const Core::Assets::AssetRef<TAsset>& assetRef, const TStringView context, const AStringView contextAscii, const AStringView kindLabel){
     if(!componentAsset.checkVirtualPath(context))
         return false;
-    if(!assetRef.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: {} '{}' asset must not be empty"), context, kindLabel, ConvertString(componentAsset.virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return ValidateSingleAssetRefComponentAssetPayload(assetRef.valid(), componentAsset.virtualPath(), contextAscii, kindLabel);
 }
 
 
@@ -71,7 +67,7 @@ b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
 }
 
 b8 ModelComponentAsset::validatePayload()const{
-    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.model, NWB_TEXT("ModelComponentAsset::validatePayload"), NWB_TEXT("model_component"));
+    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.model, NWB_TEXT("ModelComponentAsset::validatePayload"), "ModelComponentAsset::validatePayload", "model_component");
 }
 
 
@@ -83,7 +79,7 @@ b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
 }
 
 b8 MeshComponentAsset::validatePayload()const{
-    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.mesh, NWB_TEXT("MeshComponentAsset::validatePayload"), NWB_TEXT("mesh_component"));
+    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.mesh, NWB_TEXT("MeshComponentAsset::validatePayload"), "MeshComponentAsset::validatePayload", "mesh_component");
 }
 
 

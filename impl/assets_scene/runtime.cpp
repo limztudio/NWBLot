@@ -29,14 +29,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ProjectAssetCodecAutoRegistrar, ProjectAssetC
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SceneAssetCodecAutoRegistrar, SceneAssetCodec);
 
 template<typename TAsset>
-static void AssignAssetRefsFromHashes(const Span<const NameHash> hashes, Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>& outRefs){
-    outRefs.clear();
-    outRefs.reserve(hashes.size());
-    for(const NameHash& hash : hashes)
-        outRefs.push_back(Core::Assets::AssetRef<TAsset>(Name(hash)));
-}
-
-template<typename TAsset>
 [[nodiscard]] static b8 ValidateUniqueAssetRefs(const Span<const Core::Assets::AssetRef<TAsset>> references, const TStringView contextPrefix, const TStringView contextLabel, Core::Alloc::ScratchArena& scratchArena){
     SceneScratchNameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     seen.reserve(references.size());
@@ -75,10 +67,8 @@ template<typename TAsset>
 b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("EntityAsset::validatePayload")))
         return false;
-    if(m_components.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("EntityAsset::validatePayload failed: entity must declare at least one component"));
+    if(!ValidateEntityAssetComponentCount(m_components.size()))
         return false;
-    }
     if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const ComponentRef>(m_components), NWB_TEXT("EntityAsset::validatePayload"), NWB_TEXT("component"), scratchArena))
         return false;
     return true;
@@ -102,7 +92,7 @@ b8 EntityAsset::loadBinary(const Span<const u8> binary){
 
     auto& assetArena = m_components.get_allocator().arena();
     EntityAsset candidate(assetArena, virtualPath());
-    __hidden_scene_runtime::AssignAssetRefsFromHashes(Span<const NameHash>(componentHashes), candidate.m_components);
+    AssignAssetRefsFromHashes(Span<const NameHash>(componentHashes), candidate.m_components);
 
     if(!candidate.validatePayload(scratchArena))
         return false;
@@ -117,11 +107,7 @@ b8 EntityAsset::loadBinary(const Span<const u8> binary){
 b8 ProjectAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("ProjectAsset::validatePayload")))
         return false;
-    if(!m_startScene.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ProjectAsset::validatePayload failed: start_scene must not be empty"));
-        return false;
-    }
-    return true;
+    return ValidateProjectAssetPayload(m_startScene.valid());
 }
 
 b8 ProjectAsset::loadBinary(const Span<const u8> binary){
@@ -146,10 +132,8 @@ b8 ProjectAsset::loadBinary(const Span<const u8> binary){
 b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("SceneAsset::validatePayload")))
         return false;
-    if(m_subsystems.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: scene must declare at least one subsystem"));
+    if(!ValidateSceneAssetSubsystemCount(m_subsystems.size()))
         return false;
-    }
     if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), NWB_TEXT("SceneAsset::validatePayload"), NWB_TEXT("subsystem"), scratchArena))
         return false;
     if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const EntityRef>(m_entities), NWB_TEXT("SceneAsset::validatePayload"), NWB_TEXT("entity"), scratchArena))
@@ -185,10 +169,10 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
     auto& assetArena = m_subsystems.get_allocator().arena();
     SceneAsset candidate(assetArena, virtualPath());
 
-    __hidden_scene_runtime::AssignAssetRefsFromHashes(Span<const NameHash>(subsystemHashes), candidate.m_subsystems);
+    AssignAssetRefsFromHashes(Span<const NameHash>(subsystemHashes), candidate.m_subsystems);
     SubsystemAssetRuntime::DeduplicateSubsystemRefs(candidate.m_subsystems);
 
-    __hidden_scene_runtime::AssignAssetRefsFromHashes(Span<const NameHash>(entityHashes), candidate.m_entities);
+    AssignAssetRefsFromHashes(Span<const NameHash>(entityHashes), candidate.m_entities);
 
     candidate.m_assets.reserve(assetEntries.size());
     for(usize i = 0u; i < assetEntries.size(); ++i){

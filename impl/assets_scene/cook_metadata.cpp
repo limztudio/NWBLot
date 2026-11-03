@@ -43,7 +43,7 @@ using namespace Core::Metascript;
     assets.reserve(map.size());
     for(const auto& [nicknameKey, assetValue] : map){
         const AStringView nicknameView(nicknameKey.data(), nicknameKey.size());
-        if(TrimView(nicknameView).empty() || nicknameView != TrimView(nicknameView)){
+        if(!IsValidSceneAssetNicknameText(nicknameView)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' must not be empty or padded"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }

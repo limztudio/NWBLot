@@ -233,54 +233,29 @@ void Project::pointerCaptureLost()noexcept{
 }
 
 b8 Project::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
-    if(!IsFinite(xpos) || !IsFinite(ypos)){
-        m_mousePositionValid = false;
-        return false;
-    }
-
-    if(MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer()){
-        m_mousePositionValid = false;
-        return false;
-    }
-
-    if(!m_mouseLookActive){
-        m_mousePositionValid = false;
-        return false;
-    }
-
-    if(!m_mousePositionValid){
-        m_lastMouseX = xpos;
-        m_lastMouseY = ypos;
-        m_mousePositionValid = true;
-        return false;
-    }
-
-    AccumulateFlyCameraMouseDelta(xpos, ypos, m_lastMouseX, m_lastMouseY, m_pendingMouseDeltaX, m_pendingMouseDeltaY);
-    m_lastMouseX = xpos;
-    m_lastMouseY = ypos;
+    UpdateFlyCameraMousePosition(
+        xpos,
+        ypos,
+        MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer(),
+        m_mouseLookActive,
+        m_mousePositionValid,
+        m_lastMouseX,
+        m_lastMouseY,
+        m_pendingMouseDeltaX,
+        m_pendingMouseDeltaY
+    );
     return false;
 }
 
 b8 Project::mouseButtonUpdate(const i32 button, const i32 action, [[maybe_unused]] const i32 mods)noexcept{
-    if(MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer()){
-        if(button == NWB::Core::MouseButton::Right && action == NWB::Core::InputAction::Release){
-            m_mouseLookActive = false;
-            m_mousePositionValid = false;
-        }
-        return false;
-    }
-
-    if(button != NWB::Core::MouseButton::Right)
-        return false;
-
-    if(action == NWB::Core::InputAction::Press){
-        m_mouseLookActive = true;
-        m_mousePositionValid = false;
-    }
-    else if(action == NWB::Core::InputAction::Release){
-        m_mouseLookActive = false;
-        m_mousePositionValid = false;
-    }
+    UpdateFlyCameraMouseButton(
+        MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsPointer(),
+        button == NWB::Core::MouseButton::Right,
+        action == NWB::Core::InputAction::Press,
+        action == NWB::Core::InputAction::Release,
+        m_mouseLookActive,
+        m_mousePositionValid
+    );
     return false;
 }
 
@@ -380,10 +355,7 @@ void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     options.initialBounds = { s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight };
     options.contentHeightFirstUse = true;
     const auto gallery = m_uiPreview.galleryBounds(context);
-    if(!gallery)
-        return;
-    const auto& overview = options.initialBounds;
-    if(gallery->x < overview.x + overview.width && gallery->y < overview.y + overview.height)
+    if(!gallery || !CanShowTestbedOverviewWindow(*gallery, options.initialBounds))
         return;
     NWB::Impl::Ui::SeparatorOptions separator;
     separator.thickness = 1.0f;

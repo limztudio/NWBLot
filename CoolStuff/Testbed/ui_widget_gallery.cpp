@@ -54,9 +54,9 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
     if(previous != selected)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
 
-    const f32 width = ResolveWidgetGalleryContentWidth(selected);
-    const f32 x = bounds.x + (bounds.width - width) * 0.5f;
-    const f32 y = bounds.y + s_SelectorHeight + s_ContentGap;
+    const Point contentOrigin = ResolveWidgetGalleryContentOrigin(bounds, selected);
+    const f32 x = contentOrigin.x;
+    const f32 y = contentOrigin.y;
     switch(selected){
     case Section::Controls:
         paintControls(context, scratchArena, x, y);
@@ -91,8 +91,7 @@ void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, NWB::Cor
     options.enabled = m_enabled;
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     if(ui.button("increase", "Increase", options)){
-        if(m_count != Limit<u32>::s_Max)
-            ++m_count;
+        m_count = StepWidgetGalleryCounter(m_count);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom UI counter={}"), m_count);
     }
     if(ui.button("reset", "Reset"))

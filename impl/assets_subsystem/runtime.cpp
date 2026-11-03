@@ -49,23 +49,7 @@ namespace SubsystemAssetRuntime{
 
 
 void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept{
-    usize writeIndex = 0u;
-    for(usize readIndex = 0u; readIndex < subsystems.size(); ++readIndex){
-        const ISubsystem::SubsystemRef& candidate = subsystems[readIndex];
-        b8 duplicate = false;
-        for(usize prevIndex = 0u; prevIndex < writeIndex; ++prevIndex){
-            if(subsystems[prevIndex].name() == candidate.name()){
-                duplicate = true;
-                break;
-            }
-        }
-        if(!duplicate){
-            if(writeIndex != readIndex)
-                subsystems[writeIndex] = candidate;
-            ++writeIndex;
-        }
-    }
-    subsystems.resize(writeIndex);
+    ::NWB::Impl::DeduplicateSubsystemRefs(subsystems);
 }
 
 b8 ValidatePayload(const ISubsystem& subsystem){
@@ -130,17 +114,8 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SubsystemLoadBinaryContext))
         return false;
 
-    outSubsystem.subsystems.clear();
-    outSubsystem.subsystems.reserve(subsystemHashes.size());
-    for(const NameHash& subsystemHash : subsystemHashes){
-        const Name subsystemName(subsystemHash);
-        if(!subsystemName){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: subsystem reference must not be empty"));
-            return false;
-        }
-        outSubsystem.subsystems.push_back(ISubsystem::SubsystemRef(subsystemName));
-    }
-    DeduplicateSubsystemRefs(outSubsystem.subsystems);
+    if(!UnpackSubsystemRefHashes(Span<const NameHash>(subsystemHashes), outSubsystem.subsystems))
+        return false;
 
     if(!ValidateSubsystemFieldElementCountSum(Span<const u64>(fieldCounts), header.assetCount))
         return false;

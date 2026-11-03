@@ -477,6 +477,45 @@ b8 ValidateSceneAssetBinaryEntry(in Name nickname, in b8 hasValidRef, in usize i
     return false;
 }
 
+void AssignAssetRefsFromHashes<TAsset>(in Span<NameHash> hashes, mut Vector<AssetRef<TAsset>> outRefs){
+    outRefs.clear();
+    outRefs.reserve(hashes.size());
+    for(in NameHash hash : hashes){
+        AssetRef<TAsset> ref;
+        ref.virtualPath = Name(hash);
+        outRefs.push_back(ref);
+    }
+}
+
+b8 ValidateProjectAssetPayload(in b8 hasStartScene){
+    if(hasStartScene)
+        return true;
+
+    error("ProjectAsset::validatePayload failed: start_scene must not be empty");
+    return false;
+}
+
+b8 ValidateEntityAssetComponentCount(in usize componentCount){
+    if(componentCount != 0u)
+        return true;
+
+    error("EntityAsset::validatePayload failed: entity must declare at least one component");
+    return false;
+}
+
+b8 ValidateSceneAssetSubsystemCount(in usize subsystemCount){
+    if(subsystemCount != 0u)
+        return true;
+
+    error("SceneAsset::validatePayload failed: scene must declare at least one subsystem");
+    return false;
+}
+
+b8 IsValidSceneAssetNicknameText(in StringView nicknameView){
+    const StringView trimmed = trimView(nicknameView);
+    return !trimmed.empty() && nicknameView == trimmed;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -50,20 +50,29 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
     return IsScalarType(typeName) || FindBuiltinNwbValueType(typeName) != nullptr;
 }
 
+[[nodiscard]] b8 RequiresNwbNameAdmission(const MStringView typeName)noexcept{
+    const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName);
+    return nwbVal && nwbVal->requiresNameAdmission;
+}
+
 void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const MStringView valueAccessor, const TypeRef& typeRef, const SymbolTable& symbols){
-    if(typeName == "Name"){
-        out.append("*__name");
-    }
-    else if(typeName == "AssetRef"){
-        const CppTypeEmitter typeEmitter(symbols);
-        typeEmitter.emitTypeCpp(out, typeRef);
-        out.append("(*__name)");
-    }
-    else if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName)){
-        out.append(nwbVal->valuePrefix.data(), nwbVal->valuePrefix.size());
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(nwbVal->nwbAccessorMethod.data(), nwbVal->nwbAccessorMethod.size());
-        out.append(nwbVal->valueSuffix.data(), nwbVal->valueSuffix.size());
+    if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName)){
+        if(nwbVal->requiresNameAdmission){
+            if(IsAssetHandleType(typeName)){
+                const CppTypeEmitter typeEmitter(symbols);
+                typeEmitter.emitTypeCpp(out, typeRef);
+                out.append("(*__name)");
+            }
+            else{
+                out.append("*__name");
+            }
+        }
+        else{
+            out.append(nwbVal->valuePrefix.data(), nwbVal->valuePrefix.size());
+            out.append(valueAccessor.data(), valueAccessor.size());
+            out.append(nwbVal->nwbAccessorMethod.data(), nwbVal->nwbAccessorMethod.size());
+            out.append(nwbVal->valueSuffix.data(), nwbVal->valueSuffix.size());
+        }
     }
     else if(IsIntegerScalarType(typeName) || IsFloatScalarType(typeName)){
         out.append("static_cast<");
@@ -75,18 +84,23 @@ void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const 
 }
 
 void EmitNwbValueAdmissionGuard(MString& out, const MStringView typeName, const MStringView valueAccessor){
+    const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName);
     out.append("if(!");
     out.append(valueAccessor.data(), valueAccessor.size());
-    if(typeName == "b8" || IsIntegerScalarType(typeName) || typeName == "EntityID")
-        out.append(".isInteger()) continue; ");
+    if(nwbVal)
+        out.append(nwbVal->nwbCheckMethod.data(), nwbVal->nwbCheckMethod.size());
+    else if(IsIntegerScalarType(typeName))
+        out.append(".isInteger()");
     else if(IsFloatScalarType(typeName))
-        out.append(".isNumeric()) continue; ");
+        out.append(".isNumeric()");
     else
-        out.append(".isString()) continue; ");
-    if(typeName == "Name" || typeName == "AssetRef"){
+        out.append(".isString()");
+    out.append(") continue; ");
+    if(nwbVal && nwbVal->requiresNameAdmission){
         out.append("const auto __name = ::Name::FromText(");
         out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString()); if(!__name) continue; ");
+        out.append(nwbVal->nwbAccessorMethod.data(), nwbVal->nwbAccessorMethod.size());
+        out.append("); if(!__name) continue; ");
     }
 }
 
@@ -127,7 +141,7 @@ void EmitNwbMapKeyExpr(MString& out, const MStringView keyName, const b8 isEnumK
     if(isEnumKey){
         out.append("*__ek");
     }
-    else if(keyName == "Name"){
+    else if(RequiresNwbNameAdmission(keyName)){
         out.append("*__key");
     }
     else if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(keyName)){
@@ -402,11 +416,11 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
             out.append(keyName.data(), keyName.size());
             out.append("::parseNamedEnum(__k)){ ");
         }
-        else if(keyName == "Name")
+        else if(RequiresNwbNameAdmission(keyName))
             out.append("if(const auto __key = ::Name::FromText(AStringView(__k.data(), __k.size()))){ ");
     };
     const auto emitKeyGuardClose = [&](){
-        if(isEnumKey || keyName == "Name")
+        if(isEnumKey || RequiresNwbNameAdmission(keyName))
             out.append(" }");
     };
 
@@ -620,7 +634,7 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
                 out.append("__f->isMap()){ for([[maybe_unused]] const auto& [__k, __v] : __f->asMap()){ ");
                 if(effectiveTypeRef->templateArgs[0].type){
                     const MStringView keyName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
-                    if(keyName == "Name")
+                    if(RequiresNwbNameAdmission(keyName))
                         out.append("if(!::Name::FromText(AStringView(__k.data(), __k.size()))) continue; ");
                     else if(m_symbols.findEnum(keyName)){
                         out.append("if(!");

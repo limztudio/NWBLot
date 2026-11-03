@@ -129,6 +129,7 @@ struct BuiltinBinaryHashTypeInfo{
 
 struct BuiltinNwbValueTypeInfo{
     MStringView adhdName;
+    MStringView nwbCheckMethod;
     MStringView nwbAccessorMethod;
     MStringView valuePrefix;
     MStringView valueSuffix;
@@ -136,6 +137,7 @@ struct BuiltinNwbValueTypeInfo{
     MStringView directFieldSuffix;
     MStringView optionalFieldPrefix;
     MStringView optionalFieldSuffix;
+    b8 requiresNameAdmission;
 };
 
 struct BuiltinImplicitConversionInfo{
@@ -276,6 +278,11 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 NeedsBraceDefaultFieldInit(MStringView name)noexcept;
 [[nodiscard]] b8 IsStringLikeType(MStringView name)noexcept;
 [[nodiscard]] b8 IsOwningStringType(MStringView name)noexcept;
+[[nodiscard]] b8 HasMutableStringElements(MStringView name)noexcept;
+[[nodiscard]] b8 IsStringByteAccessorMethod(MStringView receiverTypeName, MStringView methodName)noexcept;
+[[nodiscard]] b8 IsStringReceiverBorrowViewMethod(MStringView receiverTypeName, MStringView methodName)noexcept;
+[[nodiscard]] b8 IsBuiltinStringViewBorrowFunction(MStringView name)noexcept;
+[[nodiscard]] b8 IsContainerOrWrapperValueAccessMethod(MStringView receiverTypeName, MStringView methodName, b8 includeStrings)noexcept;
 [[nodiscard]] b8 IsNwbMapKeyType(MStringView name)noexcept;
 [[nodiscard]] b8 RequiresTCharAdaptation(MStringView name)noexcept;
 [[nodiscard]] b8 IsImplicitlyConvertibleBuiltinType(MStringView fromTypeName, MStringView toTypeName)noexcept;

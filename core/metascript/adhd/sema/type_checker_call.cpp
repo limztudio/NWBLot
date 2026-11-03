@@ -454,20 +454,20 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     reportError(errors, expr.span, "'substr' accepts at most 2 arguments");
                     ok = false;
                 }
-                if(objType == "String")
+                if(SymbolTable::IsArenaBackedContainer(objType))
                     expr.isStringSubstr = true;
                 if(isMutationTarget){
                     reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
                     ok = false;
                 }
             }
-            else if(isStringFamily && (mName == "front" || mName == "back")){
+            else if(IsStringByteAccessorMethod(objType, mName)){
                 if(callArgCount != 0u){
                     reportError(errors, expr.span, "'front' and 'back' do not accept arguments");
                     ok = false;
                 }
                 if(isMutationTarget){
-                    if(objType == "StringView" || objType == "CompactString"){
+                    if(!HasMutableStringElements(objType)){
                         reportError(errors, expr.span, "cannot mutate elements of 'StringView' or 'CompactString'");
                         ok = false;
                     }

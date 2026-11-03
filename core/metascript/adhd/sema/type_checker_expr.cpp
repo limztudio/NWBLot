@@ -310,7 +310,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             expr.derefNotNull = true;
         if(!customOpIdx && IsStringLikeType(lhsBaseType)){
             if(isMutationTarget){
-                if(lhsBaseType == "StringView" || lhsBaseType == "CompactString"){
+                if(!HasMutableStringElements(lhsBaseType)){
                     reportError(errors, expr.span, "cannot mutate elements of 'StringView' or 'CompactString'");
                     ok = false;
                 }

@@ -42,8 +42,8 @@ inline constexpr Array s_BuiltinBinaryHashTypes = {
 };
 
 inline constexpr Array s_BuiltinNwbValueTypes = {
-#define NWB_ADHD_EXPORT_NWB_VALUE_TYPE(adhdName, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix) \
-    BuiltinNwbValueTypeInfo{ adhdName, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix },
+#define NWB_ADHD_EXPORT_NWB_VALUE_TYPE(adhdName, nwbCheckMethod, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix, requiresNameAdmission) \
+    BuiltinNwbValueTypeInfo{ adhdName, nwbCheckMethod, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix, requiresNameAdmission },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_NWB_VALUE_TYPE
 };
@@ -303,6 +303,45 @@ b8 IsOwningStringType(const MStringView name)noexcept{
     if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
         return info->isStringLike && !info->isBorrowView;
     return false;
+}
+
+b8 HasMutableStringElements(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
+        return info->isStringLike && info->isArenaBacked;
+    return false;
+}
+
+b8 IsStringByteAccessorMethod(const MStringView receiverTypeName, const MStringView methodName)noexcept{
+    if(!IsStringLikeType(receiverTypeName))
+        return false;
+    const BuiltinReceiverMethodInfo* rm = FindBuiltinReceiverMethod(receiverTypeName, methodName);
+    return rm && rm->returnTypeName == "u8";
+}
+
+b8 IsStringReceiverBorrowViewMethod(const MStringView receiverTypeName, const MStringView methodName)noexcept{
+    if(!IsStringLikeType(receiverTypeName))
+        return false;
+    const BuiltinReceiverMethodInfo* rm = FindBuiltinReceiverMethod(receiverTypeName, methodName);
+    return rm && rm->returnTypeName == "StringView";
+}
+
+b8 IsBuiltinStringViewBorrowFunction(const MStringView name)noexcept{
+    const BuiltinFunctionInfo* fn = FindBuiltinFunction(name);
+    return fn && fn->returnRule == BuiltinFunctionReturnRule::FixedType && fn->returnTypeName == "StringView" && fn->argRules[0] == BuiltinFunctionArgRule::StringView;
+}
+
+b8 IsContainerOrWrapperValueAccessMethod(const MStringView receiverTypeName, const MStringView methodName, const b8 includeStrings)noexcept{
+    if(includeStrings && IsStringByteAccessorMethod(receiverTypeName, methodName))
+        return true;
+    const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(receiverTypeName);
+    if(!genericInfo || genericInfo->isBorrowView)
+        return false;
+    if(genericInfo->inlineLayoutKind == InlineLayoutKind::Optional || genericInfo->inlineLayoutKind == InlineLayoutKind::Expected)
+        return methodName == "value";
+    if(genericInfo->inlineLayoutKind == InlineLayoutKind::Atomic)
+        return false;
+    const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(methodName);
+    return memberInfo && !memberInfo->isMutating && memberInfo->returnRule == BuiltinMemberReturnRule::FirstTypeArg;
 }
 
 b8 IsNwbMapKeyType(const MStringView name)noexcept{

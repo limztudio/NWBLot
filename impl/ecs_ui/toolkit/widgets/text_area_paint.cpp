@@ -30,9 +30,10 @@ b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
     if(!viewport)
         return false;
     const f32 lineHeight = item.editView.layout().lines().empty() ? item.editView.layout().fontSize() : item.editView.layout().lines().front().height;
-    const Point step{ item.editView.layout().fontSize() * frame.wheelLines, lineHeight * frame.wheelLines };
-    if(!IsFinite(step.x) || !IsFinite(step.y) || step.x <= 0.0f || step.y <= 0.0f)
+    const auto stepResult = TryResolveTextAreaScrollStep(item.editView.layout().fontSize(), lineHeight, frame.wheelLines);
+    if(!stepResult)
         return false;
+    const Point step = *stepResult;
     const ControlToken token = state.m_scrollInput.prepare(item.state, m_context.popupToken(), state.instanceGeneration(), state.revision(), *frame.model, item.editOptions.enabled, item.editOptions.readOnly, *viewport, step);
     m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
     if(!applyTextAreaScrollInput(item, frame, token))

@@ -101,24 +101,31 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
         m_context.fail();
         return result;
     }
-    const b8 firstBinding = state.m_visual.modelGeneration == 0u;
-    const b8 rebound = !firstBinding && state.m_visual.modelGeneration != modelGeneration;
     const Point requestedScroll = state.scroll();
-    if(rebound){
-        state.m_visual.scroll = 0.0f;
-        state.m_scrollY = 0.0f;
-        state.m_revealCaret = true;
-    }
-    else if(
-        !firstBinding && (state.m_visual.revision != model.revision()
-        || state.m_visual.selectionGeneration != model.selectionGeneration()
-        || state.m_compositionGeneration != model.compositionGeneration()
-        || state.m_visual.anchor != model.anchor() || state.m_visual.caret != model.caret()
-        || (!state.m_visual.focused && result.focused && (!m_context.input().capture().valid() || m_context.input().capture() == (*widget)->id)))
-    )
-        state.m_revealCaret = true;
-    if(!firstBinding && state.m_compositionGeneration != model.compositionGeneration())
-        state.m_visual.caretElapsed = 0.0f;
+    b8 firstBinding = false;
+    ReconcileTextAreaVisualScrollState(
+        modelGeneration,
+        model.revision(),
+        model.selectionGeneration(),
+        model.compositionGeneration(),
+        model.anchor(),
+        model.caret(),
+        result.focused,
+        m_context.input().capture(),
+        (*widget)->id,
+        state.m_compositionGeneration,
+        state.m_visual.modelGeneration,
+        state.m_visual.revision,
+        state.m_visual.selectionGeneration,
+        state.m_visual.anchor,
+        state.m_visual.caret,
+        state.m_visual.focused,
+        state.m_visual.scroll,
+        state.m_scrollY,
+        state.m_revealCaret,
+        state.m_visual.caretElapsed,
+        firstBinding
+    );
     TextAreaFrame frame;
     frame.wheelLines = options.wheelLines;
     frame.model = &model;

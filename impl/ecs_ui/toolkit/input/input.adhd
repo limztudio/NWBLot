@@ -2358,6 +2358,467 @@ void ReconcileRouterContextMenus(
     }
 }
 
+Expected<usize> FindRouterPointerSourceIndex(
+    in Span<PointerSource> pointerSources,
+    in InputSource source,
+    in PointerIntent intent
+){
+    for(usize index = 0u; index < pointerSources.size(); ++index){
+        if(pointerSources[index].source == source && pointerSources[index].intent == intent)
+            return index;
+    }
+    return makeUnexpected(Failure());
+}
+
+b8 OwnsRouterPointerSource(
+    in Span<PointerSource> pointerSources,
+    in InputSource source,
+    in PointerIntent intent
+){
+    const Expected<usize> found = FindRouterPointerSourceIndex(pointerSources, source, intent);
+    return found.has_value() && pointerSources[found.value()].consumed;
+}
+
+b8 OwnsRouterCommandSource(
+    in Span<CommandSource> commandSources,
+    in InputSource source
+){
+    const Expected<usize> found = FindRouterCommandSourceIndex(commandSources, source);
+    return found.has_value() && commandSources[found.value()].consumed;
+}
+
+void TerminateRouterPointerSource(
+    in InputSource source,
+    in InputSource hoverPointerSource,
+    mut Vector<PointerSource> pointerSources,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut u64 inOutActiveGestureSequence,
+    mut b8 inOutPointerSubmitArmed,
+    mut TargetOwner inOutSecondaryOwner,
+    mut WidgetId inOutCapture,
+    mut PopupToken inOutCapturePopup,
+    mut u64 inOutCaptureDeclaration,
+    mut ControlToken inOutCaptureControl,
+    mut b8 inOutPrimaryDown,
+    mut b8 inOutPointerSequenceConsumed,
+    mut b8 inOutSecondaryDown,
+    mut b8 inOutSecondarySequenceConsumed,
+    mut InputSource inOutActivePointerSource,
+    mut b8 outUnfinishedHoverSource
+){
+    outUnfinishedHoverSource = false;
+    const b8 active = inOutActivePointerSource == source;
+    b8 unfinished = false;
+    for(in PointerSource held : pointerSources){
+        if(held.source == source){
+            unfinished = true;
+            break;
+        }
+    }
+    if(active){
+        CancelRouterPointerPress(
+            pointerGestures,
+            inOutActiveGestureSequence,
+            inOutPointerSubmitArmed,
+            inOutSecondaryOwner,
+            inOutCapture,
+            inOutCapturePopup,
+            inOutCaptureDeclaration,
+            inOutCaptureControl
+        );
+        inOutPrimaryDown = false;
+        inOutPointerSequenceConsumed = false;
+        inOutSecondaryDown = false;
+        inOutSecondarySequenceConsumed = false;
+        inOutActivePointerSource = InputSource();
+    }
+    usize keptSources = 0u;
+    for(usize index = 0u; index < pointerSources.size(); ++index){
+        if(pointerSources[index].source != source){
+            if(keptSources != index)
+                pointerSources[keptSources] = pointerSources[index];
+            ++keptSources;
+        }
+    }
+    pointerSources.resize(keptSources);
+    outUnfinishedHoverSource = unfinished && hoverPointerSource == source;
+}
+
+b8 IsValidRouterTargetRect(in Rect rectangle){
+    if(
+        !isFinite(rectangle.x)
+        || !isFinite(rectangle.y)
+        || !isFinite(rectangle.width) || rectangle.width < 0.0f
+        || !isFinite(rectangle.height) || rectangle.height < 0.0f
+    )
+        return false;
+    const f32 right = rectangle.x + rectangle.width;
+    const f32 bottom = rectangle.y + rectangle.height;
+    return isFinite(right) && isFinite(bottom);
+}
+
+b8 HasValidRouterHitTargetGeometry(in Rect rectangle, in Rect clip, in Rect gestureReference){
+    return
+        IsValidRouterTargetRect(rectangle)
+        && IsValidRouterTargetRect(clip)
+        && IsValidRouterTargetRect(gestureReference)
+        && ((gestureReference.width == 0.0f) == (gestureReference.height == 0.0f))
+    ;
+}
+
+b8 StageRouterHitTargets(
+    in Span<HitTarget> targets,
+    in Span<PopupRecord> stagedPopups,
+    mut Vector<HitTarget> stagedTargets,
+    mut Vector<TargetLookup> stagedLookup
+){
+    stagedTargets.clear();
+    stagedLookup.clear();
+    for(usize index = 0u; index < targets.size(); ++index){
+        const HitTarget target = targets[index];
+        if(
+            !target.id.valid() || target.declarationGeneration == 0u
+            || !HasValidRouterHitTargetGeometry(target.rectangle, target.clip, target.gestureReference)
+            || !ValidStagedPopupTarget(target, stagedPopups)
+        )
+            return false;
+        stagedTargets.push_back(target);
+        TargetLookup entry;
+        entry.value = target.id.value;
+        entry.index = cast<u32>(index);
+        stagedLookup.push_back(entry);
+    }
+    return true;
+}
+
+b8 ValidateSortedStagedRouterTargetsAndPopups(
+    in Span<HitTarget> stagedTargets,
+    in Span<TargetLookup> stagedLookup,
+    in Span<PopupRecord> stagedPopups
+){
+    for(usize index = 1u; index < stagedLookup.size(); ++index){
+        if(stagedLookup[index - 1u].value == stagedLookup[index].value)
+            return false;
+    }
+    if(!ValidateStagedHitTargetControlTargets(stagedTargets, stagedLookup) || !ValidateStagedHitTargetCommandOwners(stagedTargets, stagedLookup))
+        return false;
+    for(in PopupRecord popup : stagedPopups){
+        const Expected<usize> ownerIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, popup.scope.token.widget, popup.scope.token.declarationGeneration);
+        if(!ownerIndex.has_value())
+            return false;
+        const HitTarget ownerTarget = stagedTargets[ownerIndex.value()];
+        if(ownerTarget.popup != popup.scope.token || !ownerTarget.enabled)
+            return false;
+        if(popup.scope.dismissFocusTraversal){
+            const Expected<usize> anchorIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, popup.scope.focusAnchor, popup.scope.focusAnchorDeclarationGeneration);
+            if(!anchorIndex.has_value())
+                return false;
+            const HitTarget anchorTarget = stagedTargets[anchorIndex.value()];
+            if(anchorTarget.popup != popup.scope.parent || !anchorTarget.focusable || !anchorTarget.enabled || anchorTarget.owner.valid())
+                return false;
+        }
+    }
+    return true;
+}
+
+void ApplyRouterFocusOnCommit(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in b8 windowFocused,
+    in u64 focusLossGeneration,
+    in u64 expectedFocusLossGeneration,
+    mut WidgetId inOutFocus,
+    mut u64 inOutFocusDeclaration,
+    mut ControlToken inOutFocusControl
+){
+    if(inOutFocus.valid() || !windowFocused || (expectedFocusLossGeneration != u64.max && expectedFocusLossGeneration != focusLossGeneration))
+        return;
+    for(in HitTarget target : targets){
+        if(target.focusOnCommit && target.focusable && IsRouterTargetInteractive(targets, lookup, popups, target)){
+            inOutFocus = target.id;
+            inOutFocusDeclaration = target.declarationGeneration;
+            inOutFocusControl = target.control;
+            break;
+        }
+    }
+}
+
+b8 EraseInvalidatedRouterTargets(in WidgetId id, in Span<TargetLookup> lookup, mut Vector<HitTarget> targets){
+    if(!FindTargetIndexInTable(targets, lookup, id, 0u).has_value())
+        return false;
+    usize keptTargets = 0u;
+    for(usize index = 0u; index < targets.size(); ++index){
+        if(targets[index].id != id && targets[index].owner != id){
+            if(keptTargets != index)
+                targets[keptTargets] = targets[index];
+            ++keptTargets;
+        }
+    }
+    targets.resize(keptTargets);
+    return true;
+}
+
+void UpdateRouterHoverTarget(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in b8 hasHovered,
+    in HitTarget hovered,
+    mut HoverIdentity inOutHoverIdentity,
+    mut WidgetId outHover,
+    mut b8 outChangedOwner
+){
+    outChangedOwner = false;
+    HoverIdentity identity;
+    if(hasHovered){
+        if(hovered.owner.valid()){
+            const Expected<HitTarget> host = TryResolveRouterControlHost(targets, lookup, popups, hovered);
+            if(host.has_value())
+                identity = HoverIdentity(host.value().id, host.value().declarationGeneration, host.value().popup, host.value().control);
+        }
+        else
+            identity = HoverIdentity(hovered.id, hovered.declarationGeneration, hovered.popup, hovered.control);
+    }
+    if(
+        inOutHoverIdentity.owner != identity.owner
+        || inOutHoverIdentity.declarationGeneration != identity.declarationGeneration
+        || inOutHoverIdentity.popup != identity.popup
+        || inOutHoverIdentity.control != identity.control
+    )
+        outChangedOwner = true;
+    inOutHoverIdentity = identity;
+    if(hasHovered)
+        outHover = hovered.id;
+    else
+        outHover = WidgetId();
+}
+
+void RouteRouterSecondary(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in b8 windowFocused,
+    in u64 layoutGeneration,
+    in InputEvent event,
+    in b8 hasHit,
+    in HitTarget hit,
+    in b8 primaryDown,
+    in b8 pointerSequenceConsumed,
+    mut Vector<PopupRecord> popups,
+    mut Vector<PopupDismissal> popupDismissals,
+    mut Vector<ContextMenuAction> contextMenuActions,
+    mut u64 inOutNextActionSequence,
+    mut b8 inOutSecondaryDown,
+    mut b8 inOutSecondarySequenceConsumed,
+    mut TargetOwner inOutSecondaryOwner,
+    mut Point inOutSecondaryPosition,
+    mut InputRoutingResult inOutResult,
+    mut b8 outAdvanceHoverActivity,
+    mut b8 outDismissedPopup
+){
+    outAdvanceHoverActivity = false;
+    outDismissedPopup = false;
+    b8 hasAnchor = hasHit;
+    HitTarget anchor = hit;
+    if(hasHit && !hit.contextMenu && hit.owner.valid()){
+        const Expected<HitTarget> host = TryResolveRouterControlHost(targets, lookup, popups, hit);
+        hasAnchor = host.has_value();
+        if(hasAnchor)
+            anchor = host.value();
+    }
+    if(event.type == InputEventType::SecondaryUp){
+        if(inOutSecondaryDown)
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutSecondarySequenceConsumed;
+        else if(primaryDown)
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || pointerSequenceConsumed;
+        else
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || hasHit;
+        if(
+            inOutSecondaryDown
+            && inOutSecondarySequenceConsumed
+            && hasAnchor
+            && anchor.id == inOutSecondaryOwner.target
+            && IsCurrentRouterContextMenuOwner(targets, lookup, popups, windowFocused, inOutSecondaryOwner)
+        )
+            AppendRouterContextMenu(anchor, layoutGeneration, inOutSecondaryPosition, InputActionSource::Pointer, event.source, contextMenuActions, inOutNextActionSequence, inOutResult);
+        inOutSecondaryDown = false;
+        inOutSecondarySequenceConsumed = false;
+        inOutSecondaryOwner = TargetOwner();
+        return;
+    }
+    if(inOutSecondaryDown){
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutSecondarySequenceConsumed;
+        return;
+    }
+    outAdvanceHoverActivity = true;
+    inOutSecondaryDown = true;
+    if(primaryDown)
+        inOutSecondarySequenceConsumed = pointerSequenceConsumed;
+    else
+        inOutSecondarySequenceConsumed = !popups.empty() || hasHit;
+    inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutSecondarySequenceConsumed;
+    if(!inOutSecondarySequenceConsumed)
+        return;
+    if(!popups.empty() && !hasHit){
+        outDismissedPopup = TryDismissRouterPopup(PopupDismissReason::OutsideClick, popups, popupDismissals);
+        return;
+    }
+    if(!hasAnchor || !anchor.contextMenu || !windowFocused)
+        return;
+    inOutSecondaryOwner = TargetOwner(anchor.id, anchor.declarationGeneration, anchor.popup, anchor.control);
+    inOutSecondaryPosition = event.position;
+}
+
+void RetireRouterQueuedReleases(
+    in Span<InputEvent> events,
+    in InputSource hoverPointerSource,
+    mut Vector<CommandSource> commandSources,
+    mut Vector<PointerSource> pointerSources,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut u64 inOutActiveGestureSequence,
+    mut b8 inOutPointerSubmitArmed,
+    mut TargetOwner inOutSecondaryOwner,
+    mut WidgetId inOutCapture,
+    mut PopupToken inOutCapturePopup,
+    mut u64 inOutCaptureDeclaration,
+    mut ControlToken inOutCaptureControl,
+    mut b8 inOutPrimaryDown,
+    mut b8 inOutPointerSequenceConsumed,
+    mut b8 inOutSecondaryDown,
+    mut b8 inOutSecondarySequenceConsumed,
+    mut InputSource inOutActivePointerSource,
+    mut b8 outUnfinishedHoverSource
+){
+    outUnfinishedHoverSource = false;
+    for(in InputEvent event : events){
+        if(event.type == InputEventType::CommandUp){
+            const Expected<usize> sourceIndex = FindRouterCommandSourceIndex(commandSources, event.source);
+            if(sourceIndex.has_value()){
+                for(usize moveIndex = sourceIndex.value() + 1u; moveIndex < commandSources.size(); ++moveIndex)
+                    commandSources[moveIndex - 1u] = commandSources[moveIndex];
+                commandSources.pop_back();
+            }
+        }
+        else if(event.type == InputEventType::PointerCaptureLost){
+            b8 unfinishedHover = false;
+            TerminateRouterPointerSource(
+                event.source,
+                hoverPointerSource,
+                pointerSources,
+                pointerGestures,
+                inOutActiveGestureSequence,
+                inOutPointerSubmitArmed,
+                inOutSecondaryOwner,
+                inOutCapture,
+                inOutCapturePopup,
+                inOutCaptureDeclaration,
+                inOutCaptureControl,
+                inOutPrimaryDown,
+                inOutPointerSequenceConsumed,
+                inOutSecondaryDown,
+                inOutSecondarySequenceConsumed,
+                inOutActivePointerSource,
+                unfinishedHover
+            );
+            outUnfinishedHoverSource = outUnfinishedHoverSource || unfinishedHover;
+        }
+        else if(event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp){
+            PointerIntent intent = PointerIntent::Activate;
+            if(event.type == InputEventType::SecondaryUp)
+                intent = PointerIntent::ContextMenu;
+            const Expected<usize> sourceIndex = FindRouterPointerSourceIndex(pointerSources, event.source, intent);
+            if(!sourceIndex.has_value())
+                continue;
+            for(usize moveIndex = sourceIndex.value() + 1u; moveIndex < pointerSources.size(); ++moveIndex)
+                pointerSources[moveIndex - 1u] = pointerSources[moveIndex];
+            pointerSources.pop_back();
+            if(inOutActivePointerSource != event.source)
+                continue;
+            if(intent == PointerIntent::Activate){
+                inOutPrimaryDown = false;
+                inOutPointerSequenceConsumed = false;
+            }
+            else{
+                inOutSecondaryDown = false;
+                inOutSecondarySequenceConsumed = false;
+            }
+            if(!inOutPrimaryDown && !inOutSecondaryDown)
+                inOutActivePointerSource = InputSource();
+        }
+    }
+}
+
+void ReconcileRouterFocusCaptureAndActions(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    mut Vector<CommandSource> commandSources,
+    mut Vector<InputAction> actions,
+    mut WidgetId inOutFocus,
+    mut u64 inOutFocusDeclaration,
+    mut ControlToken inOutFocusControl,
+    mut WidgetId inOutCapture,
+    mut PopupToken inOutCapturePopup,
+    mut u64 inOutCaptureDeclaration,
+    mut ControlToken inOutCaptureControl,
+    mut b8 inOutPointerSubmitArmed
+){
+    const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
+    b8 validFocus = false;
+    if(focusedIndex.has_value()){
+        const HitTarget focused = targets[focusedIndex.value()];
+        const b8 focusedText = focused.textEditable && !focused.owner.valid();
+        if(IsRouterTargetInteractive(targets, lookup, popups, focused) && focused.focusable && (focusedText || focused.control == inOutFocusControl)){
+            validFocus = true;
+            inOutFocusControl = focused.control;
+        }
+    }
+    if(!validFocus){
+        RetireRouterCommandFocus(commandSources);
+        inOutFocus = WidgetId();
+        inOutFocusDeclaration = 0u;
+        inOutFocusControl = ControlToken();
+    }
+    const Expected<usize> capturedIndex = FindTargetIndexInTable(targets, lookup, inOutCapture, inOutCaptureDeclaration);
+    b8 validCapture = false;
+    if(capturedIndex.has_value()){
+        const HitTarget captured = targets[capturedIndex.value()];
+        const b8 capturedText = captured.textEditable && !captured.owner.valid();
+        if(IsRouterTargetInteractive(targets, lookup, popups, captured) && captured.popup == inOutCapturePopup && (capturedText || captured.control == inOutCaptureControl)){
+            validCapture = true;
+            if(captured.control != inOutCaptureControl || !captured.activatable)
+                inOutPointerSubmitArmed = false;
+            inOutCaptureControl = captured.control;
+        }
+    }
+    if(!validCapture){
+        inOutCapture = WidgetId();
+        inOutCapturePopup = PopupToken();
+        inOutCaptureDeclaration = 0u;
+        inOutCaptureControl = ControlToken();
+        inOutPointerSubmitArmed = false;
+    }
+    usize keptActions = 0u;
+    for(usize index = 0u; index < actions.size(); ++index){
+        const InputAction action = actions[index];
+        const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, action.id.target, action.id.declarationGeneration);
+        b8 validAction = false;
+        if(targetIndex.has_value()){
+            const HitTarget target = targets[targetIndex.value()];
+            validAction = IsRouterTargetInteractive(targets, lookup, popups, target)
+                && target.activatable
+                && action.popup == target.popup
+                && action.control == target.control;
+        }
+        if(validAction){
+            if(keptActions != index)
+                actions[keptActions] = action;
+            ++keptActions;
+        }
+    }
+    actions.resize(keptActions);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

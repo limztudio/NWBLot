@@ -44,7 +44,12 @@ public:
 
 public:
     [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event);
-    [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input);
+    [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input){
+        const auto event = TryMakePointerInputEvent(input);
+        if(!event)
+            return MakeUnexpected(Failure{});
+        return queue(*event);
+    }
     [[nodiscard]] b8 setBindings(const Span<const InputKeyBinding> bindings){ return m_bindings.set(bindings); }
     void restoreDefaultBindings(){ m_bindings.restoreDefaults(); }
 
@@ -151,7 +156,9 @@ public:
     [[nodiscard]] b8 acceptsPointerSource(const InputSource& source)const noexcept{
         return AcceptsRouterPointerSource(m_activePointerSource, m_pointerSources, source);
     }
-    [[nodiscard]] b8 ownsPointerSource(const InputSource& source, PointerIntent::Enum intent = PointerIntent::Activate)const noexcept;
+    [[nodiscard]] b8 ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent = PointerIntent::Activate)const noexcept{
+        return OwnsRouterPointerSource(m_pointerSources, source, intent);
+    }
 
     [[nodiscard]] b8 primaryDown()const noexcept{ return m_primaryDown; }
 
@@ -173,7 +180,9 @@ public:
     [[nodiscard]] b8 ownsKey(const i32 key)const noexcept{
         return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
     }
-    [[nodiscard]] b8 ownsSource(const InputSource& source)const noexcept;
+    [[nodiscard]] b8 ownsSource(const InputSource& source)const noexcept{
+        return OwnsRouterCommandSource(m_commandSources, source);
+    }
     // Held commands cannot switch editors or begin editing after their delegated owner has retired.
     [[nodiscard]] b8 canEditCommand(const InputEvent& event)const noexcept{
         return CanRouterEditCommand(m_targets, m_lookup, m_popups, m_commandSources, m_windowFocused, m_focus, m_focusDeclaration, event);

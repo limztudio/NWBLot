@@ -6,12 +6,14 @@
 
 
 #include <impl/ecs_ui/toolkit/global.h>
+#include <impl/ecs_ui/toolkit/images/types.adhd.h>
 
 #include <impl/assets_texture/asset.h>
 
 #include <core/assets/ref.h>
 
 #include <global/arena_object.h>
+#include <global/atomic_identity.h>
 #include <global/refcount_ptr.h>
 
 
@@ -50,7 +52,22 @@ public:
 
 
 private:
-    ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture, ConstructionToken);
+    [[nodiscard]] static u64 NextGeneration()noexcept{
+        static Atomic<u64> s_NextGeneration{ 1u };
+        return NextNonWrappingIdentity(s_NextGeneration);
+    }
+
+    ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture, ConstructionToken)
+        : m_texture(arena, texture.virtualPath())
+    {
+        m_identity.virtualPath = texture.virtualPath();
+        Texture::MipLevelVector mipLevels(arena);
+        mipLevels.assign(texture.mipLevels().begin(), texture.mipLevels().end());
+        Core::Assets::AssetBytes payloadBytes(arena);
+        payloadBytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
+        m_texture.setPayload(texture.width(), texture.height(), Move(mipLevels), Move(payloadBytes), texture.dimension(), texture.depth(), texture.payloadFormat(), texture.alphaMode(), texture.alphaConstantUnorm8());
+        m_generation = NextGeneration();
+    }
 
 
 public:
@@ -72,7 +89,16 @@ private:
 };
 
 // Copies a validated static 2D texture and internally assigns a fresh process-wide generation.
-[[nodiscard]] Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture);
+[[nodiscard]] inline Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture){
+    if(!ValidateImageSourceTextureDimension(texture.virtualPath(), texture.dimension() == TextureDimension::Texture2D, texture.depth()))
+        return MakeUnexpected(Failure{});
+    if(!texture.validatePayload())
+        return MakeUnexpected(Failure{});
+    auto* const source = NewArenaObject<RefCounter<ImageSource>>(arena, arena, texture, ImageSource::ConstructionToken{});
+    if(!source)
+        return MakeUnexpected(Failure{});
+    return SharedImageSource(source, ArenaRefDeleter<RefCounter<ImageSource>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

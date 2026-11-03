@@ -38,26 +38,185 @@ private:
 
 
 public:
-    explicit Context(Core::Alloc::GlobalArena& arena);
+    explicit Context(Core::Alloc::GlobalArena& arena)
+        : m_input(arena)
+        , m_states(arena)
+        , m_scopes(arena)
+        , m_targets(arena)
+        , m_popups(arena)
+        , m_stateClaims(arena)
+        , m_retainedRoots(arena)
+        , m_commitTargets(arena)
+        , m_commitPopups(arena)
+    {
+        m_scopes.reserve(s_ContextMaxScopeDepth);
+        m_targets.reserve(s_InputMaxTargets);
+        m_commitTargets.reserve(s_InputMaxTargets);
+        m_popups.reserve(s_InputMaxPopups);
+        m_commitPopups.reserve(s_InputMaxPopups);
+    }
 
 
 public:
-    [[nodiscard]] b8 beginFrame(u64 generation)noexcept;
-    [[nodiscard]] b8 beginRoot(const WidgetRoot& root);
-    [[nodiscard]] b8 endRoot()noexcept;
-    [[nodiscard]] b8 pushScope(AStringView stableKey);
-    [[nodiscard]] b8 popScope()noexcept;
-    [[nodiscard]] Expected<NotNull<WidgetState*>> declare(AStringView stableKey, WidgetKind::Enum kind);
+    [[nodiscard]] b8 beginFrame(const u64 generation)noexcept{
+        return TryBeginContextFrame(
+            generation,
+            m_input.focusLossGeneration(),
+            m_readyGeneration,
+            m_lastFrameGeneration,
+            m_frameGeneration,
+            m_focusLossGeneration,
+            m_failed,
+            m_declarationCount,
+            m_stateClaimCount,
+            m_targets,
+            m_popups,
+            m_popupDepth,
+            m_currentPopup,
+            m_popupLayer
+        );
+    }
+    [[nodiscard]] b8 beginRoot(const WidgetRoot& root){
+        if(!TryBeginContextRoot(m_failed, m_frameGeneration, m_rootActive, root, m_root, m_rootActive, m_scopes)){
+            fail();
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] b8 endRoot()noexcept{
+        if(!TryEndContextRoot(m_failed, m_popupDepth, m_currentPopup, m_rootActive, m_scopes)){
+            fail();
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] b8 pushScope(const AStringView stableKey){
+        if(!TryPushContextScope(m_failed, m_rootActive, stableKey, m_scopes)){
+            fail();
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] b8 popScope()noexcept{
+        if(!TryPopContextScope(m_failed, m_rootActive, m_scopes)){
+            fail();
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] Expected<NotNull<WidgetState*>> declare(const AStringView stableKey, const WidgetKind::Enum kind){
+        if(m_failed || !m_rootActive)
+            return MakeUnexpected(Failure{});
+        const auto id = TryMakeWidgetId(m_scopes.back(), stableKey);
+        if(!id){
+            fail();
+            return MakeUnexpected(Failure{});
+        }
+        return declareId(*id, kind);
+    }
     // Compound controls declare internal scopes from their owning widget instead of borrowing the current layout scope.
-    [[nodiscard]] Expected<NotNull<WidgetState*>> declarePart(const WidgetState& owner, AStringView stableKey, WidgetKind::Enum kind);
+    [[nodiscard]] Expected<NotNull<WidgetState*>> declarePart(const WidgetState& owner, const AStringView stableKey, const WidgetKind::Enum kind){
+        if(m_failed || !currentDeclaration(owner)){
+            fail();
+            return MakeUnexpected(Failure{});
+        }
+        const auto id = TryMakeWidgetId(owner.id, stableKey);
+        if(!id){
+            fail();
+            return MakeUnexpected(Failure{});
+        }
+        return declareId(*id, kind);
+    }
     // A state instance may own only one control of a given kind in a frame, even across balanced roots/scopes.
-    [[nodiscard]] b8 claimState(const WidgetState& owner, u64 instanceGeneration);
-    [[nodiscard]] b8 addTarget(const WidgetState& state, HitTarget target);
-    [[nodiscard]] b8 addPartTarget(const WidgetState& owner, WidgetId part, HitTarget target);
-    [[nodiscard]] b8 takeActivation(const WidgetState& state, b8 enabled);
-    [[nodiscard]] Expected<PointerGesture> takePointerGesture(const WidgetState& state, b8 enabled);
-    [[nodiscard]] Expected<ControlAction> takeControlAction(const WidgetState& state, b8 enabled, const ControlToken& token);
-    [[nodiscard]] Expected<PointerGesture> takePartPointerGesture(const WidgetState& owner, WidgetId part, b8 enabled);
+    [[nodiscard]] b8 claimState(const WidgetState& owner, const u64 instanceGeneration){
+        if(m_failed || !currentDeclaration(owner) || instanceGeneration == 0u || m_stateClaimCount == s_InputMaxTargets){
+            fail();
+            return false;
+        }
+        const ContextStateClaim claim{ instanceGeneration, owner.kind };
+        if(m_stateClaimCount < s_SmallStateClaims){
+            if(!TryClaimSmallContextState(claim, m_smallStateClaims, m_stateClaimCount)){
+                fail();
+                return false;
+            }
+            return true;
+        }
+        if(m_stateClaimCount == s_SmallStateClaims){
+            // Small frames never clear or allocate the retained hash storage from an earlier large frame.
+            m_stateClaims.clear();
+            if(m_stateClaims.bucket_count() == 0u)
+                m_stateClaims.reserve(s_SmallStateClaims * 2u);
+            m_stateClaims.insert(m_smallStateClaims.begin(), m_smallStateClaims.end());
+        }
+        if(!m_stateClaims.emplace(claim).second){
+            fail();
+            return false;
+        }
+        ++m_stateClaimCount;
+        return true;
+    }
+    [[nodiscard]] b8 addTarget(const WidgetState& state, HitTarget target){
+        if(m_failed || !currentDeclaration(state) || !TryAppendContextTarget(state, m_currentPopup, m_popupLayer, target, m_targets)){
+            fail();
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] b8 addPartTarget(const WidgetState& owner, const WidgetId part, HitTarget target){
+        if(m_failed || !currentDeclaration(owner) || !TryAppendContextPartTarget(owner, part, m_currentPopup, m_popupLayer, target, m_targets)){
+            fail();
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] b8 takeActivation(const WidgetState& state, const b8 enabled){
+        if(m_failed || !currentDeclaration(state))
+            return false;
+        if(!enabled){
+            m_input.invalidateTarget(state.id);
+            return false;
+        }
+        const HitTarget* target = m_input.findTarget(state.id);
+        if(target && target->popup != m_currentPopup)
+            return false;
+        return !m_failed && m_input.consumeActivation(state.id);
+    }
+    [[nodiscard]] Expected<PointerGesture> takePointerGesture(const WidgetState& state, const b8 enabled){
+        if(m_failed || !currentDeclaration(state))
+            return MakeUnexpected(Failure{});
+        if(!enabled){
+            m_input.invalidateTarget(state.id);
+            return MakeUnexpected(Failure{});
+        }
+        const HitTarget* target = m_input.findTarget(state.id);
+        if(target && target->popup != m_currentPopup)
+            return MakeUnexpected(Failure{});
+        return m_input.consumePointerGesture(state.id, state.declarationGeneration);
+    }
+    [[nodiscard]] Expected<ControlAction> takeControlAction(const WidgetState& state, const b8 enabled, const ControlToken& token){
+        if(m_failed || !currentDeclaration(state))
+            return MakeUnexpected(Failure{});
+        if(!enabled){
+            m_input.invalidateTarget(state.id);
+            return MakeUnexpected(Failure{});
+        }
+        const HitTarget* target = m_input.findTarget(state.id);
+        if(target && target->popup != m_currentPopup)
+            return MakeUnexpected(Failure{});
+        return m_input.consumeControlAction(state.id, state.declarationGeneration, token);
+    }
+    [[nodiscard]] Expected<PointerGesture> takePartPointerGesture(const WidgetState& owner, const WidgetId part, const b8 enabled){
+        if(m_failed || !currentDeclaration(owner))
+            return MakeUnexpected(Failure{});
+        if(!enabled){
+            m_input.invalidateTarget(owner.id);
+            return MakeUnexpected(Failure{});
+        }
+        const HitTarget* target = m_input.findTarget(part);
+        if(target && (target->popup != m_currentPopup || target->owner != owner.id))
+            return MakeUnexpected(Failure{});
+        return m_input.consumePointerGesture(part, owner.declarationGeneration);
+    }
     // Registration reserves the declaration-order layer; activation may be repeated during deferred painting.
     [[nodiscard]] b8 registerPopupScope(const WidgetState& state, const PopupScope scope){
         PopupToken fenceToken;
@@ -111,13 +270,74 @@ public:
     [[nodiscard]] u32 popupLayer()const noexcept{ return m_popupLayer; }
     [[nodiscard]] u32 popupLayer(const PopupToken& token)const noexcept{ return ResolveContextPopupLayer(m_popups, token); }
     [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
-    [[nodiscard]] b8 finishFrame();
+    [[nodiscard]] b8 finishFrame(){
+        if(!CanFinishContextFrame(m_failed, m_frameGeneration, m_rootActive, m_popupDepth, m_currentPopup)){
+            fail();
+            return false;
+        }
+        retireUnseenStates();
+        m_readyGeneration = m_frameGeneration;
+        m_frameGeneration = 0u;
+        return true;
+    }
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
-    [[nodiscard]] b8 commitFrame(u64 generation);
-    void abandonFrame();
-    void resetInput()noexcept;
+    [[nodiscard]] b8 commitFrame(const u64 generation){
+        if(generation == 0u || generation != m_readyGeneration)
+            return false;
+        ExtractContextCommitPayloads(m_targets, m_popups, m_commitTargets, m_commitPopups);
+        if(!m_input.commitTargets(m_commitTargets, generation, m_commitPopups, m_focusLossGeneration))
+            return false;
+        m_targets.clear();
+        m_popups.clear();
+        m_readyGeneration = 0u;
+        return true;
+    }
+    void abandonFrame(){
+        resetInput();
+        retireUnseenStates();
+        m_rootActive = false;
+        m_scopes.clear();
+        m_frameGeneration = 0u;
+        m_failed = false;
+    }
+    void resetInput()noexcept{
+        m_input.reset();
+        ResetContextPopupAndTargetState(
+            m_targets,
+            m_popups,
+            m_currentPopup,
+            m_popupDepth,
+            m_popupStack,
+            m_popupLayer,
+            m_readyGeneration
+        );
+    }
     // Retire removed/hidden host roots even while a GPU frame is pending.
-    void retainRoots(Span<const WidgetRoot> roots);
+    void retainRoots(const Span<const WidgetRoot> roots){
+        if(m_states.entries().empty() && m_targets.empty() && m_popups.empty())
+            return;
+        m_retainedRoots.clear();
+        if(roots.size() > m_retainedRootCapacity){
+            m_retainedRoots.reserve(roots.size());
+            m_retainedRootCapacity = roots.size();
+        }
+        m_retainedRoots.insert(roots.begin(), roots.end());
+        for(usize index = m_states.entries().size(); index > 0u; --index){
+            const auto& state = m_states.entries()[index - 1u];
+            if(!m_retainedRoots.contains(state.root)){
+                m_input.invalidateTarget(state.id);
+                m_states.erase(index - 1u);
+            }
+        }
+        for(usize index = m_targets.size(); index > 0u; --index){
+            if(!m_retainedRoots.contains(m_targets[index - 1u].root))
+                m_targets.erase(m_targets.begin() + index - 1u);
+        }
+        for(usize index = m_popups.size(); index > 0u; --index){
+            if(!m_retainedRoots.contains(m_popups[index - 1u].root))
+                m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
+        }
+    }
     void fail()noexcept{ m_failed = true; }
 
     [[nodiscard]] b8 failed()const noexcept{ return m_failed; }
@@ -134,9 +354,36 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<NotNull<WidgetState*>> declareId(WidgetId id, WidgetKind::Enum kind);
-    [[nodiscard]] b8 currentDeclaration(const WidgetState& state)const noexcept;
-    void retireUnseenStates();
+    [[nodiscard]] Expected<NotNull<WidgetState*>> declareId(const WidgetId id, const WidgetKind::Enum kind){
+        if(m_declarationCount >= s_WidgetMaxStates){
+            fail();
+            return MakeUnexpected(Failure{});
+        }
+        const WidgetState* previous = m_states.find(id);
+        if(previous && previous->kind != kind)
+            m_input.invalidateTarget(id);
+        const auto state = m_states.touch(id, m_root, kind, m_frameGeneration);
+        if(!state)
+            fail();
+        else
+            ++m_declarationCount;
+        return state;
+    }
+    [[nodiscard]] b8 currentDeclaration(const WidgetState& state)const noexcept{
+        const WidgetState* current = m_states.find(state.id);
+        return current && IsMatchingWidgetStateDeclaration(m_rootActive, m_root, m_frameGeneration, state, *current);
+    }
+    void retireUnseenStates(){
+        if(m_frameGeneration == 0u)
+            return;
+        for(usize index = m_states.entries().size(); index > 0u; --index){
+            const auto& state = m_states.entries()[index - 1u];
+            if(state.lastSeenFrame != m_frameGeneration){
+                m_input.invalidateTarget(state.id);
+                m_states.erase(index - 1u);
+            }
+        }
+    }
 
 
 private:

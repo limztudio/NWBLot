@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_texture/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateImageSourceTextureDimension(in Name virtualPath, in b8 isTexture2D, in u32 depth){
+    if(!isTexture2D || depth != 1u){
+        error("MakeImageSource: texture '{}' must be a static 2D image with depth one", virtualPath.resolvedText());
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateImageSourceLoadIdentity(in b8 validIdentity, in Name loadedVirtualPath, in Name expectedVirtualPath){
+    if(!validIdentity){
+        error("LoadImageSource: texture asset reference is empty");
+        return false;
+    }
+    if(loadedVirtualPath != expectedVirtualPath){
+        error("LoadImageSource: loaded texture identity does not match the requested asset");
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

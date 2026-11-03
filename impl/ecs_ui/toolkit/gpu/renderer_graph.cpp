@@ -41,7 +41,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
     frame->m_clear = {};
     frame->m_raster = {};
     const DrawSnapshot& snapshot = frame->m_snapshot;
-    if(allowEmptySceneLayer && snapshot.commands().empty() && snapshot.vertices().empty() && snapshot.indices().empty() && snapshot.glyphPages().empty() && snapshot.sdfPages().empty() && snapshot.textureImages().empty()){
+    if(allowEmptySceneLayer && IsEmptyGpuSceneSnapshot(snapshot.commands().size(), snapshot.vertices().size(), snapshot.indices().size(), snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size())){
         layer.frameGeneration = snapshot.generation();
         m_declaredLayer = layer;
         m_declaredGraph = &graph;

@@ -23,14 +23,7 @@ namespace __hidden_ui_gpu_glyph_resources{
 
 
 [[nodiscard]] static b8 SamePageVersion(const GlyphPage& first, const GlyphPage& second)noexcept{
-    const GlyphPageBinding& a = first.binding();
-    const GlyphPageBinding& b = second.binding();
-    if(!SameGlyphPageKey(a, b) || a.generation != b.generation || a.width != b.width || a.height != b.height)
-        return false;
-    if(&first == &second)
-        return true;
-    // Equal identities may be reconstructed, but cannot silently alias different immutable coverage bytes.
-    return first.pixels().size() == second.pixels().size() && NWB_MEMCMP(first.pixels().data(), second.pixels().data(), first.pixels().size()) == 0;
+    return SameGlyphPageVersion(first.binding(), first.pixels(), second.binding(), second.pixels(), &first == &second);
 }
 
 [[nodiscard]] static b8 ValidPage(const SharedGlyphPage& page)noexcept{

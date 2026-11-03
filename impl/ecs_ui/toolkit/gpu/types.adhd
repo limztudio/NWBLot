@@ -173,6 +173,22 @@ b8 IsValidGpuRendererExtent(in u32 width, in u32 height){
     return width != 0u && height != 0u && width <= cast<u32>(i32.max) && height <= cast<u32>(i32.max);
 }
 
+b8 IsEmptyGpuSceneSnapshot(
+    in usize commandCount,
+    in usize vertexCount,
+    in usize indexCount,
+    in usize glyphPageCount,
+    in usize sdfPageCount,
+    in usize textureImageCount
+){
+    return commandCount == 0u
+        && vertexCount == 0u
+        && indexCount == 0u
+        && glyphPageCount == 0u
+        && sdfPageCount == 0u
+        && textureImageCount == 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

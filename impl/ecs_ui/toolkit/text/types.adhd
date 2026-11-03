@@ -563,6 +563,26 @@ b8 SameGlyphPageKey<TFont>(in GlyphPageBindingRecord<TFont> first, in GlyphPageB
     return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
 }
 
+b8 SameGlyphPageVersion<TFont>(
+    in GlyphPageBindingRecord<TFont> first,
+    in Span<u8> firstPixels,
+    in GlyphPageBindingRecord<TFont> second,
+    in Span<u8> secondPixels,
+    in b8 sameInstance
+){
+    if(!SameGlyphPageKey(first, second) || first.generation != second.generation || first.width != second.width || first.height != second.height)
+        return false;
+    if(sameInstance)
+        return true;
+    if(firstPixels.size() != secondPixels.size())
+        return false;
+    for(usize index = 0u; index < firstPixels.size(); ++index){
+        if(firstPixels[index] != secondPixels[index])
+            return false;
+    }
+    return true;
+}
+
 b8 ValidGlyphPageBinding<TFont>(in GlyphPageBindingRecord<TFont> binding, in usize pixelByteCount){
     return binding.font.valid()
         && binding.fontGeneration != 0u

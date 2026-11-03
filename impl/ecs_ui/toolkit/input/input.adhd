@@ -3411,6 +3411,20 @@ void ResetContextPopupAndTargetState(
     outReadyGeneration = 0u;
 }
 
+b8 TryClaimSmallContextState(
+    in ContextStateClaim claim,
+    mut Array<ContextStateClaim, s_SmallStateClaims> inOutSmallStateClaims,
+    mut usize inOutStateClaimCount
+){
+    for(usize index = 0u; index < inOutStateClaimCount; ++index){
+        if(inOutSmallStateClaims[index] == claim)
+            return false;
+    }
+    inOutSmallStateClaims[inOutStateClaimCount] = claim;
+    ++inOutStateClaimCount;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

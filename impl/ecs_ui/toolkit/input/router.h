@@ -15,7 +15,6 @@
 
 #include <global/algorithm.h>
 #include <global/assert.h>
-#include <global/limits.h>
 #include <global/simplemath.h>
 #include <global/termination.h>
 

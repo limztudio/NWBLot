@@ -763,6 +763,19 @@ b8 IsPaintDrawCommandBefore(in DrawCommand lhs, in DrawCommand rhs){
     return lhs.firstIndex < rhs.firstIndex;
 }
 
+b8 IsValidPaintImageDrawRequest(in Rect rectangle, in Rect uv, in Color tint){
+    return IsValidUiRect(rectangle)
+        && IsValidPaintUvRect(uv)
+        && IsValidPaintColor(tint);
+}
+
+b8 IsPaintImageInvisible(in Rect rectangle, in Rect clip, in Color tint){
+    return !HasUiRectArea(rectangle)
+        || !HasUiRectArea(clip)
+        || tint.a == 0.0f
+        || !HasVisibleUiRectIntersection(rectangle, clip);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

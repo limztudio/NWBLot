@@ -531,6 +531,53 @@ void ResolveMeshletDisconnectedCandidateChunkRange(
     outChunkEnd = outChunkBegin + chunkSize + extraCount;
 }
 
+void BuildMeshletPositionTriangleOffsets(
+    in Span<u32> indices,
+    in Span<MeshVertexRef> vertexRefs,
+    in usize positionCount,
+    mut Vector<u32> outOffsets
+){
+    outOffsets.clear();
+    outOffsets.resize(positionCount + 1u, 0u);
+    for(in u32 vertexRefIndex : indices){
+        const MeshVertexRef vertexRef = vertexRefs[cast<usize>(vertexRefIndex)];
+        ++outOffsets[cast<usize>(vertexRef.position) + 1u];
+    }
+    for(usize positionIndex = 0u; positionIndex < positionCount; ++positionIndex)
+        outOffsets[positionIndex + 1u] += outOffsets[positionIndex];
+}
+
+void ComputeMeshletTriangleDataAndCalculation(
+    in Span<u32> indices,
+    in Span<MeshVertexRef> vertexRefs,
+    in Span<f32x3u> positions,
+    in usize triangleIndex,
+    mut MeshletTriangleData outTriangle,
+    mut MeshletTriangleCalculation outCalculation
+){
+    const usize indexOffset = triangleIndex * cast<usize>(s_MeshletTriangleIndexCount);
+    outTriangle.vertexRefs[0u] = indices[indexOffset + 0u];
+    outTriangle.vertexRefs[1u] = indices[indexOffset + 1u];
+    outTriangle.vertexRefs[2u] = indices[indexOffset + 2u];
+    outTriangle.positions[0u] = vertexRefs[cast<usize>(outTriangle.vertexRefs[0u])].position;
+    outTriangle.positions[1u] = vertexRefs[cast<usize>(outTriangle.vertexRefs[1u])].position;
+    outTriangle.positions[2u] = vertexRefs[cast<usize>(outTriangle.vertexRefs[2u])].position;
+
+    const f32x3u pos0 = positions[cast<usize>(outTriangle.positions[0u])];
+    const f32x3u pos1 = positions[cast<usize>(outTriangle.positions[1u])];
+    const f32x3u pos2 = positions[cast<usize>(outTriangle.positions[2u])];
+    const f32x4 p0(pos0.x, pos0.y, pos0.z, 0.0f);
+    const f32x4 p1(pos1.x, pos1.y, pos1.z, 0.0f);
+    const f32x4 p2(pos2.x, pos2.y, pos2.z, 0.0f);
+    const f32x4 centroid = ((p0 + p1) + p2) * (1.0f / s_TriangleVertexCount);
+    const f32x4 areaNormal = cross((p1 - p0).xyz, (p2 - p0).xyz);
+    outCalculation.positions[0u] = p0;
+    outCalculation.positions[1u] = p1;
+    outCalculation.positions[2u] = p2;
+    outCalculation.centroid = f32x4(centroid.x, centroid.y, centroid.z, 0.0f);
+    outCalculation.areaNormal = f32x4(areaNormal.x, areaNormal.y, areaNormal.z, 0.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

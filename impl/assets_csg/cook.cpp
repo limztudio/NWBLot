@@ -163,21 +163,12 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<CookString> BuildDefaultCsgShapeModuleInclude(const Name shaderModule, CookArena& arena, ScratchArena& scratchArena){
-    CookString include(arena);
+[[nodiscard]] static Expected<CookString> BuildDefaultCsgShapeModuleInclude(const Name shaderModule, [[maybe_unused]] CookArena& arena, ScratchArena& scratchArena){
     if(!shaderModule)
         return MakeUnexpected(Failure{});
 
     const AString<ScratchArena> safeModuleName = BuildCanonicalSafeCacheName(scratchArena, shaderModule.resolvedText());
-    if(safeModuleName.empty())
-        return MakeUnexpected(Failure{});
-
-    include.reserve(s_DefaultGeneratedIncludeDirectory.size() + s_CsgGeneratedIncludePathSeparator.size() + safeModuleName.size() + s_CsgSlangIncludeExtension.size());
-    include += s_DefaultGeneratedIncludeDirectory;
-    include += s_CsgGeneratedIncludePathSeparator;
-    include += safeModuleName;
-    include += s_CsgSlangIncludeExtension;
-    return include;
+    return TryBuildDefaultCsgShapeModuleIncludePath(shaderModule, AStringView(safeModuleName));
 }
 
 Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, const Core::Metascript::Document& doc, CookArena& cookArena, ScratchArena& scratchArena){
@@ -239,7 +230,7 @@ b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchA
     using namespace __hidden_assets_csg_cook;
 
     Sort(csgShapeEntries.begin(), csgShapeEntries.end(), [](const CsgShapeCookEntry& lhs, const CsgShapeCookEntry& rhs){
-        return lhs.shapeName.resolvedText() < rhs.shapeName.resolvedText();
+        return IsBeforeCsgShapeCookName(lhs.shapeName, rhs.shapeName);
     });
 
     using ShapeIdNameMap = HashMap<CsgShapeTypeId, Name, ScratchArena, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>>;

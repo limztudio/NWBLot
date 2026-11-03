@@ -18,7 +18,8 @@ b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize
     usize minParams = 1u;
     usize maxParams = 1u;
     b8 prohibitsUnary = false;
-    (void)TryGetMemberOperatorArityRules(opName, minParams, maxParams, prohibitsUnary);
+    if(!TryGetMemberOperatorArityRules(opName, minParams, maxParams, prohibitsUnary))
+        return false;
     if(prohibitsUnary && paramCount == 0u){
         outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
         return false;

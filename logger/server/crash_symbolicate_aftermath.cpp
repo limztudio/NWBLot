@@ -105,7 +105,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
+void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
     const auto regularDump = IsRegularFile(dumpPath);
     if(!regularDump){
@@ -117,7 +117,6 @@ void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, Cor
         return;
 
 #if !defined(NWB_WITH_AFTERMATH)
-    static_cast<void>(scratchArena);
     outReport += s_AftermathSectionHeader;
     outReport += s_AftermathSkippedReport;
 #else

@@ -246,7 +246,7 @@ public:
 }
 #endif
 
-static void AppendLinuxClientCallstack(const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
+static void AppendLinuxClientCallstack(const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, [[maybe_unused]] const CrashSymbolicationConfig& config, [[maybe_unused]] Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     outReport += s_CallstackSectionHeader;
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -257,9 +257,6 @@ static void AppendLinuxClientCallstack(const AStringView callstackText, const Li
             ++frameLineCount;
     }
     symbolFileCache.entries.reserve(frameLineCount);
-#else
-    static_cast<void>(arena);
-    static_cast<void>(config);
 #endif
 
     usize cursor = 0u;

@@ -426,6 +426,12 @@ struct BuiltinScalarTypeInfo{
 }
 
 [[nodiscard]] constexpr b8 TryGetMemberOperatorArityRules(const MStringView opSym, usize& outMinParams, usize& outMaxParams, b8& outProhibitsUnary)noexcept{
+    if(opSym == "[]"){
+        outMinParams = 1u;
+        outMaxParams = 1u;
+        outProhibitsUnary = false;
+        return true;
+    }
 #define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, returnsBool, isBitwiseFlagOp, isPrefixUnary, isIncDec, binaryPrecedence, minMemberParams, maxMemberParams, prohibitsUnaryOverload) \
     if constexpr(isOverloadable){ \
         if(opSym == symbol){ \

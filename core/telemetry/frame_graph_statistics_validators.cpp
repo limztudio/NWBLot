@@ -54,7 +54,8 @@ inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
     }
     return true;
 #else
-    static_cast<void>(durations);
+    if(durations.empty())
+        return true;
     return false;
 #endif
 }

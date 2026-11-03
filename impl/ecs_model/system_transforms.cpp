@@ -37,7 +37,8 @@ static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, C
         if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette)){
             const Span<const SkeletonJointMatrix> paletteSpan(jointPalette.data(), jointPalette.size());
             for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
-                (void)TryResolveModelAttachmentJointQuery(paletteSpan, queries[ResolveModelAttachmentQueryIndex(parentOrder, queryIndex)]);
+                if(!TryResolveModelAttachmentJointQuery(paletteSpan, queries[ResolveModelAttachmentQueryIndex(parentOrder, queryIndex)]))
+                    break;
             }
         }
         groupBegin = groupEnd;

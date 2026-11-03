@@ -21,6 +21,8 @@ namespace __hidden_metascript_preprocessor{
 
 
 constexpr u32 s_MaxMacroExpansionPasses = 16u;
+constexpr i64 s_ShiftOperandMin = 0;
+constexpr i64 s_I64ShiftOperandMax = 64;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -188,8 +190,8 @@ private:
             const TokenType::Enum op = m_current.type;
             advance();
             const i64 right = parseAdditive();
-            if(right < 0 || right >= 64){
-                left = (op == TokenType::GreaterGreater && right >= 64 && left < 0) ? -1 : 0;
+            if(right < s_ShiftOperandMin || right >= s_I64ShiftOperandMax){
+                left = (op == TokenType::GreaterGreater && right >= s_I64ShiftOperandMax && left < 0) ? -1 : 0;
             }
             else if(op == TokenType::LessLess){
                 left = static_cast<i64>(static_cast<u64>(left) << static_cast<u32>(right));

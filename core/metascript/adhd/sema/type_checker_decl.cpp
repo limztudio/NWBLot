@@ -434,8 +434,8 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         const TypeRef* unwrappedFieldType = field->type ? m_symbols.unwrapTypeAlias(field->type) : nullptr;
         if(TypeRef* targetFuncType = ExtractUnderlyingFuncType(field->type, m_symbols); targetFuncType && field->defaultExpr && field->defaultExpr->kind == ExprKind::Lambda){
-            if(!field->defaultExpr->lambdaCaptures.empty() && targetFuncType->inferredCaptureBytes < 64u)
-                targetFuncType->inferredCaptureBytes = 64u;
+            if(!field->defaultExpr->lambdaCaptures.empty() && targetFuncType->inferredCaptureBytes < s_InferredLambdaCaptureBytes)
+                targetFuncType->inferredCaptureBytes = s_InferredLambdaCaptureBytes;
         }
         MethodDecl fieldInitDummy(m_arena);
         MVector<ScopedVarInfo> emptyScope(m_arena);

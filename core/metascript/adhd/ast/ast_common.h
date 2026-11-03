@@ -108,7 +108,8 @@ template<typename T>
 }
 
 inline void AppendAdhdUnsigned(MString& out, usize value){
-    Array<char, 32> buf;
+    constexpr usize s_MaxUnsignedDecimalDigits = 32u;
+    Array<char, s_MaxUnsignedDecimalDigits> buf;
     usize idx = 0u;
     if(value == 0u){
         out.push_back('0');

@@ -20,14 +20,14 @@ void TypeChecker::PropagateFuncCaptureBytes(TypeRef* targetType, const Expr* rhs
         return;
     if(rhs->kind == ExprKind::Lambda){
         if(!rhs->lambdaCaptures.empty())
-            funcType->inferredCaptureBytes = 64u;
+            funcType->inferredCaptureBytes = s_InferredLambdaCaptureBytes;
         return;
     }
     if(rhs->kind == ExprKind::Identifier){
         if(const ScopedVarInfo* v = FindScopedVar(scope, rhs->text)){
             const TypeRef* rhsFunc = ExtractUnderlyingFuncType(v->type, symbols);
             if((v->lambdaExpr && !v->lambdaExpr->lambdaCaptures.empty()) || (rhsFunc && rhsFunc->inferredCaptureBytes > 0u))
-                funcType->inferredCaptureBytes = 64u;
+                funcType->inferredCaptureBytes = s_InferredLambdaCaptureBytes;
         }
         return;
     }

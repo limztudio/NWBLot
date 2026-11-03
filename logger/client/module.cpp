@@ -28,6 +28,11 @@ static constexpr long s_ConnectTimeoutMs = 1000L;
 static constexpr long s_RequestTimeoutMs = 2000L;
 static constexpr u32 s_RetrySleepMs = 100u;
 static constexpr u32 s_MaxRetrySleepMs = 5000u;
+static constexpr long s_HttpBadRequestCode = 400L;
+static constexpr long s_HttpPayloadTooLargeCode = 413L;
+static constexpr long s_HttpUnprocessableContentCode = 422L;
+static constexpr long s_HttpSuccessRangeMin = 200L;
+static constexpr long s_HttpSuccessRangeMax = 300L;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -274,13 +279,13 @@ b8 Client::internalUpdate(){
     if(curlResult != CURLE_OK)
         return retryCurlFailure(curlResult, "reading HTTP status");
     m_lastCurlFailureCode = 0;
-    if(responseCode == 400 || responseCode == 413 || responseCode == 422){
+    if(responseCode == __hidden_logger_client::s_HttpBadRequestCode || responseCode == __hidden_logger_client::s_HttpPayloadTooLargeCode || responseCode == __hidden_logger_client::s_HttpUnprocessableContentCode){
         const DiagnosticEventText detail = MakeDiagnosticEventText("Server rejected a logger payload with HTTP status {}", responseCode);
         CaptureDiagnosticEvent("logger_client_payload", detail.view(), __FILE__, __LINE__);
         m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
         NWB_CERR << "[ERROR] Log client: server rejected a payload with HTTP status " << responseCode << ".\n";
     }
-    else if(responseCode < 200 || responseCode >= 300){
+    else if(responseCode < __hidden_logger_client::s_HttpSuccessRangeMin || responseCode >= __hidden_logger_client::s_HttpSuccessRangeMax){
         if(m_lastHttpFailureStatus != responseCode){
             const DiagnosticEventText detail = MakeDiagnosticEventText("Logger delivery is waiting after HTTP status {}", responseCode);
             CaptureDiagnosticEvent("logger_client_delivery", detail.view(), __FILE__, __LINE__);

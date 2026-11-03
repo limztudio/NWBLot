@@ -27,6 +27,13 @@ namespace __hidden_frame_graph_statistics_validators{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_RuntimeScalarDurationCount = 21u;
+inline constexpr usize s_PhysicalQueueScalarDurationCount = 5u;
+inline constexpr usize s_RuntimePackedDurationCount = 6u;
+inline constexpr usize s_PhysicalQueuePackedDurationCount = 2u;
+inline constexpr usize s_OwnerPackedDurationCount = 7u;
+
+
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
 inline constexpr u64 s_DoubleMagnitudeBitsMask = 0x7FFFFFFFFFFFFFFFull;
 inline constexpr u64 s_DoubleInfinityBits = 0x7FF0000000000000ull;
@@ -371,7 +378,7 @@ template<typename StatisticsT>
     if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
 
-    const Array<f64, 21u> durations = {
+    const Array<f64, __hidden_frame_graph_statistics_validators::s_RuntimeScalarDurationCount> durations = {
         statistics.compile.declarationSeconds,
         statistics.compile.analysisSeconds,
         statistics.compile.validationSeconds,
@@ -413,7 +420,7 @@ template<typename StatisticsT>
     if(!__hidden_frame_graph_statistics_validators::PhysicalQueueSubmissionCountsAreValid(statistics))
         return false;
 
-    const Array<f64, 5u> durations = { recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds, submission.submissionSeconds, };
+    const Array<f64, __hidden_frame_graph_statistics_validators::s_PhysicalQueueScalarDurationCount> durations = { recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds, submission.submissionSeconds, };
     for(const f64 duration : durations){
         if(duration < 0.0 || !IsFinite(duration))
             return false;
@@ -444,7 +451,7 @@ template<typename StatisticsT>
 
 b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
     // The Windows standard library may under-align arrays of vector types.
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 6u> durations = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, __hidden_frame_graph_statistics_validators::s_RuntimePackedDurationCount> durations = {
         VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds),
         VectorDoubleSet(statistics.compile.packetizationSeconds, statistics.compile.resourceStatePlanningSeconds, statistics.compile.packetDependencyPlanningSeconds, statistics.compile.totalSeconds),
@@ -462,7 +469,7 @@ b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statist
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 2u> durations = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, __hidden_frame_graph_statistics_validators::s_PhysicalQueuePackedDurationCount> durations = {
         VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
         VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
     };
@@ -480,7 +487,7 @@ b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueue
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 7u> durations = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, __hidden_frame_graph_statistics_validators::s_OwnerPackedDurationCount> durations = {
         VectorDoubleSet(ownerStatistics.compile.declarationSeconds, ownerStatistics.compile.analysisSeconds, ownerStatistics.compile.validationSeconds, ownerStatistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(ownerStatistics.compile.hazardAnalysisSeconds, ownerStatistics.compile.topologicalOrderSeconds, ownerStatistics.compile.queueAssignmentSeconds, ownerStatistics.compile.planningSeconds),
         VectorDoubleSet(ownerStatistics.compile.packetizationSeconds, ownerStatistics.compile.resourceStatePlanningSeconds, ownerStatistics.compile.packetDependencyPlanningSeconds, ownerStatistics.compile.totalSeconds),

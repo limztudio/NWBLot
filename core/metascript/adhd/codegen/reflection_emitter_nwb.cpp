@@ -27,7 +27,8 @@ namespace __hidden_adhd_reflection_emitter_nwb{
 [[nodiscard]] u32 SimdMatrixElementCount(const MStringView matTypeName)noexcept{
     if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(matTypeName))
         return matInfo->elemCount;
-    return 16u;
+    constexpr u32 s_DefaultSimdMatrixElementCount = 16u;
+    return s_DefaultSimdMatrixElementCount;
 }
 
 void EmitNwbFieldFindPrefix(MString& out, const MStringView fieldName){

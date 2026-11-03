@@ -66,7 +66,7 @@ namespace __hidden_adhd_source_emitter{
 
 MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView headerIncludePath, const MStringView namespacePath)const{
     MString out(m_arena);
-    out.reserve(4096u);
+    out.reserve(s_AdhdEmitReserveBytes);
 
     ReflectionEmitter reflectionEmitter(m_symbols);
 

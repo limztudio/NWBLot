@@ -20,6 +20,10 @@ namespace __hidden_adhd_const_eval{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr i64 s_ShiftOperandMin = 0;
+constexpr i64 s_I64ShiftOperandMax = 64;
+
+
 [[nodiscard]] constexpr b8 TryEvaluateIntegerScalarLimit(const MStringView scalarType, const MStringView member, i64& outVal)noexcept{
     b8 isMin = false;
     if(!TryMapScalarLimitMember(member, nullptr, &isMin))
@@ -88,12 +92,12 @@ namespace __hidden_adhd_const_eval{
         outVal = (lhsVal == Limit<i64>::s_Min && rhsVal == -1) ? 0 : (lhsVal % rhsVal);
         return true;
     case TokenType::LessLess:
-        if(rhsVal < 0 || rhsVal >= 64)
+        if(rhsVal < s_ShiftOperandMin || rhsVal >= s_I64ShiftOperandMax)
             return false;
         outVal = static_cast<i64>(static_cast<u64>(lhsVal) << static_cast<u64>(rhsVal));
         return true;
     case TokenType::GreaterGreater:
-        if(rhsVal < 0 || rhsVal >= 64)
+        if(rhsVal < s_ShiftOperandMin || rhsVal >= s_I64ShiftOperandMax)
             return false;
         outVal = lhsVal >> rhsVal;
         return true;
@@ -181,7 +185,7 @@ b8 TryEvaluateEnumEntryConstant(const EnumDecl& ed, const MStringView targetEntr
             nextSeq = static_cast<i64>(static_cast<u64>(curVal) + 1u);
         }
         else if(ed.isFlag){
-            if(flagBitIndex >= 64u)
+            if(flagBitIndex >= __hidden_adhd_const_eval::s_I64ShiftOperandMax)
                 return false;
             curVal = static_cast<i64>(u64(1) << flagBitIndex++);
             nextSeq = static_cast<i64>(static_cast<u64>(curVal) + 1u);

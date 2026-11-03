@@ -18,6 +18,7 @@ NWB_ADHD_BEGIN
 
 
 inline constexpr MStringView s_AdhdGeneratedFileBanner = "// Compiled by ADHD Compiler " NWB_ADHD_COMPILER_VERSION "\r\n";
+inline constexpr usize s_AdhdEmitReserveBytes = 4096u;
 
 void AppendCamelToSnakeCase(MString& out, MStringView text);
 void AppendAdhdTextCrlf(MString& out, MStringView text);

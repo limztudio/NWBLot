@@ -7,6 +7,7 @@
 
 #include "operations.h"
 #include "../atomic.h"
+#include "../numeric_text.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -251,6 +252,8 @@ namespace GlobalFilesystemDetail{
 
 inline constexpr usize s_MaxStageLeafPrefixCharacters = 180u;
 inline constexpr u32 s_MaxUniqueStageAttempts = 256u;
+inline constexpr u32 s_DecimalDigitCount = 10u;
+inline constexpr usize s_StageNameExtraReserveBytes = 40u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -265,9 +268,9 @@ inline void AppendLowerHexU64(TString<ArenaT>& outText, u64 value){
         return;
     }
     while(value != 0u && count < digits.size()){
-        const u32 nibble = static_cast<u32>(value & 0xFu);
-        digits[count++] = static_cast<tchar>(nibble < 10u ? (NWB_TEXT('0') + nibble) : (NWB_TEXT('a') + (nibble - 10u)));
-        value >>= 4u;
+        const u32 nibble = static_cast<u32>(value & ::s_HexNibbleMask);
+        digits[count++] = static_cast<tchar>(nibble < s_DecimalDigitCount ? (NWB_TEXT('0') + nibble) : (NWB_TEXT('a') + (nibble - s_DecimalDigitCount)));
+        value >>= ::s_HexNibbleBits;
     }
     while(count > 0u)
         outText.push_back(digits[--count]);
@@ -305,7 +308,7 @@ template<typename ArenaT>
 
     ArenaT& arena = targetPath.arena();
     TString<ArenaT> candidateName(arena);
-    candidateName.reserve(boundedLeaf.size() + suffixTag.size() + 40u);
+    candidateName.reserve(boundedLeaf.size() + suffixTag.size() + s_StageNameExtraReserveBytes);
     candidateName.push_back(NWB_TEXT('.'));
     candidateName.append(boundedLeaf.data(), boundedLeaf.size());
     candidateName.push_back(NWB_TEXT('.'));

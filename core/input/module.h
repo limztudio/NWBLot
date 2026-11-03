@@ -66,6 +66,7 @@ namespace Key{
     static constexpr i32 s_KeyUnknownCode = -1;
     static constexpr i32 s_KeySpaceAscii = 32;
     static constexpr i32 s_KeyWorld1Code = 161;
+    static constexpr i32 s_KeyWorld2Code = 162;
     static constexpr i32 s_KeyLeftShiftCode = 340;
     static constexpr i32 s_KeyKeypad0Code = 320;
     static constexpr i32 s_KeyF1Code = 290;
@@ -205,7 +206,7 @@ namespace Key{
     };
 };
 
-static_assert(Key::World1 == 161 && Key::World2 == 162);
+static_assert(Key::World1 == Key::s_KeyWorld1Code && Key::World2 == Key::s_KeyWorld2Code);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

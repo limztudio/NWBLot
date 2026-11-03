@@ -30,6 +30,10 @@ inline constexpr u32 s_SecondByteShift = 8u;
 inline constexpr u32 s_DigitMask = 63u;
 inline constexpr u32 s_DoublePaddingUnusedMask = 15u;
 inline constexpr u32 s_SinglePaddingUnusedMask = 3u;
+inline constexpr u8 s_LowercaseAlphabetOffset = 26u;
+inline constexpr u8 s_DigitAlphabetOffset = 52u;
+inline constexpr u8 s_PlusDigitValue = 62u;
+inline constexpr u8 s_SlashDigitValue = 63u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,13 +43,13 @@ inline constexpr u32 s_SinglePaddingUnusedMask = 3u;
     if(character >= 'A' && character <= 'Z')
         return static_cast<u8>(character - 'A');
     if(character >= 'a' && character <= 'z')
-        return static_cast<u8>(character - 'a' + 26);
+        return static_cast<u8>(character - 'a' + s_LowercaseAlphabetOffset);
     if(character >= '0' && character <= '9')
-        return static_cast<u8>(character - '0' + 52);
+        return static_cast<u8>(character - '0' + s_DigitAlphabetOffset);
     if(character == '+')
-        return 62u;
+        return s_PlusDigitValue;
     if(character == '/')
-        return 63u;
+        return s_SlashDigitValue;
     return s_InvalidDigit;
 }
 

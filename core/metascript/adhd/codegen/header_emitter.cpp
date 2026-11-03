@@ -18,7 +18,7 @@ NWB_ADHD_BEGIN
 
 MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView namespacePath)const{
     MString out(m_arena);
-    out.reserve(4096u);
+    out.reserve(s_AdhdEmitReserveBytes);
 
 
     out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());

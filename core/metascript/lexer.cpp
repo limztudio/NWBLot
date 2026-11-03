@@ -315,7 +315,7 @@ void Lexer::skipWhitespaceAndComments()noexcept{
 
             const MStringView commentText = m_source.substr(commentStart, m_current - commentStart);
             if(commentText == s_IncludePushMarker){
-                if(m_savedLineDepth < 64u)
+                if(m_savedLineDepth < s_MaxSavedIncludeDepth)
                     m_savedLines[m_savedLineDepth++] = m_line;
                 m_line = 1u;
                 m_column = 1u;

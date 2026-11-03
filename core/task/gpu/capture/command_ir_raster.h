@@ -23,6 +23,8 @@ NWB_CORE_BEGIN
 // Variable vertex bindings and push bytes live in the stream blob.
 // The first retained raster scope supports one color attachment, one viewport, optional scissor, and direct draws.
 #pragma pack(push, 1)
+inline constexpr usize s_GpuCommandIrGraphicsStateRecordBytes = 112u;
+inline constexpr usize s_GpuCommandIrDrawRecordBytes = 36u;
 struct GpuCommandIrRasterVertexWire{
     u32 resourceIndex = Limit<u32>::s_Max;
     u32 slot = 0u;
@@ -84,10 +86,10 @@ struct GpuCommandIrEndRenderPassRecord{
 #pragma pack(pop)
 
 static_assert(sizeof(GpuCommandIrRasterVertexWire) == 16u);
-static_assert(sizeof(GpuCommandIrSetGraphicsStateRecord) == 112u);
+static_assert(sizeof(GpuCommandIrSetGraphicsStateRecord) == s_GpuCommandIrGraphicsStateRecordBytes);
 static_assert(sizeof(GpuCommandIrBindGraphicsHeapRecord) == 24u);
 static_assert(sizeof(GpuCommandIrSetPushConstantsRecord) == 32u);
-static_assert(sizeof(GpuCommandIrDrawRecord) == 36u);
+static_assert(sizeof(GpuCommandIrDrawRecord) == s_GpuCommandIrDrawRecordBytes);
 static_assert(sizeof(GpuCommandIrEndRenderPassRecord) == 16u);
 static_assert(IsStandardLayout_V<GpuCommandIrSetGraphicsStateRecord> && IsTriviallyCopyable_V<GpuCommandIrSetGraphicsStateRecord>);
 

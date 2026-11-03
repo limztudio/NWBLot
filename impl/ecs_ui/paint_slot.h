@@ -24,7 +24,8 @@ class UiPaintContext;
 
 class UiPaintSlot{
 private:
-    using Callback = InplaceFunction<64u, void(UiPaintContext&)>;
+    static constexpr usize s_CallbackInlineBytes = 64u;
+    using Callback = InplaceFunction<s_CallbackInlineBytes, void(UiPaintContext&)>;
 
     struct Lease{
         UiPaintSlot* owner;

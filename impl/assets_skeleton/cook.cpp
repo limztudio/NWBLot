@@ -156,8 +156,7 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     outBinary.clear();
     outBinary.reserve(reserveBytes);
 
-    SkeletonHeaderBinary header;
-    header.jointCount = static_cast<u64>(skeleton.joints().size());
+    const SkeletonHeaderBinary header = MakeSkeletonHeaderBinary(static_cast<u64>(skeleton.joints().size()));
     AppendPOD(outBinary, header);
     for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
         const SkeletonJointBinary jointBinary = PackSkeletonJointBinary(jointNameHashes[jointIndex], skeleton.joints()[jointIndex]);

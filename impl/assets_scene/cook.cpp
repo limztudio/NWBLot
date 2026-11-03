@@ -46,8 +46,7 @@ b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    EntityHeaderBinary header;
-    header.componentCount = static_cast<u64>(componentHashes.size());
+    const EntityHeaderBinary header = MakeEntityHeaderBinary(static_cast<u64>(componentHashes.size()));
     AppendPOD(outBinary, header);
 
     return Core::Assets::AppendVectorPayload(componentHashes, s_EntitySerializeContext, s_EntityComponentsPayloadLabel, outBinary);
@@ -61,8 +60,7 @@ b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     if(!project.validatePayload())
         return false;
 
-    ProjectHeaderBinary header;
-    header.startSceneHash = project.startScene().name().hash();
+    const ProjectHeaderBinary header = MakeProjectHeaderBinary(project.startScene().name().hash());
     return ComponentAssetSerialization::WriteSinglePodPayload(header, outBinary);
 }
 
@@ -105,10 +103,11 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    SceneHeaderBinary header;
-    header.subsystemCount = static_cast<u64>(subsystemHashes.size());
-    header.entityCount = static_cast<u64>(entityHashes.size());
-    header.assetCount = static_cast<u64>(assetEntries.size());
+    const SceneHeaderBinary header = MakeSceneHeaderBinary(
+        static_cast<u64>(subsystemHashes.size()),
+        static_cast<u64>(entityHashes.size()),
+        static_cast<u64>(assetEntries.size())
+    );
     AppendPOD(outBinary, header);
 
     return

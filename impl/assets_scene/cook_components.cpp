@@ -112,9 +112,7 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
     if(!component.serializeComponentPayload(payload))
         return false;
 
-    ComponentHeaderBinary header;
-    header.componentTypeHash = component.assetType().hash();
-    header.payloadByteCount = static_cast<u64>(payload.size());
+    const ComponentHeaderBinary header = MakeComponentHeaderBinary(component.assetType().hash(), static_cast<u64>(payload.size()));
 
     outBinary.clear();
     outBinary.reserve(sizeof(header) + payload.size());
@@ -135,12 +133,12 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
 
 
 b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const TransformComponentPayloadBinary binaryPayload(component.position, component.rotation, component.scale);
+    const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
 
 b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const CameraComponentPayloadBinary binaryPayload(component.projection);
+    const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
 

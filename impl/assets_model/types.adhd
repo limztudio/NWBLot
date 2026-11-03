@@ -95,6 +95,18 @@ class ModelSkinnedMeshObject{
     public Name skeletonObject = s_NameNone;
 }
 
+ModelHeaderBinary MakeModelHeaderBinary(
+    in u64 skeletonObjectCount,
+    in u64 staticMeshObjectCount,
+    in u64 skinnedMeshObjectCount
+){
+    ModelHeaderBinary header;
+    header.skeletonObjectCount = skeletonObjectCount;
+    header.staticMeshObjectCount = staticMeshObjectCount;
+    header.skinnedMeshObjectCount = skinnedMeshObjectCount;
+    return header;
+}
+
 ModelSkeletonObjectBinary PackModelSkeletonObjectBinary(in ModelSkeletonObject object){
     ModelSkeletonObjectBinary objectBinary;
     objectBinary.nameHash = object.name.hash();

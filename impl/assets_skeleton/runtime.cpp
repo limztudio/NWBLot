@@ -71,7 +71,7 @@ b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     }
     for(usize i = 0u; i < m_joints.size(); ++i){
         const SkeletonJoint& joint = m_joints[i];
-        if(!MatrixIsAffine(LoadFloat(joint.localBindPose), 0.0f)){
+        if(!IsFiniteSkeletonJointMatrix(joint.localBindPose)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has non-finite local bind pose"), i);
             return false;
         }

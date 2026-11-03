@@ -384,6 +384,14 @@ b8 StoreMaterialMutableParameter(mut MaterialInstanceComponent component, in Mat
     return false;
 }
 
+b8 ValidateMaterialInstanceNumericFieldType(in MaterialLayoutFieldType fieldType, in StringView parameterNameText){
+    if(IsMaterialLayoutNumericFieldType(fieldType))
+        return true;
+
+    error("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type", parameterNameText);
+    return false;
+}
+
 usize ComputeMaterialPipelineBaseHash(
     in Name material,
     in MaterialPipelinePass pass,

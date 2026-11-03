@@ -201,10 +201,11 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    ModelHeaderBinary header;
-    header.skeletonObjectCount = static_cast<u64>(skeletonObjectBinaries.size());
-    header.staticMeshObjectCount = static_cast<u64>(staticMeshObjectBinaries.size());
-    header.skinnedMeshObjectCount = static_cast<u64>(skinnedMeshObjectBinaries.size());
+    const ModelHeaderBinary header = MakeModelHeaderBinary(
+        static_cast<u64>(skeletonObjectBinaries.size()),
+        static_cast<u64>(staticMeshObjectBinaries.size()),
+        static_cast<u64>(skinnedMeshObjectBinaries.size())
+    );
     AppendPOD(outBinary, header);
 
     return

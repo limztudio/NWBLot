@@ -71,20 +71,21 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         return false;
 
     const Core::SamplerDesc& description = sampler.description();
-    SamplerBinaryHeader header;
-    header.borderColorR = description.borderColor.r;
-    header.borderColorG = description.borderColor.g;
-    header.borderColorB = description.borderColor.b;
-    header.borderColorA = description.borderColor.a;
-    header.maxAnisotropy = description.maxAnisotropy;
-    header.mipBias = description.mipBias;
-    header.minFilter = description.minFilter ? 1u : 0u;
-    header.magFilter = description.magFilter ? 1u : 0u;
-    header.mipFilter = description.mipFilter ? 1u : 0u;
-    header.addressU = static_cast<u32>(description.addressU);
-    header.addressV = static_cast<u32>(description.addressV);
-    header.addressW = static_cast<u32>(description.addressW);
-    header.reductionType = static_cast<u32>(description.reductionType);
+    const SamplerBinaryHeader header = MakeSamplerBinaryHeader(
+        description.borderColor.r,
+        description.borderColor.g,
+        description.borderColor.b,
+        description.borderColor.a,
+        description.maxAnisotropy,
+        description.mipBias,
+        description.minFilter,
+        description.magFilter,
+        description.mipFilter,
+        static_cast<u32>(description.addressU),
+        static_cast<u32>(description.addressV),
+        static_cast<u32>(description.addressW),
+        static_cast<u32>(description.reductionType)
+    );
 
     outBinary.clear();
     outBinary.reserve(sizeof(header));

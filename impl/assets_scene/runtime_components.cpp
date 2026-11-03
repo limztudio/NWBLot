@@ -114,7 +114,7 @@ b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<TransformComponentPayloadBinary>(payload, NWB_TEXT("TransformComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
-    component = Scene::TransformComponent(binaryPayload->position, binaryPayload->rotation, binaryPayload->scale);
+    component = UnpackTransformComponentPayloadBinary(*binaryPayload);
     return true;
 }
 
@@ -137,7 +137,7 @@ b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<CameraComponentPayloadBinary>(payload, NWB_TEXT("CameraComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
-    component = Scene::CameraComponent(binaryPayload->projection);
+    component = UnpackCameraComponentPayloadBinary(*binaryPayload);
     return true;
 }
 

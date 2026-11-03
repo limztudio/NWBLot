@@ -50,6 +50,23 @@ class SkeletonJointBinary{
     public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 }
 
+SkeletonHeaderBinary MakeSkeletonHeaderBinary(in u64 jointCount){
+    SkeletonHeaderBinary header;
+    header.jointCount = jointCount;
+    return header;
+}
+
+b8 IsFiniteSkeletonJointRow(in f32x4 row){
+    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+}
+
+b8 IsFiniteSkeletonJointMatrix(in SkeletonJointMatrix matrix){
+    return IsFiniteSkeletonJointRow(matrix[0u])
+        && IsFiniteSkeletonJointRow(matrix[1u])
+        && IsFiniteSkeletonJointRow(matrix[2u])
+    ;
+}
+
 b8 IsValidSkeletonHeaderBinary(in SkeletonHeaderBinary header){
     return header.padding0 == 0u && header.jointCount <= 0xFFFFFFFFul;
 }

@@ -70,11 +70,12 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    SubsystemHeaderBinary header;
-    header.subsystemTypeHash = subsystem.assetType().hash();
-    header.subsystemCount = static_cast<u64>(subsystemHashes.size());
-    header.fieldCount = static_cast<u64>(fieldCounts.size());
-    header.assetCount = static_cast<u64>(assetHashes.size());
+    const SubsystemHeaderBinary header = MakeSubsystemHeaderBinary(
+        subsystem.assetType().hash(),
+        static_cast<u64>(subsystemHashes.size()),
+        static_cast<u64>(fieldCounts.size()),
+        static_cast<u64>(assetHashes.size())
+    );
     AppendPOD(outBinary, header);
 
     return

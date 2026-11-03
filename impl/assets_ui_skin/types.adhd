@@ -466,6 +466,22 @@ Expected<usize> TryFindUiSkinRegionIndex(
     return matchedPosition;
 }
 
+UiSkinHeaderBinary MakeUiSkinHeaderBinary(
+    in NameHash textureNameHash,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in u32 regionCount
+){
+    UiSkinHeaderBinary header;
+    header.textureNameHash = textureNameHash;
+    header.atlasWidth = atlasWidth;
+    header.atlasHeight = atlasHeight;
+    header.referenceDensity = referenceDensity;
+    header.regionCount = regionCount;
+    return header;
+}
+
 UiSkinRegionBinary PackUiSkinRegionBinary(in UiSkinRegion region){
     UiSkinRegionBinary packed;
     packed.nameHash = region.name.hash();

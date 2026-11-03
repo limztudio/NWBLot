@@ -99,18 +99,46 @@ public:
     }
 };
 
-[[nodiscard]] b8 ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, AStringView parameterNameText);
-[[nodiscard]] b8 StoreMaterialMutableParameter(MaterialInstanceComponent& component, MaterialInstanceParameter parameter, AStringView parameterNameText);
-[[nodiscard]] MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, Core::ECS::EntityID entity);
-[[nodiscard]] b8 SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, AStringView parameterNameText, MaterialLayoutFieldType::Enum fieldType, UInt4U value);
-[[nodiscard]] b8 SetMaterialMutableParameter(Core::ECS::World& world, Core::ECS::EntityID entity, const Name& materialInterface, AStringView parameterName, MaterialLayoutFieldType::Enum fieldType, UInt4U value);
+[[nodiscard]] inline MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
+    MaterialInstanceComponent* component = world.tryGetComponent<MaterialInstanceComponent>(entity);
+    if(component)
+        return component;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
+    return nullptr;
+}
+
+[[nodiscard]] inline b8 SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
+    if(!ValidateMaterialInstanceNumericFieldType(fieldType, parameterNameText))
+        return false;
+    if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))
+        return false;
+
+    const auto names = SplitMaterialInstanceParameterName(parameterNameText);
+    if(!names)
+        return false;
+
+    const MaterialInstanceParameter parameter = BuildMaterialInstanceParameter(*names, fieldType, value);
+    return StoreMaterialMutableParameter(component, parameter, parameterNameText);
+}
+
+[[nodiscard]] inline b8 SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
+    MaterialInstanceComponent* component = ResolveMaterialInstanceComponentForSet(world, entity);
+    if(!component)
+        return false;
+
+    return SetMaterialMutableParameter(*component, materialInterface, parameterName, fieldType, value);
+}
 
 template<typename TValue>
 [[nodiscard]] inline b8 SetMaterialMutableValue(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const TValue& value){
     return SetMaterialMutableParameter(world, entity, materialInterface, parameterName, MaterialInstanceValueTraits<TValue>::s_FieldType, MaterialInstanceValueTraits<TValue>::Pack(value));
 }
 
-[[nodiscard]] b8 SetMaterialMutableHalf4(Core::ECS::World& world, Core::ECS::EntityID entity, const Name& materialInterface, AStringView parameterName, const Float4& value);
+[[nodiscard]] inline b8 SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
+    const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
+    return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

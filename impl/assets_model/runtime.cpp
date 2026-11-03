@@ -82,7 +82,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_skeletonObjects.size(); ++i){
         const ModelSkeletonObject& object = m_skeletonObjects[i];
-        if(!MatrixIsAffine(LoadFloat(object.transform), 0.0f)){
+        if(!IsFiniteSkeletonJointMatrix(object.transform)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} has non-finite transform"), i);
             return false;
         }
@@ -98,7 +98,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_staticMeshObjects.size(); ++i){
         const ModelStaticMeshObject& object = m_staticMeshObjects[i];
-        if(!MatrixIsAffine(LoadFloat(object.transform), 0.0f)){
+        if(!IsFiniteSkeletonJointMatrix(object.transform)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has non-finite transform"), i);
             return false;
         }
@@ -138,7 +138,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_skinnedMeshObjects.size(); ++i){
         const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
-        if(!MatrixIsAffine(LoadFloat(object.transform), 0.0f)){
+        if(!IsFiniteSkeletonJointMatrix(object.transform)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has non-finite transform"), i);
             return false;
         }

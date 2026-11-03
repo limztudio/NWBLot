@@ -45,12 +45,13 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
     }
 
-    UiSkinHeaderBinary header;
-    header.textureNameHash = skin.texture().name().hash();
-    header.atlasWidth = skin.atlasWidth();
-    header.atlasHeight = skin.atlasHeight();
-    header.referenceDensity = skin.referenceDensity();
-    header.regionCount = static_cast<u32>(skin.regions().size());
+    const UiSkinHeaderBinary header = MakeUiSkinHeaderBinary(
+        skin.texture().name().hash(),
+        skin.atlasWidth(),
+        skin.atlasHeight(),
+        skin.referenceDensity(),
+        static_cast<u32>(skin.regions().size())
+    );
 
     outBinary.clear();
     outBinary.reserve(reserveBytes);

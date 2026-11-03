@@ -128,6 +128,13 @@ class NativeFontFailure{
     public b8 hasNativeError = false;
 }
 
+FontBinaryHeader MakeFontBinaryHeader(in u32 faceIndex, in u64 byteCount){
+    FontBinaryHeader header;
+    header.faceIndex = faceIndex;
+    header.byteCount = byteCount;
+    return header;
+}
+
 b8 IsValidFontBinaryHeader(in FontBinaryHeader header){
     return
         header.magic == s_FontBinaryMagic

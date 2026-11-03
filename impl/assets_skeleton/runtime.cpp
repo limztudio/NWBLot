@@ -48,19 +48,10 @@ b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     for(const auto& jointLookup : m_jointIndices){
         const Name jointName = jointLookup.first;
         const u32 jointIndex = jointLookup.second;
-        if(!jointName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup contains an empty name"));
+        u8 dummyFlag = 0u;
+        u8& flagRef = jointIndex < m_joints.size() ? namedJoints[jointIndex] : dummyFlag;
+        if(!ValidateSkeletonJointLookupEntry(jointName, jointIndex, m_joints.size(), flagRef))
             return false;
-        }
-        if(jointIndex >= m_joints.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}"), ConvertString(jointName.resolvedText()), jointIndex);
-            return false;
-        }
-        if(namedJoints[jointIndex] != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has multiple names"), jointIndex);
-            return false;
-        }
-        namedJoints[jointIndex] = 1u;
     }
     return ValidateSkeletonJointsArray(m_joints);
 }
@@ -75,10 +66,8 @@ b8 Skeleton::loadBinary(const Span<const u8> binary){
         return false;
     const SkeletonHeaderBinary& header = *headerResult;
 
-    if(!IsValidSkeletonHeaderBinary(header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: reserved header fields or joint count are invalid"));
+    if(!ValidateSkeletonHeaderBinary(header))
         return false;
-    }
     const auto jointByteCount = ComputeBinaryVectorPayloadBytes<SkeletonJointBinary>(header.jointCount);
     if(!jointByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint payload byte size overflows"));
@@ -104,10 +93,8 @@ b8 Skeleton::loadBinary(const Span<const u8> binary){
             return false;
         }
         const SkeletonJointBinary& jointBinary = *jointBinaryResult;
-        if(!IsValidSkeletonJointBinaryPadding(jointBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: reserved joint fields must be zero"));
+        if(!ValidateSkeletonJointBinaryPadding(jointBinary))
             return false;
-        }
         const Name jointName(jointBinary.nameHash);
         if(!candidate.m_jointIndices.emplace(jointName, static_cast<u32>(candidate.m_joints.size())).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), ConvertString(jointName.resolvedText()));

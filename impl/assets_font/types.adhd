@@ -342,6 +342,75 @@ b8 ValidateFontSfntRequiredTables(in Span<u8> bytes){
     return hasCff;
 }
 
+b8 ValidateFontBinaryPayloadHeader(in FontBinaryHeader header, in usize remainingBytes){
+    if(!IsValidFontBinaryHeader(header)){
+        error("Font::loadBinary failed: unsupported version, flags, or face index; recook required");
+        return false;
+    }
+    if(header.byteCount == 0u || header.byteCount > cast<u64>(s_FontMaxSourceBytes)){
+        error("Font::loadBinary failed: source size must be 1..{} bytes", s_FontMaxSourceBytes);
+        return false;
+    }
+    if(header.byteCount != cast<u64>(remainingBytes)){
+        error("Font::loadBinary failed: truncated source bytes or trailing payload");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateFontSourceDirectory(in Span<u8> bytes, in u32 faceIndex){
+    if(faceIndex != 0u || bytes.empty() || bytes.size() > cast<usize>(s_FontMaxSourceBytes)){
+        error("ValidateFontSource failed: face index must be zero and source size must be 1..{} bytes", s_FontMaxSourceBytes);
+        return false;
+    }
+    if(!ValidateFontSfntRequiredTables(bytes)){
+        error("ValidateFontSource failed: unsupported or malformed static TrueType/CFF SFNT directory");
+        return false;
+    }
+    return true;
+}
+
+void ReportNativeFontFailure(in NativeFontFailure failure){
+    if(failure.hasNativeError)
+        error("ValidateFontSource failed: native_operation={} native_domain=FreeType native_code={}", failure.operation, failure.nativeError);
+    else
+        error("ValidateFontSource failed: FreeType rejected the scalable Unicode face ({})", failure.operation);
+}
+
+Expected<u64, StringView> ValidatePreparedFontSerializeInputs(
+    in usize sfntByteCount,
+    in b8 hasSfntData,
+    in u32 faceIndex,
+    in Span<PreparedFontImageView> groups
+){
+    if(!hasSfntData || !IsValidPreparedFontHeaderInputs(sfntByteCount, faceIndex, groups.size())){
+        error("Prepared font serialization: invalid font bytes, face index, or image group count");
+        return makeUnexpected(s_PreparedFontInvalidSerializeInputReason);
+    }
+
+    u64 pixelByteCount = 0u;
+    for(usize index = 0u; index < groups.size(); ++index){
+        const PreparedFontImageView group = groups[index];
+        const Expected<u32> expectedBytes = TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount);
+        if(
+            !expectedBytes.has_value()
+            || group.pixels.empty()
+            || group.pixels.size() != cast<usize>(expectedBytes.value())
+            || cast<u64>(expectedBytes.value()) > s_PreparedFontMaxPixelBytes - pixelByteCount
+        ){
+            error("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes", index);
+            return makeUnexpected(s_PreparedFontInvalidSerializeGroupReason);
+        }
+        pixelByteCount += cast<u64>(expectedBytes.value());
+    }
+    const Expected<u64> expectedPayloadBytes = TryComputePreparedFontExpectedPayloadBytes(sfntByteCount, groups.size(), pixelByteCount);
+    if(!expectedPayloadBytes.has_value()){
+        error("Prepared font serialization: invalid font bytes, face index, or image group count");
+        return makeUnexpected(s_PreparedFontInvalidSerializeInputReason);
+    }
+    return expectedPayloadBytes.value();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

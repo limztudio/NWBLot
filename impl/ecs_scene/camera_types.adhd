@@ -52,6 +52,112 @@ CameraProjection MakeFallbackCameraProjection(){
     return projection;
 }
 
+Expected<f32> TryComputeCameraTanHalfVerticalFovScalar(in f32 verticalFovRadians){
+    if(!isFinite(verticalFovRadians) || !(verticalFovRadians > 0.0f) || !(verticalFovRadians < s_PI))
+        return makeUnexpected(Failure());
+
+    const f32 halfFov = verticalFovRadians * s_HalfFovWeight;
+    const f32 sinHalfFov = sin(halfFov);
+    const f32 cosHalfFov = cos(halfFov);
+    if(!isFinite(sinHalfFov) || !isFinite(cosHalfFov) || !(abs(cosHalfFov) >= s_CameraFovCosEpsilon))
+        return makeUnexpected(Failure());
+
+    const f32 tanHalfFov = sinHalfFov / cosHalfFov;
+    if(!isFinite(tanHalfFov) || !(tanHalfFov > 0.0f))
+        return makeUnexpected(Failure());
+
+    return tanHalfFov;
+}
+
+b8 CameraClipRangeValidScalar(in f32 nearPlane, in f32 farPlane){
+    return isFinite(nearPlane) && isFinite(farPlane) && nearPlane > 0.0f && nearPlane < farPlane;
+}
+
+f32 ResolveCameraAspectRatioScalar(in f32 cameraAspectRatio, in f32 fallbackAspectRatio){
+    f32 resolvedFallback = 1.0f;
+    if(isFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
+        resolvedFallback = fallbackAspectRatio;
+    if(isFinite(cameraAspectRatio) && cameraAspectRatio > 0.0f)
+        return cameraAspectRatio;
+    return resolvedFallback;
+}
+
+b8 CameraProjectionValuesValidScalar(
+    in f32x4 projectionParams,
+    in f32 aspectRatio,
+    in f32 tanHalfVerticalFov,
+    in f32 nearPlane,
+    in f32 farPlane
+){
+    return
+        isFinite(projectionParams.x) && isFinite(projectionParams.y) && isFinite(projectionParams.z) && isFinite(projectionParams.w)
+        && isFinite(aspectRatio)
+        && isFinite(tanHalfVerticalFov)
+        && aspectRatio > 0.0f
+        && tanHalfVerticalFov > 0.0f
+        && CameraClipRangeValidScalar(nearPlane, farPlane)
+        && projectionParams.x > 0.0f
+        && projectionParams.y > 0.0f
+        && projectionParams.z > 0.0f
+        && projectionParams.w < 0.0f
+    ;
+}
+
+Expected<CameraProjection> TryBuildCameraProjectionData(
+    in f32 verticalFovRadians,
+    in f32 nearPlane,
+    in f32 farPlane,
+    in f32 cameraAspectRatio,
+    in f32 fallbackAspectRatio
+){
+    const Expected<f32> tanHalfFov = TryComputeCameraTanHalfVerticalFovScalar(verticalFovRadians);
+    if(!tanHalfFov.has_value() || !CameraClipRangeValidScalar(nearPlane, farPlane))
+        return makeUnexpected(Failure());
+
+    const f32 aspectRatio = ResolveCameraAspectRatioScalar(cameraAspectRatio, fallbackAspectRatio);
+    const f32 depthRange = farPlane - nearPlane;
+    const f32x4 projectionParams(
+        1.0f / (tanHalfFov.value() * aspectRatio),
+        1.0f / tanHalfFov.value(),
+        farPlane / depthRange,
+        (-farPlane * nearPlane) / depthRange
+    );
+    if(!CameraProjectionValuesValidScalar(projectionParams, aspectRatio, tanHalfFov.value(), nearPlane, farPlane))
+        return makeUnexpected(Failure());
+
+    return MakeCameraProjection(projectionParams, f32x4(aspectRatio, tanHalfFov.value(), nearPlane, farPlane));
+}
+
+CameraProjection StoreDefaultCameraProjection(in f32 fallbackAspectRatio){
+    const Expected<CameraProjection> defaultProjection = TryBuildCameraProjectionData(
+        s_CameraVerticalFovRadians,
+        s_CameraNearPlane,
+        s_CameraFarPlane,
+        s_CameraAutoAspectRatio,
+        fallbackAspectRatio
+    );
+    if(defaultProjection.has_value())
+        return defaultProjection.value();
+
+    return MakeFallbackCameraProjection();
+}
+
+CameraProjection StoreDefaultCameraProjection(){
+    return StoreDefaultCameraProjection(s_CameraFallbackAspectRatio);
+}
+
+b8 IsValidCameraTransformVectors(in f32x4 position, in f32x4 rotation, in f32x4 scale){
+    if(
+        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
+        || !isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w)
+        || !isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z)
+    )
+        return false;
+
+    const f32 rotationLengthSquared = lengthSq(rotation);
+    return isFinite(rotationLengthSquared) && abs(rotationLengthSquared - 1.0f) <= s_CameraRotationUnitLengthSquaredTolerance;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

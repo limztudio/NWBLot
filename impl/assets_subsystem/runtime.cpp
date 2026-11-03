@@ -74,14 +74,8 @@ b8 ValidatePayload(const ISubsystem& subsystem){
 
     for(usize i = 0u; i < subsystem.subsystems.size(); ++i){
         const ISubsystem::SubsystemRef& ref = subsystem.subsystems[i];
-        if(!ref.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' dependent subsystem entry {} must not be empty"), ConvertString(subsystem.virtualPath().resolvedText()), i);
+        if(!ValidateSubsystemDependentRef(subsystem.virtualPath(), ref.name(), ref.valid(), i))
             return false;
-        }
-        if(ref.name() == subsystem.virtualPath()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' cannot reference itself in 'subsystems'"), ConvertString(subsystem.virtualPath().resolvedText()));
-            return false;
-        }
     }
 
     const usize count = subsystem.fieldCount();
@@ -93,34 +87,20 @@ b8 ValidatePayload(const ISubsystem& subsystem){
     for(usize i = 0u; i < count; ++i){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
         const usize valueCount = subsystem.fieldValueCount(i);
-        if(descriptor.isArray){
-            if(valueCount == 0u){
-                NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' array field '{}' must not be empty"), ConvertString(subsystem.virtualPath().resolvedText()), ConvertString(descriptor.fieldName));
-                return false;
-            }
-        }
-        else if(valueCount != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' field '{}' must contain exactly one value"), ConvertString(subsystem.virtualPath().resolvedText()), ConvertString(descriptor.fieldName));
+        if(!ValidateSubsystemFieldValueCount(subsystem.virtualPath(), descriptor, valueCount))
             return false;
-        }
 
         for(usize elementIndex = 0u; elementIndex < valueCount; ++elementIndex){
             const Name value = subsystem.fieldValue(i, elementIndex);
-            if(!value){
-                NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' field '{}' must not be empty"), ConvertString(subsystem.virtualPath().resolvedText()), ConvertString(descriptor.fieldName));
-                return false;
-            }
+            b8 isDuplicate = false;
             for(usize prevIndex = 0u; prevIndex < elementIndex; ++prevIndex){
                 if(subsystem.fieldValue(i, prevIndex) == value){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("ISubsystem::validatePayload failed: subsystem '{}' array field '{}' has duplicate entry '{}'")
-                        , ConvertString(subsystem.virtualPath().resolvedText())
-                        , ConvertString(descriptor.fieldName)
-                        , ConvertString(value.resolvedText())
-                    );
-                    return false;
+                    isDuplicate = true;
+                    break;
                 }
             }
+            if(!ValidateSubsystemFieldElementValue(subsystem.virtualPath(), descriptor, value, isDuplicate))
+                return false;
         }
     }
 
@@ -134,19 +114,9 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     if(!headerResult)
         return false;
     const SubsystemHeaderBinary& header = *headerResult;
-    if(header.version != s_SubsystemVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: unsupported version {}"), header.version);
-        return false;
-    }
-    if(header.subsystemTypeHash != outSubsystem.assetType().hash()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: subsystem binary type does not match '{}'"), ConvertString(outSubsystem.assetType().resolvedText()));
-        return false;
-    }
     const usize expectedFieldCount = outSubsystem.fieldCount();
-    if(header.fieldCount != expectedFieldCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: expected {} asset fields for '{}', got {}"), expectedFieldCount, ConvertString(outSubsystem.assetType().resolvedText()), header.fieldCount);
+    if(!ValidateSubsystemHeaderBinary(header, outSubsystem.assetType(), expectedFieldCount))
         return false;
-    }
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
@@ -172,24 +142,15 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     }
     DeduplicateSubsystemRefs(outSubsystem.subsystems);
 
-    const Expected<u64> totalCount = TrySumSubsystemFieldElementCounts(Span<const u64>(fieldCounts));
-    if(!totalCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: invalid field element count"));
+    if(!ValidateSubsystemFieldElementCountSum(Span<const u64>(fieldCounts), header.assetCount))
         return false;
-    }
-    if(*totalCount != header.assetCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: field element counts do not sum to asset count"));
-        return false;
-    }
 
     usize hashOffset = 0u;
     for(usize i = 0u; i < expectedFieldCount; ++i){
         const SubsystemFieldValueDescriptor descriptor = outSubsystem.fieldDescriptor(i);
         const u64 elementCount = fieldCounts[i];
-        if(!descriptor.isArray && elementCount != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: scalar field '{}' in '{}' has element count {}"), ConvertString(descriptor.fieldName), ConvertString(outSubsystem.assetType().resolvedText()), elementCount);
+        if(!ValidateSubsystemBinaryScalarFieldCount(outSubsystem.assetType(), descriptor, elementCount))
             return false;
-        }
         outSubsystem.clearFieldValues(i);
         for(u64 elementIndex = 0u; elementIndex < elementCount; ++elementIndex){
             const Name assetName(assetHashes[hashOffset++]);

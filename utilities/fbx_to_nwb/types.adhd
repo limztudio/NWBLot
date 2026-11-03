@@ -584,6 +584,30 @@ b8 SameEmittedVec4(in Vec4 lhs, in Vec4 rhs){
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
 }
 
+Expected<usize> ValidateFbxSkinClusterCount(in usize clusterCount, in usize currentJointCount){
+    if(clusterCount == 0u){
+        error("Failed to build mesh: skin deformer contains no clusters");
+        return makeUnexpected(Failure());
+    }
+    if(clusterCount > cast<usize>(u32.max)){
+        error("Failed to build mesh: skin deformer has too many clusters");
+        return makeUnexpected(Failure());
+    }
+    if(clusterCount > usize.max - currentJointCount){
+        error("Failed to build mesh: skin deformer cluster count overflows skeleton joint capacity");
+        return makeUnexpected(Failure());
+    }
+    return currentJointCount + clusterCount;
+}
+
+b8 ValidateFbxSkinVertexWeightRange(in u32 weightBegin, in u32 numWeights, in usize totalWeights){
+    if(cast<usize>(weightBegin) <= totalWeights && cast<usize>(numWeights) <= totalWeights - cast<usize>(weightBegin))
+        return true;
+
+    error("Failed to build mesh: skin vertex weight range is out of bounds");
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

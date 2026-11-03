@@ -110,6 +110,14 @@ b8 ValidateSkinInfluenceStream(in Span<SkinInfluence4> influences, in u32 jointC
     return true;
 }
 
+b8 ValidateSkinHeaderBinary(in SkinHeaderBinary header){
+    if(header.padding0 == 0u)
+        return true;
+
+    error("Skin::loadBinary failed: reserved header fields must be zero");
+    return false;
+}
+
 [subsystem("skinning_subsystem")]
 class SkinningSubsystem{
     public AssetRef<ComputeShader> localBoundsCs;

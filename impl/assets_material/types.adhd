@@ -577,6 +577,56 @@ MaterialTypedLayoutValidationStatus ValidateMaterialTypedLayout(
     return MaterialTypedLayoutValidationStatus::Valid;
 }
 
+b8 ValidateMaterialBinaryShaderCount(
+    in u32 shaderCount,
+    in u32 maxShaderTypeCount,
+    in usize remainingBytes,
+    in usize shaderEntryBytes
+){
+    if(shaderCount == 0u){
+        error("Material::loadBinary failed: material has no shader stages");
+        return false;
+    }
+    if(shaderCount > maxShaderTypeCount){
+        error("Material::loadBinary failed: shader count exceeds supported shader stage count");
+        return false;
+    }
+    if(cast<usize>(shaderCount) > remainingBytes / shaderEntryBytes){
+        error("Material::loadBinary failed: shader count exceeds available data");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateMaterialBinaryFlags(
+    in u32 materialFlags,
+    mut b8 outTransparent,
+    mut b8 outTwoSided,
+    mut b8 outRefractive
+){
+    if(TryUnpackMaterialFlags(materialFlags, outTransparent, outTwoSided, outRefractive))
+        return true;
+
+    error("Material::loadBinary failed: material flags contain unsupported bits {}", materialFlags);
+    return false;
+}
+
+b8 ValidateMaterialBinaryAvboitPresenceFlag(in StringView passLabel, in u32 hasShader){
+    if(hasShader <= 1u)
+        return true;
+
+    error("Material::loadBinary failed: invalid AVBOIT {} pixel shader presence flag {}", passLabel, hasShader);
+    return false;
+}
+
+b8 ValidateMaterialBinaryAvboitShaderRef(in StringView passLabel, in b8 isValidRef){
+    if(isValidRef)
+        return true;
+
+    error("Material::loadBinary failed: AVBOIT {} pixel shader name is empty", passLabel);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

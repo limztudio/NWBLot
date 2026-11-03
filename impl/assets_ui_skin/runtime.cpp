@@ -48,22 +48,8 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const UiSkinHeaderBinary& header = *headerResult;
-    if(header.version != s_UiSkinBinaryVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
+    if(!ValidateUiSkinHeaderBinary(header, binary.size() - cursor, sizeof(UiSkinRegionBinary)))
         return false;
-    }
-    if(!IsValidUiSkinHeaderFlags(header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: header contains unsupported flags"));
-        return false;
-    }
-    if(header.regionCount > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region count {} exceeds schema limit {}"), header.regionCount, s_UiSkinMaxRegionCount);
-        return false;
-    }
-    if(header.regionCount == 0u || header.regionCount > (binary.size() - cursor) / sizeof(UiSkinRegionBinary)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region count is empty or exceeds the payload"));
-        return false;
-    }
 
     UiSkin candidate(m_regions.get_allocator().arena(), virtualPath());
     candidate.m_texture.virtualPath = Name(header.textureNameHash);
@@ -77,13 +63,11 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed region {}"), index);
             return false;
         }
-        const UiSkinRegionBinary& packed = *packedResult;
-        if(!IsValidUiSkinRegionBinaryFlags(packed)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags"), index);
+        const Expected<UiSkinRegion> unpacked = TryUnpackUiSkinRegionBinary(*packedResult, index);
+        if(!unpacked)
             return false;
-        }
 
-        candidate.m_regions.push_back(UnpackUiSkinRegionBinary(packed));
+        candidate.m_regions.push_back(*unpacked);
     }
     UiSkinPalette palette;
     for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
@@ -129,11 +113,16 @@ b8 UiSkin::validatePayload()const{
 b8 UiSkin::validateTexture(const Texture& texture)const{
     if(!validatePayload())
         return false;
-    if(texture.virtualPath() != m_texture.name() || texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u || texture.width() != m_atlasWidth || texture.height() != m_atlasHeight){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validateTexture failed: texture identity, 2D dimension, or extent does not match the atlas"));
-        return false;
-    }
-    return true;
+    return ValidateUiSkinAtlasTextureParameters(
+        texture.virtualPath(),
+        m_texture.name(),
+        texture.dimension() == TextureDimension::Texture2D,
+        texture.depth(),
+        texture.width(),
+        texture.height(),
+        m_atlasWidth,
+        m_atlasHeight
+    );
 }
 
 void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, const u32 height, const f32 referenceDensity, RegionVector&& regions){

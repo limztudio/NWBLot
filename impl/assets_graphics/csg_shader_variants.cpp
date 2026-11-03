@@ -112,13 +112,7 @@ Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& s
 }
 
 b8 AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceVariantCount, u64& inOutVariantCount){
-    if(sourceVariantCount <= Limit<u64>::s_Max - inOutVariantCount){
-        inOutVariantCount += sourceVariantCount;
-        return true;
-    }
-
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG clip variant count overflow for entry '{}'"), ConvertString(entry.name));
-    return false;
+    return TryAddCsgClipVariantCount(entry.name, sourceVariantCount, inOutVariantCount);
 }
 
 Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(const AStringView entryName, const ShaderCook::DefineCombo& sourceCombo, ShaderCook::CookArena& cookArena){

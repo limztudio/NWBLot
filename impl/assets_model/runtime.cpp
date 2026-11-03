@@ -44,25 +44,15 @@ using ObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
 b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Model::validatePayload")))
         return false;
-    if(m_skeletonObjects.empty() && m_staticMeshObjects.empty() && m_skinnedMeshObjects.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: model has no objects"));
-        return false;
-    }
 
-    const Expected<usize> objectCountResult = TryComputeTotalModelObjectCount(m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size());
-    if(!objectCountResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: total object count overflows"));
+    const Expected<usize> objectCountResult = ResolveModelObjectCount(m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size());
+    if(!objectCountResult)
         return false;
-    }
     const usize objectCount = *objectCountResult;
     Optional<__hidden_model_runtime::ObjectNameMap> objectNames;
     // One object is necessarily unique and a mesh cannot have a separate skeleton parent in that model.
     // Larger models build the complete name index once, preserving validation order across all object kinds.
     if(objectCount > 1u){
-        if(objectCount > Limit<usize>::s_Max / 2u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: name index capacity overflows"));
-            return false;
-        }
         // Construct the final bucket array at the map's default 0.5 load factor so scratch storage never needs a reserve-time rehash.
         objectNames.emplace(objectCount * 2u, scratchArena);
         const auto indexObjects = [&objectNames](const auto& objects, const u8 flags){
@@ -77,7 +67,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         indexObjects(m_skinnedMeshObjects, 0u);
     }
     const auto nameIsUnique = [&objectNames](const Name name)noexcept{
-        return !objectNames || (objectNames->at(name) & s_ModelDuplicateObjectNameFlag) == 0u;
+        return !objectNames || !IsModelObjectFlaggedDuplicate(objectNames->at(name));
     };
 
     for(usize i = 0u; i < m_skeletonObjects.size(); ++i){
@@ -93,7 +83,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         if(object.parentObject && objectNames){
             const auto parent = objectNames->find(object.parentObject);
             parentExists = parent != objectNames->end();
-            parentIsSkeleton = parentExists && (parent.value() & s_ModelSkeletonObjectNameFlag) != 0u;
+            parentIsSkeleton = parentExists && IsModelObjectFlaggedSkeleton(parent.value());
         }
         if(!ValidateModelStaticMeshObject(object, i, nameIsUnique(object.name), parentExists, parentIsSkeleton))
             return false;
@@ -104,7 +94,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         b8 targetIsSkeleton = false;
         if(objectNames){
             const auto parent = objectNames->find(object.skeletonObject);
-            targetIsSkeleton = parent != objectNames->end() && (parent.value() & s_ModelSkeletonObjectNameFlag) != 0u;
+            targetIsSkeleton = parent != objectNames->end() && IsModelObjectFlaggedSkeleton(parent.value());
         }
         if(!ValidateModelSkinnedMeshObject(object, i, nameIsUnique(object.name), targetIsSkeleton))
             return false;
@@ -121,10 +111,8 @@ b8 Model::loadBinary(const Span<const u8> binary){
         return false;
     const ModelHeaderBinary& header = *headerResult;
 
-    if(!IsValidModelHeaderBinary(header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model::loadBinary failed: reserved header fields must be zero"));
+    if(!ValidateModelHeaderBinary(header))
         return false;
-    }
     Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
     Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
     Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
@@ -137,17 +125,9 @@ b8 Model::loadBinary(const Span<const u8> binary){
     if(!Core::Assets::ReadVectorPayload(binary, header.skinnedMeshObjectCount, s_ModelLoadBinaryContext, s_ModelSkinnedMeshObjectsPayloadLabel, cursor, skinnedMeshObjectBinaries))
         return false;
 
-    candidate.m_skeletonObjects.reserve(skeletonObjectBinaries.size());
-    for(const ModelSkeletonObjectBinary& objectBinary : skeletonObjectBinaries)
-        candidate.m_skeletonObjects.push_back(UnpackModelSkeletonObjectBinary(objectBinary));
-
-    candidate.m_staticMeshObjects.reserve(staticMeshObjectBinaries.size());
-    for(const ModelStaticMeshObjectBinary& objectBinary : staticMeshObjectBinaries)
-        candidate.m_staticMeshObjects.push_back(UnpackModelStaticMeshObjectBinary(objectBinary));
-
-    candidate.m_skinnedMeshObjects.reserve(skinnedMeshObjectBinaries.size());
-    for(const ModelSkinnedMeshObjectBinary& objectBinary : skinnedMeshObjectBinaries)
-        candidate.m_skinnedMeshObjects.push_back(UnpackModelSkinnedMeshObjectBinary(objectBinary));
+    UnpackModelSkeletonObjectBinaries(skeletonObjectBinaries, candidate.m_skeletonObjects);
+    UnpackModelStaticMeshObjectBinaries(staticMeshObjectBinaries, candidate.m_staticMeshObjects);
+    UnpackModelSkinnedMeshObjectBinaries(skinnedMeshObjectBinaries, candidate.m_skinnedMeshObjects);
 
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ModelLoadBinaryContext) || !candidate.validatePayload(scratchArena))
         return false;

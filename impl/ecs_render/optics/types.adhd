@@ -262,6 +262,39 @@ RayTracingOpticalInstanceGpu BuildRayTracingOpticalInstance(
     return instance;
 }
 
+CoincidentOpticalVolumeCandidate MakeCoincidentOpticalVolumeCandidate(
+    in EntityID entity,
+    in AssetRef<Mesh> mesh,
+    in RendererComponent renderer,
+    in Span<u8> mutableTypedBytes
+){
+    CoincidentOpticalVolumeCandidate candidate;
+    candidate.entity = entity;
+    candidate.mesh = mesh;
+    candidate.material = renderer.material;
+    if(renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup)
+        candidate.group = renderer.opticalVolumeGroup;
+    else
+        candidate.group = s_NameNone;
+    candidate.priority = renderer.opticalVolumePriority;
+    candidate.boundaryMode = cast<u32>(renderer.opticalBoundaryMode);
+    candidate.mediumPriority = renderer.opticalMediumPriority;
+    candidate.mutableTypedBytes = mutableTypedBytes;
+    return candidate;
+}
+
+RayTracingOpticalRuntimeInputGpu MakeRayTracingOpticalRuntimeInputGpu(
+    in f32x3x4 objectToWorld,
+    in u32 localBoundsSlot,
+    in u32 instanceIndex
+){
+    RayTracingOpticalRuntimeInputGpu input;
+    input.objectToWorld = objectToWorld;
+    input.localBoundsSlot = localBoundsSlot;
+    input.instanceIndex = instanceIndex;
+    return input;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

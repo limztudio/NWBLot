@@ -106,19 +106,7 @@ b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
 b8 RendererComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("RendererComponentAsset::validatePayload")))
         return false;
-    if(!component.material.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' material must not be empty"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(!IsValidRendererComponentOpticalConfig(component)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' has invalid optical enum value"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(component.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && !component.opticalVolumeGroup){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' shared_group optical volume requires optical_volume_group"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return ValidateRendererComponentAssetPayload(component, virtualPath());
 }
 
 

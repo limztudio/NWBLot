@@ -144,16 +144,10 @@ b8 Builder::separator(const AStringView stableKey, const SeparatorOptions& optio
         m_context.fail();
         return false;
     }
-    const b8 horizontal = options.direction == SeparatorDirection::Horizontal;
-    const f32 minimum = horizontal ? skinRegion->minimumHeight : skinRegion->minimumWidth;
-    const f32 thickness = options.thickness > 0.0f ? options.thickness : Max(1.0f, minimum);
     Item item(m_arena);
     item.style = m_style;
     item.state = **state;
-    LayoutNodeDesc description;
-    description.width = horizontal ? options.length : LayoutSize{ LayoutSizePolicy::Fixed, thickness };
-    description.height = horizontal ? LayoutSize{ LayoutSizePolicy::Fixed, thickness } : options.length;
-    description.intrinsicSize = { skinRegion->minimumWidth, skinRegion->minimumHeight };
+    const LayoutNodeDesc description = ResolveSeparatorNodeDesc(*skinRegion, options);
     if(!addItemNode(description, item))
         return false;
     m_scope->m_items.push_back(Move(item));
@@ -242,8 +236,8 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
         return MakeUnexpected(Failure{});
     }
     item.textBounds = *textBounds;
-    SIMDVectorSingle minimum = VectorZero();
-    SIMDVectorSingle measured = VectorSet(item.textBounds.width, item.textBounds.height, item.textBounds.width, item.textBounds.height);
+    const Point textSize{ item.textBounds.width, item.textBounds.height };
+    Point intrinsicSize = textSize;
     if(kind == WidgetKind::Selectable){
         const auto metrics = MeasureSelectable(*m_skin, m_listStyle.row);
         if(!metrics){
@@ -251,20 +245,16 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
             return MakeUnexpected(Failure{});
         }
         item.padding = metrics->padding;
-        const SIMDVectorSingle paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top), VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
-        measured = VectorAdd(measured, paddingSize);
-        minimum = VectorSet(metrics->minimum.x, metrics->minimum.y, metrics->minimum.x, metrics->minimum.y);
+        intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, metrics->minimum);
     }
     else if(kind == WidgetKind::Button){
         if(!region(m_style.button, m_style.button)){
             m_context.fail();
             return MakeUnexpected(Failure{});
         }
-        SIMDVectorSingle paddingValue = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
-        loadButtonMetrics(minimum, paddingValue);
-        const SIMDVectorSingle paddingSize = VectorAdd(VectorSwizzle<0, 1, 0, 1>(paddingValue), VectorSwizzle<2, 3, 2, 3>(paddingValue));
-        measured = VectorAdd(measured, paddingSize);
-        item.padding = { VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
+        Point minimum{};
+        loadButtonMetrics(minimum, item.padding);
+        intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, minimum);
     }
     else if(kind == WidgetKind::Checkbox){
         const Array<Name, 4> names{ m_style.checkbox, m_style.checkboxHover, m_style.checkboxChecked, m_style.checkboxDisabled };
@@ -277,17 +267,13 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
             const UiSkinRegion& skinRegion = *MakeNotNull(region(name, m_style.checkbox));
             checkboxExtent = ResolveUiSkinSquareExtent(checkboxExtent, skinRegion);
         }
-        const SIMDVectorSingle checkboxExtentVector = VectorReplicate(checkboxExtent);
-        const SIMDVectorSingle measuredSize = VectorSelect(VectorZero(), measured, s_SIMDMaskXY);
-        const SIMDVectorSingle content = VectorMax(measuredSize, VectorSelect(measuredSize, checkboxExtentVector, s_SIMDMaskY));
-        measured = VectorAdd(content, VectorAdd(VectorSelect(VectorZero(), checkboxExtentVector, s_SIMDMaskX), VectorSet(m_style.gap, 0.0f, 0.0f, 0.0f)));
+        intrinsicSize = ResolveCheckboxIntrinsicSize(textSize, checkboxExtent, m_style.gap);
         item.checkboxExtent = checkboxExtent;
     }
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle intrinsic = VectorSelect(minimum, measured, VectorGreater(measured, minimum));
-    description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
+    description.intrinsicSize = intrinsicSize;
     if(!addItemNode(description, item))
         return MakeUnexpected(Failure{});
     m_scope->m_items.push_back(Move(item));
@@ -320,16 +306,13 @@ Insets Builder::resolveRegionsPadding(const Insets& initial, const Span<const Na
     return result;
 }
 
-void Builder::loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept{
+void Builder::loadButtonMetrics(Point& size, Insets& padding)const noexcept{
     const Array<Name, 4> names{ m_style.button, m_style.buttonHover, m_style.buttonPressed, m_style.buttonDisabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_style.button);
         if(!skinRegion)
             continue;
-        const SIMDVectorSingle sizeCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, skinRegion->minimumWidth, skinRegion->minimumHeight);
-        size = VectorSelect(sizeCandidate, size, VectorGreater(size, sizeCandidate));
-        const SIMDVectorSingle paddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        padding = VectorSelect(paddingCandidate, padding, VectorGreater(padding, paddingCandidate));
+        AccumulateButtonRegionMetrics(*skinRegion, size, padding);
     }
 }
 

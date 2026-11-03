@@ -68,20 +68,11 @@ AStringView NodeDisplayName(const ufbx_node* node)noexcept{
 
 Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, const ufbx_skin_deformer& skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& inOutContext){
     ::Vector<u16, Core::Alloc::ScratchArena> outClusterJoints(scratchArena);
-    if(skin.clusters.count == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer contains no clusters"));
+    const Expected<usize> reservedJointCountResult = ValidateFbxSkinClusterCount(skin.clusters.count, inOutContext.joints.size());
+    if(!reservedJointCountResult)
         return MakeUnexpected(Failure{});
-    }
-    if(skin.clusters.count > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer has too many clusters"));
-        return MakeUnexpected(Failure{});
-    }
-    if(skin.clusters.count > Limit<usize>::s_Max - inOutContext.joints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer cluster count overflows skeleton joint capacity"));
-        return MakeUnexpected(Failure{});
-    }
 
-    const usize reservedJointCount = inOutContext.joints.size() + skin.clusters.count;
+    const usize reservedJointCount = *reservedJointCountResult;
     inOutContext.joints.reserve(reservedJointCount);
     inOutContext.bindPoseMatrices.reserve(reservedJointCount);
     inOutContext.inverseBindMatrices.reserve(reservedJointCount);
@@ -176,10 +167,8 @@ Expected<SkinInfluenceCalculation> LoadInfluence(const ufbx_skin_deformer& skin,
     }
 
     const ufbx_skin_vertex skinVertex = skin.vertices.data[logicalVertex];
-    if(skinVertex.weight_begin > skin.weights.count || skinVertex.num_weights > skin.weights.count - skinVertex.weight_begin){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin vertex weight range is out of bounds"));
+    if(!ValidateFbxSkinVertexWeightRange(skinVertex.weight_begin, skinVertex.num_weights, skin.weights.count))
         return MakeUnexpected(Failure{});
-    }
 
     f64 weightSum = 0.0;
     u32 writtenInfluenceCount = 0u;

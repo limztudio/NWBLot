@@ -116,22 +116,18 @@ Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPath
         auto plane = __hidden_encode::LoadImage(path, scratchArena);
         if(!plane)
             return MakeUnexpected(Failure{});
-        if(input.planes.empty()){
-            input.width = plane->get_width();
-            input.height = plane->get_height();
-            if(dimension == TextureDimension::TextureCube && input.width != input.height){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cubemap faces must be square."));
-                return MakeUnexpected(Failure{});
-            }
-            if(alphaSource.mode == AlphaSourceMode::Image && (alphaMask.get_width() != input.width || alphaMask.get_height() != input.height)){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image resolution must match the texture input resolution."));
-                return MakeUnexpected(Failure{});
-            }
-        }
-        else if(plane->get_width() != input.width || plane->get_height() != input.height){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture inputs must have the same resolution."));
+        if(!ValidateTexConvPlaneResolution(
+            input.planes.empty(),
+            dimension == TextureDimension::TextureCube,
+            alphaSource.mode == AlphaSourceMode::Image,
+            plane->get_width(),
+            plane->get_height(),
+            alphaMask.get_width(),
+            alphaMask.get_height(),
+            input.width,
+            input.height
+        ))
             return MakeUnexpected(Failure{});
-        }
         if(!__hidden_encode::PrepareLinearPlane(alphaMask, alphaSource, hdr, !hdr && srgb, *plane))
             return MakeUnexpected(Failure{});
         input.planes.push_back(Move(*plane));

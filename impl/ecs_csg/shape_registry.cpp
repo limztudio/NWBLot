@@ -99,11 +99,9 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
     if(!__hidden_shape_registry::ValidShapeTypeDesc(desc))
         return MakeUnexpected(Failure{});
 
-    const Expected<CsgShapeTypeId> canonicalIdResult = TryResolveCsgShapeTypeIdFromName(desc.name);
-    if(!canonicalIdResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id"), ConvertString(desc.name.resolvedText()));
+    const Expected<CsgShapeTypeId> canonicalIdResult = TryResolveCsgShapeRegistryId(desc.name);
+    if(!canonicalIdResult)
         return MakeUnexpected(Failure{});
-    }
     const CsgShapeTypeId canonicalId = *canonicalIdResult;
 
     ScopedLock lock(m_mutex);
@@ -125,17 +123,11 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
         return existingId;
     }
 
-    if(m_shapeTypes.size() >= static_cast<usize>(Limit<CsgShapeTypeId>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' because the registry is full"), ConvertString(desc.name.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-
     const auto foundCanonicalId = m_shapeTypeIndices.find(canonicalId);
-    if(foundCanonicalId != m_shapeTypeIndices.end()){
-        const CsgShapeTypeInfo& conflictingShapeType = m_shapeTypes[foundCanonicalId.value()];
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape types '{}' and '{}' collide on canonical GPU id {}"), ConvertString(conflictingShapeType.desc.name.resolvedText()), ConvertString(desc.name.resolvedText()), canonicalId);
+    const b8 hasCanonicalIdCollision = foundCanonicalId != m_shapeTypeIndices.end();
+    const Name conflictingName = hasCanonicalIdCollision ? m_shapeTypes[foundCanonicalId.value()].desc.name : s_NameNone;
+    if(!ValidateCsgShapeRegistryInsertion(desc.name, canonicalId, m_shapeTypes.size(), hasCanonicalIdCollision, conflictingName))
         return MakeUnexpected(Failure{});
-    }
 
     const CsgShapeTypeId id = canonicalId;
     CsgShapeTypeInfo shapeType(m_shapeTypes.get_allocator().arena());

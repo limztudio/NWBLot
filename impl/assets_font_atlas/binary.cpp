@@ -94,7 +94,7 @@ namespace __hidden_font_atlas_binary{
     const auto reserved = ReadU32LittleEndian(bytes, cursor);
     if(!reserved)
         return MakeUnexpected(reserved.error());
-    if(*magic != s_FontAtlasBinaryMagic || *version != s_FontAtlasBinaryVersion || *encoding != s_FontAtlasDistanceEncoding || *reserved != 0u)
+    if(!IsValidFontAtlasBinaryPreamble(*magic, *version, *encoding, *reserved))
         return MakeUnexpected(Failure{});
     NameHash identity;
     for(u64& lane : identity.qwords){
@@ -157,20 +157,9 @@ namespace __hidden_font_atlas_binary{
     const auto tableCount = ReadU32LittleEndian(bytes, cursor);
     if(!tableCount)
         return MakeUnexpected(tableCount.error());
-    if(
-        *glyphCount == 0u
-        || *glyphCount > s_FontAtlasMaxGlyphCount
-        || *glyphCount != payload.sourceGlyphCount
-        || *groupCount == 0u
-        || *groupCount > s_FontAtlasMaxGroupCount
-        || *tableCount > s_FontAtlasMaxPositioningTableCount
-        || *raster > FontAtlasRasterMode::Bitmap
-    )
+    if(!IsValidFontAtlasBinaryCounts(*glyphCount, payload.sourceGlyphCount, *groupCount, *tableCount, *raster, cursor, bytes.size()))
         return MakeUnexpected(Failure{});
     payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
-    const u64 minimumRemaining = static_cast<u64>(*glyphCount) * s_FontAtlasBinaryGlyphBytes + static_cast<u64>(*groupCount) * s_FontAtlasBinaryGroupHeaderBytes + static_cast<u64>(*tableCount) * s_FontAtlasBinaryTableHeaderBytes;
-    if(cursor > bytes.size() || minimumRemaining > bytes.size() - cursor)
-        return MakeUnexpected(Failure{});
     payload.glyphs.resize(*glyphCount);
     for(FontAtlasGlyph& glyph : payload.glyphs){
         const auto decoded = ReadGlyph(bytes, cursor);

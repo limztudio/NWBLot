@@ -629,6 +629,57 @@ b8 ValidateUiSkinToolkitRegions(in Span<UiSkinRegion> regions, in Span<u32> regi
     return true;
 }
 
+b8 ValidateUiSkinHeaderBinary(in UiSkinHeaderBinary header, in usize remainingBytes, in usize regionBinaryBytes){
+    if(header.version != s_UiSkinBinaryVersion){
+        error("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required", header.version);
+        return false;
+    }
+    if(!IsValidUiSkinHeaderFlags(header)){
+        error("UiSkin::loadBinary failed: header contains unsupported flags");
+        return false;
+    }
+    if(header.regionCount > s_UiSkinMaxRegionCount){
+        error("UiSkin::loadBinary failed: region count {} exceeds schema limit {}", header.regionCount, s_UiSkinMaxRegionCount);
+        return false;
+    }
+    if(header.regionCount == 0u || cast<usize>(header.regionCount) > remainingBytes / regionBinaryBytes){
+        error("UiSkin::loadBinary failed: region count is empty or exceeds the payload");
+        return false;
+    }
+    return true;
+}
+
+Expected<UiSkinRegion> TryUnpackUiSkinRegionBinary(in UiSkinRegionBinary packed, in u32 index){
+    if(!IsValidUiSkinRegionBinaryFlags(packed)){
+        error("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags", index);
+        return makeUnexpected(Failure());
+    }
+    return UnpackUiSkinRegionBinary(packed);
+}
+
+b8 ValidateUiSkinAtlasTextureParameters(
+    in Name textureVirtualPath,
+    in Name expectedTextureName,
+    in b8 isTexture2D,
+    in u32 depth,
+    in u32 width,
+    in u32 height,
+    in u32 expectedWidth,
+    in u32 expectedHeight
+){
+    if(
+        textureVirtualPath != expectedTextureName
+        || !isTexture2D
+        || depth != 1u
+        || width != expectedWidth
+        || height != expectedHeight
+    ){
+        error("UiSkin::validateTexture failed: texture identity, 2D dimension, or extent does not match the atlas");
+        return false;
+    }
+    return true;
+}
+
 [subsystem("ui_subsystem")]
 class UiSubsystem{
     public Vector<AssetRef<FontAtlas>> basicFonts;

@@ -40,10 +40,8 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
         return false;
     const MeshBinaryHeader& header = *headerResult;
 
-    if(!MeshBaseHeaderComplete(header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::loadBinary failed: mesh payload is incomplete"));
+    if(!ValidateMeshBaseHeader(header))
         return false;
-    }
 
     Mesh candidate(m_positionStream.get_allocator().arena(), virtualPath());
     if(!MeshAssetBinaryPayload::ReadMeshAttributeStreams(binary, header, loadFailureContext, cursor, candidate.m_positionStream, candidate.m_normalStream, candidate.m_tangentStream, candidate.m_uv0Stream, candidate.m_colorStream))
@@ -79,9 +77,7 @@ b8 Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload"), meshPathText);
         return false;
     }
-    const usize triangleCount = meshletPrimitiveIndices().size() / s_MeshletTriangleIndexCount;
-    const u32 tailBits = static_cast<u32>(triangleCount % s_MeshletSolidTriangleWordBits);
-    if(tailBits != 0u && (solidTriangleWords().back() >> tailBits) != 0u){
+    if(!HasValidMeshSolidTriangleTailPadding(meshletPrimitiveIndices().size(), solidTriangleWords().back())){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding"), meshPathText);
         return false;
     }
@@ -147,7 +143,7 @@ b8 Mesh::hasIncompleteGeometryPayload()const noexcept{
         || m_meshletAttributeRefDeltas.empty()
         || m_meshletLocalVertexRefs.empty()
         || m_meshletPrimitiveIndices.empty()
-        || m_solidTriangleWords.size() != (m_meshletPrimitiveIndices.size() / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits
+        || m_solidTriangleWords.size() != static_cast<usize>(ComputeMeshSolidTriangleWordCount(m_meshletPrimitiveIndices.size()))
     ;
 }
 
@@ -208,7 +204,7 @@ b8 ReadMeshletStreams(
         return false;
     return Core::Assets::ReadVectorPayload(
         binary,
-        (header.meshletPrimitiveIndexCount / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits,
+        ComputeMeshSolidTriangleWordCount(header.meshletPrimitiveIndexCount),
         failureContext,
         s_SolidTriangleWordsStreamLabel,
         inOutCursor,
@@ -233,25 +229,13 @@ SIMDVectorSingle FoldMeshletConeOctAxis(const SIMDVectorSingle axis)noexcept{
 }
 
 u32 PackMeshletConeOct16(const SIMDVectorSingle axis)noexcept{
-    SIMDVectorSingle octAxis = VectorSetW(axis, 0.0f);
-    const SIMDVectorSingle lengthVector = VectorSum(VectorAbs(octAxis));
-    if(!VectorIsFinite(lengthVector, VectorComponentMask::s_XYZW) || !Vector4Greater(lengthVector, VectorReplicate(s_MeshletConeAxisLengthEpsilon)))
-        return s_MeshletConeAxisFallback;
-
-    octAxis = FoldMeshletConeOctAxis(VectorMultiply(octAxis, VectorReciprocal(lengthVector)));
-    octAxis = VectorMultiplyAddExpression(octAxis, VectorReplicate(s_MeshletOctEncodeBias), VectorReplicate(s_MeshletOctEncodeBias));
-
-    const SIMDVectorSingle quantized = VectorMultiplyAddExpression(VectorSaturate(octAxis), VectorReplicate(s_MeshletUnorm8Max), VectorReplicate(s_MeshletUnorm8RoundingBias));
-    return (static_cast<u32>(VectorGetX(quantized)) << s_MeshletConeAxisXShift) | (static_cast<u32>(VectorGetY(quantized)) << s_MeshletConeAxisYShift);
+    Float4 axisVec;
+    StoreFloat(axis, axisVec);
+    return PackMeshletConeOct16Vec(axisVec);
 }
 
 SIMDVectorSingle UnpackMeshletConeOct16Axis(const u32 conePacked)noexcept{
-    const SIMDVectorSingle packed = VectorSet(static_cast<f32>((conePacked >> s_MeshletConeAxisXShift) & s_MeshletPackedByteMask), static_cast<f32>((conePacked >> s_MeshletConeAxisYShift) & s_MeshletPackedByteMask), 0.0f, 0.0f);
-    SIMDVectorSingle axis = VectorScale(packed, 1.0f / s_MeshletUnorm8Max);
-    axis = VectorAndInt(VectorMultiplyAddExpression(axis, VectorReplicate(s_MeshletOctDecodeScale), VectorReplicate(-s_MeshletOctDecodeBias)), s_SIMDMaskXY);
-    axis = VectorSelect(axis, VectorSubtract(s_SIMDOne, VectorSum(VectorAbs(axis))), s_SIMDMaskZ);
-    axis = FoldMeshletConeOctAxis(axis);
-    return Vector3NormalizeOr(axis, VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_MeshletConeAxisLengthSquaredEpsilon);
+    return LoadFloat(UnpackMeshletConeOct16AxisVec(conePacked));
 }
 
 f32 ConservativePackedMeshletConeCutoff(const SIMDVectorSingle axis, const f32 cutoff, const SIMDVectorSingle unpackedAxis)noexcept{
@@ -263,11 +247,9 @@ f32 ConservativePackedMeshletConeCutoff(const SIMDVectorSingle axis, const f32 c
 }
 
 u32 PackMeshletCone(const SIMDVectorSingle axis, const f32 cutoff)noexcept{
-    if(cutoff <= 0.0f)
-        return 0u;
-
-    const u32 packedAxis = PackMeshletConeOct16(axis);
-    return PackMeshletConeFromAxisAndCutoff(packedAxis, ConservativePackedMeshletConeCutoff(axis, cutoff, UnpackMeshletConeOct16Axis(packedAxis)));
+    Float4 axisVec;
+    StoreFloat(axis, axisVec);
+    return PackMeshletConeVec(axisVec, cutoff);
 }
 
 

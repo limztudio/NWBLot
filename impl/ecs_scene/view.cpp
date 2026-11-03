@@ -29,25 +29,15 @@ void StoreDecomposedTransform(const MatrixDecomposition& decomposition, Transfor
 }
 
 SIMDMatrix BuildDefaultSceneViewBasis()noexcept{
-    SIMDVectorSingle sinAngles;
-    SIMDVectorSingle cosAngles;
-    VectorSinCos(sinAngles, cosAngles, VectorSet(s_DefaultSceneViewYaw, s_DefaultSceneViewPitch, 0.0f, 0.0f));
-
-    const SIMDVectorSingle right = VectorPermute<4, 3, 0, 3>(sinAngles, cosAngles);
-    const SIMDVectorSingle upBase = VectorMultiply(VectorPermute<0, 5, 4, 3>(sinAngles, cosAngles), VectorSet(1.0f, 1.0f, -1.0f, 0.0f));
-    const SIMDVectorSingle upScale = VectorPermute<1, 4, 1, 3>(sinAngles, s_SIMDOne);
-    const SIMDVectorSingle forwardBase = VectorMultiply(VectorPermute<0, 1, 4, 3>(sinAngles, cosAngles), VectorSet(-1.0f, 1.0f, 1.0f, 0.0f));
-    const SIMDVectorSingle forwardScale = VectorPermute<5, 6, 5, 3>(sinAngles, cosAngles);
-    const SIMDVectorSingle up = VectorMultiply(upBase, upScale);
-    const SIMDVectorSingle forward = VectorMultiply(forwardBase, forwardScale);
-    return SIMDMatrix{ .v = { right, up, forward, VectorSet(0.0f, 0.0f, 0.0f, s_DefaultSceneViewDepthOffset) } };
+    return LoadFloat(BuildDefaultSceneViewBasisRows());
 }
 
 SIMDMatrix BuildSceneViewBasis(const SIMDVectorSingle position, const SIMDVectorSingle rotation)noexcept{
-    const SIMDVectorSingle right = Vector3Rotate(s_SIMDIdentityR0, rotation);
-    const SIMDVectorSingle up = Vector3Rotate(s_SIMDIdentityR1, rotation);
-    const SIMDVectorSingle forward = Vector3Rotate(s_SIMDIdentityR2, rotation);
-    return SIMDMatrix{ .v = { right, up, forward, position } };
+    Float4 posVec;
+    Float4 rotVec;
+    StoreFloat(position, posVec);
+    StoreFloat(rotation, rotVec);
+    return LoadFloat(BuildSceneViewBasisRows(posVec, rotVec));
 }
 
 

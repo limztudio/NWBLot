@@ -73,10 +73,9 @@ Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
         if(!clipped)
             return MakeUnexpected(MakeCsgDeformFailure(clipped.error(), stats));
         ++appliedCuts;
-        if(outTriangles.empty() || outVertices.size() > s_MaxDeformVertices || outTriangles.size() > s_MaxDeformTriangles){
-            const auto reason = outTriangles.empty() ? CsgDeformViabilityReason::NoKeptGeometry : CsgDeformViabilityReason::TooLarge;
-            return MakeUnexpected(MakeCsgDeformFailure(reason, stats));
-        }
+        const CsgDeformViabilityReason::Enum postCutReason = ClassifyPostCutCsgDeformViability(outVertices.size(), outTriangles.size());
+        if(postCutReason != CsgDeformViabilityReason::Ok)
+            return MakeUnexpected(MakeCsgDeformFailure(postCutReason, stats));
         if(options.fillCaps){
             const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, scratchEdges, outVertices, outTriangles);
             if(!cutCaps)
@@ -85,15 +84,7 @@ Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
         }
     }
 
-    if(outVertices.empty() || outTriangles.empty())
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, stats));
-    if(!IsFiniteCsgDeformVertices(outVertices))
-        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, stats));
-    stats.outputVertexCount = static_cast<u32>(outVertices.size());
-    stats.outputTriangleCount = static_cast<u32>(outTriangles.size());
-    stats.appliedCutCount = appliedCuts;
-    stats.capTriangleCount = capTriangles;
-    return stats;
+    return FinalizeCsgDeformStats(outVertices, outTriangles, appliedCuts, capTriangles, stats);
 }
 
 Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(

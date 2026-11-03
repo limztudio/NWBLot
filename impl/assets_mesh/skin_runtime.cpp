@@ -44,10 +44,8 @@ b8 Skin::loadBinary(const Span<const u8> binary){
         return false;
     const SkinHeaderBinary& header = *headerResult;
 
-    if(header.padding0 != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::loadBinary failed: reserved header fields must be zero"));
+    if(!ValidateSkinHeaderBinary(header))
         return false;
-    }
     Skin candidate(m_influences.get_allocator().arena(), virtualPath());
     candidate.m_mesh.virtualPath = Name(header.meshNameHash);
     candidate.m_skeleton.virtualPath = Name(header.skeletonNameHash);

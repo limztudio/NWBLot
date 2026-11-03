@@ -99,15 +99,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
         if(!mutableBytes)
             continue;
 
-        CoincidentOpticalVolumeCandidate candidate;
-        candidate.entity = entity;
-        candidate.mesh = mesh.mesh;
-        candidate.material = renderer.material;
-        candidate.group = renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup ? renderer.opticalVolumeGroup : s_NameNone;
-        candidate.priority = renderer.opticalVolumePriority;
-        candidate.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
-        candidate.mediumPriority = renderer.opticalMediumPriority;
-        candidate.mutableTypedBytes = *mutableBytes;
+        CoincidentOpticalVolumeCandidate candidate = MakeCoincidentOpticalVolumeCandidate(entity, mesh.mesh, renderer, *mutableBytes);
         if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
             candidate.position = transformPtr->position;
             candidate.rotation = transformPtr->rotation;

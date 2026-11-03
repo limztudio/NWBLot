@@ -38,46 +38,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidSamplerAddressMode(const Core::SamplerAddressMode::Enum addressMode)noexcept{
-    switch(addressMode){
-    case Core::SamplerAddressMode::Clamp:
-    case Core::SamplerAddressMode::Wrap:
-    case Core::SamplerAddressMode::Border:
-    case Core::SamplerAddressMode::Mirror:
-    case Core::SamplerAddressMode::MirrorOnce:
-        return true;
-    default:
-        return false;
-    }
-}
-
-b8 IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionType)noexcept{
-    switch(reductionType){
-    case Core::SamplerReductionType::Standard:
-    case Core::SamplerReductionType::Comparison:
-        return true;
-    default:
-        return false;
-    }
-}
-
-b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
-    return
-        IsValidSamplerScalarParameters(
-            description.borderColor.r,
-            description.borderColor.g,
-            description.borderColor.b,
-            description.borderColor.a,
-            description.maxAnisotropy,
-            description.mipBias
-        )
-        && IsValidSamplerAddressMode(description.addressU)
-        && IsValidSamplerAddressMode(description.addressV)
-        && IsValidSamplerAddressMode(description.addressW)
-        && IsValidSamplerReductionType(description.reductionType)
-    ;
-}
-
 b8 Sampler::validatePayload()const{
     if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
@@ -94,14 +54,8 @@ b8 Sampler::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const SamplerBinaryHeader& header = *headerResult;
-    if(header.version != s_SamplerBinaryVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: unsupported sampler version {}; recook required"), header.version);
+    if(!ValidateSamplerBinaryHeader(header))
         return false;
-    }
-    if(!IsValidSamplerBinaryHeader(header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler header contains invalid flags"));
-        return false;
-    }
 
     Core::SamplerDesc description;
     description.borderColor = Core::Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);

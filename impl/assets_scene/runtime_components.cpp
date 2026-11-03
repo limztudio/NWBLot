@@ -61,18 +61,8 @@ b8 LoadBinary(const Span<const u8> binary, IComponent& outComponent){
     if(!headerResult)
         return false;
     const ComponentHeaderBinary& header = *headerResult;
-    if(header.version != s_ComponentVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("IComponent::loadBinary failed: unsupported version {}"), header.version);
+    if(!ValidateComponentHeaderBinary(header, outComponent.assetType(), binary.size() - cursor))
         return false;
-    }
-    if(header.componentTypeHash != outComponent.assetType().hash()){
-        NWB_LOGGER_ERROR(NWB_TEXT("IComponent::loadBinary failed: component binary type does not match '{}'"), ConvertString(outComponent.assetType().resolvedText()));
-        return false;
-    }
-    if(header.payloadByteCount > binary.size() - cursor){
-        NWB_LOGGER_ERROR(NWB_TEXT("IComponent::loadBinary failed: truncated component payload"));
-        return false;
-    }
 
     const usize payloadByteCount = static_cast<usize>(header.payloadByteCount);
     const Span<const u8> payload = binary.subspan(cursor, payloadByteCount);
@@ -121,12 +111,7 @@ b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
 b8 TransformComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("TransformComponentAsset::validatePayload")))
         return false;
-
-    if(!IsValidTransformComponentParameters(component)){
-        NWB_LOGGER_ERROR(NWB_TEXT("TransformComponentAsset::validatePayload failed: transform '{}' must have finite position/scale and unit quaternion rotation"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return ValidateTransformComponentAssetPayload(component, virtualPath());
 }
 
 
@@ -144,21 +129,7 @@ b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
 b8 CameraComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("CameraComponentAsset::validatePayload")))
         return false;
-
-    const SIMDVectorSingle projection = LoadFloat(component.projection);
-    const SIMDVectorSingle aspectRatio = VectorSplatW(projection);
-    const auto builtProjection = Scene::TryBuildCameraProjection(
-        VectorSplatX(projection),
-        VectorSplatY(projection),
-        VectorSplatZ(projection),
-        aspectRatio,
-        VectorReplicate(Scene::s_CameraFallbackAspectRatio)
-    );
-    if(!VectorIsFinite(projection, VectorComponentMask::s_XYZW) || Vector4Less(aspectRatio, s_SIMDZero) || !builtProjection){
-        NWB_LOGGER_ERROR(NWB_TEXT("CameraComponentAsset::validatePayload failed: camera '{}' has invalid projection parameters"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return ValidateCameraComponentAssetPayload(component, virtualPath());
 }
 
 
@@ -181,12 +152,7 @@ b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
 b8 LightComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("LightComponentAsset::validatePayload")))
         return false;
-
-    if(!IsValidLightComponentParameters(component) || !Scene::IsValidLightCone(component.innerConeCos, component.outerConeCos)){
-        NWB_LOGGER_ERROR(NWB_TEXT("LightComponentAsset::validatePayload failed: light '{}' has invalid parameters"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return ValidateLightComponentAssetPayload(component, virtualPath());
 }
 
 

@@ -288,18 +288,8 @@ b8 Material::loadBinary(const Span<const u8> binary){
         return false;
     }
     shaderCount = *shaderCountResult;
-    if(shaderCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material has no shader stages"));
+    if(!ValidateMaterialBinaryShaderCount(shaderCount, static_cast<u32>(Core::ShaderType::Count), binary.size() - cursor, s_MaterialShaderEntryBytes))
         return false;
-    }
-    if(shaderCount > static_cast<u32>(Core::ShaderType::Count)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds supported shader stage count"));
-        return false;
-    }
-    if(shaderCount > (binary.size() - cursor) / s_MaterialShaderEntryBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds available data"));
-        return false;
-    }
 
     for(u32 i = 0u; i < shaderCount; ++i){
         Core::ShaderType::Enum shaderType = Core::ShaderType::Invalid;
@@ -346,10 +336,8 @@ b8 Material::loadBinary(const Span<const u8> binary){
         return false;
     }
     materialFlags = *materialFlagsResult;
-    if(!TryUnpackMaterialFlags(materialFlags, candidate.m_transparent, candidate.m_twoSided, candidate.m_refractive)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
+    if(!ValidateMaterialBinaryFlags(materialFlags, candidate.m_transparent, candidate.m_twoSided, candidate.m_refractive))
         return false;
-    }
 
     const auto shadingModelIdResult = ReadPOD<u32>(binary, cursor);
     if(!shadingModelIdResult){
@@ -374,10 +362,8 @@ b8 Material::loadBinary(const Span<const u8> binary){
             return MakeUnexpected(Failure{});
         }
         hasShader = *hasShaderResult;
-        if(hasShader > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid AVBOIT {} pixel shader presence flag {}"), ConvertString(passLabel), hasShader);
+        if(!ValidateMaterialBinaryAvboitPresenceFlag(passLabel, hasShader))
             return MakeUnexpected(Failure{});
-        }
         if(hasShader == 1u){
             NameHash shaderNameHash;
             const auto shaderNameHashResult = ReadPOD<NameHash>(binary, cursor);
@@ -388,10 +374,8 @@ b8 Material::loadBinary(const Span<const u8> binary){
             shaderNameHash = *shaderNameHashResult;
             Core::Assets::AssetRef<PixelShader> shaderRef;
             shaderRef.virtualPath = Name(shaderNameHash);
-            if(!shaderRef.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT {} pixel shader name is empty"), ConvertString(passLabel));
+            if(!ValidateMaterialBinaryAvboitShaderRef(passLabel, shaderRef.valid()))
                 return MakeUnexpected(Failure{});
-            }
             return shaderRef;
         }
         return Core::Assets::AssetRef<PixelShader>{};

@@ -6,6 +6,37 @@ const f32 s_DefaultSceneViewYaw = 0.82f;
 const f32 s_DefaultSceneViewPitch = 0.94f;
 const f32 s_DefaultSceneViewDepthOffset = 2.2f;
 
+f32x4 RotateSceneVector3(in f32x4 value, in f32x4 rotationQuaternion){
+    const f32x4 t = cross(rotationQuaternion.xyz, value.xyz) * 2.0f;
+    const f32x4 rotated = value + t * f32x4(rotationQuaternion.w) + cross(rotationQuaternion.xyz, t.xyz);
+    return f32x4(rotated.x, rotated.y, rotated.z, 0.0f);
+}
+
+f32x4x4 BuildDefaultSceneViewBasisRows(){
+    const f32 sinYaw = sin(s_DefaultSceneViewYaw);
+    const f32 cosYaw = cos(s_DefaultSceneViewYaw);
+    const f32 sinPitch = sin(s_DefaultSceneViewPitch);
+    const f32 cosPitch = cos(s_DefaultSceneViewPitch);
+    return f32x4x4(
+        cosYaw, 0.0f, sinYaw, 0.0f,
+        sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f,
+        -sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f,
+        0.0f, 0.0f, 0.0f, s_DefaultSceneViewDepthOffset
+    );
+}
+
+f32x4x4 BuildSceneViewBasisRows(in f32x4 position, in f32x4 rotation){
+    const f32x4 right = RotateSceneVector3(f32x4(1.0f, 0.0f, 0.0f, 0.0f), rotation);
+    const f32x4 up = RotateSceneVector3(f32x4(0.0f, 1.0f, 0.0f, 0.0f), rotation);
+    const f32x4 forward = RotateSceneVector3(f32x4(0.0f, 0.0f, 1.0f, 0.0f), rotation);
+    return f32x4x4(
+        right.x, right.y, right.z, right.w,
+        up.x, up.y, up.z, up.w,
+        forward.x, forward.y, forward.z, forward.w,
+        position.x, position.y, position.z, position.w
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

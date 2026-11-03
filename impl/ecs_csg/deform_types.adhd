@@ -422,6 +422,33 @@ u32 OtherCsgDeformLoopEdgeVertex(in CsgDeformCutLoopEdge edge, in u32 cursor){
     return edge.first;
 }
 
+CsgDeformViabilityReason ClassifyPostCutCsgDeformViability(in usize vertexCount, in usize triangleCount){
+    if(triangleCount == 0u)
+        return CsgDeformViabilityReason::NoKeptGeometry;
+    if(vertexCount > s_MaxDeformVertices || triangleCount > s_MaxDeformTriangles)
+        return CsgDeformViabilityReason::TooLarge;
+    return CsgDeformViabilityReason::Ok;
+}
+
+Expected<CsgDeformStats, CsgDeformFailure> FinalizeCsgDeformStats(
+    in Span<CsgDeformVertex> outVertices,
+    in Span<CsgDeformTriangle> outTriangles,
+    in u32 appliedCuts,
+    in u32 capTriangles,
+    in CsgDeformStats baseStats
+){
+    if(outVertices.empty() || outTriangles.empty())
+        return makeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, baseStats));
+    if(!IsFiniteCsgDeformVertices(outVertices))
+        return makeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, baseStats));
+    CsgDeformStats stats = baseStats;
+    stats.outputVertexCount = cast<u32>(outVertices.size());
+    stats.outputTriangleCount = cast<u32>(outTriangles.size());
+    stats.appliedCutCount = appliedCuts;
+    stats.capTriangleCount = capTriangles;
+    return stats;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

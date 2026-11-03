@@ -132,6 +132,35 @@ b8 IsValidRendererComponentOpticalConfig(in RendererComponent component){
     ;
 }
 
+b8 ValidateRendererComponentAssetPayload(in RendererComponent component, in Name virtualPath){
+    if(!component.material.valid()){
+        error("RendererComponentAsset::validatePayload failed: renderer_component '{}' material must not be empty", virtualPath.resolvedText());
+        return false;
+    }
+    if(!IsValidRendererComponentOpticalConfig(component)){
+        error("RendererComponentAsset::validatePayload failed: renderer_component '{}' has invalid optical enum value", virtualPath.resolvedText());
+        return false;
+    }
+    if(component.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && component.opticalVolumeGroup == s_NameNone){
+        error(
+            "RendererComponentAsset::validatePayload failed: renderer_component '{}' shared_group optical volume requires optical_volume_group"
+            , virtualPath.resolvedText()
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 TryAddCsgClipVariantCount(in StringView entryName, in u64 sourceVariantCount, mut u64 inOutVariantCount){
+    if(sourceVariantCount <= u64.max - inOutVariantCount){
+        inOutVariantCount += sourceVariantCount;
+        return true;
+    }
+
+    error("GraphicsCook: CSG clip variant count overflow for entry '{}'", entryName);
+    return false;
+}
+
 SingleAssetRefComponentPayloadBinary PackSingleAssetRefComponentPayloadBinary(in Name assetName){
     SingleAssetRefComponentPayloadBinary binaryPayload;
     binaryPayload.assetHash = assetName.hash();

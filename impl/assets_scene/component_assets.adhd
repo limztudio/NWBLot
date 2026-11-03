@@ -12,8 +12,12 @@ native{
 NWB_IMPL_BEGIN
 using Scene::TransformComponent;
 using Scene::CameraComponent;
+using Scene::CameraProjection;
 namespace LightType = Scene::LightType;
 using Scene::LightComponent;
+using Scene::TryBuildCameraProjectionData;
+using Scene::s_CameraFallbackAspectRatio;
+using Scene::IsValidLightCone;
 NWB_IMPL_END
 }
 
@@ -365,6 +369,112 @@ b8 IsValidTransformComponentParameters(in TransformComponent component){
 
     const f32 rotationLengthSq = lengthSq(component.rotation);
     return isFinite(rotationLengthSq) && abs(rotationLengthSq - 1.0f) <= s_TransformRotationUnitLengthSquaredTolerance;
+}
+
+b8 ValidateComponentHeaderBinary(in ComponentHeaderBinary header, in Name assetType, in usize remainingBytes){
+    if(header.version != s_ComponentVersion){
+        error("IComponent::loadBinary failed: unsupported version {}", header.version);
+        return false;
+    }
+    if(header.componentTypeHash != assetType.hash()){
+        error("IComponent::loadBinary failed: component binary type does not match '{}'", assetType.resolvedText());
+        return false;
+    }
+    if(header.payloadByteCount > cast<u64>(remainingBytes)){
+        error("IComponent::loadBinary failed: truncated component payload");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateTransformComponentAssetPayload(in TransformComponent component, in Name virtualPath){
+    if(IsValidTransformComponentParameters(component))
+        return true;
+
+    error(
+        "TransformComponentAsset::validatePayload failed: transform '{}' must have finite position/scale and unit quaternion rotation"
+        , virtualPath.resolvedText()
+    );
+    return false;
+}
+
+b8 ValidateCameraComponentAssetPayload(in CameraComponent component, in Name virtualPath){
+    const f32x4 projection = component.projection;
+    const f32 aspectRatio = projection.w;
+    const Expected<CameraProjection> builtProjection = TryBuildCameraProjectionData(
+        projection.x,
+        projection.y,
+        projection.z,
+        aspectRatio,
+        s_CameraFallbackAspectRatio
+    );
+    if(
+        !isFinite(projection.x) || !isFinite(projection.y) || !isFinite(projection.z) || !isFinite(projection.w)
+        || aspectRatio < 0.0f
+        || !builtProjection.has_value()
+    ){
+        error(
+            "CameraComponentAsset::validatePayload failed: camera '{}' has invalid projection parameters"
+            , virtualPath.resolvedText()
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateLightComponentAssetPayload(in LightComponent component, in Name virtualPath){
+    if(IsValidLightComponentParameters(component) && IsValidLightCone(component.innerConeCos, component.outerConeCos))
+        return true;
+
+    error(
+        "LightComponentAsset::validatePayload failed: light '{}' has invalid parameters"
+        , virtualPath.resolvedText()
+    );
+    return false;
+}
+
+b8 ValidateEntityHeaderBinary(in EntityHeaderBinary header){
+    if(header.version == s_EntityVersion)
+        return true;
+
+    error("EntityAsset::loadBinary failed: unsupported version {}", header.version);
+    return false;
+}
+
+b8 ValidateProjectHeaderBinary(in ProjectHeaderBinary header){
+    if(header.version == s_ProjectVersion)
+        return true;
+
+    error("ProjectAsset::loadBinary failed: unsupported version {}", header.version);
+    return false;
+}
+
+b8 ValidateSceneHeaderBinary(in SceneHeaderBinary header){
+    if(header.version == s_SceneVersion)
+        return true;
+
+    error("SceneAsset::loadBinary failed: unsupported version {}", header.version);
+    return false;
+}
+
+b8 ValidateSceneAssetMapEntry(in Name nickname, in b8 hasValidRef){
+    if(nickname == s_NameNone){
+        error("SceneAsset::validatePayload failed: asset entry has an empty nickname");
+        return false;
+    }
+    if(!hasValidRef){
+        error("SceneAsset::validatePayload failed: asset nickname '{}' has an empty asset reference", nickname.resolvedText());
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSceneAssetBinaryEntry(in Name nickname, in b8 hasValidRef, in usize index){
+    if(nickname != s_NameNone && hasValidRef)
+        return true;
+
+    error("SceneAsset::loadBinary failed: invalid asset entry at index {}", index);
+    return false;
 }
 
 

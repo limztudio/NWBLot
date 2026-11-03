@@ -157,6 +157,53 @@ void ResolveCheckboxPlacement(
 
 }
 
+void AccumulateButtonRegionMetrics(in UiSkinRegion skinRegion, mut Point inOutMinimum, mut Insets inOutPadding){
+    inOutMinimum.x = max(inOutMinimum.x, skinRegion.minimumWidth);
+    inOutMinimum.y = max(inOutMinimum.y, skinRegion.minimumHeight);
+    inOutPadding = MaxUiPadding(inOutPadding, skinRegion.padding);
+}
+
+void AccumulateEditRegionMinimumSize(in UiSkinRegion skinRegion, mut Point inOutMinimum){
+    inOutMinimum.x = max(inOutMinimum.x, skinRegion.minimumWidth);
+    inOutMinimum.y = max(inOutMinimum.y, skinRegion.minimumHeight);
+}
+
+Point ResolveEditIntrinsicSize(in Point minimum, in f32 visualHeight, in Insets padding){
+    const f32 paddedHeight = (visualHeight + padding.top) + padding.bottom;
+    return Point(minimum.x, max(minimum.y, paddedHeight));
+}
+
+Point ResolvePaddedIntrinsicSize(in Point textBounds, in Insets padding, in Point minimum){
+    const f32 measuredX = textBounds.x + padding.left + padding.right;
+    const f32 measuredY = textBounds.y + padding.top + padding.bottom;
+    return Point(max(minimum.x, measuredX), max(minimum.y, measuredY));
+}
+
+Point ResolveCheckboxIntrinsicSize(in Point textBounds, in f32 checkboxExtent, in f32 gap){
+    return Point(textBounds.x + checkboxExtent + gap, max(textBounds.y, checkboxExtent));
+}
+
+LayoutNodeDesc ResolveSeparatorNodeDesc(in UiSkinRegion skinRegion, in SeparatorOptions options){
+    const b8 horizontal = options.direction == SeparatorDirection::Horizontal;
+    f32 minimum = skinRegion.minimumWidth;
+    if(horizontal)
+        minimum = skinRegion.minimumHeight;
+    f32 thickness = max(1.0f, minimum);
+    if(options.thickness > 0.0f)
+        thickness = options.thickness;
+    LayoutNodeDesc description;
+    if(horizontal){
+        description.width = options.length;
+        description.height = LayoutSize(LayoutSizePolicy::Fixed, thickness);
+    }
+    else{
+        description.width = LayoutSize(LayoutSizePolicy::Fixed, thickness);
+        description.height = options.length;
+    }
+    description.intrinsicSize = Point(skinRegion.minimumWidth, skinRegion.minimumHeight);
+    return description;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

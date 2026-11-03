@@ -59,7 +59,6 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 
 // Explicit boundary for retaining a projection; calculation helpers return SIMD rows.
 [[nodiscard]] CameraProjection StoreCameraProjection(const SIMDMatrix& values)noexcept;
-[[nodiscard]] CameraProjection StoreDefaultCameraProjection(f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

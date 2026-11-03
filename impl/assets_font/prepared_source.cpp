@@ -38,27 +38,9 @@ namespace __hidden_prepared_source{
 
 
 Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){
-    if(!sfnt.data() || !IsValidPreparedFontHeaderInputs(sfnt.size(), faceIndex, groups.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
-        return MakeUnexpected(s_PreparedFontInvalidSerializeInputReason);
-    }
-
-    u64 pixelByteCount = 0u;
-    for(usize index = 0u; index < groups.size(); ++index){
-        const PreparedFontImageView& group = groups[index];
-        const Expected<u32> expectedBytes = TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount);
-        if(!expectedBytes || !group.pixels.data() || group.pixels.size() != *expectedBytes || *expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes"), index);
-            return MakeUnexpected(s_PreparedFontInvalidSerializeGroupReason);
-        }
-        pixelByteCount += *expectedBytes;
-    }
-
-    const Expected<u64> expectedPayloadBytes = TryComputePreparedFontExpectedPayloadBytes(sfnt.size(), groups.size(), pixelByteCount);
-    if(!expectedPayloadBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
-        return MakeUnexpected(s_PreparedFontInvalidSerializeInputReason);
-    }
+    const Expected<u64, AStringView> expectedPayloadBytes = ValidatePreparedFontSerializeInputs(sfnt.size(), sfnt.data() != nullptr, faceIndex, groups);
+    if(!expectedPayloadBytes)
+        return MakeUnexpected(expectedPayloadBytes.error());
     Core::Assets::AssetBytes binary(arena);
     binary.reserve(static_cast<usize>(*expectedPayloadBytes));
     AppendU32LittleEndian(binary, s_PreparedFontMagic);

@@ -60,6 +60,105 @@ Expected<u64> TrySumSubsystemFieldElementCounts(in Span<u64> fieldCounts){
     return totalCount;
 }
 
+b8 ValidateSubsystemDependentRef(in Name virtualPath, in Name refName, in b8 isValidRef, in usize index){
+    if(!isValidRef){
+        error("ISubsystem::validatePayload failed: subsystem '{}' dependent subsystem entry {} must not be empty", virtualPath.resolvedText(), index);
+        return false;
+    }
+    if(refName == virtualPath){
+        error("ISubsystem::validatePayload failed: subsystem '{}' cannot reference itself in 'subsystems'", virtualPath.resolvedText());
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSubsystemFieldValueCount(in Name virtualPath, in SubsystemFieldValueDescriptor descriptor, in usize valueCount){
+    if(descriptor.isArray){
+        if(valueCount == 0u){
+            error(
+                "ISubsystem::validatePayload failed: subsystem '{}' array field '{}' must not be empty"
+                , virtualPath.resolvedText()
+                , descriptor.fieldName
+            );
+            return false;
+        }
+        return true;
+    }
+    if(valueCount != 1u){
+        error(
+            "ISubsystem::validatePayload failed: subsystem '{}' field '{}' must contain exactly one value"
+            , virtualPath.resolvedText()
+            , descriptor.fieldName
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSubsystemFieldElementValue(in Name virtualPath, in SubsystemFieldValueDescriptor descriptor, in Name value, in b8 isDuplicate){
+    if(value == s_NameNone){
+        error("ISubsystem::validatePayload failed: subsystem '{}' field '{}' must not be empty", virtualPath.resolvedText(), descriptor.fieldName);
+        return false;
+    }
+    if(isDuplicate){
+        error(
+            "ISubsystem::validatePayload failed: subsystem '{}' array field '{}' has duplicate entry '{}'"
+            , virtualPath.resolvedText()
+            , descriptor.fieldName
+            , value.resolvedText()
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSubsystemHeaderBinary(in SubsystemHeaderBinary header, in Name assetType, in usize expectedFieldCount){
+    if(header.version != s_SubsystemVersion){
+        error("ISubsystem::loadBinary failed: unsupported version {}", header.version);
+        return false;
+    }
+    if(header.subsystemTypeHash != assetType.hash()){
+        error("ISubsystem::loadBinary failed: subsystem binary type does not match '{}'", assetType.resolvedText());
+        return false;
+    }
+    if(header.fieldCount != cast<u64>(expectedFieldCount)){
+        error(
+            "ISubsystem::loadBinary failed: expected {} asset fields for '{}', got {}"
+            , expectedFieldCount
+            , assetType.resolvedText()
+            , header.fieldCount
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSubsystemFieldElementCountSum(in Span<u64> fieldCounts, in u64 expectedAssetCount){
+    const Expected<u64> totalCount = TrySumSubsystemFieldElementCounts(fieldCounts);
+    if(!totalCount.has_value()){
+        error("ISubsystem::loadBinary failed: invalid field element count");
+        return false;
+    }
+    if(totalCount.value() != expectedAssetCount){
+        error("ISubsystem::loadBinary failed: field element counts do not sum to asset count");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSubsystemBinaryScalarFieldCount(in Name assetType, in SubsystemFieldValueDescriptor descriptor, in u64 elementCount){
+    if(descriptor.isArray || elementCount == 1u)
+        return true;
+
+    error(
+        "ISubsystem::loadBinary failed: scalar field '{}' in '{}' has element count {}"
+        , descriptor.fieldName
+        , assetType.resolvedText()
+        , elementCount
+    );
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

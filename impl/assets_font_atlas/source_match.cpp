@@ -41,7 +41,7 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
                 break;
             }
         }
-        if(!exported || exported->bytes.size() != sourceTable->bytes.size() || NWB_MEMCMP(exported->bytes.data(), sourceTable->bytes.data(), sourceTable->bytes.size()) != 0){
+        if(!exported || !AreFontAtlasByteSpansEqual(exported->bytes, sourceTable->bytes)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
             return false;
         }

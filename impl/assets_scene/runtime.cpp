@@ -56,14 +56,8 @@ template<typename TAsset>
 
 [[nodiscard]] static b8 ValidateAssetMap(const SceneAsset::AssetMap& assets){
     for(const auto& [nickname, assetRef] : assets){
-        if(!nickname){
-            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: asset entry has an empty nickname"));
+        if(!ValidateSceneAssetMapEntry(nickname, assetRef.valid()))
             return false;
-        }
-        if(!assetRef.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::validatePayload failed: asset nickname '{}' has an empty asset reference"), ConvertString(nickname.resolvedText()));
-            return false;
-        }
     }
     return true;
 }
@@ -97,10 +91,8 @@ b8 EntityAsset::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const EntityHeaderBinary& header = *headerResult;
-    if(header.version != s_EntityVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("EntityAsset::loadBinary failed: unsupported version {}"), header.version);
+    if(!ValidateEntityHeaderBinary(header))
         return false;
-    }
 
     Vector<NameHash, Core::Alloc::ScratchArena> componentHashes(scratchArena);
     if(!Core::Assets::ReadVectorPayload(binary, header.componentCount, s_EntityLoadBinaryContext, s_EntityComponentsPayloadLabel, cursor, componentHashes))
@@ -138,10 +130,8 @@ b8 ProjectAsset::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const ProjectHeaderBinary& header = *headerResult;
-    if(header.version != s_ProjectVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("ProjectAsset::loadBinary failed: unsupported version {}"), header.version);
+    if(!ValidateProjectHeaderBinary(header))
         return false;
-    }
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ProjectLoadBinaryContext))
         return false;
 
@@ -176,10 +166,8 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const SceneHeaderBinary& header = *headerResult;
-    if(header.version != s_SceneVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::loadBinary failed: unsupported version {}"), header.version);
+    if(!ValidateSceneHeaderBinary(header))
         return false;
-    }
 
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> entityHashes(scratchArena);
@@ -208,10 +196,8 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
         const Name nickname(entry.nicknameHash);
         AssetRef ref;
         ref.virtualPath = Name(entry.assetHash);
-        if(!nickname || !ref.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::loadBinary failed: invalid asset entry at index {}"), i);
+        if(!ValidateSceneAssetBinaryEntry(nickname, ref.valid(), i))
             return false;
-        }
         if(!candidate.m_assets.emplace(nickname, ref).second){
             NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::loadBinary failed: duplicate asset nickname at index {}"), i);
             return false;

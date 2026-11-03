@@ -41,18 +41,8 @@ b8 Font::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const FontBinaryHeader& header = *headerResult;
-    if(!IsValidFontBinaryHeader(header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font::loadBinary failed: unsupported version, flags, or face index; recook required"));
+    if(!ValidateFontBinaryPayloadHeader(header, binary.size() - cursor))
         return false;
-    }
-    if(header.byteCount == 0u || header.byteCount > s_FontMaxSourceBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font::loadBinary failed: source size must be 1..{} bytes"), s_FontMaxSourceBytes);
-        return false;
-    }
-    if(header.byteCount != binary.size() - cursor){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font::loadBinary failed: truncated source bytes or trailing payload"));
-        return false;
-    }
 
     Font candidate(m_fontBytes.get_allocator().arena(), virtualPath());
     candidate.m_fontBytes.assign(binary.begin() + cursor, binary.end());

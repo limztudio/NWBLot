@@ -72,22 +72,20 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;
     }
-    if(payload.unitsPerEm < s_FontAtlasMinUnitsPerEm || payload.unitsPerEm > s_FontAtlasMaxUnitsPerEm || payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || payload.glyphs.size() != payload.sourceGlyphCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid face metrics or incomplete all-glyph policy"));
+    if(!ValidateFontAtlasHeaderParameters(
+        payload.unitsPerEm,
+        payload.sourceGlyphCount,
+        payload.glyphs.size(),
+        payload.bakePpem,
+        payload.spreadPixels,
+        payload.guardTexels,
+        payload.rasterMode,
+        payload.ascenderUnits,
+        payload.descenderUnits,
+        payload.lineGapUnits,
+        payload.groups.size()
+    ))
         return false;
-    }
-    if(!IsValidFontAtlasBakeParameters(payload.bakePpem, payload.spreadPixels, payload.guardTexels, payload.rasterMode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: unsupported bake size, spread, guard, or raster mode"));
-        return false;
-    }
-    if(!IsValidFontAtlasMetrics(payload.ascenderUnits, payload.descenderUnits, payload.lineGapUnits)){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: nonfinite or invalid vertical metrics"));
-        return false;
-    }
-    if(payload.groups.empty() || payload.groups.size() > s_FontAtlasMaxGroupCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid image group count"));
-        return false;
-    }
     u64 pixelBytes = 0u;
     for(const FontAtlasGroup& group : payload.groups){
         if(!IsValidFontAtlasGroupDimensions(group.width, group.height, group.channelCount)){

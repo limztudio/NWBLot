@@ -563,6 +563,64 @@ Expected<usize> TryFindInvalidMeshletPrimitiveIndex(
     return makeUnexpected(Failure());
 }
 
+u32 PackMeshletConeOct16Vec(in f32x4 axis){
+    const f32 l1Length = abs(axis.x) + abs(axis.y) + abs(axis.z);
+    if(!isFinite(l1Length) || !(l1Length > s_MeshletConeAxisLengthEpsilon))
+        return s_MeshletConeAxisFallback;
+
+    const f32 invL1 = 1.0f / l1Length;
+    f32x4 octAxis = FoldMeshletConeOctAxisVec(f32x4(axis.x * invL1, axis.y * invL1, axis.z * invL1, 0.0f));
+    const f32 encodedX = clamp(octAxis.x * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
+    const f32 encodedY = clamp(octAxis.y * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
+    return (cast<u32>(encodedX) << s_MeshletConeAxisXShift) | (cast<u32>(encodedY) << s_MeshletConeAxisYShift);
+}
+
+f32x4 UnpackMeshletConeOct16AxisVec(in u32 conePacked){
+    const f32 invUnorm8Max = 1.0f / s_MeshletUnorm8Max;
+    const f32 packedX = cast<f32>((conePacked >> s_MeshletConeAxisXShift) & s_MeshletPackedByteMask) * invUnorm8Max;
+    const f32 packedY = cast<f32>((conePacked >> s_MeshletConeAxisYShift) & s_MeshletPackedByteMask) * invUnorm8Max;
+    const f32 octX = packedX * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
+    const f32 octY = packedY * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
+    const f32 octZ = 1.0f - (abs(octX) + abs(octY));
+    const f32x4 folded = FoldMeshletConeOctAxisVec(f32x4(octX, octY, octZ, 0.0f));
+    const f32 lengthSquared = lengthSq(folded.xyz);
+    if(isFinite(lengthSquared) && lengthSquared > s_MeshletConeAxisLengthSquaredEpsilon){
+        const f32x4 normalized = folded * rsqrt(f32x4(lengthSquared));
+        if(isFinite(normalized.x) && isFinite(normalized.y) && isFinite(normalized.z))
+            return f32x4(normalized.x, normalized.y, normalized.z, 0.0f);
+    }
+    return f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+}
+
+u32 PackMeshletConeVec(in f32x4 axis, in f32 cutoff){
+    if(cutoff <= 0.0f)
+        return 0u;
+
+    const u32 packedAxis = PackMeshletConeOct16Vec(axis);
+    return PackMeshletConeFromAxisAndCutoff(
+        packedAxis,
+        ConservativePackedMeshletConeCutoffVec(axis, cutoff, UnpackMeshletConeOct16AxisVec(packedAxis))
+    );
+}
+
+b8 ValidateMeshBaseHeader(in MeshBinaryHeader header){
+    if(MeshBaseHeaderComplete(header))
+        return true;
+
+    error("Mesh::loadBinary failed: mesh payload is incomplete");
+    return false;
+}
+
+u64 ComputeMeshSolidTriangleWordCount(in u64 primitiveIndexCount){
+    return (primitiveIndexCount / cast<u64>(s_MeshletTriangleIndexCount) + cast<u64>(s_MeshletSolidTriangleWordRoundUp)) / cast<u64>(s_MeshletSolidTriangleWordBits);
+}
+
+b8 HasValidMeshSolidTriangleTailPadding(in usize primitiveIndexCount, in u32 lastWord){
+    const usize triangleCount = primitiveIndexCount / s_MeshletTriangleIndexCount;
+    const u32 tailBits = cast<u32>(triangleCount % s_MeshletSolidTriangleWordBits);
+    return tailBits == 0u || (lastWord >> tailBits) == 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

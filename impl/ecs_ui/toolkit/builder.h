@@ -144,7 +144,7 @@ private:
     [[nodiscard]] b8 addItemNode(const LayoutNodeDesc& description, Item& item);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
     [[nodiscard]] Insets resolveRegionsPadding(const Insets& initial, Span<const Name> names, const Name& fallback)const noexcept;
-    void loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept;
+    void loadButtonMetrics(Point& size, Insets& padding)const noexcept;
     [[nodiscard]] b8 paintPanel();
     [[nodiscard]] b8 paintWindow();
     [[nodiscard]] b8 paintWindowTitle();

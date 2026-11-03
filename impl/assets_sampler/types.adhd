@@ -140,6 +140,54 @@ b8 IsValidSamplerScalarParameters(
     ;
 }
 
+b8 IsValidSamplerAddressModeValue(in u32 addressMode){
+    return addressMode <= s_SamplerMaxAddressMode;
+}
+
+b8 IsValidSamplerReductionTypeValue(in u32 reductionType){
+    return reductionType <= s_SamplerMaxReductionType;
+}
+
+b8 IsValidSamplerDescriptionParameters(
+    in f32 borderColorR,
+    in f32 borderColorG,
+    in f32 borderColorB,
+    in f32 borderColorA,
+    in f32 maxAnisotropy,
+    in f32 mipBias,
+    in u32 addressU,
+    in u32 addressV,
+    in u32 addressW,
+    in u32 reductionType
+){
+    return
+        IsValidSamplerScalarParameters(
+            borderColorR,
+            borderColorG,
+            borderColorB,
+            borderColorA,
+            maxAnisotropy,
+            mipBias
+        )
+        && IsValidSamplerAddressModeValue(addressU)
+        && IsValidSamplerAddressModeValue(addressV)
+        && IsValidSamplerAddressModeValue(addressW)
+        && IsValidSamplerReductionTypeValue(reductionType)
+    ;
+}
+
+b8 ValidateSamplerBinaryHeader(in SamplerBinaryHeader header){
+    if(header.version != s_SamplerBinaryVersion){
+        error("Sampler::loadBinary failed: unsupported sampler version {}; recook required", header.version);
+        return false;
+    }
+    if(!IsValidSamplerBinaryHeader(header)){
+        error("Sampler::loadBinary failed: sampler header contains invalid flags");
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

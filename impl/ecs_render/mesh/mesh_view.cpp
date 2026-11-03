@@ -27,29 +27,20 @@ namespace ECSRenderDetail{
 
 
 MeshViewGpuData ResolveMeshViewState(const f32 fallbackAspectRatio, Core::ECS::World& world)noexcept{
-    SIMDMatrix viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
+    Float44 viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasisRows();
     NWB::Impl::Scene::CameraProjection projection = NWB::Impl::Scene::StoreDefaultCameraProjection(fallbackAspectRatio);
 
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
-        viewBasis = NWB::Impl::Scene::BuildSceneViewBasis(LoadFloat(cameraView.transform->position), LoadFloat(cameraView.transform->rotation));
+        viewBasis = NWB::Impl::Scene::BuildSceneViewBasisRows(cameraView.transform->position, cameraView.transform->rotation);
         projection = cameraView.projection;
     }
 
-    Float4 rightRow;
-    Float4 upRow;
-    Float4 forwardRow;
-    Float4 positionDepthBias;
-    StoreFloat(viewBasis.v[0], rightRow);
-    StoreFloat(viewBasis.v[1], upRow);
-    StoreFloat(viewBasis.v[2], forwardRow);
-    StoreFloat(viewBasis.v[3], positionDepthBias);
-
     return BuildMeshViewGpuData(
-        rightRow,
-        upRow,
-        forwardRow,
-        positionDepthBias,
+        viewBasis.rows[0u],
+        viewBasis.rows[1u],
+        viewBasis.rows[2u],
+        viewBasis.rows[3u],
         projection.projectionParams,
         projection.tanHalfVerticalFov,
         projection.aspectRatio,

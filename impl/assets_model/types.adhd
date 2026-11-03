@@ -200,6 +200,40 @@ b8 IsValidModelHeaderBinary(in ModelHeaderBinary header){
     return header.padding0 == 0u;
 }
 
+b8 ValidateModelHeaderBinary(in ModelHeaderBinary header){
+    if(IsValidModelHeaderBinary(header))
+        return true;
+
+    error("Model::loadBinary failed: reserved header fields must be zero");
+    return false;
+}
+
+void UnpackModelSkeletonObjectBinaries(in Span<ModelSkeletonObjectBinary> binaries, mut Vector<ModelSkeletonObject> outObjects){
+    outObjects.reserve(binaries.size());
+    for(in ModelSkeletonObjectBinary objectBinary : binaries)
+        outObjects.push_back(UnpackModelSkeletonObjectBinary(objectBinary));
+}
+
+void UnpackModelStaticMeshObjectBinaries(in Span<ModelStaticMeshObjectBinary> binaries, mut Vector<ModelStaticMeshObject> outObjects){
+    outObjects.reserve(binaries.size());
+    for(in ModelStaticMeshObjectBinary objectBinary : binaries)
+        outObjects.push_back(UnpackModelStaticMeshObjectBinary(objectBinary));
+}
+
+void UnpackModelSkinnedMeshObjectBinaries(in Span<ModelSkinnedMeshObjectBinary> binaries, mut Vector<ModelSkinnedMeshObject> outObjects){
+    outObjects.reserve(binaries.size());
+    for(in ModelSkinnedMeshObjectBinary objectBinary : binaries)
+        outObjects.push_back(UnpackModelSkinnedMeshObjectBinary(objectBinary));
+}
+
+b8 IsModelObjectFlaggedSkeleton(in u8 flags){
+    return (flags & s_ModelSkeletonObjectNameFlag) != 0u;
+}
+
+b8 IsModelObjectFlaggedDuplicate(in u8 flags){
+    return (flags & s_ModelDuplicateObjectNameFlag) != 0u;
+}
+
 Expected<usize> TryComputeTotalModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount){
     usize objectCount = 0u;
     if(skeletonCount > 0xffffffffffffffffu - objectCount)
@@ -211,6 +245,24 @@ Expected<usize> TryComputeTotalModelObjectCount(in usize skeletonCount, in usize
     if(skinnedMeshCount > 0xffffffffffffffffu - objectCount)
         return makeUnexpected(Failure());
     objectCount += skinnedMeshCount;
+    return objectCount;
+}
+
+Expected<usize> ResolveModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount){
+    if(skeletonCount == 0u && staticMeshCount == 0u && skinnedMeshCount == 0u){
+        error("Model::validatePayload failed: model has no objects");
+        return makeUnexpected(Failure());
+    }
+    const Expected<usize> objectCountResult = TryComputeTotalModelObjectCount(skeletonCount, staticMeshCount, skinnedMeshCount);
+    if(!objectCountResult.has_value()){
+        error("Model::validatePayload failed: total object count overflows");
+        return makeUnexpected(Failure());
+    }
+    const usize objectCount = objectCountResult.value();
+    if(objectCount > 1u && objectCount > usize.max / 2u){
+        error("Model::validatePayload failed: name index capacity overflows");
+        return makeUnexpected(Failure());
+    }
     return objectCount;
 }
 

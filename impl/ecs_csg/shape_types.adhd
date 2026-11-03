@@ -268,6 +268,38 @@ b8 ValidateCsgShapeTypeDescFields(
     return ValidateCsgShaderModuleInclude(name, shaderModule, shaderModuleInclude);
 }
 
+Expected<CsgShapeTypeId> TryResolveCsgShapeRegistryId(in Name name){
+    const Expected<CsgShapeTypeId> canonicalIdResult = TryResolveCsgShapeTypeIdFromName(name);
+    if(!canonicalIdResult.has_value()){
+        error("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id", name.resolvedText());
+        return makeUnexpected(Failure());
+    }
+    return canonicalIdResult.value();
+}
+
+b8 ValidateCsgShapeRegistryInsertion(
+    in Name name,
+    in CsgShapeTypeId canonicalId,
+    in usize currentShapeTypeCount,
+    in b8 hasCanonicalIdCollision,
+    in Name conflictingName
+){
+    if(currentShapeTypeCount >= cast<usize>(u16.max)){
+        error("CsgShapeRegistry: rejected shape type '{}' because the registry is full", name.resolvedText());
+        return false;
+    }
+    if(hasCanonicalIdCollision){
+        error(
+            "CsgShapeRegistry: shape types '{}' and '{}' collide on canonical GPU id {}"
+            , conflictingName.resolvedText()
+            , name.resolvedText()
+            , canonicalId
+        );
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

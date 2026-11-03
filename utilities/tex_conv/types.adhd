@@ -141,6 +141,37 @@ f32 ComputeVolumeMipZSlabOverlap(in VolumeMipZSlabRange range, in u32 sourceZ, i
     return cast<f32>(min(range.intervalEnd, slabEnd) - max(range.intervalBegin, slabBegin));
 }
 
+b8 ValidateTexConvPlaneResolution(
+    in b8 isFirstPlane,
+    in b8 isCube,
+    in b8 hasAlphaMask,
+    in u32 planeWidth,
+    in u32 planeHeight,
+    in u32 alphaWidth,
+    in u32 alphaHeight,
+    mut u32 inOutWidth,
+    mut u32 inOutHeight
+){
+    if(isFirstPlane){
+        inOutWidth = planeWidth;
+        inOutHeight = planeHeight;
+        if(isCube && inOutWidth != inOutHeight){
+            error("tex_conv: cubemap faces must be square.");
+            return false;
+        }
+        if(hasAlphaMask && (alphaWidth != inOutWidth || alphaHeight != inOutHeight)){
+            error("tex_conv: alpha image resolution must match the texture input resolution.");
+            return false;
+        }
+        return true;
+    }
+    if(planeWidth != inOutWidth || planeHeight != inOutHeight){
+        error("tex_conv: texture inputs must have the same resolution.");
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

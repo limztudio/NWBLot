@@ -85,21 +85,11 @@ Expected<void, NativeFontFailure> FreeTypeMemoryFace::openStaticScalableFace(con
 }
 
 b8 FreeTypeMemoryFace::openAndValidate(const Span<const u8> bytes, const u32 faceIndex){
-    if(faceIndex != 0u || bytes.empty() || bytes.size() > s_FontMaxSourceBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: face index must be zero and source size must be 1..{} bytes"), s_FontMaxSourceBytes);
+    if(!ValidateFontSourceDirectory(bytes, faceIndex))
         return false;
-    }
-    if(!ValidateFontSfntRequiredTables(bytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: unsupported or malformed static TrueType/CFF SFNT directory"));
-        return false;
-    }
     const auto nativeValidation = openStaticScalableFace(bytes);
     if(!nativeValidation){
-        const auto& failure = nativeValidation.error();
-        if(failure.hasNativeError)
-            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: native_operation={} native_domain=FreeType native_code={}"), ConvertString(failure.operation), failure.nativeError);
-        else
-            NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: FreeType rejected the scalable Unicode face ({})"), ConvertString(failure.operation));
+        ReportNativeFontFailure(nativeValidation.error());
         return false;
     }
     return true;

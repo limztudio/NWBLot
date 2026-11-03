@@ -48,7 +48,7 @@ void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     valid = ui.image("sprite", s_RadioMarkRegion, sprite) && valid;
     ImageOptions slice = sprite;
     slice.width.value = s_ImageGallerySliceWidth;
-    slice.tint = Color{ s_ImageGallerySliceTint.x, s_ImageGallerySliceTint.y, s_ImageGallerySliceTint.z, s_ImageGallerySliceTint.w };
+    slice.tint = ResolveImageGallerySliceTint();
     valid = ui.image("slice", s_ButtonNormal, slice) && valid;
     valid = ui.image("natural", s_ComboArrow) && valid;
     valid = ui.endContainer() && valid;

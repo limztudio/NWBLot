@@ -75,7 +75,7 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
 
     paths.assetRoots.reserve(options.assetRoots.size());
     for(const AssetBuildRoot& assetRoot : options.assetRoots){
-        if(assetRoot.virtualRoot.view() != Assets::s_EngineVirtualRoot && assetRoot.virtualRoot.view() != Assets::s_ProjectVirtualRoot){
+        if(!IsValidAssetBuildVirtualRoot(assetRoot.virtualRoot.view(), Assets::s_EngineVirtualRoot, Assets::s_ProjectVirtualRoot)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'"), PathToString<tchar>(assetRoot.path), ConvertString(assetRoot.virtualRoot.view()));
             return MakeUnexpected(Failure{});
         }

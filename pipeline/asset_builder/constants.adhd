@@ -13,6 +13,18 @@ u32 ComputeWorkerCoreCount(in u32 cores){
     return 0u;
 }
 
+b8 ValidateAssetBuildType(in StringView assetType, in StringView expectedAssetVolumeName){
+    if(assetType != expectedAssetVolumeName){
+        error("AssetBuilder: unsupported --asset-type '{}'. Available types: graphics", assetType);
+        return false;
+    }
+    return true;
+}
+
+b8 IsValidAssetBuildVirtualRoot(in StringView virtualRoot, in StringView engineVirtualRoot, in StringView projectVirtualRoot){
+    return virtualRoot == engineVirtualRoot || virtualRoot == projectVirtualRoot;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

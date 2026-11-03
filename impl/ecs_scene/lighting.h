@@ -8,6 +8,8 @@
 #include <impl/ecs_scene/components.adhd.h>
 #include <impl/ecs_scene/lighting_types.adhd.h>
 
+#include <core/ecs/module.h>
+
 #include <global/span.h>
 
 
@@ -20,9 +22,44 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, f32 pitchRadians, f32 yawRadians, f32 rollRadians, const Float4& color, f32 intensity);
-[[nodiscard]] Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, f32 intensity, f32 range);
-[[nodiscard]] Core::ECS::EntityID CreateSpotLightEntity(Core::ECS::World& world, const Float4& position, f32 pitchRadians, f32 yawRadians, f32 rollRadians, const Float4& color, f32 intensity, f32 range, f32 innerConeCos, f32 outerConeCos);
+[[nodiscard]] inline Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, const f32 pitchRadians, const f32 yawRadians, const f32 rollRadians, const Float4& color, const f32 intensity){
+    auto lightEntity = world.createEntity();
+    auto& transform = lightEntity.addComponent<TransformComponent>();
+    StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
+
+    lightEntity.addComponent<LightComponent>() = MakeDirectionalLightComponent(color, intensity);
+    return lightEntity.id();
+}
+
+[[nodiscard]] inline Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, const f32 intensity, const f32 range){
+    auto lightEntity = world.createEntity();
+    auto& transform = lightEntity.addComponent<TransformComponent>();
+    transform.position = position;
+
+    lightEntity.addComponent<LightComponent>() = MakePointLightComponent(color, intensity, range);
+    return lightEntity.id();
+}
+
+[[nodiscard]] inline Core::ECS::EntityID CreateSpotLightEntity(
+    Core::ECS::World& world,
+    const Float4& position,
+    const f32 pitchRadians,
+    const f32 yawRadians,
+    const f32 rollRadians,
+    const Float4& color,
+    const f32 intensity,
+    const f32 range,
+    const f32 innerConeCos,
+    const f32 outerConeCos
+){
+    auto lightEntity = world.createEntity();
+    auto& transform = lightEntity.addComponent<TransformComponent>();
+    transform.position = position;
+    StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
+
+    lightEntity.addComponent<LightComponent>() = MakeSpotLightComponent(color, intensity, range, innerConeCos, outerConeCos);
+    return lightEntity.id();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,7 +84,41 @@ static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stabl
 static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to pass through scene preparation");
 static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
 
-[[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, SIMDVectorSingle defaultForward, Span<SceneLight> outLights)noexcept;
+[[nodiscard]] inline usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, const Span<SceneLight> outLights)noexcept{
+    const usize maxLights = outLights.size();
+    if(maxLights == 0u)
+        return 0u;
+
+    usize count = 0u;
+    const auto lightView = world.view<TransformComponent, LightComponent>();
+    for(auto it = lightView.begin(); it != lightView.end(); ++it){
+        if(count >= maxLights)
+            break;
+
+        [[maybe_unused]] auto&& [entity, transform, light] = *it;
+
+        Float4 position;
+        Float4 direction;
+        if(TryBuildSceneLightVectors(transform, light, position, direction)){
+            outLights[count] = MakeSceneLight(light, position, direction);
+            ++count;
+        }
+    }
+
+    if(count == 0u){
+        Float4 forwardVec;
+        StoreFloat(defaultForward, forwardVec);
+        const Float4 direction = NormalizeSceneVector3Or(
+            Float4(-forwardVec.x, -forwardVec.y, -forwardVec.z, 0.0f),
+            Float4(0.0f, 0.0f, -1.0f, 0.0f),
+            s_NormalizeLengthSquaredEpsilon
+        );
+        outLights[0] = MakeDefaultSceneLight(direction);
+        count = 1u;
+    }
+
+    return count;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

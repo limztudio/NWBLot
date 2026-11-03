@@ -4,6 +4,7 @@
 
 #include <impl/ecs_scene/camera_types.adhd>
 #include <impl/ecs_scene/lighting_types.adhd>
+#include <impl/ecs_scene/view_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -134,6 +135,81 @@ LightComponent MakeSpotLightComponent(
     light.innerConeCos = innerConeCos;
     light.outerConeCos = outerConeCos;
     return light;
+}
+
+void AssignDecomposedTransformComponent(
+    in f32x4 translation,
+    in f32x4 rotation,
+    in f32x4 scale,
+    mut TransformComponent outTransform
+){
+    outTransform.position = f32x4(translation.x, translation.y, translation.z, 0.0f);
+    outTransform.rotation = rotation;
+    outTransform.scale = f32x4(scale.x, scale.y, scale.z, 0.0f);
+}
+
+b8 IsValidSceneLightRotation(in f32x4 rotation){
+    if(!isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w))
+        return false;
+    const f32 rotationLengthSquared = lengthSq(rotation);
+    return isFinite(rotationLengthSquared) && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon;
+}
+
+b8 TryBuildSceneLightVectors(
+    in TransformComponent transform,
+    in LightComponent light,
+    mut f32x4 outPosition,
+    mut f32x4 outDirection
+){
+    const f32x4 colorIntensity = light.colorIntensity;
+    if(
+        !isFinite(colorIntensity.x)
+        || !isFinite(colorIntensity.y)
+        || !isFinite(colorIntensity.z)
+        || !isFinite(colorIntensity.w)
+        || !(colorIntensity.w > 0.0f)
+    )
+        return false;
+
+    switch(light.type){
+    case LightType::Directional:{
+        if(!IsValidSceneLightRotation(transform.rotation))
+            return false;
+
+        outPosition = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        const f32x4 rotated = RotateSceneVector3(f32x4(0.0f, 0.0f, 1.0f, 0.0f), transform.rotation);
+        outDirection = NormalizeSceneVector3Or(-rotated, f32x4(0.0f, 0.0f, -1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
+        return true;
+    }
+    case LightType::Point:{
+        if(!isFinite(transform.position.x) || !isFinite(transform.position.y) || !isFinite(transform.position.z))
+            return false;
+        if(!isFinite(light.range) || light.range <= 0.0f)
+            return false;
+
+        outPosition = f32x4(transform.position.x, transform.position.y, transform.position.z, 1.0f);
+        outDirection = f32x4(0.0f, 0.0f, -1.0f, 1.0f);
+        return true;
+    }
+    case LightType::Spot:{
+        if(!IsValidSceneLightRotation(transform.rotation))
+            return false;
+        if(!isFinite(transform.position.x) || !isFinite(transform.position.y) || !isFinite(transform.position.z))
+            return false;
+        if(!isFinite(light.range) || light.range <= 0.0f)
+            return false;
+        if(!IsValidLightCone(light.innerConeCos, light.outerConeCos))
+            return false;
+
+        outPosition = f32x4(transform.position.x, transform.position.y, transform.position.z, light.innerConeCos);
+        const f32x4 rotated = RotateSceneVector3(f32x4(0.0f, 0.0f, 1.0f, 0.0f), transform.rotation);
+        const f32x4 normalized = NormalizeSceneVector3Or(rotated, f32x4(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
+        outDirection = f32x4(normalized.x, normalized.y, normalized.z, light.outerConeCos);
+        return true;
+    }
+    default:
+        return false;
+    }
 }
 
 

@@ -9,6 +9,7 @@
 
 
 #include "build.h"
+#include "../root_discovery.h"
 
 #include <core/assets/volume/built_asset.h>
 #include <core/assets/volume/cooked_object_cache.h>
@@ -34,12 +35,28 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchArena){
-    Assets::AssetArena& arena = options.assetRoots.get_allocator().arena();
-    if(options.assetType.view() != Assets::AssetsVolumeCookDetail::s_AssetVolumeName){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: unsupported --asset-type '{}'. Available types: graphics"), ConvertString(options.assetType.view()));
+b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::ScratchArena& scratchArena, Assets::DiscoveredNwbFileVector& files){
+    if(options.inputs.empty()){
+        files.clear();
+        return true;
+    }
+
+    Vector<u8, Assets::ScratchArena> selected(files.size(), u8(0), scratchArena);
+    // Borrow discovered canonical paths until selection finishes; compact the owning file vector only afterward.
+    const auto selectionResult = Assets::SelectDiscoveredNwbInputs(paths.repoRoot, paths.assetRoots, files, options.inputs, true, scratchArena, selected);
+    if(!selectionResult){
+        LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("AssetBuilder"));
         return false;
     }
+
+    Assets::CompactSelectedDiscoveredNwbFiles(selected, files);
+    return true;
+}
+
+b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchArena){
+    Assets::AssetArena& arena = options.assetRoots.get_allocator().arena();
+    if(!ValidateAssetBuildType(options.assetType.view(), Assets::AssetsVolumeCookDetail::s_AssetVolumeName))
+        return false;
 
     auto paths = ResolveCookPaths(options, arena);
     if(!paths)

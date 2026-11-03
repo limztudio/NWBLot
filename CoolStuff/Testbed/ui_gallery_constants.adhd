@@ -339,6 +339,16 @@ f32 ResolveSkinGalleryCenteredTextY(in f32 originY, in f32 boxOffsetY, in f32 bo
     return originY + boxOffsetY + (boxHeight - textHeight) * 0.5f;
 }
 
+Color ResolveImageGallerySliceTint(){
+    return Color(s_ImageGallerySliceTint.x, s_ImageGallerySliceTint.y, s_ImageGallerySliceTint.z, s_ImageGallerySliceTint.w);
+}
+
+f64 AdvanceProgressGalleryFraction(in f64 fraction){
+    if(fraction >= 1.0)
+        return 0.0;
+    return fraction + s_DefaultProgressFraction;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

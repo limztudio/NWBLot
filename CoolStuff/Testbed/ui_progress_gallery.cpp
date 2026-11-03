@@ -23,7 +23,7 @@ void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::All
         return;
     b8 valid = ui.label(s_TitleKey, "Skinned progress bar");
     if(ui.button("advance", "Advance by 25%"))
-        m_fraction = m_fraction >= 1.0 ? 0.0 : m_fraction + s_DefaultProgressFraction;
+        m_fraction = AdvanceProgressGalleryFraction(m_fraction);
     valid = ui.progress(s_AmountKey, m_fraction) && valid;
     const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", m_fraction * s_ProgressPercentScale);
     valid = ui.label("value", { caption.data(), caption.size() }) && valid;

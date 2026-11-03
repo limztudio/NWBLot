@@ -158,6 +158,26 @@ b8 IsValidCameraTransformVectors(in f32x4 position, in f32x4 rotation, in f32x4 
     return isFinite(rotationLengthSquared) && abs(rotationLengthSquared - 1.0f) <= s_CameraRotationUnitLengthSquaredTolerance;
 }
 
+b8 IsValidSceneCameraViewProjection(
+    in EntityID entity,
+    in b8 hasTransform,
+    in b8 hasCamera,
+    in CameraProjection projection
+){
+    return
+        entity.valid()
+        && hasTransform
+        && hasCamera
+        && CameraProjectionValuesValidScalar(
+            projection.projectionParams,
+            projection.aspectRatio,
+            projection.tanHalfVerticalFov,
+            projection.nearPlane,
+            projection.farPlane
+        )
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

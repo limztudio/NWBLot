@@ -8,6 +8,8 @@
 #include <impl/ecs_scene/camera_types.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
 
+#include <core/ecs/module.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,24 +43,61 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<SIMDVectorSingleResult> TryComputeCameraTanHalfVerticalFov(SIMDVectorSingle verticalFovRadians)noexcept;
+[[nodiscard]] inline Expected<SIMDVectorSingleResult> TryComputeCameraTanHalfVerticalFov(const SIMDVectorSingle verticalFovRadians)noexcept{
+    const auto tanHalfFov = TryComputeCameraTanHalfVerticalFovScalar(VectorGetX(verticalFovRadians));
+    if(!tanHalfFov)
+        return MakeUnexpected(Failure{});
+
+    return SIMDVectorSingleResult{ VectorReplicate(*tanHalfFov) };
+}
 
 [[nodiscard]] inline b8 CameraClipRangeValid(const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
     return VectorIsFinite(nearPlane, VectorComponentMask::s_XYZW) && VectorIsFinite(farPlane, VectorComponentMask::s_XYZW) && Vector4Greater(nearPlane, s_SIMDZero) && Vector4Less(nearPlane, farPlane);
 }
 
-[[nodiscard]] SIMDVectorSingle ResolveCameraAspectRatio(SIMDVectorSingle cameraAspectRatio, SIMDVectorSingle fallbackAspectRatio)noexcept;
-[[nodiscard]] b8 CameraProjectionValuesValid(SIMDVectorSingle projectionParams, SIMDVectorSingle aspectRatio, SIMDVectorSingle tanHalfVerticalFov, SIMDVectorSingle nearPlane, SIMDVectorSingle farPlane)noexcept;
-[[nodiscard]] Expected<SIMDMatrix> TryBuildCameraProjection(
-    SIMDVectorSingle verticalFovRadians,
-    SIMDVectorSingle nearPlane,
-    SIMDVectorSingle farPlane,
-    SIMDVectorSingle cameraAspectRatio,
-    SIMDVectorSingle fallbackAspectRatio
-)noexcept;
+[[nodiscard]] inline SIMDVectorSingle ResolveCameraAspectRatio(const SIMDVectorSingle cameraAspectRatio, const SIMDVectorSingle fallbackAspectRatio)noexcept{
+    return VectorReplicate(ResolveCameraAspectRatioScalar(VectorGetX(cameraAspectRatio), VectorGetX(fallbackAspectRatio)));
+}
+
+[[nodiscard]] inline b8 CameraProjectionValuesValid(const SIMDVectorSingle projectionParams, const SIMDVectorSingle aspectRatio, const SIMDVectorSingle tanHalfVerticalFov, const SIMDVectorSingle nearPlane, const SIMDVectorSingle farPlane)noexcept{
+    Float4 params;
+    StoreFloat(projectionParams, params);
+    return CameraProjectionValuesValidScalar(params, VectorGetX(aspectRatio), VectorGetX(tanHalfVerticalFov), VectorGetX(nearPlane), VectorGetX(farPlane));
+}
+
+[[nodiscard]] inline Expected<SIMDMatrix> TryBuildCameraProjection(
+    const SIMDVectorSingle verticalFovRadians,
+    const SIMDVectorSingle nearPlane,
+    const SIMDVectorSingle farPlane,
+    const SIMDVectorSingle cameraAspectRatio,
+    const SIMDVectorSingle fallbackAspectRatio
+)noexcept{
+    const auto built = TryBuildCameraProjectionData(
+        VectorGetX(verticalFovRadians),
+        VectorGetX(nearPlane),
+        VectorGetX(farPlane),
+        VectorGetX(cameraAspectRatio),
+        VectorGetX(fallbackAspectRatio)
+    );
+    if(!built)
+        return MakeUnexpected(Failure{});
+
+    return SIMDMatrix{ .v = {
+        LoadFloat(built->projectionParams),
+        VectorSet(built->aspectRatio, built->tanHalfVerticalFov, built->nearPlane, built->farPlane),
+        VectorZero(),
+        VectorZero()
+    } };
+}
 
 // Explicit boundary for retaining a projection; calculation helpers return SIMD rows.
-[[nodiscard]] CameraProjection StoreCameraProjection(const SIMDMatrix& values)noexcept;
+[[nodiscard]] inline CameraProjection StoreCameraProjection(const SIMDMatrix& values)noexcept{
+    Float4 projectionParams;
+    Float4 meta;
+    StoreFloat(values.v[0], projectionParams);
+    StoreFloat(values.v[1], meta);
+    return MakeCameraProjection(projectionParams, meta);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,11 +111,63 @@ struct SceneCameraView{
 
 
 public:
-    [[nodiscard]] b8 valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept{
+        return IsValidSceneCameraViewProjection(entity, transform != nullptr, camera != nullptr, projection);
+    }
 };
 
-[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept;
-[[nodiscard]] Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position);
+[[nodiscard]] inline SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
+    const auto tryBuildSceneCameraView = [fallbackAspectRatio](const Core::ECS::EntityID entity, TransformComponent& transform, CameraComponent& camera)noexcept -> Expected<SceneCameraView>{
+        if(!IsValidCameraTransformVectors(transform.position, transform.rotation, transform.scale))
+            return MakeUnexpected(Failure{});
+        const auto projection = TryBuildCameraProjectionData(
+            camera.projection.x,
+            camera.projection.y,
+            camera.projection.z,
+            camera.projection.w,
+            fallbackAspectRatio
+        );
+        if(!projection)
+            return MakeUnexpected(Failure{});
+        return SceneCameraView{ entity, &transform, &camera, *projection };
+    };
+
+    Core::ECS::EntityID activeCamera = Core::ECS::s_InvalidEntityId;
+    const auto activeCameraView = world.view<ActiveCameraComponent>();
+    for(auto it = activeCameraView.begin(); it != activeCameraView.end(); ++it){
+        [[maybe_unused]] auto&& [entity, activeCameraComp] = *it;
+        activeCamera = activeCameraComp.camera;
+        break;
+    }
+
+    if(activeCamera.valid()){
+        auto* transform = world.tryGetComponent<TransformComponent>(activeCamera);
+        auto* camera = world.tryGetComponent<CameraComponent>(activeCamera);
+        if(transform && camera){
+            const auto requestedCamera = tryBuildSceneCameraView(activeCamera, *transform, *camera);
+            if(requestedCamera)
+                return *requestedCamera;
+        }
+    }
+
+    const auto cameraView = world.view<TransformComponent, CameraComponent>();
+    for(auto it = cameraView.begin(); it != cameraView.end(); ++it){
+        auto&& [entity, transform, camera] = *it;
+        const auto resolvedCamera = tryBuildSceneCameraView(entity, transform, camera);
+        if(resolvedCamera)
+            return *resolvedCamera;
+    }
+
+    return {};
+}
+
+[[nodiscard]] inline Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position){
+    auto cameraEntity = world.createEntity();
+    auto& transform = cameraEntity.addComponent<TransformComponent>();
+    transform.position = position;
+    cameraEntity.addComponent<CameraComponent>();
+    return cameraEntity.id();
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

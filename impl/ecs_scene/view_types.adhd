@@ -12,6 +12,14 @@ f32x4 RotateSceneVector3(in f32x4 value, in f32x4 rotationQuaternion){
     return f32x4(rotated.x, rotated.y, rotated.z, 0.0f);
 }
 
+f32x4 NormalizeSceneVector3Or(in f32x4 value, in f32x4 fallback, in f32 lengthSquaredEpsilon){
+    const f32 lenSq = lengthSq(value.xyz);
+    if(!isFinite(lenSq) || !(lenSq > lengthSquaredEpsilon))
+        return fallback;
+    const f32x4 scaled = value * rsqrt(f32x4(lenSq));
+    return f32x4(scaled.x, scaled.y, scaled.z, 0.0f);
+}
+
 f32x4x4 BuildDefaultSceneViewBasisRows(){
     const f32 sinYaw = sin(s_DefaultSceneViewYaw);
     const f32 cosYaw = cos(s_DefaultSceneViewYaw);

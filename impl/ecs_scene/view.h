@@ -37,12 +37,36 @@ static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0u, "Tr
     return MatrixAffineTransformation(LoadFloat(transform.scale), VectorZero(), LoadFloat(transform.rotation), LoadFloat(transform.position));
 }
 
-[[nodiscard]] SIMDMatrix LoadEntityTransformMatrix(Core::ECS::World& world, Core::ECS::EntityID entity)noexcept;
-void StoreDecomposedTransform(const MatrixDecomposition& decomposition, TransformComponent& transform)noexcept;
+[[nodiscard]] inline SIMDMatrix LoadEntityTransformMatrix(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
+    const TransformComponent* transform = world.tryGetComponent<TransformComponent>(entity);
+    return transform
+        ? LoadTransformMatrix(*transform)
+        : MatrixIdentity()
+    ;
+}
+
+inline void StoreDecomposedTransform(const MatrixDecomposition& decomposition, TransformComponent& transform)noexcept{
+    Float4 translationVec;
+    Float4 rotationVec;
+    Float4 scaleVec;
+    StoreFloat(decomposition.translation, translationVec);
+    StoreFloat(decomposition.rotation, rotationVec);
+    StoreFloat(decomposition.scale, scaleVec);
+    AssignDecomposedTransformComponent(translationVec, rotationVec, scaleVec, transform);
+}
 
 // Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
-[[nodiscard]] SIMDMatrix BuildDefaultSceneViewBasis()noexcept;
-[[nodiscard]] SIMDMatrix BuildSceneViewBasis(SIMDVectorSingle position, SIMDVectorSingle rotation)noexcept;
+[[nodiscard]] inline SIMDMatrix BuildDefaultSceneViewBasis()noexcept{
+    return LoadFloat(BuildDefaultSceneViewBasisRows());
+}
+
+[[nodiscard]] inline SIMDMatrix BuildSceneViewBasis(const SIMDVectorSingle position, const SIMDVectorSingle rotation)noexcept{
+    Float4 posVec;
+    Float4 rotVec;
+    StoreFloat(position, posVec);
+    StoreFloat(rotation, rotVec);
+    return LoadFloat(BuildSceneViewBasisRows(posVec, rotVec));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

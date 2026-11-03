@@ -416,14 +416,14 @@ struct TextureClearDestination{
         const auto& decoded = *decodedResult;
 
         const b8 raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
-        if(raster && !ownedStream)
-            return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::MissingOwnedSidecar, recordIndex);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
         // The packet is a self-contained scope; other packets only pass the reader's syntax checks.
         if(recordPacket != packet){
             ++recordIndex;
             continue;
         }
+        if(raster && !ownedStream)
+            return __hidden_gpu_command_ir_replay_preflight::SemanticFailure(reader, GpuCommandIrReplayError::MissingOwnedSidecar, recordIndex);
 
         GpuCommandIrBuiltinTaskRecord contextRecord = decoded.builtin;
         if(raster){

@@ -72,6 +72,10 @@ b8 GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, const
     if(bytes.empty() || !bytes.data() || m_blobBytes.size() > Limit<u64>::s_Max - bytes.size())
         return false;
 
+    const auto sourceOffset = ContainerDetail::SourceAliasesDestination(m_commandBytes, Span<const u8>(bytes.data(), bytes.size()));
+    if(sourceOffset && bytes.size() > m_commandBytes.size() - *sourceOffset)
+        return false;
+
     record.blobOffsetBytes = static_cast<u64>(m_blobBytes.size());
     record.blobSizeBytes = static_cast<u64>(bytes.size());
     if(!GpuCommandIrDetail::ValidateBuiltinRecord(record))
@@ -108,7 +112,8 @@ b8 GpuCommandIrCapture::appendUpload(GpuCommandIrBuiltinTaskRecord record, const
         return false;
     const usize oldBlobSize = m_blobBytes.size();
     m_blobBytes.resize(oldBlobSize + bytes.size());
-    NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, bytes.size(), bytes.data(), bytes.size());
+    const u8* const source = sourceOffset ? m_commandBytes.data() + *sourceOffset : bytes.data();
+    NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, bytes.size(), source, bytes.size());
 
     m_recordEndOffsets.push_back(m_commandBytes.size());
     m_blobEndOffsets.push_back(m_blobBytes.size());

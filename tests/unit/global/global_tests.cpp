@@ -42,6 +42,18 @@ static constexpr AStringView s_Value42 = "value 42";
 static constexpr AStringView s_ValueFormatTrailing = "value {}.trailing";
 static constexpr WStringView s_ValueFormatTrailingWide = L"value {}.trailing";
 
+template<typename T>
+concept CanTrimView = requires{ TrimView(DeclVal<T>()); TrimLeftView(DeclVal<T>()); };
+
+static_assert(CanTrimView<ACompactString&>);
+static_assert(CanTrimView<const ACompactString&>);
+static_assert(!CanTrimView<ACompactString>);
+static_assert(!CanTrimView<const ACompactString>);
+static_assert(CanTrimView<AStringView>);
+static_assert(CanTrimView<AStringView&>);
+static_assert(CanTrimView<AString<>&>);
+static_assert(!CanTrimView<AString<>>);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -278,6 +290,30 @@ TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
     EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u));
 }
 
+TEST(Global, MemoryMapRejectsMalformedOffsetsWithoutDiscardingValidNeighbors){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    constexpr AStringView s_Maps = "1000-2000 r-xp 0 00:00 0 /valid\n" "2000-3000 r-xp invalid 00:00 0 /bad\n" "3000-4000 r-xp 10000000000000000 00:00 0 /overflow\n" "4000-5000 r--p 20 00:00 0\n";
+    ::Vector<LinuxProcessMemoryMapEntry, NWB::Core::Alloc::ScratchArena> entries(scratchArena);
+    ParseLinuxProcessMemoryMaps(s_Maps, entries);
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].fileOffset, 0u);
+    EXPECT_EQ(entries[1].fileOffset, 0x20u);
+    EXPECT_TRUE(entries[1].path.empty());
+    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u));
+    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x3000u));
+}
+
+TEST(Global, GenericPathKeepsNativeFilenameCharacters){
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+    const ::Path<NWB::Core::Alloc::ScratchArena> path(scratchArena, "one\\two");
+    const auto text = PathToGenericString<char>(scratchArena, path);
+#if defined(NWB_PLATFORM_WINDOWS)
+    EXPECT_EQ(AStringView(text), "one/two");
+#else
+    EXPECT_EQ(AStringView(text), "one\\two");
+#endif
+}
+
 TEST(Global, GrowingCapacitySaturatesAtSizeLimit){
     EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / 2u) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
 }
@@ -329,6 +365,17 @@ TEST(Global, TruncatedStringReadsDoNotAdvanceCursor){
     usize cursor = 0u;
     EXPECT_FALSE(ReadString(truncated, cursor));
     EXPECT_EQ(cursor, 0u);
+}
+
+TEST(Global, CompactStringSearchUsesStoredCanonicalTextAndViewBoundaries){
+    const ACompactString compact("Folder\\Example");
+    EXPECT_EQ(compact.front(), 'f');
+    EXPECT_EQ(compact.back(), 'e');
+    EXPECT_EQ(compact.find(AStringView("/example")), 6u);
+    EXPECT_EQ(compact.find('e', 8u), 13u);
+    EXPECT_EQ(compact.find(AStringView{}, compact.size()), compact.size());
+    EXPECT_EQ(compact.find(AStringView("EXAMPLE")), ACompactString::s_NPos);
+    EXPECT_EQ(compact.find('z'), ACompactString::s_NPos);
 }
 
 TEST(Global, RejectedACompactStringAssignResetsText){

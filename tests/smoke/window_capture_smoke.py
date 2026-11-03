@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 import argparse
 import ctypes
+import fnmatch
 import math
 from dataclasses import dataclass
 import os
 from pathlib import Path
 from types import SimpleNamespace
 import platform
+import secrets
 import subprocess
 import sys
 import tempfile
 import time
+from smoke_failure_reporting import write_failure_report
 from window_capture_outcome import SmokeFailure, SmokeSkip, write_status  # noqa: E402
 from window_capture_image import TRANSPARENT_CSG_REGIONS, read_bmp_24, validate_surfel_coverage_probe  # noqa: E402
 from window_capture_x11 import LinuxX11Capture, LinuxXImage, LinuxXImageFuncs  # noqa: E402
 from window_capture_win32 import WindowsCapture, create_windows_user32  # noqa: E402
-from window_capture_logs import choose_free_port, collect_log_delta, snapshot_log_files, standalone_log_pattern, wait_for_log_drain, wait_for_tcp_port  # noqa: E402
+from window_capture_logs import READINESS_OPTION, choose_free_port, collect_log_delta, snapshot_log_files, standalone_log_pattern, wait_for_log_drain, wait_for_log_message, wait_for_tcp_port  # noqa: E402
 from window_capture_environment import application_capture_partial_path, build_launch_environment, executable_sibling, prepare_application_capture_environment  # noqa: E402
 from window_capture_validation import validate_application_capture_log_text, validate_capture_for_args, validate_expected_log_messages  # noqa: E402
 
@@ -152,22 +155,39 @@ def create_process_output_capture(working_directory, name):
     return ProcessOutputCapture(Path(stream.name), stream)
 
 
-def dispose_process_output_capture(capture):
+def report_secondary_failure(message):
+    try:
+        write_status(message)
+    except Exception:
+        pass
+
+
+def dispose_process_output_capture(capture, *, preserve=False):
     if capture is None:
         return
 
+    primary_error = sys.exc_info()[1]
     try:
         capture.stream.close()
     except OSError as error:
-        write_status(f"failed to close process output capture '{capture.path}': {error}")
+        message = f"failed to close process output capture '{capture.path}': {error}"
+        if primary_error is None:
+            raise SmokeFailure(message) from error
+        report_secondary_failure(message)
+        return
+
+    if preserve:
+        return
 
     try:
         capture.path.unlink()
     except FileNotFoundError:
         pass
     except OSError as error:
-        write_status(f"failed to remove process output capture '{capture.path}': {error}")
-
+        message = f"failed to remove process output capture '{capture.path}': {error}"
+        if primary_error is None:
+            raise SmokeFailure(message) from error
+        report_secondary_failure(message)
 
 def launch_captured_process(command, working_directory, env, name):
     capture = create_process_output_capture(working_directory, name)
@@ -181,12 +201,13 @@ def launch_captured_process(command, working_directory, env, name):
     return process
 
 
-def terminate_process(process, name, window_handle=None):
+def terminate_process(process, name, window_handle=None, *, preserve_capture=False, rejected_output=(), observed_output=None, observed_needles=()):
     if process is None:
         return None, ""
 
     exit_code = None
     tail = ""
+    termination_error = None
     try:
         if process.poll() is None:
             # Close the X11 window gracefully so shutdown writes Name sidecars.
@@ -216,13 +237,47 @@ def terminate_process(process, name, window_handle=None):
                     write_status(f"{name}: did not exit after terminate; killing")
                     process.kill()
                     process.wait(timeout=LIT_FORCED_EXIT_TIMEOUT_SECONDS)
+    except BaseException as error:
+        termination_error = error
+        raise
     finally:
-        exit_code = process.poll()
-        if exit_code is not None:
-            tail = read_process_tail(process)
+        try:
+            exit_code = process.poll()
+        except BaseException as poll_error:
             capture = getattr(process, LIT_NWB_OUTPUT_CAPTURE, None)
             process._nwb_output_capture = None
-            dispose_process_output_capture(capture)
+            dispose_process_output_capture(capture, preserve=True)
+            if termination_error is None or not isinstance(poll_error, Exception):
+                raise
+            report_secondary_failure(f"could not poll {name} during failed cleanup: {poll_error}")
+        if exit_code is None and termination_error is not None:
+            capture = getattr(process, LIT_NWB_OUTPUT_CAPTURE, None)
+            process._nwb_output_capture = None
+            dispose_process_output_capture(capture, preserve=True)
+        if exit_code is not None:
+            capture = getattr(process, LIT_NWB_OUTPUT_CAPTURE, None)
+            try:
+                tail = read_process_tail(process)
+                if capture is not None and rejected_output:
+                    reject_process_output(capture.path, rejected_output)
+                if capture is not None and observed_output is not None and observed_needles:
+                    matches = find_process_output(capture.path, observed_needles)
+                    if matches:
+                        observed_output.extend((message, capture.path) for message in matches)
+                        preserve_capture = True
+            except BaseException as capture_error:
+                process._nwb_output_capture = None
+                dispose_process_output_capture(capture, preserve=True)
+                if termination_error is None or not isinstance(capture_error, Exception):
+                    if exit_code != 0 and isinstance(capture_error, Exception):
+                        raise SmokeFailure(f"{name} exited with code {exit_code}; {capture_error}") from capture_error
+                    raise
+                report_secondary_failure(f"could not inspect {name} output during failed cleanup: {capture_error}")
+            else:
+                process._nwb_output_capture = None
+                if capture is not None and exit_code != 0:
+                    tail += f"\nFull {name} output retained at '{capture.path}'"
+                dispose_process_output_capture(capture, preserve=preserve_capture or termination_error is not None or exit_code != 0)
 
     return exit_code, tail
 
@@ -233,10 +288,35 @@ def finish_logserver_cleanup(logserver, output, errors, primary_failure, termina
     except Exception as error:
         errors.append(f"logger cleanup: {error}")
     if errors:
-        write_report(output / "cleanup_error.json", {"errors": errors})
+        write_status("; ".join(errors))
+        write_failure_report(write_report, output / "cleanup_error.json", {"errors": errors})
         if not primary_failure:
             raise SmokeFailure("; ".join(errors))
 
+
+def cleanup_capture_processes(testbed, handle, logserver, primary_error):
+    failures = []
+    retained = []
+    for process, name, window in ((testbed, LIT_TESTBED, handle), (logserver, LIT_LOGSERVER, None)):
+        if process is None:
+            continue
+        capture = getattr(process, LIT_NWB_OUTPUT_CAPTURE, None)
+        if capture is not None:
+            retained.append((name, capture))
+        try:
+            terminate_process(process, name, window, preserve_capture=True)
+        except Exception as error:
+            failures.append((name, error))
+    if primary_error is not None or failures:
+        for name, capture in retained:
+            report_secondary_failure(f"{name} output retained at '{capture.path}'")
+        for name, error in failures if primary_error is not None else failures[1:]:
+            report_secondary_failure(f"{name} cleanup also failed: {error}")
+        if primary_error is None:
+            raise failures[0][1]
+        return
+    for _, capture in retained:
+        dispose_process_output_capture(capture)
 
 def require_positive_arg(parser, name, value):
     if value <= 0.0:
@@ -248,6 +328,40 @@ def require_non_negative_arg(parser, name, value):
         parser.error(f"{name} must not be negative")
 
 
+def find_process_output(path, messages):
+    needles = [(value, value.encode(LIT_UTF_8)) for value in messages if value]
+    if not needles:
+        return set()
+    overlap = max(len(value) for _, value in needles) - 1
+    previous = b""
+    found = set()
+    try:
+        with path.open(LIT_RB) as stream:
+            while chunk := stream.read(65536):
+                window = previous + chunk
+                found.update(text for text, value in needles if value in window)
+                previous = window[-overlap:] if overlap else b""
+    except OSError as error:
+        raise SmokeFailure(f"could not read process output '{path}': {error}") from error
+    return found
+
+
+def reject_process_output(path, rejected):
+    found = find_process_output(path, rejected)
+    if found:
+        raise SmokeFailure(f"process output '{path}' contained forbidden message '{sorted(found)[0]}'")
+
+
+def finish_observed_output(skip_reason, observed):
+    if skip_reason and observed:
+        message, path = observed[0]
+        raise SmokeFailure(f"capability skip also contained blocking process output '{message}' in '{path}'")
+    for path in {path for _, path in observed}:
+        try:
+            path.unlink()
+        except OSError as error:
+            raise SmokeFailure(f"failed to remove process output capture '{path}': {error}") from error
+
 def read_file_tail(path, max_bytes=65536):
     try:
         with path.open(LIT_RB) as log_file:
@@ -255,8 +369,8 @@ def read_file_tail(path, max_bytes=65536):
             start = max(log_file.tell() - max_bytes, 0)
             log_file.seek(start)
             return log_file.read().decode(LIT_UTF_8, LIT_REPLACE)
-    except OSError:
-        return ""
+    except OSError as error:
+        raise SmokeFailure(f"could not read process output '{path}': {error}") from error
 
 
 def read_process_tail(process):
@@ -278,6 +392,15 @@ def read_process_tail(process):
 LinuxXImage._fields_ = [(LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("xoffset", ctypes.c_int), ("format", ctypes.c_int), ("data", ctypes.c_void_p), ("byte_order", ctypes.c_int), ("bitmap_unit", ctypes.c_int), ("bitmap_bit_order", ctypes.c_int),
     ("bitmap_pad", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("bytes_per_line", ctypes.c_int), ("bits_per_pixel", ctypes.c_int), ("red_mask", ctypes.c_ulong), ("green_mask", ctypes.c_ulong), ("blue_mask", ctypes.c_ulong), ("obdata", ctypes.c_void_p),
     ("f", LinuxXImageFuncs),]
+
+
+def window_capture_source_paths():
+    directory = Path(__file__).resolve().parent
+    with os.scandir(directory) as entries:
+        paths = [directory / entry.name for entry in entries if fnmatch.fnmatch(entry.name, "window_capture_*.py")]
+    paths.append(directory / "smoke_failure_reporting.py")
+    paths.append(directory.parents[1] / "launcher" / "readiness.py")
+    return tuple(sorted(paths))
 
 
 def create_capture_backend():
@@ -307,12 +430,23 @@ def launch_logserver(args, executable, env):
     log_pattern = "logserver_*.log"
     log_baseline = snapshot_log_files(log_directory, log_pattern)
     port = args.log_port if args.log_port else choose_free_port()
-    process = launch_captured_process([str(logserver), LIT_P, str(port)], args.working_directory, env, LIT_LOGSERVER,)
+    token = secrets.token_hex(16)
+    process = launch_captured_process([str(logserver), LIT_P, str(port), READINESS_OPTION, token], args.working_directory, env, LIT_LOGSERVER,)
     try:
-        wait_for_tcp_port(port, min(args.timeout, LIT_LOGSERVER_START_TIMEOUT_SECONDS))
-    except Exception as error:
-        tail = read_process_tail(process)
-        terminate_process(process, LIT_LOGSERVER)
+        wait_for_tcp_port(port, min(args.timeout, LIT_LOGSERVER_START_TIMEOUT_SECONDS), process, token)
+    except BaseException as error:
+        capture = getattr(process, LIT_NWB_OUTPUT_CAPTURE, None)
+        try:
+            _, tail = terminate_process(process, LIT_LOGSERVER, preserve_capture=True)
+            if capture is not None:
+                report_secondary_failure(f"logger output retained at '{capture.path}'")
+        except (SmokeFailure, OSError, subprocess.SubprocessError) as cleanup_error:
+            if not isinstance(error, Exception):
+                report_secondary_failure(f"logger cleanup after cancellation failed: {cleanup_error}")
+                raise error from cleanup_error
+            raise SmokeFailure(f"{error}\nlogger cleanup: {cleanup_error}") from error
+        if not isinstance(error, Exception):
+            raise
         if tail:
             raise SmokeFailure(f"{error}\n{tail}") from error
         raise
@@ -364,10 +498,13 @@ def require_normal_process_exit(exit_code, tail, process_name):
     raise SmokeFailure(f"{process_name} exited during graceful shutdown (exit {exit_code}){detail}")
 
 
-def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdown_name=LIT_LOGSERVER):
+def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdown_name=LIT_LOGSERVER, *, rejected_output=(), observed_output=None, observed_needles=()):
     if process is not None:
         ensure_process_running(process, LIT_BEFORE_LOG_COLLECTION, LIT_LOGSERVER)
-        exit_code, tail = terminate_process(process, shutdown_name)
+        if rejected_output or observed_output is not None:
+            exit_code, tail = terminate_process(process, shutdown_name, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
+        else:
+            exit_code, tail = terminate_process(process, shutdown_name)
         require_normal_process_exit(exit_code, tail, LIT_LOGSERVER)
     wait_for_log_drain(directory, baseline, pattern)
     return collect_log_delta(directory, baseline, pattern) if directory else ""
@@ -401,6 +538,10 @@ def capture_render_ready_window(args, backend, handle, process):
 
 def capture_resized_window(args, backend, handle, process, log_directory, log_baseline, log_pattern):
     backend.prepare_window(handle)
+    before_marker = getattr(args, "expect_before_resize_log_message", None)
+    if before_marker:
+        wait_for_log_message(log_directory, log_baseline, log_pattern, before_marker, args.render_ready_timeout)
+        ensure_process_running(process, "after the pre-resize render marker")
     before_args = SimpleNamespace(**vars(args))
     before_args.output = args.output.with_name(args.output.stem + ".before-resize" + args.output.suffix)
     before = capture_render_ready_window(before_args, backend, handle, process)
@@ -424,13 +565,14 @@ def capture_resized_window(args, backend, handle, process, log_directory, log_ba
     deadline = time.monotonic() + args.render_ready_timeout
     while True:
         ensure_process_running(process, "while waiting for client and framebuffer resize")
-        client_matches = backend.client_size(handle) == target_size
+        observed_extent = backend.client_size(handle)
+        client_matches = observed_extent == target_size
         log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
         if client_matches and marker in log_text:
             break
         remaining_seconds = deadline - time.monotonic()
         if remaining_seconds <= 0.0:
-            raise SmokeFailure(f"resize did not produce client extent {target_size} and runtime marker '{marker}'")
+            raise SmokeFailure(f"resize did not produce client extent {target_size} and runtime marker '{marker}'; observed extent={observed_extent}, marker_seen={marker in log_text}")
         time.sleep(min(RENDER_READY_POLL_SECONDS, remaining_seconds))
 
     write_status(f"confirmed resized client and framebuffer {target_size[0]}x{target_size[1]}; settling {args.resize_settle_seconds:g}s")
@@ -448,6 +590,9 @@ def launch_and_capture(args, backend):
         raise SmokeFailure(f"executable does not exist: {executable}")
 
     env = build_launch_environment(args)
+    rejected_output = tuple(getattr(args, "reject_log_message", ()))
+    observed_needles = tuple(getattr(args, "skip_blocking_log_message", ()))
+    observed_output = []
     logserver_process = None
     testbed_process = None
     result = None
@@ -472,24 +617,20 @@ def launch_and_capture(args, backend):
             time.sleep(args.settle_seconds)
             ensure_process_running(testbed_process, "before checked capture")
             result = capture_render_ready_window(args, backend, handle, testbed_process)
-        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, LIT_TESTBED, handle)
+        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, LIT_TESTBED, handle, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
         testbed_process = None
         require_normal_process_exit(testbed_exit_code, testbed_exit_tail, LIT_TESTBED)
         if logserver_process is not None:
             ensure_process_running(logserver_process, LIT_BEFORE_LOG_COLLECTION, LIT_LOGSERVER)
-            logserver_exit_code, logserver_exit_tail = terminate_process(logserver_process, LIT_LOGSERVER)
+            logserver_exit_code, logserver_exit_tail = terminate_process(logserver_process, LIT_LOGSERVER, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
             logserver_process = None
             require_normal_process_exit(logserver_exit_code, logserver_exit_tail, LIT_LOGSERVER)
         wait_for_log_drain(log_directory, log_baseline, log_pattern)
         skip_reason = validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message, args.skip_log_message, args.skip_blocking_log_message,)
     finally:
-        try:
-            if testbed_process is not None:
-                terminate_process(testbed_process, LIT_TESTBED, handle)
-        finally:
-            if logserver_process is not None:
-                terminate_process(logserver_process, LIT_LOGSERVER)
+        cleanup_capture_processes(testbed_process, handle, logserver_process, sys.exc_info()[1])
 
+    finish_observed_output(skip_reason, observed_output)
     if skip_reason:
         raise SmokeSkip(skip_reason)
     return result
@@ -501,6 +642,9 @@ def launch_and_capture_application(args):
         raise SmokeFailure(f"executable does not exist: {executable}")
 
     env = prepare_application_capture_environment(args, build_launch_environment(args))
+    rejected_output = tuple(getattr(args, "reject_log_message", ()))
+    observed_needles = tuple(getattr(args, "skip_blocking_log_message", ()))
+    observed_output = []
     partial_path = application_capture_partial_path(args.output)
     logserver_process = None
     testbed_process = None
@@ -517,17 +661,18 @@ def launch_and_capture_application(args):
         except SmokeFailure as error:
             wait_failure = error
 
-        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, LIT_TESTBED)
-        testbed_process = None
-        log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern,)
-        logserver_process = None
-    finally:
         try:
-            if testbed_process is not None:
-                terminate_process(testbed_process, LIT_TESTBED)
-        finally:
-            if logserver_process is not None:
-                terminate_process(logserver_process, LIT_LOGSERVER)
+            testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, LIT_TESTBED, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
+            testbed_process = None
+            log_text = shutdown_logserver_and_collect(logserver_process, log_directory, log_baseline, log_pattern, rejected_output=rejected_output, observed_output=observed_output, observed_needles=observed_needles)
+            logserver_process = None
+        except Exception as cleanup_error:
+            if wait_failure is None:
+                raise
+            report_secondary_failure(f"capture cleanup failed while handling {wait_failure}: {cleanup_error}")
+            raise wait_failure from cleanup_error
+    finally:
+        cleanup_capture_processes(testbed_process, None, logserver_process, sys.exc_info()[1] or wait_failure)
 
     log_output = getattr(args, "log_output", None)
     if log_output:
@@ -540,6 +685,7 @@ def launch_and_capture_application(args):
         raise SmokeFailure(f"testbed self-exited during application capture (exit {testbed_exit_code}){detail}")
 
     skip_reason = validate_application_capture_log_text(log_text, args)
+    finish_observed_output(skip_reason, observed_output)
     if skip_reason:
         raise SmokeSkip(skip_reason)
     if not args.output.is_file():
@@ -564,6 +710,7 @@ def parse_args(argv):
     parser.add_argument(LIT_SETTLE_SECONDS, type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"), help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
     parser.add_argument(LIT_RESIZE_SETTLE_SECONDS, type=float, help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
+    parser.add_argument("--expect-before-resize-log-message", help="Wait for this runtime marker before capturing the original size.")
     parser.add_argument(LIT_RENDER_READY_TIMEOUT, type=float, default=RENDER_READY_TIMEOUT_SECONDS, help="Seconds to wait for a blank visible window to publish its first rendered frame.",)
     parser.add_argument("--application-capture", action=LIT_STORE_TRUE, help="Use the application's framebuffer readback instead of desktop window capture.",)
     parser.add_argument(LIT_APPLICATION_CAPTURE_FRAME_COUNT, type=int, default=360, help="Positive rendered frame count at which application capture is requested. Defaults to 360.",)
@@ -606,6 +753,8 @@ def parse_args(argv):
     require_positive_arg(parser, LIT_APPLICATION_CAPTURE_FRAME_COUNT, args.application_capture_frame_count,)
     require_non_negative_arg(parser, LIT_SETTLE_SECONDS, args.settle_seconds)
 
+    if args.expect_before_resize_log_message and args.resize_client is None:
+        parser.error("--expect-before-resize-log-message requires --resize-client")
     if args.resize_client is not None:
         if args.application_capture or args.window_handle is not None:
             parser.error("--resize-client requires a launched desktop capture; application capture and existing handles are incompatible")

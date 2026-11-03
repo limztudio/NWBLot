@@ -122,12 +122,16 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
     MString ns(arena);
     ns.append("NWB");
 
-    if(virtualFilePath.empty() || virtualFilePath[0] == '/' || virtualFilePath[0] == '\\' || (virtualFilePath.size() >= 2u && virtualFilePath[1] == ':'))
+    if(
+        virtualFilePath.empty()
+        || GlobalFilesystemPathDetail::IsSeparator(virtualFilePath[0])
+        || GlobalFilesystemPathDetail::RootNameLength(virtualFilePath) != 0u
+    )
         return ns;
 
     usize lastSlash = virtualFilePath.size();
     for(usize i = 0u; i < virtualFilePath.size(); ++i){
-        if(virtualFilePath[i] == '/' || virtualFilePath[i] == '\\')
+        if(GlobalFilesystemPathDetail::IsSeparator(virtualFilePath[i]))
             lastSlash = i;
     }
 
@@ -137,7 +141,7 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
     const MStringView dirPart = virtualFilePath.substr(0u, lastSlash);
     usize segStart = 0u;
     for(usize i = 0u; i <= dirPart.size(); ++i){
-        if(i == dirPart.size() || dirPart[i] == '/' || dirPart[i] == '\\'){
+        if(i == dirPart.size() || GlobalFilesystemPathDetail::IsSeparator(dirPart[i])){
             if(i > segStart){
                 const MStringView seg = dirPart.substr(segStart, i - segStart);
                 if(seg != "." && seg != ".."){

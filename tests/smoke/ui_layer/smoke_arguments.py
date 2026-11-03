@@ -8,7 +8,7 @@ LIT_DEFAULT = "default"
 DEFAULT_TIMEOUT_SECONDS = 90.0
 
 
-def parse_ui_smoke_args(argv, *, description, include_skin=False):
+def parse_ui_smoke_args(argv, *, description, include_skin=False, include_many_roots=False):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--working-directory", type=Path, required=True)
@@ -16,6 +16,8 @@ def parse_ui_smoke_args(argv, *, description, include_skin=False):
     parser.add_argument("--logserver-executable", type=Path)
     if include_skin:
         parser.add_argument("--skin", choices=(LIT_DEFAULT, "alternate"), default=LIT_DEFAULT)
+    if include_many_roots:
+        parser.add_argument("--many-roots", action="store_true")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
     parser.add_argument("--application-arg", action="append", default=[])
     parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")

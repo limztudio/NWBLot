@@ -8,6 +8,7 @@
 #include <loader/project_entry.h>
 
 #include <core/ecs/world.h>
+#include <core/graphics/runtime/render_pass.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,6 +27,12 @@ namespace Tests::Smoke{
 
 
 class FramebufferCapture;
+
+class UiLayerResizeRenderPass final : public Core::IRenderPass{
+public:
+    using Core::IRenderPass::IRenderPass;
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+};
 
 class UiLayerSmokeProject final : public IProjectEntryCallbacks{
 public:
@@ -47,6 +54,10 @@ private:
     NotNullUniquePtr<Core::ECS::World> m_world;
     UniquePtr<FramebufferCapture> m_framebufferCapture;
     ProjectRuntimeContext& m_context;
+    UiLayerResizeRenderPass m_resizeRenderPass;
+    b8 m_resizeRenderPassRegistered = false;
+    b8 m_resizePresentationReported = false;
+    u64 m_resizePresentationBaseline = 0u;
 };
 
 

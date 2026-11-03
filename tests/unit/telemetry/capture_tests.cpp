@@ -120,6 +120,43 @@ TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
     EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(payload.data(), payload.size())));
 }
 
+TEST(Telemetry, DiagnosticPayloadPreservesAliasedTextFields){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    constexpr AStringView s_Text = "event category expression message file";
+    payload.reserve(512u);
+    payload.resize(s_Text.size());
+    NWB_MEMCPY(payload.data(), payload.size(), s_Text.data(), s_Text.size());
+    const AStringView text(reinterpret_cast<const char*>(payload.data()), payload.size());
+    const DiagnosticEventRecord record{
+        .event = text.substr(0u, 5u),
+        .category = text.substr(6u, 8u),
+        .expression = text.substr(15u, 10u),
+        .message = text.substr(26u, 7u),
+        .file = text.substr(34u, 4u),
+    };
+    ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(record, testArena.arena, payload));
+    const auto parsed = Telemetry::ParseDiagnosticPayload(payload.data(), payload.size());
+    ASSERT_TRUE(parsed);
+    EXPECT_EQ(parsed->event, "event");
+    EXPECT_EQ(parsed->category, "category");
+    EXPECT_EQ(parsed->expression, "expression");
+    EXPECT_EQ(parsed->message, "message");
+    EXPECT_EQ(parsed->file, "file");
+    const DiagnosticEventRecord roundtrip{
+        .event = parsed->event,
+        .category = parsed->category,
+        .expression = parsed->expression,
+        .message = parsed->message,
+        .file = parsed->file,
+    };
+    ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(roundtrip, testArena.arena, payload));
+    const auto rebuilt = Telemetry::ParseDiagnosticPayload(payload.data(), payload.size());
+    ASSERT_TRUE(rebuilt);
+    EXPECT_EQ(rebuilt->message, "message");
+    EXPECT_EQ(rebuilt->file, "file");
+}
+
 TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
@@ -426,6 +463,74 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
         EXPECT_EQ(parsed->event, DiagnosticEventName::s_Error);
         EXPECT_EQ(parsed->category, "telemetry_guard");
         EXPECT_EQ(parsed->message, "capture during destruction");
+    }
+}
+
+TEST(Telemetry, CaptureScopePreservesForwardedLogsAndMetadataUnderConcurrentChurn){
+    constexpr u32 s_WriterCount = 4u;
+    constexpr u32 s_MessagesPerWriter = 384u;
+    constexpr u32 s_ExpectedForwardCount = s_WriterCount * s_MessagesPerWriter;
+    constexpr u32 s_BaseStreamId = 70u;
+
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setFrameIndex(1u);
+    session.setStreamId(s_BaseStreamId + 1u);
+
+    NWB::Tests::CapturingLogger forwardLogger;
+    NWB::Core::Common::LoggerRegistrationGuard baseRegistration(forwardLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
+
+    Latch startGate(s_WriterCount + 1u);
+    Atomic<u32> activeWriters{ s_WriterCount };
+    Array<Thread, s_WriterCount> writers;
+    for(u32 writerIndex = 0u; writerIndex < s_WriterCount; ++writerIndex){
+        writers[writerIndex] = Thread([&startGate, &activeWriters](){
+            startGate.arrive_and_wait();
+            for(u32 messageIndex = 0u; messageIndex < s_MessagesPerWriter; ++messageIndex){
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("concurrent capture scope text {}"), messageIndex);
+                if((messageIndex & 7u) == 0u)
+                    YieldThread();
+            }
+            activeWriters.fetch_sub(1u, MemoryOrder::release);
+        });
+    }
+
+    startGate.arrive_and_wait();
+    u64 nextFrameIndex = 1u;
+    while(activeWriters.load(MemoryOrder::acquire) != 0u){
+        session.setFrameIndex(nextFrameIndex);
+        session.setStreamId(s_BaseStreamId + static_cast<u32>(nextFrameIndex & 7u));
+        {
+            Telemetry::CaptureSessionCaptureScope scope(session);
+            ++nextFrameIndex;
+            session.setFrameIndex(nextFrameIndex);
+            session.setStreamId(s_BaseStreamId + static_cast<u32>(nextFrameIndex & 7u));
+            YieldThread();
+        }
+        ++nextFrameIndex;
+    }
+
+    for(Thread& writer : writers)
+        writer.join();
+
+    EXPECT_EQ(forwardLogger.messageCount(), s_ExpectedForwardCount);
+    EXPECT_GT(session.eventCount(), 0u);
+
+    const Telemetry::EventView events = session.view();
+    for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
+        const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
+        ASSERT_NE(event, nullptr);
+        EXPECT_EQ(event->header.kind, Telemetry::EventKind::TextLog);
+        EXPECT_GE(event->header.frameIndex, 1u);
+        EXPECT_LE(event->header.frameIndex, nextFrameIndex);
+        EXPECT_GE(event->header.streamId, s_BaseStreamId);
+        EXPECT_LE(event->header.streamId, s_BaseStreamId + 7u);
+
+        const auto parsed = Telemetry::ParseTextLogPayload(event->payload.data(), event->payload.size());
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(parsed->type, NWB::Core::Common::LogType::EssentialInfo);
+        EXPECT_NE(parsed->messageUtf8.find("concurrent capture scope text"), AStringView::npos);
     }
 }
 

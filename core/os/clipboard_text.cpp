@@ -4,6 +4,7 @@
 
 #include "clipboard_text.h"
 
+#include <global/containers.h>
 #include <global/utf8_text.h>
 
 
@@ -41,6 +42,17 @@ ClipboardStatus::Enum ValidateClipboardUtf8Text(const AStringView text)noexcept{
 }
 
 ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Alloc::GlobalArena>& output){
+    const auto alias = ContainerDetail::SourceAliasesDestination(output, Span<const char>(text.data(), text.size()));
+    if(alias){
+        if(text.size() > output.size() - *alias){
+            output.clear();
+            return ClipboardStatus::InvalidText;
+        }
+        AString<Alloc::GlobalArena> staged(output.get_allocator().arena());
+        const auto result = DecodeClipboardLatin1(text, staged);
+        output = Move(staged);
+        return result;
+    }
     output.clear();
     if(text.size() > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
@@ -64,6 +76,17 @@ ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Allo
 }
 
 ClipboardStatus::Enum EncodeClipboardLatin1(const AStringView text, AString<Alloc::GlobalArena>& output){
+    const auto alias = ContainerDetail::SourceAliasesDestination(output, Span<const char>(text.data(), text.size()));
+    if(alias){
+        if(text.size() > output.size() - *alias){
+            output.clear();
+            return ClipboardStatus::InvalidText;
+        }
+        AString<Alloc::GlobalArena> staged(output.get_allocator().arena());
+        const auto result = EncodeClipboardLatin1(text, staged);
+        output = Move(staged);
+        return result;
+    }
     output.clear();
     const ClipboardStatus::Enum status = ValidateClipboardUtf8Text(text);
     if(status != ClipboardStatus::Success)

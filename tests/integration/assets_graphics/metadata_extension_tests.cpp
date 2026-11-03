@@ -7,13 +7,19 @@
 #include <impl/assets_shader/asset.h>
 
 #include <core/assets/cook_metadata.h>
+#include <core/assets/cook_dependency_registry.h>
+#include <core/assets/cook_metadata_internal.h>
+#include <core/assets/paths.h>
+#include <core/common/name_symbols.h>
 #include <core/task/cpu/scheduler.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
 #include <global/filesystem.h>
+#include <global/scope_exit.h>
 #include <global/text_utils.h>
+#include <global/thread.h>
 
 #include <gtest/gtest.h>
 
@@ -601,6 +607,26 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
 }
 
 
+TEST(MetadataDiscoveryAdmission, DuplicateRootsKeepFirstOwnerAndPaths){
+    AssetArena arena(Name("tests/metadata_discovery/duplicate_roots"));
+    ScratchArena scratchArena(Name("tests/metadata_discovery/duplicate_roots_scratch"));
+    const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / "tests" / "smoke" / "assets" / "textures";
+    CookVector<ResolvedAssetRoot> roots(arena);
+    roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
+    const auto single = DiscoverFilesWithExtension(roots, s_NwbExtension, arena, scratchArena);
+    ASSERT_TRUE(single);
+    ASSERT_FALSE(single->empty());
+    roots.emplace_back(NWB::Path(arena, root), s_EngineVirtualRoot);
+    const auto duplicate = DiscoverFilesWithExtension(roots, s_NwbExtension, arena, scratchArena);
+    ASSERT_TRUE(duplicate);
+    ASSERT_EQ(duplicate->size(), single->size());
+    for(usize i = 0u; i < single->size(); ++i){
+        EXPECT_EQ((*duplicate)[i].filePath, (*single)[i].filePath);
+        EXPECT_EQ((*duplicate)[i].normalizedPathText, (*single)[i].normalizedPathText);
+        EXPECT_EQ((*duplicate)[i].virtualRoot.view(), s_ProjectVirtualRoot);
+    }
+}
+
 TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmission){
 #if defined(NWB_PLATFORM_WINDOWS)
     GTEST_SKIP() << "The current Windows host identity folds physical path case";
@@ -630,6 +656,35 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
 }
 
 
+TEST(MetadataDiscoveryAdmission, VirtualPathDoesNotSkipAnUninspectableEarlierRoot){
+    AssetArena arena(Name("tests/metadata_discovery/root_inspection"));
+    Alloc::ScratchArena scratchArena(Name("tests/metadata_discovery/root_inspection_scratch"));
+    Tests::CapturingLogger logger;
+    Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::ReportOnly);
+    const NWB::Path repo = Tests::RepoRootOf(arena, __FILE__);
+#if defined(NWB_PLATFORM_WINDOWS)
+    const NWB::Path invalidRoot = repo / "invalid|root";
+#else
+    TString<AssetArena> longName(arena);
+    longName.resize(40000u, static_cast<tchar>('a'));
+    const NWB::Path invalidRoot = repo / longName;
+#endif
+    ASSERT_FALSE(FileExists(invalidRoot / "CMakeLists.txt"));
+    const auto validFile = FileExists(repo / "CMakeLists.txt");
+    ASSERT_TRUE(validFile);
+    ASSERT_TRUE(*validFile);
+    CookVector<ResolvedAssetRoot> roots(arena);
+    roots.emplace_back(NWB::Path(arena, invalidRoot), s_ProjectVirtualRoot);
+    roots.emplace_back(NWB::Path(arena, repo), s_ProjectVirtualRoot);
+    EXPECT_FALSE(ResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
+    roots[0u].path = repo / "__nwb_missing_virtual_path_root_31c68263";
+    const auto missing = FileExists(roots[0u].path);
+    ASSERT_TRUE(missing);
+    ASSERT_FALSE(*missing);
+    EXPECT_TRUE(ResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
+}
+
+
 TEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket){
     AssetArena arena(Name("tests/metadata_registry/null_allocation"));
     Tests::CapturingLogger logger;
@@ -640,6 +695,107 @@ TEST(MetadataRegistryPublication, NullClassAllocationDoesNotPublishBucket){
     EXPECT_EQ(registry.bucketCount(), 0u);
     EXPECT_EQ(registry.find(type), nullptr);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("bucket allocation returned null")));
+}
+
+TEST(MetadataRegistryPublication, DefaultDependencyEntryOwnsItsPathText){
+    AssetArena arena(Name("tests/metadata_registry/dependency_path"));
+    CookDependencyRegistry registry(arena);
+    ScratchArena scratchArena(Name("tests/metadata_registry/dependency_path_scratch"));
+    ScratchString text("project/example", scratchArena);
+    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name("project/example"), Name("example"), AStringView(text)));
+    text.assign("project/changed");
+    EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
+    const AStringView stored = registry.defaultEntryAsset().virtualPathText;
+    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name("project/example"), Name("example"), stored));
+    EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
+    CookDependencyRegistry moved(Move(registry));
+    EXPECT_EQ(moved.defaultEntryAsset().virtualPathText, "project/example");
+    EXPECT_FALSE(registry.defaultEntryAsset().virtualPath);
+}
+
+TEST(MetadataDiscoveryAdmission, PathsInSameHashBucketKeepDistinctOwnedPaths){
+    ScratchArena scratchArena(Name("tests/metadata_discovery/colliding_paths"));
+    CookMetadataDetail::DiscoveredPathSet seen(0, Hasher<AStringView>(), EqualTo<>(), scratchArena);
+    seen.reserve(2u);
+    ScratchString first("a/first.asset.nwb", scratchArena);
+    ScratchString second(scratchArena);
+    const usize bucket = Hasher<AStringView>{}(AStringView(first)) % seen.bucket_count();
+    for(u32 i = 0u; i < 1024u; ++i){
+        ScratchString candidate = StringFormat(scratchArena, "b/second_{}.asset.nwb", i);
+        if(Hasher<AStringView>{}(AStringView(candidate)) % seen.bucket_count() == bucket){
+            second = Move(candidate);
+            break;
+        }
+    }
+    ASSERT_FALSE(second.empty());
+    EXPECT_TRUE(seen.insert(first).second);
+    EXPECT_TRUE(seen.insert(second).second);
+    first.assign("overwritten");
+    ScratchString original("a/first.asset.nwb", scratchArena);
+    EXPECT_FALSE(seen.insert(original).second);
+    EXPECT_FALSE(seen.insert(second).second);
+    EXPECT_EQ(seen.size(), 2u);
+}
+
+TEST(MetadataRegistryPublication, MetadataRegistrationKeepsCallerTextAlive){
+    ScratchArena scratchArena(Name("tests/metadata_registry/owned_tokens"));
+    ScratchString token("nwb_owned_token_71a7", scratchArena);
+    ScratchString suffix("_nwb_owned_suffix_71a7", scratchArena);
+    ScratchString extension(".nwb_owned_sidecar_71a7", scratchArena);
+    RegisterNonStandaloneAssetType(Name("tests/owned_type_71a7"), AStringView(token));
+    RegisterNonStandaloneFirstTokenSuffix(AStringView(suffix));
+    RegisterAssetPairedSidecarRule(AssetPairedSidecarRule{ AStringView(extension) });
+    token.assign("overwritten");
+    suffix.assign("overwritten");
+    extension.assign("overwritten");
+
+    EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_token_71a7"));
+    EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("value_nwb_owned_suffix_71a7"));
+    Vector<AssetPairedSidecarRule, ScratchArena> rules(scratchArena);
+    CookMetadataDetail::CopyPairedSidecarRules(rules);
+    b8 found = false;
+    for(const AssetPairedSidecarRule& rule : rules)
+        found = found || rule.sidecarExtension == ".nwb_owned_sidecar_71a7";
+    EXPECT_TRUE(found);
+#if defined(NWB_DEBUG)
+    Name fallback("nwb_owned_fallback_71a7");
+    RegisterNonStandaloneAssetType(fallback);
+    fallback = Name("nwb_replaced_fallback_71a7");
+    EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_fallback_71a7"));
+#else
+    const auto previousRecorder = NameDetail::SymbolRecorderState();
+    const auto previousResolver = NameDetail::SymbolResolverState();
+    ScopeExit restore([&]()noexcept{
+        SetNameSymbolRecordCallback(previousRecorder.callback, previousRecorder.userData);
+        SetNameSymbolResolveCallback(previousResolver.callback, previousResolver.userData);
+    });
+    Common::NameSymbols::InstallRuntimeRegistry();
+    const Name fallback{ AStringView("nwb_owned_fallback_71a7") };
+    RegisterNonStandaloneAssetType(fallback);
+    const Name replacement{ AStringView("nwb_replaced_fallback_71a7") };
+    for(usize i = 0u; i < NameDetail::s_SymbolTextBufferCount; ++i)
+        EXPECT_EQ(replacement.resolvedText(), AStringView("nwb_replaced_fallback_71a7"));
+    EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_fallback_71a7"));
+#endif
+}
+
+TEST(MetadataRegistryPublication, ConcurrentMetadataRegistrationsKeepDistinctTokens){
+    constexpr Array<AStringView, 4u> tokens = {
+        "nwb_owned_thread_a_71a7", "nwb_owned_thread_b_71a7", "nwb_owned_thread_c_71a7", "nwb_owned_thread_d_71a7"
+    };
+    Array<Thread, tokens.size()> threads;
+    for(usize i = 0u; i < tokens.size(); ++i){
+        threads[i] = Thread([&, i](){
+            ScratchArena scratchArena(Name("tests/metadata_registry/concurrent_tokens"));
+            ScratchString text(tokens[i], scratchArena);
+            RegisterNonStandaloneAssetType(s_NameNone, AStringView(text.data(), text.size()));
+            text.assign("overwritten");
+        });
+    }
+    for(Thread& thread : threads)
+        thread.join();
+    for(const AStringView token : tokens)
+        EXPECT_TRUE(IsLikelyNonStandaloneFirstToken(token));
 }
 
 TEST(AssetCodecAdmission, NullClassAllocationDoesNotCallAssetLoad){

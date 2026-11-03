@@ -130,11 +130,18 @@ Expected<GpuUploadBlobId> GpuTaskGraph::copyUploadData(const void* const data, c
     if(!data || byteSize == 0u || alignment == 0u || (alignment & (alignment - 1u)) != 0u || m_uploadBlobs.size() >= Limit<u32>::s_Max)
         return MakeUnexpected(Failure{});
 
+    if(alignment - 1u > Limit<usize>::s_Max - byteSize)
+        return MakeUnexpected(Failure{});
+    const usize allocationSize = byteSize + alignment - 1u;
     GpuUploadBlobNode blob(m_arena);
+    if(allocationSize > blob.bytes.max_size())
+        return MakeUnexpected(Failure{});
     const u8* const sourceBytes = static_cast<const u8*>(data);
-    blob.bytes.reserve(byteSize);
-    blob.bytes.assign(sourceBytes, sourceBytes + byteSize);
-    NWB_ASSERT(blob.bytes.size() == byteSize);
+    blob.bytes.resize(allocationSize);
+    const usize address = reinterpret_cast<usize>(blob.bytes.data());
+    blob.dataOffset = (alignment - (address & (alignment - 1u))) & (alignment - 1u);
+    blob.dataSize = byteSize;
+    NWB_MEMCPY(blob.bytes.data() + blob.dataOffset, byteSize, sourceBytes, byteSize);
 
     const u32 index = static_cast<u32>(m_uploadBlobs.size());
     m_uploadBlobs.push_back(Move(blob));
@@ -155,17 +162,17 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, c
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    NWB_ASSERT(source && !source->bytes.empty());
+    NWB_ASSERT(source && source->dataSize != 0u);
     if(destinationResource.type != GpuGraphResourceType::Buffer || !destinationResource.buffer)
         return MakeUnexpected(Failure{});
 
     const BufferDesc& destinationDesc = destinationResource.buffer->getCreationDescription();
     if(
         uploadDesc.destinationOffsetBytes > destinationDesc.byteSize
-        || source->bytes.size() > destinationDesc.byteSize - uploadDesc.destinationOffsetBytes
+        || source->dataSize > destinationDesc.byteSize - uploadDesc.destinationOffsetBytes
         // Keep declaration acceptance aligned with CommandList::tryWriteBuffer so a built-in upload cannot fail only during late packet recording.
         || (uploadDesc.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
-        || (source->bytes.size() & (sizeof(u32) - 1u)) != 0u
+        || (source->dataSize & (sizeof(u32) - 1u)) != 0u
         || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState)
         // Upload bodies perform their own CopyDest -> final-state transition.
         // A retained descriptor restores its descriptor state at packet close, so the primitive's graph-visible final state must match that restore.
@@ -188,13 +195,13 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, c
     const Array<GpuTaskResourceUse, 2> resourceUses = {{
         GpuTaskResourceUse{
             .resource = uploadDesc.destination,
-            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->bytes.size()) },
+            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->dataSize) },
             .requiredState = ResourceStates::CopyDest,
             .access = GpuTaskResourceAccess::Write,
         },
         GpuTaskResourceUse{
             .resource = uploadDesc.destination,
-            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->bytes.size()) },
+            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->dataSize) },
             .requiredState = uploadDesc.finalState,
             .access = GpuTaskResourceAccess::Write,
         },
@@ -218,7 +225,7 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, 
 
     const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
     const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    NWB_ASSERT(source && !source->bytes.empty());
+    NWB_ASSERT(source && source->dataSize != 0u);
     if(destinationResource.type != GpuGraphResourceType::Texture || !destinationResource.texture)
         return MakeUnexpected(Failure{});
 
@@ -232,7 +239,7 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, 
         !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState, uploadDesc.finalState)
         ||
         !(requiredBytes = ComputeTextureUploadByteSize(destinationDesc, uploadDesc.arraySlice, uploadDesc.mipLevel, uploadDesc.rowPitch, uploadDesc.depthPitch, uploadDesc.aspect))
-        || source->bytes.size() < *requiredBytes
+        || source->dataSize < *requiredBytes
     )
         return MakeUnexpected(Failure{});
 

@@ -32,6 +32,8 @@ static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes);
 using CsgShapeSignedDistanceCallback = Expected<f32>(*)(const Float4& shapePosition, const CsgShapeInlineParameters& parameters);
 
+void LogCsgShapeInvalidParameterSize(const Name& name);
+
 [[nodiscard]] Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept;
 
 template<typename ShapeT>
@@ -75,7 +77,7 @@ public:
 };
 
 template<typename ShapeT>
-[[nodiscard]] CsgShapeTypeDesc MakeCsgShapeTypeDesc(Core::Alloc::GlobalArena& arena, const Name& shaderModule = s_NameNone, const AStringView shaderModuleInclude = {}){
+[[nodiscard]] Expected<CsgShapeTypeDesc> MakeCsgShapeTypeDesc(Core::Alloc::GlobalArena& arena, const Name& shaderModule = s_NameNone, const AStringView shaderModuleInclude = {}){
     static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
 
     const ShapeT shape{};
@@ -85,8 +87,10 @@ template<typename ShapeT>
     desc.shaderModuleInclude = shaderModuleInclude;
     desc.parameterByteSize = shape.parameterByteSize();
     const CsgShapeInlineParameters defaults = shape.defaultParameters();
-    [[maybe_unused]] const b8 packedDefaults = PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults, desc.defaultParameterBytes);
-    NWB_ASSERT(packedDefaults);
+    if(!PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults, desc.defaultParameterBytes)){
+        LogCsgShapeInvalidParameterSize(desc.name);
+        return MakeUnexpected(Failure{});
+    }
     desc.boundsCallback = &EvaluateCsgShapeBoundsCallback<ShapeT>;
     desc.signedDistanceCallback = &EvaluateCsgShapeSignedDistanceCallback<ShapeT>;
     return desc;
@@ -143,7 +147,10 @@ public:
 
     template<typename ShapeT>
     [[nodiscard]] Expected<CsgShapeTypeId> registerShape(const b8 replaceExisting = false, const Name& shaderModule = s_NameNone, const AStringView shaderModuleInclude = {}){
-        return registerShapeType(MakeCsgShapeTypeDesc<ShapeT>(m_shapeTypes.get_allocator().arena(), shaderModule, shaderModuleInclude), replaceExisting);
+        auto desc = MakeCsgShapeTypeDesc<ShapeT>(m_shapeTypes.get_allocator().arena(), shaderModule, shaderModuleInclude);
+        if(!desc)
+            return MakeUnexpected(Failure{});
+        return registerShapeType(*desc, replaceExisting);
     }
 
 

@@ -644,11 +644,8 @@ b8 TypeChecker::isConstructibleTypeName(const MStringView calleeName, const MStr
 b8 TypeChecker::isRvalueTemporaryExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     if(IsAlwaysRvalueExprKind(expr.kind))
         return true;
-    if(expr.kind == ExprKind::Call || expr.kind == ExprKind::Unary){
-        const TypeRef* retType = inferExprTypeRef(ownerClass, method, expr, scope);
-        return m_symbols.resolveRefMode(retType) == ParamPassingMode::None;
-    }
-    return false;
+    const TypeRef* retType = inferExprTypeRef(ownerClass, method, expr, scope);
+    return m_symbols.resolveRefMode(retType) == ParamPassingMode::None && isTemporaryOwnerExpr(ownerClass, method, expr, scope);
 }
 
 const MethodDecl* TypeChecker::resolveCustomOperator(

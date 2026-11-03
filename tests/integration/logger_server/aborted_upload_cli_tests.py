@@ -51,7 +51,10 @@ def start_partial_upload(port, process, inbox, timeout, marker):
         path = wait_for_condition(process, lambda: next((path for path in inbox.glob("*.nwbcrashpkg") if path.stat().st_size > 0 and path.read_bytes().startswith(marker)), None), timeout, "waiting for an incomplete crash upload file")
         return connection, path
     except BaseException:
-        connection.close()
+        try:
+            connection.close()
+        except OSError as cleanup_error:
+            print(f"upload connection cleanup failed: {cleanup_error}", file=sys.stderr, flush=True)
         raise
 
 
@@ -95,11 +98,11 @@ def run(executable, output, timeout):
                 evidence[LIT_RESPONSE_RECOVERED] = True
             finally:
                 health.close()
-            exit_code, tail = terminate_process(process, "logserver after disconnected upload")
+            exit_code, tail = terminate_process(process, "logserver after disconnected upload", rejected_output=STRICT_LOG_FAILURE_MESSAGES)
             process = None
             require_normal_process_exit(exit_code, tail, LIT_LOGSERVER)
             validate_expected_log_text(tail, (), STRICT_LOG_FAILURE_MESSAGES)
-            exit_code, tail = terminate_process(second_process, "logserver with incomplete upload")
+            exit_code, tail = terminate_process(second_process, "logserver with incomplete upload", rejected_output=STRICT_LOG_FAILURE_MESSAGES)
             second_process = None
             require_normal_process_exit(exit_code, tail, LIT_SECOND_LOGSERVER)
             if second_path.exists() or list(inbox.iterdir()):
@@ -112,10 +115,10 @@ def run(executable, output, timeout):
             if open_upload is not None:
                 open_upload.close()
             if process is not None:
-                exit_code, tail = terminate_process(process, "logserver upload cleanup")
+                exit_code, tail = terminate_process(process, "logserver upload cleanup", rejected_output=STRICT_LOG_FAILURE_MESSAGES)
                 require_normal_process_exit(exit_code, tail, LIT_LOGSERVER)
             if second_process is not None:
-                exit_code, tail = terminate_process(second_process, "second logserver upload cleanup")
+                exit_code, tail = terminate_process(second_process, "second logserver upload cleanup", rejected_output=STRICT_LOG_FAILURE_MESSAGES)
                 require_normal_process_exit(exit_code, tail, LIT_SECOND_LOGSERVER)
             if directory is not None:
                 logs = collect_log_delta(directory, baseline, pattern)

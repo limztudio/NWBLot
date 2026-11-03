@@ -14,6 +14,8 @@ import sys
 import tempfile
 
 import reflection_benchmark as benchmark
+from smoke_failure_reporting import write_failure_report
+from window_capture_smoke import window_capture_source_paths
 from renderer_ab_benchmark import binary_identity, runtime_identity
 
 LIT_VARIANT = "variant"
@@ -56,6 +58,13 @@ def hardware_unavailable_without_errors(text):
     return True
 
 
+def hardware_skip_is_proven(error, log_path, cleanup_status):
+    acquisition_failure = str(error).startswith("GPU benchmark timed out:") \
+        or str(error) == "hardware was unavailable for a hardware benchmark route"
+    return acquisition_failure and cleanup_status.succeeded and log_path.is_file() \
+        and hardware_unavailable_without_errors(log_path.read_text(encoding=LIT_UTF_8))
+
+
 def validate_recording_evidence(trial, history_samples, symbols=None):
     """Reparse retained evidence and reject cap-one work even outside the measured window."""
     if history_samples not in CAPS or trial[LIT_VARIANT] != asdict(VARIANT):
@@ -83,8 +92,8 @@ def validate_recording_evidence(trial, history_samples, symbols=None):
 
 def source_identity(namesym):
     root = Path(__file__).resolve().parents[2]
-    files = {Path(__file__).resolve()}
-    for module in ("reflection_benchmark", "renderer_ab_benchmark", "window_capture_smoke", "smoke_volume_identity", "gpu_timing_parse", "name_symbols"):
+    files = {Path(__file__).resolve(), *window_capture_source_paths()}
+    for module in ("reflection_benchmark", "renderer_ab_benchmark", "smoke_volume_identity", "gpu_timing_parse", "name_symbols"):
         files.add(Path(sys.modules[module].__file__).resolve())
     for relative in ("impl/ecs_render/reflection", "impl/assets/graphics/reflection"):
         files.update(path for path in (root / relative).rglob("*") if path.is_file())
@@ -130,15 +139,12 @@ def run(args):
             verify_frozen()
             acquisition = acquisition_args(args, output, cap)
             benchmark.write_status(f"Temporal omission proof {position + 1}/2: temporal enabled, history cap {cap}")
+            cleanup_status = benchmark.TrialCleanupStatus()
             try:
-                trial = benchmark.run_trial(acquisition, VARIANT, 0, position, symbols, executable_identity)
+                trial = benchmark.run_trial(acquisition, VARIANT, 0, position, symbols, executable_identity, cleanup_status=cleanup_status)
             except benchmark.SmokeFailure as error:
                 log_path = output / f"block_00_{position:02d}_{VARIANT.name}" / "runtime.log"
-                # Convert only hardware capability skips to exit code 77.
-                acquisition_failure = str(error).startswith("GPU benchmark timed out:") \
-                    or str(error) == "hardware was unavailable for a hardware benchmark route"
-                if acquisition_failure and log_path.is_file() and not (log_path.parent / "cleanup_error.txt").exists() \
-                    and hardware_unavailable_without_errors(log_path.read_text(encoding=LIT_UTF_8)):
+                if hardware_skip_is_proven(error, log_path, cleanup_status):
                     verify_frozen()
                     raise benchmark.SmokeSkip("hardware ray queries are unavailable; temporal omission requires the hardware route") from error
                 raise
@@ -151,7 +157,7 @@ def run(args):
         benchmark.write_status("Temporal omission proof passed: " + str(output / LIT_REPORT_JSON))
         return 0
     except (benchmark.SmokeFailure, benchmark.SmokeSkip, OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
-        benchmark.write_json(output / "failure.json", {"error": str(error), "completed_trials": len(trials)})
+        write_failure_report(benchmark.write_json, output / "failure.json", {"error": str(error), "completed_trials": len(trials)})
         raise
 
 

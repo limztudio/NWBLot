@@ -51,6 +51,17 @@ inline constexpr UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(UiEditClipboard, InvalidActionAndChannelTakePrecedenceOverModelState){
+    Tests::TestArena arena;
+    DelayedClipboard service(arena.arena);
+    UiEditClipboardController controller(arena.arena, service);
+    Ui::EditModel model(arena.arena);
+    const auto invalidChannel = static_cast<ClipboardChannel::Enum>(255u);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::None, invalidChannel, true).status, UiEditClipboardStatus::InvalidAction);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, invalidChannel, true).status, UiEditClipboardStatus::Unsupported);
+    EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, invalidChannel).status, UiEditClipboardStatus::Unsupported);
+}
+
 TEST(UiEditClipboard, CutWaitsForSuccessfulNativePublicationBeforeDeleting){
     Tests::TestArena arena;
     DelayedClipboard service(arena.arena);

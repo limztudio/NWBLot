@@ -3,12 +3,14 @@
 
 
 #include "ingest.h"
+#include "file_publication.h"
 
 #include <logger/common.h>
 
 #include <core/alloc/scratch.h>
 
 #include <global/binary.h>
+#include <global/process.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,13 +56,14 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
     const u64 counter = s_TelemetryUploadCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
         arena,
-        NWB_TEXT("telemetry_{:04}{:02}{:02}_{:02}{:02}{:02}_{}"),
+        NWB_TEXT("telemetry_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}"),
         localTime.tm_year + s_LocalTimeYearBase,
         localTime.tm_mon + s_LocalTimeMonthBase,
         localTime.tm_mday,
         localTime.tm_hour,
         localTime.tm_min,
         localTime.tm_sec,
+        CurrentProcessId(),
         counter
     );
 
@@ -108,11 +111,15 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     result.graphPath = reportDirectory / uploadStem;
     result.graphPath.replaceExtension(__hidden_telemetry_ingest::s_GraphFileExtension);
 
-    result.storedRaw = WriteBinaryFile(result.rawPath, BinaryByteView{ static_cast<const u8*>(bytes), byteCount });
-    if(!result.storedRaw){
-        __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not store raw stream", Core::Common::LogType::Error);
+    const auto rawPublication = PublishNewTelemetryFile(result.rawPath, BinaryByteView{ static_cast<const u8*>(bytes), byteCount });
+    result.storedRaw = rawPublication.published;
+    if(rawPublication.error && !rawPublication.published){
+        result.message = StringFormat(arena, NWB_TEXT("Telemetry raw publication failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), rawPublication.stagingRetained, rawPublication.error.value());
+        result.type = Core::Common::LogType::Error;
         return result;
     }
+    result.rawCleanupError = rawPublication.error;
+    result.rawStagingRetained = rawPublication.stagingRetained;
 
     Core::Telemetry::Recorder recorder(arena);
     const auto decoded = Core::Telemetry::DecodeEventStream(bytes, byteCount, arena, recorder);
@@ -131,12 +138,16 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     }
 
     result.summary = report->summary;
-    result.wroteJson = WriteTextFile(result.jsonPath, AStringView(report->json.data(), report->json.size()));
-    result.wrotePerfCsv = WriteTextFile(result.perfCsvPath, AStringView(report->perfCsv.data(), report->perfCsv.size()));
+    const auto jsonPublication = PublishNewTelemetryFile(result.jsonPath, BinaryByteView{ reinterpret_cast<const u8*>(report->json.data()), report->json.size() });
+    const auto csvPublication = PublishNewTelemetryFile(result.perfCsvPath, BinaryByteView{ reinterpret_cast<const u8*>(report->perfCsv.data()), report->perfCsv.size() });
+    TelemetryFilePublicationResult graphPublication;
     if(!report->graph.empty())
-        result.wroteGraph = WriteTextFile(result.graphPath, AStringView(report->graph.data(), report->graph.size()));
-    if(!result.wroteJson || !result.wrotePerfCsv){
-        result.message = StringFormat(arena, NWB_TEXT("Telemetry upload decoded but report write failed: raw='{}' json='{}' csv='{}'"), PathToString<tchar>(result.rawPath), PathToString<tchar>(result.jsonPath), PathToString<tchar>(result.perfCsvPath));
+        graphPublication = PublishNewTelemetryFile(result.graphPath, BinaryByteView{ reinterpret_cast<const u8*>(report->graph.data()), report->graph.size() });
+    result.wroteJson = jsonPublication.published;
+    result.wrotePerfCsv = csvPublication.published;
+    result.wroteGraph = graphPublication.published;
+    if(jsonPublication.error || csvPublication.error || graphPublication.error){
+        result.message = StringFormat(arena, NWB_TEXT("Telemetry report publication failed: raw='{}' json='{}' error={} csv='{}' error={} graph='{}' error={}"), PathToString<tchar>(result.rawPath), PathToString<tchar>(result.jsonPath), jsonPublication.error.value(), PathToString<tchar>(result.perfCsvPath), csvPublication.error.value(), PathToString<tchar>(result.graphPath), graphPublication.error.value());
         result.type = Core::Common::LogType::Error;
         return result;
     }

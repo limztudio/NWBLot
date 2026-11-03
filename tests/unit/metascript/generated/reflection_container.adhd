@@ -1,0 +1,25 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> ReflectionKey{
+    Valid = 0,
+    kCount
+}
+
+class ReflectionAsset{}
+
+[reflect]
+class ReflectionContainerFixture{
+    public Vector<Name> names;
+    public Array<Name, 3> fixedNames;
+    public FixedVector<Name, 2> boundedNames;
+    public HashMap<Name, u32> counts;
+    public HashMap<Name, AssetRef<ReflectionAsset>> assets;
+    public HashMap<ReflectionKey, AssetRef<ReflectionAsset>> enumAssets;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

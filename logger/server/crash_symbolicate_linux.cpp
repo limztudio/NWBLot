@@ -6,6 +6,7 @@
 
 #include <core/crash/package_names.h>
 
+#include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/process_capture.h>
 #include <global/process_memory_map.h>
@@ -279,12 +280,14 @@ static void AppendLinuxClientCallstack(const AStringView callstackText, const Li
                 outReport.append(modulePath.data(), modulePath.size());
                 outReport += "+";
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-                const u64 symbolOffset = moduleOffset + mapEntry->fileOffset;
+                const auto symbolOffset = AddNoOverflow(moduleOffset, mapEntry->fileOffset);
                 AppendHexAddress(moduleOffset, outReport);
-                const auto symbol = ResolveLinuxFrameSymbol(modulePath, symbolOffset, config, arena, symbolFileCache);
-                if(symbol){
-                    outReport += " ";
-                    outReport += *symbol;
+                if(symbolOffset){
+                    const auto symbol = ResolveLinuxFrameSymbol(modulePath, *symbolOffset, config, arena, symbolFileCache);
+                    if(symbol){
+                        outReport += " ";
+                        outReport += *symbol;
+                    }
                 }
 #else
                 AppendHexAddress(moduleOffset, outReport);
@@ -372,7 +375,11 @@ void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const 
     AppendHexAddress(*instructionPointer - instructionMapEntry->begin, outReport);
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     outReport += "\nsymbolication_relative_ip=";
-    AppendHexAddress(*instructionPointer - instructionMapEntry->begin + instructionMapEntry->fileOffset, outReport);
+    const auto symbolOffset = AddNoOverflow(*instructionPointer - instructionMapEntry->begin, instructionMapEntry->fileOffset);
+    if(symbolOffset)
+        AppendHexAddress(*symbolOffset, outReport);
+    else
+        outReport += "unavailable";
 #endif
     outReport += clientCallstackPresent
         ? "\ndetail=client callstack captured; module frames are symbolized with DWARF when symbols are reachable\n"

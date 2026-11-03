@@ -45,6 +45,82 @@ public:
 
 struct ContributionFailure{};
 
+class LocalLabelContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        char label[] = "local label";
+        const auto node = builder.addPass(Name("local_label"), AStringView(label));
+        label[0u] = 'X';
+        return node.valid();
+    }
+};
+
+class MutatingContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    explicit MutatingContributor(Telemetry::FrameGraphRegistry& registry)noexcept
+        : m_registry(registry)
+    {}
+
+    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        ++calls;
+        const auto node = builder.addPass(Name("mutation"), "mutation");
+        if(clearRegistry)
+            m_registry.clear();
+        if(removeSelf)
+            m_registry.unregisterContributor(*this);
+        if(removeOther)
+            m_registry.unregisterContributor(*removeOther);
+        if(addOther)
+            m_registry.registerContributor(*addOther);
+        if(throwAfterMutation)
+            throw ContributionFailure{};
+        return node.valid();
+    }
+
+    Telemetry::IFrameGraphContributor* removeOther = nullptr;
+    Telemetry::IFrameGraphContributor* addOther = nullptr;
+    usize calls = 0u;
+    b8 removeSelf = false;
+    b8 clearRegistry = false;
+    b8 throwAfterMutation = false;
+
+private:
+    Telemetry::FrameGraphRegistry& m_registry;
+};
+
+class OwnedLabelContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    OwnedLabelContributor(Telemetry::FrameGraphRegistry& registry, Telemetry::TelemetryArena& arena)
+        : m_registry(registry)
+        , m_label("label retained after contributor destruction", arena)
+    {}
+
+    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        const auto node = builder.addPass(Name("owned_label"), AStringView(m_label));
+        m_registry.unregisterContributor(*this);
+        return node.valid();
+    }
+
+private:
+    Telemetry::FrameGraphRegistry& m_registry;
+    AString<Telemetry::TelemetryArena> m_label;
+};
+
+class DestroyContributor final : public Telemetry::IFrameGraphContributor{
+public:
+    explicit DestroyContributor(Optional<OwnedLabelContributor>& target)noexcept
+        : m_target(target)
+    {}
+
+    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
+        m_target.reset();
+        return builder.addPass(Name("destroyer"), "destroyer").valid();
+    }
+
+private:
+    Optional<OwnedLabelContributor>& m_target;
+};
+
 class CacheLifetimeContributor final : public Telemetry::IFrameGraphContributor{
 public:
     CacheLifetimeContributor(Telemetry::FrameGraphRegistry& registry, Telemetry::CaptureSession& session, const AString<Telemetry::TelemetryArena>& label)noexcept
@@ -77,6 +153,123 @@ private:
     Telemetry::CaptureSession& m_session;
     const AString<Telemetry::TelemetryArena>& m_label;
 };
+
+TEST(Telemetry, RegistryOwnsLabelsFromContributorCallbacks){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    LocalLabelContributor contributor;
+    registry.registerContributor(contributor);
+    ASSERT_TRUE(registry.record(session));
+    const auto* event = session.view().eventAt(0u);
+    ASSERT_NE(event, nullptr);
+    const auto parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());
+    ASSERT_TRUE(parsed);
+    ASSERT_EQ(parsed->nodes.size(), 1u);
+    EXPECT_EQ(parsed->nodes[0u].label, "local label");
+}
+
+TEST(Telemetry, RegistryDefersAddedContributorsAndSkipsRemovedOnes){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    MutatingContributor first(registry), removed(registry), last(registry), added(registry);
+    first.removeSelf = true;
+    first.removeOther = &removed;
+    first.addOther = &added;
+    registry.registerContributor(first);
+    registry.registerContributor(removed);
+    registry.registerContributor(last);
+
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(first.calls, 1u);
+    EXPECT_EQ(removed.calls, 0u);
+    EXPECT_EQ(last.calls, 1u);
+    EXPECT_EQ(added.calls, 0u);
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(first.calls, 1u);
+    EXPECT_EQ(removed.calls, 0u);
+    EXPECT_EQ(last.calls, 2u);
+    EXPECT_EQ(added.calls, 1u);
+}
+
+TEST(Telemetry, RegistryKeepsLabelsAfterRemovedContributorIsDestroyed){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    Optional<OwnedLabelContributor> first;
+    first.emplace(registry, testArena.arena);
+    DestroyContributor destroyer(first);
+    registry.registerContributor(*first);
+    registry.registerContributor(destroyer);
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_FALSE(first.has_value());
+    const auto* event = session.view().eventAt(0u);
+    ASSERT_NE(event, nullptr);
+    const auto parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());
+    ASSERT_TRUE(parsed);
+    ASSERT_EQ(parsed->nodes.size(), 2u);
+    EXPECT_EQ(parsed->nodes[0u].label, "label retained after contributor destruction");
+}
+
+TEST(Telemetry, RegistryClearDuringCallbackSkipsRemainingContributors){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    MutatingContributor first(registry), skipped(registry), added(registry);
+    first.clearRegistry = true;
+    first.addOther = &added;
+    registry.registerContributor(first);
+    registry.registerContributor(skipped);
+
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(first.calls, 1u);
+    EXPECT_EQ(skipped.calls, 0u);
+    EXPECT_EQ(added.calls, 0u);
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(first.calls, 1u);
+    EXPECT_EQ(skipped.calls, 0u);
+    EXPECT_EQ(added.calls, 1u);
+}
+
+TEST(Telemetry, RegistryCanRemoveAndReregisterTheCurrentContributor){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    MutatingContributor contributor(registry);
+    contributor.removeSelf = true;
+    contributor.addOther = &contributor;
+    registry.registerContributor(contributor);
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(contributor.calls, 1u);
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(contributor.calls, 2u);
+}
+
+TEST(Telemetry, RegistryAppliesCallbackMutationsAfterUnwind){
+    TestArena testArena;
+    Telemetry::CaptureSession session(testArena.arena);
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    Telemetry::FrameGraphRegistry registry(testArena.arena);
+    MutatingContributor first(registry), skipped(registry), added(registry);
+    first.removeSelf = true;
+    first.removeOther = &skipped;
+    first.addOther = &added;
+    first.throwAfterMutation = true;
+    registry.registerContributor(first);
+    registry.registerContributor(skipped);
+    EXPECT_THROW(EXPECT_TRUE(registry.record(session)), ContributionFailure);
+    EXPECT_EQ(session.eventCount(), 0u);
+    ASSERT_TRUE(registry.record(session));
+    EXPECT_EQ(first.calls, 1u);
+    EXPECT_EQ(skipped.calls, 0u);
+    EXPECT_EQ(added.calls, 1u);
+}
 
 TEST(Telemetry, RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphCapacity){
     TestArena testArena;

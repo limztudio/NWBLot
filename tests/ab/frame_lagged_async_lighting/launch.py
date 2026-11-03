@@ -23,7 +23,10 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tests" / "ab"))
 
 import launch as AB_LAUNCH  # noqa: E402
-import launcher as ROOT_LAUNCHER  # noqa: E402
+from launcher.build import BuildController  # noqa: E402
+from launcher.cli import LauncherCli  # noqa: E402
+from launcher.cmake_settings import CmakeSettings  # noqa: E402
+from launcher.constants import DEFAULT_DOMAIN  # noqa: E402
 
 LIT_EXECUTABLE = "--executable"
 LIT_RUNTIME_DIR = AB_LAUNCH.LIT_RUNTIME_DIR
@@ -43,8 +46,8 @@ class FrameLaggedPaths:
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> FrameLaggedPaths:
-    executable = ROOT_LAUNCHER.resolve_executable_path(settings, SMOKE_TARGET, args.executable, None, args.dry_run,)
-    runtime_directory = (ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / RUNTIME_DIRECTORY / settings.config)
+    executable = BuildController.resolve_executable_path(settings, SMOKE_TARGET, args.executable, None, args.dry_run,)
+    runtime_directory = (CmakeSettings.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / RUNTIME_DIRECTORY / settings.config)
     return FrameLaggedPaths(executable, runtime_directory)
 
 
@@ -59,7 +62,7 @@ def run_runner(args: argparse.Namespace, paths: FrameLaggedPaths) -> int:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    ROOT_LAUNCHER.add_build_options(parser)
+    LauncherCli.add_build_options(parser)
     parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the frame-lagged smoke executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked smoke runtime directory.")
     AB_LAUNCH.add_ab_runner_options(
@@ -76,11 +79,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run(args: argparse.Namespace) -> int:
-    environment = ROOT_LAUNCHER.build_environment(args)
-    settings = ROOT_LAUNCHER.resolve_launch_settings(args, ROOT_LAUNCHER.DEFAULT_DOMAIN)
-    ROOT_LAUNCHER.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
-    settings = ROOT_LAUNCHER.refresh_launch_settings(settings, args.domain)
-    ROOT_LAUNCHER.build_target(args, settings, SMOKE_TARGET, environment)
+    environment = BuildController.build_environment(args)
+    settings = CmakeSettings.resolve_launch_settings(args, DEFAULT_DOMAIN)
+    CmakeSettings.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
+    settings = CmakeSettings.refresh_launch_settings(settings, args.domain)
+    BuildController.build_target(args, settings, SMOKE_TARGET, environment)
     return run_runner(args, resolve_paths(args, settings))
 
 

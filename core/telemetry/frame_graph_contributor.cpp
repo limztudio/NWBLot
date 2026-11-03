@@ -170,8 +170,18 @@ void FrameGraphBuilder::dependsOnByName(const FrameGraphNodeHandle from, const N
 }
 
 FrameGraphNodeHandle FrameGraphBuilder::addNode(const Name& name, const AStringView label, const FrameGraphNodeKind::Enum kind, const FrameGraphPassMetadata& metadata, const u8 flags){
+    if(m_nodes.size() >= static_cast<usize>(s_InvalidFrameGraphNodeIndex))
+        return {};
+    AStringView storedLabel;
+    if(!label.empty()){
+        auto* const storage = static_cast<char*>(m_scratchArena.allocate(alignof(char), label.size()));
+        if(!storage)
+            throw AllocationException{};
+        NWB_MEMCPY(storage, label.size(), label.data(), label.size());
+        storedLabel = AStringView(storage, label.size());
+    }
     const u32 index = static_cast<u32>(m_nodes.size());
-    m_nodes.push_back(FrameGraphNodeDesc{ .name = name, .label = label, .kind = kind, .flags = flags, .queueAssignment = metadata.queueAssignment, .compiledTask = metadata.compiledTask, .runtimeStatistics = metadata.runtimeStatistics, });
+    m_nodes.push_back(FrameGraphNodeDesc{ .name = name, .label = storedLabel, .kind = kind, .flags = flags, .queueAssignment = metadata.queueAssignment, .compiledTask = metadata.compiledTask, .runtimeStatistics = metadata.runtimeStatistics, });
     return FrameGraphNodeHandle{ .index = index };
 }
 

@@ -163,11 +163,13 @@ void WaylandTextInputService::sendCaret(const TextInputRect caret)noexcept{
 
 
 void WaylandTextInputService::sendSurrounding(const AStringView text, const usize anchorByte, const usize caretByte, const u64 revision){
-    const WaylandTextInputSurrounding slice = m_wireState.update(text, anchorByte, caretByte, revision);
+    WaylandTextInputSurroundingState staged = m_wireState;
+    const WaylandTextInputSurrounding slice = staged.update(text, anchorByte, caretByte, revision);
     if(!slice.available)
         return;
     m_wireSurrounding.assign(slice.text.data(), slice.text.size());
     zwp_text_input_v3_set_surrounding_text(m_input, m_wireSurrounding.c_str(), static_cast<i32>(slice.caretByte), static_cast<i32>(slice.anchorByte));
+    m_wireState = staged;
 }
 
 void WaylandTextInputService::receiveDone(const u32 serial){

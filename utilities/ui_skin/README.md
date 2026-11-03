@@ -37,3 +37,7 @@ python -m launcher ui-skin -- --tex-conv __exec/windows/arm64/full/opt/tex_conv.
 The path above uses Windows ARM64, the full domain, and the optimized configuration; select the matching path for another
 platform, architecture, or domain. The generator's options are shown by `python -m launcher ui-skin --help`.
 Native build options belong to `tex-conv`; the Python generator accepts `--directory` and `--tex-conv`.
+The generator stages its outputs and restores earlier files if publication fails. It reports the recovery directory if
+rollback cannot complete. Publication across multiple files is not atomic against process crashes or concurrent readers
+or writers. On POSIX, existing owner, group, and mode bits are copied to replacements; publication fails if they cannot
+be set. ACLs and extended attributes are not preserved by this generator.

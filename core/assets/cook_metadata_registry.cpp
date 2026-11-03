@@ -34,6 +34,35 @@ struct AutoMetadataParser{
     AssetValueMetadataParseFunction valueFunction = nullptr;
 };
 
+class RegistrationTextPool final : NoCopy{
+public:
+    RegistrationTextPool()
+        : m_arena(AssetsArenaScope::s_MetadataRegistrationTextArena)
+        , m_values(m_arena)
+    {}
+
+    [[nodiscard]] AStringView intern(const AStringView text){
+        ScopedLock lock(m_mutex);
+        for(const AssetString& value : m_values){
+            if(AStringView(value) == text)
+                return AStringView(value);
+        }
+        m_values.emplace_back(text, m_arena);
+        return AStringView(m_values.back());
+    }
+
+
+private:
+    Futex m_mutex;
+    AssetArena m_arena;
+    Deque<AssetString, AssetArena> m_values;
+};
+
+[[nodiscard]] static AStringView StableRegistrationText(const AStringView text){
+    static RegistrationTextPool pool;
+    return pool.intern(text);
+}
+
 
 template<typename ContextT, typename FunctionT>
 [[nodiscard]] static AssetMetadataParseResult::Enum TryAutoCollectedMetadataParsers(FunctionT AutoMetadataParser::* const member, ContextT& context){
@@ -153,10 +182,13 @@ void RegisterNonStandaloneAssetType(const Name& assetType, const AStringView tok
         );
     }
 
-    const AStringView effectiveToken = !tokenText.empty() ? tokenText : assetType.resolvedText();
+    Array<char, NameDetail::s_SymbolTextBufferLength> resolvedToken = {};
+    if(tokenText.empty())
+        CopyFixedBuffer(resolvedToken, assetType.resolvedText());
+    const AStringView effectiveToken = !tokenText.empty() ? tokenText : FixedBufferView(resolvedToken);
     if(!effectiveToken.empty()){
         QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenQueueArena>().appendUnique(
-            effectiveToken,
+            __hidden_cook_metadata_registry::StableRegistrationText(effectiveToken),
             [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; }
         );
     }
@@ -167,7 +199,7 @@ void RegisterNonStandaloneFirstTokenSuffix(const AStringView tokenSuffix){
         return;
 
     QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenSuffixQueueArena>().appendUnique(
-        tokenSuffix,
+        __hidden_cook_metadata_registry::StableRegistrationText(tokenSuffix),
         [](const AStringView lhs, const AStringView rhs)noexcept{ return lhs == rhs; }
     );
 }
@@ -199,13 +231,13 @@ b8 IsLikelyNonStandaloneFirstToken(const AStringView firstToken){
 }
 
 void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule){
-    if(rule.sidecarExtension.empty() || (rule.firstToken.empty() && rule.bunchScanKeyword.empty()))
+    if(rule.sidecarExtension.empty())
         return;
 
     QueryAssetAutoRegistrationQueue<AssetPairedSidecarRule, AssetsArenaScope::s_PairedSidecarRuleQueueArena>().appendUnique(
-        rule,
+        AssetPairedSidecarRule{ __hidden_cook_metadata_registry::StableRegistrationText(rule.sidecarExtension) },
         [](const AssetPairedSidecarRule& lhs, const AssetPairedSidecarRule& rhs)noexcept{
-            return lhs.firstToken == rhs.firstToken && lhs.sidecarExtension == rhs.sidecarExtension && lhs.bunchScanKeyword == rhs.bunchScanKeyword;
+            return lhs.sidecarExtension == rhs.sidecarExtension;
         }
     );
 }

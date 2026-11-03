@@ -16,8 +16,9 @@ from types import SimpleNamespace
 import renderer_ab_benchmark as ab
 from reflection_benchmark import balanced_orders, paired_statistics
 from smoke_volume_identity import file_identity
+from smoke_failure_reporting import write_failure_report
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, write_status,)
+    shutdown_logserver_and_collect, terminate_process, window_capture_source_paths, write_status,)
 from window_capture_validation import validate_expected_log_text
 
 LIT_WINDOW_TIMEOUT_SECONDS = 30.
@@ -391,7 +392,8 @@ def acquire(args, arm, block, position):
         except Exception as error:
             errors.append(f"window backend cleanup: {error}")
         if errors:
-            ab.write_json(directory / "cleanup_error.json", {"errors": errors})
+            write_status("; ".join(errors))
+            write_failure_report(ab.write_json, directory / "cleanup_error.json", {"errors": errors})
             if not primary_failure:
                 raise SmokeFailure("; ".join(errors))
 
@@ -436,8 +438,8 @@ def run(args):
         raise SmokeFailure("explicit shared logserver is missing")
     orders = [[arm.name for arm in row] for row in balanced_orders(arms, args.blocks, args.order_seed)]
     args.frozen_environment = environment(build_launch_environment(args), args.workload, args.mode, "<per-trial-output>")
-    modules = ("renderer_ab_benchmark", "reflection_benchmark", "window_capture_smoke", "smoke_volume_identity", "gpu_timing_parse", "name_symbols")
-    paths = [Path(__file__).resolve(), Path(sys.executable).resolve()]
+    modules = ("renderer_ab_benchmark", "reflection_benchmark", "smoke_volume_identity", "gpu_timing_parse", "name_symbols")
+    paths = [Path(__file__).resolve(), Path(sys.executable).resolve(), *window_capture_source_paths()]
     paths.extend(args.logserver_executable.parent / name for name in ab.binary_identity(args.logserver_executable))
     paths.extend(Path(sys.modules[name].__file__).resolve() for name in modules)
     shared = {str(path): file_identity(path) for path in paths}
@@ -471,7 +473,7 @@ def run(args):
         ab.write_json(args.output_directory / "report.json", {"plan": plan, "trials": trials, "comparison": comparison})
         return 0
     except Exception as error:
-        ab.write_json(args.output_directory / "failure.json", {"error": str(error), "completed_trials": len(trials)})
+        write_failure_report(ab.write_json, args.output_directory / "failure.json", {"error": str(error), "completed_trials": len(trials)})
         raise
 
 

@@ -15,7 +15,12 @@ from typing import Sequence
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-import launcher as ROOT_LAUNCHER  # noqa: E402
+from launcher.build import BuildController  # noqa: E402
+from launcher.cli import LauncherCli  # noqa: E402
+from launcher.cmake_settings import CmakeSettings  # noqa: E402
+from launcher.host import HostProbe  # noqa: E402
+from launcher.models import LaunchSettings  # noqa: E402
+from launcher.constants import DEFAULT_DOMAIN  # noqa: E402
 
 
 TARGET = "nwb_pipeline"
@@ -41,7 +46,7 @@ OPTION_REPO_ROOT = "--repo-root"
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    ROOT_LAUNCHER.add_build_options(parser)
+    LauncherCli.add_build_options(parser)
     parser.add_argument(OPTION_ASSET_ROOT, type=Path, action=ACTION_EXTEND, nargs="+", required=True)
     parser.add_argument("--input", type=Path, action=ACTION_EXTEND, nargs="+", help="Explicit .nwb files or directories; defaults to the project.nwb root manifest")
     parser.add_argument(OPTION_OUTPUT_SHORT, OPTION_OUTPUT, OPTION_OUTPUT_DIRECTORY, type=Path, required=True)
@@ -63,14 +68,14 @@ def resolve_path(root: Path, path: Path) -> Path:
     return (path if path.is_absolute() else root / path).resolve()
 
 
-def resolve_tools(options: argparse.Namespace, settings: ROOT_LAUNCHER.LaunchSettings) -> tuple[Path, Path, Path]:
+def resolve_tools(options: argparse.Namespace, settings: LaunchSettings) -> tuple[Path, Path, Path]:
     tools = []
     for target, explicit in (("nwb_dependency_computer", options.dependency_computer), ("nwb_asset_builder", options.asset_builder), ("nwb_asset_gatherer", options.asset_gatherer),):
         if explicit is None and options.tool_directory is not None:
-            name = ROOT_LAUNCHER.target_default_executable_base_name(target)
-            candidate = resolve_path(settings.root, options.tool_directory) / ROOT_LAUNCHER.executable_name(name, settings.platform_name)
+            name = HostProbe.target_default_executable_base_name(target)
+            candidate = resolve_path(settings.root, options.tool_directory) / HostProbe.executable_name(name, settings.platform_name)
         else:
-            candidate = ROOT_LAUNCHER.resolve_executable_path(settings, target, explicit, None, options.dry_run)
+            candidate = BuildController.resolve_executable_path(settings, target, explicit, None, options.dry_run)
         if not options.dry_run and not candidate.is_file():
             raise ValueError(f"Pipeline executable does not exist: {candidate}")
         tools.append(candidate)
@@ -128,7 +133,7 @@ def pipeline_commands(options: argparse.Namespace, repo_root: Path, roots: list[
 
 
 def cook(options: argparse.Namespace) -> None:
-    settings = ROOT_LAUNCHER.resolve_launch_settings(options, ROOT_LAUNCHER.DEFAULT_DOMAIN)
+    settings = CmakeSettings.resolve_launch_settings(options, DEFAULT_DOMAIN)
     repo_root = settings.root
     roots = [resolve_path(repo_root, root) for root in options.asset_root]
     inputs = resolve_inputs(roots, options.input, repo_root)
@@ -139,16 +144,16 @@ def cook(options: argparse.Namespace) -> None:
     configuration_key = hashlib.sha256(configuration.encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
     built = resolve_path(repo_root, options.build_directory) if options.build_directory else cache / "pipeline" / configuration_key / output_key
 
-    env = ROOT_LAUNCHER.build_environment(options)
+    env = BuildController.build_environment(options)
     if not options.skip_build:
-        ROOT_LAUNCHER.maybe_configure(options, settings, {"NWB_BUILD_PIPELINE": "ON"}, env)
-        settings = ROOT_LAUNCHER.refresh_launch_settings(settings, options.domain)
-        ROOT_LAUNCHER.build_target(options, settings, TARGET, env)
+        CmakeSettings.maybe_configure(options, settings, {"NWB_BUILD_PIPELINE": "ON"}, env)
+        settings = CmakeSettings.refresh_launch_settings(settings, options.domain)
+        BuildController.build_target(options, settings, TARGET, env)
     tools = resolve_tools(options, settings)
     if options.dry_run:
         workspace = cache / "pipeline-dry-run"
         for executable, arguments in pipeline_commands(options, repo_root, roots, output, built, configuration, tools, workspace):
-            ROOT_LAUNCHER.run_checked([executable, *arguments], repo_root, env, dry_run=True)
+            CmakeSettings.run_checked([executable, *arguments], repo_root, env, dry_run=True)
         return
 
     cache.mkdir(parents=True, exist_ok=True)

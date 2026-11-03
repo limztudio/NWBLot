@@ -28,6 +28,10 @@ namespace __hidden_crash_module{
 inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = 5u;
 inline constexpr usize s_LifecycleFailureTextCapacity = 192u;
 
+[[nodiscard]] static b8 FitsFixedText(const AStringView text, const usize capacity)noexcept{
+    return text.size() < capacity && text.find('\0') == AStringView::npos;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -87,7 +91,7 @@ static u64 DiagnosticSiteHash(const DiagnosticEventRecord& record)noexcept{
 }
 
 static b8 DiagnosticResultCanSuppressDuplicatePlatformCrash(const CrashDumpResult& result)noexcept{
-    return result.status != CrashDumpStatus::NotInstalled && result.status != CrashDumpStatus::RequestFailed && result.status != CrashDumpStatus::PackageWriteFailed;
+    return result.requestAccepted() && result.status != CrashDumpStatus::PackageWriteFailed;
 }
 
 static b8 ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category)noexcept{
@@ -268,15 +272,30 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     if(CrashDetail::g_State.platformRestorePending)
         return false;
 
+    if(
+        !__hidden_crash_module::FitsFixedText(config.applicationName, CrashDetail::s_MaxShortText)
+        || !__hidden_crash_module::FitsFixedText(config.version, CrashDetail::s_MaxShortText)
+        || !__hidden_crash_module::FitsFixedText(config.buildId, CrashDetail::s_MaxMediumText)
+        || !__hidden_crash_module::FitsFixedText(config.logServerUrl, CrashDetail::s_MaxUrlText)
+        || !__hidden_crash_module::FitsFixedText(config.crashUploadToken, CrashDetail::s_MaxMediumText)
+        || !__hidden_crash_module::FitsFixedText(config.handlerExecutablePath, CrashDetail::s_MaxPathText)
+    )
+        return false;
+
+    Alloc::ScratchArena scratchArena(CrashArenaScope::s_PlatformInstallationScratch);
+    const ::Path<Alloc::ScratchArena> spoolDirectory = config.spoolDirectory.empty() ? DefaultCrashSpoolDirectory(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.spoolDirectory);
+    const ::Path<Alloc::ScratchArena> handlerExecutablePath = config.handlerExecutablePath.empty() ? DefaultCrashHandlerExecutablePath(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.handlerExecutablePath);
+    const AString<Alloc::ScratchArena> spoolDirectoryText = PathToString<char>(scratchArena, spoolDirectory);
+    const AString<Alloc::ScratchArena> handlerExecutablePathText = PathToString<char>(scratchArena, handlerExecutablePath);
+    if(!__hidden_crash_module::FitsFixedText(spoolDirectoryText, CrashDetail::s_MaxPathText) || !__hidden_crash_module::FitsFixedText(handlerExecutablePathText, CrashDetail::s_MaxPathText))
+        return false;
+
     CopyFixedBuffer(CrashDetail::g_State.applicationName, config.applicationName);
     CopyFixedBuffer(CrashDetail::g_State.versionText, config.version);
     CopyFixedBuffer(CrashDetail::g_State.buildId, config.buildId);
     CopyFixedBuffer(CrashDetail::g_State.logServerUrl, config.logServerUrl);
     CopyFixedBuffer(CrashDetail::g_State.crashUploadToken, config.crashUploadToken);
 
-    Alloc::ScratchArena scratchArena(CrashArenaScope::s_PlatformInstallationScratch);
-    const ::Path<Alloc::ScratchArena> spoolDirectory = config.spoolDirectory.empty() ? DefaultCrashSpoolDirectory(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.spoolDirectory);
-    const ::Path<Alloc::ScratchArena> handlerExecutablePath = config.handlerExecutablePath.empty() ? DefaultCrashHandlerExecutablePath(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.handlerExecutablePath);
     CrashDetail::g_State.dumpDetailMode = config.dumpDetailMode;
     CrashDetail::g_State.capturePolicy = config.capturePolicy;
     CrashDetail::g_State.spoolRetention = config.spoolRetention;
@@ -284,9 +303,7 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     for(CrashDetail::FixedDiagnosticSite& site : CrashDetail::g_State.diagnosticSites)
         site = CrashDetail::FixedDiagnosticSite{};
     CrashDetail::InitializeDumpArena();
-    const AString<Alloc::ScratchArena> spoolDirectoryText = PathToString<char>(scratchArena, spoolDirectory);
     CopyFixedBuffer(CrashDetail::g_State.spoolDirectoryText, AStringView(spoolDirectoryText.data(), spoolDirectoryText.size()));
-    const AString<Alloc::ScratchArena> handlerExecutablePathText = PathToString<char>(scratchArena, handlerExecutablePath);
     CopyFixedBuffer(CrashDetail::g_State.handlerExecutablePathText, AStringView(handlerExecutablePathText.data(), handlerExecutablePathText.size()));
 
     const auto spool = CrashDetail::EnsureCrashSpoolDirectories(spoolDirectory);
@@ -329,7 +346,7 @@ void UninstallCrashHandler()noexcept{
 }
 
 b8 SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
-    if(key.empty())
+    if(key.empty() || !__hidden_crash_module::FitsFixedText(key, CrashDetail::s_MaxShortText) || !__hidden_crash_module::FitsFixedText(value, CrashDetail::s_MaxMediumText))
         return false;
 
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
@@ -358,6 +375,8 @@ b8 SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
 }
 
 b8 SetCrashUploadDestination(const AStringView logServerUrl, const AStringView crashUploadToken)noexcept{
+    if(!__hidden_crash_module::FitsFixedText(logServerUrl, CrashDetail::s_MaxUrlText) || !__hidden_crash_module::FitsFixedText(crashUploadToken, CrashDetail::s_MaxMediumText))
+        return false;
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
     if(!CrashDetail::g_State.installed)
         return false;

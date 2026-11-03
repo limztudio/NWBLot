@@ -33,9 +33,7 @@ namespace __hidden_font_atlas_cook_metadata{
 using Core::Metascript::Value;
 
 static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontAtlasPairedSidecarRuleAutoRegistrar({
-    .firstToken = "font_atlas",
     .sidecarExtension = s_PreparedFontExtension,
-    .bunchScanKeyword = "font_atlas",
 });
 
 

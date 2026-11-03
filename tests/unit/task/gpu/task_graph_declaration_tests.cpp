@@ -255,6 +255,31 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
     EXPECT_NE(replacement.generation, blob.generation);
 }
 
+TEST(GpuTaskGraph, UploadBlobPreservesRequestedAlignmentAcrossGrowth){
+    TestArena testArena;
+    Core::GpuTaskGraph graph(testArena.arena);
+    constexpr usize s_Alignment = 65536u;
+    const Array<u8, 3u> source = { 0x17u, 0x80u, 0xffu };
+    const auto first = graph.copyUploadData(source.data(), source.size(), s_Alignment);
+    ASSERT_TRUE(first);
+    for(usize index = 0u; index < 32u; ++index)
+        ASSERT_TRUE(graph.copyUploadData(source.data(), source.size(), s_Alignment));
+    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const auto bytes = declarations.uploadBlobData(*first);
+    ASSERT_TRUE(bytes);
+    ASSERT_EQ(bytes->size(), source.size());
+    EXPECT_EQ(reinterpret_cast<usize>(bytes->data()) % s_Alignment, 0u);
+    for(usize index = 0u; index < source.size(); ++index)
+        EXPECT_EQ((*bytes)[index], source[index]);
+}
+
+TEST(GpuTaskGraph, RejectsOverflowingUploadBlobAllocation){
+    TestArena testArena;
+    Core::GpuTaskGraph graph(testArena.arena);
+    const u8 source = 0x17u;
+    EXPECT_FALSE(graph.copyUploadData(&source, Limit<usize>::s_Max, 65536u).has_value());
+}
+
 TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);

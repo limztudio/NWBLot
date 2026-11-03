@@ -8,6 +8,8 @@ frame.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
 
 `Frame` publishes named allocation owners automatically at the end of each successful frame. The existing telemetry upload flow stores the binary stream and the logger creates its JSON report under the configured telemetry report directory. Memory data is in `perf.memoryRecords`; timing CSV output remains timing data.
 
+The telemetry HTTP response acknowledges storage of the raw stream, not successful decoding or report generation. Empty requests are rejected, and temporary storage failures return 503 so the client retains the pending payload and retries with capped backoff. Failed publication leaves any created `.partial` file for inspection; existing raw and report files are never replaced. A lost response after storage can lead to a repeated upload, so this protocol does not guarantee exactly-once delivery. The client exposes `rejectedPayloadCount()` and writes a diagnostic when a permanently invalid payload is dropped.
+
 Each memory record contains:
 
 - `source`: `arena`, `heapBacking`, or `explicitScope`.

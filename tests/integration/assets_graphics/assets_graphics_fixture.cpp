@@ -122,7 +122,10 @@ b8 AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
     NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(workerThreadCount);
     NWB::Pipeline::AssetBuilder::AssetBuildOptions options(testArena.arena, cookCpuTaskScheduler);
     const Path normalRoot = root.lexicallyNormal();
-    b8 useCaseRootAsRepoRoot = !FileExists(root / __hidden_assets_graphics_fixture::s_AssetsDirectory / __hidden_assets_graphics_fixture::s_ShadersDirectory / "material_mesh.nwb").value_or(false);
+    const auto materialExists = FileExists(root / __hidden_assets_graphics_fixture::s_AssetsDirectory / __hidden_assets_graphics_fixture::s_ShadersDirectory / "material_mesh.nwb");
+    if(!materialExists)
+        return false;
+    b8 useCaseRootAsRepoRoot = !*materialExists;
     for(const Path& assetRoot : assetRoots){
         const Path normalAssetRoot = assetRoot.lexicallyNormal();
         if(normalAssetRoot != normalRoot && !PathHasDirectoryAncestor(normalAssetRoot, normalRoot)){

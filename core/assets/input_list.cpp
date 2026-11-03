@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/filesystem/utility.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,6 +16,23 @@ NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ScratchString> EncodeAssetInputList(const Span<const AssetString> inputs, Alloc::ScratchArena& scratchArena){
+    ScratchString text(scratchArena);
+    usize size = 0u;
+    for(const auto& input : inputs){
+        if(!IsSingleLinePathText(AStringView(input)) || size >= text.max_size() || input.size() > text.max_size() - size - 1u)
+            return MakeUnexpected(Failure{});
+        size += input.size() + 1u;
+    }
+    text.reserve(size);
+    for(const auto& input : inputs){
+        text += input;
+        text += '\n';
+    }
+    return text;
+}
 
 
 b8 ReadAssetInputList(const Path& path, Alloc::ScratchArena& scratchArena, AssetVector<AssetString>& inputs, const b8 resolveRelativePaths){

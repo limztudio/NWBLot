@@ -147,9 +147,9 @@ RayTracingAccelStruct* GpuTaskGraph::accelStructForResource(const GpuGraphResour
 
 Expected<BinaryByteView> GpuTaskGraph::uploadBlobData(const GpuUploadBlobId& blob)const noexcept{
     const GpuUploadBlobNode* const node = findUploadBlob(blob);
-    if(!node || node->bytes.empty())
+    if(!node || node->dataSize == 0u)
         return MakeUnexpected(Failure{});
-    return BinaryByteView{ node->bytes.data(), node->bytes.size() };
+    return BinaryByteView{ node->bytes.data() + node->dataOffset, node->dataSize };
 }
 
 GraphicsPipeline* GpuTaskGraph::graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{

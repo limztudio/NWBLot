@@ -38,7 +38,7 @@ public:
 
 
 private:
-    void emitCallTargetExpr(MString& out, const Expr* lhs)const;
+    void emitCallTargetExpr(MString& out, const Expr* lhs, b8 isBuiltinCall)const;
     void emitIndent(MString& out, u32 indent)const;
     void emitScratchArenaPrologue(MString& out, u32 indent, MStringView arenaName)const;
     void emitStatementList(MString& out, Span<const Stmt* const> statements, u32 indent)const;

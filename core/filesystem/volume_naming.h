@@ -65,17 +65,19 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline b8 VolumeSegmentExists(const ::Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex = 0u){
+[[nodiscard]] inline Expected<b8, ErrorCode> VolumeSegmentExists(const ::Path<ArenaT>& directory, const AStringView volumeName, const usize segmentIndex = 0u){
     if(directory.empty())
         return false;
 
     const auto isDirectory = IsDirectory(directory);
-    if(!isDirectory || !*isDirectory)
+    if(!isDirectory)
+        return MakeUnexpected(isDirectory.error());
+    if(!*isDirectory)
         return false;
 
     const ::Path<ArenaT> segmentPath = MakeVolumeSegmentPath(directory, volumeName, segmentIndex);
     const auto exists = FileExists(segmentPath);
-    return exists && *exists;
+    return exists;
 }
 
 

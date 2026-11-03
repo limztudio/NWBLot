@@ -156,6 +156,23 @@ b8 BuildFrameGraphPayloadImpl(
     Alloc::ScratchArena& scratchArena,
     TelemetryBytes& outPayload
 ){
+    b8 aliasesOutput = false;
+    for(const FrameGraphNodeDesc& node : nodes){
+        const auto alias = ContainerDetail::SourceAliasesDestination(outPayload, Span<const u8>(reinterpret_cast<const u8*>(node.label.data()), node.label.size()));
+        if(alias){
+            if(node.label.size() > outPayload.size() - *alias){
+                outPayload.clear();
+                return false;
+            }
+            aliasesOutput = true;
+        }
+    }
+    if(aliasesOutput){
+        TelemetryBytes staged(outPayload.get_allocator().arena());
+        const b8 result = BuildFrameGraphPayloadImpl(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, scratchArena, staged);
+        outPayload = Move(staged);
+        return result;
+    }
     outPayload.clear();
 
     if(!FitsU32(nodes.size()) || !FitsU32(edges.size()) || !FitsU32(physicalQueueRuntimeStatistics.size()) || (packetSubmissionStatistics && !FitsU32(packetSubmissionStatistics->size())))

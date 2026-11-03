@@ -168,6 +168,18 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if sampler_filters(combined_payloads) != [0, 1]:
         raise AssertionError("multiple input assets did not produce both runtime sampler descriptions")
 
+    exemplar = next(combined_directory.rglob(LIT_NWBA)).read_bytes()
+    magic, version, name_hash, _, _ = ARTIFACT_HEADER.unpack_from(exemplar)
+    empty_artifact = ARTIFACT_HEADER.pack(magic, version, name_hash, 0, 14695981039346656037)
+    first_empty = root / "empty-first.nwba"
+    second_empty = root / "empty-second.nwba"
+    first_empty.write_bytes(empty_artifact)
+    second_empty.write_bytes(empty_artifact)
+    empty_output = root / "empty-gathered"
+    run_command([str(args.asset_gatherer), LIT_INPUT, str(first_empty), str(second_empty), LIT_OUTPUT_DIRECTORY, str(empty_output)], root)
+    if read_volume(empty_output) != {name_hash: b""}:
+        raise AssertionError("identical empty payloads did not gather into one empty asset")
+
     previous_build_files = {path.relative_to(combined_directory): path.read_bytes() for path in combined_directory.rglob("*") if path.is_file()}
     failure_output = run_command([str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), LIT_OUTPUT_DIRECTORY, str(combined_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE], root, failure=True,)
     if "unsupported --asset-type ''" not in failure_output:

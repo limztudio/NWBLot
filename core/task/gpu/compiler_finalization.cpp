@@ -105,6 +105,9 @@ namespace GpuTaskGraphCompilerDetail{
         GpuSubmissionPacketId externalExportPacket;
         GpuPhysicalQueueId externalExportSourceQueue;
         b8 externalExportUsesOnePacket = true;
+        constexpr usize s_SourceMax = static_cast<usize>(Limit<u32>::s_Max);
+        if(compiledPlan.externalResourceExportSources.size() > s_SourceMax)
+            return false;
         const u32 externalExportSourceOffset = static_cast<u32>(compiledPlan.externalResourceExportSources.size());
         u32 externalExportSourceCount = 0u;
         const auto appendTerminalState = [&](const TrackedCompiledResourceState& state, const usize terminalStateIndex, const GpuTaskResourceRange& terminalRange){
@@ -147,6 +150,8 @@ namespace GpuTaskGraphCompilerDetail{
                 // Texture and buffer ownership snapshots retain disjoint terminal ranges from different queues.
                 // Acceleration structures still have one allocation owner and cannot publish conflicting releases.
                 if(resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer && (externalExportPacket != terminalPacket || externalExportSourceQueue != state.queue))
+                    return false;
+                if(compiledPlan.externalResourceExportSources.size() >= s_SourceMax)
                     return false;
                 compiledPlan.externalResourceExportSources.push_back(GpuCompiledExternalResourceExportSource{ .producerTask = state.task, .sourceQueue = state.queue, .range = terminalRange, });
                 ++externalExportSourceCount;

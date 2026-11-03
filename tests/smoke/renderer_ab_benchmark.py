@@ -32,8 +32,9 @@ import reflection_benchmark as reflection
 import caustic_timing_qualification as caustic
 from reflection_benchmark import LIT_POSITIVE_FRAME_REPORTS, balanced_orders, paired_statistics, parse_intervals, positive_frame_reports, summarize_intervals
 from smoke_volume_identity import file_identity, runtime_pipeline_cache_paths
+from smoke_failure_reporting import write_failure_report
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, write_status,)
+    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, window_capture_source_paths, write_status,)
 from window_capture_validation import validate_expected_log_text
 
 LIT_REFLECTION_OPTICAL_INSIDE = "reflection-optical-inside"
@@ -641,7 +642,8 @@ def acquire_trial(args, arm, workload, block, position, symbols):
             except Exception as error:
                 errors.append(f"window backend cleanup: {error}")
         if errors:
-            write_json(directory / "cleanup_error.json", {"errors": errors})
+            write_status("; ".join(errors))
+            write_failure_report(write_json, directory / "cleanup_error.json", {"errors": errors})
             if not primary_failure:
                 raise SmokeFailure("; ".join(errors))
 
@@ -728,8 +730,8 @@ def run(args):
             path = getattr(args, arm.name + "_caustic_qualification")
             qualification[arm.name], paths = caustic.validate_report(path, identities[arm.name])
             qualification_paths.extend(paths)
-    local_modules = ("reflection_benchmark", "window_capture_smoke", "gpu_timing_parse", "name_symbols", "smoke_volume_identity", "caustic_timing_qualification")
-    shared_paths = [Path(__file__), args.logserver_executable, *qualification_paths]
+    local_modules = ("reflection_benchmark", "gpu_timing_parse", "name_symbols", "smoke_volume_identity", "caustic_timing_qualification")
+    shared_paths = [Path(__file__), args.logserver_executable, *qualification_paths, *window_capture_source_paths()]
     shared_paths.extend(Path(sys.modules[name].__file__) for name in local_modules)
     if args.namesym:
         shared_paths.append(args.namesym)
@@ -775,7 +777,7 @@ def run(args):
         write_status(f"Renderer A/B complete: {args.output_directory / LIT_REPORT_JSON}")
         return 0
     except Exception as error:
-        write_json(args.output_directory / "failure.json", {"error": str(error), LIT_COMPLETED_TRIALS: len(trials)})
+        write_failure_report(write_json, args.output_directory / "failure.json", {"error": str(error), LIT_COMPLETED_TRIALS: len(trials)})
         raise
 
 

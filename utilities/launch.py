@@ -11,14 +11,14 @@ from typing import Sequence
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-import launcher as ROOT_LAUNCHER  # noqa: E402
+from launcher.discovery import LauncherDiscovery  # noqa: E402
 
 
 MAIN_ENTRY = "__main__"
 
 
 def main(argv: Sequence[str]) -> int:
-    return ROOT_LAUNCHER.run_directory_launcher(Path("utilities"), argv)
+    return LauncherDiscovery.run_directory_launcher(Path("utilities"), argv)
 
 
 if __name__ == MAIN_ENTRY:

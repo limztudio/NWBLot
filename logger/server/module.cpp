@@ -39,7 +39,6 @@ namespace __hidden_logger_server{
 inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
 inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;
 inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
-inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
 inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
 inline constexpr AStringView s_UnsupportedNameSymbolUploadPath = "/namesym";
 inline constexpr AStringView s_UploadDiagnosticCategory = "logger_server_upload";
@@ -62,6 +61,7 @@ struct ConnectionInfo : NoCopy{
     u8* buffer = nullptr;
     usize size = 0u;
     usize capacity = 0u;
+    u32 rejectionStatus = 0u;
     ConnectionUploadKind::Enum uploadKind = ConnectionUploadKind::LogMessage;
     b8 crashUploadOwned = false;
     Path crashUploadPath;
@@ -150,14 +150,9 @@ public:
     }
 };
 
-inline constexpr usize s_MaxLogMessageUploadBytes = s_MaxLogMessageUploadMebibytes * s_BytesPerMebibyte;
 inline constexpr usize s_MaxCrashPackageUploadBytes = s_MaxCrashPackageUploadMebibytes * s_BytesPerMebibyte;
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept;
-
-inline constexpr usize s_MaxTelemetryUploadMebibytes = 64u;
-inline constexpr usize s_MaxTelemetryUploadBytes = s_MaxTelemetryUploadMebibytes * s_BytesPerMebibyte;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -192,8 +187,8 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     return responseResult;
 }
 
-[[nodiscard]] MHD_Result FinishConnectionUpload(Server& server, MHD_Connection& connection, ConnectionInfo*& info, void*& connectionContext){
-    const MHD_Result responseResult = QueueEmptyResponse(server, connection);
+[[nodiscard]] MHD_Result FinishConnectionUpload(Server& server, MHD_Connection& connection, ConnectionInfo*& info, void*& connectionContext, const u32 statusCode){
+    const MHD_Result responseResult = QueueEmptyResponse(server, connection, statusCode);
     DestroyConnectionInfo(info, connectionContext);
     return responseResult;
 }
@@ -306,10 +301,17 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         return MHD_NO;
 
     const AStringView methodView(method);
+    const auto thisPtr = MakeNotNull(static_cast<Server*>(serverContext));
+    if(methodView == "GET" && AStringView(url) == "/ready" && !thisPtr->m_readinessToken.empty()){
+        auto* response = MHD_create_response_from_buffer(thisPtr->m_readinessToken.size(), thisPtr->m_readinessToken.data(), MHD_RESPMEM_MUST_COPY);
+        if(!response)
+            return MHD_NO;
+        const MHD_Result result = MHD_queue_response(connection, MHD_HTTP_OK, response);
+        MHD_destroy_response(response);
+        return result;
+    }
     if(methodView != "POST")
         return MHD_NO;
-
-    const auto thisPtr = MakeNotNull(static_cast<Server*>(serverContext));
     const auto uploadDataSizePtr = MakeNotNull(uploadDataSizeAddress);
     auto& uploadDataSize = *uploadDataSizePtr;
     const auto connectionContextPtr = MakeNotNull(connectionContextAddress);
@@ -333,9 +335,9 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         if(!info){
             thisPtr->enqueue(
                 StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), __hidden_logger_server::s_ServerName),
-                Core::Common::LogType::Fatal
+                Core::Common::LogType::Error
             );
-            return MHD_NO;
+            return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_SERVICE_UNAVAILABLE);
         }
 
         connectionContext = info->get();
@@ -345,33 +347,44 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
     auto* info = static_cast<__hidden_logger_server::ConnectionInfo*>(connectionContext);
 
     if(uploadDataSize){
+        if(info->rejectionStatus){
+            uploadDataSize = 0u;
+            return MHD_YES;
+        }
         if(!uploadData){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
             info->discardCrashUpload();
-            __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
-            return MHD_NO;
+            info->rejectionStatus = MHD_HTTP_BAD_REQUEST;
+            uploadDataSize = 0u;
+            return MHD_YES;
         }
 
         const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->uploadKind);
         if(uploadDataSize > static_cast<size_t>(uploadSizeLimit) || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
             info->discardCrashUpload();
-            __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
-            return MHD_NO;
+            info->rejectionStatus = MHD_HTTP_CONTENT_TOO_LARGE;
+            uploadDataSize = 0u;
+            return MHD_YES;
         }
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(BinaryByteView(reinterpret_cast<const u8*>(uploadData), appendSize))){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
             info->discardCrashUpload();
-            __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
-            return MHD_NO;
+            info->rejectionStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
+            uploadDataSize = 0u;
+            return MHD_YES;
         }
 
         uploadDataSize = 0;
         return MHD_YES;
     }
 
+    if(info->rejectionStatus)
+        return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, info->rejectionStatus);
+
+    u32 responseStatus = MHD_HTTP_OK;
     if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Crash){
         if(info->closeCrashUploadStream() && info->crashUploadOwned){
             Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_enqueue/scratch"));
@@ -381,17 +394,24 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
                 thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
             }
             else{
-                info->discardCrashUpload();
-                __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Discarded crash upload that could not be queued"), Core::Common::LogType::Error);
+                info->crashUploadOwned = false;
+                responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be queued and was retained at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::Error);
             }
         }
         else{
-            info->discardCrashUpload();
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store crash upload"), Core::Common::LogType::Error);
+            info->crashUploadOwned = false;
+            responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be closed and was retained at '{}'"), PathToString<tchar>(info->crashUploadPath)), Core::Common::LogType::Error);
         }
     }
     else if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Telemetry){
         TelemetryIngestResult result = ProcessTelemetryUpload(thisPtr->arena(), info->buffer, info->size, thisPtr->m_telemetryIngestConfig);
+        if(!result.storedRaw)
+            responseStatus = info->size == 0u ? MHD_HTTP_BAD_REQUEST : MHD_HTTP_SERVICE_UNAVAILABLE;
+        if(result.rawCleanupError){
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Telemetry raw stream was stored but staging cleanup failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), result.rawStagingRetained, result.rawCleanupError.value()), Core::Common::LogType::Error);
+        }
         thisPtr->enqueue(Move(result.message), result.type);
     }
     else{
@@ -399,11 +419,12 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         if(message)
             thisPtr->enqueue(Move(*message));
         else{
+            responseStatus = MHD_HTTP_BAD_REQUEST;
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, message.error(), Core::Common::LogType::Error);
         }
     }
 
-    return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext);
+    return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, responseStatus);
 }
 
 
@@ -440,6 +461,7 @@ Server::Server()
     , m_crashIngestConfig(BaseType::arena())
     , m_telemetryIngestConfig(BaseType::arena())
     , m_crashUploadToken(BaseType::arena())
+    , m_readinessToken(BaseType::arena())
     , m_crashUploads(BaseType::arena())
     , m_crashIngestSemaphore(0)
     , m_crashIngestExit(false)
@@ -456,12 +478,13 @@ Server::~Server()noexcept{
     m_processedMessageFile.close();
 }
 
-b8 Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStringView crashSymbolStoreDirectory, CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken){
+b8 Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStringView crashSymbolStoreDirectory, CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken, AStringView readinessToken){
     m_crashIngestConfig.symbolication.symbolStoreDirectory.clear();
     if(!crashSymbolStoreDirectory.empty())
         m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
     m_crashIngestConfig.retention = crashRetentionConfig;
     m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
+    m_readinessToken.assign(readinessToken.data(), readinessToken.size());
     const auto nameSymbolLoad = Core::Common::NameSymbols::LoadDefaultFile();
     b8 loadedNameSymbols = false;
     if(nameSymbolLoad)

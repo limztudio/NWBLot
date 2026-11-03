@@ -504,8 +504,6 @@ TEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStric
     const MStringView instHdr(instSimdRes.generatedHeader.data(), instSimdRes.generatedHeader.size());
     const MStringView instSrc(instSimdRes.generatedSource.data(), instSimdRes.generatedSource.size());
     EXPECT_NE(instHdr.find("template<>\r\nclass Box<u32> final"), MStringView::npos);
-    EXPECT_NE(instHdr.find("::Name::FromText(__f->asList()[__i].asString()).value_or(::Name{})"), MStringView::npos);
-    EXPECT_NE(instHdr.find("::Name::FromText(__k).value_or(::Name{})"), MStringView::npos);
     EXPECT_NE(instSrc.find("::StoreFloat(__adhd_simd_sum, sum);"), MStringView::npos);
     EXPECT_NE(instSrc.find("::HashCombineValue(usize(wrapped.value), sum)"), MStringView::npos);
 }

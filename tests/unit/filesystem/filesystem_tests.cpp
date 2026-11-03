@@ -65,6 +65,31 @@ private:
     NWB::Core::Common::LogArena& m_arena;
 };
 
+class BlockingRestoreLogger final : public NWB::Core::Common::ILogger{
+public:
+    BlockingRestoreLogger(NWB::Core::Common::LogArena& arena, const Path& blockedPath, const b8 throwAfterBlock = false)noexcept
+        : m_arena(arena)
+        , m_blockedPath(blockedPath)
+        , m_throwAfterBlock(throwAfterBlock)
+    {}
+
+    virtual NWB::Core::Common::LogArena& arena()noexcept override{ return m_arena; }
+    virtual void enqueue(NWB::Core::Common::LogString&&, NWB::Core::Common::LogType::Enum)override{ block(); }
+    virtual void enqueue(const NWB::Core::Common::LogString&, NWB::Core::Common::LogType::Enum)override{ block(); }
+    [[nodiscard]] b8 blocked()const noexcept{ return m_blocked; }
+
+private:
+    void block(){
+        m_blocked = static_cast<b8>(EnsureDirectories(m_blockedPath));
+        if(m_throwAfterBlock)
+            throw s_PublishLogFailure;
+    }
+    NWB::Core::Common::LogArena& m_arena;
+    const Path& m_blockedPath;
+    b8 m_throwAfterBlock;
+    b8 m_blocked = false;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,6 +131,116 @@ protected:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST_F(FilesystemVolumeTest, SegmentProbePreservesInspectionErrors){
+    const auto missing = VolumeSegmentExists(m_directory, m_desc.volumeName.view());
+    ASSERT_TRUE(missing);
+    EXPECT_FALSE(*missing);
+
+#if defined(NWB_PLATFORM_WINDOWS)
+    const Path invalidPath(m_arena, "invalid|volume");
+#else
+    TString<NWB::Core::Alloc::GlobalArena> longName(m_arena);
+    longName.resize(40000u, static_cast<tchar>('a'));
+    const Path invalidPath(m_arena, longName);
+#endif
+    const auto inspection = IsDirectory(invalidPath);
+    ASSERT_FALSE(inspection);
+    const auto failedProbe = VolumeSegmentExists(invalidPath, m_desc.volumeName.view());
+    ASSERT_FALSE(failedProbe);
+    EXPECT_EQ(failedProbe.error(), inspection.error());
+
+    auto filesystem = CreateFilesystem(m_arena, m_desc);
+    ASSERT_TRUE(filesystem);
+    const auto present = VolumeSegmentExists(m_directory, m_desc.volumeName.view());
+    ASSERT_TRUE(present);
+    EXPECT_TRUE(*present);
+    ASSERT_TRUE((*filesystem)->unmount());
+}
+
+TEST_F(FilesystemVolumeTest, SegmentCreatedAfterMountIsNotTruncated){
+    VolumeFileSystem filesystem(m_arena);
+    ASSERT_TRUE(filesystem.mount(m_desc));
+    const Path unexpected = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 1u);
+    const Array<u8, 4u> sentinel{ 7u, 8u, 9u, 10u };
+    ASSERT_TRUE(WriteBinaryFile(unexpected, sentinel));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> payload(5000u, 5u, scratchArena);
+    EXPECT_FALSE(filesystem.writeFile(s_TestFile, payload));
+    Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
+    ASSERT_TRUE(ReadBinaryFile(unexpected, loaded));
+    ASSERT_EQ(loaded.size(), sentinel.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
+    EXPECT_FALSE(filesystem.fileExists(s_TestFile));
+    ASSERT_TRUE(filesystem.unmount());
+}
+
+TEST_F(FilesystemVolumeTest, FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable){
+    constexpr Name s_Large("project/tests/large_growth");
+    VolumeFileSystem filesystem(m_arena);
+    ASSERT_TRUE(filesystem.mount(m_desc));
+    const Array<u8, 3u> payload{ 1u, 2u, 3u };
+    ASSERT_TRUE(filesystem.writeFile(s_TestFile, payload));
+    ASSERT_TRUE(filesystem.flush());
+    const Path first = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
+    const auto trimmedSize = FileSize(first);
+    ASSERT_TRUE(trimmedSize);
+    ASSERT_LT(*trimmedSize, m_desc.segmentSize);
+    const Path collision = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 2u);
+    const Array<u8, 2u> sentinel{ 7u, 8u };
+    ASSERT_TRUE(WriteBinaryFile(collision, sentinel));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> large(9000u, 5u, scratchArena);
+    EXPECT_FALSE(filesystem.writeFile(s_Large, large));
+    Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
+    ASSERT_TRUE(ReadBinaryFile(collision, loaded));
+    ASSERT_EQ(loaded.size(), sentinel.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
+    ASSERT_TRUE(RemoveFile(collision));
+    ASSERT_TRUE(filesystem.unmount());
+    ASSERT_TRUE(filesystem.mount(m_desc));
+    ASSERT_TRUE(filesystem.readFile(s_TestFile, loaded));
+    ASSERT_EQ(loaded.size(), payload.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+    EXPECT_FALSE(filesystem.fileExists(s_Large));
+    ASSERT_TRUE(filesystem.unmount());
+}
+
+TEST_F(FilesystemVolumeTest, GrowthDoesNotPadOverExternallyTruncatedLiveData){
+    VolumeFileSystem filesystem(m_arena);
+    ASSERT_TRUE(filesystem.mount(m_desc));
+    const Array<u8, 8u> payload{ 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u };
+    ASSERT_TRUE(filesystem.writeFile(s_TestFile, payload));
+    const Path first = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
+    const u64 truncatedSize = m_desc.metadataSize + 1u;
+    ASSERT_TRUE(ResizeFile(first, truncatedSize));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> large(5000u, 5u, scratchArena);
+    EXPECT_FALSE(filesystem.writeFile(Name("project/tests/new_growth"), large));
+    const auto size = FileSize(first);
+    ASSERT_TRUE(size);
+    EXPECT_EQ(*size, truncatedSize);
+    ASSERT_TRUE(filesystem.unmount());
+}
+
+TEST_F(FilesystemVolumeTest, GrowthAtSegmentLimitDoesNotExpandTrimmedFile){
+    m_desc.maxSegments = 1u;
+    VolumeFileSystem filesystem(m_arena);
+    ASSERT_TRUE(filesystem.mount(m_desc));
+    const Array<u8, 3u> payload{ 1u, 2u, 3u };
+    ASSERT_TRUE(filesystem.writeFile(s_TestFile, payload));
+    ASSERT_TRUE(filesystem.flush());
+    const Path first = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
+    const auto before = FileSize(first);
+    ASSERT_TRUE(before);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> large(5000u, 5u, scratchArena);
+    EXPECT_FALSE(filesystem.writeFile(Name("project/tests/limited_growth"), large));
+    const auto after = FileSize(first);
+    ASSERT_TRUE(after);
+    EXPECT_EQ(*after, *before);
+    ASSERT_TRUE(filesystem.unmount());
+}
 
 TEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries){
     auto filesystemResult = CreateFilesystem(m_arena, m_desc);
@@ -264,6 +399,69 @@ TEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles){
     EXPECT_TRUE(loaded.empty());
     ASSERT_TRUE(filesystem->unmount());
 }
+
+TEST_F(FilesystemVolumeTest, CompactionPreservesExistingRecoveryDirectories){
+    constexpr Name s_Gap("project/tests/recovery_gap");
+    VolumeFileSystem filesystem(m_arena);
+    ASSERT_TRUE(filesystem.mount(m_desc));
+    const Array<u8, 4u> payload{ 1u, 2u, 3u, 4u };
+    ASSERT_TRUE(filesystem.writeFile(s_Gap, payload));
+    ASSERT_TRUE(filesystem.writeFile(s_TestFile, payload));
+    ASSERT_TRUE(filesystem.removeFile(s_Gap));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    const auto paths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(m_directory, m_desc.volumeName.view(), scratchArena);
+    ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
+    ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
+    const Path backupEvidence = paths.backupDirectory / "recovery";
+    const Path stageEvidence = paths.stageDirectory / "recovery";
+    ASSERT_TRUE(WriteBinaryFile(backupEvidence, payload));
+    ASSERT_TRUE(WriteBinaryFile(stageEvidence, payload));
+    EXPECT_FALSE(filesystem.compact(false));
+    Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
+    ASSERT_TRUE(ReadBinaryFile(backupEvidence, loaded));
+    ASSERT_EQ(loaded.size(), payload.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+    ASSERT_TRUE(ReadBinaryFile(stageEvidence, loaded));
+    ASSERT_EQ(loaded.size(), payload.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+    ASSERT_TRUE(filesystem.unmount());
+}
+
+#if defined(NWB_PLATFORM_WINDOWS)
+TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){
+    VolumeFileSystem filesystem(m_arena);
+    ASSERT_TRUE(filesystem.mount(m_desc));
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> abandoned(5000u, 19u, scratchArena);
+    const Array<u8, 3u> payload{ 4u, 5u, 6u };
+    ASSERT_TRUE(filesystem.writeFile(s_TestFile, abandoned));
+    ASSERT_TRUE(filesystem.writeFile(s_TestFile, payload));
+    ASSERT_GE(filesystem.segmentCount(), 2u);
+    const Path first = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
+    const Path second = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 1u);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> original(scratchArena);
+    ASSERT_TRUE(ReadBinaryFile(first, original));
+    const auto paths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(m_directory, m_desc.volumeName.view(), scratchArena);
+    const Path backup = MakeVolumeSegmentPath(paths.backupDirectory, m_desc.volumeName.view(), 0u);
+    const HANDLE held = CreateFile(second.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    ASSERT_NE(held, INVALID_HANDLE_VALUE);
+    ScopeExit closeHeld([held]()noexcept{ CloseHandle(held); });
+    BlockingRestoreLogger logger(m_logger.arena(), first);
+    {
+        NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
+        EXPECT_FALSE(filesystem.compact(false));
+    }
+    EXPECT_TRUE(logger.blocked());
+    EXPECT_FALSE(filesystem.mounted());
+    EXPECT_FALSE(filesystem.fileExists(s_TestFile));
+    Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
+    ASSERT_TRUE(ReadBinaryFile(backup, loaded));
+    ASSERT_EQ(loaded.size(), original.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), original.data(), original.size()), 0);
+    EXPECT_FALSE(filesystem.readFile(s_TestFile, loaded));
+    EXPECT_TRUE(filesystem.unmount());
+}
+#endif
 
 TEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBytes){
     constexpr Name s_First("project/tests/compact_first");
@@ -484,6 +682,94 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
         verifyImage(index + 1u);
     }
     ASSERT_TRUE(filesystem->unmount());
+}
+
+TEST_F(FilesystemVolumeTest, EarlyPublicationFailureCleansOwnedWorkDirectories){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    NWB::Core::Filesystem::StagedDirectoryPaths paths(m_arena);
+    paths.stageDirectory = m_directory / s_StageDirectory;
+    paths.backupDirectory = m_directory / s_BackupDirectory;
+    ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
+    ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
+    {
+        StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
+        StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
+        EXPECT_FALSE(PublishStagedVolume(paths, m_directory, m_desc.volumeName.view(), 0u, scratchArena, {}, &stageCleanup, &backupCleanup));
+    }
+    const auto stageExists = FileExists(paths.stageDirectory);
+    const auto backupExists = FileExists(paths.backupDirectory);
+    ASSERT_TRUE(stageExists);
+    ASSERT_TRUE(backupExists);
+    EXPECT_FALSE(*stageExists);
+    EXPECT_FALSE(*backupExists);
+}
+
+TEST_F(FilesystemVolumeTest, IncompletePublicationRollbackPreservesRecoveryFiles){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    NWB::Core::Filesystem::StagedDirectoryPaths paths(m_arena);
+    paths.stageDirectory = m_directory / s_StageDirectory;
+    paths.backupDirectory = m_directory / s_BackupDirectory;
+    ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
+    ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
+    const Path output = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
+    const Path backup = MakeVolumeSegmentPath(paths.backupDirectory, m_desc.volumeName.view(), 0u);
+    const Array<u8, 3u> oldBytes{ 1u, 2u, 3u };
+    ASSERT_TRUE(WriteBinaryFile(output, oldBytes));
+    b8 rollbackFailed = false;
+    const VolumePublicationObserver observer{
+        .context = &rollbackFailed,
+        .rollbackFailed = [](void* context)noexcept{ *static_cast<b8*>(context) = true; },
+    };
+    {
+        StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
+        StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
+        BlockingRestoreLogger logger(m_logger.arena(), output);
+        NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
+        EXPECT_FALSE(PublishStagedVolume(paths, m_directory, m_desc.volumeName.view(), 1u, scratchArena, observer, &stageCleanup, &backupCleanup));
+        EXPECT_TRUE(logger.blocked());
+    }
+    EXPECT_TRUE(rollbackFailed);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
+    ASSERT_TRUE(ReadBinaryFile(backup, loaded));
+    ASSERT_EQ(loaded.size(), oldBytes.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+    const auto stageExists = IsDirectory(paths.stageDirectory);
+    ASSERT_TRUE(stageExists);
+    EXPECT_TRUE(*stageExists);
+}
+
+TEST_F(FilesystemVolumeTest, ThrowingDiagnosticStillRetainsIncompleteRollback){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    NWB::Core::Filesystem::StagedDirectoryPaths paths(m_arena);
+    paths.stageDirectory = m_directory / s_StageDirectory;
+    paths.backupDirectory = m_directory / s_BackupDirectory;
+    ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
+    ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
+    const Path output = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
+    const Path backup = MakeVolumeSegmentPath(paths.backupDirectory, m_desc.volumeName.view(), 0u);
+    const Array<u8, 3u> oldBytes{ 1u, 2u, 3u };
+    ASSERT_TRUE(WriteBinaryFile(output, oldBytes));
+    b8 rollbackFailed = false;
+    const VolumePublicationObserver observer{
+        .context = &rollbackFailed,
+        .rollbackFailed = [](void* context)noexcept{ *static_cast<b8*>(context) = true; },
+    };
+    {
+        StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
+        StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
+        BlockingRestoreLogger logger(m_logger.arena(), output, true);
+        NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
+        EXPECT_THROW(PublishStagedVolume(paths, m_directory, m_desc.volumeName.view(), 1u, scratchArena, observer, &stageCleanup, &backupCleanup), i32);
+        EXPECT_TRUE(logger.blocked());
+    }
+    EXPECT_TRUE(rollbackFailed);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> loaded(scratchArena);
+    ASSERT_TRUE(ReadBinaryFile(backup, loaded));
+    ASSERT_EQ(loaded.size(), oldBytes.size());
+    EXPECT_EQ(NWB_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+    const auto stageExists = IsDirectory(paths.stageDirectory);
+    ASSERT_TRUE(stageExists);
+    EXPECT_TRUE(*stageExists);
 }
 
 TEST_F(FilesystemVolumeTest, FailedLaterSegmentPromotionRestoresPublishedBytes){

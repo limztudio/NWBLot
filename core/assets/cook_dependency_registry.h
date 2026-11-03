@@ -83,7 +83,17 @@ public:
     explicit CookDependencyRegistry(CookArena& arena)noexcept
         : m_lookup(0, Hasher<Name>(), EqualTo<Name>(), arena)
         , m_categories(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_defaultEntryText(arena)
     {}
+    CookDependencyRegistry(CookDependencyRegistry&& other)
+        : m_lookup(Move(other.m_lookup))
+        , m_categories(Move(other.m_categories))
+        , m_defaultEntryText(Move(other.m_defaultEntryText))
+        , m_defaultEntryAsset(other.m_defaultEntryAsset)
+    {
+        m_defaultEntryAsset.virtualPathText = AStringView(m_defaultEntryText.data(), m_defaultEntryText.size());
+        other.m_defaultEntryAsset = {};
+    }
 
 
 public:
@@ -99,6 +109,7 @@ public:
 private:
     ExtractorLookup m_lookup;
     CategoryLookup m_categories;
+    CookString m_defaultEntryText;
     DefaultCookEntryAssetDescriptor m_defaultEntryAsset;
 };
 

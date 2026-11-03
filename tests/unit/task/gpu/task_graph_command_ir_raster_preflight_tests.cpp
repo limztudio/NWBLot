@@ -71,6 +71,26 @@ TEST(GpuCommandIrRasterPreflight, DrawWithoutHeapBindingRejectsWholePacket){
     EXPECT_EQ(accepted.error, Core::GpuCommandIrReplayError::None);
     EXPECT_TRUE(accepted.streamValidation.valid());
 
+    // Converting INT32_MAX to f32 rounds up beyond the scissor range.
+    for(const b8 vertical : { false, true }){
+        for(const b8 overLimit : { false, true }){
+            for(const b8 explicitScissor : { false, true }){
+                Core::GpuCommandIrRasterStateDesc boundary = state;
+                const f32 maximum = overLimit ? 2147483648.f : 2147483520.f;
+                boundary.viewport = vertical ? Core::Viewport(0.f, 64.f, 0.f, maximum, 0.f, 1.f) : Core::Viewport(0.f, maximum, 0.f, 48.f, 0.f, 1.f);
+                boundary.hasScissor = explicitScissor;
+                boundary.scissor = Core::Rect(0, 1, 0, 1);
+                Core::GpuCommandIrCapture boundaryCapture(testArena.arena);
+                ASSERT_TRUE(boundaryCapture.captureSetGraphicsState(task, packet, queue, boundary));
+                ASSERT_TRUE(boundaryCapture.captureEndRenderPass(task, packet, queue));
+                const auto boundaryStream = boundaryCapture.exportOwned(testArena.arena);
+                ASSERT_TRUE(boundaryStream);
+                const auto boundaryResult = Core::PreflightGpuCommandIrPacket(*boundaryStream, declarations, plan, packet);
+                EXPECT_EQ(boundaryResult.error, overLimit && !explicitScissor ? Core::GpuCommandIrReplayError::InvalidRasterState : Core::GpuCommandIrReplayError::None);
+            }
+        }
+    }
+
     Core::GpuCommandIrCapture invalidCapture(testArena.arena);
     ASSERT_TRUE(invalidCapture.captureSetGraphicsState(task, packet, queue, state));
     ASSERT_TRUE(invalidCapture.capturePushConstants(task, packet, queue, BinaryByteView{ pushBytes.data(), sizeof(pushBytes) }));

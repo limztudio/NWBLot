@@ -18,7 +18,7 @@ import subprocess
 import threading
 import time
 
-from window_capture_smoke import SmokeFailure
+from window_capture_smoke import SmokeFailure, write_status
 
 COUNTER_PATH = r"\GPU Engine(*)\Utilization Percentage"
 PID_INSTANCE = re.compile(r"^pid_(\d+)_(luid_.+_phys_\d+_eng_\d+_engtype_.+)$", re.IGNORECASE)
@@ -124,7 +124,10 @@ class PdhEngineQuery:
         try:
             self._require(self.api.PdhAddEnglishCounterW(self.query, COUNTER_PATH, 0, ctypes.byref(self.counter)), "add engine counter")
         except Exception:
-            self.close()
+            try:
+                self.close()
+            except Exception as cleanup_error:
+                write_status(f"PDH cleanup after setup failure: {cleanup_error}")
             raise
 
     @staticmethod

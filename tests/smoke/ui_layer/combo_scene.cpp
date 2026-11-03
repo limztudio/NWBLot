@@ -103,7 +103,7 @@ b8 UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiComboSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+::NWB::Core::KeyboardInputResult UiComboSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key < Core::Key::F4 || key > Core::Key::F12)
         return false;
     if(action != Core::InputAction::Press)

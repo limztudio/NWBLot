@@ -277,6 +277,7 @@ b8 ValidateUiTextEditPollSequence(in u64 eventSequence, in u64 lastSequence, in 
 
 b8 ValidateUiEditClipboardActionMode(
     in EditClipboardAction action,
+    in b8 validChannel,
     in b8 readOnly,
     in b8 compositionActive,
     in b8 hasSelection,
@@ -287,6 +288,10 @@ b8 ValidateUiEditClipboardActionMode(
     outStatus = UiEditClipboardStatus::Idle;
     if(action == EditClipboardAction::None || cast<u8>(action) > cast<u8>(EditClipboardAction::PublishSelection)){
         outStatus = UiEditClipboardStatus::InvalidAction;
+        return false;
+    }
+    if(!validChannel){
+        outStatus = UiEditClipboardStatus::Unsupported;
         return false;
     }
     outReads = action == EditClipboardAction::Paste;
@@ -308,3 +313,4 @@ b8 ValidateUiEditClipboardActionMode(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

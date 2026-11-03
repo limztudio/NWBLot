@@ -16,7 +16,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ArrowYawInputHandler::keyboardUpdate(const i32 key, const i32 /*scancode*/, const i32 action, const i32 /*mods*/)noexcept{
+::NWB::Core::KeyboardInputResult ArrowYawInputHandler::keyboardUpdate(const i32 key, const i32 /*scancode*/, const i32 action, const i32 /*mods*/)noexcept{
     const b8 pressed = action == Core::InputAction::Press || action == Core::InputAction::Repeat;
     if(key == Core::Key::Left){
         m_leftHeld = pressed;

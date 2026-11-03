@@ -4,14 +4,18 @@
 from __future__ import annotations
 
 import math
+import secrets
 import socket
 import subprocess
-import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional, Sequence
+from launcher.readiness import READINESS_OPTION, ReadinessError, wait_for_logserver
 from launcher.models import LaunchSettings, ProfileSession
-from launcher.constants import (CWD_PREFIX, EMPTY_STRING, LOGSERVER_LABEL, LOG_PREFIX, MSG_LAUNCHED_LOGSERVER, MSG_LOGSERVER_EXITED, MSG_LOGSERVER_NO_ACCEPT, MSG_LOGSERVER_TIMEOUT_SUFFIX, MSG_PORT_BUSY, MSG_PORT_RANGE, MSG_POSITIVE_TIMEOUT,
-    PROFILE_CLIENT_ADDRESS_FLAG, PROFILE_CLIENT_PORT_FLAG, PROFILE_LOG_CONNECT_TIMEOUT_SECONDS, PROFILE_LOG_DRY_RUN_PORT, PROFILE_LOG_HOST, PROFILE_LOG_PORT_AUTO, PROFILE_LOG_PORT_MAX, PROFILE_LOG_PORT_MIN, PROFILE_LOG_READY_POLL_SECONDS,)
+from launcher.build import BuildController
+from launcher.cmake_settings import CmakeSettings
+from launcher.process import ProcessLauncher
+from launcher.constants import (CWD_PREFIX, LOGSERVER_LABEL, LOG_PREFIX, MSG_LAUNCHED_LOGSERVER, MSG_PORT_BUSY, MSG_PORT_RANGE, MSG_POSITIVE_TIMEOUT,
+    PROFILE_CLIENT_PORT_FLAG, PROFILE_LOG_DRY_RUN_PORT, PROFILE_LOG_HOST, PROFILE_LOG_PORT_AUTO, PROFILE_LOG_PORT_MAX, PROFILE_LOG_PORT_MIN,)
 
 
 class ProfileSessionController:
@@ -33,78 +37,58 @@ class ProfileSessionController:
 
     @staticmethod
     def resolve_profile_log_port(args) -> int:
-        import launcher as _facade
         port = int(args.profile_log_port)
         if port < PROFILE_LOG_PORT_MIN or port > PROFILE_LOG_PORT_MAX:
             raise SystemExit(MSG_PORT_RANGE)
         if port != PROFILE_LOG_PORT_AUTO:
             if not args.dry_run:
-                _facade.ensure_tcp_port_available(port)
+                ProfileSessionController.ensure_tcp_port_available(port)
             return port
         if args.dry_run:
             return PROFILE_LOG_DRY_RUN_PORT
-        return _facade.choose_free_tcp_port()
+        return ProfileSessionController.choose_free_tcp_port()
 
     @staticmethod
-    def wait_for_tcp_port(port: int, timeout_seconds: float, process: Optional[subprocess.Popen]) -> None:
-        deadline = time.monotonic() + timeout_seconds
-        last_error: Optional[OSError] = None
-        while time.monotonic() < deadline:
-            if process is not None and process.poll() is not None:
-                raise SystemExit(MSG_LOGSERVER_EXITED.format(port=port, process=process))
-
-            try:
-                with socket.create_connection((PROFILE_LOG_HOST, port), timeout=PROFILE_LOG_CONNECT_TIMEOUT_SECONDS):
-                    return
-            except OSError as exc:
-                last_error = exc
-                time.sleep(PROFILE_LOG_READY_POLL_SECONDS)
-
-        suffix = MSG_LOGSERVER_TIMEOUT_SUFFIX.format(last_error=last_error) if last_error is not None else EMPTY_STRING
-        raise SystemExit(MSG_LOGSERVER_NO_ACCEPT.format(port=port, timeout_seconds=timeout_seconds, suffix=suffix))
-
-    @staticmethod
-    def profile_client_args(args, profile_session: Optional[ProfileSession]) -> List[str]:
-        if profile_session is None:
-            return []
-        return [PROFILE_CLIENT_ADDRESS_FLAG, args.profile_log_address, PROFILE_CLIENT_PORT_FLAG, str(profile_session.log_port)]
+    def wait_for_tcp_port(port: int, timeout_seconds: float, process: subprocess.Popen, token: str) -> None:
+        try:
+            wait_for_logserver(port, token, timeout_seconds, process)
+        except ReadinessError as error:
+            raise SystemExit(str(error)) from error
 
     @staticmethod
     def start_profile_session(args, settings: LaunchSettings, working_directory: Path, env: Dict[str, str],) -> Optional[ProfileSession]:
-        import launcher as _facade
         if not args.with_profile:
             return None
 
         if not math.isfinite(args.profile_logserver_timeout) or args.profile_logserver_timeout <= 0.0:
             raise SystemExit(MSG_POSITIVE_TIMEOUT)
 
-        log_port = _facade.resolve_profile_log_port(args)
-        logserver_executable = _facade.resolve_executable_path(settings, args.profile_logserver_target, args.profile_logserver_executable, args.profile_logserver_name, args.dry_run,)
-        _facade.validate_launch_paths(logserver_executable, working_directory, args.dry_run)
+        log_port = ProfileSessionController.resolve_profile_log_port(args)
+        logserver_executable = BuildController.resolve_executable_path(settings, args.profile_logserver_target, args.profile_logserver_executable, args.profile_logserver_name, args.dry_run,)
+        ProcessLauncher.validate_launch_paths(logserver_executable, working_directory, args.dry_run)
 
-        command = [str(logserver_executable), PROFILE_CLIENT_PORT_FLAG, str(log_port)] + list(args.profile_logserver_args)
-        print(LOG_PREFIX + _facade.format_command(command), flush=True)
+        token = secrets.token_hex(16) if not args.dry_run else ""
+        command = [str(logserver_executable), PROFILE_CLIENT_PORT_FLAG, str(log_port)] + ([READINESS_OPTION, token] if token else []) + list(args.profile_logserver_args)
+        print(LOG_PREFIX + CmakeSettings.format_command(command), flush=True)
         print(CWD_PREFIX + str(working_directory), flush=True)
         if args.dry_run:
-            return _facade.ProfileSession(log_port, logserver_executable, None)
+            return ProfileSession(log_port, logserver_executable, None)
 
         process: Optional[subprocess.Popen] = None
         published = False
         try:
             process = subprocess.Popen(command, cwd=working_directory, env=env)
             print(MSG_LAUNCHED_LOGSERVER.format(logserver_executable=logserver_executable, process=process, log_port=log_port), flush=True)
-            _facade.wait_for_tcp_port(log_port, args.profile_logserver_timeout, process)
-            session = _facade.ProfileSession(log_port, logserver_executable, process)
+            ProfileSessionController.wait_for_tcp_port(log_port, args.profile_logserver_timeout, process, token)
+            session = ProfileSession(log_port, logserver_executable, process)
             published = True
             return session
         finally:
             if process is not None and not published:
-                _facade.terminate_process(process, LOGSERVER_LABEL)
+                ProcessLauncher.terminate_process(process, LOGSERVER_LABEL)
 
-
-choose_free_tcp_port = ProfileSessionController.choose_free_tcp_port
-ensure_tcp_port_available = ProfileSessionController.ensure_tcp_port_available
-resolve_profile_log_port = ProfileSessionController.resolve_profile_log_port
-wait_for_tcp_port = ProfileSessionController.wait_for_tcp_port
-profile_client_args = ProfileSessionController.profile_client_args
-start_profile_session = ProfileSessionController.start_profile_session
+    @staticmethod
+    def launch_with_optional_profile(args, settings: LaunchSettings, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str],) -> int:
+        ProcessLauncher.validate_launch_paths(executable, working_directory, args.dry_run)
+        profile_session = ProfileSessionController.start_profile_session(args, settings, working_directory, env)
+        return ProcessLauncher.launch_process(args, executable, working_directory, env, application_args, profile_session, paths_validated=True)

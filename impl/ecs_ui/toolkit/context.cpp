@@ -21,6 +21,7 @@ Context::Context(Core::Alloc::GlobalArena& arena)
     , m_targets(arena)
     , m_popups(arena)
     , m_stateClaims(arena)
+    , m_retainedRoots(arena)
     , m_commitTargets(arena)
     , m_commitPopups(arena)
 {
@@ -284,19 +285,27 @@ void Context::resetInput()noexcept{
 }
 
 void Context::retainRoots(const Span<const WidgetRoot> roots){
+    if(m_states.entries().empty() && m_targets.empty() && m_popups.empty())
+        return;
+    m_retainedRoots.clear();
+    if(roots.size() > m_retainedRootCapacity){
+        m_retainedRoots.reserve(roots.size());
+        m_retainedRootCapacity = roots.size();
+    }
+    m_retainedRoots.insert(roots.begin(), roots.end());
     for(usize index = m_states.entries().size(); index > 0u; --index){
         const auto& state = m_states.entries()[index - 1u];
-        if(!ContainsWidgetRoot(roots, state.root)){
+        if(!m_retainedRoots.contains(state.root)){
             m_input.invalidateTarget(state.id);
             m_states.erase(index - 1u);
         }
     }
     for(usize index = m_targets.size(); index > 0u; --index){
-        if(!ContainsWidgetRoot(roots, m_targets[index - 1u].root))
+        if(!m_retainedRoots.contains(m_targets[index - 1u].root))
             m_targets.erase(m_targets.begin() + index - 1u);
     }
     for(usize index = m_popups.size(); index > 0u; --index){
-        if(!ContainsWidgetRoot(roots, m_popups[index - 1u].root))
+        if(!m_retainedRoots.contains(m_popups[index - 1u].root))
             m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
     }
 }

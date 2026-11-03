@@ -21,12 +21,14 @@ NWB_ADHD_BEGIN
 struct ScopedVarInfo{
     MStringView name;
     MStringView inferredTypeName;
+    MStringView borrowedLocalOwnerName;
     TypeRef* type = nullptr;
     const Expr* lambdaExpr = nullptr;
     ParamPassingMode::Enum mode = ParamPassingMode::None;
     u32 declaredParallelDepth = 0u;
     b8 isConst = false;
     b8 isParam = false;
+    b8 borrowsLocalStringOwner = false;
 };
 
 
@@ -151,7 +153,10 @@ private:
     [[nodiscard]] MStringView inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] const TypeRef* inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprBaseType(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef = nullptr)const noexcept;
-    [[nodiscard]] b8 deduceCallTemplateArgs(
+    [[nodiscard]] b8 isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] b8 exprBorrowsTemporaryStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] b8 exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, MStringView* outOwnerName = nullptr, usize* outOwnerScopeIndex = nullptr)const noexcept;
+    void deduceCallTemplateArgs(
         const ClassDecl* ownerClass,
         const MethodDecl* enclosingMethod,
         const MethodDecl& targetCallable,

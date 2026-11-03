@@ -6,6 +6,7 @@
 
 
 #include "name_hash.h"
+#include "sync.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +35,26 @@ struct NameSymbolResolverState{
     void* userData = nullptr;
 };
 
+
+[[nodiscard]] inline MallocMutex& SymbolRecorderMutex()noexcept{
+    static MallocMutex s_Mutex;
+    return s_Mutex;
+}
+
+[[nodiscard]] inline MallocMutex& SymbolResolverMutex()noexcept{
+    static MallocMutex s_Mutex;
+    return s_Mutex;
+}
+
+[[nodiscard]] inline Atomic<b8>& SymbolRecorderActive()noexcept{
+    static Atomic<b8> s_Active{ false };
+    return s_Active;
+}
+
+[[nodiscard]] inline Atomic<b8>& SymbolResolverActive()noexcept{
+    static Atomic<b8> s_Active{ false };
+    return s_Active;
+}
 
 [[nodiscard]] inline NameSymbolRecorderState& SymbolRecorderState()noexcept{
     static NameSymbolRecorderState s_State;
@@ -88,23 +109,26 @@ inline constexpr usize s_SymbolTextBufferCount = 8u;
 }
 
 inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData)noexcept{
+    NothrowScopedLock lock(SymbolRecorderMutex());
     NameSymbolRecorderState& state = SymbolRecorderState();
     state.callback = callback;
-    state.userData = userData;
+    state.userData = callback ? userData : nullptr;
+    SymbolRecorderActive().store(callback != nullptr, MemoryOrder::release);
 }
 
 inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callback, void* const userData)noexcept{
+    NothrowScopedLock lock(SymbolResolverMutex());
     NameSymbolResolverState& state = SymbolResolverState();
     state.callback = callback;
-    state.userData = userData;
+    state.userData = callback ? userData : nullptr;
+    SymbolResolverActive().store(callback != nullptr, MemoryOrder::release);
 }
 
 [[nodiscard]] inline b8 ResolveNameSymbolText(char* const outText, const usize outTextSize, const NameHash& hash){
     if(IsZeroHash(hash) || outText == nullptr || outTextSize == 0u)
         return false;
 
-    NameSymbolResolverState& state = SymbolResolverState();
-    if(!state.callback)
+    if(!SymbolResolverActive().load(MemoryOrder::acquire))
         return false;
 
     b8& inProgress = SymbolResolveInProgress();
@@ -112,6 +136,10 @@ inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callbac
         return false;
     ScopedSymbolCallbackFlag resolveFlag(inProgress);
 
+    NothrowScopedLock lock(SymbolResolverMutex());
+    const NameSymbolResolverState& state = SymbolResolverState();
+    if(!state.callback)
+        return false;
     return state.callback(outText, outTextSize, hash, state.userData);
 }
 
@@ -120,8 +148,7 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
     if(IsZeroHash(hash))
         return;
 
-    NameSymbolRecorderState& state = SymbolRecorderState();
-    if(!state.callback)
+    if(!SymbolRecorderActive().load(MemoryOrder::acquire))
         return;
 
     b8& inProgress = SymbolRecordInProgress();
@@ -131,6 +158,10 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
 
     if constexpr(IsSame_V<CharT, char>){
         if(HasEmbeddedNull(text))
+            return;
+        NothrowScopedLock lock(SymbolRecorderMutex());
+        const NameSymbolRecorderState& state = SymbolRecorderState();
+        if(!state.callback)
             return;
         state.callback(hash, AStringView(text.data(), text.size()), state.userData);
     }
@@ -146,6 +177,10 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
                 ++copiedCount;
             }
         }
+        NothrowScopedLock lock(SymbolRecorderMutex());
+        const NameSymbolRecorderState& state = SymbolRecorderState();
+        if(!state.callback)
+            return;
         state.callback(hash, AStringView(narrowText.data(), copiedCount), state.userData);
     }
 }

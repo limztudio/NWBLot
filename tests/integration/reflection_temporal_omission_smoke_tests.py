@@ -72,6 +72,20 @@ class TemporalOmissionCapabilityTests(unittest.TestCase):
         self.assertTrue(proof.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI + "ReflectionSmokeProject: shutdown\n"))
         self.assertFalse(proof.hardware_unavailable_without_errors(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI * 2))
 
+    def test_missing_cleanup_artifact_cannot_prove_cleanup_succeeded(self):
+        with tempfile.TemporaryDirectory() as root:
+            log = Path(root) / "runtime.log"
+            log.write_text(LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI, encoding=LIT_UTF_8)
+            error = proof.benchmark.SmokeFailure("GPU benchmark timed out: no hardware")
+            cleanup = proof.benchmark.TrialCleanupStatus()
+            self.assertFalse(proof.hardware_skip_is_proven(error, log, cleanup))
+            cleanup.succeeded = True
+            self.assertTrue(proof.hardware_skip_is_proven(error, log, cleanup))
+
+    def test_source_identity_includes_capture_validation_helpers(self):
+        files = {Path(path).name for path in proof.source_identity(None)}
+        self.assertTrue({"window_capture_logs.py", "window_capture_validation.py", "smoke_failure_reporting.py"}.issubset(files))
+
     def test_no_marker_cannot_hide_an_acquisition_failure(self):
         self.assertFalse(proof.hardware_unavailable_without_errors("ReflectionSmokeProject: shutdown\n"))
 

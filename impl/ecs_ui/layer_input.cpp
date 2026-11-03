@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, const i32 mods){
+::NWB::Core::KeyboardInputResult UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, const i32 mods){
     if(!Ui::InputBindings::ValidKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
         return false;
     synchronizeNativeInput();
@@ -46,7 +46,7 @@ b8 UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scanc
     m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
     if(action != Core::InputAction::Release)
         m_blockNativeChars = owner == UiInputOwner::Custom;
-    return owner == UiInputOwner::Custom;
+    return { owner == UiInputOwner::Custom, m_blockCommandChars };
 }
 
 b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){

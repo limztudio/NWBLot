@@ -42,6 +42,8 @@ def parse_args(argv):
     parser.add_argument("--mode", choices=(LIT_FRAMEBUFFER, LIT_RESIZE), default=LIT_FRAMEBUFFER)
     parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
     parser.add_argument("--frames", type=int, default=60)
+    parser.add_argument("--many-roots", action="store_true")
+    parser.add_argument("--persistent-state-test", action="store_true")
     parser.add_argument(LIT_TIMEOUT, type=float, default=60.0)
     parser.add_argument("--application-arg", action="append", default=[])
     parser.add_argument(LIT_GPU_VALIDATION, action=argparse.BooleanOptionalAction, default=True, help="Request graphics validation; use --no-gpu-validation for a fin application.")
@@ -60,11 +62,17 @@ def capture_command(args, output):
     if args.mode == LIT_FRAMEBUFFER:
         command += ["--application-capture", "--application-capture-frame-count", str(args.frames), "--log-output", str(output.with_suffix(".log"))]
     else:
-        command += ["--resize-client", "800", "600", "--settle-seconds", SETTLE_SECONDS_ARGUMENT, "--resize-settle-seconds", SETTLE_SECONDS_ARGUMENT]
+        command += ["--resize-client", "800", "600", "--settle-seconds", SETTLE_SECONDS_ARGUMENT, "--resize-settle-seconds", SETTLE_SECONDS_ARGUMENT, "--render-ready-timeout", "30",
+            "--expect-before-resize-log-message", "UiLayerSmokeProject: resize scene presented"]
     if args.logserver_executable:
         command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable.resolve())]
     else:
         command.append("--no-logserver")
+    if args.many_roots:
+        command += [LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: root beyond target limit painted"]
+        command += [LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: root removed during paint"]
+    if args.persistent_state_test:
+        command += [LIT_EXPECT_LOG_MESSAGE, "UiLayerSmokeProject: persistent state self-filter passed"]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     return command
 
@@ -74,6 +82,10 @@ def run(args):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     output = args.output_directory / "ui_layer.bmp"
     environment = build_fixture_environment(os.environ)
+    environment["NWB_UI_LAYER_MANY_ROOTS"] = "1" if args.many_roots else "0"
+    environment["NWB_UI_LAYER_PERSISTENT_STATE_TEST"] = "1" if args.persistent_state_test else "0"
+    if args.mode == LIT_RESIZE:
+        environment["NWB_UI_LAYER_RESIZE_RENDER"] = "1"
     result = subprocess.run(capture_command(args, output), env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if result.returncode == SKIP_EXIT_CODE:
         return SKIP_EXIT_CODE

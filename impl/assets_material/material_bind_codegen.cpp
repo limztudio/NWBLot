@@ -233,8 +233,10 @@ static b8 AppendMaterialBindFieldConstants(
     NWB_ASSERT(!defaultAttribute.empty());
 
     ACompactString keyText;
-    const b8 keyBuilt = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name), keyText);
-    NWB_ASSERT(keyBuilt);
+    if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name), keyText)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': failed to build key for '{}.{}'"), ConvertString(includePath), ConvertString(instance.name), ConvertString(field.name));
+        return false;
+    }
     const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText.view());
 
     if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, scratchArena, inOutSymbols, inOutSource))

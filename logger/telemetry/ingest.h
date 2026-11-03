@@ -42,6 +42,8 @@ struct TelemetryIngestResult{
     b8 wroteJson = false;
     b8 wrotePerfCsv = false;
     b8 wroteGraph = false;
+    b8 rawStagingRetained = false;
+    ErrorCode rawCleanupError;
     Core::Telemetry::DecodeResult decode;
     TelemetryReportSummary summary;
 
@@ -58,7 +60,7 @@ public:
 
 public:
     [[nodiscard]] b8 ok()const noexcept{
-        return storedRaw && decode.ok() && wroteJson && wrotePerfCsv && summary.parseFailureCount == 0u;
+        return storedRaw && !rawCleanupError && decode.ok() && wroteJson && wrotePerfCsv && summary.parseFailureCount == 0u;
     }
 };
 

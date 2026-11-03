@@ -288,7 +288,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                 emitScratchArenaPrologue(out, indent + 2u, "parallel");
                 emitIndent(out, indent + 2u);
             }
-            emitCallTargetExpr(out, stmt.expr->lhs);
+            emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall);
             if(!stmt.expr->callTemplateArgs.empty())
                 m_typeEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs);
             out.push_back('(');

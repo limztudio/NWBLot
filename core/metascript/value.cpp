@@ -25,7 +25,7 @@ namespace __hidden_metascript_value{
 
 
 template<typename IntOverflowCheck, typename IntOp, typename FloatOp>
-void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOverflowCheck&& overflows, IntOp&& intOp, FloatOp&& floatOp, const TStringView invalidOpMessage, const b8 rejectZeroDivisor = false)noexcept{
+void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOverflowCheck&& overflows, IntOp&& intOp, FloatOp&& floatOp, [[maybe_unused]] const TStringView invalidOpMessage, const b8 rejectZeroDivisor = false)noexcept{
     if(lhs.isInteger() && rhs.isInteger()){
         if(rejectZeroDivisor && rhs.asInteger() == 0){
             NWB_ASSERT_MSG(false, OperationValidator::s_DivisionByZeroText);

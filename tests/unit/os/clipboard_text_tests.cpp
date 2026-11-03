@@ -84,6 +84,20 @@ TEST(ClipboardText, Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput){
     EXPECT_TRUE(utf8.empty());
 }
 
+TEST(ClipboardText, Latin1ConversionAcceptsAliasedOutputAndSubviews){
+    NWB::Tests::TestArena arena;
+    AString<Alloc::GlobalArena> text(AStringView("\x80\xFF", 2u), arena.arena);
+    ASSERT_EQ(DecodeClipboardLatin1(AStringView(text), text), ClipboardStatus::Success);
+    EXPECT_EQ(text, "\xC2\x80\xC3\xBF");
+    ASSERT_EQ(EncodeClipboardLatin1(AStringView(text), text), ClipboardStatus::Success);
+    EXPECT_EQ(AStringView(text), AStringView("\x80\xFF", 2u));
+
+    text.assign("prefix\xC2\x80");
+    const AStringView suffix = AStringView(text).substr(6u);
+    ASSERT_EQ(EncodeClipboardLatin1(suffix, text), ClipboardStatus::Success);
+    EXPECT_EQ(AStringView(text), AStringView("\x80", 1u));
+}
+
 TEST(ClipboardText, Latin1ExpansionCannotExceedUtf8ByteLimit){
     NWB::Tests::TestArena arena;
     AString<Alloc::GlobalArena> input(s_ClipboardMaxTextBytes / 2u + 1u, static_cast<char>(0xFFu), arena.arena);

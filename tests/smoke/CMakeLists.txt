@@ -54,9 +54,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     set(_nwb_skinned_caustic_transition_script_timeout_seconds 240)
     set(_nwb_skinned_caustic_transition_ctest_timeout_seconds 870)
     set(_nwb_stress_presentation_timing_timeout_seconds 120)
-    set(_nwb_gi_coverage_probe_settle_seconds 12)
-    set(_nwb_gi_coverage_probe_script_timeout_seconds 75)
-    set(_nwb_gi_coverage_probe_ctest_timeout_seconds 90)
+    set(_nwb_gi_coverage_probe_script_timeout_seconds 240)
+    set(_nwb_gi_coverage_probe_ctest_timeout_seconds 270)
     set(_nwb_csg_gi_smoke_timeout_seconds 900)
 
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
@@ -786,11 +785,14 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets nwb_gi_smoke_assets)
 
         # Separate opt-in fixture for same-cell perpendicular face GI coverage.
-        nwb_add_window_capture_smoke(nwb_gi_coverage_probe_capture_smoke gi_coverage_probe_capture.bmp "$<TARGET_FILE:nwb_gi_test_smoke>" "${_nwb_gi_runtime_root}" "NWB GI Test" "--settle-seconds" "${_nwb_gi_coverage_probe_settle_seconds}"
+        nwb_add_window_capture_smoke(nwb_gi_coverage_probe_capture_smoke gi_coverage_probe_capture.bmp "$<TARGET_FILE:nwb_gi_test_smoke>" "${_nwb_gi_runtime_root}" "NWB GI Test" "--application-capture" "--application-capture-frame-count" "1"
             "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_gi_coverage_probe_script_timeout_seconds}" "--expect-log-message" "GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"
+                "--expect-log-message" "GiTestSmokeProject: complex GI live warmup start"
+                "--expect-log-message" "GiTestSmokeProject: complex GI live warmup end"
+                "--expect-log-message" "GiTestSmokeProject: complex GI capture source_frame="
                 "--expect-log-message" "GiTestSmokeProject: shutdown"
             "--expect-surfel-coverage-probe")
-        set_tests_properties(nwb_gi_coverage_probe_capture_smoke PROPERTIES ENVIRONMENT "NWB_GI_SMOKE_COVERAGE_VIEW=1" TIMEOUT ${_nwb_gi_coverage_probe_ctest_timeout_seconds})
+        set_tests_properties(nwb_gi_coverage_probe_capture_smoke PROPERTIES ENVIRONMENT "NWB_GI_SMOKE_COVERAGE_VIEW=1;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=1" TIMEOUT ${_nwb_gi_coverage_probe_ctest_timeout_seconds})
 
         foreach(_nwb_csg_gi_route IN ITEMS natural software)
             foreach(_nwb_csg_gi_lighting IN ITEMS current lagged)

@@ -111,12 +111,14 @@ TEST(ClipboardPipe, WriterOwnsLargeInputAndResumesAfterFullPipe){
     ASSERT_EQ(poll(&writable, 1u, 0), 0);
 
     ClipboardTextAccumulator received(arena.arena);
-    Expected<b8, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
-    for(usize attempt = 0u; attempt < 4096u && !finished.value_or(false); ++attempt){
-        ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
+    b8 finished = false;
+    for(usize attempt = 0u; attempt < 4096u && !finished; ++attempt){
+        const auto read = ReadClipboardPipe(pipe.m_readFd, received);
+        ASSERT_TRUE(read);
+        finished = *read;
         ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
     }
-    EXPECT_TRUE(*finished);
+    EXPECT_TRUE(finished);
     EXPECT_TRUE(writer.finished());
     EXPECT_EQ(received.text(), expected);
 }

@@ -263,6 +263,32 @@ struct CrashAck{
 [[nodiscard]] inline b8 IsCurrentCrashRequest(const CrashRequest& request)noexcept{
     if(request.magic != s_RequestMagic || request.version != s_RequestVersion)
         return false;
+    if(request.metadataCount > s_MaxMetadata || request.breadcrumbCount > s_MaxBreadcrumbs || request.callstackFrameCount > s_MaxCallstackFrames)
+        return false;
+    const auto terminated = [](const auto& buffer)noexcept{ return FixedBufferView(buffer).size() < buffer.size(); };
+    if(
+        !terminated(request.crashId) || !terminated(request.applicationName) || !terminated(request.versionText)
+        || !terminated(request.buildId) || !terminated(request.abi) || !terminated(request.spoolDirectory)
+        || !terminated(request.logServerUrl) || !terminated(request.crashUploadToken) || !terminated(request.event)
+        || !terminated(request.triggerCategory) || !terminated(request.triggerExpression) || !terminated(request.triggerMessage)
+        || !terminated(request.triggerFile)
+    )
+        return false;
+    const AStringView crashId = FixedBufferView(request.crashId);
+    if(crashId.empty() || crashId == "." || crashId == "..")
+        return false;
+    for(const char ch : crashId){
+        if(!IsAsciiIdentifierChar(ch) && ch != '-' && ch != '.')
+            return false;
+    }
+    for(u32 i = 0u; i < request.metadataCount; ++i){
+        if(!terminated(request.metadata[i].key) || !terminated(request.metadata[i].value))
+            return false;
+    }
+    for(u32 i = 0u; i < request.breadcrumbCount; ++i){
+        if(!terminated(request.breadcrumbs[i].category) || !terminated(request.breadcrumbs[i].message))
+            return false;
+    }
 #if defined(NWB_PLATFORM_WINDOWS)
     if(request.manualContextSize == 0u)
         return request.manualExceptionRecordSize == 0u && request.manualContextArchitecture == 0u;
@@ -281,7 +307,10 @@ struct CrashAck{
 }
 
 [[nodiscard]] inline b8 CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
-    return ack.magic == s_AckMagic && ack.version == s_RequestVersion && AStringView(ack.crashId.data()) == AStringView(request.crashId.data());
+    const AStringView ackId = FixedBufferView(ack.crashId);
+    const AStringView requestId = FixedBufferView(request.crashId);
+    return ack.magic == s_AckMagic && ack.version == s_RequestVersion && ack.packageWritten <= 1u
+        && !ackId.empty() && ackId.size() < ack.crashId.size() && requestId.size() < request.crashId.size() && ackId == requestId;
 }
 
 struct ManualDumpContextStorage;

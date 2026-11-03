@@ -117,6 +117,29 @@ TEST(GlobalFilesystemCleanup, DirectoryAndRootLinksWithTrailingSeparatorsDoNotRe
     EXPECT_TRUE(RemoveAllForCleanup(root));
 }
 
+TEST(GlobalFilesystemCleanup, RemoveAllIfExistsRemovesDanglingLinkWithoutTouchingItsTarget){
+    NWB::Tests::TestArena<> arena;
+    const TestPath root(arena.arena, "global_test_artifacts/cleanup_dangling_link");
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
+    const TestPath link = root / "dangling";
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(!CreateSymbolicLinkW(link.c_str(), L"missing", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
+        const DWORD error = GetLastError();
+        ASSERT_TRUE(RemoveAllForCleanup(root));
+        if(error == ERROR_PRIVILEGE_NOT_HELD)
+            GTEST_SKIP() << "Symlink creation requires host permission";
+        FAIL() << "CreateSymbolicLinkW failed: " << error;
+    }
+#else
+    ASSERT_EQ(::symlink("missing", link.c_str()), 0);
+#endif
+    ASSERT_TRUE(RemoveAllIfExists(link));
+    const auto exists = FileExistsNoFollow(link);
+    ASSERT_TRUE(exists);
+    EXPECT_FALSE(*exists);
+    EXPECT_TRUE(RemoveAllForCleanup(root));
+}
+
 #if defined(NWB_PLATFORM_WINDOWS)
 TEST(GlobalFilesystemCleanup, DosDeviceDrivePathRemovesItsOwnedTree){
     NWB::Tests::TestArena<> arena;

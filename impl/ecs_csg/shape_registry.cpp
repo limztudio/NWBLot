@@ -103,6 +103,10 @@ namespace __hidden_shape_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void LogCsgShapeInvalidParameterSize(const Name& name){
+    NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI"), ConvertString(name.resolvedText()));
+}
+
 Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
     if(!localBounds.finiteBounds)
         return CsgShapeBounds{};

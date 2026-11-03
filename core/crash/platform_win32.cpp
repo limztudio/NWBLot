@@ -209,12 +209,12 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
         return CrashDumpTransportStatus::Failed;
     s_InTransport = true;
 
-    // One writer owns the request pipe + ack event; the other bails (its sibling's report still lands).
+    // One writer owns the request pipe and ack event; other requests are not sent.
     // One async-safe CAS, never blocks.
     u32 expected = 0u;
     if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
         s_InTransport = false;
-        return CrashDumpTransportStatus::Sent;
+        return CrashDumpTransportStatus::Failed;
     }
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;

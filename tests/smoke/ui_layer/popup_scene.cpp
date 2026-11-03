@@ -159,7 +159,7 @@ b8 UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
     return true;
 }
 
-b8 UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+::NWB::Core::KeyboardInputResult UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
         return false;
     if(action == Core::InputAction::Press){

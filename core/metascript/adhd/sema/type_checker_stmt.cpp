@@ -212,9 +212,15 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
         const b8 isMutRefBinding = (varRefMode == ParamPassingMode::Mut);
         if(!checkExpr(ownerClass, scope, isMutRefBinding, method, *stmt.expr, errors))
             ok = false;
-        if(varRefMode == ParamPassingMode::In && isRvalueTemporaryExpr(ownerClass, &method, *stmt.expr, scope)){
-            reportError(errors, stmt.span, "cannot bind 'in' reference variable to a literal or rvalue temporary");
-            ok = false;
+        if(varRefMode == ParamPassingMode::In){
+            if(isRvalueTemporaryExpr(ownerClass, &method, *stmt.expr, scope)){
+                reportError(errors, stmt.span, "cannot bind 'in' reference variable to a literal or rvalue temporary");
+                ok = false;
+            }
+            else if(stmt.expr->isStringByteRead){
+                stmt.expr->isStringByteRead = false;
+                stmt.expr->isStringByteConstRef = true;
+            }
         }
         if(stmt.varType && stmt.varType->isAuto && !stmt.expr->resolvedSimdType.empty()){
             stmt.varType->isAuto = false;
@@ -273,6 +279,23 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
     info.declaredParallelDepth = m_parallelDepth;
     if(stmt.expr && stmt.expr->kind == ExprKind::Lambda)
         info.lambdaExpr = stmt.expr;
+    const MStringView effectiveVarBase = resolveScopedVarBaseType(info);
+    const Expr* stringViewInitExpr = stmt.expr
+        ? stmt.expr
+        : (stmt.isCtorInit && !stmt.arguments.empty() ? stmt.arguments[0] : nullptr);
+    if(effectiveVarBase == "StringView" && stringViewInitExpr){
+        if(exprBorrowsTemporaryStringOwner(ownerClass, &method, *stringViewInitExpr, scope)){
+            reportError(errors, stmt.span, "cannot bind 'StringView' variable to a temporary owning string");
+            ok = false;
+        }
+        else{
+            MStringView borrowedOwnerName;
+            if(exprBorrowsLocalStringOwner(ownerClass, &method, *stringViewInitExpr, scope, &borrowedOwnerName)){
+                info.borrowsLocalStringOwner = true;
+                info.borrowedLocalOwnerName = borrowedOwnerName;
+            }
+        }
+    }
     scope.push_back(info);
     return ok;
 }
@@ -314,6 +337,9 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
             else if(stmt.expr->kind == ExprKind::MemberAccess || stmt.expr->kind == ExprKind::Index){
                 const TypeRef* subTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
                 if(m_symbols.resolveRefMode(subTypeRef) == ParamPassingMode::None){
+                    if(isTemporaryOwnerExpr(ownerClass, &method, *stmt.expr, scope)){
+                        isDanglingReturn = true;
+                    }
                     const Expr* root = stmt.expr->lhs;
                     while(root && (root->kind == ExprKind::MemberAccess || root->kind == ExprKind::Index)){
                         const TypeRef* midType = inferExprTypeRef(ownerClass, &method, *root, scope);
@@ -350,6 +376,26 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
     }
     if(stmt.expr && !checkExpr(ownerClass, scope, retRefMode == ParamPassingMode::Mut, method, *stmt.expr, errors))
         ok = false;
+    if(stmt.expr && retRefMode == ParamPassingMode::In && stmt.expr->isStringByteRead){
+        stmt.expr->isStringByteRead = false;
+        stmt.expr->isStringByteConstRef = true;
+    }
+    if(activeRetType && stmt.expr && retRefMode == ParamPassingMode::None){
+        const MStringView baseRetTypeName = m_symbols.resolveBaseTypeName(activeRetType->name);
+        if(baseRetTypeName == "StringView"){
+            if(exprBorrowsTemporaryStringOwner(ownerClass, &method, *stmt.expr, scope)
+                || exprBorrowsLocalStringOwner(ownerClass, &method, *stmt.expr, scope)){
+                reportError(errors, stmt.span, "cannot return 'StringView' borrowing a temporary or stack-local string");
+                ok = false;
+            }
+        }
+        else if(baseRetTypeName != "String" && baseRetTypeName != "CompactString" && stmt.expr->kind == ExprKind::Identifier){
+            if(const ScopedVarInfo* retLocal = FindScopedVar(scope, stmt.expr->text); retLocal && retLocal->borrowsLocalStringOwner){
+                reportError(errors, stmt.span, "cannot return value containing 'StringView' borrowing a stack-local string");
+                ok = false;
+            }
+        }
+    }
     if(stmt.expr && IsEscapingMutCaptureLambda(stmt.expr, scope)){
         reportError(errors, stmt.span, "cannot return lambda with 'mut' capture; mutable reference captures cannot escape their enclosing scope");
         ok = false;

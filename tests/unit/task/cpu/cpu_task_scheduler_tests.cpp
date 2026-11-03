@@ -41,7 +41,9 @@ TEST(CpuTaskSchedulerTests, ForeignDependenciesAndForeignWaitsAreRejectedWithout
     EXPECT_FALSE(rejected);
     EXPECT_EQ(second.statistics().outstandingTasks, 0u);
     EXPECT_THROW(second.wait(foreign), RuntimeException);
+    EXPECT_THROW({ const b8 complete = second.isComplete(foreign); EXPECT_FALSE(complete); }, RuntimeException);
     first.wait(foreign);
+    EXPECT_THROW({ const b8 complete = second.isComplete(foreign); EXPECT_FALSE(complete); }, RuntimeException);
     const auto cpuTaskAdmission = second.submit([&]()noexcept{ ++invoked; }, foreign);
     EXPECT_FALSE(cpuTaskAdmission);
     EXPECT_EQ(invoked, 0u);

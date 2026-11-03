@@ -5,6 +5,7 @@ import contextlib
 import io
 from pathlib import Path
 import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -218,6 +219,52 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
         start, retained = benchmark.retain_target_reports(reports, 2, 2, 100, 1, [.5] * len(reports))
         self.assertEqual(start, 12)
         self.assertEqual(retained, reports[12:])
+
+    def test_cleanup_failures_preserve_startup_error_and_close_backend(self):
+        with tempfile.TemporaryDirectory() as root:
+            args = SimpleNamespace(output_directory=Path(root), baseline_scheduling="tiled", timeout=1.0)
+            arm = SimpleNamespace(name="candidate", executable=Path("app"), runtime=Path("runtime"), logserver=Path("logger"), namesym=Path("names"))
+            cell = benchmark.Cell("960x720", 0, "screen")
+            backend = mock.Mock()
+
+            def terminate(_process, name, *_args):
+                if name == "logserver":
+                    raise OSError("logger cleanup failed")
+
+            with mock.patch.object(benchmark, "workload_for"), mock.patch.object(benchmark, "load_name_symbols"), \
+                    mock.patch.object(benchmark, "build_launch_environment", return_value={}), \
+                    mock.patch.object(benchmark.ab, "configure_environment", return_value=({}, {})), \
+                    mock.patch.object(benchmark.ab, "cache_identity", return_value={}), \
+                    mock.patch.object(benchmark, "write"), mock.patch.object(benchmark, "create_capture_backend", return_value=backend), \
+                    mock.patch.object(benchmark, "launch_logserver", side_effect=benchmark.SmokeFailure("startup failed")), \
+                    mock.patch.object(benchmark, "terminate_process", side_effect=terminate), \
+                    mock.patch.object(Path, "write_text", side_effect=OSError("report failed")), \
+                    mock.patch.object(benchmark, "write_status") as status:
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "startup failed"):
+                    benchmark.acquire(args, arm, cell, 0, 0)
+            backend.close.assert_called_once_with()
+            self.assertIn("logger cleanup failed", " ".join(str(call) for call in status.call_args_list))
+            self.assertIn("report failed", " ".join(str(call) for call in status.call_args_list))
+
+    def test_failure_report_write_error_keeps_original_diagnostic(self):
+        with tempfile.TemporaryDirectory() as root:
+            args = benchmark.parse_args(self.arguments())
+            args.output_directory = Path(root) / "result"
+
+            def fail_write(path, _value):
+                if path.name == "failure.json":
+                    raise OSError("report failed")
+                raise benchmark.SmokeFailure("plan failed")
+
+            stderr = io.StringIO()
+            with mock.patch.object(benchmark.ab, "validate_arm_separation"), \
+                    mock.patch.object(benchmark, "freeze", return_value={}), \
+                    mock.patch.object(benchmark, "require_same_fixture_sources", return_value={}), \
+                    mock.patch.object(benchmark, "write", side_effect=fail_write), \
+                    mock.patch.object(benchmark, "write_status") as status, contextlib.redirect_stderr(stderr):
+                self.assertEqual(benchmark.run(args), 1)
+            self.assertIn("plan failed", stderr.getvalue())
+            self.assertIn("report failed", str(status.call_args))
 
     def test_missing_or_invalid_publication_durations_cannot_establish_elapsed_warmup(self):
         reports = [{benchmark.FRAME: benchmark.timing.ScopeSample(1, 100)}] * 4

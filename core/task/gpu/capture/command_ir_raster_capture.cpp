@@ -229,6 +229,9 @@ b8 GpuCommandIrCapture::appendRasterBytes(
     const usize nextCount = m_recordEndOffsets.size() + 1u;
     if(!CanStoreValueCount(m_recordEndOffsets, nextCount) || !CanStoreValueCount(m_blobEndOffsets, nextCount) || !CanStoreValueCount(m_recordSerials, nextCount))
         return false;
+    const auto sourceOffset = ContainerDetail::SourceAliasesDestination(m_commandBytes, Span<const u8>(blob.data(), blob.size()));
+    if(sourceOffset && blob.size() > m_commandBytes.size() - *sourceOffset)
+        return false;
     if((stateOwner || heapOwner) && !m_rasterOwners){
         m_rasterOwners = NewArenaObject<GpuCommandIrRasterOwnerTable>(m_arena, m_arena);
         if(!m_rasterOwners)
@@ -256,7 +259,8 @@ b8 GpuCommandIrCapture::appendRasterBytes(
     if(!blob.empty()){
         const usize oldBlobSize = m_blobBytes.size();
         m_blobBytes.resize(oldBlobSize + blob.size());
-        NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), blob.data(), blob.size());
+        const u8* const source = sourceOffset ? m_commandBytes.data() + *sourceOffset : blob.data();
+        NWB_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), source, blob.size());
     }
     if(stateOwner){
         GpuCommandIrRasterStateOwner owner = *stateOwner;

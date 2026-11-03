@@ -78,8 +78,7 @@ class HostProbe:
 
     @staticmethod
     def default_build_dir(root: Path, platform_name: str, domain: str, arch: str) -> Path:
-        import launcher as _facade
-        return root / CMAKE_BUILD_ROOT_DIR / CMAKE_BUILD_SUBDIR / _facade.default_configure_preset_name(platform_name, domain, arch)
+        return root / CMAKE_BUILD_ROOT_DIR / CMAKE_BUILD_SUBDIR / HostProbe.default_configure_preset_name(platform_name, domain, arch)
 
     @staticmethod
     def output_root(root: Path, platform_name: str, arch: str, domain: str) -> Path:
@@ -93,14 +92,3 @@ class HostProbe:
         if target.startswith(NWB_TARGET_PREFIX):
             return target[len(NWB_TARGET_PREFIX):]
         return target
-
-
-host_platform_name = HostProbe.host_platform_name
-query_windows_native_machine_name = HostProbe.query_windows_native_machine_name
-host_arch_name = HostProbe.host_arch_name
-configure_preset_architecture = HostProbe.configure_preset_architecture
-executable_name = HostProbe.executable_name
-default_configure_preset_name = HostProbe.default_configure_preset_name
-default_build_dir = HostProbe.default_build_dir
-output_root = HostProbe.output_root
-target_default_executable_base_name = HostProbe.target_default_executable_base_name

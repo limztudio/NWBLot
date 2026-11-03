@@ -122,6 +122,18 @@ static b8 ValidateManifestEntryCount(const AssetsVolumeCookDetail::AssetVolumePa
     return false;
 }
 
+static b8 ValidateUniqueManifestPaths(const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, ScratchArena& scratchArena){
+    HashSet<Name, ScratchArena> paths(scratchArena);
+    paths.reserve(manifest.entries.size());
+    for(const auto& entry : manifest.entries){
+        if(!paths.insert(entry.virtualPath).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: duplicate manifest identity '{}'"), ConvertString(entry.virtualPath.resolvedText()));
+            return false;
+        }
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -141,7 +153,7 @@ namespace AssetsVolumeCookDetail{
 Expected<AssetVolumeWriteResult> WriteAssetVolume(const ResolvedCookPaths& resolvedPaths, const AStringView configurationSafeName, const AssetVolumePackManifest& manifest, Core::Alloc::GlobalArena& arena, ScratchArena& scratchArena){
     AssetVolumeWriteResult result;
 
-    if(!__hidden_asset_volume_writer::ValidateManifestEntryCount(manifest))
+    if(!__hidden_asset_volume_writer::ValidateManifestEntryCount(manifest) || !__hidden_asset_volume_writer::ValidateUniqueManifestPaths(manifest, scratchArena))
         return MakeUnexpected(Failure{});
 
     const auto volumeConfig = __hidden_asset_volume_writer::ConfigureVolumeSizing(manifest.plannedFileCount);
@@ -149,11 +161,12 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(const ResolvedCookPaths& resol
         return MakeUnexpected(Failure{});
 
     const Core::Filesystem::StagedDirectoryPaths stagedVolumePaths = __hidden_asset_volume_writer::BuildStagedVolumePaths(resolvedPaths.outputDirectory, volumeConfig->volumeName, configurationSafeName, scratchArena);
-    if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, s_AssetVolumeLogPrefix, Core::Filesystem::s_StageDirectoryLabel))
+    if(!Core::Filesystem::CreateNewStagedDirectory(stagedVolumePaths.backupDirectory, s_AssetVolumeLogPrefix, Core::Filesystem::s_BackupDirectoryLabel))
+        return MakeUnexpected(Failure{});
+    Core::Filesystem::StagedDirectoryCleanupGuard backupDirectoryCleanup(stagedVolumePaths.backupDirectory, s_AssetVolumeLogPrefix, Core::Filesystem::s_BackupDirectoryLabel);
+    if(!Core::Filesystem::CreateNewStagedDirectory(stagedVolumePaths.stageDirectory, s_AssetVolumeLogPrefix, Core::Filesystem::s_StageDirectoryLabel))
         return MakeUnexpected(Failure{});
     Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, s_AssetVolumeLogPrefix);
-    if(!Core::Filesystem::RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, s_AssetVolumeLogPrefix, Core::Filesystem::s_BackupDirectoryLabel))
-        return MakeUnexpected(Failure{});
 
     u64 stagedFileCount = 0;
     usize stagedSegmentCount = 0;
@@ -185,9 +198,10 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(const ResolvedCookPaths& resol
             return MakeUnexpected(Failure{});
     }
 
-    if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig->volumeName, stagedSegmentCount, scratchArena))
+    if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig->volumeName, stagedSegmentCount, scratchArena, {}, &stageDirectoryCleanup, &backupDirectoryCleanup))
         return MakeUnexpected(Failure{});
     stageDirectoryCleanup.dismiss();
+    backupDirectoryCleanup.dismiss();
 
     result.volumeName = volumeConfig->volumeName;
     result.fileCount = stagedFileCount;

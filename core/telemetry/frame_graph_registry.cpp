@@ -65,20 +65,35 @@ static void ResolvePendingNameEdges(const Span<const FrameGraphNodeDesc> nodes, 
 
 
 void FrameGraphRegistry::registerContributor(IFrameGraphContributor& contributor){
-    for(const auto existing : m_contributors){
-        if(existing.get() == &contributor)
+    for(const auto& existing : m_contributors){
+        if(existing.active && existing.contributor.get() == &contributor)
             return;
     }
-    m_contributors.push_back(NotNull(&contributor));
+    m_contributors.push_back(ContributorEntry{ .contributor = NotNull(&contributor) });
 }
 
 void FrameGraphRegistry::unregisterContributor(IFrameGraphContributor& contributor)noexcept{
     for(auto iterator = m_contributors.begin(); iterator != m_contributors.end();){
-        if(iterator->get() == &contributor)
-            iterator = m_contributors.erase(iterator);
-        else
+        if(iterator->contributor.get() != &contributor){
             ++iterator;
+            continue;
+        }
+        if(m_recording){
+            iterator->active = false;
+            ++iterator;
+        }
+        else
+            iterator = m_contributors.erase(iterator);
     }
+}
+
+void FrameGraphRegistry::clear()noexcept{
+    if(!m_recording){
+        m_contributors.clear();
+        return;
+    }
+    for(auto& contributor : m_contributors)
+        contributor.active = false;
 }
 
 b8 FrameGraphRegistry::record(CaptureSession& session){
@@ -95,13 +110,20 @@ b8 FrameGraphRegistry::record(CaptureSession& session){
         m_pendingNameEdges.clear();
         m_edges.clear();
         m_nodes.clear();
+        for(auto iterator = m_contributors.begin(); iterator != m_contributors.end();){
+            if(!iterator->active)
+                iterator = m_contributors.erase(iterator);
+            else
+                ++iterator;
+        }
         m_recording = false;
     });
 
     FrameGraphBuilder builder(scratchArena, m_nodes, m_edges, m_pendingNameEdges, m_physicalQueueRuntimeStatistics, m_packetSubmissionStatistics, session.frameIndex());
     b8 hasGraph = false;
-    for(const auto contributor : m_contributors){
-        if(contributor->appendFrameGraph(builder))
+    usize remaining = m_contributors.size();
+    for(auto iterator = m_contributors.begin(); remaining != 0u; ++iterator, --remaining){
+        if(iterator->active && iterator->contributor->appendFrameGraph(builder))
             hasGraph = true;
     }
 

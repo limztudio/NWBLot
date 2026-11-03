@@ -88,7 +88,7 @@ class WinGuiThreadInfo(ctypes.Structure):
 
 
 def parse_args(argv, *, description=__doc__):
-    return parse_ui_smoke_args(argv, description=description)
+    return parse_ui_smoke_args(argv, description=description, include_many_roots=True)
 
 
 def observe_markers(frame, scale_x, scale_y, expected_count, enabled):
@@ -123,6 +123,18 @@ class NativeInput:
             backend.user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
             backend.user32.GetGUIThreadInfo.argtypes = [ctypes.c_uint32, ctypes.POINTER(WinGuiThreadInfo)]
             backend.user32.GetGUIThreadInfo.restype = ctypes.c_int
+
+    def wait_for_foreground(self, process, timeout):
+        if not self.windows:
+            return
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ensure_process_running(process, "while waiting for foreground focus")
+            self.backend.focus_window(self.handle)
+            if self.backend.user32.GetForegroundWindow() == self.handle:
+                return
+            time.sleep(INPUT_SETTLE_SECONDS)
+        raise SmokeSkip("the fixture could not acquire foreground input focus")
 
     def capture_owner(self):
         thread_id = self.backend.user32.GetWindowThreadProcessId(ctypes.c_void_p(self.handle), None)
@@ -331,6 +343,7 @@ def run(args):
         raise SmokeFailure(f"executable does not exist: {args.executable}")
     args.output_directory.mkdir(parents=True, exist_ok=True)
     environment = build_fixture_environment(build_launch_environment(args), "INTERACTIVE", force_x11=True)
+    environment["NWB_UI_LAYER_MANY_ROOTS"] = "1" if args.many_roots else "0"
     backend = create_capture_backend()
     logserver = application = interaction = None
     handle = None
@@ -344,7 +357,11 @@ def run(args):
             raise SmokeFailure("interactive UI window did not appear")
         backend.prepare_window(handle)
         wait_for_log_message(log_directory, log_baseline, log_pattern, "UiInteractiveSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
+        if args.many_roots:
+            wait_for_log_message(log_directory, log_baseline, log_pattern, "UiLayerSmokeProject: root beyond target limit painted", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
+            wait_for_log_message(log_directory, log_baseline, log_pattern, "UiLayerSmokeProject: root removed during paint", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
         interaction = InteractionRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
+        interaction.native.wait_for_foreground(application, min(args.timeout, 15.0))
         interaction.execute()
     finally:
         try:

@@ -91,6 +91,7 @@ public:
         if(IsZeroHash(hash))
             return false;
 
+        ScopedLock lock(m_mutex);
         SymbolString canonicalText(m_arena);
         canonicalText.reserve(text.size());
         for(const char ch : text)
@@ -106,6 +107,7 @@ public:
         if(outText == nullptr || outTextSize == 0u || IsZeroHash(hash))
             return false;
 
+        ScopedLock lock(m_mutex);
         const auto it = m_symbols.find(hash);
         if(it == m_symbols.end())
             return false;
@@ -121,10 +123,12 @@ public:
     }
 
     void clear()noexcept{
+        ScopedLock lock(m_mutex);
         m_symbols.clear();
     }
 
     [[nodiscard]] usize size()const noexcept{
+        ScopedLock lock(m_mutex);
         return m_symbols.size();
     }
 
@@ -199,6 +203,7 @@ private:
 
     template<typename ArenaT>
     void appendFileText(Alloc::ScratchArena& scratchArena, AString<ArenaT>& outText)const{
+        ScopedLock lock(m_mutex);
         Vector<SymbolRecordView, Alloc::ScratchArena> records(scratchArena);
         records.reserve(m_symbols.size());
         for(const auto& symbol : m_symbols)
@@ -236,7 +241,7 @@ private:
             return false;
         AString<Alloc::ScratchArena> fileText(scratchArena);
         appendFileText(scratchArena, fileText);
-        return ::WriteTextFile(path, AStringView(fileText.data(), fileText.size()));
+        return ::WriteTextFileAtomic(path, AStringView(fileText.data(), fileText.size()));
     }
 
     [[nodiscard]] Expected<AString<Alloc::ScratchArena>> unescapeNamesymText(const AStringView text, Alloc::ScratchArena& scratchArena){
@@ -277,6 +282,7 @@ private:
 
 
 private:
+    mutable Futex m_mutex;
     SymbolArena m_arena;
     SymbolMap m_symbols;
 };
@@ -386,6 +392,9 @@ Expected<b8, DefaultFileLoadFailure> LoadDefaultFile(){
         return MakeUnexpected(DefaultFileLoadFailure{ directory.error(), loadedAny });
 
     for(const ::DirectoryEntry<Alloc::ScratchArena>& entry : *directory){
+        if(entry.path().extensionView() != s_FileExtension)
+            continue;
+
         const auto isRegularFile = entry.isRegularFile();
         if(!isRegularFile){
             if(!firstError)
@@ -393,9 +402,6 @@ Expected<b8, DefaultFileLoadFailure> LoadDefaultFile(){
             continue;
         }
         if(!*isRegularFile)
-            continue;
-
-        if(entry.path().extensionView() != s_FileExtension)
             continue;
 
         const auto loaded = LoadFile(entry.path(), scratchArena);

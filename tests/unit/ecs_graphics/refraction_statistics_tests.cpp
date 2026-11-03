@@ -65,6 +65,7 @@ TEST(RefractionStatistics, RingSaturationDoesNotRecycleOutstandingGpuWork){
 
 TEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
     const Array<u32, s_RefractionCounterWordCount> counters = {};
@@ -91,6 +92,7 @@ TEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
 
 TEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     RefractionStatistics metadata = Metadata(10u);
     const auto older = context.control->reserve(metadata);
     metadata.frameIndex = 11u;
@@ -123,11 +125,15 @@ TEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication){
     EXPECT_EQ(statistics->physicalQueries, 103u);
     EXPECT_EQ(statistics->queryBudgetUnits, 107u);
     EXPECT_EQ(statistics->overflowFlags, 1u);
+#define NWB_CHECK_REFRACTION_COUNTER(field, byteOffset) EXPECT_EQ(statistics->field, s_Counters[(byteOffset) / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES]);
+    NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_CHECK_REFRACTION_COUNTER)
+#undef NWB_CHECK_REFRACTION_COUNTER
     EXPECT_EQ(context.control->reserve(Metadata()).slot, older.slot);
 }
 
 TEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto previous = context.control->reserve(Metadata());
     context.control->accept(previous, Token(), true);
     const Array<u32, s_RefractionCounterWordCount> counters = {};
@@ -157,6 +163,7 @@ TEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion){
 
 TEST(RefractionStatistics, FailedMappingRetiresSlotWithoutReplacingPublication){
     StatisticsContext context;
+    ASSERT_TRUE(context.control);
     const auto first = context.control->reserve(Metadata());
     context.control->accept(first, Token(), true);
     const Array<u32, s_RefractionCounterWordCount> counters = {};

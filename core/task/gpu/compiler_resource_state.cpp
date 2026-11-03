@@ -198,6 +198,9 @@ namespace GpuTaskGraphCompilerDetail{
         auto& taskQueue = *MakeNotNull(FindCompiledQueueInfo(compiledPlan, compiledTask.queue));
         if(!taskUseHistory.build(task))
             return false;
+        constexpr usize s_OffsetMax = static_cast<usize>(Limit<u32>::s_Max);
+        if(compiledPlan.prologueStateSeeds.size() > s_OffsetMax || compiledPlan.prologueBarriers.size() > s_OffsetMax)
+            return false;
         compiledTask.prologueStateSeedOffset = static_cast<u32>(compiledPlan.prologueStateSeeds.size());
         compiledTask.prologueBarrierOffset = static_cast<u32>(compiledPlan.prologueBarriers.size());
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
@@ -412,6 +415,8 @@ namespace GpuTaskGraphCompilerDetail{
             if(!resourceHistory.append(TrackedCompiledResourceState{ .resource = use.resource, .range = use.range, .task = taskID, .state = use.requiredState, .access = use.access, .queue = compiledTask.queue, .readStateSourceIndex = readStateSourceIndex, }))
                 return false;
         }
+        if(compiledPlan.prologueStateSeeds.size() > s_OffsetMax || compiledPlan.prologueBarriers.size() > s_OffsetMax)
+            return false;
         compiledTask.prologueStateSeedCount = static_cast<u32>(compiledPlan.prologueStateSeeds.size()) - compiledTask.prologueStateSeedOffset;
         compiledTask.prologueBarrierCount = static_cast<u32>(compiledPlan.prologueBarriers.size()) - compiledTask.prologueBarrierOffset;
     }

@@ -8,6 +8,7 @@
 #include <core/ecs/world.h>
 
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 #include <global/termination.h>
 
 
@@ -31,6 +32,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
     const UiSkin& skin = *MakeNotNull(Core::Assets::CastAsset<UiSkin>(m_skinAsset.get()));
     if(!m_context.beginFrame(m_frameGeneration))
         TerminateInvariant();
+    ScopeExit abandon([this]()noexcept{ abandonPendingFrame(true); });
     const f32 frameDelta = m_frameDelta.consume();
     m_editHost.beginFrame(m_frameGeneration, m_display);
     if(m_editHost.takeClipboardFailure())
@@ -52,12 +54,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
         if(!m_context.beginRoot({ root.entity.id, 1u }))
             break;
         context.entity = root.entity;
-        // Keep mutable callback state and its captures alive if it removes/replaces its own component.
-        UiPaintCallback callback = Move(component->paint);
-        callback(context);
-        UiPaintComponent* updated = m_world.tryGetComponent<UiPaintComponent>(root.entity);
-        if(updated && !updated->paint)
-            updated->paint = Move(callback);
+        component->paint.invoke(context);
         if(!m_ui.balanced())
             m_context.fail();
         if(!m_context.endRoot())
@@ -65,40 +62,33 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
     }
     if(!m_context.finishFrame()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
-        abandonPendingFrame(true);
         return {};
     }
     m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
         abandonPendingFrame();
+        abandon.release();
+        return {};
     }
+    abandon.release();
     return {};
 }
 
-b8 UiLayerSystem::collectRoots(){
+void UiLayerSystem::collectRoots(){
     m_liveRoots.clear();
     m_rootIdentities.clear();
-    b8 overflow = false;
-    m_world.view<UiPaintComponent>().each([this, &overflow](const Core::ECS::EntityID entity, UiPaintComponent& component)noexcept{
-        if(!component.visible || !component.paint)
+    m_world.view<UiPaintComponent>().each([this](const Core::ECS::EntityID entity, UiPaintComponent& component){
+        if(!component.visible || !component.paint.present())
             return;
-        if(m_liveRoots.size() == Ui::s_InputMaxTargets){
-            overflow = true;
-            return;
-        }
         m_liveRoots.push_back({ entity, component.order });
         m_rootIdentities.push_back({ entity.id, 1u });
     });
-    m_context.retainRoots(m_rootIdentities);
-    return !overflow;
 }
 
 void UiLayerSystem::synchronizeInput(){
-    if(!collectRoots()){
-        resetNormalizedInput();
-        return;
-    }
+    collectRoots();
+    m_context.retainRoots(m_rootIdentities);
     if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
         const auto status = m_renderer.lastAcceptedPresentationStatus();
         if(status == Core::PresentationReceiptStatus::Accepted){

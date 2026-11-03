@@ -216,12 +216,12 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
                 args.output.write_bytes(b"engine-bmp")
                 return 0, True
 
-            def terminate(process, name):
+            def terminate(process, name, **_kwargs):
                 self.assertIs(process, testbed_process)
                 events.append(LIT_APPLICATION_OUTPUT_COLLECT)
                 return 0, ""
 
-            def shutdown_and_collect(*_args):
+            def shutdown_and_collect(*_args, **_kwargs):
                 events.append(LIT_LOGSERVER_SHUTDOWN_AND_LOG_COLLECT)
                 return captured_log
 
@@ -258,7 +258,7 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
                  mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
                  mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, return_value=(9, False)), \
                  mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(9, "application tail")), \
-                 mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=lambda *_args: events.append(LIT_LOGS_COLLECTED) or window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,), \
+                 mock.patch.object(window_capture_smoke, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=lambda *_args, **_kwargs: events.append(LIT_LOGS_COLLECTED) or window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,), \
                  mock.patch.object(window_capture_smoke, LIT_READ_BMP_24) as read_bmp:
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, r"self-exited.*exit 9"):
                     window_capture_smoke.launch_and_capture_application(args)
@@ -272,11 +272,11 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
             args.log_output = Path(temp_dir) / "timeout.log"
             events = []
 
-            def terminate(*_args):
+            def terminate(*_args, **_kwargs):
                 events.append(LIT_APPLICATION_TERMINATED)
                 return -15, ""
 
-            def shutdown_and_collect(*_args):
+            def shutdown_and_collect(*_args, **_kwargs):
                 events.append(LIT_LOGS_COLLECTED)
                 return LIT_ORDINARY_STARTUP
 

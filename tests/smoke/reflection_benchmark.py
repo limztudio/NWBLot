@@ -14,6 +14,7 @@ import math
 from pathlib import Path
 import random
 import re
+import shutil
 import statistics
 import subprocess
 import sys
@@ -27,6 +28,7 @@ LIT_PROCESS_POLL_SECONDS = .1
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, SCOPE_RE, load_name_symbols
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
+from smoke_failure_reporting import write_failure_report
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, write_status,)
 from window_capture_validation import validate_expected_log_text
@@ -119,6 +121,11 @@ class Variant:
     temporal: bool = False
     spatial: bool = False
     feedback: bool = False
+
+
+@dataclass
+class TrialCleanupStatus:
+    succeeded: bool = False
 
 
 @dataclass(frozen=True)
@@ -389,7 +396,17 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding=LIT_UTF_8)
 
 
-def run_trial(args, variant, block, position, symbols, executable_identity):
+def retain_and_validate_process_output(capture, directory):
+    if capture is None:
+        raise SmokeFailure("reflection process output capture is missing")
+    output_path = directory / "process_output.log"
+    shutil.copyfile(capture.path, output_path)
+    output_text = output_path.read_text(encoding=LIT_UTF_8, errors="replace")
+    if output_text:
+        validate_expected_log_text(output_text, (), (*STRICT_LOG_FAILURE_MESSAGES, "Exception:"))
+
+
+def run_trial(args, variant, block, position, symbols, executable_identity, *, cleanup_status=None):
     directory = args.output_directory / f"block_{block:02d}_{position:02d}_{variant.name}"
     directory.mkdir(parents=True, exist_ok=False)
     timing_file = directory / "gpu_timing.txt"
@@ -418,8 +435,8 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         if handle:
             try:
                 backend.focus_window(handle)
-            except Exception:
-                pass
+            except Exception as error:
+                write_status(f"could not focus benchmark window: {error}")
         deadline = time.monotonic() + args.timeout
         last_problem = "timing reports have not arrived"
         while time.monotonic() < deadline:
@@ -441,9 +458,11 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
             time.sleep(LIT_PROCESS_POLL_SECONDS)
         if selected is None:
             raise SmokeFailure(f"GPU benchmark timed out: {last_problem}")
-        exit_code, tail = terminate_process(runtime, LIT_REFLECTION_BENCHMARK, handle)
+        capture = getattr(runtime, "_nwb_output_capture", None)
+        exit_code, tail = terminate_process(runtime, LIT_REFLECTION_BENCHMARK, handle, preserve_capture=True)
         runtime = None
         (directory / "process_tail.txt").write_text(tail, encoding=LIT_UTF_8)
+        retain_and_validate_process_output(capture, directory)
         require_normal_process_exit(exit_code, tail, LIT_REFLECTION_BENCHMARK)
         log_text = shutdown_logserver_and_collect(logserver, log_directory, baseline, pattern)
         logserver = None
@@ -464,7 +483,11 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         primary_failure = sys.exc_info()[0] is not None
         cleanup_errors = []
         try:
-            terminate_process(runtime, LIT_REFLECTION_BENCHMARK, handle)
+            if runtime is not None:
+                capture = getattr(runtime, "_nwb_output_capture", None)
+                exit_code, tail = terminate_process(runtime, LIT_REFLECTION_BENCHMARK, handle, preserve_capture=True)
+                retain_and_validate_process_output(capture, directory)
+                require_normal_process_exit(exit_code, tail, LIT_REFLECTION_BENCHMARK)
         except (SmokeFailure, OSError, subprocess.SubprocessError) as error:
             cleanup_errors.append(f"application cleanup: {error}")
         if log_directory is not None and not collected_logs:
@@ -483,6 +506,8 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
                 backend.close()
             except (SmokeFailure, OSError) as error:
                 cleanup_errors.append(f"window backend cleanup: {error}")
+        if cleanup_status is not None:
+            cleanup_status.succeeded = not cleanup_errors
         if cleanup_errors:
             detail = "\n".join(cleanup_errors)
             write_status(detail)
@@ -685,7 +710,7 @@ def run(args):
         write_status(f"GPU benchmark complete: {args.output_directory / LIT_REPORT_JSON}")
         return 0
     except (SmokeFailure, SmokeSkip, OSError, subprocess.SubprocessError) as error:
-        write_json(args.output_directory / "failure.json", {"error": str(error), "completed_trials": len(trials)})
+        write_failure_report(write_json, args.output_directory / "failure.json", {"error": str(error), "completed_trials": len(trials)})
         raise
 
 

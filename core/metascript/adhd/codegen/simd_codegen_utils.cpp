@@ -244,7 +244,7 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
         const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
         if(SymbolTable::IsSimdType(baseCallee) && IsRegisterPromotableSimdType(expr->resolvedSimdType))
             return true;
-        if(!MapBuiltinMathFunction(callee).empty()){
+        if(expr->isBuiltinCall){
             if(IsRegisterPromotableSimdType(expr->resolvedSimdType))
                 return true;
             if(IsSimdScalarReductionFunction(callee)){

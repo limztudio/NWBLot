@@ -24,6 +24,7 @@ namespace __hidden_logger_server_main{
 
 
 inline constexpr StringView s_AppName = "logserver";
+inline constexpr StringView s_ReadinessTokenOption = "--readiness-token";
 inline constexpr StringView s_CrashSymbolStoreOption = "--crash-symbol-store";
 inline constexpr StringView s_CrashRetainPackagesOption = "--crash-retain-packages";
 inline constexpr StringView s_CrashRetainRawOption = "--crash-retain-raw";
@@ -43,9 +44,9 @@ inline constexpr int s_LoggerServerExitFailure = -1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Log::CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken, void* inst){
+static int MainLogic(u16 logPort, AStringView crashSymbolStoreDirectory, NWB::Log::CrashRetentionConfig crashRetentionConfig, AStringView crashUploadToken, AStringView readinessToken, void* inst){
     NWB::Log::Server logger;
-    if(!logger.init(logPort, __hidden_logger_server_main::s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken))
+    if(!logger.init(logPort, __hidden_logger_server_main::s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken, readinessToken))
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
 
     return ::InvokeTerminalEntry<GeneralException>([&](){
@@ -79,10 +80,12 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     u16 logPort = Get<static_cast<usize>(NWB::Log::ArgCommand::LogPort)>(NWB::Log::s_ArgDefault);
     AString<NWB::Core::Alloc::ScratchArena> crashSymbolStoreDirectory(commandLineArena);
     AString<NWB::Core::Alloc::ScratchArena> crashUploadToken(commandLineArena);
+    AString<NWB::Core::Alloc::ScratchArena> readinessToken(commandLineArena);
     NWB::Log::CrashRetentionConfig crashRetentionConfig;
     CLI::App app{ __hidden_logger_server_main::s_AppName.data() };
 
     NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogPort>(app, logPort);
+    app.add_option(__hidden_logger_server_main::s_ReadinessTokenOption.data(), readinessToken, "Token returned by the readiness endpoint");
     app.add_option(__hidden_logger_server_main::s_CrashSymbolStoreOption.data(), crashSymbolStoreDirectory, "Directory containing crash symbol files");
     app.add_option(NWB::Log::s_CrashUploadTokenOption.data(), crashUploadToken, "Bearer token required for crash uploads; empty disables upload auth");
     app.add_option(__hidden_logger_server_main::s_CrashRetainPackagesOption.data(), crashRetentionConfig.maxExtractedPackages, "Maximum extracted crash packages to keep; zero disables pruning");
@@ -92,7 +95,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         CommandLineParseApp(app, argc, argv);
 
-        return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, AStringView(crashUploadToken.data(), crashUploadToken.size()), inst);
+        return MainLogic(logPort, AStringView(crashSymbolStoreDirectory.data(), crashSymbolStoreDirectory.size()), crashRetentionConfig, AStringView(crashUploadToken.data(), crashUploadToken.size()), AStringView(readinessToken.data(), readinessToken.size()), inst);
     }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return __hidden_logger_server_main::s_LoggerServerExitFailure; }
     );
 }

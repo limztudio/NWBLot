@@ -376,6 +376,30 @@ TEST_F(UiContextTests, RootRetentionMatchesLifetimeGenerationAndKeepsOtherRootsA
     EXPECT_EQ(m_context.input().hitTest({ 85.0f, 25.0f }), secondState.id);
 }
 
+TEST_F(UiContextTests, RootRetentionHandlesManyUnorderedRootsAndLifetimeChanges){
+    ASSERT_TRUE(m_context.beginFrame(1u));
+    for(u64 index = 1u; index <= s_WidgetMaxStates; ++index){
+        ASSERT_TRUE(m_context.beginRoot({ index, 1u }));
+        ASSERT_TRUE(m_context.declare(s_ActionKey, WidgetKind::Button));
+        ASSERT_TRUE(m_context.endRoot());
+    }
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+
+    constexpr u64 s_RootCount = 100000u;
+    PaintVector<WidgetRoot> roots(m_arena);
+    roots.reserve(static_cast<usize>(s_RootCount + 1u));
+    for(u64 index = s_RootCount; index > 0u; --index)
+        roots.push_back({ index, 1u });
+    roots.push_back({ 2u, 1u });
+    m_context.retainRoots(roots);
+    EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates);
+
+    roots[static_cast<usize>(s_RootCount - 1u)].generation = 2u;
+    m_context.retainRoots(roots);
+    EXPECT_EQ(m_context.states().entries().size(), s_WidgetMaxStates - 1u);
+}
+
 TEST_F(UiContextTests, DisabledDeclarationDropsOldFocusAndActionsBeforePublication){
     const auto originalResult = prepare(1u, { 111u, 1u });
     ASSERT_TRUE(originalResult);

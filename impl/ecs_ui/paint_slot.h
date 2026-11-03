@@ -1,0 +1,124 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+
+#include <global/inplace_function.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiPaintContext;
+
+
+class UiPaintSlot{
+private:
+    using Callback = InplaceFunction<64u, void(UiPaintContext&)>;
+
+    struct Lease{
+        UiPaintSlot* owner;
+        Callback callback;
+
+        explicit Lease(UiPaintSlot& slot)noexcept
+            : owner(&slot)
+            , callback(Move(slot.m_callback))
+        {
+            slot.m_active = this;
+        }
+
+        ~Lease()noexcept{
+            if(owner){
+                owner->m_active = nullptr;
+                owner->m_callback = Move(callback);
+            }
+        }
+    };
+
+
+public:
+    UiPaintSlot()noexcept = default;
+    ~UiPaintSlot()noexcept{ detach(); }
+    UiPaintSlot(const UiPaintSlot& other)
+        : m_callback(other.m_callback)
+    {}
+    UiPaintSlot(UiPaintSlot&& other)noexcept{ moveFrom(other); }
+
+    UiPaintSlot& operator=(const UiPaintSlot& other){
+        if(this != &other){
+            detach();
+            m_callback = other.m_callback;
+        }
+        return *this;
+    }
+    UiPaintSlot& operator=(UiPaintSlot&& other)noexcept{
+        if(this != &other){
+            detach();
+            moveFrom(other);
+        }
+        return *this;
+    }
+    template<typename Func>
+        requires (!IsSame_V<Decay_T<Func>, UiPaintSlot> && requires(Callback& callback, Func&& func){ callback = Forward<Func>(func); })
+    UiPaintSlot& operator=(Func&& func)noexcept(noexcept(m_callback = Forward<Func>(func))){
+        detach();
+        m_callback = Forward<Func>(func);
+        return *this;
+    }
+
+    explicit operator b8()const noexcept{ return static_cast<b8>(m_callback); }
+    [[nodiscard]] b8 present()const noexcept{ return m_active != nullptr || static_cast<b8>(m_callback); }
+
+    void reset()noexcept{
+        detach();
+        m_callback.reset();
+    }
+
+    void invoke(UiPaintContext& context){
+        NWB_ASSERT(m_callback && !m_active);
+        Lease lease(*this);
+        lease.callback(context);
+    }
+
+
+private:
+    void detach()noexcept{
+        if(m_active){
+            m_active->owner = nullptr;
+            m_active = nullptr;
+        }
+    }
+
+    void moveFrom(UiPaintSlot& other)noexcept{
+        m_callback = Move(other.m_callback);
+        m_active = other.m_active;
+        if(m_active)
+            m_active->owner = this;
+        other.m_active = nullptr;
+    }
+
+
+private:
+    Callback m_callback;
+    Lease* m_active = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

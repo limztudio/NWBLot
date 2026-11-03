@@ -119,12 +119,14 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
         for(usize segmentIndex = 0u; segmentIndex < segmentPathCount; ++segmentIndex){
             const Path& segmentPath = m_segmentPaths[segmentIndex];
             const auto fileSizeResult = FileSize(segmentPath);
-            const u64 segmentFileSize = fileSizeResult.value_or(0u);
-            if(!fileSizeResult || segmentFileSize == 0){
-                if(!fileSizeResult)
-                    FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, segmentPath, fileSizeResult.error());
-                else
-                    FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, segmentPath, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
+            if(!fileSizeResult){
+                FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, segmentPath, fileSizeResult.error());
+                unmountLocked();
+                return false;
+            }
+            const u64 segmentFileSize = *fileSizeResult;
+            if(segmentFileSize == 0){
+                FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, segmentPath, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
                 unmountLocked();
                 return false;
             }
@@ -143,12 +145,13 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         const auto firstFileSizeResult = FileSize(m_segmentPaths[0]);
-        const u64 firstSegmentFileSize = firstFileSizeResult.value_or(0u);
-        if(!firstFileSizeResult || firstSegmentFileSize < sizeof(FilesystemVolumeDetail::VolumeHeaderDisk)){
-            if(!firstFileSizeResult)
-                FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, m_segmentPaths[0], firstFileSizeResult.error());
-            else
-                FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, m_segmentPaths[0], "segment is smaller than the volume header");
+        if(!firstFileSizeResult){
+            FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, m_segmentPaths[0], firstFileSizeResult.error());
+            unmountLocked();
+            return false;
+        }
+        if(*firstFileSizeResult < sizeof(FilesystemVolumeDetail::VolumeHeaderDisk)){
+            FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, m_segmentPaths[0], "segment is smaller than the volume header");
             unmountLocked();
             return false;
         }

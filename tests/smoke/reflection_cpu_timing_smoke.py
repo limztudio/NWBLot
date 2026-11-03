@@ -14,6 +14,7 @@ import renderer_ab_benchmark as ab
 import reflection_benchmark as reflection
 import smoke_cpu_gpu_timing as timing
 from smoke_volume_identity import file_identity
+from smoke_failure_reporting import write_failure_report
 from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process)
 from window_capture_validation import validate_expected_log_text
 
@@ -240,7 +241,8 @@ def acquire(args):
         except Exception as error:
             errors.append(str(error))
         if errors:
-            write_json(output / "cleanup_error.json", dict(errors=errors))
+            print("; ".join(errors), file=sys.stderr, flush=True)
+            write_failure_report(write_json, output / "cleanup_error.json", dict(errors=errors))
             if not primary_failure:
                 raise SmokeFailure("; ".join(errors))
 
@@ -274,7 +276,7 @@ def main(argv=None):
         return 0
     except (SmokeFailure, SmokeSkip, OSError, ValueError, subprocess.SubprocessError) as error:
         if args is not None and args.output_directory.is_dir():
-            write_json(args.output_directory / "failure.json", dict(passed=False, error=str(error), diagnostic_only=True))
+            write_failure_report(write_json, args.output_directory / "failure.json", dict(passed=False, error=str(error), diagnostic_only=True))
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
 

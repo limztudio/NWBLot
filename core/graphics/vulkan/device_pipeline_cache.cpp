@@ -157,8 +157,15 @@ Expected<GraphicsBytes> Device::loadPipelineCacheData(){
     GraphicsBytes data{m_context.objectArena};
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty())
         return MakeUnexpected(Failure{});
-    if(!m_filesystemFactory && !Core::Filesystem::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
-        return MakeUnexpected(Failure{});
+    if(!m_filesystemFactory){
+        const auto exists = Core::Filesystem::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName);
+        if(!exists){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to inspect pipeline cache volume '{}' in '{}': {}"), ConvertString(m_pipelineCacheVolumeName), PathToString<tchar>(m_pipelineCacheDirectory), ConvertString(exists.error().message()));
+            return MakeUnexpected(Failure{});
+        }
+        if(!*exists)
+            return MakeUnexpected(Failure{});
+    }
 
     auto volume = __hidden_vulkan_device_pipeline_cache::MountPipelineCacheVolume(m_pipelineCacheDirectory, m_pipelineCacheVolumeName, false, Filesystem::VolumeUsage::RuntimeReadOnly, m_filesystemFactory);
     if(!volume){

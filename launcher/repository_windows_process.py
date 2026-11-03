@@ -111,7 +111,14 @@ class WindowsProcessApi:
         buffer = ctypes.create_unicode_buffer(MAX_WINDOWS_IMAGE_PATH)
         length = ctypes.c_uint32(len(buffer))
         if not self._kernel32.QueryFullProcessImageNameW(handle.native_handle, QUERY_IMAGE_PATH_UNUSED_FLAGS, buffer, ctypes.byref(length)):
-            return None
+            query_error = ctypes.get_last_error()
+            try:
+                exited = self.wait_for_exit(handle, 0.0)
+            except WindowsProcessError as wait_error:
+                raise WindowsProcessError(f"process image query failed with Windows error {query_error}; {wait_error}") from wait_error
+            if exited:
+                return None
+            raise WindowsProcessError(f"process image query failed with Windows error {query_error}")
         return buffer.value[:length.value]
 
     def request_close(self, pid: int) -> bool:
@@ -126,7 +133,7 @@ class WindowsProcessApi:
             return WINDOW_ENUM_CONTINUE
 
         if not self._user32.EnumWindows(enum_window, QUERY_IMAGE_PATH_UNUSED_FLAGS):
-            return False
+            raise WindowsProcessError(f"EnumWindows failed: Windows error {ctypes.get_last_error()}")
         return posted[0]
 
     def wait_for_exit(self, handle: WindowsProcessHandle, timeout_seconds: float) -> bool:

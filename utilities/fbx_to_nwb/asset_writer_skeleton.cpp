@@ -36,6 +36,8 @@ Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept{
 }
 
 Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, const SIMDMatrix* parentGlobalBindPose)noexcept{
+    if(MatrixIsNaN(globalBindPose) || MatrixIsInfinite(globalBindPose))
+        return MakeUnexpected(Failure{});
     if(!parentGlobalBindPose)
         return globalBindPose;
 
@@ -100,8 +102,10 @@ ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::A
 Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     SkeletonOutputData outData;
 
-    NWB_ASSERT(joints.size() == bindPoseMatrices.size());
-    NWB_ASSERT(inverseBindMatrices.size() == joints.size());
+    if(joints.size() != bindPoseMatrices.size() || inverseBindMatrices.size() != joints.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint and matrix counts differ"));
+        return MakeUnexpected(Failure{});
+    }
     if(joints.size() > s_MaxSkeletonJointCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
         return MakeUnexpected(Failure{});
@@ -174,6 +178,11 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
         const u32 parentIndex = parentIndices[oldJointIndex];
         const JointMatrix* parentGlobalBindPose = parentIndex != Impl::s_MeshMissingStreamIndex ? &bindPoseMatrices[parentIndex] : nullptr;
         const SIMDMatrix globalBindPoseMatrix = LoadFloat(bindPoseMatrices[oldJointIndex]);
+        const SIMDMatrix inverseBindMatrix = LoadFloat(inverseBindMatrices[oldJointIndex]);
+        if(MatrixIsNaN(inverseBindMatrix) || MatrixIsInfinite(inverseBindMatrix)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: inverse bind matrix for joint '{}' is not finite"), ConvertString(sortNames[oldJointIndex]));
+            return MakeUnexpected(Failure{});
+        }
 
         SIMDMatrix parentGlobalBindPoseMatrix{};
         const SIMDMatrix* parentGlobalBindPoseMatrixPtr = nullptr;

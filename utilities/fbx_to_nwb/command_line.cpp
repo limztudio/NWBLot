@@ -107,7 +107,7 @@ f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::S
 }
 
 b8 ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
-    const auto exists = FileExists(outputPath);
+    const auto exists = FileExistsNoFollow(outputPath);
     if(!exists){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), ConvertString(exists.error().message()));
         return false;
@@ -449,6 +449,14 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
             return __hidden_command_line::ExitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
         if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
             return s_FbxToNwbExitFailure;
+        if(options.separateAssets){
+            const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
+            if(!__hidden_command_line::ValidateOutputOverwrite(packageDirectory / s_MeshSplitFileName, options, scratchArena, prompted))
+                return s_FbxToNwbExitFailure;
+            if(wantsSkinning && (!__hidden_command_line::ValidateOutputOverwrite(packageDirectory / s_SkeletonSplitFileName, options, scratchArena, prompted)
+                || !__hidden_command_line::ValidateOutputOverwrite(packageDirectory / s_SkinSplitFileName, options, scratchArena, prompted)))
+                return s_FbxToNwbExitFailure;
+        }
 
         auto built = BuildMesh(instances, selection, options, wantsSkinning, *defaultColor, cpuScheduler, scratchArena);
         if(!built)

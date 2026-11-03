@@ -133,9 +133,9 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 }
 
 [[nodiscard]] constexpr MStringView ExtractAdhdFileStem(const MStringView path)noexcept{
-    usize fileStart = 0u;
-    for(usize i = 0u; i < path.size(); ++i){
-        if(path[i] == '/' || path[i] == '\\')
+    usize fileStart = GlobalFilesystemPathDetail::RootNameLength(path);
+    for(usize i = fileStart; i < path.size(); ++i){
+        if(GlobalFilesystemPathDetail::IsSeparator(path[i]))
             fileStart = i + 1u;
     }
     return StripAdhdExtension(path.substr(fileStart));

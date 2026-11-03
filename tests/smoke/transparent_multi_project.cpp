@@ -113,7 +113,7 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 // Toggle frame-lagged lighting on F1 to test teardown and re-bootstrap.
 class FrameLaggedAsyncLightingToggleInputHandler final : public NWB::Core::IInputEventHandler{
 public:
-    virtual b8 keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept override{
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept override{
         if(key != NWB::Core::Key::F1)
             return false;
         if(action == NWB::Core::InputAction::Press)

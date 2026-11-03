@@ -7,11 +7,16 @@
 #include <impl/assets_graphics/components.adhd.h>
 
 #include <core/assets/input_list.h>
+#include <core/assets/cook_metadata_internal.h>
 #include <core/assets/volume/built_asset.h>
 
 #include <global/sha1.h>
 
 #include <gtest/gtest.h>
+
+#include <global/atomic.h>
+#include <global/sync.h>
+#include <global/thread.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,6 +66,44 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(AssetsGraphics, ConcurrentImmutablePublicationPreservesTheWinner){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    const Path root = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "immutable_publication_race");
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareCleanDirectory(root));
+    const Path destination = root / "shared.nwba";
+    Atomic<u32> ready{0u};
+    Atomic<b8> start{false};
+    b8 results[2]{};
+    const auto publish = [&](const usize index){
+        NWB::Core::Alloc::ScratchArena scratch(AssetsGraphicsFixture::s_CodecScratchArena);
+        ::Path<NWB::Core::Alloc::ScratchArena> path(scratch, destination);
+        Vector<u8, NWB::Core::Alloc::ScratchArena> bytes(scratch);
+        Vector<u8, NWB::Core::Alloc::ScratchArena> existing(scratch);
+        bytes.resize(1024u * 1024u, static_cast<u8>(index + 1u));
+        ready.fetch_add(1u);
+        while(!start.load())
+            YieldThread();
+        results[index] = NWB::Core::Assets::BuiltAssetDetail::WriteBinaryFileIfChanged(path, bytes, false, existing);
+    };
+    Thread first(publish, 0u);
+    Thread second(publish, 1u);
+    while(ready.load() != 2u)
+        YieldThread();
+    start.store(true);
+    first.join();
+    second.join();
+    ASSERT_NE(results[0], results[1]);
+    NWB::Core::Assets::AssetBytes stored(testArena.arena);
+    ASSERT_TRUE(ReadBinaryFile(destination, stored));
+    ASSERT_EQ(stored.size(), 1024u * 1024u);
+    const u8 expected = results[0] ? 1u : 2u;
+    for(const u8 byte : stored)
+        ASSERT_EQ(byte, expected);
+    EXPECT_TRUE(RemoveAllIfExists(root));
+}
 
 TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
     TestArena testArena;
@@ -330,6 +373,66 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     EXPECT_NE(initialHeader->flags & NWB::Core::Assets::s_NwbAssetCacheFlagStandalone, 0u);
     EXPECT_EQ(initialHeader->entryCount, 1u);
 
+    // A cache written by a different producer must not be reused.
+    {
+        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+        const auto executablePath = GetExecutablePath(scratchArena);
+        ASSERT_TRUE(executablePath);
+        Vector<u8, NWB::Core::Alloc::ScratchArena> executableBytes(scratchArena);
+        ASSERT_TRUE(ReadBinaryFile(*executablePath, executableBytes));
+        const Sha256Digest producer = ComputeSha256(BinaryByteView{ executableBytes.data(), executableBytes.size() });
+        Sha256Digest otherProducer = producer;
+        otherProducer.bytes[0u] ^= 1u;
+        const auto normalizedPath = PathToString(testArena.arena, mixedCaseNwbPath);
+        NWB::Core::Assets::DiscoveredNwbFile discovered(testArena.arena, assetRoot, mixedCaseNwbPath, AStringView(normalizedPath), NWB::Core::Assets::s_ProjectVirtualRoot);
+        NWB::Core::Assets::NwbFileAssetCacheRecord originalProducer(testArena.arena);
+        NWB::Core::Assets::NwbFileAssetCacheRecord staleProducer(testArena.arena);
+        NWB::Core::Assets::ScratchString relativePath(scratchArena);
+        NWB::Core::Assets::ScratchString cacheName(scratchArena);
+        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_SamplerMetadata, producer, scratchArena, relativePath, cacheName, originalProducer);
+        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_SamplerMetadata, otherProducer, scratchArena, relativePath, cacheName, staleProducer);
+        ASSERT_TRUE(originalProducer.canWriteCache);
+        ASSERT_TRUE(staleProducer.canWriteCache);
+        EXPECT_EQ(originalProducer.paramSha256, initialHeader->paramSha256);
+        EXPECT_NE(staleProducer.paramSha256, originalProducer.paramSha256);
+        auto staleBytes = initialCacheBytes;
+        auto staleHeader = *initialHeader;
+        staleHeader.paramSha256 = staleProducer.paramSha256;
+        ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, staleHeader, staleBytes));
+        ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, staleBytes));
+        ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_new_producer", root / "out_new_producer"));
+        NWB::Core::Assets::AssetBytes refreshed(testArena.arena);
+        ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, refreshed));
+        EXPECT_EQ(refreshed, initialCacheBytes);
+
+        const Path bunchPath = assetRoot / "Samplers" / "Sidecar_Bunch.nwb";
+        const Path fontPath = assetRoot / "Samplers" / "Sidecar_Bunch.font";
+        const Path texturePath = assetRoot / "Samplers" / "Sidecar_Bunch.tex";
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(fontPath, "font-one"));
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(texturePath, "texture-one"));
+        const auto bunchPathText = PathToString(testArena.arena, bunchPath);
+        NWB::Core::Assets::DiscoveredNwbFile bunch(testArena.arena, assetRoot, bunchPath, AStringView(bunchPathText), NWB::Core::Assets::s_ProjectVirtualRoot);
+        NWB::Core::Assets::ScratchString largeMetadata(scratchArena);
+        largeMetadata.resize(70000u, ' ');
+        largeMetadata.append("ASSET_BUNCH asset; font f; texture t;");
+        NWB::Core::Assets::NwbFileAssetCacheRecord initialSidecars(testArena.arena);
+        NWB::Core::Assets::NwbFileAssetCacheRecord changedFont(testArena.arena);
+        NWB::Core::Assets::NwbFileAssetCacheRecord changedTexture(testArena.arena);
+        const auto prepareSidecars = [&](NWB::Core::Assets::NwbFileAssetCacheRecord& record){
+            NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", bunch, AStringView(largeMetadata), producer, scratchArena, relativePath, cacheName, record);
+        };
+        prepareSidecars(initialSidecars);
+        ASSERT_TRUE(initialSidecars.canWriteCache);
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(fontPath, "font-two"));
+        prepareSidecars(changedFont);
+        ASSERT_TRUE(changedFont.canWriteCache);
+        EXPECT_NE(initialSidecars.paramSha256, changedFont.paramSha256);
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(texturePath, "texture-two"));
+        prepareSidecars(changedTexture);
+        ASSERT_TRUE(changedTexture.canWriteCache);
+        EXPECT_NE(changedFont.paramSha256, changedTexture.paramSha256);
+    }
+
     // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.
     ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_second", root / "out_second"));
 
@@ -345,6 +448,16 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
     ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_repaired", root / "out_repaired"));
     NWB::Core::Assets::AssetBytes repairedCacheBytes(testArena.arena);
+    ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, repairedCacheBytes));
+    EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
+
+    // A corrupt count must be rejected before reserving memory.
+    corruptedHeader = *initialHeader;
+    corruptedHeader.entryCount = Limit<u32>::s_Max;
+    corruptedCacheBytes = initialCacheBytes;
+    ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
+    ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
+    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_bad_count", root / "out_bad_count"));
     ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, repairedCacheBytes));
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
@@ -364,6 +477,123 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     EXPECT_FLOAT_EQ(static_cast<const NWB::Impl::Sampler*>(updatedSampler->get())->description().mipBias, 3.5f);
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(RemoveAllIfExists(root));
+}
+
+TEST(AssetsGraphics, AssetRegistrySupportsReentrantDeserializeAndDrainsBeforeUnregister){
+    class ProbeAsset final : public NWB::Core::Assets::IAsset{
+    public:
+        ProbeAsset(const Name& assetType, const Name& virtualPath)noexcept
+            : IAsset(assetType, virtualPath)
+        {}
+    };
+
+    class LeafProbeCodec final : public NWB::Core::Assets::IAssetCodec{
+    public:
+        explicit LeafProbeCodec(const Name& assetType)noexcept
+            : IAssetCodec(assetType)
+        {}
+
+
+    public:
+        virtual Expected<UniquePtr<NWB::Core::Assets::IAsset>> deserialize(const Name& virtualPath, const Span<const u8>, NWB::Core::Assets::AssetArena&)const override{
+            return UniquePtr<NWB::Core::Assets::IAsset>(MakeUnique<ProbeAsset>(assetType(), virtualPath));
+        }
+
+#if defined(NWB_COOK)
+        virtual b8 serialize(const NWB::Core::Assets::IAsset&, NWB::Core::Assets::AssetBytes&)const override{
+            return true;
+        }
+#endif
+    };
+
+    class ReentrantBlockingCodec final : public NWB::Core::Assets::IAssetCodec{
+    public:
+        ReentrantBlockingCodec(const Name& assetType, const NWB::Core::Assets::AssetRegistry& registry, const Name& leafType, Atomic<b8>& entered, Atomic<b8>& release, Atomic<b8>& destroyedWhileActive)noexcept
+            : IAssetCodec(assetType)
+            , m_registry(registry)
+            , m_leafType(leafType)
+            , m_entered(entered)
+            , m_release(release)
+            , m_destroyedWhileActive(destroyedWhileActive)
+        {}
+
+        virtual ~ReentrantBlockingCodec()noexcept override{
+            if(m_inFlight.load())
+                m_destroyedWhileActive.store(true);
+        }
+
+
+    public:
+        virtual Expected<UniquePtr<NWB::Core::Assets::IAsset>> deserialize(const Name& virtualPath, const Span<const u8> binary, NWB::Core::Assets::AssetArena&)const override{
+            m_inFlight.store(true);
+            auto nested = m_registry.deserializeAsset(m_leafType, Name("project/probe/leaf"), binary);
+            if(!nested){
+                m_inFlight.store(false);
+                return MakeUnexpected(Failure{});
+            }
+            m_entered.store(true);
+            while(!m_release.load())
+                YieldThread();
+            m_inFlight.store(false);
+            return UniquePtr<NWB::Core::Assets::IAsset>(MakeUnique<ProbeAsset>(assetType(), virtualPath));
+        }
+
+#if defined(NWB_COOK)
+        virtual b8 serialize(const NWB::Core::Assets::IAsset&, NWB::Core::Assets::AssetBytes&)const override{
+            return true;
+        }
+#endif
+
+
+    private:
+        const NWB::Core::Assets::AssetRegistry& m_registry;
+        Name m_leafType;
+        Atomic<b8>& m_entered;
+        Atomic<b8>& m_release;
+        Atomic<b8>& m_destroyedWhileActive;
+        mutable Atomic<b8> m_inFlight{false};
+    };
+
+    TestArena testArena;
+    NWB::Core::Assets::AssetRegistry registry(testArena.arena);
+    const Name parentType("probe_parent_asset");
+    const Name leafType("probe_leaf_asset");
+    Atomic<b8> entered{false};
+    Atomic<b8> release{false};
+    Atomic<b8> destroyedWhileActive{false};
+    Atomic<b8> unregisterFinished{false};
+
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<LeafProbeCodec>(leafType)));
+    ASSERT_TRUE(registry.registerCodec(MakeUnique<ReentrantBlockingCodec>(parentType, registry, leafType, entered, release, destroyedWhileActive)));
+
+    Expected<UniquePtr<NWB::Core::Assets::IAsset>> parentResult = MakeUnexpected(Failure{});
+    Thread deserializeThread([&](){
+        parentResult = registry.deserializeAsset(parentType, Name("project/probe/parent"), Span<const u8>{});
+    });
+
+    while(!entered.load())
+        YieldThread();
+
+    b8 unregistered = false;
+    Thread unregisterThread([&](){
+        unregistered = registry.unregisterCodec(parentType);
+        unregisterFinished.store(true);
+    });
+
+    for(u32 spin = 0u; spin < 64u; ++spin)
+        YieldThread();
+    EXPECT_FALSE(unregisterFinished.load());
+
+    release.store(true);
+    deserializeThread.join();
+    unregisterThread.join();
+
+    ASSERT_TRUE(parentResult);
+    ASSERT_NE(parentResult->get(), nullptr);
+    EXPECT_EQ((*parentResult)->assetType(), parentType);
+    EXPECT_TRUE(unregistered);
+    EXPECT_TRUE(unregisterFinished.load());
+    EXPECT_FALSE(destroyedWhileActive.load());
 }
 
 

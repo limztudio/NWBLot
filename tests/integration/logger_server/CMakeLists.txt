@@ -21,6 +21,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET nwb_logserver AND Python3_Inter
     set_tests_properties(nwb_logserver_aborted_upload_integration PROPERTIES TIMEOUT ${_nwb_logserver_aborted_upload_timeout_seconds})
     unset(_nwb_logserver_aborted_upload_timeout_seconds)
 endif()
+if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND TARGET nwb_logserver AND Python3_Interpreter_FOUND)
+    add_test(NAME nwb_logserver_http_status_integration COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/http_status_cli_tests.py" --executable "$<TARGET_FILE:nwb_logserver>"
+            --output-directory "${CMAKE_BINARY_DIR}/Testing/logserver_http_status/$<CONFIG>")
+    set_tests_properties(nwb_logserver_http_status_integration PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT 120)
+endif()
 if(WIN32)
     target_sources(nwb_logserver_crash_tests PRIVATE
         "${PROJECT_SOURCE_DIR}/logger/server/clipboard_text.cpp"

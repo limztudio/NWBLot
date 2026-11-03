@@ -74,21 +74,41 @@ template<typename ArenaT>
         return removedCount + 1u;
     return MakeUnexpected(FileRemovalFailure{ LastSystemError(), removedCount });
 #else
-    const auto pathStat = LStatPath(path);
-    if(!pathStat){
-        if(IsMissingPathError(pathStat.error()))
+    if(path.empty())
+        return 0u;
+    return RemoveAllAt(AT_FDCWD, MakeNotNull<const char*>(path.c_str()));
+#endif
+}
+
+#if !defined(NWB_PLATFORM_WINDOWS)
+[[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAllAt(const int parentDescriptor, const NotNull<const char*> entryName)noexcept{
+    struct stat entryStat = {};
+    if(fstatat(parentDescriptor, entryName.get(), &entryStat, AT_SYMLINK_NOFOLLOW) != 0){
+        const ErrorCode statError = LastSystemError();
+        if(IsMissingPathError(statError))
             return 0u;
-        return MakeUnexpected(FileRemovalFailure{ pathStat.error(), 0u });
+        return MakeUnexpected(FileRemovalFailure{ statError, 0u });
     }
-    if(!S_ISDIR(pathStat->st_mode)){
-        const auto removed = RemoveFile(path);
-        if(!removed)
-            return MakeUnexpected(FileRemovalFailure{ removed.error(), 0u });
-        return *removed ? 1u : 0u;
-    }
-    DIR* const directory = opendir(path.c_str());
-    if(directory == nullptr)
+    if(!S_ISDIR(entryStat.st_mode)){
+        if(unlinkat(parentDescriptor, entryName.get(), 0) == 0)
+            return 1u;
+        if(errno == ENOENT || errno == ENOTDIR)
+            return 0u;
         return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
+    }
+    const int directoryDescriptor = openat(parentDescriptor, entryName.get(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if(directoryDescriptor < 0){
+        if(errno == ENOENT)
+            return 0u;
+        return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
+    }
+    DIR* const directory = fdopendir(directoryDescriptor);
+    if(directory == nullptr){
+        ErrorCode openError = LastSystemError();
+        if(close(directoryDescriptor) != 0 && !openError)
+            openError = LastSystemError();
+        return MakeUnexpected(FileRemovalFailure{ openError, 0u });
+    }
     ErrorCode iterationError;
     ScopeExit close([&]()noexcept{ CloseDirectory(MakeNotNull(directory), iterationError); });
     u64 removedCount = 0u;
@@ -102,7 +122,7 @@ template<typename ArenaT>
         const AStringView name(entry->d_name);
         if(IsDot(name) || IsDotDot(name))
             continue;
-        const auto removed = RemoveAllImpl(path / name);
+        const auto removed = RemoveAllAt(directoryDescriptor, MakeNotNull<const char*>(entry->d_name));
         if(!removed)
             return MakeUnexpected(FileRemovalFailure{ removed.error().code, removedCount + removed.error().removedCount });
         removedCount += *removed;
@@ -111,11 +131,14 @@ template<typename ArenaT>
     close.release();
     if(iterationError)
         return MakeUnexpected(FileRemovalFailure{ iterationError, removedCount });
-    if(rmdir(path.c_str()) != 0)
+    if(unlinkat(parentDescriptor, entryName.get(), AT_REMOVEDIR) != 0){
+        if(errno == ENOENT)
+            return removedCount;
         return MakeUnexpected(FileRemovalFailure{ LastSystemError(), removedCount });
+    }
     return removedCount + 1u;
-#endif
 }
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,24 +155,13 @@ template<typename ArenaT>
     return GlobalFilesystemDetail::RemoveAllImpl(path);
 }
 
-template<typename ArenaT>
-[[nodiscard]] inline Expected<void, ErrorCode> RenamePath(const Path<ArenaT>& from, const Path<ArenaT>& to)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    if(MoveFileEx(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING))
-#else
-    if(std::rename(from.c_str(), to.c_str()) == 0)
-#endif
-        return {};
-    return MakeUnexpected(LastSystemError());
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename ArenaT>
 [[nodiscard]] inline Expected<void, ErrorCode> RemoveAllIfExists(const Path<ArenaT>& path){
-    const auto exists = FileExists(path);
+    const auto exists = FileExistsNoFollow(path);
     if(!exists)
         return MakeUnexpected(exists.error());
     if(!*exists)
@@ -159,7 +171,7 @@ template<typename ArenaT>
         return MakeUnexpected(removedCount.error().code);
     if(*removedCount != 0u)
         return {};
-    const auto stillExists = FileExists(path);
+    const auto stillExists = FileExistsNoFollow(path);
     if(!stillExists)
         return MakeUnexpected(stillExists.error());
     if(*stillExists)

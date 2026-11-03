@@ -4,6 +4,8 @@
 
 #include "type_checker.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -111,8 +113,11 @@ namespace __hidden_adhd_type_checker_infer{
         return false;
     if((stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall) && StmtReferencesIdentifier(stmt, varName))
         return true;
-    if(stmt->kind == StmtKind::VarDecl && stmt->name != varName && stmt->varType && symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None && StmtReferencesIdentifier(stmt, varName))
-        return true;
+    if(stmt->kind == StmtKind::VarDecl && stmt->name != varName && stmt->varType && StmtReferencesIdentifier(stmt, varName)){
+        const MStringView baseVarType = symbols.resolveBaseTypeName(stmt->varType->name);
+        if(symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None || baseVarType == "StringView" || baseVarType == "Span")
+            return true;
+    }
     if(ExprHasMutLambdaCapture(stmt->expr, varName, symbols) || ExprHasMutLambdaCapture(stmt->condition, varName, symbols) || ExprHasMutLambdaCapture(stmt->stepExpr, varName, symbols))
         return true;
     for(const Expr* arg : stmt->arguments){
@@ -158,8 +163,10 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
     if(expr.kind == ExprKind::Identifier){
         if(const ScopedVarInfo* local = FindScopedVar(scope, expr.text))
             return resolveScopedVarBaseType(*local);
-        if(const BuiltinGlobalConstantInfo* builtinConst = FindBuiltinGlobalConstant(expr.text))
-            return builtinConst->adhdTypeName;
+        if(!m_symbols.findGlobalConstant(expr.text) && !HasConstValueTemplateParam(ownerClass, method, expr.text)){
+            if(const BuiltinGlobalConstantInfo* builtinConst = FindBuiltinGlobalConstant(expr.text))
+                return builtinConst->adhdTypeName;
+        }
     }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier && expr.lhs->callTemplateArgs.empty() && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
@@ -388,7 +395,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     }
                     else{
                         MVector<TypeArg> deducedArgs(m_arena);
-                        if(deduceCallTemplateArgs(ownerClass, method, *fn, expr.arguments, scope, deducedArgs))
+                        deduceCallTemplateArgs(ownerClass, method, *fn, expr.arguments, scope, deducedArgs);
+                        if(FindIf(deducedArgs.begin(), deducedArgs.end(), [](const TypeArg& arg)noexcept{ return arg.type != nullptr; }) != deducedArgs.end())
                             rt = m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, deducedArgs);
                     }
                 }
@@ -434,7 +442,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     }
                     else{
                         MVector<TypeArg> deducedArgs(m_arena);
-                        if(deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs))
+                        deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs);
+                        if(FindIf(deducedArgs.begin(), deducedArgs.end(), [](const TypeArg& arg)noexcept{ return arg.type != nullptr; }) != deducedArgs.end())
                             rt = m_symbols.substituteTypeParams(*m->returnType, m->templateParams, deducedArgs);
                     }
                 }
@@ -481,7 +490,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                         }
                         else{
                             MVector<TypeArg> deducedArgs(m_arena);
-                            if(deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs))
+                            deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs);
+                            if(FindIf(deducedArgs.begin(), deducedArgs.end(), [](const TypeArg& arg)noexcept{ return arg.type != nullptr; }) != deducedArgs.end())
                                 rt = m_symbols.substituteTypeParams(*rt, m->templateParams, deducedArgs);
                         }
                     }
@@ -532,7 +542,211 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
         : inferExprTypeName(ownerClass, method, expr, scope);
 }
 
-b8 TypeChecker::deduceCallTemplateArgs(
+b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    const TypeRef* exprTypeRef = inferExprTypeRef(ownerClass, method, expr, scope);
+    if(m_symbols.resolveRefMode(exprTypeRef) != ParamPassingMode::None)
+        return false;
+    const MStringView baseType = exprTypeRef
+        ? m_symbols.resolveBaseTypeName(exprTypeRef->name)
+        : inferExprTypeName(ownerClass, method, expr, scope);
+    if(baseType == "StringView" || baseType == "Span")
+        return false;
+
+    switch(expr.kind){
+    case ExprKind::Identifier:
+    case ExprKind::ThisMember:
+        return false;
+    case ExprKind::MemberAccess:
+        return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
+    case ExprKind::Index:{
+        if(!expr.lhs)
+            return false;
+        const TypeRef* containerTypeRef = nullptr;
+        const MStringView lhsBase = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &containerTypeRef);
+        if(lhsBase == "Span" || lhsBase == "StringView")
+            return false;
+        const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
+        if(const MethodDecl* customOp = resolveCustomOperator(ownerClass, method, containerTypeRef, lhsBase, "[]", 1u, recvIsConst))
+            return m_symbols.resolveRefMode(customOp->returnType) == ParamPassingMode::None;
+        return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
+    }
+    case ExprKind::Call:{
+        if(expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            const MStringView mName = expr.lhs->text;
+            const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
+            if((mName == "value" && (recvBase == "Optional" || recvBase == "Expected"))
+                || ((mName == "front" || mName == "back") && (FindBuiltinGenericType(recvBase) != nullptr || recvBase == "String" || recvBase == "CompactString") && recvBase != "Span")){
+                return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs->lhs, scope);
+            }
+            if((mName == "front" || mName == "back") && (recvBase == "Span" || recvBase == "StringView"))
+                return false;
+        }
+        return true;
+    }
+    case ExprKind::Binary:
+        if(IsCompoundOrSimpleAssignment(expr.op))
+            return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
+        return true;
+    case ExprKind::Unary:
+        if(!expr.isPostfix && (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus))
+            return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
+        return true;
+    default:
+        return true;
+    }
+}
+
+b8 TypeChecker::exprBorrowsTemporaryStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope);
+    if(baseType == "String" || baseType == "CompactString")
+        return isTemporaryOwnerExpr(ownerClass, method, expr, scope);
+    if(baseType != "StringView")
+        return false;
+
+    if(expr.kind == ExprKind::Call && expr.lhs){
+        if(expr.lhs->kind == ExprKind::Identifier){
+            const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
+            if((expr.lhs->text == "trimView" || expr.lhs->text == "trimLeftView" || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
+                return exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.arguments[0], scope);
+        }
+        else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            const MStringView mName = expr.lhs->text;
+            const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
+            if((recvBase == "StringView" && mName == "substr") || ((recvBase == "String" || recvBase == "CompactString") && (mName == "view" || mName == "c_str"))){
+                if(exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.lhs->lhs, scope))
+                    return true;
+            }
+        }
+        for(const Expr* arg : expr.arguments){
+            if(!arg)
+                continue;
+            const MStringView argBase = inferExprBaseType(ownerClass, method, *arg, scope);
+            if((argBase == "String" || argBase == "CompactString" || argBase == "StringView") && exprBorrowsTemporaryStringOwner(ownerClass, method, *arg, scope))
+                return true;
+        }
+        return false;
+    }
+    if(expr.kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr.op) && expr.rhs)
+        return exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.rhs, scope);
+    if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.lhs)
+        return exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.lhs, scope);
+    return false;
+}
+
+b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, MStringView* outOwnerName, usize* outOwnerScopeIndex)const noexcept{
+    const auto resolveLocalIndex = [&](const MStringView name, usize& outIndex)noexcept -> const ScopedVarInfo*{
+        for(usize i = scope.size(); i > 0u; --i){
+            if(scope[i - 1u].name == name){
+                outIndex = i - 1u;
+                return &scope[i - 1u];
+            }
+        }
+        return nullptr;
+    };
+
+    const auto checkRootLocalOwner = [&](const Expr& candidate)noexcept -> b8{
+        const Expr* root = &candidate;
+        while(root){
+            if(root->kind == ExprKind::MemberAccess && root->lhs){
+                const TypeRef* midType = inferExprTypeRef(ownerClass, method, *root, scope);
+                if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None)
+                    return false;
+                root = root->lhs;
+                continue;
+            }
+            if(root->kind == ExprKind::Index && root->lhs){
+                const TypeRef* midType = inferExprTypeRef(ownerClass, method, *root, scope);
+                if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None)
+                    return false;
+                const MStringView parentBase = inferExprBaseType(ownerClass, method, *root->lhs, scope);
+                if(parentBase == "Span" || parentBase == "StringView")
+                    return false;
+                root = root->lhs;
+                continue;
+            }
+            if(root->kind == ExprKind::Call && root->lhs && root->lhs->kind == ExprKind::MemberAccess && root->lhs->lhs){
+                const MStringView mName = root->lhs->text;
+                const MStringView recvBase = inferExprBaseType(ownerClass, method, *root->lhs->lhs, scope);
+                if((mName == "value" && (recvBase == "Optional" || recvBase == "Expected"))
+                    || ((mName == "front" || mName == "back") && FindBuiltinGenericType(recvBase) != nullptr && recvBase != "Span")){
+                    root = root->lhs->lhs;
+                    continue;
+                }
+            }
+            break;
+        }
+        if(!root || root->kind != ExprKind::Identifier)
+            return false;
+        usize localIdx = 0u;
+        const ScopedVarInfo* local = resolveLocalIndex(root->text, localIdx);
+        if(!local)
+            return false;
+        if(local->borrowsLocalStringOwner){
+            usize ownerIdx = localIdx;
+            if(!local->borrowedLocalOwnerName.empty())
+                resolveLocalIndex(local->borrowedLocalOwnerName, ownerIdx);
+            if(outOwnerName)
+                *outOwnerName = local->borrowedLocalOwnerName;
+            if(outOwnerScopeIndex)
+                *outOwnerScopeIndex = ownerIdx;
+            return true;
+        }
+        const MStringView candidateBase = inferExprBaseType(ownerClass, method, candidate, scope);
+        if((candidateBase == "String" || candidateBase == "CompactString")
+            && !local->isParam
+            && local->mode == ParamPassingMode::None
+            && m_symbols.resolveRefMode(local->type) == ParamPassingMode::None
+            && resolveScopedVarBaseType(*local) != "Span"){
+            if(outOwnerName)
+                *outOwnerName = local->name;
+            if(outOwnerScopeIndex)
+                *outOwnerScopeIndex = localIdx;
+            return true;
+        }
+        return false;
+    };
+
+    const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope);
+    if(baseType == "String" || baseType == "CompactString")
+        return checkRootLocalOwner(expr);
+    if(checkRootLocalOwner(expr))
+        return true;
+    if(baseType != "StringView")
+        return false;
+
+    if(expr.kind == ExprKind::Call && expr.lhs){
+        if(expr.lhs->kind == ExprKind::Identifier){
+            const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
+            if((expr.lhs->text == "trimView" || expr.lhs->text == "trimLeftView" || baseCallee == "StringView") && !expr.arguments.empty() && expr.arguments[0])
+                return exprBorrowsLocalStringOwner(ownerClass, method, *expr.arguments[0], scope, outOwnerName, outOwnerScopeIndex);
+        }
+        else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            const MStringView mName = expr.lhs->text;
+            const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
+            if((recvBase == "StringView" && mName == "substr") || ((recvBase == "String" || recvBase == "CompactString") && (mName == "view" || mName == "c_str"))){
+                if(exprBorrowsLocalStringOwner(ownerClass, method, *expr.lhs->lhs, scope, outOwnerName, outOwnerScopeIndex))
+                    return true;
+            }
+        }
+        for(const Expr* arg : expr.arguments){
+            if(!arg)
+                continue;
+            const MStringView argBase = inferExprBaseType(ownerClass, method, *arg, scope);
+            if((argBase == "String" || argBase == "CompactString" || argBase == "StringView")
+                && exprBorrowsLocalStringOwner(ownerClass, method, *arg, scope, outOwnerName, outOwnerScopeIndex)){
+                return true;
+            }
+        }
+        return false;
+    }
+    if(expr.kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr.op) && expr.rhs)
+        return exprBorrowsLocalStringOwner(ownerClass, method, *expr.rhs, scope, outOwnerName, outOwnerScopeIndex);
+    if((expr.kind == ExprKind::Cast || expr.kind == ExprKind::BitCast) && expr.lhs)
+        return exprBorrowsLocalStringOwner(ownerClass, method, *expr.lhs, scope, outOwnerName, outOwnerScopeIndex);
+    return false;
+}
+
+void TypeChecker::deduceCallTemplateArgs(
     const ClassDecl* ownerClass,
     const MethodDecl* enclosingMethod,
     const MethodDecl& targetCallable,
@@ -542,7 +756,6 @@ b8 TypeChecker::deduceCallTemplateArgs(
 )const{
     outDeducedArgs.clear();
     outDeducedArgs.reserve(targetCallable.templateParams.size());
-    b8 anyDeduced = false;
     for(const TemplateParamDecl& tp : targetCallable.templateParams){
         TypeArg dArg;
         if(!tp.constValueType){
@@ -556,14 +769,12 @@ b8 TypeChecker::deduceCallTemplateArgs(
                     const MStringView argBase = inferExprBaseType(ownerClass, enclosingMethod, *arg, scope, &argRef);
                     if(argRef){
                         dArg.type = const_cast<TypeRef*>(argRef);
-                        anyDeduced = true;
                         break;
                     }
                     if(!argBase.empty()){
                         TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
                         synth->name = argBase;
                         dArg.type = synth;
-                        anyDeduced = true;
                         break;
                     }
                 }
@@ -571,7 +782,6 @@ b8 TypeChecker::deduceCallTemplateArgs(
                     const TypeRef* argRef = inferExprTypeRef(ownerClass, enclosingMethod, *arg, scope);
                     if(const TypeRef* sub = DeduceTemplateParamTypeRef(pType, argRef, tp.name, m_symbols)){
                         dArg.type = const_cast<TypeRef*>(sub);
-                        anyDeduced = true;
                         break;
                     }
                 }
@@ -579,7 +789,6 @@ b8 TypeChecker::deduceCallTemplateArgs(
         }
         outDeducedArgs.push_back(dArg);
     }
-    return anyDeduced;
 }
 
 void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, const Span<const ScopedVarInfo> scope, const usize savedScopeSize)const noexcept{
@@ -599,12 +808,18 @@ void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, 
             continue;
 
         b8 capturedOrAsyncOrAliased = false;
-        for(usize j = savedScopeSize; j < scope.size(); ++j){
-            if(const Expr* lam = scope[j].lambdaExpr){
-                for(const LambdaCapture& cap : lam->lambdaCaptures){
-                    if(cap.name == local.name){
-                        capturedOrAsyncOrAliased = true;
-                        break;
+        for(usize j = 0u; j < scope.size(); ++j){
+            if(scope[j].borrowsLocalStringOwner && scope[j].borrowedLocalOwnerName == local.name){
+                capturedOrAsyncOrAliased = true;
+                break;
+            }
+            if(j >= savedScopeSize){
+                if(const Expr* lam = scope[j].lambdaExpr){
+                    for(const LambdaCapture& cap : lam->lambdaCaptures){
+                        if(cap.name == local.name){
+                            capturedOrAsyncOrAliased = true;
+                            break;
+                        }
                     }
                 }
             }

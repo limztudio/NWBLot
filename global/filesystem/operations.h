@@ -430,6 +430,118 @@ template<typename ArenaT>
 #endif
 }
 
+[[nodiscard]] inline b8 IsMissingOrInvalidPathLookupError(const ErrorCode& error)noexcept{
+    if(IsMissingPathError(error))
+        return true;
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(error.category() != SystemCategory())
+        return false;
+    switch(error.value()){
+    case ERROR_INVALID_NAME:
+    case ERROR_BAD_NETPATH:
+    case ERROR_BAD_PATHNAME:
+    case ERROR_CANT_RESOLVE_FILENAME:
+        return true;
+    default:
+        return false;
+    }
+#else
+    return error == ErrorCondition::too_many_symbolic_link_levels;
+#endif
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<b8, ErrorCode> AreSameExistingPath(const Path<ArenaT>& lhs, const Path<ArenaT>& rhs)noexcept{
+    if(lhs.empty() || rhs.empty())
+        return false;
+#if defined(NWB_PLATFORM_WINDOWS)
+    const HANDLE lhsHandle = CreateFile(
+        lhs.c_str(),
+        0u,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS,
+        nullptr
+    );
+    if(lhsHandle == INVALID_HANDLE_VALUE){
+        const ErrorCode lhsError = LastSystemError();
+        if(IsMissingOrInvalidPathLookupError(lhsError))
+            return false;
+        return MakeUnexpected(lhsError);
+    }
+    const HANDLE rhsHandle = CreateFile(
+        rhs.c_str(),
+        0u,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS,
+        nullptr
+    );
+    if(rhsHandle == INVALID_HANDLE_VALUE){
+        const ErrorCode rhsError = LastSystemError();
+        const b8 lhsClosed = CloseHandle(lhsHandle) != 0;
+        const ErrorCode closeError = lhsClosed ? ErrorCode{} : LastSystemError();
+        if(IsMissingOrInvalidPathLookupError(rhsError)){
+            if(closeError)
+                return MakeUnexpected(closeError);
+            return false;
+        }
+        return MakeUnexpected(rhsError);
+    }
+
+    b8 same = false;
+    ErrorCode queryError;
+    FILE_ID_INFO lhsId = {};
+    FILE_ID_INFO rhsId = {};
+    if(
+        GetFileInformationByHandleEx(lhsHandle, FileIdInfo, &lhsId, sizeof(lhsId))
+        && GetFileInformationByHandleEx(rhsHandle, FileIdInfo, &rhsId, sizeof(rhsId))
+    ){
+        same = lhsId.VolumeSerialNumber == rhsId.VolumeSerialNumber
+            && NWB_MEMCMP(&lhsId.FileId, &rhsId.FileId, sizeof(lhsId.FileId)) == 0;
+    }
+    else{
+        BY_HANDLE_FILE_INFORMATION lhsInfo = {};
+        BY_HANDLE_FILE_INFORMATION rhsInfo = {};
+        if(GetFileInformationByHandle(lhsHandle, &lhsInfo) && GetFileInformationByHandle(rhsHandle, &rhsInfo)){
+            same = lhsInfo.dwVolumeSerialNumber == rhsInfo.dwVolumeSerialNumber
+                && lhsInfo.nFileIndexHigh == rhsInfo.nFileIndexHigh
+                && lhsInfo.nFileIndexLow == rhsInfo.nFileIndexLow;
+        }
+        else
+            queryError = LastSystemError();
+    }
+
+    const b8 rhsClosed = CloseHandle(rhsHandle) != 0;
+    const ErrorCode rhsCloseError = rhsClosed ? ErrorCode{} : LastSystemError();
+    const b8 lhsClosed = CloseHandle(lhsHandle) != 0;
+    const ErrorCode lhsCloseError = lhsClosed ? ErrorCode{} : LastSystemError();
+    if(queryError)
+        return MakeUnexpected(queryError);
+    if(rhsCloseError)
+        return MakeUnexpected(rhsCloseError);
+    if(lhsCloseError)
+        return MakeUnexpected(lhsCloseError);
+    return same;
+#else
+    const auto lhsStat = GlobalFilesystemDetail::StatPath(lhs);
+    if(!lhsStat){
+        if(IsMissingOrInvalidPathLookupError(lhsStat.error()))
+            return false;
+        return MakeUnexpected(lhsStat.error());
+    }
+    const auto rhsStat = GlobalFilesystemDetail::StatPath(rhs);
+    if(!rhsStat){
+        if(IsMissingOrInvalidPathLookupError(rhsStat.error()))
+            return false;
+        return MakeUnexpected(rhsStat.error());
+    }
+    return lhsStat->st_dev == rhsStat->st_dev && lhsStat->st_ino == rhsStat->st_ino;
+#endif
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -539,6 +651,17 @@ template<typename ArenaT>
     if(errno == ENOENT || errno == ENOTDIR)
         return false;
 #endif
+    return MakeUnexpected(LastSystemError());
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<void, ErrorCode> RenamePath(const Path<ArenaT>& from, const Path<ArenaT>& to)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(MoveFileEx(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING))
+#else
+    if(std::rename(from.c_str(), to.c_str()) == 0)
+#endif
+        return {};
     return MakeUnexpected(LastSystemError());
 }
 

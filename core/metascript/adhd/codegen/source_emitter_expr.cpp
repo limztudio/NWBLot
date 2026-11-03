@@ -45,7 +45,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             || expr.kind == ExprKind::Unary
             || (expr.kind == ExprKind::Binary && expr.op != TokenType::Equal)
             || (expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier
-                && !MapBuiltinMathFunction(expr.lhs->text).empty())
+                && expr.isBuiltinCall)
             || isSimdCtorWithRegArg;
         if(isDirectSimdRegOp){
             const MStringView simdType = expr.resolvedSimdType;
@@ -76,7 +76,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.push_back(')');
         }
         else{
-            if(const BuiltinGlobalConstantInfo* globalConst = FindBuiltinGlobalConstant(expr.text))
+            if(const BuiltinGlobalConstantInfo* globalConst = expr.isBuiltinConstant ? FindBuiltinGlobalConstant(expr.text) : nullptr)
                 out.append(globalConst->cppExportName.data(), globalConst->cppExportName.size());
             else
                 out.append(expr.text.data(), expr.text.size());
@@ -155,6 +155,12 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 break;
             }
         }
+        if(expr.isStringByteMutRef)
+            out.append("reinterpret_cast<::u8&>(");
+        else if(expr.isStringByteConstRef)
+            out.append("reinterpret_cast<const ::u8&>(");
+        else if(expr.isStringByteRead)
+            out.append("static_cast<::u8>(");
         if(expr.derefNotNull)
             out.append("(*(");
         if(expr.lhs)
@@ -170,10 +176,12 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         out.push_back(']');
         if(expr.derefNotNull)
             out.append("))");
+        if(expr.isStringByteMutRef || expr.isStringByteConstRef || expr.isStringByteRead)
+            out.push_back(')');
         break;
     }
     case ExprKind::Call:{
-        if(expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        if(expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr.lhs->text;
             MStringView scalarReductionSuffix;
 #define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION(adhdName, laneIntrinsicSuffix) \
@@ -196,13 +204,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 break;
             }
             if(callee == "lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2] && expr.resolvedSimdType.empty()){
-                out.append("((");
+                out.append("([](auto&& __adhd_lerp_a, auto&& __adhd_lerp_b, auto&& __adhd_lerp_t) -> decltype(auto) { return (::Forward<decltype(__adhd_lerp_a)>(__adhd_lerp_a) + ((::Forward<decltype(__adhd_lerp_b)>(__adhd_lerp_b) - __adhd_lerp_a) * ::Forward<decltype(__adhd_lerp_t)>(__adhd_lerp_t))); }(");
                 emitExpr(out, *expr.arguments[0]);
-                out.append(") + ((");
+                out.append(", ");
                 emitExpr(out, *expr.arguments[1]);
-                out.append(") - (");
-                emitExpr(out, *expr.arguments[0]);
-                out.append(")) * (");
+                out.append(", ");
                 emitExpr(out, *expr.arguments[2]);
                 out.append("))");
                 break;
@@ -217,9 +223,27 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             }
         }
 
+        if(expr.isStringSubstr && expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
+            out.append("([](const auto& __adhd_str, const ::usize __adhd_pos = 0u, const ::usize __adhd_count = ::AStringView::npos)noexcept{ const ::AStringView __adhd_view(__adhd_str.data(), __adhd_str.size()); const ::usize __adhd_clamped = __adhd_pos < __adhd_view.size() ? __adhd_pos : __adhd_view.size(); const ::AStringView __adhd_sub = __adhd_view.substr(__adhd_clamped, __adhd_count); return ::RemoveCVRef_T<decltype(__adhd_str)>(__adhd_sub.data(), __adhd_sub.size(), __adhd_str.get_allocator()); }(");
+            emitExpr(out, *expr.lhs->lhs);
+            for(const Expr* arg : expr.arguments){
+                if(!arg)
+                    continue;
+                out.append(", ");
+                emitExpr(out, *arg);
+            }
+            out.append("))");
+            break;
+        }
+        if(expr.isStringByteMutRef)
+            out.append("reinterpret_cast<::u8&>(");
+        else if(expr.isStringByteConstRef)
+            out.append("reinterpret_cast<const ::u8&>(");
+        else if(expr.isStringByteRead)
+            out.append("static_cast<::u8>(");
         if(expr.derefNotNull)
             out.append("(*");
-        emitCallTargetExpr(out, expr.lhs);
+        emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall);
         if(!expr.callTemplateArgs.empty())
             m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
         const MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
@@ -230,6 +254,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             : (expr.injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});
         emitCtorOrCallArgs(out, baseCallee, expr.arguments, injectedArena, false, false);
         if(expr.derefNotNull)
+            out.push_back(')');
+        if(expr.isStringByteMutRef || expr.isStringByteConstRef || expr.isStringByteRead)
             out.push_back(')');
         break;
     }
@@ -340,11 +366,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
 }
 
-void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs)const{
+void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 isBuiltinCall)const{
     if(!lhs)
         return;
     if(lhs->kind == ExprKind::Identifier){
-        const MStringView mappedMath = MapBuiltinMathFunction(lhs->text);
+        const MStringView mappedMath = isBuiltinCall ? MapBuiltinMathFunction(lhs->text) : MStringView{};
         if(!mappedMath.empty()){
             out.append(mappedMath.data(), mappedMath.size());
         }

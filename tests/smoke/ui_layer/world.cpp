@@ -156,6 +156,22 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
         layer.setGpuCommandRecordingMode(Impl::Ui::GpuCommandRecordingMode::CommandIrReplay);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: command IR replay enabled"));
     }
+    if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_MANY_ROOTS")){
+        for(usize index = 0u; index < Impl::Ui::s_InputMaxTargets; ++index){
+            auto root = world->createEntity();
+            root.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext&){};
+        }
+        auto lastRoot = world->createEntity();
+        lastRoot.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext& context){
+            const Core::ECS::EntityID id = context.entity;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: root beyond target limit painted"));
+            context.world.destroyEntity(id);
+            if(context.world.entity(id).alive())
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: root removal during paint failed"));
+            else
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: root removed during paint"));
+        };
+    }
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
     if(textureImageSmoke){

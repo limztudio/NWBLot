@@ -49,7 +49,7 @@ Configuration names are exactly lowercase `dbg`, `opt`, and `fin`. For a single-
 Windows hosts require Windows 10 version 1709 or newer, the documented minimum for
 [IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2). Native host detection requires that API. An unavailable API, a failed query, or an
 unsupported native machine type produces an error; architecture is not guessed from the Python process or environment.
-Use `--arch` to select a target explicitly. Other platforms retain their native machine-name normalization.
+Use `--arch` to select a target explicitly. Other platforms default to `x64`.
 
 A new custom build directory is configured from the selected preset automatically. Relative paths are resolved against the repository root:
 
@@ -80,6 +80,10 @@ Build-only commands reject application arguments and contradictory `--skip-build
 selected build and configuration's CMake File API reply, unless `--executable` supplies the path explicitly. Missing target
 metadata or artifacts fail before launch. Dry runs can preview the repository naming convention; `--executable-name` and
 `--profile-logserver-name` only change that preview. `python -m launcher profiles` lists the discovered project and utility commands.
+
+A custom `--profile-logserver-executable` must accept `--readiness-token <token>` and return that exact ASCII token from
+`GET /ready` on its selected loopback port. The launcher uses a fresh token to reject an unrelated listener before starting
+the application. This check identifies the startup listener; it does not authenticate later connections.
 
 Specialized workflows such as `pipeline`, `smoke`, and the A/B runners have their own options; use their `--help` output.
 To build their CMake targets without running the workflow, use the generic `build` command. The Python `ui-skin` generator

@@ -262,6 +262,55 @@ TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCaptu
     EXPECT_TRUE(RemoveFile(namesymPath));
 }
 
+TEST(NameSymbolDecodeTests, ConcurrentRecordResolveClearAndUninstallStaySynchronized){
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
+    ScopeExit restoreRegistry([]()noexcept{
+        NameSymbols::InstallRuntimeRegistry();
+        NameSymbols::ClearRuntimeSymbols();
+    });
+
+    constexpr AStringView s_TargetText = "concurrent/symbol_entry";
+    const NameHash targetHash = ComputeNameHash(MakeNotNull("concurrent/symbol_entry"));
+    Atomic<b8> stop{ false };
+    Latch startLatch(4);
+
+    JoiningThread recorderThread([&](){
+        startLatch.arrive_and_wait();
+        for(u32 i = 0u; i < 400u; ++i){
+            const Name recorded(s_TargetText);
+            EXPECT_EQ(recorded.identityHash(), targetHash);
+        }
+        stop.store(true, MemoryOrder::release);
+    });
+
+    JoiningThread resolverThread([&](){
+        startLatch.arrive_and_wait();
+        Array<char, NameSymbols::s_MaxResolvedTextLength> buffer = {};
+        while(!stop.load(MemoryOrder::acquire)){
+            if(NameSymbols::Resolve(buffer.data(), buffer.size(), targetHash))
+                EXPECT_EQ(AStringView(buffer.data()), s_TargetText);
+        }
+    });
+
+    JoiningThread clearThread([&](){
+        startLatch.arrive_and_wait();
+        while(!stop.load(MemoryOrder::acquire)){
+            NameSymbols::ClearRuntimeSymbols();
+            const usize count = NameSymbols::EntryCount();
+            EXPECT_LE(count, 64u);
+        }
+    });
+
+    JoiningThread toggleThread([&](){
+        startLatch.arrive_and_wait();
+        while(!stop.load(MemoryOrder::acquire)){
+            NameSymbols::UninstallRuntimeRegistry();
+            NameSymbols::InstallRuntimeRegistry();
+        }
+    });
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

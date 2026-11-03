@@ -155,6 +155,12 @@ struct Expr{
     b8 hasMutContainerCapture = false;
     b8 isVectorRawIndex = false;
     b8 isMatrixRowIndex = false;
+    b8 isBuiltinCall = false;
+    b8 isBuiltinConstant = false;
+    b8 isStringSubstr = false;
+    b8 isStringByteRead = false;
+    b8 isStringByteConstRef = false;
+    b8 isStringByteMutRef = false;
 
 
 public:

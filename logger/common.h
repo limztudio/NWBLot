@@ -8,6 +8,7 @@
 #include "global.h"
 
 #include <global/binary.h>
+#include <global/process.h>
 #include <global/thread.h>
 
 
@@ -25,6 +26,8 @@ using MessageQueue = ParallelQueue<MessageType, LogArena>;
 using LogBytes = Vector<u8, LogArena>;
 
 inline constexpr StringView s_TelemetryUploadEndpoint = "/telemetry";
+inline constexpr usize s_MaxLogMessageUploadBytes = 1024u * 1024u;
+inline constexpr usize s_MaxTelemetryUploadBytes = 64u * 1024u * 1024u;
 inline constexpr StringView s_CrashUploadTokenOption = "--crash-upload-token";
 inline constexpr i32 s_LocalTimeYearBase = 1900;
 inline constexpr i32 s_LocalTimeMonthBase = 1;
@@ -242,21 +245,32 @@ public:
         if(!executableDirectory)
             return false;
 
-        const LogString fileName = StringFormat(
-            m_arena,
-            NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
-            fileNameBase,
-            localTime->tm_year + s_LocalTimeYearBase,
-            localTime->tm_mon + s_LocalTimeMonthBase,
-            localTime->tm_mday,
-            localTime->tm_hour,
-            localTime->tm_min,
-            localTime->tm_sec
-        );
-        m_filePath = *executableDirectory / fileName;
-
-        m_stream.open(m_filePath, s_FileOpenWrite | s_FileOpenAppend);
-        return m_stream.is_open();
+        static Atomic<u64> sequence{ 0u };
+        constexpr usize s_MaxAttempts = 1024u;
+        for(usize attempt = 0u; attempt < s_MaxAttempts; ++attempt){
+            const LogString fileName = StringFormat(
+                m_arena,
+                NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}.log"),
+                fileNameBase,
+                localTime->tm_year + s_LocalTimeYearBase,
+                localTime->tm_mon + s_LocalTimeMonthBase,
+                localTime->tm_mday,
+                localTime->tm_hour,
+                localTime->tm_min,
+                localTime->tm_sec,
+                CurrentProcessId(),
+                sequence.fetch_add(1u, MemoryOrder::relaxed)
+            );
+            m_filePath = *executableDirectory / fileName;
+            m_stream.open(m_filePath, s_FileOpenWrite | StreamType::noreplace);
+            if(m_stream.is_open())
+                return true;
+            m_stream.clear();
+            const auto exists = FileExistsNoFollow(m_filePath);
+            if(!exists || !*exists)
+                return false;
+        }
+        return false;
     }
 
     b8 openByExecutableName(){
@@ -267,6 +281,8 @@ public:
         const LogString executableNameString = PathToString<tchar>(m_arena, *executableName);
         return open(executableNameString);
     }
+
+    [[nodiscard]] const Path& path()const noexcept{ return m_filePath; }
 
     void close(){
         if(!m_stream.is_open())

@@ -105,6 +105,10 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
         return TextInputAdmission::QueueFull;
     }
     TextInputEvent& event = replace ? m_events.back() : m_events.emplace_back(m_arena);
+    ScopeExit rollback([this, replace]()noexcept{
+        if(!replace)
+            m_events.pop_back();
+    });
     event.text.assign(text.data(), text.size());
     event.token = token;
     event.sequence = m_nextSequence;
@@ -119,6 +123,7 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     event.cancelReason = TextInputCancelReason::NativeCancelled;
     event.deletionBasis = basis;
     m_queuedTextBytes = m_queuedTextBytes - oldBytes + text.size();
+    rollback.release();
     return TextInputAdmission::Accepted;
 }
 

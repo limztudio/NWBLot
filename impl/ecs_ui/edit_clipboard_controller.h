@@ -56,10 +56,8 @@ public:
             return { UiEditClipboardStatus::NativeFailure };
         b8 reads = false;
         UiEditClipboardStatus::Enum validationStatus = UiEditClipboardStatus::Idle;
-        if(!ValidateUiEditClipboardActionMode(action, readOnly, model.composition().active, model.hasSelection(), reads, validationStatus))
+        if(!ValidateUiEditClipboardActionMode(action, channel <= Core::ClipboardChannel::PrimarySelection, readOnly, model.composition().active, model.hasSelection(), reads, validationStatus))
             return { validationStatus };
-        if(channel > Core::ClipboardChannel::PrimarySelection)
-            return { UiEditClipboardStatus::Unsupported };
         const auto capabilities = m_service.capabilities(channel);
         if(reads ? !capabilities.readText : !capabilities.writeText)
             return { UiEditClipboardStatus::Unsupported };
@@ -184,3 +182,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

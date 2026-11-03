@@ -84,7 +84,7 @@ template<typename VisitTriangle>
     return VectorScale(LoadUfbxVector(position), static_cast<f32>(options.scale));
 }
 
-[[nodiscard]] static SIMDVectorSingle LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 normal = {};
     if(options.bakeTransforms){
         normal = ufbx_get_vertex_vec3(wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal, cornerIndex);
@@ -94,17 +94,16 @@ template<typename VisitTriangle>
     else
         normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
 
-    const auto outputNormal = Vector3TryNormalize(LoadUfbxVector(normal));
-    return outputNormal ? outputNormal->value : VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    return Vector3TryNormalize(LoadUfbxVector(normal));
 }
 
-[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
+[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& geometryToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
     if(!mesh.vertex_tangent.exists)
         return MakeUnexpected(Failure{});
 
     ufbx_vec3 tangent = ufbx_get_vertex_vec3(&mesh.vertex_tangent, cornerIndex);
     if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
-        tangent = ufbx_transform_direction(&normalToWorld, tangent);
+        tangent = ufbx_transform_direction(&geometryToWorld, tangent);
 
     const auto outputTangent = Vector3TryNormalize(LoadUfbxVector(tangent));
     if(!outputTangent)
@@ -114,7 +113,7 @@ template<typename VisitTriangle>
     if(mesh.vertex_bitangent.exists){
         ufbx_vec3 bitangent = ufbx_get_vertex_vec3(&mesh.vertex_bitangent, cornerIndex);
         if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
-            bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
+            bitangent = ufbx_transform_direction(&geometryToWorld, bitangent);
 
         const auto outputBitangent = Vector3TryNormalize(LoadUfbxVector(bitangent));
         if(outputBitangent){
@@ -260,8 +259,14 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             trianglePositions[triangleCornerIndex] = position;
 
             SIMDVectorSingle normal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-            if(normalMode == NormalMode::Imported)
-                normal = LoadCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+            if(normalMode == NormalMode::Imported){
+                const auto importedNormal = LoadCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+                if(!importedNormal){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: imported normal is invalid"));
+                    return false;
+                }
+                normal = importedNormal->value;
+            }
             else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(position));
                 if(foundNormal == smoothNormals.end()){
@@ -297,7 +302,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
 
             SIMDVectorSingle tangent = VectorZero();
             if(importTangents){
-                const auto importedTangent = LoadCornerOutputTangentVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex, normal);
+                const auto importedTangent = LoadCornerOutputTangentVector(*mesh, node->geometry_to_world, options, wantsSkinning, cornerIndex, normal);
                 corner.hasTangent = importedTangent.has_value();
                 if(importedTangent){
                     tangent = importedTangent->value;

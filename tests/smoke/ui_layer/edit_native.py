@@ -10,7 +10,7 @@ import time
 from contextlib import contextmanager
 
 from interaction_smoke import INPUT_SETTLE_SECONDS, KEY_REPEAT_INTERVAL_SECONDS, PRESS_HOLD_SECONDS, NativeInput, WinInput, WinKeyboardInput
-from window_capture_smoke import SmokeFailure, SmokeSkip
+from window_capture_smoke import SmokeFailure, SmokeSkip, write_status
 from window_capture_win32 import WinPoint
 from window_capture_x11 import LinuxXEvent
 
@@ -94,35 +94,26 @@ class EditNativeInput(NativeInput):
 
     def tap(self, name, *, repeat_count=0, shift=False, control=False):
         modifiers = []
-        # Keep modifier chords in one native queue; F10 retains its posted-key path.
         native_chord = self.windows and (shift or control) and name != "F10"
-        if self.windows and (shift or control):
-            self.backend.focus_window(self.handle)
-            time.sleep(INPUT_SETTLE_SECONDS)
-            if self.backend.user32.GetForegroundWindow() != self.handle:
-                raise SmokeSkip("the edit fixture cannot take foreground focus for native modifier chords")
-            try:
+        key_down = False
+        primary_error = None
+        try:
+            if self.windows and (shift or control):
+                self.backend.focus_window(self.handle)
+                time.sleep(INPUT_SETTLE_SECONDS)
+                if self.backend.user32.GetForegroundWindow() != self.handle:
+                    raise SmokeSkip("the edit fixture cannot take foreground focus for native modifier chords")
                 for enabled, key in ((shift, 0x10), (control, 0x11)):
                     if enabled:
-                        self._native_key(key, True)
                         modifiers.append(key)
+                        self._native_key(key, True)
                 time.sleep(PRESS_HOLD_SECONDS)
-            except BaseException:
-                try:
-                    if 0x11 in modifiers:
-                        self._native_key(0x11, False)
-                finally:
-                    if 0x10 in modifiers:
-                        self._native_key(0x10, False)
-                raise
-        key_down = False
-        try:
             if native_chord:
                 key_down = True
                 self.native_chord_key(name, True, shift=shift, control=control)
             else:
-                self.key(name, True, shift=shift, control=control)
                 key_down = True
+                self.key(name, True, shift=shift, control=control)
             for _ in range(repeat_count):
                 time.sleep(KEY_REPEAT_INTERVAL_SECONDS)
                 if native_chord:
@@ -130,20 +121,34 @@ class EditNativeInput(NativeInput):
                 else:
                     self.key(name, True, repeat=True, shift=shift, control=control)
             time.sleep(PRESS_HOLD_SECONDS)
+        except BaseException as error:
+            primary_error = error
+            raise
         finally:
-            try:
-                if key_down:
-                    if native_chord:
-                        self.native_chord_key(name, False, shift=shift, control=control)
-                    else:
-                        self.key(name, False, shift=shift, control=control)
-            finally:
+            releases = []
+            if key_down:
+                if native_chord:
+                    releases.append(lambda: self.native_chord_key(name, False, shift=shift, control=control))
+                else:
+                    releases.append(lambda: self.key(name, False, shift=shift, control=control))
+            releases.extend(lambda key=key: self._native_key(key, False) for key in reversed(modifiers))
+            cleanup_errors = []
+            interrupt = None
+            for release in releases:
                 try:
-                    if 0x11 in modifiers:
-                        self._native_key(0x11, False)
-                finally:
-                    if 0x10 in modifiers:
-                        self._native_key(0x10, False)
+                    release()
+                except Exception as error:
+                    cleanup_errors.append(str(error))
+                except BaseException as error:
+                    if interrupt is None:
+                        interrupt = error
+            if interrupt is not None:
+                raise interrupt
+            if cleanup_errors:
+                detail = "native key release failed: " + "; ".join(cleanup_errors)
+                if primary_error is None:
+                    raise SmokeFailure(detail)
+                write_status(detail)
         time.sleep(INPUT_SETTLE_SECONDS)
 
     def aggregate_tap(self, name, count, *, repeat=False):

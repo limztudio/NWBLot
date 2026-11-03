@@ -35,6 +35,7 @@ inline constexpr Name s_NonStandaloneTypeQueueArena("core/assets/non_standalone_
 inline constexpr Name s_NonStandaloneTokenQueueArena("core/assets/non_standalone_token_queue");
 inline constexpr Name s_NonStandaloneTokenSuffixQueueArena("core/assets/non_standalone_token_suffix_queue");
 inline constexpr Name s_PairedSidecarRuleQueueArena("core/assets/paired_sidecar_rule_queue");
+inline constexpr Name s_MetadataRegistrationTextArena("core/assets/metadata_registration_text");
 
 inline constexpr Name s_AutoRegistrationQueueArena("core/assets/cook_entry_auto_registration_queue");
 inline constexpr Name s_CookDependencyQueueArena("core/assets/cook_dependency_auto_registration_queue");

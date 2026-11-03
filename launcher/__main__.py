@@ -3,11 +3,11 @@
 
 import sys
 
-from launcher import main
+from launcher.cli import LauncherCli
 
 
 MAIN_ENTRY = "__main__"
 
 
 if __name__ == MAIN_ENTRY:
-    raise SystemExit(main(sys.argv[1:]))
+    raise SystemExit(LauncherCli.main(sys.argv[1:]))

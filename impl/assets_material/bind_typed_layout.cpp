@@ -511,7 +511,10 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
     }
 
     usize expectedBlockByteSize = 0u;
-    NWB_ASSERT(ComputeMaterialTypedBlockByteSize(layout.typedLayoutBlocks, expectedBlockByteSize) && expectedBlockByteSize == layout.typedBlockBytes.size());
+    if(!ComputeMaterialTypedBlockByteSize(layout.typedLayoutBlocks, expectedBlockByteSize) || expectedBlockByteSize != layout.typedBlockBytes.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has inconsistent block storage for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(contextName.resolvedText()));
+        return MakeUnexpected(Failure{});
+    }
 
     if(!BuildMaterialBindTypedLayoutBlockLookup(contextName.resolvedText(), layout))
         return MakeUnexpected(Failure{});

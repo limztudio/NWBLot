@@ -8,6 +8,8 @@
 #include "input/router.h"
 #include "state/store.h"
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,6 +27,10 @@ private:
         [[nodiscard]] usize operator()(const ContextStateClaim& claim)const noexcept{ return ContextStateClaimHash(claim); }
     };
 
+    struct RootHash{
+        [[nodiscard]] usize operator()(const WidgetRoot& root)const noexcept{ return HashCombineValue(HashValue(root.value), root.generation); }
+    };
+
     struct ContextOwnedTarget{
         HitTarget target;
         WidgetRoot root;
@@ -38,6 +44,7 @@ private:
 
 private:
     using StateClaims = HashSet<ContextStateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<ContextStateClaim>>;
+    using RootSet = HashSet<WidgetRoot, Core::Alloc::GlobalArena, RootHash, EqualTo<WidgetRoot>>;
 
 
 public:
@@ -113,6 +120,8 @@ private:
     PaintVector<ContextOwnedPopup> m_popups;
     Array<ContextStateClaim, s_SmallStateClaims> m_smallStateClaims{};
     StateClaims m_stateClaims;
+    RootSet m_retainedRoots;
+    usize m_retainedRootCapacity = 0u;
     InputVector<HitTarget> m_commitTargets;
     InputVector<PopupScope> m_commitPopups;
     PopupToken m_currentPopup;

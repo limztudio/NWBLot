@@ -108,16 +108,26 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         }
         const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
         const SIMDMatrixDouble inverseBindDouble = LoadUfbxMatrix(inverseBind);
-        if(!FiniteUfbxMatrix(inverseBindDouble) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= s_InvertibleMatrixDeterminantEpsilon){
+        const f64 determinant = static_cast<f64>(ufbx_matrix_determinant(&inverseBind));
+        if(!FiniteUfbxMatrix(inverseBindDouble) || !IsFinite(determinant) || Abs(determinant) <= s_InvertibleMatrixDeterminantEpsilon){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
             return MakeUnexpected(Failure{});
         }
 
         const SIMDMatrix inverseBindValue = ConvertJointMatrix(inverseBindDouble);
+        if(MatrixIsNaN(inverseBindValue) || MatrixIsInfinite(inverseBindValue)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is outside float range"));
+            return MakeUnexpected(Failure{});
+        }
         const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
         const SIMDMatrixDouble bindPoseDouble = LoadUfbxMatrix(bindPose);
         if(!FiniteUfbxMatrix(bindPoseDouble)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
+            return MakeUnexpected(Failure{});
+        }
+        const SIMDMatrix bindPoseValue = ConvertJointMatrix(bindPoseDouble);
+        if(MatrixIsNaN(bindPoseValue) || MatrixIsInfinite(bindPoseValue)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is outside float range"));
             return MakeUnexpected(Failure{});
         }
         auto foundJoint = inOutContext.jointLookup.find(MakeNotNull(cluster->bone_node));
@@ -142,7 +152,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         JointMatrix storedInverseBind{};
         JointMatrix storedBindPose{};
         StoreFloat(inverseBindValue, storedInverseBind);
-        StoreFloat(ConvertJointMatrix(bindPoseDouble), storedBindPose);
+        StoreFloat(bindPoseValue, storedBindPose);
         const u16 joint = static_cast<u16>(inOutContext.joints.size());
         inOutContext.joints.push_back(cluster->bone_node);
         inOutContext.bindPoseMatrices.push_back(storedBindPose);

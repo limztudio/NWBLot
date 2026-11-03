@@ -4,19 +4,24 @@
 from __future__ import annotations
 
 import math
-import re
-import shutil
+import os
+import select
+import signal
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
-from typing import Dict, Optional, Sequence
-from launcher.models import LaunchSettings, ProfileSession
+from typing import Dict, List, Optional, Sequence
+from launcher.models import ProfileSession
 from launcher import repository_windows_process
-from launcher.constants import (APPLICATION_FORCED_STOP_TIMEOUT_SECONDS, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, COMMAND_RUN, CWD_PREFIX, GPUDBG_FLAG, LOGSERVER_LABEL, LOG_PREFIX, MSG_KILLING, MSG_LAUNCHED_APP, MSG_LEAVING_APP, MSG_LEAVING_BOTH,
-    MSG_MISSING_EXECUTABLE, MSG_MISSING_WORKDIR, MSG_NO_EXIT_STATUS, MSG_NO_PKILL, MSG_PKILL_FAILED, MSG_POSITIVE_RUN_SECONDS, MSG_RUN_FORCED, MSG_RUN_GRACEFUL, MSG_RUN_REQUEST, MSG_STOPPED_APP, MSG_STOPPING, PKILL_COMMAND, PKILL_FOLLOW_FLAG, PKILL_STDERR_ENCODING, PKILL_STDERR_ERRORS, PKILL_STDERR_MAX_BYTES, PLATFORM_WINDOWS,
-    PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS, PROFILE_LOG_READY_POLL_SECONDS, STOP_KIND_FORCED, STOP_KIND_GRACEFUL,)
+from launcher.cmake_settings import CmakeSettings
+from launcher.host import HostProbe
+from launcher.constants import (APPLICATION_FORCED_STOP_TIMEOUT_SECONDS, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, CWD_PREFIX, GPUDBG_FLAG, LOGSERVER_LABEL, LOG_PREFIX, MSG_KILLING, MSG_LAUNCHED_APP, MSG_LEAVING_APP, MSG_LEAVING_BOTH,
+    MSG_MISSING_EXECUTABLE, MSG_MISSING_WORKDIR, MSG_NO_EXIT_STATUS, MSG_POSITIVE_RUN_SECONDS, MSG_RUN_FORCED, MSG_RUN_GRACEFUL, MSG_RUN_REQUEST, MSG_STOPPED_APP, MSG_STOPPING, PLATFORM_LINUX, PLATFORM_WINDOWS,
+    PROFILE_CLIENT_ADDRESS_FLAG, PROFILE_CLIENT_PORT_FLAG, PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS, PROFILE_LOG_READY_POLL_SECONDS, STOP_KIND_FORCED, STOP_KIND_GRACEFUL,)
+
+
+LINUX_PF_KTHREAD = 0x00200000
 
 
 class ProcessLauncher:
@@ -31,16 +36,80 @@ class ProcessLauncher:
                 print(MSG_STOPPED_APP.format(executable=executable, result=result, stop_kind=stop_kind), flush=True)
             return
 
-        if shutil.which(PKILL_COMMAND) is None:
-            raise SystemExit(MSG_NO_PKILL)
+        if platform_name != PLATFORM_LINUX or not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+            raise SystemExit("--kill-existing requires Linux pidfd support on this host")
 
-        pattern = re.escape(str(executable.resolve()))
-        with tempfile.TemporaryFile() as diagnostic:
-            completed = subprocess.run([PKILL_COMMAND, PKILL_FOLLOW_FLAG, pattern], check=False, stdout=subprocess.DEVNULL, stderr=diagnostic,)
-            diagnostic.seek(0)
-            detail = diagnostic.read(PKILL_STDERR_MAX_BYTES).decode(PKILL_STDERR_ENCODING, errors=PKILL_STDERR_ERRORS).strip()
-            if completed.returncode not in (0, 1) or detail:
-                raise SystemExit(MSG_PKILL_FAILED.format(executable=executable, exit_code=completed.returncode, detail=detail))
+        def exited(handle: int, timeout_seconds: float) -> bool:
+            poller = select.poll()
+            poller.register(handle, select.POLLIN)
+            events = poller.poll(math.ceil(timeout_seconds * 1000))
+            if any(flags & (select.POLLERR | select.POLLNVAL) for _, flags in events):
+                raise OSError("failed to wait for process")
+            return any(flags & (select.POLLIN | select.POLLHUP) for _, flags in events)
+
+        target = str(executable.resolve())
+        handles = []
+        try:
+            try:
+                process_names = os.listdir("/proc")
+                own_pid = os.getpid()
+                own_uid = os.geteuid()
+                for name in process_names:
+                    if not name.isdecimal() or int(name) == own_pid:
+                        continue
+                    pid = int(name)
+                    proc_dir = f"/proc/{pid}"
+                    try:
+                        handle = os.pidfd_open(pid)
+                    except (FileNotFoundError, ProcessLookupError):
+                        continue
+                    try:
+                        if own_uid != 0 and os.stat(proc_dir).st_uid != own_uid:
+                            continue
+                        image_path = os.readlink(f"{proc_dir}/exe")
+                        if image_path == target:
+                            if target.endswith(" (deleted)"):
+                                raise SystemExit(f"cannot safely identify an ambiguously named process image for '{executable}' (pid {pid})")
+                            handles.append((pid, handle))
+                            handle = None
+                        elif image_path == target + " (deleted)":
+                            raise SystemExit(f"cannot safely identify a deleted or ambiguously named process image for '{executable}' (pid {pid})")
+                    except (FileNotFoundError, ProcessLookupError):
+                        if not exited(handle, 0):
+                            try:
+                                with open(f"{proc_dir}/status", encoding="utf-8", errors="replace") as status:
+                                    kernel_flag = next((value.strip() for key, separator, value in (line.partition(":") for line in status) if key == "Kthread" and separator), None)
+                                if kernel_flag is None:
+                                    with open(f"{proc_dir}/stat", encoding="utf-8", errors="replace") as stat_file:
+                                        stat_text = stat_file.read()
+                                    _, separator, fields_text = stat_text.rpartition(")")
+                                    fields = fields_text.split()
+                                    if not separator or len(fields) < 7 or not fields[6].isdecimal():
+                                        raise OSError("invalid process stat flags")
+                                    kernel_thread = bool(int(fields[6]) & LINUX_PF_KTHREAD)
+                                else:
+                                    kernel_thread = kernel_flag == "1"
+                            except (FileNotFoundError, ProcessLookupError):
+                                kernel_thread = False
+                            if not kernel_thread and not exited(handle, 0):
+                                raise SystemExit(f"cannot inspect live process {pid} while stopping '{executable}'")
+                    finally:
+                        if handle is not None:
+                            os.close(handle)
+
+                for _pid, handle in handles:
+                    try:
+                        signal.pidfd_send_signal(handle, signal.SIGTERM)
+                    except ProcessLookupError:
+                        continue
+                for _pid, handle in handles:
+                    if not exited(handle, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS):
+                        raise SystemExit(f"existing process for '{executable}' did not exit after SIGTERM")
+            except OSError as exc:
+                raise SystemExit(f"failed to inspect or stop existing processes for '{executable}': {exc}") from exc
+        finally:
+            for _pid, handle in handles:
+                os.close(handle)
 
     @staticmethod
     def validate_launch_paths(executable: Path, working_directory: Path, dry_run: bool) -> None:
@@ -53,23 +122,39 @@ class ProcessLauncher:
 
     @staticmethod
     def terminate_process(process: Optional[subprocess.Popen], label: str, timeout_seconds: float = PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS) -> None:
-        if process is None or process.poll() is not None:
-            return
+        primary_error = sys.exc_info()[1]
+        announcement_error = None
 
-        forced = False
+        def report_cleanup_error(error):
+            try:
+                print(f"failed to stop {label}: {error}", file=sys.stderr, flush=True)
+            except Exception:
+                pass
+
         try:
-            if sys.exc_info()[0] is None:
-                print(MSG_STOPPING.format(label=label, process=process), flush=True)
-        finally:
+            if process is None or process.poll() is not None:
+                return
+            if primary_error is None:
+                try:
+                    print(MSG_STOPPING.format(label=label, process=process), flush=True)
+                except Exception as error:
+                    announcement_error = error
             process.terminate()
             try:
                 process.wait(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
-                forced = True
-            if forced and sys.exc_info()[0] is None:
-                print(MSG_KILLING.format(label=label, process=process), flush=True)
+                if primary_error is None and announcement_error is None:
+                    print(MSG_KILLING.format(label=label, process=process), flush=True)
+        except Exception as cleanup_error:
+            if primary_error is None and announcement_error is None:
+                raise
+            report_cleanup_error(cleanup_error)
+        if announcement_error is not None:
+            if primary_error is None:
+                raise announcement_error
+            report_cleanup_error(announcement_error)
 
     @staticmethod
     def wait_for_process_exit(process: subprocess.Popen, timeout_seconds: float) -> Optional[int]:
@@ -85,8 +170,13 @@ class ProcessLauncher:
             time.sleep(min(PROFILE_LOG_READY_POLL_SECONDS, remaining_seconds))
 
     @staticmethod
+    def profile_client_args(args, profile_session: Optional[ProfileSession]) -> List[str]:
+        if profile_session is None:
+            return []
+        return [PROFILE_CLIENT_ADDRESS_FLAG, args.profile_log_address, PROFILE_CLIENT_PORT_FLAG, str(profile_session.log_port)]
+
+    @staticmethod
     def launch_process(args, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str], profile_session: Optional[ProfileSession] = None, paths_validated: bool = False,) -> int:
-        import launcher as _facade
         process: Optional[subprocess.Popen] = None
         retain_processes = False
         process_completed = False
@@ -94,19 +184,21 @@ class ProcessLauncher:
             run_seconds = getattr(args, "run_seconds", None)
             if run_seconds is not None and (not math.isfinite(run_seconds) or run_seconds <= 0.0):
                 raise SystemExit(MSG_POSITIVE_RUN_SECONDS)
+            if run_seconds is not None and args.detach:
+                raise SystemExit("--detach cannot be combined with --run-seconds")
             if not paths_validated:
-                _facade.validate_launch_paths(executable, working_directory, args.dry_run)
+                ProcessLauncher.validate_launch_paths(executable, working_directory, args.dry_run)
 
             if args.kill_existing and not args.dry_run:
-                _facade.stop_existing_process(executable, _facade.host_platform_name())
+                ProcessLauncher.stop_existing_process(executable, HostProbe.host_platform_name())
 
             launch = [str(executable)]
             if args.gpudbg:
                 launch.append(GPUDBG_FLAG)
-            launch += _facade.profile_client_args(args, profile_session)
+            launch += ProcessLauncher.profile_client_args(args, profile_session)
             launch += list(application_args)
 
-            print("+ " + _facade.format_command(launch), flush=True)
+            print("+ " + CmakeSettings.format_command(launch), flush=True)
             print(CWD_PREFIX + str(working_directory), flush=True)
             if args.dry_run:
                 return 0
@@ -118,7 +210,7 @@ class ProcessLauncher:
                 return 0
 
             if run_seconds is not None:
-                if _facade.host_platform_name() == PLATFORM_WINDOWS:
+                if HostProbe.host_platform_name() == PLATFORM_WINDOWS:
                     run_result = repository_windows_process.run_bounded_process(process, run_seconds, APPLICATION_GRACEFUL_STOP_TIMEOUT_SECONDS, APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,)
                     process_completed = True
                     if run_result.deadline_reached:
@@ -127,12 +219,12 @@ class ProcessLauncher:
                         print(MSG_RUN_FORCED.format(executable=executable, process=process, run_result=run_result), flush=True)
                     return run_result.exit_code
 
-                exit_code = _facade.wait_for_process_exit(process, run_seconds)
+                exit_code = ProcessLauncher.wait_for_process_exit(process, run_seconds)
                 if exit_code is not None:
                     return exit_code
 
                 print(MSG_RUN_REQUEST.format(run_seconds=run_seconds), flush=True)
-                _facade.terminate_process(process, executable.name)
+                ProcessLauncher.terminate_process(process, executable.name)
                 if process.returncode is None:
                     raise SystemExit(MSG_NO_EXIT_STATUS.format(executable=executable))
                 return process.returncode
@@ -147,40 +239,17 @@ class ProcessLauncher:
             return 0
         finally:
             try:
-                if process is not None and not retain_processes and not process_completed and process.poll() is None:
-                    _facade.terminate_process(process, executable.name)
+                if process is not None and not retain_processes and not process_completed:
+                    ProcessLauncher.terminate_process(process, executable.name)
             finally:
                 if profile_session is not None and profile_session.process is not None and not retain_processes:
-                    _facade.terminate_process(profile_session.process, LOGSERVER_LABEL)
-
-    @staticmethod
-    def launch_with_optional_profile(args, settings: LaunchSettings, executable: Path, working_directory: Path, env: Dict[str, str], application_args: Sequence[str],) -> int:
-        import launcher as _facade
-        _facade.validate_launch_paths(executable, working_directory, args.dry_run)
-        profile_session = _facade.start_profile_session(args, settings, working_directory, env)
-        return _facade.launch_process(args, executable, working_directory, env, application_args, profile_session, paths_validated=True)
-
-    @staticmethod
-    def run_target_launcher(target: str, argv: Sequence[str]) -> int:
-        import launcher as _facade
-        return _facade.main([COMMAND_RUN, target] + list(argv))
+                    ProcessLauncher.terminate_process(profile_session.process, LOGSERVER_LABEL)
 
     @staticmethod
     def run_repo_script(script: Path, script_args: Sequence[str], echo: bool = True) -> int:
-        import launcher as _facade
-        root = _facade.repo_root()
+        root = CmakeSettings.repo_root()
         script_path = root / script
         command = [sys.executable, str(script_path)] + list(script_args)
         if echo:
-            print(LOG_PREFIX + _facade.format_command(command), flush=True)
+            print(LOG_PREFIX + CmakeSettings.format_command(command), flush=True)
         return subprocess.run(command, cwd=root).returncode
-
-
-stop_existing_process = ProcessLauncher.stop_existing_process
-validate_launch_paths = ProcessLauncher.validate_launch_paths
-terminate_process = ProcessLauncher.terminate_process
-wait_for_process_exit = ProcessLauncher.wait_for_process_exit
-launch_process = ProcessLauncher.launch_process
-launch_with_optional_profile = ProcessLauncher.launch_with_optional_profile
-run_target_launcher = ProcessLauncher.run_target_launcher
-run_repo_script = ProcessLauncher.run_repo_script

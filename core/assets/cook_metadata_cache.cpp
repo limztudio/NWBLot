@@ -60,49 +60,27 @@ static void BuildNwbRelativePathText(const Path& repoRoot, const DiscoveredNwbFi
     }
 }
 
-[[nodiscard]] static b8 TryInspectPairedSidecar(const Path& nwbFilePath, const AStringView metaText, const AStringView firstToken, ScratchArena& scratchArena, Optional<Sha256Digest>& outSidecarSha256){
-    static constexpr usize s_MaxSmallMetaScanBytes = 65536u;
-
-    outSidecarSha256.reset();
+[[nodiscard]] static b8 AppendPairedSidecarChecksums(const Path& nwbFilePath, ScratchArena& scratchArena, Vector<u8, ScratchArena>& shaInput){
     Vector<AssetPairedSidecarRule, ScratchArena> rules(scratchArena);
     CookMetadataDetail::CopyPairedSidecarRules(rules);
-    if(rules.empty())
-        return true;
-
-    AStringView requiredExtension;
     for(const AssetPairedSidecarRule& rule : rules){
-        if(!rule.firstToken.empty() && rule.firstToken == firstToken){
-            requiredExtension = rule.sidecarExtension;
-            break;
-        }
-    }
-
-    AStringView optionalBunchExtension;
-    if(requiredExtension.empty() && metaText.size() <= s_MaxSmallMetaScanBytes){
-        for(const AssetPairedSidecarRule& rule : rules){
-            if(!rule.bunchScanKeyword.empty() && metaText.find(rule.bunchScanKeyword) != AStringView::npos){
-                optionalBunchExtension = rule.sidecarExtension;
-                break;
-            }
-        }
-    }
-
-    if(requiredExtension.empty() && optionalBunchExtension.empty())
-        return true;
-
-    ::Path<ScratchArena> sidecarPath(scratchArena, nwbFilePath);
-    sidecarPath.replaceExtension(!requiredExtension.empty() ? requiredExtension : optionalBunchExtension);
-    if(requiredExtension.empty()){
+        if(!AppendString(shaInput, rule.sidecarExtension))
+            return false;
+        ::Path<ScratchArena> sidecarPath(scratchArena, nwbFilePath);
+        sidecarPath.replaceExtension(rule.sidecarExtension);
         const auto exists = FileExists(sidecarPath);
-        if(!exists || !*exists)
-            return true;
+        if(!exists)
+            return false;
+        const u8 present = *exists ? 1u : 0u;
+        AppendPOD(shaInput, present);
+        if(!*exists)
+            continue;
+        Vector<u8, ScratchArena> sidecarBytes(scratchArena);
+        if(!ReadBinaryFile(sidecarPath, sidecarBytes))
+            return false;
+        const Sha256Digest digest = ComputeSha256(BinaryByteView{ sidecarBytes.data(), sidecarBytes.size() });
+        AppendPOD(shaInput, digest);
     }
-
-    Vector<u8, ScratchArena> sidecarBytes(scratchArena);
-    if(!ReadBinaryFile(sidecarPath, sidecarBytes))
-        return false;
-
-    outSidecarSha256 = ComputeSha256(BinaryByteView{ sidecarBytes.data(), sidecarBytes.size() });
     return true;
 }
 
@@ -110,7 +88,7 @@ static void BuildNwbRelativePathText(const Path& repoRoot, const DiscoveredNwbFi
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView relativePathText,
     const AStringView metaText,
-    const AStringView firstToken,
+    const Sha256Digest& producerDigest,
     ScratchArena& scratchArena,
     b8& outCanUseCache
 ){
@@ -126,17 +104,14 @@ static void BuildNwbRelativePathText(const Path& repoRoot, const DiscoveredNwbFi
         outCanUseCache = false;
     const AStringView derivedVirtualPathView = derivedVirtualPath ? AStringView(*derivedVirtualPath) : AStringView{};
 
-    Optional<Sha256Digest> sidecarSha256;
-    if(!TryInspectPairedSidecar(discoveredNwbFile.filePath, metaText, firstToken, scratchArena, sidecarSha256))
-        outCanUseCache = false;
-
     Vector<u8, ScratchArena> metaBytes(scratchArena);
     AppendBytesUnchecked(metaBytes, metaText.data(), metaText.size());
     const Sha256Digest metaSha256 = ComputeSha256(BinaryByteView{ metaBytes.data(), metaBytes.size() });
 
     Vector<u8, ScratchArena> shaInput(scratchArena);
-    shaInput.reserve(sizeof(u16) + relativePathText.size() + discoveredNwbFile.virtualRoot.view().size() + derivedVirtualPathView.size() + sizeof(Sha256Digest) * 2u + 16u);
+    shaInput.reserve(sizeof(u16) + relativePathText.size() + discoveredNwbFile.virtualRoot.view().size() + derivedVirtualPathView.size() + sizeof(Sha256Digest) * 3u + 16u);
     AppendPOD(shaInput, s_NwbAssetCacheVersion);
+    AppendPOD(shaInput, producerDigest);
     if(
         !AppendString(shaInput, relativePathText)
         || !AppendString(shaInput, discoveredNwbFile.virtualRoot.view())
@@ -144,10 +119,8 @@ static void BuildNwbRelativePathText(const Path& repoRoot, const DiscoveredNwbFi
     )
         outCanUseCache = false;
     AppendPOD(shaInput, metaSha256);
-    const u8 sidecarFlag = sidecarSha256.has_value() ? 1u : 0u;
-    AppendPOD(shaInput, sidecarFlag);
-    if(sidecarSha256)
-        AppendPOD(shaInput, *sidecarSha256);
+    if(!AppendPairedSidecarChecksums(discoveredNwbFile.filePath, scratchArena, shaInput))
+        outCanUseCache = false;
 
     return ComputeSha256(BinaryByteView{ shaInput.data(), shaInput.size() });
 }
@@ -213,7 +186,7 @@ void PrepareNwbFileAssetCacheRecord(
     const Path& assetCacheDirectory,
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView metaText,
-    const AStringView firstToken,
+    const Sha256Digest& producerDigest,
     ScratchArena& scratchArena,
     ScratchString& inOutRelativePathText,
     ScratchString& inOutCacheFileName,
@@ -233,7 +206,7 @@ void PrepareNwbFileAssetCacheRecord(
         discoveredNwbFile,
         AStringView(inOutRelativePathText),
         metaText,
-        firstToken,
+        producerDigest,
         scratchArena,
         canUseCache
     );
@@ -274,6 +247,10 @@ NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
 
     const auto cachedRelativePath = ReadString(cacheBytes, cursor);
     if(!cachedRelativePath || *cachedRelativePath != AStringView(record.relativePathText))
+        return NwbCacheLoadResult::Miss;
+
+    constexpr usize minimumEntryBytes = sizeof(u32) * 2u + sizeof(NameHash) * 2u + sizeof(u64) * 2u;
+    if(header->entryCount > (cacheBytes.size() - cursor) / minimumEntryBytes)
         return NwbCacheLoadResult::Miss;
 
     Vector<__hidden_cook_metadata_cache::DecodedCachedAssetEntry, ScratchArena> decodedEntries(scratchArena);

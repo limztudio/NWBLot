@@ -79,8 +79,7 @@ public:
 public:
     // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
     [[nodiscard]] b8 setInputBindings(Span<const Ui::InputKeyBinding> bindings);
-    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
-    [[nodiscard]] virtual b8 blocksKeyboardText()const noexcept override{ return m_blockCommandChars; }
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     virtual b8 keyboardCharInput(u32 unicode, i32 mods)override;
     virtual b8 mousePosUpdate(f64 xpos, f64 ypos)override;
     virtual b8 mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
@@ -93,7 +92,7 @@ public:
 
 
 private:
-    [[nodiscard]] b8 collectRoots();
+    void collectRoots();
     void synchronizeInput();
     void routeInput(const Ui::InputEvent& event, b8* blockText = nullptr);
     void routePointerInput(const Ui::PointerInput& input, b8* consumed = nullptr);

@@ -20,17 +20,17 @@ NWB_FILESYSTEM_BEGIN
 inline constexpr AStringView s_StageDirectoryLabel = "stage directory";
 inline constexpr AStringView s_BackupDirectoryLabel = "backup directory";
 
-b8 RemoveStagedDirectoryIfPresent(const Path& directoryPath, AStringView operationName, AStringView label);
-b8 EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
+b8 CreateNewStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
 
 class StagedDirectoryCleanupGuard : NoCopy{
 public:
-    // The operation and label backing text must outlive this guard.
-    StagedDirectoryCleanupGuard(const Path& directoryPath, const AStringView operationName, const AStringView label = s_StageDirectoryLabel)
+    // The path and backing text must outlive this guard.
+    StagedDirectoryCleanupGuard(const Path& directoryPath, const AStringView operationName, const AStringView label = s_StageDirectoryLabel)noexcept
         : m_directoryPath(directoryPath)
         , m_operationName(operationName)
         , m_label(label)
     {}
+    StagedDirectoryCleanupGuard(Path&&, AStringView, AStringView = s_StageDirectoryLabel) = delete;
     ~StagedDirectoryCleanupGuard()noexcept;
 
 
@@ -39,7 +39,7 @@ public:
 
 
 private:
-    Path m_directoryPath;
+    const Path& m_directoryPath;
     AStringView m_operationName;
     AStringView m_label;
     b8 m_active = true;
@@ -49,9 +49,10 @@ private:
 struct VolumePublicationObserver{
     void* context = nullptr;
     void(*commit)(void*)noexcept = nullptr;
+    void(*rollbackFailed)(void*)noexcept = nullptr;
 };
 
-b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena, VolumePublicationObserver observer = {});
+b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena, VolumePublicationObserver observer = {}, StagedDirectoryCleanupGuard* stageCleanup = nullptr, StagedDirectoryCleanupGuard* backupCleanup = nullptr);
 b8 RemoveVolumeSegments(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
 
 

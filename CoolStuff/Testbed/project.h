@@ -61,7 +61,7 @@ public:
 public:
     virtual void windowFocusUpdate(b8 focused)noexcept override;
     virtual void pointerCaptureLost()noexcept override;
-    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
     virtual b8 mousePosUpdate(f64 xpos, f64 ypos)noexcept override;
     virtual b8 mouseButtonUpdate(i32 button, i32 action, i32 mods)noexcept override;
 

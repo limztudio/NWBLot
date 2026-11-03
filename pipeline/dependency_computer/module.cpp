@@ -6,6 +6,7 @@
 
 #include <pipeline/command_line.h>
 
+#include <core/assets/input_list.h>
 #include <core/common/log.h>
 
 
@@ -28,17 +29,13 @@ int RunPipelineTool(const int argc, char** argv){
             return s_PipelineExitFailure;
         const auto& inputs = *resolvedInputs;
 
-        usize outputReserveBytes = 0u;
-        for(const auto& input : inputs)
-            outputReserveBytes += input.size() + DependencyComputer::s_LineFeedReserveBytes;
-        AString<Core::Alloc::ScratchArena> text(scratchArena);
-        text.reserve(outputReserveBytes);
-        for(const auto& input : inputs){
-            text += input;
-            text += '\n';
+        const auto text = Core::Assets::EncodeAssetInputList(inputs, scratchArena);
+        if(!text){
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input paths cannot be represented in the dependency list"));
+            return s_PipelineExitFailure;
         }
         const auto output = AbsolutePath(Path(arena, parsed.outputPath));
-        if(!output || !EnsureDirectories(output->parentPath()) || !WriteTextFile(*output, AStringView(text))){
+        if(!output || !EnsureDirectories(output->parentPath()) || !WriteTextFileAtomic(*output, AStringView(*text))){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), ConvertString(parsed.outputPath));
             return s_PipelineExitFailure;
         }

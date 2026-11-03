@@ -224,9 +224,6 @@ public:
     }
 
     virtual b8 appendCachedEntry(const CookEntrySourceLocation& location, const Name& virtualPath, const Span<const u8> payloadBytes, CookEntryParseContext& context)override{
-        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(m_assetKindText, virtualPath, context.seenVirtualPathHashes))
-            return false;
-
         Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
         CachedCookedBucketEntry cachedEntry(assetArena);
         cachedEntry.nwbFileIndex = location.nwbFileIndex;
@@ -234,7 +231,17 @@ public:
         cachedEntry.virtualPath = virtualPath;
         if(!payloadBytes.empty())
             cachedEntry.payloadBytes.assign(payloadBytes.begin(), payloadBytes.end());
+        m_cachedEntries.reserve(m_cachedEntries.size() + 1u);
+
+        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(m_assetKindText, virtualPath, context.seenVirtualPathHashes))
+            return false;
+        ScopeExit rollbackSeenPath([&]()noexcept{
+            if(virtualPath)
+                context.seenVirtualPathHashes.erase(virtualPath.hash());
+        });
+
         m_cachedEntries.push_back(Move(cachedEntry));
+        rollbackSeenPath.release();
         return true;
     }
 
@@ -302,11 +309,21 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: {} virtual path contains an embedded null"), m_assetKindText);
             return false;
         }
-        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(m_assetKindText, *virtualPath ? **virtualPath : s_NameNone, context.seenVirtualPathHashes))
+        const usize nextCount = m_entries.size() + 1u;
+        m_entries.reserve(nextCount);
+        m_entryLocations.reserve(nextCount);
+
+        const Name resolvedVirtualPath = *virtualPath ? **virtualPath : s_NameNone;
+        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(m_assetKindText, resolvedVirtualPath, context.seenVirtualPathHashes))
             return false;
+        ScopeExit rollbackSeenPath([&]()noexcept{
+            if(resolvedVirtualPath)
+                context.seenVirtualPathHashes.erase(resolvedVirtualPath.hash());
+        });
 
         m_entries.push_back(Move(entry));
         m_entryLocations.push_back(CookEntrySourceLocation{ context.nwbFileIndex, context.nwbSubIndex });
+        rollbackSeenPath.release();
         return true;
     }
 

@@ -227,6 +227,29 @@ public:
         return view_type(m_storage, m_size);
     }
 
+    [[nodiscard]] usize find(const view_type text, const usize pos = 0u)const noexcept{
+        return view().find(text, pos);
+    }
+
+    [[nodiscard]] usize find(const value_type ch, const usize pos = 0u)const noexcept{
+        return view().find(ch, pos);
+    }
+
+    [[nodiscard]] const value_type& operator[](const usize index)const noexcept{
+        NWB_ASSERT(index < m_size);
+        return m_storage[index];
+    }
+
+    [[nodiscard]] const value_type& front()const noexcept{
+        NWB_ASSERT(!empty());
+        return m_storage[0u];
+    }
+
+    [[nodiscard]] const value_type& back()const noexcept{
+        NWB_ASSERT(!empty());
+        return m_storage[m_size - 1u];
+    }
+
 
 public:
     [[nodiscard]] const value_type* c_str()const noexcept{
@@ -241,7 +264,7 @@ public:
         return m_storage + m_size;
     }
 
-    [[nodiscard]] BasicCompactString substr(const usize pos, const usize count = s_NPos)const noexcept(IsArithmetic_V<value_type>){
+    [[nodiscard]] BasicCompactString substr(const usize pos = 0u, const usize count = s_NPos)const noexcept(IsArithmetic_V<value_type>){
         BasicCompactString result;
         if(pos >= m_size)
             return result;

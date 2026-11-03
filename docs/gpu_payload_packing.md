@@ -20,7 +20,7 @@ The dedicated surfel constants store cell size in the X component of `cellSizeRa
 
 The skinning shader derives attribute counts from each meshlet; the resource cache retains the live attribute counts. Five scalar push fields avoid the tail rounding caused by a `uint4` plus scalar layout.
 
-Meshlet bounds use raw SRV/UAV buffers with four-byte alignment. Their sphere and cone reads end at byte 19 of each record. CPU types, cooker serialization, static and posed buffer uploads, culling readers, and the posed bounds writer share `NWB_MESHLET_BOUNDS_STRIDE`. The internal mesh payload admits MSH7 and rejects older payloads at its existing header boundary. Recook incompatible assets through the launcher; asset authors have no version or layout fields to set. Skin payloads reference the separate mesh asset and retain their current contract.
+Meshlet bounds use raw SRV/UAV buffers with four-byte alignment. Their sphere and cone reads end at byte 19 of each record. CPU types, cooker serialization, static and posed buffer uploads, culling readers, and the posed bounds writer share `NWB_MESHLET_BOUNDS_STRIDE`. The internal mesh payload admits MSH8 and rejects older payloads at its existing header boundary. Recook incompatible assets through the launcher; asset authors have no version or layout fields to set. Skin payloads reference the separate mesh asset and retain their current contract.
 
 ## Verification and measurement
 

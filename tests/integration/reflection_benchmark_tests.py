@@ -483,11 +483,99 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             self.assertEqual((directory / "runtime.log").read_text(encoding=LIT_UTF_8), LIT_ORIGINAL_LOG)
             self.assertIn(LIT_BACKEND_CLOSE_FAILED, (directory / "cleanup_error.txt").read_text(encoding=LIT_UTF_8))
 
+    def test_failed_cleanup_is_reported_even_when_artifact_cannot_be_written(self):
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            root = Path(temporary)
+            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
+            backend = Mock()
+            backend.close.side_effect = OSError(LIT_BACKEND_CLOSE_FAILED)
+            logserver = object()
+            stack.enter_context(patch.object(benchmark, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}))
+            stack.enter_context(patch.object(benchmark, LIT_RUNTIME_ASSET_IDENTITY, return_value=[]))
+            stack.enter_context(patch.object(benchmark, LIT_CREATE_CAPTURE_BACKEND, return_value=backend))
+            stack.enter_context(patch.object(benchmark, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 1, root, {}, LIT_LOGS)))
+            stack.enter_context(patch.object(benchmark, LIT_LAUNCH_TESTBED, side_effect=benchmark.SmokeFailure(LIT_LAUNCH_FAILED)))
+            stack.enter_context(patch.object(benchmark, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=LIT_ORIGINAL_LOG))
+            stack.enter_context(patch.object(benchmark, LIT_TERMINATE_PROCESS, return_value=(0, "")))
+            status = stack.enter_context(patch.object(benchmark, LIT_WRITE_STATUS))
+            original_write = Path.write_text
+            def write(path, *args, **kwargs):
+                if path.name == "cleanup_error.txt":
+                    raise OSError("report denied")
+                return original_write(path, *args, **kwargs)
+            stack.enter_context(patch.object(Path, "write_text", write))
+            cleanup = benchmark.TrialCleanupStatus()
+            with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_LAUNCH_FAILED):
+                benchmark.run_trial(args, benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE), 0, 0, {}, {}, cleanup_status=cleanup)
+            self.assertFalse(cleanup.succeeded)
+            self.assertIn(LIT_BACKEND_CLOSE_FAILED, str(status.call_args_list))
+            self.assertIn("report denied", str(status.call_args_list))
+
+    def test_cleanup_status_rejects_abnormal_exit_or_failure_output(self):
+        cases = ((0, "", "", True), (7, "", "", False), (0, "Exception: renderer failed", "Exception: renderer failed", False),
+                 (0, "", "[ERROR] early failure\n" + "x" * 70000, False))
+        for exit_code, tail, output, expected in cases:
+            with self.subTest(exit_code=exit_code, tail=tail, early_error=bool(output)), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+                root = Path(temporary)
+                args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
+                runtime, logserver, backend = Mock(), Mock(), Mock()
+                capture_path = root / "capture.log"
+                capture_path.write_text(output, encoding=LIT_UTF_8)
+                runtime._nwb_output_capture = SimpleNamespace(path=capture_path)
+                backend.wait_for_window.side_effect = benchmark.SmokeFailure("GPU benchmark timed out: no hardware")
+                stack.enter_context(patch.object(benchmark, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}))
+                stack.enter_context(patch.object(benchmark, LIT_RUNTIME_ASSET_IDENTITY, return_value=[]))
+                stack.enter_context(patch.object(benchmark, LIT_CREATE_CAPTURE_BACKEND, return_value=backend))
+                stack.enter_context(patch.object(benchmark, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 1, root, {}, LIT_LOGS)))
+                stack.enter_context(patch.object(benchmark, LIT_LAUNCH_TESTBED, return_value=runtime))
+                stack.enter_context(patch.object(benchmark, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=LIT_ORIGINAL_LOG))
+                stack.enter_context(patch.object(benchmark, LIT_TERMINATE_PROCESS, side_effect=lambda process, *_args, **_kwargs: (exit_code, tail) if process is runtime else (0, "")))
+                stack.enter_context(patch.object(benchmark, LIT_WRITE_STATUS))
+                cleanup = benchmark.TrialCleanupStatus()
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "GPU benchmark timed out"):
+                    benchmark.run_trial(args, benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE), 0, 0, {}, {}, cleanup_status=cleanup)
+                self.assertEqual(cleanup.succeeded, expected)
+
+    def test_normal_acquisition_checks_full_output_before_capability_skip(self):
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            root = Path(temporary)
+            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
+            runtime, logserver, backend = Mock(), Mock(), Mock()
+            capture_path = root / "capture.log"
+            capture_path.write_text("[ERROR] early failure\n" + "x" * 70000, encoding=LIT_UTF_8)
+            runtime._nwb_output_capture = SimpleNamespace(path=capture_path)
+            backend.wait_for_window.return_value = 1
+            def launch(*_args):
+                timing = args.output_directory / LIT_BLOCK_00_00_HARDWARE / "gpu_timing.txt"
+                timing.write_text("timing", encoding=LIT_UTF_8)
+                return runtime
+            stack.enter_context(patch.object(benchmark, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}))
+            stack.enter_context(patch.object(benchmark, LIT_RUNTIME_ASSET_IDENTITY, return_value=[]))
+            stack.enter_context(patch.object(benchmark, LIT_CREATE_CAPTURE_BACKEND, return_value=backend))
+            stack.enter_context(patch.object(benchmark, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 1, root, {}, LIT_LOGS)))
+            stack.enter_context(patch.object(benchmark, LIT_LAUNCH_TESTBED, side_effect=launch))
+            stack.enter_context(patch.object(benchmark, "ensure_process_running"))
+            stack.enter_context(patch.object(benchmark, "parse_intervals", return_value=[{}]))
+            stack.enter_context(patch.object(benchmark, "retain_after_warmup", return_value=(0, [{}] * args.sample_intervals)))
+            stack.enter_context(patch.object(benchmark, "summarize_intervals", return_value={}))
+            stack.enter_context(patch.object(benchmark, "validate_coverage"))
+            stack.enter_context(patch.object(benchmark, LIT_TERMINATE_PROCESS, return_value=(0, "")))
+            stack.enter_context(patch.object(benchmark, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=LIT_ORIGINAL_LOG))
+            log_validation = stack.enter_context(patch.object(benchmark, "validate_trial_log", side_effect=benchmark.SmokeFailure("hardware was unavailable for a hardware benchmark route")))
+            with self.assertRaisesRegex(benchmark.SmokeFailure, "rejected"):
+                benchmark.run_trial(args, benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE), 0, 0, {}, {})
+            log_validation.assert_not_called()
+            retained = args.output_directory / LIT_BLOCK_00_00_HARDWARE / "process_output.log"
+            self.assertEqual(retained.read_bytes(), capture_path.read_bytes())
+
     def test_unmapped_window_backend_type_error_propagates_without_old_signature_retry(self):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
             root = Path(temporary)
             args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
             runtime, logserver, backend = Mock(), Mock(), Mock()
+            capture_path = root / "capture.log"
+            capture_path.write_text("", encoding=LIT_UTF_8)
+            runtime._nwb_output_capture = SimpleNamespace(path=capture_path)
             backend.wait_for_window.return_value = None
             backend.find_window_for_pid.side_effect = TypeError(LIT_BACKEND_DISCOVERY_FAILED)
             stack.enter_context(patch.object(benchmark, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}))
@@ -502,7 +590,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             backend.find_window_for_pid.assert_called_once_with(runtime.pid, None, require_mapped=False)
             backend.focus_window.assert_not_called()
             backend.close.assert_called_once()
-            stop.assert_any_call(runtime, benchmark.LIT_REFLECTION_BENCHMARK, None)
+            stop.assert_any_call(runtime, benchmark.LIT_REFLECTION_BENCHMARK, None, preserve_capture=True)
             self.assertFalse((args.output_directory / LIT_BLOCK_00_00_HARDWARE / LIT_SUMMARY_JSON).exists())
 
     def test_empty_completed_timing_reports_explain_absent_gpu_samples(self):
@@ -510,6 +598,9 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             root = Path(temporary)
             args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root), LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
             runtime, logserver, backend = Mock(), Mock(), Mock()
+            capture_path = root / "capture.log"
+            capture_path.write_text("", encoding=LIT_UTF_8)
+            runtime._nwb_output_capture = SimpleNamespace(path=capture_path)
             backend.wait_for_window.return_value = 1
             def launch(*_):
                 timing = args.output_directory / LIT_BLOCK_00_00_HARDWARE / "gpu_timing.txt"

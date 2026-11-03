@@ -1,12 +1,18 @@
 """Window-capture log plumbing: logserver port selection and readiness, log-file snapshots and deltas, and message waits."""
 
 
+import fnmatch
+import hashlib
+import os
 import socket
+import sys
+from pathlib import Path
 import time
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from launcher.readiness import READINESS_OPTION, ReadinessError, wait_for_logserver  # noqa: E402
 from window_capture_outcome import SmokeFailure  # noqa: E402
 
 
-LIT_PORT_PROBE_TIMEOUT_SECONDS = 0.2
 LIT_SHORT_POLL_SECONDS = 0.05
 LIT_LOG_POLL_SECONDS = 0.1
 LIT_N_127_0_0_1 = "127.0.0.1"
@@ -21,52 +27,78 @@ def choose_free_port():
         return sock.getsockname()[1]
 
 
-def wait_for_tcp_port(port, timeout_seconds):
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(LIT_PORT_PROBE_TIMEOUT_SECONDS)
-            try:
-                sock.connect((LIT_N_127_0_0_1, port))
-                return
-            except OSError:
-                time.sleep(LIT_SHORT_POLL_SECONDS)
+def wait_for_tcp_port(port, timeout_seconds, process, token):
+    try:
+        wait_for_logserver(port, token, timeout_seconds, process)
+    except ReadinessError as error:
+        raise SmokeFailure(str(error)) from error
 
-    raise SmokeFailure(f"logserver did not open port {port}")
+def matching_log_files(directory, pattern):
+    with os.scandir(directory) as entries:
+        return sorted(directory / entry.name for entry in entries if fnmatch.fnmatch(entry.name, pattern))
+
+
+def _file_identity(info):
+    return info.st_dev, info.st_ino
+
+
+def _hash_prefix(stream, size):
+    digest = hashlib.sha256()
+    remaining = size
+    while remaining:
+        chunk = stream.read(min(remaining, 1024 * 1024))
+        if not chunk:
+            raise SmokeFailure("log file shrank while reading its baseline")
+        digest.update(chunk)
+        remaining -= len(chunk)
+    return digest.digest()
 
 
 def snapshot_log_files(directory, pattern):
-    try:
-        return {path: path.stat().st_size for path in directory.glob(pattern)}
-    except OSError:
-        return {}
-
-
-def read_log_delta(path, offset):
-    try:
-        size = path.stat().st_size
-        if size <= offset:
-            return ""
-
+    """Snapshot append-only logs; an identical truncate-and-rewrite is not observable."""
+    baseline = {}
+    for path in matching_log_files(directory, pattern):
         with path.open(LIT_RB) as log_file:
-            log_file.seek(offset)
-            return log_file.read().decode(LIT_UTF_8, LIT_REPLACE)
-    except OSError:
-        return ""
+            info = os.fstat(log_file.fileno())
+            baseline[path] = (_file_identity(info), info.st_size, _hash_prefix(log_file, info.st_size))
+    return baseline
 
+
+def read_log_delta(path, baseline):
+    with path.open(LIT_RB) as log_file:
+        info = os.fstat(log_file.fileno())
+        identity = _file_identity(info)
+        if baseline is None:
+            content = log_file.read()
+            log_file.seek(0)
+            if _hash_prefix(log_file, len(content)) != hashlib.sha256(content).digest():
+                raise SmokeFailure(f"log file changed while it was read: '{path}'")
+        else:
+            expected_identity, offset, digest = baseline
+            if identity != expected_identity:
+                raise SmokeFailure(f"log file was replaced after its baseline was captured: '{path}'")
+            if info.st_size < offset:
+                raise SmokeFailure(f"log file shrank after its baseline was captured: '{path}'")
+            if _hash_prefix(log_file, offset) != digest:
+                raise SmokeFailure(f"log file changed before its baseline offset: '{path}'")
+            content = log_file.read()
+            log_file.seek(offset)
+            if _hash_prefix(log_file, len(content)) != hashlib.sha256(content).digest():
+                raise SmokeFailure(f"log file changed while it was read: '{path}'")
+            log_file.seek(0)
+            if _hash_prefix(log_file, offset) != digest:
+                raise SmokeFailure(f"log file changed while it was read: '{path}'")
+        if _file_identity(os.fstat(log_file.fileno())) != identity or _file_identity(path.stat()) != identity:
+            raise SmokeFailure(f"log file was replaced while it was read: '{path}'")
+        return content.decode(LIT_UTF_8, LIT_REPLACE)
 
 def collect_log_delta(directory, baseline, pattern):
-    chunks = []
-    try:
-        paths = sorted(directory.glob(pattern))
-    except OSError:
-        return ""
-
-    for path in paths:
-        chunks.append(read_log_delta(path, baseline.get(path, 0)))
-
+    paths = matching_log_files(directory, pattern)
+    missing = baseline.keys() - set(paths)
+    if missing:
+        raise SmokeFailure(f"log file disappeared after its baseline was captured: '{next(iter(missing))}'")
+    chunks = [read_log_delta(path, baseline.get(path)) for path in paths]
     return "\n".join(chunk for chunk in chunks if chunk)
-
 
 def standalone_log_pattern(executable):
     return f"{executable.resolve().stem}_*.log"

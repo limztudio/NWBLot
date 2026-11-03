@@ -79,6 +79,7 @@ Expected<TextInputSessionToken, TextInputAdmission::Enum> QueuedTextInputService
     const TextInputAdmission::Enum validation = __hidden_text_input_service::ValidateSurrounding(desc.surrounding, desc.anchorByte, desc.caretByte);
     if(validation != TextInputAdmission::Accepted)
         return MakeUnexpected(validation);
+    m_surrounding.assign(desc.surrounding.data(), desc.surrounding.size());
     const u64 generation = m_nextGeneration;
     AdvanceNonWrappingRevision(m_nextGeneration);
 
@@ -88,7 +89,6 @@ Expected<TextInputSessionToken, TextInputAdmission::Enum> QueuedTextInputService
     m_cancelledToken = {};
     m_activeToken = { .service = m_serviceIdentity, .generation = generation };
     m_caret = desc.caret;
-    m_surrounding.assign(desc.surrounding.data(), desc.surrounding.size());
     m_anchorByte = desc.anchorByte;
     m_caretByte = desc.caretByte;
     m_surroundingRevision = 1u;

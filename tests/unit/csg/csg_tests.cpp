@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
 
 #include <impl/ecs_csg/module.h>
@@ -511,6 +512,30 @@ public:
         return shapePosition.x + parameters.parameter0.x;
     }
 };
+
+class OversizedProjectShape final : public NWB::Impl::ICsgShape{
+public:
+    virtual Name shapeTypeName()const noexcept override{ return Name("project/csg/oversized"); }
+    virtual u32 parameterByteSize()const noexcept override{ return static_cast<u32>(NWB::Impl::s_CsgShapeInlineParameterMaxBytes) + 1u; }
+    virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{ return {}; }
+    virtual b8 computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters&, NWB::Impl::CsgShapeLocalBounds&)const noexcept override{ return false; }
+    virtual f32 evaluateSignedDistance(const Float4&, const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return 0.0f; }
+};
+
+TEST(Csg, OversizedProjectShapeDoesNotChangeRegistry){
+    NWB::Tests::CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestWorld testWorld;
+    NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    const usize count = registry.shapeTypeCount();
+    const u64 revision = registry.revision();
+    EXPECT_FALSE(registry.registerShape<OversizedProjectShape>());
+    EXPECT_EQ(registry.shapeTypeCount(), count);
+    EXPECT_EQ(registry.revision(), revision);
+    EXPECT_FALSE(registry.findShapeType(Name("project/csg/oversized")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("parameter size larger than the inline shader ABI")));
+}
 
 TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
     TestWorld testWorld;

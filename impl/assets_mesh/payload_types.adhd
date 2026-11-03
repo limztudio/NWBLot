@@ -10,7 +10,7 @@
 
 const Name s_MeshValidatePayloadArena = "impl/assets_mesh/validate_payload";
 
-const u32 s_MeshBinaryMagic = 0x4D534837u; // MSH7
+const u32 s_MeshBinaryMagic = 0x4D534838u; // MSH8
 const u32 s_MeshMissingStreamIndex = 0xffffffffu;
 const u32 s_MeshMaxMeshletVertices = 96u;
 const u32 s_MeshMaxMeshletTriangles = 126u;

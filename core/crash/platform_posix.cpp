@@ -472,7 +472,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     u32 expected = 0u;
     if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
         s_InTransport = false;
-        return CrashDumpTransportStatus::Sent;
+        return CrashDumpTransportStatus::Failed;
     }
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;

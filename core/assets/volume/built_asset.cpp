@@ -71,32 +71,63 @@ b8 WriteBinaryFileIfChanged(const __hidden_built_asset::ScratchPath& path, const
     const auto read = ReadBinaryFile(path, existing);
     if(read && __hidden_built_asset::BytesMatch(existing, bytes))
         return true;
-    if(!replaceDifferent && (read || !IsMissingPathError(read.error()))){
+    if((!read && !IsMissingPathError(read.error())) || (!replaceDifferent && read)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
         return false;
     }
 
-    ScratchString temporaryName(__hidden_built_asset::s_TemporaryNamePrefix, path.arena());
-    AppendHexU64(CurrentProcessId(), temporaryName);
-    temporaryName += __hidden_built_asset::s_TemporaryNameSeparator;
-    AppendHexU64(__hidden_built_asset::g_TemporarySequence.fetch_add(__hidden_built_asset::s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
-    temporaryName += __hidden_built_asset::s_TemporaryNameExtension;
-    const __hidden_built_asset::ScratchPath temporary = path.parentPath() / temporaryName;
-    ScopeExit removeTemporary([&temporary]()noexcept{
-        if(!RemoveFile(temporary)){
+    ScratchString temporaryName(path.arena());
+    __hidden_built_asset::ScratchPath temporary(path.arena());
+    b8 ownsTemporary = false;
+    ScopeExit removeTemporary([&temporary, &ownsTemporary]()noexcept{
+        if(ownsTemporary && !RemoveFile(temporary)){
             CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_built_asset::s_WarningEventName, .category = "built_asset_temporary_cleanup", .message = "AssetVolume: failed to remove temporary output", });
         }
     });
-    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing) || !__hidden_built_asset::BytesMatch(existing, bytes)){
+    b8 staged = false;
+    for(u32 attempt = 0u; attempt < __hidden_built_asset::s_MaxRenameAttempts; ++attempt){
+        temporaryName = __hidden_built_asset::s_TemporaryNamePrefix;
+        AppendHexU64(CurrentProcessId(), temporaryName);
+        temporaryName += __hidden_built_asset::s_TemporaryNameSeparator;
+        AppendHexU64(__hidden_built_asset::g_TemporarySequence.fetch_add(__hidden_built_asset::s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
+        temporaryName += __hidden_built_asset::s_TemporaryNameExtension;
+        temporary = path.parentPath() / temporaryName;
+        const auto result = StageNewBinaryFileDurable(temporary, bytes.data(), bytes.size(), ownsTemporary);
+        if(result){
+            staged = true;
+            break;
+        }
+#if defined(NWB_PLATFORM_WINDOWS)
+        const b8 collision = result.error().value() == ERROR_FILE_EXISTS || result.error().value() == ERROR_ALREADY_EXISTS;
+#else
+        const b8 collision = result.error() == ErrorCondition::file_exists;
+#endif
+        if(ownsTemporary || !collision)
+            break;
+    }
+    if(!staged || !ReadBinaryFile(temporary, existing) || !__hidden_built_asset::BytesMatch(existing, bytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
         return false;
     }
     for(u32 attempt = 0u; attempt < __hidden_built_asset::s_MaxRenameAttempts; ++attempt){
-        if(RenamePath(temporary, path)){
-            removeTemporary.release();
-            return true;
+        if(replaceDifferent){
+            if(RenamePath(temporary, path)){
+                ownsTemporary = false;
+                return true;
+            }
         }
-        if(replaceDifferent && ReadBinaryFile(path, existing) && __hidden_built_asset::BytesMatch(existing, bytes))
+        else{
+#if defined(NWB_PLATFORM_WINDOWS)
+            if(MoveFileEx(temporary.c_str(), path.c_str(), 0u)){
+                ownsTemporary = false;
+                return true;
+            }
+#else
+            if(::link(temporary.c_str(), path.c_str()) == 0)
+                return true;
+#endif
+        }
+        if(ReadBinaryFile(path, existing) && __hidden_built_asset::BytesMatch(existing, bytes))
             return true;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));

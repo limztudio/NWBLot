@@ -194,7 +194,7 @@ public:
     // Terminal cleanup: stop admission and skip queued callbacks before joining active work.
     void drain()noexcept;
     void pumpMainThread();
-    [[nodiscard]] b8 isComplete(TaskHandle handle)const noexcept;
+    [[nodiscard]] b8 isComplete(TaskHandle handle)const;
     [[nodiscard]] CpuTaskSchedulerStatistics statistics()const noexcept;
     // Register labels during setup; reuse handles in options and scopes.
     [[nodiscard]] CpuTaskProfileLabel registerProfileLabel(const Name& name);

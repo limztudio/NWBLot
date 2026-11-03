@@ -69,7 +69,7 @@ b8 UiImageSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiImageSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+::NWB::Core::KeyboardInputResult UiImageSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);
 }
 

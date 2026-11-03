@@ -521,6 +521,67 @@ TEST(Global, PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWithoutE
     EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("delta.ext.delta.ext")));
     aliased /= aliased.parentPathView();
     EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("gamma_segment_0123456789")));
+
+    Path<NWB::Core::Alloc::GlobalArena> extension(testArena.arena, NWB_TEXT("name.ext"));
+    extension.replaceExtension(extension.extensionView());
+    EXPECT_EQ(extension.native(), TStringView(NWB_TEXT("name.ext")));
+    Path<NWB::Core::Alloc::GlobalArena> filename(testArena.arena, NWB_TEXT("name.ext"));
+    filename.replaceExtension(filename.filenameView());
+    EXPECT_EQ(filename.native(), TStringView(NWB_TEXT("name.name.ext")));
+    Path<NWB::Core::Alloc::GlobalArena> self(testArena.arena, NWB_TEXT("name.ext"));
+    self.replaceExtension(self);
+    EXPECT_EQ(self.native(), TStringView(NWB_TEXT("name.name.ext")));
+}
+
+TEST(Global, AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirectoryTargets){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/same_existing_and_atomic_write");
+    const Path<NWB::Core::Alloc::GlobalArena> firstFile = root / "first.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> secondFile = root / "second.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> hardLinkFile = root / "first_hardlink.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> missingFile = root / "missing.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> directoryTarget = root / "dir_target";
+
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
+    ASSERT_TRUE(WriteTextFileAtomic(firstFile, AStringView("initial")));
+    ASSERT_TRUE(WriteTextFileAtomic(secondFile, AStringView("distinct")));
+    ASSERT_TRUE(EnsureDirectories(directoryTarget));
+
+    const auto sameSelf = AreSameExistingPath(firstFile, firstFile);
+    const auto sameDistinct = AreSameExistingPath(firstFile, secondFile);
+    const auto sameMissing = AreSameExistingPath(firstFile, missingFile);
+    ASSERT_TRUE(sameSelf);
+    ASSERT_TRUE(sameDistinct);
+    ASSERT_TRUE(sameMissing);
+    EXPECT_TRUE(*sameSelf);
+    EXPECT_FALSE(*sameDistinct);
+    EXPECT_FALSE(*sameMissing);
+
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(CreateHardLink(hardLinkFile.c_str(), firstFile.c_str(), nullptr) != 0){
+        const auto sameHardLink = AreSameExistingPath(firstFile, hardLinkFile);
+        ASSERT_TRUE(sameHardLink);
+        EXPECT_TRUE(*sameHardLink);
+    }
+#else
+    if(::link(firstFile.c_str(), hardLinkFile.c_str()) == 0){
+        const auto sameHardLink = AreSameExistingPath(firstFile, hardLinkFile);
+        ASSERT_TRUE(sameHardLink);
+        EXPECT_TRUE(*sameHardLink);
+    }
+#endif
+
+    EXPECT_FALSE(WriteTextFileAtomic(directoryTarget, AStringView("must_fail")));
+    const auto dirStillExists = IsDirectory(directoryTarget);
+    ASSERT_TRUE(dirStillExists);
+    EXPECT_TRUE(*dirStillExists);
+
+    ASSERT_TRUE(WriteTextFileAtomic(firstFile, AStringView("updated_atomically")));
+    ::AString<NWB::Core::Alloc::GlobalArena> readBack(testArena.arena);
+    ASSERT_TRUE(ReadTextFile(firstFile, readBack));
+    EXPECT_EQ(AStringView(readBack.data(), readBack.size()), AStringView("updated_atomically"));
+
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 #if defined(NWB_PLATFORM_LINUX)

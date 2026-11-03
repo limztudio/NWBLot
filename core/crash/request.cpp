@@ -241,6 +241,8 @@ CrashRequest BuildCrashDumpRequest(const CrashReasonKind::Enum reasonKind, const
 }
 
 CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u32 reasonCode, const CrashDumpRequestOptions& options){
+    if(!options.gpuDump.empty() && options.gpuDumpKind != GpuCrashDumpKind::RadeonGpuDetective && options.gpuDumpKind != GpuCrashDumpKind::Aftermath)
+        return CrashDumpResult{ CrashDumpStatus::RequestFailed };
     const CrashRequest request = BuildCrashDumpRequest(reasonKind, reasonCode, options);
     if(!IsCurrentCrashRequest(request))
         return CrashDumpResult{ CrashDumpStatus::RequestFailed };
@@ -253,7 +255,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
         if(EnsureDirectories(packageDirectory)){
             if(!options.gpuReport.empty()){
                 if(!WriteTextFile(packageDirectory / PackageNames::s_GpuCrashReportFileName, options.gpuReport))
-                    return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
+                    return CrashDumpResult{ CrashDumpStatus::AttachmentWriteFailed };
             }
             if(!options.gpuDump.empty()){
                 StringView gpuDumpFileName;
@@ -264,12 +266,12 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
 
                 if(!gpuDumpFileName.empty()){
                     if(!WriteTextFile(packageDirectory / gpuDumpFileName, options.gpuDump))
-                        return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
+                        return CrashDumpResult{ CrashDumpStatus::AttachmentWriteFailed };
                 }
             }
         }
         else
-            return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
+            return CrashDumpResult{ CrashDumpStatus::AttachmentWriteFailed };
     }
 
     const CrashDumpTransportStatus::Enum transportStatus = RequestCrashHandler(request, options.waitMilliseconds);

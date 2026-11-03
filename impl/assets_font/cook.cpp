@@ -33,9 +33,7 @@ namespace __hidden_font_cook_metadata{
 
 
 static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontPairedSidecarRuleAutoRegistrar({
-    .firstToken = "font",
     .sidecarExtension = s_PreparedFontExtension,
-    .bunchScanKeyword = "font",
 });
 
 

@@ -37,7 +37,18 @@ struct StatisticsContext{
     using Handle = RefCountPtr<ControlT, ArenaRefDeleter<ControlT, NWB::Core::Alloc::GlobalArena>>;
 
     NWB::Core::Alloc::GlobalArena arena{Name("tests/statistics")};
-    Handle control = NWB::Impl::CreateStatisticsControl<ControlT>(arena, DefaultDeviceGeneration).value_or(Handle{});
+    Handle control;
+
+
+public:
+    StatisticsContext(){
+        auto created = NWB::Impl::CreateStatisticsControl<ControlT>(arena, DefaultDeviceGeneration);
+        if(!created){
+            ADD_FAILURE() << "Failed to create statistics control";
+            return;
+        }
+        control = Move(*created);
+    }
 };
 
 template<typename StateT, typename PlanT>

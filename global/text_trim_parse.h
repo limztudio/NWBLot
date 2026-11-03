@@ -68,12 +68,14 @@ template<typename CharT>
 }
 
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
-[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return TrimView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
 }
-template<typename CharT, typename ArenaT>
-BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>&&) = delete;
+template<typename StringT>
+    requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
+    && (!IsSame_V<StringT, BasicStringView<typename StringT::value_type>>)
+BasicStringView<typename StringT::value_type> TrimView(const StringT&&) = delete;
 
 
 template<typename CharT>
@@ -84,12 +86,14 @@ template<typename CharT>
 }
 
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
-[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()}) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return TrimLeftView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
 }
-template<typename CharT, typename ArenaT>
-BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>&&) = delete;
+template<typename StringT>
+    requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
+    && (!IsSame_V<StringT, BasicStringView<typename StringT::value_type>>)
+BasicStringView<typename StringT::value_type> TrimLeftView(const StringT&&) = delete;
 
 
 template<typename CharT>

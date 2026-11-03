@@ -576,6 +576,52 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
         "}\r\n";
     CompileResult badUtf8BoundaryRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_BadUtf8BoundaryArg, "impl/bad_utf8_boundary.adhd", arena.arena, badUtf8BoundaryRes));
+
+    static constexpr MStringView s_BadTempSubstrViewVar =
+        "usize badTempSubstr(in String text) {\r\n"
+        "    StringView view = trimView(text.substr(1u));\r\n"
+        "    return view.size();\r\n"
+        "}\r\n";
+    CompileResult badTempSubstrRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadTempSubstrViewVar, "impl/bad_temp_substr.adhd", arena.arena, badTempSubstrRes));
+
+    static constexpr MStringView s_BadTempMemberViewVar =
+        "class TempOwner { public CompactString label = CompactString(\"hi\"); }\r\n"
+        "TempOwner makeOwner() { return TempOwner(); }\r\n"
+        "usize badTempMemberView() {\r\n"
+        "    auto view = trimLeftView(makeOwner().label.view());\r\n"
+        "    return view.size();\r\n"
+        "}\r\n";
+    CompileResult badTempMemberRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadTempMemberViewVar, "impl/bad_temp_member.adhd", arena.arena, badTempMemberRes));
+
+    static constexpr MStringView s_BadReturnLocalViewAlias =
+        "StringView badReturnAlias() {\r\n"
+        "    CompactString local = CompactString(\"  scoped  \");\r\n"
+        "    StringView trimmed = trimView(local);\r\n"
+        "    return trimmed.substr(1u);\r\n"
+        "}\r\n";
+    CompileResult badRetAliasRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadReturnLocalViewAlias, "impl/bad_ret_alias.adhd", arena.arena, badRetAliasRes));
+
+    static constexpr MStringView s_BadShorterBlockViewAssign =
+        "usize badOuterAssign(in StringView fallback) {\r\n"
+        "    StringView outer = fallback;\r\n"
+        "    {\r\n"
+        "        String inner = \"block\";\r\n"
+        "        outer = trimView(inner);\r\n"
+        "    }\r\n"
+        "    return outer.size();\r\n"
+        "}\r\n";
+    CompileResult badOuterAssignRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadShorterBlockViewAssign, "impl/bad_outer_assign.adhd", arena.arena, badOuterAssignRes));
+
+    static constexpr MStringView s_BadMutateStringViewFront =
+        "void badMutateView(in StringView v) {\r\n"
+        "    v.front() = 65u;\r\n"
+        "}\r\n";
+    CompileResult badMutViewRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadMutateStringViewFront, "impl/bad_mut_view.adhd", arena.arena, badMutViewRes));
 }
 
 

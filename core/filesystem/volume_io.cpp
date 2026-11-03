@@ -29,6 +29,98 @@ static constexpr StringView s_NoMountLabel = "none";
 static constexpr StringView s_UnknownMountLabel = "unknown";
 constexpr usize s_ErrnoMessageBufferBytes = 256u;
 
+struct SegmentCreateFailure{
+    ErrorCode code;
+    b8 created;
+};
+
+static Expected<void, SegmentCreateFailure> CreateNewSegment(const Path& path, const u64 size)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(size > static_cast<u64>(Limit<LONGLONG>::s_Max))
+        return MakeUnexpected(SegmentCreateFailure{ MakeErrorCode(ErrorCondition::value_too_large), false });
+    const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if(handle == INVALID_HANDLE_VALUE)
+        return MakeUnexpected(SegmentCreateFailure{ LastSystemError(), false });
+    ErrorCode error;
+    LARGE_INTEGER end{};
+    end.QuadPart = static_cast<LONGLONG>(size);
+    if(!SetFilePointerEx(handle, end, nullptr, FILE_BEGIN) || !SetEndOfFile(handle))
+        error = LastSystemError();
+    if(!CloseHandle(handle) && !error)
+        error = LastSystemError();
+#else
+    if(size > static_cast<u64>(Limit<off_t>::s_Max))
+        return MakeUnexpected(SegmentCreateFailure{ MakeErrorCode(ErrorCondition::value_too_large), false });
+    constexpr u32 s_NewSegmentMode = 0666u;
+    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewSegmentMode);
+    if(descriptor < 0)
+        return MakeUnexpected(SegmentCreateFailure{ LastSystemError(), false });
+    ErrorCode error;
+    while(ftruncate(descriptor, static_cast<off_t>(size)) != 0){
+        if(errno != EINTR){
+            error = LastSystemError();
+            break;
+        }
+    }
+    if(close(descriptor) != 0 && !error)
+        error = LastSystemError();
+#endif
+    if(error)
+        return MakeUnexpected(SegmentCreateFailure{ error, true });
+    return {};
+}
+
+static Expected<void, ErrorCode> GrowLastSegment(const Path& path, const u64 size, const u64 minimumBytes)noexcept{
+    if(minimumBytes > size)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(size > static_cast<u64>(Limit<LONGLONG>::s_Max))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
+    const HANDLE handle = CreateFile(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if(handle == INVALID_HANDLE_VALUE)
+        return MakeUnexpected(LastSystemError());
+    ErrorCode error;
+    LARGE_INTEGER current{};
+    if(!GetFileSizeEx(handle, &current))
+        error = LastSystemError();
+    else if(current.QuadPart <= 0 || static_cast<u64>(current.QuadPart) < minimumBytes || static_cast<u64>(current.QuadPart) > size)
+        error = MakeErrorCode(ErrorCondition::io_error);
+    else if(static_cast<u64>(current.QuadPart) < size){
+        LARGE_INTEGER end{};
+        end.QuadPart = static_cast<LONGLONG>(size);
+        if(!SetFilePointerEx(handle, end, nullptr, FILE_BEGIN) || !SetEndOfFile(handle))
+            error = LastSystemError();
+    }
+    if(!CloseHandle(handle) && !error)
+        error = LastSystemError();
+#else
+    if(size > static_cast<u64>(Limit<off_t>::s_Max))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
+    const int descriptor = open(path.c_str(), O_RDWR | O_CLOEXEC);
+    if(descriptor < 0)
+        return MakeUnexpected(LastSystemError());
+    ErrorCode error;
+    struct stat status{};
+    if(fstat(descriptor, &status) != 0)
+        error = LastSystemError();
+    else if(!S_ISREG(status.st_mode) || status.st_size <= 0 || static_cast<u64>(status.st_size) < minimumBytes || static_cast<u64>(status.st_size) > size)
+        error = MakeErrorCode(ErrorCondition::io_error);
+    else if(static_cast<u64>(status.st_size) < size){
+        while(ftruncate(descriptor, static_cast<off_t>(size)) != 0){
+            if(errno != EINTR){
+                error = LastSystemError();
+                break;
+            }
+        }
+    }
+    if(close(descriptor) != 0 && !error)
+        error = LastSystemError();
+#endif
+    if(error)
+        return MakeUnexpected(error);
+    return {};
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -324,47 +416,18 @@ b8 VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
         return false;
     }
 
-    const auto streamOffset = FilesystemVolumeDetail::ToStreamOff(m_segmentSize - 1);
-    if(!streamOffset){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"), ConvertString(m_volumeName), m_segmentSize);
-        return false;
-    }
-
-    const Path path = segmentPath(segmentIndex);
-    OutputFileStream stream(path, OutputFileStream::binary | OutputFileStream::trunc);
-    if(!stream.is_open()){
-        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentOpen, path, FilesystemVolumeDetail::LastErrnoMessage());
-        return false;
-    }
-
-    stream.seekp(*streamOffset);
-    if(!stream.good()){
-        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentSeek, path, FilesystemVolumeDetail::LastErrnoMessage());
-        return false;
-    }
-
-    char zero = 0;
-    stream.write(&zero, 1);
-    if(!stream.good()){
-        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegmentWrite, path, FilesystemVolumeDetail::LastErrnoMessage());
-        return false;
-    }
-
-    stream.close();
-    if(!stream.good()){
-        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, "createSegment:close", path, FilesystemVolumeDetail::LastErrnoMessage());
-        return false;
-    }
-
-    if(segmentIndex == m_segmentPaths.size())
-        m_segmentPaths.push_back(path);
-    else if(segmentIndex < m_segmentPaths.size())
-        m_segmentPaths[segmentIndex] = path;
-    else{
+    if(segmentIndex != m_segmentPaths.size() || segmentIndex == Limit<usize>::s_Max){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})"), ConvertString(m_volumeName), segmentIndex, m_segmentPaths.size());
         return false;
     }
-
+    m_segmentPaths.reserve(segmentIndex + 1u);
+    Path path = segmentPath(segmentIndex);
+    const auto created = FilesystemVolumeDetail::CreateNewSegment(path, m_segmentSize);
+    if(!created){
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem('{}'): failed to create segment '{}': {}{}"), ConvertString(m_volumeName), PathToString<tchar>(path), ConvertString(created.error().code.message()), created.error().created ? NWB_TEXT("; partial segment retained") : NWB_TEXT(""));
+        return false;
+    }
+    m_segmentPaths.push_back(Move(path));
     return true;
 }
 
@@ -387,6 +450,22 @@ b8 VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
 
         if(!m_writable){
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only"), ConvertString(m_volumeName), requiredBytes, capacity);
+            return false;
+        }
+        if(m_maxSegments != 0u && m_segmentPaths.size() >= m_maxSegments){
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: maxSegments {} reached"), ConvertString(m_volumeName), m_maxSegments);
+            return false;
+        }
+        if(m_segmentPaths.empty()){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpEnsureCapacity, FilesystemVolumeDetail::s_VolumeDetailNoSegmentsMounted);
+            return false;
+        }
+        const Path& previousLast = m_segmentPaths.back();
+        const u64 previousSegmentsCapacity = capacity - m_segmentSize;
+        const u64 minimumLastBytes = m_nextFreeOffset > previousSegmentsCapacity ? m_nextFreeOffset - previousSegmentsCapacity : 0u;
+        const auto grown = FilesystemVolumeDetail::GrowLastSegment(previousLast, m_segmentSize, minimumLastBytes);
+        if(!grown){
+            FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpEnsureCapacity, previousLast, grown.error());
             return false;
         }
         if(!createSegmentLocked(m_segmentPaths.size()))

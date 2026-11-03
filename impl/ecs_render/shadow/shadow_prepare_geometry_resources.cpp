@@ -93,7 +93,10 @@ void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer
         if(!m_requests && m_inlineRequestCount == s_SmallInlineIndexCapacity)
             promoteRequests();
         if(m_requests){
-            request = &m_requests->try_emplace(MakeNotNull(buffer.get())).first.value();
+            const auto inserted = m_requests->try_emplace(MakeNotNull(buffer.get()));
+            if(!inserted.second)
+                TerminateInvariant();
+            request = &inserted.first.value();
             request->source = &buffer;
         }
         else{
@@ -153,8 +156,8 @@ b8 ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& gra
     if(m_requests){
         ResourceIndex resources(m_requests->bucket_count(), m_scratchArena);
         for(auto request = m_requests->begin(); request != m_requests->end(); ++request){
-            if(request.value().resource.valid())
-                resources.emplace(request.value().resource.index, MakeNotNull(&request.value()));
+            if(request.value().resource.valid() && !resources.emplace(request.value().resource.index, MakeNotNull(&request.value())).second)
+                TerminateInvariant();
         }
         static_assert(IsNothrowMoveConstructible_V<ResourceIndex>);
         m_resources.emplace(Move(resources));

@@ -101,7 +101,25 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 BuildDiagnosticPayload(const DiagnosticEventRecord& record, TelemetryArena&, TelemetryBytes& outPayload){
+b8 BuildDiagnosticPayload(const DiagnosticEventRecord& record, TelemetryArena& arena, TelemetryBytes& outPayload){
+    const Array<AStringView, __hidden_telemetry_diagnostic::s_PayloadTextFieldCount> fields{ record.event, record.category, record.expression, record.message, record.file };
+    b8 aliasesOutput = false;
+    for(const AStringView text : fields){
+        const auto alias = ContainerDetail::SourceAliasesDestination(outPayload, Span<const u8>(reinterpret_cast<const u8*>(text.data()), text.size()));
+        if(alias){
+            if(text.size() > outPayload.size() - *alias){
+                outPayload.clear();
+                return false;
+            }
+            aliasesOutput = true;
+        }
+    }
+    if(aliasesOutput){
+        TelemetryBytes staged(outPayload.get_allocator().arena());
+        const b8 result = BuildDiagnosticPayload(record, arena, staged);
+        outPayload = Move(staged);
+        return result;
+    }
     outPayload.clear();
 
     const AStringView event = record.event;
@@ -186,8 +204,18 @@ b8 RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
+DiagnosticCaptureGuard::DiagnosticCaptureGuard(
+    Recorder& recorder,
+    const u64 frameIndex,
+    const u32 streamId,
+    const Atomic<u64>* const sharedFrameIndex,
+    const Atomic<u32>* const sharedStreamId
+)
     : m_recorder(recorder)
+    , m_frameIndex(frameIndex)
+    , m_streamId(streamId)
+    , m_sharedFrameIndex(sharedFrameIndex)
+    , m_sharedStreamId(sharedStreamId)
 {
     DiagnosticCaptureGuard* expectedGuard = nullptr;
     if(__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(expectedGuard, this, MemoryOrder::acq_rel)){

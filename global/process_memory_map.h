@@ -101,9 +101,10 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
     if(!ProcessMemoryMapDetail::SkipProcMapField(line, cursor))
         return MakeUnexpected(Failure{});
 
-    // File-offset is optional in /proc maps; failures keep the default of 0.
     const auto fileOffset = ParseVariableHexU64(AStringView(line.data() + offsetBegin, cursor - offsetBegin));
-    return LinuxProcessMemoryMapEntry{ .begin = *begin, .end = *end, .fileOffset = fileOffset.value_or(0u), .path = ProcessMemoryMapDetail::ProcMapPathField(line), };
+    if(!fileOffset)
+        return MakeUnexpected(Failure{});
+    return LinuxProcessMemoryMapEntry{ .begin = *begin, .end = *end, .fileOffset = *fileOffset, .path = ProcessMemoryMapDetail::ProcMapPathField(line), };
 }
 
 template<typename EntryVectorT>

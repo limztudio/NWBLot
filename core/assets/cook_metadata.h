@@ -188,7 +188,7 @@ public:
 using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
 
 inline constexpr u32 s_NwbAssetCacheMagic = 0x4341574eu; // NWAC
-inline constexpr u16 s_NwbAssetCacheVersion = 1u;
+inline constexpr u16 s_NwbAssetCacheVersion = 2u;
 inline constexpr u32 s_NwbAssetCacheFlagStandalone = 1u << 0u;
 
 struct NwbAssetCacheFileHeader{
@@ -331,9 +331,7 @@ public:
 };
 
 struct AssetPairedSidecarRule{
-    AStringView firstToken;
     AStringView sidecarExtension;
-    AStringView bunchScanKeyword;
 };
 
 class NonStandaloneAssetTypeAutoRegistrar final{

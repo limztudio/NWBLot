@@ -19,7 +19,7 @@ namespace NWB::Tests::Smoke{
 
 class ArrowYawInputHandler final : public Core::IInputEventHandler{
 public:
-    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
     void clear()noexcept;
 

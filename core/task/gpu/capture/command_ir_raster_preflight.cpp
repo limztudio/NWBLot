@@ -44,7 +44,7 @@ namespace __hidden_gpu_command_ir_raster_preflight{
 }
 
 [[nodiscard]] static b8 ImplicitScissorIsValid(const Viewport& viewport)noexcept{
-    return viewport.minX >= 0.0f && viewport.minY >= 0.0f && viewport.maxX <= static_cast<f32>(Limit<i32>::s_Max) && viewport.maxY <= static_cast<f32>(Limit<i32>::s_Max);
+    return viewport.minX >= 0.0f && viewport.minY >= 0.0f && static_cast<f64>(viewport.maxX) <= static_cast<f64>(Limit<i32>::s_Max) && static_cast<f64>(viewport.maxY) <= static_cast<f64>(Limit<i32>::s_Max);
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateGraphicsState(const GpuCommandIrRasterTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task)noexcept{

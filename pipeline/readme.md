@@ -81,8 +81,9 @@ for `.nwba` files. Identical duplicate virtual identities and payloads are merge
 The graphics metadata merge callback combines shader archive index records from
 independent builds; conflicting records or other different payloads for the same
 identity fail. Gathering performs no source parsing or compilation. It publishes the existing `graphics` volume format, using
-the default volume implementation through `IFilesystem`. The staged publication
-preserves the previous volume if validation or packing fails.
+the default volume implementation through `IFilesystem`. Validation and packing failures before publication leave the
+previous volume in place. If a publication fails, restoration is attempted; an incomplete rollback can leave the live
+volume incomplete and retains the stage and backup directories for recovery.
 
 ```console
 python -m launcher run nwb_asset_gatherer --config dbg --working-directory . -- --input built-a built-b --output-directory runtime/res
@@ -94,7 +95,7 @@ using the same convention as the repository's other runnable directories. It val
 asset roots and optional input overrides, configures and
 builds `nwb_pipeline`, calls `dependency_computer`, passes that result to
 `asset_builder`, then passes the builder manifest to `asset_gatherer`. Discovery
-errors and failed stages stop the pipeline and preserve the published volume.
+errors and failed stages stop the pipeline. A failed publication follows the recovery behavior described above.
 
 ```console
 python -m launcher pipeline --config dbg --asset-root impl/assets project/assets --output-directory runtime/res
@@ -131,6 +132,13 @@ artifacts, or volumes, or running tools. `--input` overrides automatic `project.
 root discovery with an explicit seed list while still expanding transitive dependencies.
 `--build-directory` chooses where to retain intermediate artifacts; otherwise
 they live in an output-specific directory under the asset cache.
+
+The standalone asset cache keys cooked entries by their authored inputs and the
+running producer executable's SHA-256 and all registered paired sidecars present
+beside the metadata. Rebuilding the producer or changing a sidecar therefore
+invalidates entries made by older inputs. When the executable cannot be
+read, the builder reports the problem and cooks without reading or writing that
+cache. Shader compilation also fingerprints its configured compiler and options.
 
 The C++ build entry point is `NWB::Pipeline::AssetBuilder::BuildAssets`, declared
 in `pipeline/asset_builder/build.h`, with `AssetBuildOptions` in the same namespace.

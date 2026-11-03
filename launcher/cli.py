@@ -8,6 +8,10 @@ import math
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 from launcher.models import RepoLauncher
+from launcher.build import BuildController
+from launcher.discovery import LauncherDiscovery
+from launcher.dispatch import DispatchRouter
+from launcher.host import HostProbe
 from launcher.constants import (ARG_ARCH, ARG_BUILD_DIR, ARG_BUILD_ONLY, ARG_CMAKE, ARG_COMMAND, ARG_CONFIGURE, ARG_CONFIGURE_PRESET, ARG_DEFINE_DEST, ARG_DEFINE_LONG, ARG_DEFINE_SHORT, ARG_DETACH, ARG_DOMAIN, ARG_DRY_RUN, ARG_EXECUTABLE, ARG_EXECUTABLE_NAME,
     ARG_GPUDBG, ARG_JOBS, ARG_KILL_EXISTING, ARG_PLATFORM, ARG_PROFILE_LOGSERVER_ARG, ARG_PROFILE_LOGSERVER_ARGS_DEST, ARG_PROFILE_LOGSERVER_EXECUTABLE, ARG_PROFILE_LOGSERVER_NAME, ARG_PROFILE_LOGSERVER_TARGET, ARG_PROFILE_LOGSERVER_TIMEOUT,
     ARG_PROFILE_LOG_ADDRESS, ARG_PROFILE_LOG_PORT, ARG_REPO_ROOT, ARG_RUN_SECONDS, ARG_SKIP_BUILD, ARG_TARGET, ARG_TARGETS, ARG_WITH_PROFILE, ARG_WORKING_DIRECTORY, CMAKE_CONFIG_FLAG, COMMAND_BUILD, COMMAND_PROFILES, COMMAND_RUN, COMMAND_SEPARATOR,
@@ -30,9 +34,8 @@ class LauncherCli:
 
     @staticmethod
     def add_build_options(parser: argparse.ArgumentParser, *, allow_skip_build: bool = True) -> None:
-        import launcher as _facade
         parser.add_argument(ARG_REPO_ROOT, type=Path, help=HELP_REPO_ROOT)
-        parser.add_argument(ARG_PLATFORM, default=_facade.host_platform_name(), help=HELP_PLATFORM)
+        parser.add_argument(ARG_PLATFORM, default=HostProbe.host_platform_name(), help=HELP_PLATFORM)
         parser.add_argument(ARG_ARCH, choices=SUPPORTED_ARCHITECTURES, help=HELP_ARCH,)
         parser.add_argument(ARG_DOMAIN, help=HELP_DOMAIN)
         parser.add_argument(ARG_CONFIGURE_PRESET, help=HELP_CONFIGURE_PRESET)
@@ -48,15 +51,15 @@ class LauncherCli:
 
     @staticmethod
     def add_common_options(parser: argparse.ArgumentParser) -> None:
-        import launcher as _facade
-        _facade.add_build_options(parser)
+        LauncherCli.add_build_options(parser)
         parser.add_argument(ARG_WORKING_DIRECTORY, type=Path, help=HELP_WORKING_DIRECTORY)
         parser.add_argument(ARG_EXECUTABLE, type=Path, help=HELP_EXECUTABLE)
         parser.add_argument(ARG_EXECUTABLE_NAME, help=HELP_EXECUTABLE_NAME)
         parser.add_argument(ARG_GPUDBG, action=STORE_TRUE, help=HELP_GPUDBG)
         parser.add_argument(ARG_KILL_EXISTING, action=STORE_TRUE, help=HELP_KILL_EXISTING,)
-        parser.add_argument(ARG_DETACH, action=STORE_TRUE, help=HELP_DETACH)
-        parser.add_argument(ARG_RUN_SECONDS, type=_positive_finite_duration, default=None, help=HELP_RUN_SECONDS,)
+        lifetime = parser.add_mutually_exclusive_group()
+        lifetime.add_argument(ARG_DETACH, action=STORE_TRUE, help=HELP_DETACH)
+        lifetime.add_argument(ARG_RUN_SECONDS, type=_positive_finite_duration, default=None, help=HELP_RUN_SECONDS,)
         parser.add_argument(ARG_WITH_PROFILE, action=STORE_TRUE, help=HELP_WITH_PROFILE)
         parser.add_argument(ARG_PROFILE_LOG_ADDRESS, default=PROFILE_LOG_ADDRESS, help=HELP_PROFILE_LOG_ADDRESS,)
         parser.add_argument(ARG_PROFILE_LOG_PORT, type=int, default=PROFILE_LOG_PORT_AUTO, help=HELP_PROFILE_LOG_PORT,)
@@ -68,29 +71,28 @@ class LauncherCli:
 
     @staticmethod
     def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> argparse.ArgumentParser:
-        import launcher as _facade
         if repo_launchers is None:
-            repo_launchers = _facade.discover_repo_launchers()
+            repo_launchers = LauncherDiscovery.discover_repo_launchers()
         parser = argparse.ArgumentParser(description=MSG_LAUNCHER_DESC)
         subparsers = parser.add_subparsers(dest=ARG_COMMAND, required=True)
 
         build_parser = subparsers.add_parser(COMMAND_BUILD, help=MSG_BUILD_TARGET_HELP)
-        _facade.add_build_options(build_parser, allow_skip_build=False)
+        LauncherCli.add_build_options(build_parser, allow_skip_build=False)
         build_parser.add_argument(ARG_TARGETS, nargs=NARGS_ONE_OR_MORE, help=MSG_BUILD_TARGETS_HELP)
-        build_parser.set_defaults(handler=_facade.build_command, skip_build=False)
+        build_parser.set_defaults(handler=BuildController.build_command, skip_build=False)
 
         run_parser = subparsers.add_parser(COMMAND_RUN, help=MSG_RUN_TARGET_HELP)
-        _facade.add_common_options(run_parser)
+        LauncherCli.add_common_options(run_parser)
         run_parser.add_argument(ARG_BUILD_ONLY, action=STORE_TRUE, help=HELP_BUILD_ONLY)
         run_parser.add_argument(ARG_TARGET, help=MSG_TARGET_HELP)
-        run_parser.set_defaults(handler=_facade.run_target_command)
+        run_parser.set_defaults(handler=DispatchRouter.run_target_command)
 
         for launcher in repo_launchers.values():
             route = ROUTE_SEPARATOR.join(str(script) for script in (*launcher.route, launcher.script))
             subparsers.add_parser(launcher.command, help=MSG_FORWARD_THROUGH.format(route=route))
 
         profiles_parser = subparsers.add_parser(COMMAND_PROFILES, help=MSG_PROFILES_HELP)
-        profiles_parser.set_defaults(handler=_facade.list_profiles_command, repo_launchers=repo_launchers)
+        profiles_parser.set_defaults(handler=LauncherDiscovery.list_profiles_command, repo_launchers=repo_launchers)
 
         return parser
 
@@ -104,14 +106,13 @@ class LauncherCli:
 
     @staticmethod
     def main(argv: Sequence[str]) -> int:
-        import launcher as _facade
-        repo_launchers = _facade.discover_repo_launchers()
+        repo_launchers = LauncherDiscovery.discover_repo_launchers()
         if argv and argv[0] in repo_launchers:
             launcher = repo_launchers[argv[0]]
-            return _facade.run_discovered_launcher(launcher, argv[1:], echo=not _facade.is_help_request(argv[1:]))
+            return LauncherDiscovery.run_discovered_launcher(launcher, argv[1:], echo=not DispatchRouter.is_help_request(argv[1:]))
 
-        parser_args, application_args = _facade.split_application_args(argv)
-        parser = _facade.make_parser(repo_launchers)
+        parser_args, application_args = LauncherCli.split_application_args(argv)
+        parser = LauncherCli.make_parser(repo_launchers)
         args = parser.parse_args(parser_args)
         args.application_args = application_args
         build_only = args.command == COMMAND_BUILD or (args.command == COMMAND_RUN and args.build_only)
@@ -121,9 +122,6 @@ class LauncherCli:
             parser.error(MSG_BUILD_ONLY_SKIP_BUILD)
         return args.handler(args)
 
-
-add_build_options = LauncherCli.add_build_options
-add_common_options = LauncherCli.add_common_options
-make_parser = LauncherCli.make_parser
-split_application_args = LauncherCli.split_application_args
-main = LauncherCli.main
+    @staticmethod
+    def run_target_launcher(target: str, argv: Sequence[str]) -> int:
+        return LauncherCli.main([COMMAND_RUN, target] + list(argv))

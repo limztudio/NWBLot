@@ -98,10 +98,11 @@ Expected<Path> ResolveVirtualAssetPath(const Span<const ResolvedAssetRoot> asset
         }
         resolvedPath = resolvedPath.lexicallyNormal();
         const auto fileExists = FileExists(resolvedPath);
+        if(!fileExists && !IsMissingPathError(fileExists.error())){
+            NWB_LOGGER_ERROR(NWB_TEXT("Assets: failed to inspect resolved path '{}': {}"), PathToString<tchar>(resolvedPath), ConvertString(fileExists.error().message()));
+            return MakeUnexpected(Failure{});
+        }
         if(fileExists && *fileExists)
-            return resolvedPath;
-        const auto dirExists = IsDirectory(resolvedPath);
-        if(dirExists && *dirExists)
             return resolvedPath;
         if(!firstResolvedPath.has_value())
             firstResolvedPath.emplace(Move(resolvedPath));

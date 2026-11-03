@@ -22,7 +22,7 @@ import reflection_benchmark as timing
 from gpu_timing_parse import load_name_symbols
 from smoke_volume_identity import file_identity
 from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, create_capture_backend, ensure_process_running,
-    collect_log_delta, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process)
+    collect_log_delta, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, write_status)
 from window_capture_validation import validate_expected_log_text
 
 FRAME = "render.frame"
@@ -279,8 +279,8 @@ def acquire(args, arm, cell, block, position):
         if handle:
             try:
                 backend.focus_window(handle)
-            except Exception:
-                pass
+            except Exception as error:
+                write_status(f"could not focus benchmark window: {error}")
         startup_resize = prepare_target_extent(backend, handle, process, cell, lambda: collect_log_delta(log_directory, log_baseline, pattern), args.timeout)
         target_confirmed_seconds = time.monotonic() - started
         startup_text = sidecar.read_text(encoding="utf-8") if sidecar.is_file() else ""
@@ -373,12 +373,20 @@ def acquire(args, arm, cell, block, position):
                 failures.append(str(error))
         try:
             terminate_process(logserver, "logserver")
-            if backend is not None:
-                backend.close()
         except Exception as error:
             failures.append(str(error))
+        if backend is not None:
+            try:
+                backend.close()
+            except Exception as error:
+                failures.append(str(error))
         if failures:
-            (directory / "cleanup_error.txt").write_text("\n".join(failures), encoding="utf-8")
+            detail = "\n".join(failures)
+            write_status(detail)
+            try:
+                (directory / "cleanup_error.txt").write_text(detail, encoding="utf-8")
+            except OSError as error:
+                write_status(f"could not write cleanup error artifact: {error}")
             if not active_error:
                 raise SmokeFailure("; ".join(failures))
 
@@ -525,7 +533,10 @@ def run(args):
         print("Completed: " + str(args.output_directory / "report.json"), flush=True)
         return 0
     except (SmokeFailure, SmokeSkip, OSError, ValueError, subprocess.SubprocessError) as error:
-        write(args.output_directory / "failure.json", {"status": "inconclusive_acquisition" if "inconclusive" in str(error) else "failed", "error": str(error), "completed_trials": len(trials)})
+        try:
+            write(args.output_directory / "failure.json", {"status": "inconclusive_acquisition" if "inconclusive" in str(error) else "failed", "error": str(error), "completed_trials": len(trials)})
+        except OSError as report_error:
+            write_status(f"could not write failure artifact: {report_error}")
         print("FAIL/INCONCLUSIVE: " + str(error), file=sys.stderr)
         return 77 if isinstance(error, SmokeSkip) else 1
 

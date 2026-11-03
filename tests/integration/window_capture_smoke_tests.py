@@ -23,10 +23,12 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY))
 
+import window_capture_logs  # noqa: E402
 import window_capture_image  # noqa: E402
 import window_capture_outcome  # noqa: E402
 import window_capture_smoke  # noqa: E402
 import window_capture_win32  # noqa: E402
+import interaction_smoke  # noqa: E402
 import csg_gi_temporal_smoke  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     ensure_process_running, launch_captured_process, read_process_tail, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_messages,)
@@ -126,6 +128,320 @@ class _FakeProcess:
         self._alive = False
 
 
+class FailureReportTests(unittest.TestCase):
+    def test_unwritable_report_keeps_primary_exception(self):
+        from smoke_failure_reporting import write_failure_report
+
+        def broken_writer(_path, _value):
+            raise PermissionError("report denied")
+
+        captured = io.StringIO()
+        with redirect_stderr(captured), self.assertRaisesRegex(ValueError, "primary failure"):
+            try:
+                raise ValueError("primary failure")
+            except ValueError:
+                write_failure_report(broken_writer, Path("failure.json"), {})
+                raise
+        self.assertIn("report denied", captured.getvalue())
+
+
+class DepthWarpFailureReportTests(unittest.TestCase):
+    def test_unwritable_skip_report_preserves_skip_exit(self):
+        import avboit_depth_warp_probe_smoke as probe
+
+        with tempfile.TemporaryDirectory() as root:
+            args = SimpleNamespace(output_directory=Path(root))
+            captured = io.StringIO()
+            with mock.patch.object(probe, "parse_args", return_value=args), \
+                    mock.patch.object(probe, "acquire", side_effect=probe.WindowsDesktopUnavailable("desktop unavailable")), \
+                    mock.patch.object(probe, "write_json", side_effect=OSError("report denied")), \
+                    redirect_stderr(captured), redirect_stdout(io.StringIO()):
+                self.assertEqual(probe.main([]), probe.SKIP_EXIT_CODE)
+            self.assertIn("desktop unavailable", captured.getvalue())
+            self.assertIn("report denied", captured.getvalue())
+
+
+class LogEvidenceFailureTests(unittest.TestCase):
+    def test_unreadable_log_directory_is_not_an_empty_snapshot_or_delta(self):
+        with mock.patch.object(window_capture_logs.os, "scandir", side_effect=PermissionError("log directory denied")):
+            with self.assertRaisesRegex(PermissionError, "log directory denied"):
+                window_capture_logs.snapshot_log_files(Path("logs"), "*.log")
+            with self.assertRaisesRegex(PermissionError, "log directory denied"):
+                window_capture_logs.collect_log_delta(Path("logs"), {}, "*.log")
+
+    def test_truncated_or_unreadable_log_cannot_be_omitted(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            path = directory / "current.log"
+            path.write_text("original data", encoding="utf-8")
+            baseline = window_capture_logs.snapshot_log_files(directory, "*.log")
+            path.write_text("new", encoding="utf-8")
+            with self.assertRaisesRegex(window_capture_logs.SmokeFailure, "shrank"):
+                window_capture_logs.collect_log_delta(directory, baseline, "*.log")
+            with mock.patch.object(Path, "open", side_effect=PermissionError("log denied")):
+                with self.assertRaisesRegex(PermissionError, "log denied"):
+                    window_capture_logs.collect_log_delta(directory, {}, "*.log")
+
+    def test_replaced_regrown_or_removed_baseline_cannot_hide_log_output(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            path = directory / "one.log"
+            path.write_bytes(b"old record")
+            baseline = window_capture_logs.snapshot_log_files(directory, "*.log")
+            path.write_bytes(b"new error record")
+            with self.assertRaisesRegex(window_capture_logs.SmokeFailure, "changed before its baseline"):
+                window_capture_logs.collect_log_delta(directory, baseline, "*.log")
+            path.rename(directory / "previous.txt")
+            with self.assertRaisesRegex(window_capture_logs.SmokeFailure, "disappeared"):
+                window_capture_logs.collect_log_delta(directory, baseline, "*.log")
+            path.write_bytes(b"replacement record")
+            with self.assertRaisesRegex(window_capture_logs.SmokeFailure, "replaced"):
+                window_capture_logs.collect_log_delta(directory, baseline, "*.log")
+
+    def test_failed_poll_during_failed_termination_retains_capture(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            stream = path.open("w+b")
+            process = SimpleNamespace(poll=mock.Mock(side_effect=[OSError("first poll"), OSError("final poll")]),
+                _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+            output = io.StringIO()
+            with redirect_stderr(output), self.assertRaisesRegex(OSError, "first poll"):
+                terminate_process(process, LIT_UNIT)
+            self.assertIn("final poll", output.getvalue())
+            self.assertTrue(stream.closed)
+            self.assertTrue(path.exists())
+            self.assertIsNone(process._nwb_output_capture)
+
+    def test_resize_does_not_capture_before_render_marker(self):
+        args = SimpleNamespace(expect_before_resize_log_message="painted", render_ready_timeout=1.0)
+        backend = mock.Mock()
+        with mock.patch.object(window_capture_smoke, "wait_for_log_message", side_effect=window_capture_smoke.SmokeFailure("marker missing")), \
+                mock.patch.object(window_capture_smoke, "capture_render_ready_window") as capture:
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "marker missing"):
+                window_capture_smoke.capture_resized_window(args, backend, 1, mock.Mock(), Path("logs"), {}, "*.log")
+        capture.assert_not_called()
+
+    def test_close_failure_retains_capture_and_is_reported(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            path.write_bytes(b"evidence")
+            stream = mock.Mock()
+            stream.close.side_effect = OSError("close denied")
+            capture = window_capture_smoke.ProcessOutputCapture(path, stream)
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "close denied"):
+                window_capture_smoke.dispose_process_output_capture(capture)
+            self.assertEqual(path.read_bytes(), b"evidence")
+
+    def test_failed_capture_cleanup_attempts_both_and_retains_primary(self):
+        output = io.StringIO()
+        with mock.patch.object(window_capture_smoke, "terminate_process", side_effect=[OSError("app cleanup"), OSError("logger cleanup")]) as terminate, redirect_stderr(output):
+            window_capture_smoke.cleanup_capture_processes(mock.sentinel.app, 7, mock.sentinel.logger, ValueError("capture failed"))
+        self.assertEqual(terminate.call_count, 2)
+        self.assertIn("app cleanup", output.getvalue())
+        self.assertIn("logger cleanup", output.getvalue())
+
+    def test_early_process_diagnostic_across_chunk_boundary_is_retained(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            stream = path.open("w+b")
+            stream.write(b"x" * 65533 + b"[ERROR] early\n" + b"y" * 70000)
+            stream.flush()
+            process = SimpleNamespace(poll=lambda: 0, _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "forbidden message"):
+                terminate_process(process, LIT_UNIT, rejected_output=("[ERROR]",))
+            self.assertTrue(stream.closed)
+            self.assertTrue(path.exists())
+
+    def test_cancelled_readiness_stops_owned_logger(self):
+        with tempfile.TemporaryDirectory() as root:
+            args = SimpleNamespace(no_logserver=False, logserver_executable=Path(root) / "logger", log_port=1, working_directory=Path(root), timeout=1)
+            process = object()
+            with mock.patch.object(window_capture_smoke, "snapshot_log_files", return_value={}), \
+                    mock.patch.object(window_capture_smoke, "launch_captured_process", return_value=process), \
+                    mock.patch.object(window_capture_smoke, "wait_for_tcp_port", side_effect=KeyboardInterrupt), \
+                    mock.patch.object(window_capture_smoke, "terminate_process", return_value=(0, "")) as terminate:
+                with self.assertRaises(KeyboardInterrupt):
+                    window_capture_smoke.launch_logserver(args, Path(root) / "app", {})
+            terminate.assert_called_once_with(process, window_capture_smoke.LIT_LOGSERVER, preserve_capture=True)
+
+    def test_nonzero_output_diagnostic_keeps_exit_and_capture_path(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            stream = path.open("w+b")
+            stream.write(b"[ERROR] failed")
+            stream.flush()
+            process = SimpleNamespace(poll=lambda: 9, _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "exited with code 9.*forbidden") as failure:
+                terminate_process(process, LIT_UNIT, rejected_output=("[ERROR]",))
+            self.assertIn(str(path), str(failure.exception))
+            self.assertTrue(path.exists())
+
+    def test_skip_only_output_blocks_skip_but_not_success(self):
+        for skip in (None, "unsupported"):
+            with self.subTest(skip=skip), tempfile.TemporaryDirectory() as root:
+                path = Path(root) / "process.log"
+                stream = path.open("w+b")
+                stream.write(b"custom blocker")
+                stream.flush()
+                process = SimpleNamespace(poll=lambda: 0, _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+                observed = []
+                terminate_process(process, LIT_UNIT, observed_output=observed, observed_needles=("custom blocker",))
+                self.assertTrue(path.exists())
+                if skip:
+                    with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "blocking process output"):
+                        window_capture_smoke.finish_observed_output(skip, observed)
+                    self.assertTrue(path.exists())
+                else:
+                    window_capture_smoke.finish_observed_output(skip, observed)
+                    self.assertFalse(path.exists())
+
+    def test_late_logger_cleanup_failure_retains_both_captures(self):
+        with tempfile.TemporaryDirectory() as root:
+            first_path = Path(root) / "app.log"
+            second_path = Path(root) / "logger.log"
+            first = SimpleNamespace(_nwb_output_capture=window_capture_smoke.ProcessOutputCapture(first_path, first_path.open("w+b")))
+            second = SimpleNamespace(_nwb_output_capture=window_capture_smoke.ProcessOutputCapture(second_path, second_path.open("w+b")))
+            def terminate(process, _name, _window, **_kwargs):
+                process._nwb_output_capture.stream.close()
+                if process is second:
+                    raise OSError("logger cleanup failed")
+            with mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), redirect_stderr(io.StringIO()):
+                with self.assertRaisesRegex(OSError, "logger cleanup failed"):
+                    window_capture_smoke.cleanup_capture_processes(first, None, second, None)
+            self.assertTrue(first_path.exists())
+            self.assertTrue(second_path.exists())
+
+    def test_failed_start_still_stops_logger_when_capture_is_unreadable(self):
+        with tempfile.TemporaryDirectory() as root:
+            args = SimpleNamespace(no_logserver=False, logserver_executable=Path(root) / "logger", log_port=1, working_directory=Path(root), timeout=1)
+            process = object()
+            with mock.patch.object(window_capture_smoke, "snapshot_log_files", return_value={}), \
+                    mock.patch.object(window_capture_smoke, "launch_captured_process", return_value=process), \
+                    mock.patch.object(window_capture_smoke, "wait_for_tcp_port", side_effect=window_capture_smoke.SmokeFailure("port failed")), \
+                    mock.patch.object(window_capture_smoke, "terminate_process", side_effect=window_capture_smoke.SmokeFailure("capture denied")) as terminate:
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "(?s)port failed.*capture denied"):
+                    window_capture_smoke.launch_logserver(args, Path(root) / "app", {})
+            terminate.assert_called_once_with(process, "logserver", preserve_capture=True)
+
+    def test_cleanup_report_failure_keeps_primary_and_prints_cleanup(self):
+        captured = io.StringIO()
+        with redirect_stderr(captured):
+            window_capture_smoke.finish_logserver_cleanup(None, Path("output"), ["cleanup failed"], True, lambda *_: None,
+                mock.Mock(side_effect=OSError("report denied")))
+        self.assertIn("cleanup failed", captured.getvalue())
+        self.assertIn("report denied", captured.getvalue())
+
+
+class CleanupErrorPreservationTests(unittest.TestCase):
+    def test_pdh_setup_error_survives_close_error(self):
+        import gpu_load_telemetry as telemetry
+
+        api = mock.Mock()
+        def open_query(_source, _data, query):
+            ctypes.cast(query, ctypes.POINTER(ctypes.c_void_p))[0] = ctypes.c_void_p(1)
+            return 0
+        api.PdhOpenQueryW.side_effect = open_query
+        api.PdhAddEnglishCounterW.return_value = 1
+        api.PdhCloseQuery.return_value = 2
+        captured = io.StringIO()
+        with mock.patch.object(telemetry, "os", SimpleNamespace(name="nt")), \
+                mock.patch.object(telemetry.ctypes, "WinDLL", return_value=api, create=True), redirect_stderr(captured):
+            with self.assertRaisesRegex(telemetry.SmokeFailure, "add engine counter"):
+                telemetry.PdhEngineQuery()
+        self.assertIn("PDH close failed", captured.getvalue())
+
+    def test_partial_upload_error_survives_socket_close_error(self):
+        module_path = str(Path(__file__).resolve().parent / "logger_server")
+        with mock.patch.object(sys, "path", [module_path, *sys.path]):
+            import aborted_upload_cli_tests as aborted
+
+        connection = mock.Mock()
+        connection.sendall.side_effect = OSError("send failed")
+        connection.close.side_effect = OSError("close failed")
+        captured = io.StringIO()
+        with mock.patch.object(aborted.socket, "create_connection", return_value=connection), redirect_stderr(captured):
+            with self.assertRaisesRegex(OSError, "send failed"):
+                aborted.start_partial_upload(1, None, None, 1, b"marker")
+        connection.close.assert_called_once_with()
+        self.assertIn("close failed", captured.getvalue())
+
+
+class NativeKeyCleanupTests(unittest.TestCase):
+    def driver(self):
+        import edit_native
+        driver = edit_native.EditNativeInput.__new__(edit_native.EditNativeInput)
+        driver.windows = True
+        driver.handle = 1
+        driver.backend = SimpleNamespace(focus_window=mock.Mock(), user32=SimpleNamespace(GetForegroundWindow=lambda: 1))
+        return edit_native, driver
+
+    def test_modifier_press_failure_keeps_primary_and_attempts_release(self):
+        edit_native, driver = self.driver()
+        def modifier(key, down):
+            if key == 0x11 and down:
+                raise OSError("control press failed")
+            if key == 0x10 and not down:
+                raise OSError("shift release failed")
+        driver._native_key = mock.Mock(side_effect=modifier)
+        captured = io.StringIO()
+        with mock.patch.object(edit_native.time, "sleep"), redirect_stderr(captured):
+            with self.assertRaisesRegex(OSError, "control press failed"):
+                driver.tap("Tab", shift=True, control=True)
+        driver._native_key.assert_any_call(0x10, False)
+        self.assertIn("shift release failed", captured.getvalue())
+
+    def test_key_failure_keeps_primary_and_attempts_all_releases(self):
+        edit_native, driver = self.driver()
+        def modifier(key, down):
+            if not down:
+                raise OSError(f"modifier {key} release failed")
+        def chord(_name, down, **_kwargs):
+            raise OSError("key press failed" if down else "key release failed")
+        driver._native_key = mock.Mock(side_effect=modifier)
+        driver.native_chord_key = mock.Mock(side_effect=chord)
+        captured = io.StringIO()
+        with mock.patch.object(edit_native.time, "sleep"), redirect_stderr(captured):
+            with self.assertRaisesRegex(OSError, "key press failed"):
+                driver.tap("Tab", shift=True, control=True)
+        driver._native_key.assert_any_call(0x11, False)
+        driver._native_key.assert_any_call(0x10, False)
+        self.assertIn("key release failed", captured.getvalue())
+        self.assertIn("modifier 17 release failed", captured.getvalue())
+        self.assertIn("modifier 16 release failed", captured.getvalue())
+
+    def test_interrupted_key_submission_still_releases_attempted_key(self):
+        edit_native, driver = self.driver()
+        driver.windows = False
+        def key(_name, down, **_kwargs):
+            if down:
+                raise KeyboardInterrupt()
+        driver.key = mock.Mock(side_effect=key)
+        with mock.patch.object(edit_native.time, "sleep"), self.assertRaises(KeyboardInterrupt):
+            driver.tap("Tab")
+        driver.key.assert_any_call("Tab", False, shift=False, control=False)
+
+    def test_interrupted_modifier_submission_still_attempts_release(self):
+        edit_native, driver = self.driver()
+        def modifier(_key, down):
+            if down:
+                raise KeyboardInterrupt()
+        driver._native_key = mock.Mock(side_effect=modifier)
+        with mock.patch.object(edit_native.time, "sleep"), self.assertRaises(KeyboardInterrupt):
+            driver.tap("Tab", shift=True)
+        driver._native_key.assert_any_call(0x10, False)
+
+    def test_release_failure_after_success_is_not_ignored(self):
+        edit_native, driver = self.driver()
+        driver._native_key = mock.Mock()
+        def chord(_name, down, **_kwargs):
+            if not down:
+                raise OSError("key release failed")
+        driver.native_chord_key = mock.Mock(side_effect=chord)
+        with mock.patch.object(edit_native.time, "sleep"), self.assertRaisesRegex(edit_native.SmokeFailure, "key release failed"):
+            driver.tap("Tab", shift=True)
+        driver._native_key.assert_any_call(0x10, False)
+
+
 class ProcessOutputCaptureTests(unittest.TestCase):
     def test_large_output_does_not_block_and_tail_is_preserved(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -141,6 +457,73 @@ class ProcessOutputCaptureTests(unittest.TestCase):
                 terminate_process(process, LIT_UNIT)
 
             self.assertFalse(capture.path.exists())
+
+
+    def test_unreadable_output_preserves_capture_and_fails(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            stream = path.open("w+b")
+            process = SimpleNamespace(poll=lambda: 0, _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+            with mock.patch.object(Path, "open", side_effect=PermissionError("capture denied")):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "capture denied"):
+                    terminate_process(process, LIT_UNIT)
+            self.assertTrue(stream.closed)
+            self.assertTrue(path.exists())
+            self.assertIsNone(process._nwb_output_capture)
+
+
+    def test_cleanup_and_output_read_failures_keep_both_diagnostics(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            stream = path.open("w+b")
+            process = SimpleNamespace(poll=mock.Mock(side_effect=[None, None, 0]), terminate=mock.Mock(side_effect=OSError("terminate denied")),
+                _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+            captured = io.StringIO()
+            with mock.patch.object(window_capture_smoke.platform, "system", return_value="Other"), \
+                    mock.patch.object(Path, "open", side_effect=PermissionError("capture denied")), redirect_stderr(captured):
+                with self.assertRaisesRegex(OSError, "terminate denied"):
+                    terminate_process(process, LIT_UNIT)
+            self.assertIn("capture denied", captured.getvalue())
+            self.assertTrue(stream.closed)
+            self.assertTrue(path.exists())
+
+    def test_outer_exception_does_not_hide_capture_read_failure(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            stream = path.open("w+b")
+            process = SimpleNamespace(poll=lambda: 0, _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+            try:
+                raise ValueError("outer failure")
+            except ValueError:
+                with mock.patch.object(Path, "open", side_effect=PermissionError("capture denied")):
+                    with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "capture denied"):
+                        terminate_process(process, LIT_UNIT)
+            self.assertTrue(stream.closed)
+            self.assertTrue(path.exists())
+
+    def test_requested_capture_retention_preserves_full_output(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "process.log"
+            stream = path.open("w+b")
+            stream.write(b"first line\n" + b"x" * 70000)
+            stream.flush()
+            process = SimpleNamespace(poll=lambda: 0, _nwb_output_capture=window_capture_smoke.ProcessOutputCapture(path, stream))
+            terminate_process(process, LIT_UNIT, preserve_capture=True)
+            self.assertTrue(stream.closed)
+            self.assertTrue(path.read_bytes().startswith(b"first line\n"))
+
+
+class LoggerProcessEvidenceTests(unittest.TestCase):
+    def test_full_output_validation_rejects_errors_before_tail(self):
+        import logger_busy_spin_smoke as logger
+
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            source = directory / "capture.tmp"
+            source.write_text("[ERROR] early failure\n" + "x" * 70000, encoding="utf-8")
+            with self.assertRaises(window_capture_smoke.SmokeFailure):
+                logger.retain_and_validate_process_output(SimpleNamespace(path=source), directory)
+            self.assertEqual((directory / f"process_output_{source.name}").read_bytes(), source.read_bytes())
 
 
 class BmpReadbackTests(unittest.TestCase):
@@ -476,7 +859,7 @@ class ShutdownLogValidationTests(unittest.TestCase):
             logserver_process = SimpleNamespace(poll=lambda: None)
             events = []
 
-            def terminate(process, name, _window_handle=None):
+            def terminate(process, name, _window_handle=None, **_kwargs):
                 if process is testbed_process:
                     events.append(LIT_TESTBED_SHUTDOWN)
                 else:
@@ -589,6 +972,38 @@ class GracefulTerminationTests(unittest.TestCase):
     def test_missing_shutdown_exit_code_is_reported_to_the_smoke_runner(self):
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "did not exit"):
             require_normal_process_exit(None, "", LIT_TESTBED)
+
+
+class InteractionForegroundTests(unittest.TestCase):
+    def native_input(self, foreground_values):
+        native = interaction_smoke.NativeInput.__new__(interaction_smoke.NativeInput)
+        native.windows = True
+        native.handle = 42
+        native.backend = SimpleNamespace(
+            user32=SimpleNamespace(GetForegroundWindow=mock.Mock(side_effect=foreground_values)),
+            focus_window=mock.Mock(),
+        )
+        return native
+
+    def test_waits_until_the_fixture_owns_foreground(self):
+        native = self.native_input([10, 42])
+        with mock.patch.object(interaction_smoke, "ensure_process_running") as running, \
+             mock.patch.object(interaction_smoke.time, "monotonic", side_effect=[0.0, 0.0, 0.2]), \
+             mock.patch.object(interaction_smoke.time, "sleep"):
+            native.wait_for_foreground(object(), 1.0)
+        self.assertEqual(native.backend.focus_window.call_count, 2)
+        self.assertEqual(running.call_count, 2)
+
+    def test_unavailable_foreground_is_a_skip_and_process_failure_propagates(self):
+        native = self.native_input([10])
+        with mock.patch.object(interaction_smoke, "ensure_process_running"), \
+             mock.patch.object(interaction_smoke.time, "monotonic", side_effect=[0.0, 0.0, 2.0]), \
+             mock.patch.object(interaction_smoke.time, "sleep"):
+            with self.assertRaisesRegex(interaction_smoke.SmokeSkip, "foreground"):
+                native.wait_for_foreground(object(), 1.0)
+        with mock.patch.object(interaction_smoke, "ensure_process_running", side_effect=interaction_smoke.SmokeFailure("stopped")):
+            with self.assertRaisesRegex(interaction_smoke.SmokeFailure, "stopped"):
+                native.wait_for_foreground(object(), 1.0)
 
 
 if __name__ == LIT_MAIN:

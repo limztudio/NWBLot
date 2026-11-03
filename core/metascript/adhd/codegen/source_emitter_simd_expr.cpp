@@ -363,6 +363,8 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 emitSimdVectorCtorReg(out, simdType, expr.arguments);
                 return;
             }
+            if(!expr.isBuiltinCall)
+                break;
 
             b8 isIntFallbackCallee = false;
 #define NWB_ADHD_EXPORT_SIMD_INT_FALLBACK(adhdName) \
@@ -481,7 +483,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 const Expr& arg0 = *expr.arguments[0];
                 if(
                     arg0.kind == ExprKind::Call && arg0.lhs && arg0.lhs->kind == ExprKind::Identifier
-                    && arg0.lhs->text == "mul" && arg0.arguments.size() == 2u && arg0.arguments[0] && arg0.arguments[1]
+                    && arg0.isBuiltinCall && arg0.lhs->text == "mul" && arg0.arguments.size() == 2u && arg0.arguments[0] && arg0.arguments[1]
                     && SymbolTable::IsSimdMatrixType(arg0.arguments[0]->resolvedSimdType)
                     && SymbolTable::IsSimdMatrixType(arg0.arguments[1]->resolvedSimdType)
                 ){

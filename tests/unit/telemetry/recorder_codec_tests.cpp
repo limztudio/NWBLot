@@ -136,6 +136,41 @@ TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
     EXPECT_EQ(decoded.eventCount(), 0u);
 }
 
+TEST(Telemetry, EventStreamCanDecodeBytesBorrowedFromDestinationRecorder){
+    TestArena testArena;
+    Telemetry::Recorder source(testArena.arena);
+    source.setCaptureOptions(Telemetry::CaptureOptions::All());
+    const Array<u8, 2u> first = { 7u, 8u };
+    const Array<u8, 2u> second = { 9u, 10u };
+    ASSERT_TRUE(source.recordBinary(Telemetry::EventKind::PerfFrame, 1u, first.data(), first.size()));
+    ASSERT_TRUE(source.recordBinary(Telemetry::EventKind::PerfFrame, 2u, second.data(), second.size()));
+    Telemetry::TelemetryBytes encoded(testArena.arena);
+    ASSERT_TRUE(Telemetry::EncodeEventStream(source.view(), encoded));
+
+    Telemetry::TelemetryBytes wrapped(testArena.arena);
+    wrapped.resize(encoded.size() + 3u);
+    NWB_MEMCPY(wrapped.data() + 3u, encoded.size(), encoded.data(), encoded.size());
+    for(const b8 captureEnabled : { false, true }){
+        SCOPED_TRACE(captureEnabled);
+        Telemetry::Recorder destination(testArena.arena);
+        if(captureEnabled)
+            destination.setCaptureOptions(Telemetry::CaptureOptions::All());
+        Telemetry::EventHeader envelope;
+        envelope.kind = Telemetry::EventKind::PerfFrame;
+        envelope.payloadBytes = wrapped.size();
+        ASSERT_TRUE(destination.append(envelope, wrapped.data(), wrapped.size()));
+        const Telemetry::EventRecord* borrowed = destination.view().eventAt(0u);
+        ASSERT_NE(borrowed, nullptr);
+        ASSERT_TRUE(Telemetry::DecodeEventStream(borrowed->payload.data() + 3u, encoded.size(), testArena.arena, destination));
+        ASSERT_EQ(destination.eventCount(), 2u);
+        const Telemetry::EventRecord* decoded = destination.view().eventAt(1u);
+        ASSERT_NE(decoded, nullptr);
+        ASSERT_EQ(decoded->payload.size(), second.size());
+        EXPECT_EQ(decoded->payload[0u], second[0u]);
+        EXPECT_EQ(decoded->payload[1u], second[1u]);
+    }
+}
+
 TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);

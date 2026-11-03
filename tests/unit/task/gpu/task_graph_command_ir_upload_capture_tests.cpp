@@ -33,6 +33,32 @@ using namespace TaskGraphTestUtils;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(GpuCommandIrUploadCapture, CapturesBorrowedCommandBytesAcrossGrowthForUploadAndPushConstants){
+    TaskGraphTestUtils::TestArena testArena;
+    for(const b8 pushConstants : { false, true }){
+        Core::GpuCommandIrCapture capture(testArena.arena);
+        const BinaryByteView commands = capture.commandBytes();
+        ASSERT_EQ(commands.size(), sizeof(Core::GpuCommandIrStreamHeader));
+        const BinaryByteView source{ commands.data() + sizeof(u32), commands.size() - sizeof(u32) };
+        Array<u8, sizeof(Core::GpuCommandIrStreamHeader) - sizeof(u32)> expected{};
+        NWB_MEMCPY(expected.data(), expected.size(), source.data(), source.size());
+        if(pushConstants)
+            ASSERT_TRUE(capture.capturePushConstants(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, source));
+        else{
+            const Core::GpuUploadBlobId blob{ .generation = s_CommandIrTask.generation, .index = 0u };
+            ASSERT_TRUE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, blob, s_CommandIrDestination, 0u, source, Core::ResourceStates::CopyDest));
+        }
+        const auto stream = capture.exportOwned(testArena.arena);
+        ASSERT_TRUE(stream);
+        Core::GpuCommandIrStreamReader reader(stream->bytes());
+        ASSERT_TRUE(reader.next());
+        const BinaryByteView captured = reader.blobBytes();
+        ASSERT_EQ(captured.size(), expected.size());
+        EXPECT_EQ(NWB_MEMCMP(captured.data(), expected.data(), expected.size()), 0);
+    }
+}
+
+
 TEST(GpuCommandIrUploadCapture, OwnsLargeGraphBlobAfterCallerMutationAndGraphReset){
     TaskGraphTestUtils::TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);

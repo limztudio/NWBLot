@@ -83,6 +83,7 @@ class EntityManager{
 
 
 public:
+    // An index is retired before its generation wraps, including across clear().
     explicit EntityManager(Alloc::GlobalArena& arena)noexcept
         : m_generations(arena)
         , m_freeIndices(arena)

@@ -38,6 +38,7 @@ struct FileLayout{
 
 template<typename FileRecordT, typename SegmentPathVectorT>
 struct CompactPublication{
+    VolumeFileSystem& filesystem;
     Vector<FileLayout<FileRecordT>, Core::Alloc::ScratchArena>& layouts;
     SegmentPathVectorT& segmentPaths;
     u64& nextFreeOffset;
@@ -124,11 +125,12 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
     }
 
     const StagedDirectoryPaths stagedPaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(m_mountDirectory, m_volumeName.view(), scratchArena);
-    if(!EnsureEmptyStagedDirectory(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_StageDirectoryLabel))
+    if(!CreateNewStagedDirectory(stagedPaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_BackupDirectoryLabel))
+        return false;
+    StagedDirectoryCleanupGuard backupCleanup(stagedPaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_BackupDirectoryLabel);
+    if(!CreateNewStagedDirectory(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_StageDirectoryLabel))
         return false;
     StagedDirectoryCleanupGuard stageCleanup(stagedPaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix);
-    if(!RemoveStagedDirectoryIfPresent(stagedPaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, s_BackupDirectoryLabel))
-        return false;
     Vector<u8, Core::Alloc::ScratchArena> copyBuffer(static_cast<usize>(copyChunkBytes), 0u, scratchArena);
     usize stagedSegmentCount = 0u;
     {
@@ -171,7 +173,7 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
             return false;
     }
 
-    Publication publication{ layouts, m_segmentPaths, m_nextFreeOffset, compactedWriteOffset, stagedSegmentCount };
+    Publication publication{ *this, layouts, m_segmentPaths, m_nextFreeOffset, compactedWriteOffset, stagedSegmentCount };
     const VolumePublicationObserver observer{
         .context = &publication,
         .commit = [](void* context)noexcept{
@@ -182,10 +184,15 @@ b8 VolumeFileSystem::compact(const b8 shrinkSegments){
             while(state.segmentPaths.size() > state.segmentCount)
                 state.segmentPaths.pop_back();
         },
+        .rollbackFailed = [](void* context)noexcept{
+            auto& state = *MakeNotNull(static_cast<Publication*>(context));
+            state.filesystem.unmountLocked();
+        },
     };
-    if(!PublishStagedVolume(stagedPaths, m_mountDirectory, m_volumeName.view(), stagedSegmentCount, scratchArena, observer))
+    if(!PublishStagedVolume(stagedPaths, m_mountDirectory, m_volumeName.view(), stagedSegmentCount, scratchArena, observer, &stageCleanup, &backupCleanup))
         return false;
     stageCleanup.dismiss();
+    backupCleanup.dismiss();
     return true;
 }
 

@@ -211,6 +211,14 @@ static_assert(Key::World1 == 161 && Key::World2 == 162);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct KeyboardInputResult{
+    b8 consumed = false;
+    b8 blocksText = false;
+
+    constexpr KeyboardInputResult(const b8 consumedValue = false, const b8 blocksTextValue = false)noexcept
+        : consumed(consumedValue), blocksText(blocksTextValue){}
+};
+
 interface IInputEventHandler{
 public:
     virtual ~IInputEventHandler()noexcept = default;
@@ -223,9 +231,7 @@ public:
 
     virtual void pointerCaptureLost(){}
 
-    virtual b8 keyboardUpdate(i32, i32, i32, i32){ return false; }
-    // Queried immediately from the consuming press/repeat handler before native ordinary text is admitted.
-    [[nodiscard]] virtual b8 blocksKeyboardText()const{ return false; }
+    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32){ return false; }
 
     virtual b8 keyboardCharInput(u32, i32){ return false; }
 
@@ -272,9 +278,10 @@ public:
 
 
 public:
-    void addHandlerToFront(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddFront, handler); }
-    void addHandlerToBack(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddBack, handler); }
-    void removeHandler(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::Remove, handler); }
+    // Remove a handler before destroying it, including during a callback.
+    void addHandlerToFront(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddFront, MakeNotNull(&handler)); }
+    void addHandlerToBack(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddBack, MakeNotNull(&handler)); }
+    void removeHandler(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::Remove, MakeNotNull(&handler)); }
 
     void setMousePositionScale(f32 x, f32 y)noexcept;
 
@@ -302,10 +309,10 @@ private:
             ScopeExit restoreDispatchDepth([this]()noexcept{ --m_dispatchDepth; });
 
             for(auto it = m_handlers.crbegin(); it != m_handlers.crend(); ++it){
-                IInputEventHandler& handler = **it;
-                if(m_pendingHandlerRemovalCount > 0 && isHandlerPendingRemoval(handler))
+                const NotNull<IInputEventHandler*> handler = *it;
+                if(m_pendingHandlerRemovalCount > 0 && isHandlerPendingRemoval(handler.get()))
                     continue;
-                if(dispatchFunc(handler))
+                if(dispatchFunc(*handler))
                     break;
             }
         }
@@ -313,9 +320,9 @@ private:
             applyPendingHandlerMutations();
     }
 
-    void queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler);
+    void queueOrApplyHandlerMutation(HandlerMutationType::Enum type, NotNull<IInputEventHandler*> handler);
     void applyPendingHandlerMutations();
-    b8 isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept;
+    b8 isHandlerPendingRemoval(const IInputEventHandler* handler)const noexcept;
 
 
 private:

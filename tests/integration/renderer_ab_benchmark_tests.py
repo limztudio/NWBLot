@@ -2,13 +2,17 @@
 """Pure CPU tests for frozen-arm renderer A/B acquisition contracts."""
 
 
+import contextlib
 import copy
+import io
 import hashlib
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_ab_benchmark as benchmark
@@ -80,6 +84,45 @@ def make_arm(directory, name):
     (runtime / LIT_RES).mkdir(parents=True)
     (runtime / LIT_RES / LIT_AUTHORED_VOL).write_bytes(b"authored asset")
     return benchmark.Arm(name, executable, runtime, source_manifest(directory / LIT_SOURCE))
+
+
+class CleanupFailureTests(unittest.TestCase):
+    def test_unwritable_cleanup_report_keeps_primary_and_cleanup_errors(self):
+        with tempfile.TemporaryDirectory() as root:
+            args = SimpleNamespace(output_directory=Path(root), application_arg=[], timeout=1)
+            arm = SimpleNamespace(name="baseline", executable=Path("app"), runtime=Path("runtime"))
+            backend = mock.Mock()
+            backend.close.side_effect = OSError("backend cleanup failed")
+
+            def write(path, _value):
+                if path.name == "cleanup_error.json":
+                    raise OSError("report denied")
+
+            captured = io.StringIO()
+            with mock.patch.object(benchmark, "build_launch_environment", return_value={}), \
+                    mock.patch.object(benchmark, "configure_environment", return_value=({}, {})), \
+                    mock.patch.object(benchmark, "cache_identity", return_value={}), \
+                    mock.patch.object(benchmark, "write_json", side_effect=write), \
+                    mock.patch.object(benchmark, "create_capture_backend", return_value=backend), \
+                    mock.patch.object(benchmark, "launch_logserver", side_effect=benchmark.SmokeFailure("startup failed")), \
+                    mock.patch.object(benchmark, "terminate_process"), contextlib.redirect_stderr(captured):
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "startup failed"):
+                    benchmark.acquire_trial(args, arm, None, 0, 0, {})
+            self.assertIn("backend cleanup failed", captured.getvalue())
+            self.assertIn("report denied", captured.getvalue())
+
+
+class CaptureSourceIdentityTests(unittest.TestCase):
+    def test_changed_log_or_validation_helper_invalidates_frozen_run(self):
+        paths = benchmark.window_capture_source_paths()
+        names = {path.name for path in paths}
+        self.assertTrue({"window_capture_logs.py", "window_capture_validation.py", "smoke_failure_reporting.py"}.issubset(names))
+        frozen = {str(path): {"digest": "original"} for path in paths}
+        for changed in ("window_capture_logs.py", "window_capture_validation.py"):
+            with self.subTest(changed=changed), mock.patch.object(benchmark, "validate_arm_separation"), \
+                    mock.patch.object(benchmark, "file_identity", side_effect=lambda path: {"digest": "changed" if path.name == changed else "original"}):
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "shared runner.*changed"):
+                    benchmark.verify_frozen((), {}, frozen)
 
 
 class CoverageTests(unittest.TestCase):

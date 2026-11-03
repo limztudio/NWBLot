@@ -21,6 +21,7 @@ namespace __hidden_entity_id{
 
 
 inline constexpr u16 s_FreeEntityFlag = static_cast<u16>(1u << ECSDetail::s_EntityGenerationBits);
+inline constexpr u16 s_RetiredEntityFlag = static_cast<u16>(s_FreeEntityFlag << 1u);
 static_assert(s_FreeEntityFlag > ECSDetail::s_EntityGenerationMask);
 
 
@@ -42,6 +43,8 @@ EntityID EntityManager::create(){
         m_generations[index] = static_cast<u16>(m_generations[index] & ECSDetail::s_EntityGenerationMask);
     }
     else{
+        while(m_nextEntityIndex < m_generations.size() && (m_generations[m_nextEntityIndex] & __hidden_entity_id::s_RetiredEntityFlag) != 0u)
+            ++m_nextEntityIndex;
         if(m_nextEntityIndex >= ECSDetail::s_EntityIndexMask){
             NWB_ASSERT_MSG(false, NWB_TEXT("EntityManager exceeded maximum entity count"));
             return s_InvalidEntityId;
@@ -78,8 +81,12 @@ b8 EntityManager::alive(EntityID entityId)const noexcept{
 void EntityManager::clear()noexcept{
     for(u32 index = 0u; index < m_nextEntityIndex; ++index){
         u16& generation = m_generations[index];
-        if((generation & __hidden_entity_id::s_FreeEntityFlag) == 0u)
-            generation = static_cast<u16>((generation + 1u) & ECSDetail::s_EntityGenerationMask);
+        if((generation & __hidden_entity_id::s_FreeEntityFlag) == 0u){
+            if(generation == ECSDetail::s_EntityGenerationMask)
+                generation = static_cast<u16>(generation | __hidden_entity_id::s_RetiredEntityFlag);
+            else
+                ++generation;
+        }
         generation = static_cast<u16>(generation | __hidden_entity_id::s_FreeEntityFlag);
     }
     m_freeIndices.clear();
@@ -92,8 +99,13 @@ void EntityManager::destroyAlive(EntityID entityId){
     NWB_ASSERT(alive(entityId));
 
     const u32 index = entityId.index();
+    if(m_generations[index] == ECSDetail::s_EntityGenerationMask){
+        m_generations[index] = static_cast<u16>(m_generations[index] | __hidden_entity_id::s_FreeEntityFlag | __hidden_entity_id::s_RetiredEntityFlag);
+        --m_aliveCount;
+        return;
+    }
     m_freeIndices.push_back(index);
-    m_generations[index] = static_cast<u16>(((m_generations[index] + 1u) & ECSDetail::s_EntityGenerationMask) | __hidden_entity_id::s_FreeEntityFlag);
+    m_generations[index] = static_cast<u16>((m_generations[index] + 1u) | __hidden_entity_id::s_FreeEntityFlag);
     --m_aliveCount;
 }
 

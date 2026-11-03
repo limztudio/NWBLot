@@ -37,7 +37,7 @@ public:
 
 public:
     [[nodiscard]] b8 paint(Impl::UiPaintContext& context);
-    virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)noexcept override;
 
 
 private:

@@ -52,6 +52,27 @@ TEST_F(LoggerProducerContracts, MessagePayloadRejectsInvalidTypeWithoutPublishin
     EXPECT_TRUE(payload.empty());
 }
 
+TEST_F(LoggerProducerContracts, SimultaneousProcessedFilesKeepIndependentRecords){
+    TestArena testArena;
+    NWB::Log::ProcessedMessageFile first(testArena.arena);
+    NWB::Log::ProcessedMessageFile second(testArena.arena);
+    ASSERT_TRUE(first.open(NWB_TEXT("processed_file_isolation")));
+    ASSERT_TRUE(second.open(NWB_TEXT("processed_file_isolation")));
+    EXPECT_NE(first.path(), second.path());
+    ASSERT_TRUE(first.writeLine(NWB_TEXT("first record")));
+    ASSERT_TRUE(second.writeLine(NWB_TEXT("second record")));
+    first.close();
+    second.close();
+    AString<NWB::Log::LogArena> firstText(testArena.arena);
+    AString<NWB::Log::LogArena> secondText(testArena.arena);
+    ASSERT_TRUE(ReadTextFile(first.path(), firstText));
+    ASSERT_TRUE(ReadTextFile(second.path(), secondText));
+    EXPECT_TRUE(Contains(firstText, "first record"));
+    EXPECT_FALSE(Contains(firstText, "second record"));
+    EXPECT_TRUE(Contains(secondText, "second record"));
+    EXPECT_FALSE(Contains(secondText, "first record"));
+}
+
 TEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRejection){
     TestArena testArena;
     auto& arena = testArena.arena;

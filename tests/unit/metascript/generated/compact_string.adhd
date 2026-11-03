@@ -1,0 +1,194 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize findCompact(in CompactString value){
+    return value.find("needle");
+}
+
+u8 firstCompact(in CompactString value){
+    return value.front();
+}
+
+u8 lastCompact(in CompactString value){
+    return value.back();
+}
+
+
+f32 lerpWithCounter(mut i32 counter){
+    return lerp(counter++, 11.0f, 0.5f);
+}
+
+
+T lerpMoveOnly<T>(mut T value){
+    return lerp(value, T(), T());
+}
+
+
+i32 max(in i32 a, in i32 b){
+    return a - b;
+}
+
+i32 callShadowedMax(in i32 a, in i32 b){
+    return max(a, b);
+}
+
+
+f32x4 max(in f32x4 a, in f32x4 b){
+    return a - b;
+}
+
+f32 callShadowedVectorMax(){
+    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
+    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
+    f32x4 result = max(a, b);
+    return result.x;
+}
+
+
+f32 callBuiltinVectorMin(){
+    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
+    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
+    f32x4 result = min(a, b);
+    return result.x;
+}
+
+
+i32 callShadowedLocalMin(){
+    auto min = lambda() -> i32 { return 17; };
+    return min();
+}
+
+
+f32 callNestedShadowedVector(){
+    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
+    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
+    f32x4 c = f32x4(2.0f, 2.0f, 2.0f, 2.0f);
+    f32x4 result = min(max(a, b), c);
+    return result.x;
+}
+
+
+f32x4x4 mul(in f32x4x4 a, in f32x4x4 b){
+    return a + b;
+}
+
+f32 callShadowedMatrixMul(){
+    f32x4x4 a = f32x4x4(1.0f);
+    f32x4x4 b = f32x4x4(2.0f);
+    f32x4x4 result = transpose(mul(a, b));
+    return result[0].x;
+}
+
+
+f32 callShadowedLocalDot(){
+    auto dot = lambda(in f32x4 a, in f32x4 b) -> f32 { return a.x - b.x; };
+    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
+    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
+    return dot(a, b);
+}
+
+
+i32 callShadowedEntityConstant(in i32 s_InvalidEntityId){
+    return s_InvalidEntityId;
+}
+
+
+EntityID readBuiltinEntityConstant(){
+    return s_InvalidEntityId;
+}
+
+
+T lerpTemporary<T>(){
+    return lerp(T(), T(), T());
+}
+
+
+usize trimLocalCompact(){
+    CompactString text = CompactString("  payload  ");
+    StringView view = trimView(text);
+    return view.size();
+}
+
+
+String stepAndMakeLongString(mut i32 recvCounter){
+    ++recvCounter;
+    return String("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_tail_segment_beyond_sso");
+}
+
+usize stepSubstrArg(mut i32 argCounter, in usize value){
+    ++argCounter;
+    return value;
+}
+
+String extractLongStringSubstrOnce(mut i32 recvCounter, mut i32 posCounter, mut i32 countCounter){
+    auto sub = stepAndMakeLongString(recvCounter).substr(
+        stepSubstrArg(posCounter, 10u),
+        stepSubstrArg(countCounter, 72u)
+    );
+    return sub;
+}
+
+CompactString extractCompactSubstr(in CompactString value, in usize pos, in usize count){
+    auto fullCopy = value.substr();
+    auto sliced = fullCopy.substr(pos, count);
+    return sliced;
+}
+
+i32 selectByteOverload(in u8 value){
+    return 1000 + cast<i32>(value);
+}
+
+i32 selectByteOverload(in i32 value){
+    return -1000 + value;
+}
+
+i32 selectByteSignedness(in u8 value){
+    return 2000 + cast<i32>(value);
+}
+
+i32 selectByteSignedness(in i8 value){
+    return -2000 + cast<i32>(value);
+}
+
+void incrementMutableByte(mut u8 target){
+    target += 1u;
+}
+
+u32 exerciseHighByteStringOps(in StringView viewValue, in CompactString compactValue){
+    auto vf = viewValue.front();
+    auto vb = viewValue.back();
+    auto cf = compactValue.front();
+    auto cb = compactValue.back();
+    u32 sum = 0u;
+    if(vf > 0x7fu && vf == 0x80u && vb == 0xffu && cf == 0x80u && cb == 0xfeu){
+        sum += cast<u32>(vf) + cast<u32>(vb) + cast<u32>(cf) + cast<u32>(cb);
+    }
+    sum += cast<u32>(selectByteOverload(viewValue.front()));
+    sum += cast<u32>(selectByteSignedness(compactValue.back()));
+
+    String owned = String(viewValue);
+    owned.front() >>= 1u;
+    owned.back() = 0x80u;
+    u8 postInc = owned.back()++;
+    incrementMutableByte(owned[1u]);
+    if(postInc == 0x80u && owned.front() == 0x40u && owned.back() == 0x81u && owned[1u] == 0x80u){
+        sum += cast<u32>(owned.front()) + cast<u32>(owned.back()) + cast<u32>(owned[1u]);
+    }
+    return sum;
+}
+
+usize consumeStringValue(in String s){
+    return s.size();
+}
+
+usize borrowLocalStringAcrossValueCall(){
+    String text = String("  0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789  ");
+    StringView view = trimView(text);
+    const usize consumed = consumeStringValue(text);
+    return consumed + view.size();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

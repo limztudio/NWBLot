@@ -83,7 +83,7 @@ b8 UiNumericEditSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
+::NWB::Core::KeyboardInputResult UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
     if(key < Core::Key::F5 || key > Core::Key::F9)
         return false;
     if(action == Core::InputAction::Press){

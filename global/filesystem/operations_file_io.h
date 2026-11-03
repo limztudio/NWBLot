@@ -6,6 +6,7 @@
 
 
 #include "operations.h"
+#include "../atomic.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -240,6 +241,161 @@ template<typename ArenaT>
     if(error)
         return MakeUnexpected(error);
     return {};
+}
+
+namespace GlobalFilesystemDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_MaxStageLeafPrefixCharacters = 180u;
+inline constexpr u32 s_MaxUniqueStageAttempts = 256u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+inline void AppendLowerHexU64(TString<ArenaT>& outText, u64 value){
+    Array<tchar, sizeof(u64) * 2u> digits = {};
+    usize count = 0u;
+    if(value == 0u){
+        outText.push_back(NWB_TEXT('0'));
+        return;
+    }
+    while(value != 0u && count < digits.size()){
+        const u32 nibble = static_cast<u32>(value & 0xFu);
+        digits[count++] = static_cast<tchar>(nibble < 10u ? (NWB_TEXT('0') + nibble) : (NWB_TEXT('a') + (nibble - 10u)));
+        value >>= 4u;
+    }
+    while(count > 0u)
+        outText.push_back(digits[--count]);
+}
+
+[[nodiscard]] inline u64 NextUniqueStageSequence()noexcept{
+    static Atomic<u64> s_Sequence{ 0u };
+    return s_Sequence.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+}
+
+[[nodiscard]] inline u64 CurrentStageProcessId()noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    return static_cast<u64>(GetCurrentProcessId());
+#else
+    return static_cast<u64>(getpid());
+#endif
+}
+
+[[nodiscard]] inline b8 IsFileExistsError(const ErrorCode& error)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    return error.category() == SystemCategory() && (error.value() == ERROR_FILE_EXISTS || error.value() == ERROR_ALREADY_EXISTS);
+#else
+    return error == ErrorCondition::file_exists;
+#endif
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> BuildUniqueSiblingStagePath(const Path<ArenaT>& targetPath, const TStringView suffixTag){
+    const TStringView leafView = targetPath.filenameView();
+    if(leafView.empty() || IsDot(leafView) || IsDotDot(leafView))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    const TStringView boundedLeaf = leafView.size() > s_MaxStageLeafPrefixCharacters
+        ? leafView.substr(0u, s_MaxStageLeafPrefixCharacters)
+        : leafView;
+
+    ArenaT& arena = targetPath.arena();
+    TString<ArenaT> candidateName(arena);
+    candidateName.reserve(boundedLeaf.size() + suffixTag.size() + 40u);
+    candidateName.push_back(NWB_TEXT('.'));
+    candidateName.append(boundedLeaf.data(), boundedLeaf.size());
+    candidateName.push_back(NWB_TEXT('.'));
+    AppendLowerHexU64(candidateName, CurrentStageProcessId());
+    candidateName.push_back(NWB_TEXT('.'));
+    AppendLowerHexU64(candidateName, NextUniqueStageSequence());
+    candidateName.push_back(NWB_TEXT('.'));
+    candidateName.append(suffixTag.data(), suffixTag.size());
+
+    const Path<ArenaT> parentDir = targetPath.parentPath();
+    if(parentDir.empty())
+        return Path<ArenaT>(arena, TStringView(candidateName.data(), candidateName.size()));
+    return parentDir / TStringView(candidateName.data(), candidateName.size());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> StageUniqueBinaryFileDurable(
+    const Path<ArenaT>& targetPath,
+    const void* const data,
+    const usize count,
+    const TStringView suffixTag = NWB_TEXT("stage")
+){
+    for(u32 attempt = 0u; attempt < GlobalFilesystemDetail::s_MaxUniqueStageAttempts; ++attempt){
+        const auto stagedPath = GlobalFilesystemDetail::BuildUniqueSiblingStagePath(targetPath, suffixTag);
+        if(!stagedPath)
+            return MakeUnexpected(stagedPath.error());
+        b8 created = false;
+        const auto staged = StageNewBinaryFileDurable(*stagedPath, data, count, created);
+        if(staged)
+            return *stagedPath;
+        if(created){
+            const auto removed = RemoveFile(*stagedPath);
+            if(!removed)
+                return MakeUnexpected(staged.error() ? staged.error() : removed.error());
+            return MakeUnexpected(staged.error());
+        }
+        if(GlobalFilesystemDetail::IsFileExistsError(staged.error()))
+            continue;
+        return MakeUnexpected(staged.error());
+    }
+    return MakeUnexpected(MakeErrorCode(ErrorCondition::file_exists));
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<void, ErrorCode> WriteBinaryFileAtomicChecked(const Path<ArenaT>& path, const void* const data, const usize count){
+    const auto existing = FileExistsNoFollow(path);
+    if(!existing)
+        return MakeUnexpected(existing.error());
+    if(*existing){
+        const auto regular = IsRegularFile(path);
+        if(!regular)
+            return MakeUnexpected(regular.error());
+        if(!*regular)
+            return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    }
+    const auto stagedPath = StageUniqueBinaryFileDurable(path, data, count);
+    if(!stagedPath)
+        return MakeUnexpected(stagedPath.error());
+    const auto renamed = RenamePath(*stagedPath, path);
+    if(!renamed){
+        const auto removed = RemoveFile(*stagedPath);
+        if(!removed)
+            return MakeUnexpected(renamed.error() ? renamed.error() : removed.error());
+        return MakeUnexpected(renamed.error());
+    }
+    return {};
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline b8 WriteTextFileAtomic(const Path<ArenaT>& path, const AStringView content){
+    if(!CanRepresentStreamSize(static_cast<u64>(content.size())))
+        return false;
+    return WriteBinaryFileAtomicChecked(path, content.data(), content.size()).has_value();
+}
+
+template<typename ArenaT, typename Container>
+[[nodiscard]] inline b8 WriteBinaryFileAtomic(const Path<ArenaT>& path, const Container& bytes){
+    if(!CanRepresentStreamSize(static_cast<u64>(bytes.size())))
+        return false;
+    return WriteBinaryFileAtomicChecked(path, bytes.data(), bytes.size()).has_value();
 }
 
 template<typename ArenaT>

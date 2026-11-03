@@ -13,7 +13,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-import launcher  # noqa: E402
+from launcher import constants as launcher
+from launcher.build import BuildController
+from launcher.cli import LauncherCli
+from launcher.cmake_settings import CmakeSettings
+from launcher.dispatch import DispatchRouter
+from launcher.host import HostProbe
+from launcher.models import LaunchSettings
 
 
 LIT_RESOLVE_EXECUTABLE_PATH = "resolve_executable_path"
@@ -85,8 +91,8 @@ class LauncherDryRunDomainTests(unittest.TestCase):
         output_patch = mock.patch(LIT_BUILTINS_PRINT)
         self.output = output_patch.start()
         self.addCleanup(output_patch.stop)
-        for owner, operation, options in ((launcher, LIT_CMAKE_COMMAND, {LIT_RETURN_VALUE: (LIT_CMAKE_EXECUTABLE,)}), (launcher, LIT_HOST_PLATFORM_NAME, {LIT_RETURN_VALUE: LIT_WINDOWS}), (launcher, "host_arch_name", {LIT_RETURN_VALUE: LIT_ARM64}),
-            (launcher, LIT_ENSURE_FILE_API_QUERY, {"wraps": launcher.ensure_file_api_query}), (subprocess, LIT_RUN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}), (subprocess, LIT_POPEN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}),):
+        for owner, operation, options in ((CmakeSettings, LIT_CMAKE_COMMAND, {LIT_RETURN_VALUE: (LIT_CMAKE_EXECUTABLE,)}), (HostProbe, LIT_HOST_PLATFORM_NAME, {LIT_RETURN_VALUE: LIT_WINDOWS}), (HostProbe, "host_arch_name", {LIT_RETURN_VALUE: LIT_ARM64}),
+            (CmakeSettings, LIT_ENSURE_FILE_API_QUERY, {"wraps": CmakeSettings.ensure_file_api_query}), (subprocess, LIT_RUN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}), (subprocess, LIT_POPEN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}),):
             patcher = mock.patch.object(owner, operation, **options)
             result = patcher.start()
             self.addCleanup(patcher.stop)
@@ -95,21 +101,21 @@ class LauncherDryRunDomainTests(unittest.TestCase):
 
     def assert_preview_uses_domain(self, expected_domain, extra_arguments):
         self.output.reset_mock()
-        args = launcher.make_parser({}).parse_args([*self.arguments, *extra_arguments])
+        args = LauncherCli.make_parser({}).parse_args([*self.arguments, *extra_arguments])
         args.application_args = []
         before = tuple((path, path.read_bytes() if path.is_file() else None) for path in sorted(self.root.rglob("*")))
-        settings = launcher.resolve_launch_settings(args, LIT_FULL)
+        settings = CmakeSettings.resolve_launch_settings(args, LIT_FULL)
         self.assertEqual(expected_domain, settings.domain)
-        self.assertEqual(expected_domain, launcher.refresh_launch_settings(settings, args.domain).domain)
+        self.assertEqual(expected_domain, CmakeSettings.refresh_launch_settings(settings, args.domain).domain)
 
-        self.assertEqual(0, launcher.run_target_command(args))
+        self.assertEqual(0, DispatchRouter.run_target_command(args))
 
         output = self.root / LIT_EXEC_OUTPUT_ROOT / LIT_WINDOWS / LIT_ARM64
         if expected_domain != LIT_ENGINE:
             output /= expected_domain
         executable = output / LIT_OPT / "testbed.exe"
         printed = [str(call.args[0]) for call in self.output.call_args_list]
-        self.assertIn("+ " + launcher.format_command([str(executable)]), printed)
+        self.assertIn("+ " + CmakeSettings.format_command([str(executable)]), printed)
         self.assertIn("  cwd: " + str(output), printed)
         after = tuple((path, path.read_bytes() if path.is_file() else None) for path in sorted(self.root.rglob("*")))
         self.assertEqual(before, after)
@@ -135,7 +141,7 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.settings = launcher.LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD, cmake=(LIT_CMAKE_EXECUTABLE,),)
+        self.settings = LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD, cmake=(LIT_CMAKE_EXECUTABLE,),)
         self.reply = self.settings.build_dir / launcher.FILE_API_DIR_CMAKE / launcher.FILE_API_DIR_API / launcher.FILE_API_DIR_V1 / launcher.FILE_API_DIR_REPLY
         self.reply.mkdir(parents=True)
         self.actual = self.settings.build_dir / LIT_ACTUAL_EXECUTABLE
@@ -149,17 +155,17 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
             (self.reply / name).write_text(json.dumps(document), encoding=LIT_UTF_8)
 
     def test_missing_metadata_rejects_guess_but_keeps_explicit_and_preview_paths(self):
-        predicted = launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, True)
+        predicted = BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, True)
         predicted.parent.mkdir(parents=True)
         predicted.touch()
         with self.assertRaisesRegex(SystemExit, LIT_CMAKE_FILE_API_METADATA_IS_REQUIRED):
-            launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False)
+            BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False)
         explicit = Path(LIT_EXPLICIT_EXECUTABLE)
-        self.assertEqual(self.root / explicit, launcher.resolve_executable_path(self.settings, LIT_TESTBED, explicit, None, False))
-        self.assertEqual(predicted, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, True))
+        self.assertEqual(self.root / explicit, BuildController.resolve_executable_path(self.settings, LIT_TESTBED, explicit, None, False))
+        self.assertEqual(predicted, BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, True))
 
         self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [self.actual])
-        self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False))
+        self.assertEqual(self.actual, BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False))
 
     def test_unmatched_single_configuration_cannot_supply_the_selected_executable(self):
         codemodel_path = self.reply / LIT_METADATA_CODEMODEL
@@ -170,17 +176,17 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
                 codemodel[launcher.FILE_API_CONFIGURATIONS_KEY][0][launcher.FILE_API_NAME_KEY] = other_config
                 codemodel_path.write_text(json.dumps(codemodel), encoding=LIT_UTF_8)
                 with self.assertRaisesRegex(SystemExit, LIT_CMAKE_FILE_API_METADATA_IS_REQUIRED):
-                    launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False)
+                    BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False)
 
     def test_executable_metadata_without_artifact_or_with_library_type_is_rejected(self):
         self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [])
         with self.assertRaisesRegex(SystemExit, "has no executable artifact"):
-            launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False)
+            BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False)
         self.write_target_metadata(LIT_METADATA_LIBRARY, [self.actual])
         with self.assertRaisesRegex(SystemExit, "CMake target is not executable"):
-            launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False)
+            BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False)
         self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [Path(LIT_ACTUAL_EXECUTABLE)])
-        self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False))
+        self.assertEqual(self.actual, BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False))
 
 
 class PipelineLauncherTests(unittest.TestCase):
@@ -193,7 +199,7 @@ class PipelineLauncherTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.settings = launcher.LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD / LIT_WINDOWS_CLANG_ARM64,
+        self.settings = LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD / LIT_WINDOWS_CLANG_ARM64,
             cmake=(LIT_CMAKE_EXECUTABLE,),)
         self.environment = {"NWB_TEST_ENVIRONMENT": LIT_PIPELINE}
         self.asset_roots = [self.root / "first assets", self.root / "second assets"]
@@ -209,10 +215,10 @@ class PipelineLauncherTests(unittest.TestCase):
         for path in self.tool_paths.values():
             path.parent.mkdir(exist_ok=True)
             path.touch()
-        self.settings_resolver = self.patch(launcher, "resolve_launch_settings", return_value=self.settings)
-        self.refresh = self.patch(launcher, "refresh_launch_settings", return_value=self.settings)
-        self.patch(launcher, LIT_BUILD_ENVIRONMENT, return_value=self.environment)
-        self.patch(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS)
+        self.settings_resolver = self.patch(CmakeSettings, "resolve_launch_settings", return_value=self.settings)
+        self.refresh = self.patch(CmakeSettings, "refresh_launch_settings", return_value=self.settings)
+        self.patch(BuildController, LIT_BUILD_ENVIRONMENT, return_value=self.environment)
+        self.patch(HostProbe, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS)
         self.process = self.patch(subprocess, LIT_RUN, return_value=mock.Mock(returncode=0))
         self.stage = self.patch(self.pipeline, "run_stage")
 
@@ -223,9 +229,9 @@ class PipelineLauncherTests(unittest.TestCase):
         return result
 
     def prepare_pipeline_build(self):
-        configure = self.patch(launcher, "maybe_configure")
-        build = self.patch(launcher, "build_target")
-        resolve = self.patch(launcher, LIT_RESOLVE_EXECUTABLE_PATH, side_effect=lambda settings, target, override, base_name, dry_run: override or self.tool_paths[target],)
+        configure = self.patch(CmakeSettings, "maybe_configure")
+        build = self.patch(BuildController, "build_target")
+        resolve = self.patch(BuildController, LIT_RESOLVE_EXECUTABLE_PATH, side_effect=lambda settings, target, override, base_name, dry_run: override or self.tool_paths[target],)
         return configure, build, resolve
 
 

@@ -106,6 +106,10 @@ The default backend serializes individual operations using its internal `Futex`.
 and requires caller synchronization when shared between threads. Whole-container reads consist of a size
 query followed by a range read; clients requiring a stable snapshot must prevent concurrent replacement or
 removal of that file for the complete operation. Runtime asset volumes are normally immutable while mounted.
+Writable access to a volume requires one owner across filesystem instances and processes; their locks do not
+coordinate with one another. If compaction cannot restore a failed publication, it unmounts the affected
+instance and retains its stage and backup directories for recovery. A later operation using the same work
+paths refuses to overwrite those directories.
 Custom backends must synchronize their mutable state and support concurrent reads from independent callers.
 Their destructors must release backend resources safely, including after a failed mount or an early runtime
 exit. The loader explicitly unmounts after normal project shutdown; pipeline cache operations explicitly

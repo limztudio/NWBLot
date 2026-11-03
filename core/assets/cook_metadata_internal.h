@@ -29,6 +29,12 @@ namespace CookMetadataDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using DiscoveredPathSet = HashSet<ScratchString, ScratchArena, Hasher<AStringView>, EqualTo<>>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NwbCacheLoadResult{
     enum Enum : u8{
         Miss,
@@ -44,7 +50,7 @@ void PrepareNwbFileAssetCacheRecord(
     const Path& assetCacheDirectory,
     const DiscoveredNwbFile& discoveredNwbFile,
     AStringView metaText,
-    AStringView firstToken,
+    const Sha256Digest& producerDigest,
     ScratchArena& scratchArena,
     ScratchString& inOutRelativePathText,
     ScratchString& inOutCacheFileName,

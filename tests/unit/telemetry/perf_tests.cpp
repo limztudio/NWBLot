@@ -89,6 +89,43 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
     EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
 }
 
+TEST(Telemetry, PerfPayloadBuildersPreserveAliasedScopeText){
+    TestArena testArena;
+    const Name scopeName{ s_RendererFrame };
+    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
+    const auto snapshot = MakeTestMemorySnapshot(scopeName);
+    const auto delta = MakeTestMemoryDelta();
+    constexpr AStringView s_Text = "borrowed scope inside output";
+    Telemetry::TelemetryBytes payload(testArena.arena);
+
+    const auto seed = [&](){
+        payload.clear();
+        payload.reserve(512u);
+        payload.resize(s_Text.size());
+        NWB_MEMCPY(payload.data(), payload.size(), s_Text.data(), s_Text.size());
+        return AStringView(reinterpret_cast<const char*>(payload.data()), payload.size());
+    };
+
+    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(Telemetry::PerfTimingSource::Cpu, scopeName, seed(), stats, payload));
+    const auto timing = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size());
+    ASSERT_TRUE(timing);
+    EXPECT_EQ(timing->scopeText, s_Text);
+
+    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(scopeName, seed(), snapshot, delta, payload));
+    const auto memory = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
+    ASSERT_TRUE(memory);
+    EXPECT_EQ(memory->scopeText, s_Text);
+
+    ASSERT_TRUE(Telemetry::BuildPerfTimingPayload(Telemetry::PerfTimingSource::Cpu, scopeName, memory->scopeText.substr(9u), stats, payload));
+    const auto converted = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size());
+    ASSERT_TRUE(converted);
+    EXPECT_EQ(converted->scopeText, "scope inside output");
+    ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(scopeName, converted->scopeText, snapshot, delta, payload));
+    const auto expanded = Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
+    ASSERT_TRUE(expanded);
+    EXPECT_EQ(expanded->scopeText, "scope inside output");
+}
+
 TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);

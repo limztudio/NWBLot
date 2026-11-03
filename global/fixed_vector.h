@@ -114,8 +114,12 @@ public:
 
     constexpr size_type max_size()const noexcept{ return s_MaxElements; }
 
-    constexpr void clear()noexcept{
-        m_currentSize = 0;
+    // Slots remain constructed; successful removals reset them from the back.
+    constexpr void clear()noexcept(resetSlotIsNoexcept()){
+        while(m_currentSize != 0u){
+            resetSlot(data()[m_currentSize - 1u]);
+            --m_currentSize;
+        }
     }
 
     constexpr void fill(const T& value)noexcept(noexcept(DeclVal<T&>() = DeclVal<const T&>())){
@@ -142,6 +146,7 @@ public:
 
     constexpr void pop_back(){
         requireNonEmpty(MakeNotNull("FixedVector pop_back on empty vector"));
+        resetSlot(data()[m_currentSize - 1u]);
         --m_currentSize;
     }
 
@@ -169,6 +174,26 @@ public:
 
 
 private:
+    [[nodiscard]] static consteval b8 resetSlotIsNoexcept(){
+        if constexpr(MaxElements == 0u)
+            return true;
+        else if constexpr(requires(T& slot){ slot = T{}; })
+            return noexcept(DeclVal<T&>() = T{});
+        else if constexpr(requires(T& slot){ slot = static_cast<const T&>(T{}); })
+            return noexcept(DeclVal<T&>() = static_cast<const T&>(T{}));
+        else
+            return true;
+    }
+
+    static constexpr void resetSlot([[maybe_unused]] T& slot)noexcept(resetSlotIsNoexcept()){
+        if constexpr(MaxElements != 0u){
+            if constexpr(requires(T& value){ value = T{}; })
+                slot = T{};
+            else if constexpr(requires(T& value){ value = static_cast<const T&>(T{}); })
+                slot = static_cast<const T&>(T{});
+        }
+    }
+
     constexpr void requireIndex(const size_type pos)const{
         NWB_ASSERT(pos < m_currentSize);
         if(pos >= m_currentSize)

@@ -4,7 +4,9 @@
 
 #include <pipeline/asset_gatherer/gather.h>
 
+#include <core/assets/input_list.h>
 #include <core/assets/volume/built_asset.h>
+#include <core/assets/volume/asset_volume_writer.h>
 #include <core/filesystem/factory.h>
 #include <core/graphics/shader_archive.h>
 
@@ -133,6 +135,20 @@ TEST(AssetsGraphics, DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwr
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
+TEST_F(GatherInputs, InputListEncodingRejectsUnrepresentablePathsWithoutLosingDuplicates){
+    Assets::AssetVector<Assets::AssetString> inputs(m_testArena.arena);
+    inputs.emplace_back("valid path", m_testArena.arena);
+    inputs.emplace_back("valid path", m_testArena.arena);
+    const auto encoded = Assets::EncodeAssetInputList(inputs, m_scratchArena);
+    ASSERT_TRUE(encoded);
+    EXPECT_EQ(AStringView(*encoded), "valid path\nvalid path\n");
+
+    for(const AStringView invalid : { AStringView(), AStringView("line\nbreak"), AStringView("carriage\rreturn"), AStringView("nul\0byte", 8u) }){
+        inputs.back().assign(invalid);
+        EXPECT_FALSE(Assets::EncodeAssetInputList(inputs, m_scratchArena));
+    }
+}
+
 TEST_F(GatherInputs, IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls){
     ASSERT_NO_FATAL_FAILURE(writeInputs("a", 64u, 257u, 7u));
     ASSERT_NO_FATAL_FAILURE(writeInputs("b", 64u, 257u, 7u));
@@ -150,6 +166,24 @@ TEST_F(GatherInputs, ConflictingDuplicatesPreservePublishedVolume){
     EXPECT_FALSE(Gatherer::GatherAssets(m_options, m_scratchArena));
     EXPECT_GT(m_logger.errorCount(), 0u);
     ASSERT_NO_FATAL_FAILURE(verifyPayloads(4u, 8u, 3u));
+}
+
+TEST_F(GatherInputs, DuplicateManifestPathsPreservePublishedVolume){
+    ASSERT_NO_FATAL_FAILURE(writeInputs("a", 1u, 8u, 3u));
+    ASSERT_TRUE(Gatherer::GatherAssets(m_options, m_scratchArena));
+    Pack::AssetVolumePackManifest manifest(m_testArena.arena);
+    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(2u, manifest));
+    const auto name = AssetName(0u);
+    ASSERT_TRUE(name);
+    const Array<u8, 1u> first{ 7u };
+    const Array<u8, 1u> second{ 8u };
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(*name, first, manifest, 1u));
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(*name, second, manifest, 1u));
+    Assets::ResolvedCookPaths paths(m_testArena.arena);
+    paths.outputDirectory = m_root / s_OutputDirectory;
+    EXPECT_FALSE(Pack::WriteAssetVolume(paths, "tests", manifest, m_testArena.arena, m_scratchArena));
+    EXPECT_GT(m_logger.errorCount(), 0u);
+    ASSERT_NO_FATAL_FAILURE(verifyPayloads(1u, 8u, 3u));
 }
 
 TEST_F(GatherInputs, MergedPayloadIdentitySurvivesLaterIdenticalDuplicate){

@@ -71,7 +71,8 @@ using Box = SmokeBoxBounds;
 [[nodiscard]] static b8 CreateReferencePieces(const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint, Core::ECS::World& world){
     // Ordinary closed pieces provide independent triangle geometry for the same subtraction union.
     Array<Box, 6> pieces{};
-    (void)BuildSmokeBoxSubtractionPieces(box, cutter, pieces);
+    if(!BuildSmokeBoxSubtractionPieces(box, cutter, pieces))
+        return false;
     for(const auto& piece : pieces){
         if(!SmokeBoxBoundsValid(piece))
             continue;

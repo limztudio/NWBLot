@@ -157,6 +157,10 @@ Expected<ClipboardRequestToken, ClipboardAdmission::Enum> QueuedClipboardService
     const u64 generation = m_nextGeneration;
     AdvanceNonWrappingRevision(m_nextGeneration);
     available->token = { .service = m_serviceIdentity, .generation = generation };
+    ScopeExit rollback([available]()noexcept{
+        available->token = {};
+        available->text.clear();
+    });
     available->operation = operation;
     available->channel = channel;
     available->completed = false;
@@ -170,6 +174,7 @@ Expected<ClipboardRequestToken, ClipboardAdmission::Enum> QueuedClipboardService
     }
     else if(!text.empty())
         available->text.assign(text.data(), text.size());
+    rollback.release();
     return available->token;
 }
 

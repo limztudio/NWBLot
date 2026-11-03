@@ -44,7 +44,7 @@ public:
         }
     }
 
-    virtual b8 keyboardUpdate(i32, i32, const i32 action, i32)noexcept override{
+    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32, i32, const i32 action, i32)noexcept override{
         if(action == InputAction::Release)
             ++m_keyReleases;
         else

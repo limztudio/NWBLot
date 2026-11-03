@@ -128,14 +128,6 @@ usize ContextStateClaimHash(in ContextStateClaim claim){
     return hashCombineValue(seed, cast<u8>(claim.kind));
 }
 
-b8 ContainsWidgetRoot(in Span<WidgetRoot> roots, in WidgetRoot root){
-    for(usize index = 0u; index < roots.size(); ++index){
-        if(roots[index] == root)
-            return true;
-    }
-    return false;
-}
-
 u64 UpdateWidgetFnv64Byte(in u64 hash, in u8 byteValue){
     return (hash ^ cast<u64>(byteValue)) * s_WidgetFnv64Prime;
 }
@@ -201,3 +193,4 @@ b8 CanTouchExistingWidgetState(in WidgetState entry, in WidgetRoot root, in u64 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

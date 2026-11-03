@@ -252,9 +252,8 @@ b8 RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         const Core::BufferDesc& desc = mesh.runtimeMeshletLocalBoundsBuffer->getCreationDescription();
         const u64 requiredBytes = static_cast<u64>(mesh.meshletCount) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
-        if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews)
-            (void)RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get()), mesh.runtimeMeshletLocalBoundsHeapHandle);
-        if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid())
+        if(!(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews
+            && RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get()), mesh.runtimeMeshletLocalBoundsHeapHandle)))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows"), ConvertString(mesh.meshName.resolvedText()));
     }
 

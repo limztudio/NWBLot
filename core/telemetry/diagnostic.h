@@ -74,19 +74,29 @@ struct DiagnosticPayload{
 
 class DiagnosticCaptureGuard final : NoCopy{
 public:
-    explicit DiagnosticCaptureGuard(Recorder& recorder);
+    explicit DiagnosticCaptureGuard(
+        Recorder& recorder,
+        u64 frameIndex = 0u,
+        u32 streamId = 0u,
+        const Atomic<u64>* sharedFrameIndex = nullptr,
+        const Atomic<u32>* sharedStreamId = nullptr
+    );
     DiagnosticCaptureGuard(DiagnosticCaptureGuard&&) = delete;
     ~DiagnosticCaptureGuard()noexcept;
 
 
 public:
-    void setFrameIndex(u64 frameIndex)noexcept{ m_frameIndex.store(frameIndex, MemoryOrder::relaxed); }
+    void setFrameIndex(const u64 frameIndex)noexcept{ m_frameIndex.store(frameIndex, MemoryOrder::release); }
 
-    void setStreamId(u32 streamId)noexcept{ m_streamId.store(streamId, MemoryOrder::relaxed); }
+    void setStreamId(const u32 streamId)noexcept{ m_streamId.store(streamId, MemoryOrder::release); }
 
-    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex.load(MemoryOrder::relaxed); }
+    [[nodiscard]] u64 frameIndex()const noexcept{
+        return m_sharedFrameIndex ? m_sharedFrameIndex->load(MemoryOrder::acquire) : m_frameIndex.load(MemoryOrder::acquire);
+    }
 
-    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId.load(MemoryOrder::relaxed); }
+    [[nodiscard]] u32 streamId()const noexcept{
+        return m_sharedStreamId ? m_sharedStreamId->load(MemoryOrder::acquire) : m_streamId.load(MemoryOrder::acquire);
+    }
 
     [[nodiscard]] b8 installed()const noexcept{ return m_installed; }
 
@@ -97,6 +107,8 @@ private:
     Recorder& m_recorder;
     Atomic<u64> m_frameIndex{ 0u };
     Atomic<u32> m_streamId{ 0u };
+    const Atomic<u64>* m_sharedFrameIndex = nullptr;
+    const Atomic<u32>* m_sharedStreamId = nullptr;
     b8 m_installed = false;
 };
 

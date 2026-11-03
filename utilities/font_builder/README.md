@@ -28,7 +28,7 @@ python -m launcher font-builder --skip-build --config opt -- --font "/absolute/p
 The first command prepares the utility without baking a font. The launcher configures
 and builds as needed; see [the launcher guide](../../launcher/README.md) for build options.
 
-Use `--overwrite` to replace an existing complete pair. A partial pair, occupied `.tmp` or `.old` work path, or invalid source fails without publishing. The builder stages, flushes, and byte-verifies both files before replacement; existing files are moved to backups while the new files are published, and restored if publication fails. It publishes `.font` first and the `.nwb` declaration last.
+Use `--overwrite` to replace an existing complete pair. A partial pair, occupied `.tmp` or `.old` work path, or invalid source fails before publication. The builder stages, flushes, and byte-verifies both files before replacement. It backs up existing files, publishes `.font` first and the `.nwb` declaration last, and attempts to restore the backups if publication fails. A failed rollback is reported and may leave backup files for recovery.
 
 Defaults are 64 pixels per em, spread 8, a maximum square packing extent of 1024 pixels and up to 8 four-plane groups. `--ppem` accepts 16..256, `--spread` 2..32, `--extent` 32..2048, and `--max-groups` 1..8. Non-power-of-two packing extents are supported. After placement, each group is automatically cropped to its glyph bounds including the one-texel guard, and unused trailing channels are removed. Final groups can be rectangular and have one through four channels. Total staging capacity is at most 128 MiB. Capacity failure never drops glyphs or changes the requested bake size.
 

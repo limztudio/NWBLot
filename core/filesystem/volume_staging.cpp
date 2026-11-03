@@ -42,17 +42,6 @@ inline constexpr StringView s_CleanupCategory = "filesystem_volume_cleanup";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView operationName, const AStringView label){
-
-    if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
-        const ErrorCode errorCode = operation.error();
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to remove {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(errorCode.message()));
-        return false;
-    }
-
-    return true;
-}
-
 static void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringView operationName, const AStringView label){
 
     if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
@@ -61,14 +50,21 @@ static void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AS
     }
 }
 
-b8 EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView operationName, const AStringView label){
-
-    if(const auto operation = ::EnsureEmptyDirectory(directoryPath); !operation){
+b8 CreateNewStagedDirectory(const Path& directoryPath, const AStringView operationName, const AStringView label){
+    if(const auto operation = EnsureDirectories(directoryPath.parentPath()); !operation){
         const ErrorCode errorCode = operation.error();
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(errorCode.message()));
         return false;
     }
-
+    const auto created = GlobalFilesystemDetail::CreateDirectorySingle(directoryPath);
+    if(!created){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create {} '{}': {}"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath), ConvertString(created.error().message()));
+        return false;
+    }
+    if(!*created){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' already exists; preserve it for recovery"), ConvertString(operationName), ConvertString(label), PathToString<tchar>(directoryPath));
+        return false;
+    }
     return true;
 }
 
@@ -196,7 +192,7 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
+b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer, StagedDirectoryCleanupGuard* const stageCleanup, StagedDirectoryCleanupGuard* const backupCleanup){
     if(segmentCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), ConvertString(volumeName));
         return false;
@@ -232,6 +228,16 @@ b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outp
 
     b8 promoted = true;
     b8 rollbackComplete = true;
+    ScopeExit preserveRecovery([&]()noexcept{
+        if(!rollbackComplete){
+            if(stageCleanup)
+                stageCleanup->dismiss();
+            if(backupCleanup)
+                backupCleanup->dismiss();
+            if(observer.rollbackFailed)
+                observer.rollbackFailed(observer.context);
+        }
+    });
     usize movedCount = 0u;
     {
         ScopeExit rollbackMoves([&]()noexcept{

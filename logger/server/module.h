@@ -55,7 +55,7 @@ public:
 
 
 protected:
-    b8 internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {}, CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}, AStringView crashUploadToken = AStringView());
+    b8 internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {}, CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}, AStringView crashUploadToken = AStringView(), AStringView readinessToken = AStringView());
     void internalDestroy(){ stopCrashIngestWorker(); }
     b8 internalUpdate();
 
@@ -78,6 +78,7 @@ private:
     CrashIngestConfig m_crashIngestConfig;
     TelemetryIngestConfig m_telemetryIngestConfig;
     AString<LogArena> m_crashUploadToken;
+    AString<LogArena> m_readinessToken;
     CrashUploadQueue m_crashUploads;
     Semaphore<> m_crashIngestSemaphore;
     Atomic<b8> m_crashIngestExit;

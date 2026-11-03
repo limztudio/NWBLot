@@ -21,6 +21,32 @@ namespace __hidden_crash_snapshot_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(Crash, MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue){
+    using namespace NWB::Core::Crash;
+    using namespace NWB::Core::Crash::CrashDetail;
+    constexpr AStringView key("bounded_metadata");
+    ASSERT_TRUE(SetCrashMetadata(key, "original"));
+    Array<char, s_MaxShortText> longKey;
+    longKey.fill('k');
+    Array<char, s_MaxMediumText> longValue;
+    longValue.fill('v');
+    const Array<char, 3u> embedded{ 'a', '\0', 'b' };
+    EXPECT_TRUE(SetCrashMetadata(AStringView(longKey.data(), longKey.size() - 1u), AStringView(longValue.data(), longValue.size() - 1u)));
+    EXPECT_FALSE(SetCrashMetadata(AStringView(longKey.data(), longKey.size()), "value"));
+    EXPECT_FALSE(SetCrashMetadata(key, AStringView(longValue.data(), longValue.size())));
+    EXPECT_FALSE(SetCrashMetadata(AStringView(embedded.data(), embedded.size()), "value"));
+    EXPECT_FALSE(SetCrashMetadata(key, AStringView(embedded.data(), embedded.size())));
+    const auto request = BuildCrashDumpRequest(CrashReasonKind::ManualDump, 0u, {});
+    b8 found = false;
+    for(u32 i = 0u; i < request.metadataCount; ++i){
+        if(FixedBufferView(request.metadata[i].key) == key){
+            found = true;
+            EXPECT_EQ(FixedBufferView(request.metadata[i].value), AStringView("original"));
+        }
+    }
+    EXPECT_TRUE(found);
+}
+
 TEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter){
     constexpr AStringView s_Key("snapshot_interrupted_writer");
     constexpr AStringView s_Published("published_complete_value");

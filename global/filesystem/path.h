@@ -480,8 +480,8 @@ public:
                 return *this;
             }
         }
-        replaceExtension();
         Path replacementPath(arena(), replacement);
+        replaceExtension();
         if(replacementPath.empty())
             return *this;
         if(replacementPath.m_text.front() != static_cast<value_type>('.'))

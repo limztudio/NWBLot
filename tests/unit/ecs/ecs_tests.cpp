@@ -290,6 +290,35 @@ TEST(Ecs, DestroyedEntityGenerationCannotReachRecycledComponents){
     EXPECT_NE(recycledEntity.id(), entityId);
 }
 
+TEST(Ecs, ExhaustedEntityGenerationNeverRevivesAStaleId){
+    TestWorld testWorld;
+    auto currentId = testWorld.world.createEntity().id();
+    const auto stale = currentId;
+    for(u32 generation = 0u; generation <= NWB::Core::ECS::ECSDetail::s_EntityGenerationMask; ++generation){
+        testWorld.world.entity(currentId).destroy();
+        currentId = testWorld.world.createEntity().id();
+    }
+    EXPECT_NE(currentId.index(), stale.index());
+    EXPECT_FALSE(testWorld.world.entity(stale).alive());
+    testWorld.world.clear();
+    auto afterClear = testWorld.world.createEntity();
+    EXPECT_NE(afterClear.id().index(), stale.index());
+    EXPECT_FALSE(testWorld.world.entity(stale).alive());
+}
+
+TEST(Ecs, ClearingAtTheLastGenerationRetiresTheIndex){
+    TestWorld testWorld;
+    auto currentId = testWorld.world.createEntity().id();
+    const auto stale = currentId;
+    for(u32 generation = 0u; generation <= NWB::Core::ECS::ECSDetail::s_EntityGenerationMask; ++generation){
+        testWorld.world.clear();
+        testWorld.world.clear();
+        currentId = testWorld.world.createEntity().id();
+    }
+    EXPECT_NE(currentId.index(), stale.index());
+    EXPECT_FALSE(testWorld.world.entity(stale).alive());
+}
+
 TEST(Ecs, ClearedEntityFacadesCannotReachOrDestroyReplacementComponents){
     TestWorld testWorld;
     Array<NWB::Core::ECS::EntityID, 8u> retiredIds{};

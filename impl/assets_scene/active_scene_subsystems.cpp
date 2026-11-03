@@ -52,8 +52,12 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
     LoadedEntityVector nextLoadedEntities(m_arena);
 
     nextSceneAssets.reserve(sceneAsset.assets().size());
-    for(const auto& [nickname, asset] : sceneAsset.assets())
-        nextSceneAssets.emplace(nickname, asset);
+    for(const auto& [nickname, asset] : sceneAsset.assets()){
+        if(!nextSceneAssets.emplace(nickname, asset).second){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
 
     Core::Alloc::ScratchArena scratchArena(s_ActiveSceneLoadArena);
     SceneScratchNameHashSet seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);

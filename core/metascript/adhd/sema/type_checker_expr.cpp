@@ -31,6 +31,9 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
     }
     case ExprKind::Identifier:{
         const ScopedVarInfo* local = FindScopedVar(scope, expr.text);
+        expr.isBuiltinConstant = !local && !m_symbols.findGlobalConstant(expr.text)
+            && !HasConstValueTemplateParam(ownerClass, &method, expr.text)
+            && FindBuiltinGlobalConstant(expr.text);
         if(local){
             const ParamPassingMode::Enum resolvedLocalRefMode = m_symbols.resolveRefMode(local->type);
             if((!local->isParam && local->mode != ParamPassingMode::None) || resolvedLocalRefMode != ParamPassingMode::None)
@@ -305,6 +308,20 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
         if(elemRefMode != ParamPassingMode::None)
             expr.derefNotNull = true;
+        if(!customOpIdx && (lhsBaseType == "String" || lhsBaseType == "CompactString" || lhsBaseType == "StringView")){
+            if(isMutationTarget){
+                if(lhsBaseType == "StringView" || lhsBaseType == "CompactString"){
+                    reportError(errors, expr.span, "cannot mutate elements of 'StringView' or 'CompactString'");
+                    ok = false;
+                }
+                else{
+                    expr.isStringByteMutRef = true;
+                }
+            }
+            else{
+                expr.isStringByteRead = true;
+            }
+        }
         if(isMutationTarget){
             if(elemRefMode == ParamPassingMode::In){
                 reportError(errors, expr.span, "cannot mutate 'in' parameter or read-only borrow");
@@ -472,6 +489,10 @@ b8 TypeChecker::applyInterfaceRefRebind(
         if(isRvalueTemporaryExpr(ownerClass, &method, *assignExpr.rhs, scope)){
             reportError(errors, assignExpr.span, "cannot rebind 'in' reference to a literal or rvalue temporary");
             return false;
+        }
+        if(assignExpr.rhs->isStringByteRead){
+            assignExpr.rhs->isStringByteRead = false;
+            assignExpr.rhs->isStringByteConstRef = true;
         }
     }
     const MStringView baseTypeName = targetType ? m_symbols.resolveBaseTypeName(targetType->name) : MStringView{};
@@ -674,6 +695,45 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, const Span<const ScopedVa
         }
         if(RequiresTCharAdaptation(lhsType))
             markStringToPathAdaptation(ownerClass, &method, scope, *expr.rhs);
+        if(expr.op == TokenType::Equal && lhsType == "StringView"){
+            if(exprBorrowsTemporaryStringOwner(ownerClass, &method, *expr.rhs, scope)){
+                reportError(errors, expr.span, "cannot assign 'StringView' from a temporary owning string");
+                ok = false;
+            }
+            else{
+                MStringView borrowedOwnerName;
+                usize borrowedOwnerIdx = 0u;
+                if(exprBorrowsLocalStringOwner(ownerClass, &method, *expr.rhs, scope, &borrowedOwnerName, &borrowedOwnerIdx)){
+                    const Expr* rootLhs = expr.lhs;
+                    while(rootLhs && (rootLhs->kind == ExprKind::MemberAccess || rootLhs->kind == ExprKind::Index))
+                        rootLhs = rootLhs->lhs;
+                    const ScopedVarInfo* rootLocal = nullptr;
+                    usize rootLocalIdx = 0u;
+                    if(rootLhs && rootLhs->kind == ExprKind::Identifier){
+                        for(usize i = scope.size(); i > 0u; --i){
+                            if(scope[i - 1u].name == rootLhs->text){
+                                rootLocal = &scope[i - 1u];
+                                rootLocalIdx = i - 1u;
+                                break;
+                            }
+                        }
+                    }
+                    if(!rootLocal || rootLocal->isParam || rootLocal->mode != ParamPassingMode::None || m_symbols.resolveRefMode(rootLocal->type) != ParamPassingMode::None){
+                        reportError(errors, expr.span, "cannot store 'StringView' borrowing a stack-local string into an escaping target");
+                        ok = false;
+                    }
+                    else if(rootLocalIdx < borrowedOwnerIdx){
+                        reportError(errors, expr.span, "cannot assign 'StringView' from a shorter-lived block-local string");
+                        ok = false;
+                    }
+                    else{
+                        ScopedVarInfo* mutableRoot = const_cast<ScopedVarInfo*>(rootLocal);
+                        mutableRoot->borrowsLocalStringOwner = true;
+                        mutableRoot->borrowedLocalOwnerName = borrowedOwnerName;
+                    }
+                }
+            }
+        }
     }
 
     return ok;

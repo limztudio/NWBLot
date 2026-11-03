@@ -108,6 +108,20 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     EXPECT_TRUE(secondPacketContext.streamValidation.valid());
     EXPECT_EQ(secondPacketContext.recordIndex, 1u);
 
+    Core::GpuCommandIrCapture otherRasterCapture(testArena.arena);
+    const Array<u8, 4u> pushBytes{ 1u, 2u, 3u, 4u };
+    ASSERT_TRUE(otherRasterCapture.capturePushConstants(secondTask, secondPacket, queue, BinaryByteView{ pushBytes.data(), pushBytes.size() }));
+    const Core::GpuCommandIrReplayResult otherRaster = Core::PreflightGpuCommandIrPacket(otherRasterCapture.commandBytes(), declarations, compiledPlan, packet);
+    EXPECT_EQ(otherRaster.error, Core::GpuCommandIrReplayError::None);
+    EXPECT_TRUE(otherRaster.streamValidation.valid());
+    const Core::GpuCommandIrReplayResult selectedRaster = Core::PreflightGpuCommandIrPacket(otherRasterCapture.commandBytes(), declarations, compiledPlan, secondPacket);
+    EXPECT_EQ(selectedRaster.error, Core::GpuCommandIrReplayError::MissingOwnedSidecar);
+    Core::GraphicsBytes malformedOther(testArena.arena);
+    CopyCommandIrBytes(otherRasterCapture.commandBytes(), malformedOther);
+    WriteCommandIrPod(sizeof(Core::GpuCommandIrStreamHeader) + offsetof(Core::GpuCommandIrHeader, byteSize), static_cast<u16>(0u), malformedOther);
+    const Core::GpuCommandIrReplayResult invalidOther = Core::PreflightGpuCommandIrPacket(BinaryByteView{ malformedOther.data(), malformedOther.size() }, declarations, compiledPlan, packet);
+    EXPECT_EQ(invalidOther.error, Core::GpuCommandIrReplayError::InvalidStream);
+
     const Core::GpuCommandIrReplayResult invalidPacket = Core::PreflightGpuCommandIrPacket(capture.commandBytes(), declarations, compiledPlan, Core::GpuSubmissionPacketId{ .generation = packet.generation, .index = Limit<u32>::s_Max - 1u });
     EXPECT_EQ(invalidPacket.error, Core::GpuCommandIrReplayError::InvalidPacket);
     EXPECT_TRUE(invalidPacket.streamValidation.valid());

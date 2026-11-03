@@ -84,6 +84,7 @@ public:
     [[nodiscard]] b8 addPhysicalQueueRuntimeStatistics(FrameGraphNodeHandle owner, const FrameGraphPhysicalQueueRuntimeStatistics& statistics);
     [[nodiscard]] b8 addPacketSubmissionStatistics(FrameGraphNodeHandle owner, const FrameGraphPacketSubmissionStatisticsRecord& statistics);
 
+    // Labels are copied into the scratch arena and remain valid while that arena lives.
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
     }

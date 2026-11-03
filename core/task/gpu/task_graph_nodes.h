@@ -230,6 +230,8 @@ struct GpuExternalCompletionNode{
 
 struct GpuUploadBlobNode{
     GraphicsBytes bytes;
+    usize dataOffset = 0u;
+    usize dataSize = 0u;
 
 
 public:

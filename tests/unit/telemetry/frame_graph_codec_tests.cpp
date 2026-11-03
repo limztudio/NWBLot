@@ -21,6 +21,30 @@ namespace __hidden_telemetry_frame_graph_codec_tests{
 using namespace TelemetryTestDetail;
 
 
+TEST(Telemetry, FrameGraphPayloadPreservesBorrowedLabelsWhenRebuiltInPlace){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(905u, nodes, edges, testArena.scratchArena, payload));
+    const auto first = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
+    ASSERT_TRUE(first);
+    nodes[0u].label = first->nodes[0u].label;
+    nodes[1u].label = first->nodes[1u].label;
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(906u, nodes, edges, testArena.scratchArena, payload));
+    const auto rebuilt = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
+    ASSERT_TRUE(rebuilt);
+    EXPECT_EQ(rebuilt->frameIndex, 906u);
+    EXPECT_EQ(rebuilt->nodes[0u].label, "GBuffer Pass");
+    EXPECT_EQ(rebuilt->nodes[1u].label, "Albedo Texture");
+    nodes[0u].label = rebuilt->nodes[0u].label;
+    nodes[1u].label = rebuilt->nodes[1u].label;
+    nodes[0u].kind = Telemetry::FrameGraphNodeKind::Unknown;
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(907u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_TRUE(payload.empty());
+}
+
 TEST(Telemetry, FrameGraphPayloadRejectsCorruptedHeaderAfterValidParse){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);

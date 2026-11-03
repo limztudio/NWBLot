@@ -160,6 +160,17 @@ b8 IsValidPerfTimingSource(const PerfTimingSource::Enum source)noexcept{
 }
 
 b8 BuildPerfTimingPayload(const PerfTimingSource::Enum source, const Name& scopeName, const AStringView scopeText, const Perf::TimingStats& stats, TelemetryBytes& outPayload){
+    const auto alias = ContainerDetail::SourceAliasesDestination(outPayload, Span<const u8>(reinterpret_cast<const u8*>(scopeText.data()), scopeText.size()));
+    if(alias){
+        if(scopeText.size() > outPayload.size() - *alias){
+            outPayload.clear();
+            return false;
+        }
+        TelemetryBytes staged(outPayload.get_allocator().arena());
+        const b8 result = BuildPerfTimingPayload(source, scopeName, scopeText, stats, staged);
+        outPayload = Move(staged);
+        return result;
+    }
     outPayload.clear();
 
     if(!__hidden_telemetry_perf::ValidateTimingInput(source, scopeName, scopeText, stats))
@@ -210,6 +221,17 @@ b8 RecordPerfTiming(Recorder& recorder, const PerfTimingSource::Enum source, con
 }
 
 b8 BuildPerfMemoryPayload(const Name& scopeName, const AStringView scopeText, const Perf::MemorySnapshot& snapshot, const Perf::MemoryDelta& delta, TelemetryBytes& outPayload){
+    const auto alias = ContainerDetail::SourceAliasesDestination(outPayload, Span<const u8>(reinterpret_cast<const u8*>(scopeText.data()), scopeText.size()));
+    if(alias){
+        if(scopeText.size() > outPayload.size() - *alias){
+            outPayload.clear();
+            return false;
+        }
+        TelemetryBytes staged(outPayload.get_allocator().arena());
+        const b8 result = BuildPerfMemoryPayload(scopeName, scopeText, snapshot, delta, staged);
+        outPayload = Move(staged);
+        return result;
+    }
     outPayload.clear();
 
     if(!__hidden_telemetry_perf::ValidateMemoryInput(scopeName, scopeText, snapshot, delta))

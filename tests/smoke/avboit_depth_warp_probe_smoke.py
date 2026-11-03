@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from window_capture_outcome import WindowsDesktopUnavailable
+from smoke_failure_reporting import write_failure_report
 from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
 from window_capture_validation import validate_expected_log_text
 
@@ -166,12 +167,12 @@ def main(argv=None):
     try:
         result = acquire(args, output)
     except WindowsDesktopUnavailable as error:
-        write_json(output / LIT_RESULT_JSON, {LIT_SCHEMA: 1, LIT_PASSED: False, "skipped": True, "skip_reason": str(error)})
+        write_failure_report(write_json, output / LIT_RESULT_JSON, {LIT_SCHEMA: 1, LIT_PASSED: False, "skipped": True, "skip_reason": str(error)})
         print(f"SKIP: {error}", file=sys.stderr, flush=True)
         return SKIP_EXIT_CODE
     except (SmokeFailure, SmokeSkip, OSError) as error:
         # Missing validation/device support still fails this native qualification.
-        write_json(output / LIT_RESULT_JSON, {LIT_SCHEMA: 1, LIT_PASSED: False, "error": str(error)})
+        write_failure_report(write_json, output / LIT_RESULT_JSON, {LIT_SCHEMA: 1, LIT_PASSED: False, "error": str(error)})
         print(f"FAIL: {error}", file=sys.stderr, flush=True)
         return 1
     write_json(output / LIT_RESULT_JSON, result)

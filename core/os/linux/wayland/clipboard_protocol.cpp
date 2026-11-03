@@ -222,14 +222,13 @@ void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlob
 }
 
 void WaylandClipboardService::addOffer(void* const handle, const ClipboardChannel::Enum channel){
+    Offer pending(*this);
+    pending.handle = handle;
+    pending.channel = channel;
     auto offer = MakeGlobalUnique<Offer>(m_arena, *this);
-    if(!offer){
-        Offer rejected(*this);
-        rejected.handle = handle;
-        rejected.channel = channel;
+    if(!offer)
         return;
-    }
-    offer->handle = handle;
+    offer->handle = Exchange(pending.handle, nullptr);
     offer->channel = channel;
     if(m_offers.size() == s_MaxOffers)
         return;

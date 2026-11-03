@@ -222,7 +222,7 @@ void Project::pointerCaptureLost()noexcept{
     m_pendingMouseDeltaY = 0.0f;
 }
 
-b8 Project::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, [[maybe_unused]] const i32 mods)noexcept{
+::NWB::Core::KeyboardInputResult Project::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, [[maybe_unused]] const i32 mods)noexcept{
     if(action == NWB::Core::InputAction::Release)
         setKeyState(key, false);
 

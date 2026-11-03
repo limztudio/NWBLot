@@ -274,14 +274,18 @@ TEST(AssetsGraphics, MeshFailedReloadPreservesEveryPreviouslyPublishedStream){
     Impl::MeshAssetCodec codec;
     Core::Assets::AssetBytes original(testArena.arena);
     ASSERT_TRUE(codec.serialize(mesh, original));
-    for(u32 invalidCase = 0u; invalidCase < 3u; ++invalidCase){
+    for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
         Core::Assets::AssetBytes malformed(original);
         if(invalidCase == 0u)
             malformed[0u] ^= 1u;
         else if(invalidCase == 1u)
             malformed.pop_back();
-        else
+        else if(invalidCase == 2u)
             malformed.push_back(0u);
+        else{
+            constexpr u32 s_OldMeshMagic = 0x4D534837u;
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, s_OldMeshMagic, malformed));
+        }
         EXPECT_FALSE(mesh.loadBinary(malformed)) << invalidCase;
         Core::Assets::AssetBytes retained(testArena.arena);
         ASSERT_TRUE(codec.serialize(mesh, retained));

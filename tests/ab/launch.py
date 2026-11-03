@@ -14,7 +14,9 @@ from typing import Callable, List, Optional, Sequence
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-import launcher as ROOT_LAUNCHER  # noqa: E402
+from launcher.cli import LauncherCli  # noqa: E402
+from launcher.cmake_settings import CmakeSettings  # noqa: E402
+from launcher.discovery import LauncherDiscovery  # noqa: E402
 
 
 TESTS_DIR_NAME = "tests"
@@ -54,7 +56,7 @@ def append_ab_runner_args(command: List[object], args: argparse.Namespace, repo:
     if args.no_logserver:
         command.append(LIT_NO_LOGSERVER)
     elif args.logserver_executable is not None:
-        command += [LIT_LOGSERVER_EXECUTABLE, ROOT_LAUNCHER.resolve_path(repo, args.logserver_executable)]
+        command += [LIT_LOGSERVER_EXECUTABLE, CmakeSettings.resolve_path(repo, args.logserver_executable)]
     command += list(args.runner_args)
     return command
 
@@ -67,7 +69,7 @@ def run_ab_runner(
 ) -> int:
     if artifact_message is not None:
         print(artifact_message, flush=True)
-    print("+ " + ROOT_LAUNCHER.format_command(command), flush=True)
+    print("+ " + CmakeSettings.format_command(command), flush=True)
     if dry_run:
         return 0
     return subprocess.run([str(part) for part in command], cwd=repo).returncode
@@ -102,14 +104,14 @@ def parse_ab_launcher_args(
     make_parser_fn: Callable[[], argparse.ArgumentParser],
     argv: Sequence[str],
 ) -> argparse.Namespace:
-    launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
+    launcher_args, runner_args = LauncherCli.split_application_args(argv)
     args = make_parser_fn().parse_args(launcher_args)
     args.runner_args = runner_args
     return args
 
 
 def main(argv: Sequence[str]) -> int:
-    return ROOT_LAUNCHER.run_directory_launcher(Path(TESTS_DIR_NAME) / AB_SUBDIR_NAME, argv)
+    return LauncherDiscovery.run_directory_launcher(Path(TESTS_DIR_NAME) / AB_SUBDIR_NAME, argv)
 
 
 if __name__ == MAIN_ENTRY:

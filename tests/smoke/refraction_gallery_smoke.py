@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import struct
 import sys
+import tempfile
 import zlib
 
 from window_capture_image import analyze_rgb_rows, read_bmp_24_rows
@@ -181,6 +183,27 @@ def png_rgb_bytes(frame):
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(scanlines, 9)) + chunk(b"IEND", b"")
 
 
+def stage_logserver(executable, output_directory):
+    executable = executable.resolve()
+    runtime = Path(tempfile.mkdtemp(prefix="logserver_", dir=output_directory))
+    staged = runtime / executable.name
+    try:
+        shutil.copy2(executable, staged)
+        symbols = executable.with_suffix(".pdb")
+        try:
+            symbols.stat()
+        except FileNotFoundError:
+            pass
+        else:
+            shutil.copy2(symbols, runtime / symbols.name)
+        for symbols in executable.parent.glob("*.namesym"):
+            if symbols.is_file():
+                shutil.copy2(symbols, runtime / symbols.name)
+    except OSError as error:
+        raise SmokeFailure(f"could not stage logserver; files remain in '{runtime}': {error}") from error
+    return staged, executable.parent
+
+
 def capture(args, case, variant):
     output = args.output_directory / f"{case}_{variant}.bmp"
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
@@ -199,7 +222,13 @@ def capture(args, case, variant):
         command += ["--reject-log-message", LIT_AVBOIT_REFRACTION_RESOLVE]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing {case}/{variant} ({args.frames} frames)...", flush=True)
-    completed = subprocess.run(command, env=capture_environment(case, variant), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
+    environment = capture_environment(case, variant)
+    library_directory = getattr(args, "logserver_library_directory", None)
+    if library_directory:
+        for variable in ("PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
+            previous = environment.get(variable, "")
+            environment[variable] = str(library_directory) + (os.pathsep + previous if previous else "")
+    completed = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
     if completed.returncode == SKIP_EXIT_CODE:
         return None
     if completed.returncode != 0:
@@ -300,6 +329,9 @@ def main(argv):
         LIT_VARIANTS: list(args.variants), "variant_labels": labels, LIT_LIMITS: COMMON_LIMIT, LIT_IMAGE_COUNT: len(args.cases) * len(args.variants), LIT_CASES: [],
         "validation": "Strict runtime logs, successful route dispatch, normal shutdown, nontrivial frames, and visible changes when a disabled baseline is present.", }
     try:
+        args.logserver_library_directory = None
+        if args.logserver_executable:
+            args.logserver_executable, args.logserver_library_directory = stage_logserver(args.logserver_executable, args.output_directory)
         for case_id in args.cases:
             title, description, note = CASES[case_id]
             entry = {LIT_ID: case_id, "title": title, "description": description, "note": note, LIT_CAPTURES: []}

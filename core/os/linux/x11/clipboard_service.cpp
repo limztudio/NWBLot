@@ -254,6 +254,9 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
         return;
     }
     OwnedSelection& selection = *MakeNotNull(ownedSelection(m_operationSelection));
+    OwnedSelection staged(m_arena);
+    staged.utf8 = m_pendingWrite;
+    staged.latin1Available = EncodeClipboardLatin1(staged.utf8, staged.latin1) == ClipboardStatus::Success;
     b8 acquired = false;
     {
         X11CheckedOperation checked(m_display);
@@ -264,8 +267,9 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
         finishOperation(ClipboardStatus::Unavailable);
         return;
     }
-    selection.utf8 = m_pendingWrite;
-    selection.latin1Available = EncodeClipboardLatin1(selection.utf8, selection.latin1) == ClipboardStatus::Success;
+    selection.utf8.swap(staged.utf8);
+    selection.latin1.swap(staged.latin1);
+    selection.latin1Available = staged.latin1Available;
     selection.timestamp = timestamp;
     selection.owned = true;
     finishOperation(ClipboardStatus::Success);

@@ -8,6 +8,7 @@
 
 #include <global/assert.h>
 #include <global/not_null.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,22 +32,29 @@ b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replace
         return false;
     }
 
-    ScopedLock lock(m_mutex);
+    UniquePtr<IAssetCodec> replacedCodec;
+    {
+        UniqueLock lock(m_mutex);
+        auto found = m_codecs.find(typeName);
+        if(found != m_codecs.end()){
+            if(!replaceExisting){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"), ConvertString(typeName.resolvedText()));
+                return false;
+            }
 
-    const auto found = m_codecs.find(typeName);
-    if(found != m_codecs.end()){
-        if(!replaceExisting){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"), ConvertString(typeName.resolvedText()));
-            return false;
+            m_idleCondition.wait(lock, [this]()noexcept{ return m_activeDeserializations == 0u; });
+            found = m_codecs.find(typeName);
+            if(found != m_codecs.end()){
+                replacedCodec = Move(found.value());
+                found.value() = Move(codec);
+                return true;
+            }
         }
 
-        found.value() = Move(codec);
-        return true;
-    }
-
-    if(!m_codecs.emplace(typeName, Move(codec)).second){
-        NWB_ASSERT(false);
-        return false;
+        if(!m_codecs.emplace(typeName, Move(codec)).second){
+            NWB_ASSERT(false);
+            return false;
+        }
     }
     return true;
 }
@@ -55,8 +63,20 @@ b8 AssetRegistry::unregisterCodec(const Name& assetType)noexcept{
     if(!assetType)
         return false;
 
-    ScopedLock lock(m_mutex);
-    return m_codecs.erase(assetType) != 0;
+    UniquePtr<IAssetCodec> removedCodec;
+    {
+        UniqueLock lock(m_mutex);
+        auto found = m_codecs.find(assetType);
+        if(found == m_codecs.end())
+            return false;
+        m_idleCondition.wait(lock, [this]()noexcept{ return m_activeDeserializations == 0u; });
+        found = m_codecs.find(assetType);
+        if(found == m_codecs.end())
+            return false;
+        removedCodec = Move(found.value());
+        m_codecs.erase(found);
+    }
+    return true;
 }
 
 Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetType, const Name& virtualPath, const Span<const u8> binary)const{
@@ -65,13 +85,24 @@ Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetTyp
         return MakeUnexpected(Failure{});
     }
 
-    ScopedLock lock(m_mutex);
-    const auto found = m_codecs.find(assetType);
-    if(found == m_codecs.end()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), ConvertString(assetType.resolvedText()));
-        return MakeUnexpected(Failure{});
+    IAssetCodec* rawCodec = nullptr;
+    {
+        ScopedLock lock(m_mutex);
+        const auto found = m_codecs.find(assetType);
+        if(found == m_codecs.end()){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), ConvertString(assetType.resolvedText()));
+            return MakeUnexpected(Failure{});
+        }
+        rawCodec = found.value().get();
+        ++m_activeDeserializations;
     }
-    const NotNull<IAssetCodec*> codec(found.value().get());
+    ScopeExit releaseActive([this]()noexcept{
+        NothrowScopedLock lock(m_mutex);
+        --m_activeDeserializations;
+        if(m_activeDeserializations == 0u)
+            m_idleCondition.notify_all();
+    });
+    const NotNull<IAssetCodec*> codec(rawCodec);
 
     return codec->deserialize(virtualPath, binary, m_arena);
 }

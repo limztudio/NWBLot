@@ -29,6 +29,7 @@ from smoke_volume_identity import file_identity
 import caustic_quality_smoke
 import surfel_gi_quality_smoke
 import smoke_cpu_gpu_timing
+from smoke_failure_reporting import write_failure_report
 from window_capture_smoke import (finish_logserver_cleanup, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, write_status,)
 from window_capture_validation import validate_expected_log_text
@@ -736,12 +737,12 @@ def main(argv=None):
         return 0
     except SmokeSkip as error:
         if output is not None:
-            write_json(output / LIT_FAILURE_JSON, {LIT_PASSED: False, "skipped": True, LIT_ERROR: str(error)})
+            write_failure_report(write_json, output / LIT_FAILURE_JSON, {LIT_PASSED: False, "skipped": True, LIT_ERROR: str(error)})
         write_status(f"SKIP: {error}")
         return 77
     except (SmokeFailure, OSError) as error:
         if output is not None:
-            write_json(output / LIT_FAILURE_JSON, {LIT_PASSED: False, LIT_ERROR: str(error)})
+            write_failure_report(write_json, output / LIT_FAILURE_JSON, {LIT_PASSED: False, LIT_ERROR: str(error)})
         write_status(f"FAIL: {error}")
         return 1
 

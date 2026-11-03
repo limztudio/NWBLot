@@ -176,6 +176,26 @@ Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const vo
 }
 
 Expected<usize, DecodeResult> DecodeEventStream(const void* const bytes, const usize byteCount, TelemetryArena& arena, Recorder& inOutRecorder){
+    if(bytes && byteCount != 0u){
+        const EventView previous = inOutRecorder.view();
+        const usize count = previous.eventCount();
+        for(usize i = 0u; i < count; ++i){
+            const EventRecord* const event = previous.eventAt(i);
+            if(!event)
+                break;
+            const auto alias = ContainerDetail::SourceAliasesDestination(event->payload, Span<const u8>(static_cast<const u8*>(bytes), byteCount));
+            if(!alias)
+                continue;
+            if(byteCount > event->payload.size() - *alias){
+                inOutRecorder.clear();
+                return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedPayload });
+            }
+            TelemetryBytes preserved(arena);
+            preserved.resize(byteCount);
+            NWB_MEMCPY(preserved.data(), preserved.size(), bytes, byteCount);
+            return DecodeEventStream(preserved.data(), preserved.size(), arena, inOutRecorder);
+        }
+    }
     inOutRecorder.clear();
     if(!bytes)
         return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });

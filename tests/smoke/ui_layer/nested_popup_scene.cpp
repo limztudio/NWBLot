@@ -100,7 +100,7 @@ b8 UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+::NWB::Core::KeyboardInputResult UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key != Core::Key::F8)
         return false;
     if(action == Core::InputAction::Press)

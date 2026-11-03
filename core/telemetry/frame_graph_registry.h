@@ -24,6 +24,13 @@ class CaptureSession;
 
 
 class FrameGraphRegistry final : NoCopy{
+private:
+    struct ContributorEntry{
+        NotNull<IFrameGraphContributor*> contributor;
+        b8 active = true;
+    };
+
+
 public:
     explicit FrameGraphRegistry(Alloc::GlobalArena& arena)
         : m_contributors(arena)
@@ -38,13 +45,14 @@ public:
 public:
     void registerContributor(IFrameGraphContributor& contributor);
     void unregisterContributor(IFrameGraphContributor& contributor)noexcept;
-    void clear()noexcept{ m_contributors.clear(); }
+    void clear()noexcept;
 
+    // Changes made by a callback affect the next record; removed contributors are skipped in the current record.
     [[nodiscard]] b8 record(CaptureSession& session);
 
 
 private:
-    List<NotNull<IFrameGraphContributor*>, Alloc::GlobalArena> m_contributors;
+    List<ContributorEntry, Alloc::GlobalArena> m_contributors;
     FrameGraphNodeDescs m_nodes;
     FrameGraphEdgeDescs m_edges;
     FrameGraphPendingNameEdges m_pendingNameEdges;

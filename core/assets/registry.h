@@ -38,6 +38,8 @@ public:
 
 private:
     mutable Futex m_mutex;
+    mutable ConditionVariableAny m_idleCondition;
+    mutable usize m_activeDeserializations = 0u;
     AssetArena& m_arena;
     CodecMap m_codecs;
 };

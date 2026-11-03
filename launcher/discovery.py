@@ -5,11 +5,15 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 from launcher.models import RepoLauncher
-from launcher.constants import (COMMAND_HELP_LONG, COMMAND_HELP_SHORT, COMMAND_PROFILES, EXIT_USAGE_ERROR, KIND_CATEGORY, KIND_DIRECTORY, LAUNCHER_ARTIFACT_DIRECTORIES, LAUNCHER_GLOB_SUFFIX, LAUNCHER_SCRIPT_NAME, LAUNCHER_SEARCH_ROOTS, LAUNCH_COMMAND_NAME_HYPHEN,
+from launcher.cmake_settings import CmakeSettings
+from launcher.dispatch import DispatchRouter
+from launcher.process import ProcessLauncher
+from launcher.constants import (COMMAND_HELP_LONG, COMMAND_HELP_SHORT, COMMAND_PROFILES, EXIT_USAGE_ERROR, KIND_CATEGORY, KIND_DIRECTORY, LAUNCHER_ARTIFACT_DIRECTORIES, LAUNCHER_SCRIPT_NAME, LAUNCHER_SEARCH_ROOTS, LAUNCH_COMMAND_NAME_HYPHEN,
     LAUNCH_COMMAND_NAME_UNDERSCORE, LAUNCH_COMMAND_PATTERN, LIST_ITEM_SEPARATOR, MSG_BUILD_USAGE, MSG_COMMAND_CONFLICT, MSG_DIR_COMMANDS, MSG_DIR_ITEM, MSG_DISAMBIGUATE, MSG_DUPLICATE_COMMAND, MSG_INVALID_COMMAND, MSG_LIST_COMMANDS,
     MSG_MISSING_LAUNCHER_PREFIX, MSG_ROUTE_ITEM, MSG_RUN_USAGE, MSG_UNKNOWN_LAUNCHER, RESERVED_LAUNCH_COMMANDS, ROUTE_SEPARATOR,)
 
@@ -40,47 +44,80 @@ class LauncherDiscovery:
     @staticmethod
     def _launcher_scripts(search_path: Path) -> List[Path]:
         scripts: List[Path] = []
-        for directory, children, files in os.walk(search_path):
-            # Frozen source copies in generated artifacts are not repository launchers.
-            children[:] = sorted(child for child in children if child not in LAUNCHER_ARTIFACT_DIRECTORIES)
-            if LAUNCHER_SCRIPT_NAME in files:
-                scripts.append(Path(directory) / LAUNCHER_SCRIPT_NAME)
+        pending = [search_path]
+        while pending:
+            directory = pending.pop()
+            children = []
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    if entry.name in LAUNCHER_ARTIFACT_DIRECTORIES:
+                        continue
+                    if entry.is_symlink():
+                        if entry.name == LAUNCHER_SCRIPT_NAME and not entry.is_dir():
+                            scripts.append(Path(entry.path))
+                        continue
+                    if entry.is_dir():
+                        children.append(Path(entry.path))
+                    elif entry.name == LAUNCHER_SCRIPT_NAME:
+                        scripts.append(Path(entry.path))
+            pending.extend(sorted(children, key=lambda path: path.as_posix(), reverse=True))
         return sorted(scripts, key=lambda path: path.as_posix())
+
+    @staticmethod
+    def _is_directory(path: Path) -> bool:
+        try:
+            return stat.S_ISDIR(path.stat().st_mode)
+        except (FileNotFoundError, NotADirectoryError):
+            return False
+
+    @staticmethod
+    def _is_file(path: Path) -> bool:
+        try:
+            return stat.S_ISREG(path.stat().st_mode)
+        except (FileNotFoundError, NotADirectoryError):
+            return False
 
     @staticmethod
     def discover_directory_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
         """Discover the launchers directly below one router directory."""
-        import launcher as _facade
-        root = (root or _facade.repo_root()).resolve()
+        root = (root or CmakeSettings.repo_root()).resolve()
         search_path = directory if directory.is_absolute() else root / directory
         search_path = search_path.resolve()
 
-        if not search_path.is_dir() or search_path.name in LAUNCHER_ARTIFACT_DIRECTORIES:
+        if search_path.name in LAUNCHER_ARTIFACT_DIRECTORIES or not LauncherDiscovery._is_directory(search_path):
             return {}
 
         launchers: Dict[str, RepoLauncher] = {}
-        for script in sorted(search_path.glob(LAUNCHER_GLOB_SUFFIX), key=lambda path: path.as_posix()):
-            if script.parent.name in LAUNCHER_ARTIFACT_DIRECTORIES:
-                continue
-            command = _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)
-            launcher = _facade.RepoLauncher(command, script.relative_to(root))
+        scripts = []
+        with os.scandir(search_path) as entries:
+            for entry in entries:
+                if entry.name in LAUNCHER_ARTIFACT_DIRECTORIES or not entry.is_dir():
+                    continue
+                script = Path(entry.path) / LAUNCHER_SCRIPT_NAME
+                try:
+                    script.lstat()
+                except (FileNotFoundError, NotADirectoryError):
+                    continue
+                scripts.append(script)
+        for script in sorted(scripts, key=lambda path: path.as_posix()):
+            command = LauncherDiscovery.validate_launch_command(LauncherDiscovery.launch_command_from_directory(script), script)
+            launcher = RepoLauncher(command, script.relative_to(root))
             LauncherDiscovery._register_launcher(launchers, launcher)
 
         return dict(sorted(launchers.items()))
 
     @staticmethod
     def launcher_route(search_path: Path, leaf_script: Path, root: Path) -> Tuple[Path, ...]:
-        import launcher as _facade
         relative_parts = leaf_script.parent.relative_to(search_path).parts
         route: List[Path] = []
         for depth in range(len(relative_parts)):
             directory = search_path.joinpath(*relative_parts[:depth])
             script = directory / LAUNCHER_SCRIPT_NAME
-            if not script.is_file():
+            if not LauncherDiscovery._is_file(script):
                 kind = KIND_CATEGORY if depth == 0 else KIND_DIRECTORY
                 raise SystemExit(f"{MSG_MISSING_LAUNCHER_PREFIX}{kind} launcher: {script.relative_to(root)}")
             if depth > 0:
-                _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)
+                LauncherDiscovery.validate_launch_command(LauncherDiscovery.launch_command_from_directory(script), script)
             route.append(script.relative_to(root))
         return tuple(route)
 
@@ -92,12 +129,11 @@ class LauncherDiscovery:
         launchers, and every directory between it and the category must provide a
         router so nested groupings cannot be bypassed.
         """
-        import launcher as _facade
-        root = (root or _facade.repo_root()).resolve()
+        root = (root or CmakeSettings.repo_root()).resolve()
         search_path = directory if directory.is_absolute() else root / directory
         search_path = search_path.resolve()
 
-        if not search_path.is_dir() or search_path.name in LAUNCHER_ARTIFACT_DIRECTORIES:
+        if search_path.name in LAUNCHER_ARTIFACT_DIRECTORIES or not LauncherDiscovery._is_directory(search_path):
             return {}
 
         scripts = LauncherDiscovery._launcher_scripts(search_path)
@@ -105,40 +141,38 @@ class LauncherDiscovery:
         router_directories = set()
         for script in scripts:
             for ancestor in script.parent.parents:
-                if not ancestor.is_relative_to(search_path):
-                    break
                 if ancestor in script_directories:
                     router_directories.add(ancestor)
+                if ancestor == search_path:
+                    break
         launchers: Dict[str, RepoLauncher] = {}
         for script in scripts:
             if script.parent in router_directories:
                 continue
 
-            command = _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)
-            launcher = _facade.RepoLauncher(command, script.relative_to(root), _facade.launcher_route(search_path, script, root))
+            command = LauncherDiscovery.validate_launch_command(LauncherDiscovery.launch_command_from_directory(script), script)
+            launcher = RepoLauncher(command, script.relative_to(root), LauncherDiscovery.launcher_route(search_path, script, root))
             LauncherDiscovery._register_launcher(launchers, launcher)
 
         return dict(sorted(launchers.items()))
 
     @staticmethod
     def discover_repo_launchers(root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
-        import launcher as _facade
-        root = (root or _facade.repo_root()).resolve()
+        root = (root or CmakeSettings.repo_root()).resolve()
         launchers: Dict[str, RepoLauncher] = {}
 
         for search_root in LAUNCHER_SEARCH_ROOTS:
-            for launcher in _facade.discover_leaf_launchers(search_root, root).values():
+            for launcher in LauncherDiscovery.discover_leaf_launchers(search_root, root).values():
                 LauncherDiscovery._register_launcher(launchers, launcher)
 
         return dict(sorted(launchers.items()))
 
     @staticmethod
     def run_discovered_launcher(repo_launcher: RepoLauncher, forwarded_args: Sequence[str], echo: bool = True) -> int:
-        import launcher as _facade
         if repo_launcher.route:
-            route_arguments = [_facade.launch_command_from_directory(script) for script in repo_launcher.route[1:]]
-            return _facade.run_repo_script(repo_launcher.route[0], route_arguments + [repo_launcher.command] + list(forwarded_args), echo=echo,)
-        return _facade.run_repo_script(repo_launcher.script, forwarded_args, echo=echo)
+            route_arguments = [LauncherDiscovery.launch_command_from_directory(script) for script in repo_launcher.route[1:]]
+            return ProcessLauncher.run_repo_script(repo_launcher.route[0], route_arguments + [repo_launcher.command] + list(forwarded_args), echo=echo,)
+        return ProcessLauncher.run_repo_script(repo_launcher.script, forwarded_args, echo=echo)
 
     @staticmethod
     def list_directory_launchers(directory: Path, launchers: Dict[str, RepoLauncher]) -> None:
@@ -149,14 +183,13 @@ class LauncherDiscovery:
     @staticmethod
     def run_directory_launcher(directory: Path, argv: Sequence[str]) -> int:
         """Dispatch a category launcher to one of its leaf launchers."""
-        import launcher as _facade
-        launchers = _facade.discover_directory_launchers(directory)
+        launchers = LauncherDiscovery.discover_directory_launchers(directory)
         values = list(argv)
         if not values:
-            _facade.list_directory_launchers(directory, launchers)
+            LauncherDiscovery.list_directory_launchers(directory, launchers)
             return EXIT_USAGE_ERROR
         if values[0] in (COMMAND_HELP_SHORT, COMMAND_HELP_LONG, COMMAND_PROFILES):
-            _facade.list_directory_launchers(directory, launchers)
+            LauncherDiscovery.list_directory_launchers(directory, launchers)
             return 0
 
         repo_launcher = launchers.get(values[0])
@@ -166,7 +199,7 @@ class LauncherDiscovery:
             return EXIT_USAGE_ERROR
 
         forwarded_args = values[1:]
-        return _facade.run_repo_script(repo_launcher.script, forwarded_args, echo=not _facade.is_help_request(forwarded_args))
+        return ProcessLauncher.run_repo_script(repo_launcher.script, forwarded_args, echo=not DispatchRouter.is_help_request(forwarded_args))
 
     @staticmethod
     def list_profiles_command(args) -> int:
@@ -177,15 +210,3 @@ class LauncherDiscovery:
             route = ROUTE_SEPARATOR.join(str(script) for script in (*launcher.route, launcher.script))
             print(MSG_ROUTE_ITEM.format(launcher=launcher, route=route), flush=True)
         return 0
-
-
-launch_command_from_directory = LauncherDiscovery.launch_command_from_directory
-validate_launch_command = LauncherDiscovery.validate_launch_command
-discover_directory_launchers = LauncherDiscovery.discover_directory_launchers
-launcher_route = LauncherDiscovery.launcher_route
-discover_leaf_launchers = LauncherDiscovery.discover_leaf_launchers
-discover_repo_launchers = LauncherDiscovery.discover_repo_launchers
-run_discovered_launcher = LauncherDiscovery.run_discovered_launcher
-list_directory_launchers = LauncherDiscovery.list_directory_launchers
-run_directory_launcher = LauncherDiscovery.run_directory_launcher
-list_profiles_command = LauncherDiscovery.list_profiles_command

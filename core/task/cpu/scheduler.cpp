@@ -161,9 +161,11 @@ void CpuTaskScheduler::pumpMainThread(){
     while(executeOne(false)){}
 }
 
-b8 CpuTaskScheduler::isComplete(const TaskHandle handle)const noexcept{
+b8 CpuTaskScheduler::isComplete(const TaskHandle handle)const{
     if(!handle.valid())
         return true;
+    if(handle.domainIdentity != m_domainIdentity)
+        throw RuntimeException("CPU task query belongs to another scheduler");
     NothrowScopedLock lock(m_mutex);
     return !resolveLocked(handle);
 }

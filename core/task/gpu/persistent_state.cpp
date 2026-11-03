@@ -183,6 +183,29 @@ b8 GpuPersistentResourceStateCache::buildFilteredResourceSubset(
 )const{
     if(&outCandidate.m_owner != this)
         return false;
+    if(&source == &outCandidate.m_states){
+        if(!source.valid() || (!textures.empty() && !textures.data()) || (!buffers.empty() && !buffers.data())){
+            outCandidate.reset();
+            return false;
+        }
+        CommandListResourceSelection selection(scratchArena);
+        using namespace __hidden_gpu_persistent_state;
+        if(!BuildSelection(selection, textures, buffers)){
+            outCandidate.reset();
+            return false;
+        }
+        GraphicsVector<TextureHandle> retainedTextures(m_arena);
+        GraphicsVector<BufferHandle> retainedBuffers(m_arena);
+        RetainSelectedHandles(selection, textures, buffers, retainedTextures, retainedBuffers);
+        if(!outCandidate.m_states.buildResourceSubset(source, selection)){
+            outCandidate.reset();
+            return false;
+        }
+        outCandidate.m_textures.swap(retainedTextures);
+        outCandidate.m_buffers.swap(retainedBuffers);
+        outCandidate.m_consumed = false;
+        return true;
+    }
     outCandidate.reset();
     if(!source.valid() || (!textures.empty() && !textures.data()) || (!buffers.empty() && !buffers.data()))
         return false;

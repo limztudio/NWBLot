@@ -64,17 +64,16 @@ void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods
     const u64 policyEpoch = m_keyboardTextPolicyEpoch;
 
     dispatchToHandlers([&](IInputEventHandler& handler){
-        const b8 consumed = handler.keyboardUpdate(key, scancode, action, mods);
-        if(captureText && consumed){
-            const b8 blocked = handler.blocksKeyboardText();
+        const KeyboardInputResult result = handler.keyboardUpdate(key, scancode, action, mods);
+        if(captureText && result.consumed){
             if(policyEpoch == m_keyboardTextPolicyEpoch){
-                m_keyboardTextBlocked = m_windowFocused && blocked;
+                m_keyboardTextBlocked = m_windowFocused && result.blocksText;
                 if(hasScancode)
                     m_keyboardTextPolicies[static_cast<usize>(scancode)] = m_keyboardTextBlocked;
             }
         }
         // Releases reach every handler so a focus change between handlers cannot leave a press held.
-        return action != InputAction::Release && consumed;
+        return action != InputAction::Release && result.consumed;
     });
 }
 
@@ -116,9 +115,9 @@ void InputDispatcher::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     });
 }
 
-void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler){
+void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type, const NotNull<IInputEventHandler*> handler){
     if(m_dispatchDepth > 0){
-        m_pendingHandlerMutations.push_back({ MakeNotNull(&handler), type });
+        m_pendingHandlerMutations.push_back({ handler, type });
         if(type == HandlerMutationType::Remove)
             ++m_pendingHandlerRemovalCount;
         return;
@@ -126,30 +125,30 @@ void InputDispatcher::queueOrApplyHandlerMutation(HandlerMutationType::Enum type
 
     switch(type){
     case HandlerMutationType::AddFront:
-        m_handlers.remove(MakeNotNull(&handler));
-        m_handlers.push_front(MakeNotNull(&handler));
+        m_handlers.remove(handler);
+        m_handlers.push_front(handler);
         break;
     case HandlerMutationType::AddBack:
-        m_handlers.remove(MakeNotNull(&handler));
-        m_handlers.push_back(MakeNotNull(&handler));
+        m_handlers.remove(handler);
+        m_handlers.push_back(handler);
         break;
     case HandlerMutationType::Remove:
-        m_handlers.remove(MakeNotNull(&handler));
+        m_handlers.remove(handler);
         break;
     }
 }
 
 void InputDispatcher::applyPendingHandlerMutations(){
     for(const HandlerMutation& mutation : m_pendingHandlerMutations){
-        queueOrApplyHandlerMutation(mutation.type, *mutation.handler);
+        queueOrApplyHandlerMutation(mutation.type, mutation.handler);
     }
     m_pendingHandlerMutations.clear();
     m_pendingHandlerRemovalCount = 0;
 }
 
-b8 InputDispatcher::isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept{
+b8 InputDispatcher::isHandlerPendingRemoval(const IInputEventHandler* const handler)const noexcept{
     for(const HandlerMutation& mutation : m_pendingHandlerMutations){
-        if(mutation.handler.get() == &handler && mutation.type == HandlerMutationType::Remove)
+        if(mutation.handler.get() == handler && mutation.type == HandlerMutationType::Remove)
             return true;
     }
     return false;

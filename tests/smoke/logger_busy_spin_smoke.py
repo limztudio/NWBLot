@@ -6,6 +6,7 @@ import ctypes
 import http.client
 import json
 import os
+import shutil
 from pathlib import Path
 import struct
 import sys
@@ -70,6 +71,8 @@ def bind_window_queries(user32):
     user32.GetForegroundWindow.restype = ctypes.c_void_p
     user32.GetGUIThreadInfo.argtypes = [ctypes.c_uint32, ctypes.POINTER(GuiThreadInfo)]
     user32.GetGUIThreadInfo.restype = ctypes.c_int
+    user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
     user32.GetDlgItem.argtypes = [ctypes.c_void_p, ctypes.c_int]
     user32.GetDlgItem.restype = ctypes.c_void_p
     user32.SendMessageTimeoutW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t, ctypes.c_uint, ctypes.c_uint, ctypes.POINTER(ctypes.c_size_t),]
@@ -79,10 +82,17 @@ def bind_window_queries(user32):
 def require_active_window(user32, handle):
     info = GuiThreadInfo()
     info.size = ctypes.sizeof(info)
-    if not user32.GetGUIThreadInfo(0, ctypes.byref(info)):
-        raise SmokeFailure(f"GetGUIThreadInfo failed: {ctypes.get_last_error()}")
-    if user32.GetForegroundWindow() != handle or info.active != handle:
-        raise SmokeFailure("logger window lost foreground or active status during the idle sample")
+    fixture_pid = ctypes.c_uint32()
+    thread_id = user32.GetWindowThreadProcessId(handle, ctypes.byref(fixture_pid))
+    if not thread_id or not user32.GetGUIThreadInfo(thread_id, ctypes.byref(info)):
+        raise SmokeFailure(f"GetGUIThreadInfo failed for logger thread {thread_id}: {ctypes.get_last_error()}")
+    foreground = user32.GetForegroundWindow()
+    if foreground != handle or info.active != handle:
+        foreground_pid = ctypes.c_uint32()
+        if foreground:
+            user32.GetWindowThreadProcessId(foreground, ctypes.byref(foreground_pid))
+        raise SmokeFailure(f"logger window is not foreground and active: fixture={handle:#x} pid={fixture_pid.value}, "
+                           f"foreground={foreground!r} pid={foreground_pid.value}, active={info.active!r}, focus={info.focus!r}")
 
 
 def sample_idle_cpu(process, backend, handle):
@@ -122,6 +132,15 @@ def sample_idle_cpu(process, backend, handle):
     finally:
         if not kernel32.CloseHandle(process_handle):
             raise SmokeFailure(f"CloseHandle failed: {ctypes.get_last_error()}")
+
+
+def retain_and_validate_process_output(capture, output_directory):
+    output_path = output_directory / f"process_output_{capture.path.name}"
+    shutil.copyfile(capture.path, output_path)
+    output_text = output_path.read_text(encoding=LIT_UTF_8, errors="replace")
+    if output_text:
+        validate_expected_log_text(output_text, (), LOG_FAILURE_MESSAGES)
+    return output_path
 
 
 def query_log_list(backend, handle, message, index=0, address=0):
@@ -318,10 +337,12 @@ def main(argv):
                 failures.append(f"WM_CLOSE: {error}")
             finally:
                 try:
-                    exit_code, tail = terminate_process(process, LIT_LOGSERVER)
-                    evidence.update({"exit_code": exit_code, "process_output_tail": tail})
-                    if tail:
-                        validate_expected_log_text(tail, (), LOG_FAILURE_MESSAGES)
+                    capture = getattr(process, "_nwb_output_capture", None)
+                    exit_code, tail = terminate_process(process, LIT_LOGSERVER, preserve_capture=True)
+                    if capture is None:
+                        raise SmokeFailure("logger process output capture is missing")
+                    output_path = retain_and_validate_process_output(capture, args.output_directory)
+                    evidence.update({"exit_code": exit_code, "process_output_tail": tail, "process_output_path": str(output_path)})
                     evidence["process_output_checked"] = True
                 except Exception as error:
                     failures.append(f"shutdown: {error}")
@@ -334,9 +355,15 @@ def main(argv):
             except Exception as error:
                 failures.append(f"log evidence: {error}")
         if backend:
-            backend.close()
+            try:
+                backend.close()
+            except Exception as error:
+                failures.append(f"window backend cleanup: {error}")
         evidence.update({"passed": not failures and skip_reason is None, "skipped": skip_reason is not None, "skip_reason": skip_reason, "failures": failures})
-        (args.output_directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding=LIT_UTF_8)
+        try:
+            (args.output_directory / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding=LIT_UTF_8)
+        except OSError as error:
+            failures.append(f"evidence write: {error}")
 
     for failure in failures:
         write_status(f"FAIL: {failure}")

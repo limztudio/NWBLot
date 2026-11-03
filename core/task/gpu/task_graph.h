@@ -276,7 +276,7 @@ public:
     // Adds a texture resolve. The helper derives Graphics requirements and uses, retaining the textures. Caller passes no uses.
     [[nodiscard]] Expected<GpuTaskId> addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
 
-    // Copies caller bytes into graph-owned storage. `alignment` is a nonzero power of two; upload tasks resolve the blob while recording.
+    // Copies caller bytes into graph-owned storage aligned to `alignment`, a nonzero power of two.
     [[nodiscard]] Expected<GpuUploadBlobId> copyUploadData(const void* data, usize byteSize, usize alignment = alignof(u8));
 
     // Adds graph-owned buffer/texture uploads.
@@ -481,7 +481,7 @@ private:
     }
 
     [[nodiscard]] b8 validUploadBlob(const GpuUploadBlobId& id)const noexcept{
-        return id.valid() && id.generation == m_generation && id.index < m_uploadBlobs.size() && !m_uploadBlobs[id.index].bytes.empty();
+        return id.valid() && id.generation == m_generation && id.index < m_uploadBlobs.size() && m_uploadBlobs[id.index].dataSize != 0u;
     }
 
     [[nodiscard]] b8 validPipeline(const GpuGraphPipelineId& id)const noexcept{

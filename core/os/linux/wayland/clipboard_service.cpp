@@ -5,6 +5,7 @@
 #include "clipboard_service.h"
 
 #include <core/common/log.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -235,12 +236,12 @@ void WaylandClipboardService::sendSource(Source& source, const int fd){
         CloseClipboardPipe(rejectedFd);
         return;
     }
+    int ownedFd = fd;
+    ScopeExit closeFd([&ownedFd]()noexcept{ CloseClipboardPipe(ownedFd); });
     auto writer = MakeGlobalUnique<ClipboardPipeWriter>(m_arena, m_arena);
-    if(!writer){
-        int rejectedFd = fd;
-        CloseClipboardPipe(rejectedFd);
+    if(!writer)
         return;
-    }
+    ownedFd = -1;
     if(writer->begin(fd, source.text))
         m_writers.push_back(Move(writer));
 }

@@ -42,12 +42,12 @@ public:
     void setCaptureOptions(const CaptureOptions& options){ m_recorder.setCaptureOptions(options); }
 
     void setFrameIndex(const u64 frameIndex)noexcept{
-        m_frameIndex = frameIndex;
+        m_frameIndex.store(frameIndex, MemoryOrder::release);
         m_textLogCapture.setFrameIndex(frameIndex);
     }
 
     void setStreamId(const u32 streamId)noexcept{
-        m_streamId = streamId;
+        m_streamId.store(streamId, MemoryOrder::release);
         m_textLogCapture.setStreamId(streamId);
     }
 
@@ -61,7 +61,9 @@ public:
 
     [[nodiscard]] b8 enabled()const noexcept{ return m_recorder.enabled(); }
 
-    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
+    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex.load(MemoryOrder::acquire); }
+
+    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId.load(MemoryOrder::acquire); }
 
     [[nodiscard]] usize eventCount()const noexcept{ return m_recorder.eventCount(); }
 
@@ -74,7 +76,7 @@ public:
         const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
         const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics
     ){
-        return RecordFrameGraph(m_recorder, scratchArena, m_frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, m_streamId);
+        return RecordFrameGraph(m_recorder, scratchArena, frameIndex(), nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, streamId());
     }
 
     [[nodiscard]] PerfSessionRecordResult recordPerfReport(const Perf::SessionReport& report, const u32 streamId = 0u){
@@ -83,10 +85,10 @@ public:
 
 
 private:
-    u64 m_frameIndex = 0u;
+    Atomic<u64> m_frameIndex{ 0u };
     Recorder m_recorder;
     TextLogCaptureLogger m_textLogCapture;
-    u32 m_streamId = 0u;
+    Atomic<u32> m_streamId{ 0u };
 };
 
 
@@ -97,26 +99,46 @@ class CaptureSessionCaptureScope final : NoCopy{
 public:
     explicit CaptureSessionCaptureScope(CaptureSession& session)
         : m_session(session)
-        , m_previousForwardLogger(session.m_textLogCapture.forwardLogger())
-        , m_logRegistration(session.m_textLogCapture)
-        , m_diagnostic(session.recorder())
-    {
-        Common::ILogger* const forwardLogger = m_logRegistration.previousLogger() == &m_session.m_textLogCapture ? m_previousForwardLogger : m_logRegistration.previousLogger();
-        m_session.m_textLogCapture.setForwardLogger(forwardLogger);
-        m_diagnostic.setFrameIndex(session.frameIndex());
-        m_diagnostic.setStreamId(session.m_streamId);
-    }
+        , m_diagnostic(
+            session.recorder(),
+            session.frameIndex(),
+            session.streamId(),
+            &session.m_frameIndex,
+            &session.m_streamId
+        )
+        , m_logRegistration(
+            session.m_textLogCapture,
+            &CaptureSessionCaptureScope::BeforePublishLogger,
+            &CaptureSessionCaptureScope::AfterUnpublishLogger,
+            this
+        )
+    {}
     CaptureSessionCaptureScope(CaptureSessionCaptureScope&&) = delete;
-    ~CaptureSessionCaptureScope()noexcept{
-        m_session.m_textLogCapture.setForwardLogger(m_previousForwardLogger);
+    ~CaptureSessionCaptureScope()noexcept = default;
+
+
+private:
+    static void BeforePublishLogger(void* const context, Common::ILogger* const previousLogger)noexcept{
+        auto& self = *static_cast<CaptureSessionCaptureScope*>(context);
+        self.m_previousForwardLogger = self.m_session.m_textLogCapture.forwardLogger();
+        Common::ILogger* const forwardLogger = previousLogger == &self.m_session.m_textLogCapture
+            ? self.m_previousForwardLogger
+            : previousLogger
+        ;
+        self.m_session.m_textLogCapture.setForwardLogger(forwardLogger);
+    }
+
+    static void AfterUnpublishLogger(void* const context, Common::ILogger*)noexcept{
+        auto& self = *static_cast<CaptureSessionCaptureScope*>(context);
+        self.m_session.m_textLogCapture.setForwardLogger(self.m_previousForwardLogger);
     }
 
 
 private:
     CaptureSession& m_session;
     Common::ILogger* m_previousForwardLogger = nullptr;
-    Common::LoggerRegistrationGuard m_logRegistration;
     DiagnosticCaptureGuard m_diagnostic;
+    Common::LoggerRegistrationGuard m_logRegistration;
 };
 
 

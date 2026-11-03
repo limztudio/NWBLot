@@ -4,10 +4,11 @@
 import argparse
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-from refraction_gallery_smoke import CASES, capture_environment, frame_difference, parse_selection  # noqa: E402
+from refraction_gallery_smoke import CASES, capture_environment, frame_difference, parse_selection, stage_logserver  # noqa: E402
 
 LIT_CASES = "cases"
 LIT_NESTED = "nested"
@@ -50,6 +51,26 @@ class RefractionGalleryTests(unittest.TestCase):
         output = (2, 1, [[(9, 0, 0), (18, 10, 10)]])
         result = frame_difference(reference, output)
         self.assertEqual(result["changed_pixels"], 1)
+
+    def test_logserver_staging_is_unique_and_preserves_existing_logs(self):
+        with tempfile.TemporaryDirectory(prefix="nwb_gallery_logger_") as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            executable = source / "logserver.exe"
+            executable.write_bytes(b"executable")
+            executable.with_suffix(".pdb").write_bytes(b"symbols")
+            (source / "project.namesym").write_bytes(b"name symbols")
+            historical = source / "logserver_old.log"
+            historical.write_bytes(b"retained")
+            first, library_directory = stage_logserver(executable, root)
+            second, _ = stage_logserver(executable, root)
+            self.assertNotEqual(first.parent, second.parent)
+            self.assertEqual(first.read_bytes(), b"executable")
+            self.assertEqual(first.with_suffix(".pdb").read_bytes(), b"symbols")
+            self.assertEqual((first.parent / "project.namesym").read_bytes(), b"name symbols")
+            self.assertEqual(library_directory, source)
+            self.assertEqual(historical.read_bytes(), b"retained")
 
 
 if __name__ == LIT_MAIN:

@@ -93,20 +93,32 @@ b8 ProjectTickCallback(void* userData, f32 delta){
     return updateContext.callbacks.onUpdate(delta);
 }
 
-Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
+struct ResourceMountError{
+    ErrorCode code;
+    AStringView stage;
+    ::Path<NWB::Core::Alloc::ScratchArena> path;
+};
+
+Expected<Path, ResourceMountError> ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
     const auto currentDirectory = GetCurrentPath(scratchArena);
-    if(currentDirectory){
-        const auto currentResDirectory = *currentDirectory / s_ResourceDirectoryName;
-        if(NWB::Core::Filesystem::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName))
-            return Path(arena, currentResDirectory);
-    }
+    if(!currentDirectory)
+        return MakeUnexpected(ResourceMountError{ currentDirectory.error(), "current directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena) });
+    const auto currentResDirectory = *currentDirectory / s_ResourceDirectoryName;
+    const auto currentExists = NWB::Core::Filesystem::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName);
+    if(!currentExists)
+        return MakeUnexpected(ResourceMountError{ currentExists.error(), "resource directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena, currentResDirectory) });
+    if(*currentExists)
+        return Path(arena, currentResDirectory);
 
     const auto executableDirectory = GetExecutableDirectory(scratchArena);
     if(!executableDirectory)
-        return Path(arena, s_ResourceDirectoryName);
+        return MakeUnexpected(ResourceMountError{ executableDirectory.error(), "executable directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena) });
 
     const auto executableResDirectory = *executableDirectory / s_ResourceDirectoryName;
-    if(NWB::Core::Filesystem::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName))
+    const auto executableExists = NWB::Core::Filesystem::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName);
+    if(!executableExists)
+        return MakeUnexpected(ResourceMountError{ executableExists.error(), "resource directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena, executableResDirectory) });
+    if(*executableExists)
         return Path(arena, executableResDirectory);
 
     const auto parentDirectory = executableDirectory->parentPath();
@@ -114,7 +126,10 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena, NWB::Co
         return Path(arena, s_ResourceDirectoryName);
 
     const auto parentResDirectory = parentDirectory / s_ResourceDirectoryName;
-    if(NWB::Core::Filesystem::VolumeSegmentExists(parentResDirectory, s_GraphicsVolumeName))
+    const auto parentExists = NWB::Core::Filesystem::VolumeSegmentExists(parentResDirectory, s_GraphicsVolumeName);
+    if(!parentExists)
+        return MakeUnexpected(ResourceMountError{ parentExists.error(), "resource directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena, parentResDirectory) });
+    if(*parentExists)
         return Path(arena, parentResDirectory);
 
     return Path(arena, s_ResourceDirectoryName);
@@ -199,7 +214,7 @@ b8 InstallCrashCapture(CrashArena& crashArena){
         const AStringView binaryDump = report.binaryDump ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize) : AStringView();
         const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective : NWB::Core::Crash::GpuCrashDumpKind::Aftermath;
         const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details.data(), report.details.size()), binaryDump, dumpKind);
-        if(dumpResult.status == NWB::Core::Crash::CrashDumpStatus::NotInstalled || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::RequestFailed || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed){
+        if(!dumpResult.requestAccepted() || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed){
             NWB_LOGGER_WARNING(NWB_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
         }
     }, nullptr
@@ -255,13 +270,23 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
         if(telemetryClient)
             frame.setTelemetryUploadCallback(&__hidden_loader::UploadTelemetry, telemetryClient);
         frame.graphics().setWindowTitle(projectWindowTitle);
-        const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(frame.projectObjectArena(), scratchArena);
-        frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
+        auto resourceDirectoryResult = __hidden_loader::ResolveResourceMountDirectory(frame.projectObjectArena(), scratchArena);
+        if(resourceDirectoryResult)
+            frame.graphics().setPipelineCacheDirectory(*resourceDirectoryResult);
         NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
         if(!NWB::ConfigureProjectRuntime(startupContext)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: project runtime configuration failed before device initialization"));
             return __hidden_loader::s_LoaderExitFailure;
         }
+        if(!resourceDirectoryResult){
+            const auto& error = resourceDirectoryResult.error();
+            if(!startupContext.filesystemFactory){
+                NWB_LOGGER_ERROR(NWB_TEXT("Loader: failed to inspect {} '{}': {}"), ConvertString(error.stage), PathToString<tchar>(error.path), ConvertString(error.code.message()));
+                return __hidden_loader::s_LoaderExitFailure;
+            }
+            NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to inspect {} '{}': {}; continuing with custom filesystem factory"), ConvertString(error.stage), PathToString<tchar>(error.path), ConvertString(error.code.message()));
+        }
+        const NWB::Path resourceMountDirectory = resourceDirectoryResult ? Move(*resourceDirectoryResult) : NWB::Path(frame.projectObjectArena(), __hidden_loader::s_ResourceDirectoryName);
         if(!frame.graphics().setFilesystemFactory(startupContext.filesystemFactory))
             return __hidden_loader::s_LoaderExitFailure;
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))

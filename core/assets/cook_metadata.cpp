@@ -12,6 +12,8 @@
 
 #include <core/common/log.h>
 
+#include <global/filesystem/operations.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -125,7 +127,7 @@ namespace __hidden_cook_metadata{
 
 Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(const Span<const ResolvedAssetRoot> assetRoots, const AStringView expectedExtension, CookArena& cookArena, ScratchArena& scratchArena){
     DiscoveredNwbFileVector files(cookArena);
-    HashSet<u64, ScratchArena, Hasher<u64>, EqualTo<u64>> seenPathHashes(0, Hasher<u64>(), EqualTo<u64>(), scratchArena);
+    CookMetadataDetail::DiscoveredPathSet seenPaths(0, Hasher<AStringView>(), EqualTo<>(), scratchArena);
 
     for(const ResolvedAssetRoot& assetRoot : assetRoots){
         const auto directory = IsDirectory(assetRoot.path);
@@ -146,7 +148,7 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(const Span<const Re
             return MakeUnexpected(Failure{});
         }
         files.reserve(AddSize(files.size(), static_cast<usize>(entries->end() - entries->begin())));
-        seenPathHashes.reserve(AddSize(seenPathHashes.size(), static_cast<usize>(entries->end() - entries->begin())));
+        seenPaths.reserve(AddSize(seenPaths.size(), static_cast<usize>(entries->end() - entries->begin())));
         for(const auto& dirEntry : *entries){
             const auto isRegularFile = dirEntry.isRegularFile();
             if(!isRegularFile){
@@ -166,13 +168,16 @@ Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(const Span<const Re
 #if defined(NWB_PLATFORM_WINDOWS)
             CanonicalizeTextInPlace(normalizedPath);
 #endif
-            if(!seenPathHashes.insert(ComputeFnv64Text(normalizedPath)).second)
+            const auto inserted = seenPaths.insert(Move(normalizedPath));
+            if(!inserted.second)
                 continue;
 #if !defined(NWB_PLATFORM_WINDOWS)
-            CanonicalizeTextInPlace(normalizedPath);
+            ScratchString canonicalPath(*inserted.first, scratchArena);
+            CanonicalizeTextInPlace(canonicalPath);
+            files.emplace_back(cookArena, assetRoot.path, filePath, canonicalPath, assetRoot.virtualRoot);
+#else
+            files.emplace_back(cookArena, assetRoot.path, filePath, *inserted.first, assetRoot.virtualRoot);
 #endif
-
-            files.emplace_back(cookArena, assetRoot.path, filePath, normalizedPath, assetRoot.virtualRoot);
         }
     }
 
@@ -206,7 +211,36 @@ b8 ParseAssetMetadata(
 
     seenPropertyAssetPathHashes.reserve(nwbFiles.size());
 
-    const b8 useAssetCache = !assetCacheDirectory.empty();
+    b8 useAssetCache = !assetCacheDirectory.empty();
+    Sha256Digest producerDigest = {};
+    if(useAssetCache && !nwbFiles.empty()){
+        ::Path<ScratchArena> executablePath(scratchArena);
+#if defined(NWB_PLATFORM_LINUX)
+        executablePath = ::Path<ScratchArena>(scratchArena, "/proc/self/exe");
+#else
+        auto resolvedExecutablePath = GetExecutablePath(scratchArena);
+        if(!resolvedExecutablePath){
+            NWB_LOGGER_WARNING(NWB_TEXT("AssetCook: disabling asset cache because the producer executable path is unavailable: {}"), ConvertString(resolvedExecutablePath.error().message()));
+            useAssetCache = false;
+        }
+        else
+            executablePath = Move(*resolvedExecutablePath);
+#endif
+        if(useAssetCache){
+            Vector<u8, ScratchArena> executableBytes(scratchArena);
+            const auto read = ReadBinaryFile(executablePath, executableBytes);
+            if(!read){
+                NWB_LOGGER_WARNING(NWB_TEXT("AssetCook: disabling asset cache because producer executable '{}' could not be read: {}"), PathToString<tchar>(executablePath), ConvertString(read.error().message()));
+                useAssetCache = false;
+            }
+            else if(executableBytes.empty()){
+                NWB_LOGGER_WARNING(NWB_TEXT("AssetCook: disabling asset cache because producer executable '{}' is empty"), PathToString<tchar>(executablePath));
+                useAssetCache = false;
+            }
+            else
+                producerDigest = ComputeSha256(BinaryByteView{ executableBytes.data(), executableBytes.size() });
+        }
+    }
     outMetadata.fileCacheRecords.clear();
     if(useAssetCache){
         outMetadata.fileCacheRecords.reserve(nwbFiles.size());
@@ -236,7 +270,7 @@ b8 ParseAssetMetadata(
                 assetCacheDirectory,
                 discoveredNwbFile,
                 AStringView(metaText),
-                firstToken,
+                producerDigest,
                 scratchArena,
                 relativePathText,
                 cacheFileName,

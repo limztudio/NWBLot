@@ -167,6 +167,7 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     FrameGraphPhysicalQueueCompileRuntimeStatistics compile;
     FrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
     FrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;
+    u64 barrierCount = 0u;
 };
 
 [[nodiscard]] EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(u32 nodeIndex, const FrameGraphRuntimeStatistics& statistics)noexcept;

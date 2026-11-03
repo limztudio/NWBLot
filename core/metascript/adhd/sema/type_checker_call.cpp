@@ -156,6 +156,13 @@ b8 TypeChecker::checkCallableArguments(
                 ok = false;
             }
         }
+        else if(!targetCallable && calledMemberName == "substr"){
+            const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
+            if(!actualArgType.empty() && !IsIntegerScalarType(actualArgType)){
+                reportError(errors, arg->span, "arguments to 'substr' must have integer types");
+                ok = false;
+            }
+        }
         if(!expectedParamType.empty() && m_symbols.findInterface(expectedParamType)){
             if(!verifyConcreteClassImplementsInterface(
                 ownerClass,
@@ -265,6 +272,7 @@ b8 TypeChecker::checkCallableArguments(
 
 b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors){
     b8 ok = true;
+    expr.isBuiltinCall = false;
 
     if(expr.lhs && !checkExpr(ownerClass, scope, false, method, *expr.lhs, errors))
         ok = false;
@@ -326,6 +334,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             }
             if(!targetCallable && !localCallable){
                 if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
+                    expr.isBuiltinCall = true;
                     calledMemberName = expr.lhs->text;
                     if(fnInfo->arity > 0u && callArgCount != fnInfo->arity){
                         reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
@@ -439,7 +448,39 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 }
             }
 
-            if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp){
+            const b8 isStringFamily = (objType == "String" || objType == "CompactString" || objType == "StringView");
+            if(isStringFamily && mName == "substr"){
+                if(callArgCount > 2u){
+                    reportError(errors, expr.span, "'substr' accepts at most 2 arguments");
+                    ok = false;
+                }
+                if(objType == "String")
+                    expr.isStringSubstr = true;
+                if(isMutationTarget){
+                    reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
+                    ok = false;
+                }
+            }
+            else if(isStringFamily && (mName == "front" || mName == "back")){
+                if(callArgCount != 0u){
+                    reportError(errors, expr.span, "'front' and 'back' do not accept arguments");
+                    ok = false;
+                }
+                if(isMutationTarget){
+                    if(objType == "StringView" || objType == "CompactString"){
+                        reportError(errors, expr.span, "cannot mutate elements of 'StringView' or 'CompactString'");
+                        ok = false;
+                    }
+                    else{
+                        expr.isStringByteMutRef = true;
+                    }
+                }
+                else{
+                    expr.isStringByteRead = true;
+                }
+            }
+
+            if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp || expr.isStringByteMutRef){
                 const b8 savedDeref = expr.lhs->lhs->derefNotNull;
                 if(!checkExpr(ownerClass, scope, true, method, *expr.lhs->lhs, errors))
                     ok = false;
@@ -536,7 +577,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     }
 
     if(targetCallable && expr.callTemplateArgs.empty() && !targetCallable->templateParams.empty())
-        (void)deduceCallTemplateArgs(ownerClass, &method, *targetCallable, expr.arguments, scope, expr.deducedTemplateArgs);
+        deduceCallTemplateArgs(ownerClass, &method, *targetCallable, expr.arguments, scope, expr.deducedTemplateArgs);
 
     return ok;
 }

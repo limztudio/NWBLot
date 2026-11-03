@@ -77,6 +77,7 @@ public:
 
 public:
     [[nodiscard]] b8 enqueueTelemetry(const void* bytes, usize byteCount);
+    [[nodiscard]] usize rejectedPayloadCount()const noexcept{ return m_rejectedPayloadCount.load(MemoryOrder::acquire); }
 
 
 protected:
@@ -99,9 +100,14 @@ private:
     AString<LogArena> m_telemetryUrl;
     ClientPayloadKind::Enum m_pendingPayloadKind;
     b8 m_hasPendingPayload;
+    b8 m_preferTelemetry;
+    u32 m_retryDelayMs;
+    long m_lastHttpFailureStatus;
+    i32 m_lastCurlFailureCode;
 
 
 private:
+    Atomic<usize> m_rejectedPayloadCount;
     Atomic<usize> m_messageCount;
     Atomic<usize> m_telemetryCount;
     ParallelQueue<LogBytes, LogArena> m_telemetryQueue;

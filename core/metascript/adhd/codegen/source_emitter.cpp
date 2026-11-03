@@ -257,7 +257,7 @@ void SourceEmitter::emitIndent(MString& out, const u32 indent)const{
 
 void SourceEmitter::emitScratchArenaPrologue(MString& out, const u32 indent, const MStringView arenaName)const{
     emitIndent(out, indent);
-    out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"");
+    out.append("static ::NWB::Core::Alloc::GlobalArena __adhd_scratch(::Name(\"");
     out.append(arenaName.data(), arenaName.size());
     out.append("\"));\r\n");
 }

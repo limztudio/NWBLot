@@ -34,9 +34,7 @@ namespace __hidden_texture_cook_metadata{
 using Core::Metascript::Value;
 
 static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarRegistrar(Core::Assets::AssetPairedSidecarRule{
-    .firstToken = "texture",
     .sidecarExtension = TextureFormat::s_TextureDataExtension,
-    .bunchScanKeyword = {},
 });
 
 

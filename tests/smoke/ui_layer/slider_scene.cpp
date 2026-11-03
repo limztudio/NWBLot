@@ -72,7 +72,7 @@ b8 UiSliderSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiSliderSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
+::NWB::Core::KeyboardInputResult UiSliderSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key < Core::Key::F4 || key > Core::Key::F9)
         return false;
     if(action != Core::InputAction::Press)

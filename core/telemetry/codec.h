@@ -85,6 +85,7 @@ struct DecodedEvent{
 [[nodiscard]] b8 EncodeEvent(const EventHeader& header, const void* payload, usize payloadBytes, TelemetryBytes& outBytes);
 [[nodiscard]] b8 EncodeEventStream(const EventView& events, TelemetryBytes& outBytes);
 [[nodiscard]] Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const void* bytes, usize byteCount);
+// The destination must not be changed concurrently. Input may borrow one of its current event payloads.
 [[nodiscard]] Expected<usize, DecodeResult> DecodeEventStream(const void* bytes, usize byteCount, TelemetryArena& arena, Recorder& inOutRecorder);
 
 

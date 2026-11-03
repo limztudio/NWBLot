@@ -12,6 +12,7 @@
 
 
 #include "asset.h"
+#include <impl/assets_mesh/cook_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -28,7 +29,12 @@ NWB_IMPL_BEGIN
 
 
 // Bits follow the canonical ray-triangle order. Attribute seams share position identity; coincident independent positions remain separate.
-[[nodiscard]] Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(Span<const Float3U> positions, Span<const u32> triangleIndices, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] inline Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const Span<const Float3U> positions, const Span<const u32> triangleIndices, Core::Alloc::ScratchArena& scratchArena){
+    const Expected<Vector<u32>> words = BuildSolidTriangleWordsGlobal(positions, triangleIndices);
+    if(!words)
+        return MakeUnexpected(Failure{});
+    return Vector<u32, Core::Alloc::ScratchArena>(words->begin(), words->end(), scratchArena);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

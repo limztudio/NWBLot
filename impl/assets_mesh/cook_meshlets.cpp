@@ -93,10 +93,10 @@ b8 MeshCookMeshlets::AddVisitedMeshletTriangle(
         return false;
 
     localTriangleIndices.push_back(triangleIndex);
-    MeshletCandidateSearch::AddMeshletTriangleToScoreState(
+    AddMeshletTriangleToScoreStateFromCalculations(
+        trianglePrecompute.triangleCalculations,
         localTriangleIndices,
-        trianglePrecompute.loadTriangleVectors(triangleIndex),
-        trianglePrecompute.triangleAreaNormalAt(),
+        triangleIndex,
         scoreState
     );
     trianglePrecompute.visitedTriangles[triangleIndex] = 1u;

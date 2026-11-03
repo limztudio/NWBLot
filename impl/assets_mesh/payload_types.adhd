@@ -53,6 +53,19 @@ const usize s_AttribGpuByteSize = 16u;
 const f32 s_DirectionLengthTolerance = 0.01f;
 const f32 s_TangentHandednessTolerance = 0.001f;
 
+const StringView s_UnnamedMeshAssetPathText = "<unnamed>";
+const StringView s_MeshValidatePayloadContextText = "Mesh::validatePayload";
+const StringView s_StreamCountLimitReasonText = "exceeds u32 stream count limits";
+const StringView s_NonFiniteDataReasonText = "contains non-finite data";
+const StringView s_InvalidStreamReasonText = "is invalid";
+const StringView s_InvalidEncodedPositionRefReasonText = "has invalid encoded position ref";
+const StringView s_InvalidEncodedAttributeRefReasonText = "has invalid encoded attribute ref";
+const StringView s_PositionsStreamLabelText = "positions";
+const StringView s_NormalsStreamLabelText = "normals";
+const StringView s_TangentsStreamLabelText = "tangents";
+const StringView s_Uv0StreamLabelText = "uv0";
+const StringView s_ColorsStreamLabelText = "colors";
+
 [reflect]
 enum<u32> MeshletRefDeltaWidth{
     U8 = 0u,
@@ -619,6 +632,309 @@ b8 HasValidMeshSolidTriangleTailPadding(in usize primitiveIndexCount, in u32 las
     const usize triangleCount = primitiveIndexCount / s_MeshletTriangleIndexCount;
     const u32 tailBits = cast<u32>(triangleCount % s_MeshletSolidTriangleWordBits);
     return tailBits == 0u || (lastWord >> tailBits) == 0u;
+}
+
+StringView ResolveMeshVirtualPathText(in Name virtualPath){
+    if(virtualPath != s_NameNone)
+        return virtualPath.resolvedText();
+    return s_UnnamedMeshAssetPathText;
+}
+
+b8 MeshStreamSizeFitsU32(in usize count){
+    return count <= cast<usize>(u32.max);
+}
+
+f32x4 UnpackHalf4UToF32x4(in f16x4u halfValue){
+    f32x4 outDecoded(0.0f, 0.0f, 0.0f, 0.0f);
+    native(in halfValue, mut outDecoded){
+        ::StoreFloat(::LoadHalf(halfValue), outDecoded);
+    }
+    return outDecoded;
+}
+
+void LogMeshPayloadValidation(in StringView contextText, in StringView meshPathText, in StringView detailText){
+    error("{} failed: mesh '{}' {}", contextText, meshPathText, detailText);
+}
+
+void LogMeshPayloadIndexedValidation(
+    in StringView contextText,
+    in StringView meshPathText,
+    in StringView itemText,
+    in usize itemIndex,
+    in StringView detailText
+){
+    error(
+        "{} failed: mesh '{}' {} {} {}"
+        , contextText
+        , meshPathText
+        , itemText
+        , itemIndex
+        , detailText
+    );
+}
+
+void LogMeshletPayloadValidation(in StringView contextText, in StringView meshPathText, in usize meshletIndex, in StringView detailText){
+    error(
+        "{} failed: mesh '{}' meshlet {} {}"
+        , contextText
+        , meshPathText
+        , meshletIndex
+        , detailText
+    );
+}
+
+void LogMeshletPrimitivePayloadValidation(
+    in StringView contextText,
+    in StringView meshPathText,
+    in usize meshletIndex,
+    in usize primitiveIndex,
+    in StringView detailText
+){
+    error(
+        "{} failed: mesh '{}' meshlet {} primitive {} {}"
+        , contextText
+        , meshPathText
+        , meshletIndex
+        , primitiveIndex
+        , detailText
+    );
+}
+
+b8 ValidateMeshStreams(
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in StringView contextText,
+    in StringView meshPathText
+){
+    if(
+        !MeshStreamSizeFitsU32(positions.size())
+        || !MeshStreamSizeFitsU32(normals.size())
+        || !MeshStreamSizeFitsU32(tangents.size())
+        || !MeshStreamSizeFitsU32(uv0.size())
+        || !MeshStreamSizeFitsU32(colors.size())
+    ){
+        LogMeshPayloadValidation(contextText, meshPathText, s_StreamCountLimitReasonText);
+        return false;
+    }
+
+    for(usize i = 0u; i < positions.size(); ++i){
+        const f32x3u pos = positions[i];
+        if(isFinite(pos.x) && isFinite(pos.y) && isFinite(pos.z))
+            continue;
+
+        LogMeshPayloadIndexedValidation(contextText, meshPathText, s_PositionsStreamLabelText, i, s_NonFiniteDataReasonText);
+        return false;
+    }
+    for(usize i = 0u; i < normals.size(); ++i){
+        const f32x4 normal = UnpackHalf4UToF32x4(normals[i]);
+        if(IsValidMeshDirectionVector(f32x4(normal.x, normal.y, normal.z, 0.0f)))
+            continue;
+
+        LogMeshPayloadIndexedValidation(contextText, meshPathText, s_NormalsStreamLabelText, i, s_InvalidStreamReasonText);
+        return false;
+    }
+    for(usize i = 0u; i < tangents.size(); ++i){
+        if(IsValidMeshTangentVector(UnpackHalf4UToF32x4(tangents[i])))
+            continue;
+
+        LogMeshPayloadIndexedValidation(contextText, meshPathText, s_TangentsStreamLabelText, i, s_InvalidStreamReasonText);
+        return false;
+    }
+    for(usize i = 0u; i < uv0.size(); ++i){
+        const f32x2u uv = uv0[i];
+        if(isFinite(uv.x) && isFinite(uv.y))
+            continue;
+
+        LogMeshPayloadIndexedValidation(contextText, meshPathText, s_Uv0StreamLabelText, i, s_NonFiniteDataReasonText);
+        return false;
+    }
+    for(usize i = 0u; i < colors.size(); ++i){
+        const f32x4 color = UnpackHalf4UToF32x4(colors[i]);
+        if(isFinite(color.x) && isFinite(color.y) && isFinite(color.z) && isFinite(color.w))
+            continue;
+
+        LogMeshPayloadIndexedValidation(contextText, meshPathText, s_ColorsStreamLabelText, i, s_NonFiniteDataReasonText);
+        return false;
+    }
+
+    return true;
+}
+
+b8 ValidateMeshletPayload(
+    in Span<u8> positionRefDeltas,
+    in Span<u8> attributeRefDeltas,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<u8> meshletPrimitiveIndices,
+    in usize positionCount,
+    in usize normalCount,
+    in usize tangentCount,
+    in usize uv0Count,
+    in usize colorCount,
+    in StringView contextText,
+    in StringView meshPathText
+){
+    if(meshlets.empty() || meshletBounds.size() != meshlets.size()){
+        LogMeshPayloadValidation(contextText, meshPathText, "has incomplete meshlet payload");
+        return false;
+    }
+    if(meshlets.size() > cast<usize>(u32.max / s_MeshletBoundsStride)){
+        LogMeshPayloadValidation(contextText, meshPathText, "meshlet bounds exceed u32 byte-address limits");
+        return false;
+    }
+    if(!MeshStreamSizeFitsU32(positionRefDeltas.size()) || !MeshStreamSizeFitsU32(attributeRefDeltas.size())){
+        LogMeshPayloadValidation(contextText, meshPathText, s_StreamCountLimitReasonText);
+        return false;
+    }
+
+    usize expectedLocalVertexRefCount = 0u;
+    usize expectedPositionRefByteCount = 0u;
+    usize expectedAttributeRefByteCount = 0u;
+    usize expectedPrimitiveIndexCount = 0u;
+    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
+        const MeshletDesc meshlet = meshlets[meshletIndex];
+        const u32 vertexCount = MeshletVertexCount(meshlet);
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+        const u32 encodedPositionCount = MeshletPositionCount(meshlet);
+        const u32 attributeCount = MeshletAttributeCount(meshlet);
+        if(vertexCount == 0u || vertexCount > s_MeshMaxMeshletVertices){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid vertex count");
+            return false;
+        }
+        if(primitiveCount == 0u || primitiveCount > s_MeshMaxMeshletTriangles){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid primitive count");
+            return false;
+        }
+        if(encodedPositionCount == 0u || encodedPositionCount > s_MeshMaxMeshletVertices){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid deformed position count");
+            return false;
+        }
+        if(attributeCount == 0u || attributeCount > s_MeshMaxMeshletVertices){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid attribute count");
+            return false;
+        }
+        if(
+            cast<usize>(meshlet.localVertexOffset) != expectedLocalVertexRefCount
+            || cast<usize>(meshlet.primitiveOffset) != expectedPrimitiveIndexCount
+            || cast<usize>(meshlet.positionRefOffset) != expectedPositionRefByteCount
+            || cast<usize>(meshlet.attributeRefOffset) != expectedAttributeRefByteCount
+        ){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has non-contiguous offsets");
+            return false;
+        }
+
+        const Expected<usize> encodedPositionBytes = TryComputeMeshletEncodedPositionRefByteCount(meshlet, false);
+        const Expected<usize> encodedAttributeBytes = TryComputeMeshletEncodedAttributeRefByteCount(meshlet);
+        if(!encodedPositionBytes.has_value() || !encodedAttributeBytes.has_value()){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid ref encoding width");
+            return false;
+        }
+        if(
+            encodedPositionBytes.value() > usize.max - expectedPositionRefByteCount
+            || encodedAttributeBytes.value() > usize.max - expectedAttributeRefByteCount
+        ){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "encoded ref byte counts overflow");
+            return false;
+        }
+
+        expectedLocalVertexRefCount += cast<usize>(vertexCount);
+        expectedPositionRefByteCount += encodedPositionBytes.value();
+        expectedAttributeRefByteCount += encodedAttributeBytes.value();
+        expectedPrimitiveIndexCount += cast<usize>(primitiveCount) * cast<usize>(s_MeshletTriangleIndexCount);
+        if(
+            expectedLocalVertexRefCount > localVertexRefs.size()
+            || expectedPositionRefByteCount > positionRefDeltas.size()
+            || expectedAttributeRefByteCount > attributeRefDeltas.size()
+            || expectedPrimitiveIndexCount > meshletPrimitiveIndices.size()
+        ){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "exceeds meshlet stream bounds");
+            return false;
+        }
+
+        const MeshletBounds bounds = meshletBounds[meshletIndex];
+        if(!IsValidMeshletBoundsSphere(bounds)){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid bounds");
+            return false;
+        }
+        if(!HasValidMeshletConeFlags(bounds)){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid cone flags");
+            return false;
+        }
+        if(!HasValidMeshletConeCutoff(bounds)){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "has invalid cone cutoff");
+            return false;
+        }
+
+        if(!ValidateMeshletEncodedPositionRefs(positionRefDeltas, meshlet, encodedPositionCount, positionCount)){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, s_InvalidEncodedPositionRefReasonText);
+            return false;
+        }
+
+        if(!ValidateMeshletEncodedAttributeRefs(attributeRefDeltas, meshlet, attributeCount, normalCount, tangentCount, uv0Count, colorCount)){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, s_InvalidEncodedAttributeRefReasonText);
+            return false;
+        }
+        if(!ValidateMeshletLocalVertexRefsRange(localVertexRefs, meshlet, vertexCount, encodedPositionCount, attributeCount)){
+            LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, "local vertex ref is out of range");
+            return false;
+        }
+        const Expected<usize> invalidPrimitive = TryFindInvalidMeshletPrimitiveIndex(meshletPrimitiveIndices, meshlet, primitiveCount, vertexCount);
+        if(invalidPrimitive.has_value()){
+            LogMeshletPrimitivePayloadValidation(contextText, meshPathText, meshletIndex, invalidPrimitive.value(), "has an out-of-range local vertex");
+            return false;
+        }
+    }
+
+    if(
+        expectedLocalVertexRefCount != localVertexRefs.size()
+        || expectedPositionRefByteCount != positionRefDeltas.size()
+        || expectedAttributeRefByteCount != attributeRefDeltas.size()
+        || expectedPrimitiveIndexCount != meshletPrimitiveIndices.size()
+    ){
+        LogMeshPayloadValidation(contextText, meshPathText, "meshlet streams contain trailing data");
+        return false;
+    }
+
+    return true;
+}
+
+b8 ValidateSharedMeshPayload(
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<u8> positionRefDeltas,
+    in Span<u8> attributeRefDeltas,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<u8> meshletPrimitiveIndices,
+    in StringView contextText,
+    in StringView meshPathText
+){
+    return
+        ValidateMeshStreams(positions, normals, tangents, uv0, colors, contextText, meshPathText)
+        && ValidateMeshletPayload(
+            positionRefDeltas,
+            attributeRefDeltas,
+            localVertexRefs,
+            meshlets,
+            meshletBounds,
+            meshletPrimitiveIndices,
+            positions.size(),
+            normals.size(),
+            tangents.size(),
+            uv0.size(),
+            colors.size(),
+            contextText,
+            meshPathText
+        )
+    ;
 }
 
 

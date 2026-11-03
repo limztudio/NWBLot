@@ -115,10 +115,9 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
     const auto triangleIndices = BuildMeshletTriangleIndices(meshEntry.meshlets, meshEntry.meshletLocalVertexRefs, meshEntry.meshletPositionRefDeltas, meshEntry.meshletPrimitiveIndices, meshEntry.positions.size(), scratchArena);
     if(!triangleIndices)
         return MakeUnexpected(Failure{});
-    auto solidTriangleWords = BuildSolidTriangleWords(meshEntry.positions, *triangleIndices, scratchArena);
-    if(!solidTriangleWords)
+    Core::Assets::AssetVector<u32> solidWords(arena);
+    if(!BuildSolidTriangleWordsInto(meshEntry.positions, *triangleIndices, solidWords))
         return MakeUnexpected(Failure{});
-    Core::Assets::AssetVector<u32> solidWords(solidTriangleWords->begin(), solidTriangleWords->end(), arena);
 
     Mesh mesh(arena, meshEntry.virtualPath);
     mesh.setPayload(

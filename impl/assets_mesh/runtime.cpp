@@ -8,7 +8,6 @@
 #include "meshlet_triangle_indices.h"
 #include "meshlet_triangle_visit.h"
 #include "meshlet_vertex_attributes.h"
-#include "runtime_validation.h"
 
 #include <core/common/log.h>
 #include <core/assets/auto_registration.h>
@@ -71,18 +70,19 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
 }
 
 b8 Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(*this, scratchArena);
+    (void)scratchArena;
+    const AStringView meshPathText = ResolveMeshVirtualPathText(virtualPath());
 
     if(hasIncompleteGeometryPayload()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload"), meshPathText);
+        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload"), ConvertString(meshPathText));
         return false;
     }
     if(!HasValidMeshSolidTriangleTailPadding(meshletPrimitiveIndices().size(), solidTriangleWords().back())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding"), meshPathText);
+        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding"), ConvertString(meshPathText));
         return false;
     }
 
-    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(
+    if(!ValidateSharedMeshPayload(
         m_positionStream,
         m_normalStream,
         m_tangentStream,
@@ -94,7 +94,7 @@ b8 Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         m_meshlets,
         m_meshletBounds,
         m_meshletPrimitiveIndices,
-        NWB_TEXT("Mesh::validatePayload"),
+        s_MeshValidatePayloadContextText,
         meshPathText
     ))
         return false;

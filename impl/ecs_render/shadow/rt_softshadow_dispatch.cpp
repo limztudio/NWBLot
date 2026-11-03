@@ -92,17 +92,18 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         {
             Core::GpuTimingMeasure geometryTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowGeometryDownsample, m_graphics.getDevice(), commandList);
 
-            ShadowGeometryDownsamplePushConstants geometryPush;
-            geometryPush.receiverFactor = targets.shadowReceiverFactor;
-            geometryPush.width = targets.width;
-            geometryPush.height = targets.height;
-            geometryPush.halfWidth = softHalfWidth;
-            geometryPush.halfHeight = softHalfHeight;
-            geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-            geometryPush.normalSlot = targets.bindless.gbufferNormal.slot();
-            geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
-            geometryPush.outputStorageSlot = targets.bindless.shadowSoftGeometryStorage.slot();
-            geometryPush.sceneShadingSlot = targets.bindless.sceneShading.slot();
+            const ShadowGeometryDownsamplePushConstants geometryPush = MakeShadowGeometryDownsamplePushConstants(
+                targets.width,
+                targets.height,
+                softHalfWidth,
+                softHalfHeight,
+                targets.bindless.gbufferWorldPosition.slot(),
+                targets.bindless.gbufferNormal.slot(),
+                targets.bindless.gbufferDepth.slot(),
+                targets.bindless.shadowSoftGeometryStorage.slot(),
+                targets.bindless.sceneShading.slot(),
+                targets.shadowReceiverFactor
+            );
             commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_shadowGeometryDownsamplePipeline));
             heap.bindCompute(commandList, *m_rayTracingState.m_shadowGeometryDownsamplePipeline.get());
             commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
@@ -384,7 +385,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
 
 
 b8 RendererRayTracingSystem::softShadowTemporalHistoryUsable()const noexcept{
-    return m_rayTracingState.m_softShadowTemporalReady && m_rayTracingState.m_prevWorldToClipValid && m_rayTracingState.m_softShadowTemporalSeeded;
+    return SoftShadowTemporalHistoryUsable(m_rayTracingState.m_softShadowTemporalReady, m_rayTracingState.m_prevWorldToClipValid, m_rayTracingState.m_softShadowTemporalSeeded);
 }
 
 

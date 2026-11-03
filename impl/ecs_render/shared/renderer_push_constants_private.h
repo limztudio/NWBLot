@@ -65,12 +65,12 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
 
 [[nodiscard]] NWB_INLINE MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MeshFrameBindingSnapshot& frameBindings, const u32 generatedVertex = 0u)noexcept{
     NWB_ASSERT(frameBindings.bindingValid());
-    MeshFrameHeapSlots slots;
-    slots.instance = frameBindings.instanceHeapHandle.slot();
-    slots.materialTyped = frameBindings.materialTypedHeapHandle.slot();
-    slots.view = frameBindings.meshView.heapHandle.slot();
-    slots.generatedVertex = generatedVertex;
-    return slots;
+    return MakeMeshFrameHeapSlots(
+        frameBindings.instanceHeapHandle.slot(),
+        frameBindings.materialTypedHeapHandle.slot(),
+        frameBindings.meshView.heapHandle.slot(),
+        generatedVertex
+    );
 }
 
 [[nodiscard]] NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(

@@ -275,6 +275,15 @@ b8 FrameSetupReady(in b8 meshViewSetupReady, in b8 sceneShadingSetupReady){
     return meshViewSetupReady && sceneShadingSetupReady;
 }
 
+MeshFrameHeapSlots MakeMeshFrameHeapSlots(in u32 instance, in u32 materialTyped, in u32 view, in u32 generatedVertex){
+    MeshFrameHeapSlots slots;
+    slots.instance = instance;
+    slots.materialTyped = materialTyped;
+    slots.view = view;
+    slots.generatedVertex = generatedVertex;
+    return slots;
+}
+
 ShaderDrivenPushConstants ResolveShaderDrivenPushConstants(
     in u32 meshletCount,
     in u32 instanceIndex,

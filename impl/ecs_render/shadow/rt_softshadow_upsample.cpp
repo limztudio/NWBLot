@@ -40,24 +40,23 @@ b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList&
     commandList.commitBarriers();
 
     const DeferredBindlessFrameResources& bindless = targets.bindless;
-    ShadowResolvePushConstants push;
-    push.receiverFactor = targets.shadowReceiverFactor;
-    push.width = targets.width;
-    push.height = targets.height;
-    push.halfWidth = DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor));
-    push.halfHeight = DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor));
-    push.stage = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE;
-    push.lightSlotCount = ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask);
-    push.geometrySlot = bindless.shadowSoftGeometry.slot();
-    push.depthSlot = bindless.gbufferDepth.slot();
-    push.worldPositionSlot = bindless.gbufferWorldPosition.slot();
-    push.normalSlot = bindless.gbufferNormal.slot();
-    push.inputColorSlot = transparentReady ? bindless.shadowSoftHalfA.slot() : bindless.shadowSoftHalfB.slot();
-    push.momentsSlot = push.inputColorSlot;
-    push.outputStorageSlot = bindless.shadowVisibilityStorage.slot();
-    push.visibilityStorageSlot = bindless.shadowVisibilityStorage.slot();
-    push.sceneShadingSlot = bindless.sceneShading.slot();
-    push.opaqueInputColorSlot = bindless.shadowSoftHalfB.slot();
+    const ShadowResolvePushConstants push = MakeShadowTerminalUpsamplePushConstants(
+        targets.width,
+        targets.height,
+        DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor)),
+        DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor)),
+        ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask),
+        bindless.shadowSoftGeometry.slot(),
+        bindless.gbufferDepth.slot(),
+        bindless.gbufferWorldPosition.slot(),
+        bindless.gbufferNormal.slot(),
+        transparentReady ? bindless.shadowSoftHalfA.slot() : bindless.shadowSoftHalfB.slot(),
+        bindless.shadowVisibilityStorage.slot(),
+        bindless.shadowVisibilityStorage.slot(),
+        bindless.sceneShading.slot(),
+        bindless.shadowSoftHalfB.slot(),
+        targets.shadowReceiverFactor
+    );
     Core::ComputeState state;
     state.setPipeline(pipeline.get());
     commandList.setComputeState(state);

@@ -104,6 +104,40 @@ const usize s_SurfelResourceUseCapacity = 29u;
 const usize s_SurfelTraceResourceUseCapacity = 17u;
 const usize s_SurfelCsgTraceContextUseCapacity = 2u;
 
+StringView ResolveGiCsgVariant(in b8 csg){
+    if(csg)
+        return s_GiCsgEnabledVariant;
+    return s_GiCsgDisabledVariant;
+}
+
+SurfelHeapPushConstants MakeSurfelHeapPushConstants(
+    in u32 constantsHeapSlot,
+    in u32 poolHeapSlot,
+    in u32 guidePoolHeapSlot,
+    in u32 cellHeadHeapSlot,
+    in u32 counterHeapSlot,
+    in u32 freeListHeapSlot,
+    in u32 snapshotPoolHeapSlot,
+    in u32 snapshotCellHeadHeapSlot,
+    in u32 traceIndirectArgsHeapSlot,
+    in u32 deferredResourcesHeapSlot,
+    in u32 materialContextSlotsHeapSlot
+){
+    SurfelHeapPushConstants push;
+    push.constantsHeapSlot = constantsHeapSlot;
+    push.poolHeapSlot = poolHeapSlot;
+    push.guidePoolHeapSlot = guidePoolHeapSlot;
+    push.cellHeadHeapSlot = cellHeadHeapSlot;
+    push.counterHeapSlot = counterHeapSlot;
+    push.freeListHeapSlot = freeListHeapSlot;
+    push.snapshotPoolHeapSlot = snapshotPoolHeapSlot;
+    push.snapshotCellHeadHeapSlot = snapshotCellHeadHeapSlot;
+    push.traceIndirectArgsHeapSlot = traceIndirectArgsHeapSlot;
+    push.deferredResourcesHeapSlot = deferredResourcesHeapSlot;
+    push.materialContextSlotsHeapSlot = materialContextSlotsHeapSlot;
+    return push;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

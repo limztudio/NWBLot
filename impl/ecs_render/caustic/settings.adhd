@@ -344,6 +344,40 @@ CausticResolveActivitySlots ResolveCausticActivitySlots(
     return slots;
 }
 
+CausticGeometryDownsamplePushConstants MakeCausticGeometryDownsamplePushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 halfWidth,
+    in u32 halfHeight,
+    in u32 worldPositionSlot,
+    in u32 depthSlot,
+    in u32 outputStorageSlot
+){
+    CausticGeometryDownsamplePushConstants push;
+    push.width = width;
+    push.height = height;
+    push.halfWidth = halfWidth;
+    push.halfHeight = halfHeight;
+    push.worldPositionSlot = worldPositionSlot;
+    push.depthSlot = depthSlot;
+    push.outputStorageSlot = outputStorageSlot;
+    return push;
+}
+
+CausticAccumulatorDecayPushConstants MakeCausticAccumulatorDecayPushConstants(
+    in u32 width,
+    in u32 height,
+    in f32 decayFactor,
+    in u32 accumulatorStorageSlot
+){
+    CausticAccumulatorDecayPushConstants push;
+    push.width = width;
+    push.height = height;
+    push.decayFactor = decayFactor;
+    push.accumulatorStorageSlot = accumulatorStorageSlot;
+    return push;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

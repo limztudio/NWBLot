@@ -57,10 +57,11 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
         .combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline
             && state.m_softShadowTemporalReady && state.m_softTransparentTemporalReady,
         .combinedSoftTemporalReady = static_cast<b8>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline),
-        .softShadowHistoryReadable =
-            state.m_softShadowTemporalReady
-            && state.m_prevWorldToClipValid
-            && state.m_softShadowTemporalSeeded,
+        .softShadowHistoryReadable = SoftShadowTemporalHistoryUsable(
+            state.m_softShadowTemporalReady,
+            state.m_prevWorldToClipValid,
+            state.m_softShadowTemporalSeeded
+        ),
         .opaqueTemporalMergeReady = state.m_softShadowTemporalReady,
         .transparentTemporalMergeReady = state.m_softTransparentTemporalReady,
         .historyFrontIsA = state.m_softShadowHistoryFrontIsA != 0u,
@@ -114,19 +115,19 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
 
     const auto makePush = [&]()noexcept{
-        SwShadowHeapPushConstants push;
-        push.receiverFactor = targets.shadowReceiverFactor;
-        push.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
-        push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        push.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-        push.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
-        push.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
-        push.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
-        push.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
-        push.edgeCounterStorageSlot = m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot();
-        push.edgeListStorageSlot = m_rayTracingState.m_swShadowEdgeListHeapHandle.slot();
-        push.indirectArgsStorageSlot = m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot();
-        return push;
+        return MakeSwShadowHeapPushConstants(
+            m_rayTracingState.m_sceneBvhInstanceCount,
+            targets.bindless.slotsBufferDescriptor.slot(),
+            m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
+            targets.bindless.shadowVisibilityStorage.slot(),
+            targets.bindless.shadowCoarseTransmittanceStorage.slot(),
+            targets.bindless.shadowSoftHalfAStorage.slot(),
+            targets.bindless.transparentSoftHalfStorage.slot(),
+            m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot(),
+            m_rayTracingState.m_swShadowEdgeListHeapHandle.slot(),
+            m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot(),
+            targets.shadowReceiverFactor
+        );
     };
 
     const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);

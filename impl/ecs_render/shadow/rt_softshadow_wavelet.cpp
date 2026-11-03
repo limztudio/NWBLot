@@ -54,23 +54,21 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& 
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
     commandList.commitBarriers();
     const DeferredBindlessFrameResources& bindless = targets.bindless;
-    ShadowCombinedWaveletPushConstants push;
-    push.resolve.receiverFactor = targets.shadowReceiverFactor;
-    push.resolve.width = targets.width;
-    push.resolve.height = targets.height;
-    push.resolve.halfWidth = DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor));
-    push.resolve.halfHeight = DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor));
-    push.resolve.stage = NWB_SHADOW_RESOLVE_STAGE_WAVELET;
-    push.resolve.lightSlotCount = ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask);
-    push.resolve.momentsValid = 1u;
-    push.resolve.geometrySlot = bindless.shadowSoftGeometry.slot();
-    push.resolve.inputColorSlot = frontIsA ? bindless.transparentHistB.slot() : bindless.transparentHistA.slot();
-    push.resolve.momentsSlot = frontIsA ? bindless.transparentMomentsB.slot() : bindless.transparentMomentsA.slot();
-    push.resolve.outputStorageSlot = bindless.shadowSoftHalfAStorage.slot();
-    push.resolve.opaqueInputColorSlot = frontIsA ? bindless.shadowHistB.slot() : bindless.shadowHistA.slot();
-    push.opaqueMomentsSlot = frontIsA ? bindless.shadowMomentsB.slot() : bindless.shadowMomentsA.slot();
-    push.opaqueMomentsValid = 1u;
-    push.opaqueOutputStorageSlot = bindless.shadowSoftHalfBStorage.slot();
+    const ShadowCombinedWaveletPushConstants push = MakeShadowCombinedWaveletPushConstants(
+        targets.width,
+        targets.height,
+        DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor)),
+        DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor)),
+        ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask),
+        bindless.shadowSoftGeometry.slot(),
+        frontIsA ? bindless.transparentHistB.slot() : bindless.transparentHistA.slot(),
+        frontIsA ? bindless.transparentMomentsB.slot() : bindless.transparentMomentsA.slot(),
+        bindless.shadowSoftHalfAStorage.slot(),
+        frontIsA ? bindless.shadowHistB.slot() : bindless.shadowHistA.slot(),
+        frontIsA ? bindless.shadowMomentsB.slot() : bindless.shadowMomentsA.slot(),
+        bindless.shadowSoftHalfBStorage.slot(),
+        targets.shadowReceiverFactor
+    );
     Core::ComputeState state;
     state.setPipeline(resolve.m_combinedWavelet.m_pipeline.get());
     commandList.setComputeState(state);

@@ -87,18 +87,19 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     const u32 poolCapacity = m_rayTracingState.m_surfelPoolCapacity;
 
-    SurfelHeapPushConstants surfelPush;
-    surfelPush.constantsHeapSlot = m_rayTracingState.m_surfelConstantsHeapHandle.slot();
-    surfelPush.poolHeapSlot = m_rayTracingState.m_surfelPoolHeapHandle.slot();
-    surfelPush.guidePoolHeapSlot = m_rayTracingState.m_surfelGuidePoolHeapHandle.slot();
-    surfelPush.cellHeadHeapSlot = m_rayTracingState.m_surfelCellHeadHeapHandle.slot();
-    surfelPush.counterHeapSlot = m_rayTracingState.m_surfelCounterHeapHandle.slot();
-    surfelPush.freeListHeapSlot = m_rayTracingState.m_surfelFreeListHeapHandle.slot();
-    surfelPush.snapshotPoolHeapSlot = m_rayTracingState.m_surfelPoolSnapshotHeapHandle.slot();
-    surfelPush.snapshotCellHeadHeapSlot = m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle.slot();
-    surfelPush.traceIndirectArgsHeapSlot = m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle.slot();
-    surfelPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-    surfelPush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
+    SurfelHeapPushConstants surfelPush = MakeSurfelHeapPushConstants(
+        m_rayTracingState.m_surfelConstantsHeapHandle.slot(),
+        m_rayTracingState.m_surfelPoolHeapHandle.slot(),
+        m_rayTracingState.m_surfelGuidePoolHeapHandle.slot(),
+        m_rayTracingState.m_surfelCellHeadHeapHandle.slot(),
+        m_rayTracingState.m_surfelCounterHeapHandle.slot(),
+        m_rayTracingState.m_surfelFreeListHeapHandle.slot(),
+        m_rayTracingState.m_surfelPoolSnapshotHeapHandle.slot(),
+        m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle.slot(),
+        m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle.slot(),
+        targets.bindless.slotsBufferDescriptor.slot(),
+        m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot()
+    );
 
     // Order every in-place field update, including prior-frame spawn writes.
     commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelPoolBuffer.get(), true);

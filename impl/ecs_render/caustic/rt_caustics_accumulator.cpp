@@ -46,14 +46,15 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(Core::CommandLi
     const u32 halfWidth = groups.width;
     const u32 halfHeight = groups.height;
 
-    CausticGeometryDownsamplePushConstants geometryPush;
-    geometryPush.width = targets.width;
-    geometryPush.height = targets.height;
-    geometryPush.halfWidth = halfWidth;
-    geometryPush.halfHeight = halfHeight;
-    geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-    geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
-    geometryPush.outputStorageSlot = targets.bindless.causticResolveGeometryStorage.slot();
+    const CausticGeometryDownsamplePushConstants geometryPush = MakeCausticGeometryDownsamplePushConstants(
+        targets.width,
+        targets.height,
+        halfWidth,
+        halfHeight,
+        targets.bindless.gbufferWorldPosition.slot(),
+        targets.bindless.gbufferDepth.slot(),
+        targets.bindless.causticResolveGeometryStorage.slot()
+    );
 
     Core::ComputeState geometryState;
     geometryState.setPipeline(m_rayTracingState.m_causticGeometryDownsamplePipeline.get());

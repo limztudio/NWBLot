@@ -492,6 +492,137 @@ u32 ResolveSoftShadowLightSlotRangeCount(in u32 softShadowSlotMask){
     return slotRangeCount;
 }
 
+b8 SoftShadowTemporalHistoryUsable(in b8 softShadowTemporalReady, in b8 prevWorldToClipValid, in b8 softShadowTemporalSeeded){
+    return softShadowTemporalReady && prevWorldToClipValid && softShadowTemporalSeeded;
+}
+
+SwShadowHeapPushConstants MakeSwShadowHeapPushConstants(
+    in u32 instanceCount,
+    in u32 deferredResourcesHeapSlot,
+    in u32 materialContextSlotsHeapSlot,
+    in u32 visibilityStorageSlot,
+    in u32 coarseStorageSlot,
+    in u32 softHalfStorageSlot,
+    in u32 transparentSoftHalfStorageSlot,
+    in u32 edgeCounterStorageSlot,
+    in u32 edgeListStorageSlot,
+    in u32 indirectArgsStorageSlot,
+    in u32 receiverFactor
+){
+    SwShadowHeapPushConstants push;
+    push.instanceCount = instanceCount;
+    push.deferredResourcesHeapSlot = deferredResourcesHeapSlot;
+    push.materialContextSlotsHeapSlot = materialContextSlotsHeapSlot;
+    push.visibilityStorageSlot = visibilityStorageSlot;
+    push.coarseStorageSlot = coarseStorageSlot;
+    push.softHalfStorageSlot = softHalfStorageSlot;
+    push.transparentSoftHalfStorageSlot = transparentSoftHalfStorageSlot;
+    push.edgeCounterStorageSlot = edgeCounterStorageSlot;
+    push.edgeListStorageSlot = edgeListStorageSlot;
+    push.indirectArgsStorageSlot = indirectArgsStorageSlot;
+    push.receiverFactor = receiverFactor;
+    return push;
+}
+
+ShadowGeometryDownsamplePushConstants MakeShadowGeometryDownsamplePushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 halfWidth,
+    in u32 halfHeight,
+    in u32 worldPositionSlot,
+    in u32 normalSlot,
+    in u32 depthSlot,
+    in u32 outputStorageSlot,
+    in u32 sceneShadingSlot,
+    in u32 receiverFactor
+){
+    ShadowGeometryDownsamplePushConstants push;
+    push.width = width;
+    push.height = height;
+    push.halfWidth = halfWidth;
+    push.halfHeight = halfHeight;
+    push.worldPositionSlot = worldPositionSlot;
+    push.normalSlot = normalSlot;
+    push.depthSlot = depthSlot;
+    push.outputStorageSlot = outputStorageSlot;
+    push.sceneShadingSlot = sceneShadingSlot;
+    push.receiverFactor = receiverFactor;
+    return push;
+}
+
+ShadowResolvePushConstants MakeShadowTerminalUpsamplePushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 halfWidth,
+    in u32 halfHeight,
+    in u32 lightSlotCount,
+    in u32 geometrySlot,
+    in u32 depthSlot,
+    in u32 worldPositionSlot,
+    in u32 normalSlot,
+    in u32 inputColorSlot,
+    in u32 outputStorageSlot,
+    in u32 visibilityStorageSlot,
+    in u32 sceneShadingSlot,
+    in u32 opaqueInputColorSlot,
+    in u32 receiverFactor
+){
+    ShadowResolvePushConstants push;
+    push.width = width;
+    push.height = height;
+    push.halfWidth = halfWidth;
+    push.halfHeight = halfHeight;
+    push.stage = cast<u32>(ShadowResolveStage::Upsample);
+    push.lightSlotCount = lightSlotCount;
+    push.geometrySlot = geometrySlot;
+    push.depthSlot = depthSlot;
+    push.worldPositionSlot = worldPositionSlot;
+    push.normalSlot = normalSlot;
+    push.inputColorSlot = inputColorSlot;
+    push.momentsSlot = inputColorSlot;
+    push.outputStorageSlot = outputStorageSlot;
+    push.visibilityStorageSlot = visibilityStorageSlot;
+    push.sceneShadingSlot = sceneShadingSlot;
+    push.opaqueInputColorSlot = opaqueInputColorSlot;
+    push.receiverFactor = receiverFactor;
+    return push;
+}
+
+ShadowCombinedWaveletPushConstants MakeShadowCombinedWaveletPushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 halfWidth,
+    in u32 halfHeight,
+    in u32 lightSlotCount,
+    in u32 geometrySlot,
+    in u32 inputColorSlot,
+    in u32 momentsSlot,
+    in u32 outputStorageSlot,
+    in u32 opaqueInputColorSlot,
+    in u32 opaqueMomentsSlot,
+    in u32 opaqueOutputStorageSlot,
+    in u32 receiverFactor
+){
+    ShadowCombinedWaveletPushConstants push;
+    push.resolve.width = width;
+    push.resolve.height = height;
+    push.resolve.halfWidth = halfWidth;
+    push.resolve.halfHeight = halfHeight;
+    push.resolve.stage = cast<u32>(ShadowResolveStage::Wavelet);
+    push.resolve.lightSlotCount = lightSlotCount;
+    push.resolve.momentsValid = 1u;
+    push.resolve.geometrySlot = geometrySlot;
+    push.resolve.inputColorSlot = inputColorSlot;
+    push.resolve.momentsSlot = momentsSlot;
+    push.resolve.outputStorageSlot = outputStorageSlot;
+    push.resolve.opaqueInputColorSlot = opaqueInputColorSlot;
+    push.resolve.receiverFactor = receiverFactor;
+    push.opaqueMomentsSlot = opaqueMomentsSlot;
+    push.opaqueMomentsValid = 1u;
+    push.opaqueOutputStorageSlot = opaqueOutputStorageSlot;
+    return push;
+}
+
 const usize s_ShadowPrepareResourceSetUseCapacity = 3u;
 const usize s_ShadowPrepareResourceUseCapacity = 19u;
 const usize s_ShadowPrepareSingleDependencyCount = 1u;

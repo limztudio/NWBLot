@@ -4,6 +4,8 @@
 
 #include "frame_graph_runtime_statistics.h"
 
+#include <core/task/gpu/telemetry_queue_class.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,16 +23,7 @@ namespace __hidden_frame_graph_runtime_statistics{
 
 
 [[nodiscard]] static Expected<Core::Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const Core::CommandQueue::Enum queueClass)noexcept{
-    switch(queueClass){
-    case Core::CommandQueue::Graphics:
-        return Core::Telemetry::FrameGraphQueueClass::Graphics;
-    case Core::CommandQueue::Compute:
-        return Core::Telemetry::FrameGraphQueueClass::Compute;
-    case Core::CommandQueue::Transfer:
-        return Core::Telemetry::FrameGraphQueueClass::Transfer;
-    default:
-        return MakeUnexpected(Failure{});
-    }
+    return Core::GpuTaskTelemetryDetail::TranslateQueueClass(queueClass);
 }
 
 

@@ -6,6 +6,7 @@
 #include "compiler.h"
 #include "dependency_pair_hash.h"
 #include "queue_assignment_telemetry.h"
+#include "telemetry_queue_class.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
 
@@ -32,16 +33,7 @@ inline constexpr u32 s_DependencyPairProducerShift = 32u;
 }
 
 [[nodiscard]] static Expected<Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const CommandQueue::Enum queueClass)noexcept{
-    switch(queueClass){
-    case CommandQueue::Graphics:
-        return Telemetry::FrameGraphQueueClass::Graphics;
-    case CommandQueue::Compute:
-        return Telemetry::FrameGraphQueueClass::Compute;
-    case CommandQueue::Transfer:
-        return Telemetry::FrameGraphQueueClass::Transfer;
-    default:
-        return MakeUnexpected(Failure{});
-    }
+    return GpuTaskTelemetryDetail::TranslateQueueClass(queueClass);
 }
 
 [[nodiscard]] static Expected<Telemetry::FrameGraphQueueAssignmentReason::Enum> TranslateReason(const GpuTaskQueueAssignmentReason::Enum reason)noexcept{

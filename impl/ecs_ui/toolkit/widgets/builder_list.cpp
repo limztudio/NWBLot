@@ -73,9 +73,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
         for(;;){
             LayoutBox provisional;
-            const f32 probeWidth = Max(Max(s_StyleMinimumFieldWidth, background->minimumWidth), frame.padding.left + frame.padding.right + frame.style.scrollbarWidth + frame.rowHeight);
-            const f32 probeHeight = Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom);
-            provisional.rectangle = { 0.0f, 0.0f, probeWidth, probeHeight };
+            provisional.rectangle = ResolveListProbeRect(*background, frame.padding, frame.style.scrollbarWidth, frame.rowHeight);
             provisional.clip = provisional.rectangle;
             const auto placement = measureListPlacement(frame, provisional, provisional.clip);
             if(!placement){
@@ -83,7 +81,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
                 result.valid = false;
                 return result;
             }
-            const f32 height = Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom);
+            const f32 height = ResolveListIntrinsicSize(*background, frame.padding, frame.rowHeight).y;
             if(height == placement->bounds.height)
                 break;
         }
@@ -95,10 +93,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = {
-        Max(background->minimumWidth, s_StyleMinimumFieldWidth),
-        Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom),
-    };
+    description.intrinsicSize = ResolveListIntrinsicSize(*background, frame.padding, frame.rowHeight);
     if(!addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -160,7 +155,7 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
         const auto bounds = m_text.measure(*empty, m_paint.displayMetrics());
         if(!bounds)
             return false;
-        const f32 height = Max(metrics->minimum.y, bounds->height + metrics->padding.top + metrics->padding.bottom);
+        const f32 height = ResolveListRowBaseHeight(*metrics, bounds->height);
         if(!IsFinite(height) || height <= 0.0f || !listMatches(frame))
             return false;
         state.m_measureKey = key;

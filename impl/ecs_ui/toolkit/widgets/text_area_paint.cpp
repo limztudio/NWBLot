@@ -109,31 +109,8 @@ b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fram
             haveVertical = vertical && vertical->control == token;
         }
         else{
-            Point next = scroll;
-            if(action->kind == ControlActionKind::Wheel){
-                const auto nextX = TryStepScrollbarOffset(scroll.x, action->deltaX, action->stepX, action->maximumX);
-                const auto nextY = TryStepScrollbarOffset(scroll.y, -action->delta, action->step, action->maximum);
-                if(!nextX || !nextY)
-                    return false;
-                next.x = *nextX;
-                next.y = *nextY;
-                manual = true;
-            }
-            else if(action->kind == ControlActionKind::Activate && action->value >= s_TextAreaScrollHorizontalBefore && action->value <= s_TextAreaScrollVerticalAfter){
-                const ScrollViewportPlacement& accepted = state.scrollbars();
-                const b8 x = action->value <= s_TextAreaScrollHorizontalAfter;
-                const f64 direction = action->value == s_TextAreaScrollHorizontalBefore || action->value == s_TextAreaScrollVerticalBefore ? -1.0 : 1.0;
-                const ScrollbarPlacement& bar = x ? accepted.horizontal : accepted.vertical;
-                const auto stepped = TryStepScrollbarOffset(x ? scroll.x : scroll.y, direction, bar.viewportExtent, bar.maximum);
-                if(!stepped)
-                    return false;
-                if(x)
-                    next.x = *stepped;
-                else
-                    next.y = *stepped;
-                manual = true;
-            }
-            scroll = next;
+            if(!TryApplyTextAreaScrollControlAction(*action, state.scrollbars(), scroll, manual))
+                return false;
             action = m_context.takeControlAction(item.state, enabled, token);
             haveAction = action.has_value();
         }

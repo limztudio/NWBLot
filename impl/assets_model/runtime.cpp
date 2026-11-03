@@ -59,7 +59,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             for(const auto& object : objects){
                 const auto inserted = objectNames->try_emplace(object.name, flags);
                 if(!inserted.second)
-                    inserted.first.value() |= s_ModelDuplicateObjectNameFlag;
+                    MarkDuplicateModelObjectNameFlags(inserted.first.value());
             }
         };
         indexObjects(m_skeletonObjects, s_ModelSkeletonObjectNameFlag);
@@ -78,25 +78,32 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_staticMeshObjects.size(); ++i){
         const ModelStaticMeshObject& object = m_staticMeshObjects[i];
-        b8 parentExists = object.parentObject == object.name;
-        b8 parentIsSkeleton = false;
+        b8 foundParent = false;
+        u8 parentFlags = 0u;
         if(object.parentObject && objectNames){
             const auto parent = objectNames->find(object.parentObject);
-            parentExists = parent != objectNames->end();
-            parentIsSkeleton = parentExists && IsModelObjectFlaggedSkeleton(parent.value());
+            foundParent = parent != objectNames->end();
+            if(foundParent)
+                parentFlags = parent.value();
         }
+        b8 parentExists = false;
+        b8 parentIsSkeleton = false;
+        ResolveModelStaticMeshParentState(object.name, object.parentObject, foundParent, parentFlags, parentExists, parentIsSkeleton);
         if(!ValidateModelStaticMeshObject(object, i, nameIsUnique(object.name), parentExists, parentIsSkeleton))
             return false;
     }
 
     for(usize i = 0u; i < m_skinnedMeshObjects.size(); ++i){
         const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
-        b8 targetIsSkeleton = false;
+        b8 foundParent = false;
+        u8 parentFlags = 0u;
         if(objectNames){
             const auto parent = objectNames->find(object.skeletonObject);
-            targetIsSkeleton = parent != objectNames->end() && IsModelObjectFlaggedSkeleton(parent.value());
+            foundParent = parent != objectNames->end();
+            if(foundParent)
+                parentFlags = parent.value();
         }
-        if(!ValidateModelSkinnedMeshObject(object, i, nameIsUnique(object.name), targetIsSkeleton))
+        if(!ValidateModelSkinnedMeshObject(object, i, nameIsUnique(object.name), ResolveModelSkinnedMeshTargetState(foundParent, parentFlags)))
             return false;
     }
 

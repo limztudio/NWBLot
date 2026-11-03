@@ -220,20 +220,6 @@ void InputRouter::reset()noexcept{
     cancelInteraction();
 }
 
-b8 InputRouter::consumeActivation(const WidgetId id)noexcept{
-    const HitTarget* target = findTarget(id);
-    if(target == nullptr || !isInteractive(*target) || !target->activatable)
-        return false;
-    for(usize index = 0u; index < m_actions.size(); ++index){
-        const InputActionId& action = m_actions[index].id;
-        if(action.target == id && action.declarationGeneration == target->declarationGeneration && m_actions[index].popup == target->popup && m_actions[index].control == target->control){
-            m_actions.erase(m_actions.begin() + static_cast<isize>(index));
-            return true;
-        }
-    }
-    return false;
-}
-
 WidgetId InputRouter::hitTest(const Point& position)const noexcept{
     const HitTarget* target = findHitTarget(position);
     return target == nullptr ? WidgetId{} : target->id;
@@ -281,47 +267,22 @@ const CommandSource* InputRouter::findCommandSource(const InputSource& source)co
     });
 }
 
-b8 InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
-    const auto& owner = source.focusOwner;
-    const HitTarget* focused = findTarget(owner.target, owner.declarationGeneration);
-    return
-        m_windowFocused && source.consumed && owner.target.valid() && m_focus == owner.target && m_focusDeclaration == owner.declarationGeneration
-        && focused != nullptr && focused->focusable && isInteractive(*focused) && focused->popup == owner.popup && focused->control == owner.control
-    ;
-}
-
 void InputRouter::cancelPointerPress()noexcept{
-    m_pointerSubmitArmed = false;
-    m_secondaryOwner = {};
-    for(usize index = 0u; index < m_pointerGestures.size(); ++index){
-        if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
-            m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
-            break;
-        }
-    }
-    m_activeGestureSequence = 0u;
-    m_capture = {};
-    m_capturePopup = {};
-    m_captureDeclaration = 0u;
-    m_captureControl = {};
+    CancelRouterPointerPress(
+        m_pointerGestures,
+        m_activeGestureSequence,
+        m_pointerSubmitArmed,
+        m_secondaryOwner,
+        m_capture,
+        m_capturePopup,
+        m_captureDeclaration,
+        m_captureControl
+    );
 }
 
 const HitTarget* InputRouter::findHitTarget(const Point& position)const noexcept{
-    if(!IsFinite(position.x) || !IsFinite(position.y))
-        return nullptr;
-    const HitTarget* found = nullptr;
-    for(const HitTarget& target : m_targets){
-        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !isInteractive(target))
-            continue;
-        if(found == nullptr || target.layer > found->layer || (target.layer == found->layer && target.paintOrder >= found->paintOrder))
-            found = &target;
-    }
-    return found;
-}
-
-b8 InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
-    const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
-    return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
+    const auto foundIndex = FindRouterHitTargetIndex(m_targets, m_lookup, m_popups, position);
+    return foundIndex ? &m_targets[*foundIndex] : nullptr;
 }
 
 void InputRouter::rebuildLookup(){
@@ -412,6 +373,81 @@ void InputRouter::cancelInteraction()noexcept{
     m_pointerSubmitArmed = false;
     // Cancel delivery while retaining physical sequence ownership through its matching release.
     retireCommandFocus();
+}
+
+void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& result){
+    CommandSource* source = findCommandSource(event.source);
+    if(event.type == InputEventType::CommandUp){
+        if(source){
+            result.commandConsumed |= source->consumed;
+            releaseCommand(event, *source, result);
+            m_commandSources.erase(m_commandSources.begin() + (source - m_commandSources.data()));
+        }
+        return;
+    }
+    const b8 alreadyPressed = source != nullptr;
+    if(!source){
+        if(m_commandSources.size() == s_InputMaxSources){
+            result.activationOverflow = true;
+            return;
+        }
+        CommandSource admitted;
+        admitted.source = event.source;
+        m_commandSources.push_back(admitted);
+        source = &m_commandSources.back();
+        const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
+        if(m_windowFocused && !event.repeat && focused && isInteractive(*focused))
+            source->focusOwner = { focused->id, focused->declarationGeneration, focused->popup, focused->control };
+    }
+    // Blurred and orphan repeat sequences remain inert until released and pressed again.
+    result.commandConsumed |= source->consumed;
+    if(!m_windowFocused || (!alreadyPressed && event.repeat))
+        return;
+    b8 consumed = source->consumed;
+    if(alreadyPressed && !consumed)
+        return;
+    const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
+    if(routeContextMenuCommand(event, focused, alreadyPressed, *source))
+        consumed = true;
+    else if(event.command == InputCommand::FocusNext || event.command == InputCommand::FocusPrevious)
+        consumed |= moveFocusForTraversal(event.command == InputCommand::FocusPrevious) || hasPopup();
+    else if(event.command == InputCommand::Cancel){
+        consumed |= wantsCommands() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed || (!m_pointerSources.empty() && wantsPointer());
+        if(!event.repeat && !alreadyPressed){
+            cancelCommandPresses();
+            cancelPointerPress();
+        }
+        if(hasPopup() && !(focused && focused->textEditable)){
+            const b8 dismissed = !event.repeat && !alreadyPressed && dismissPopup(PopupDismissReason::Cancel);
+            if(dismissed)
+                updateHover();
+            consumed = true;
+        }
+        else if(!event.repeat && !alreadyPressed && !(focused && focused->textEditable)){
+            clearFocus();
+        }
+    }
+    else{
+        consumed |= hasPopup() || focused != nullptr;
+        RouteRouterActiveCommandAction(
+            m_targets,
+            m_lookup,
+            m_popups,
+            event,
+            focused != nullptr,
+            focused != nullptr ? *focused : HitTarget{},
+            alreadyPressed,
+            m_layoutGeneration,
+            *source,
+            m_controlActions,
+            m_nextActionSequence,
+            result
+        );
+    }
+    if(consumed){
+        source->consumed = true;
+        result.commandConsumed = true;
+    }
 }
 
 

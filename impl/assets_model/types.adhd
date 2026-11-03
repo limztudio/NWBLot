@@ -234,6 +234,30 @@ b8 IsModelObjectFlaggedDuplicate(in u8 flags){
     return (flags & s_ModelDuplicateObjectNameFlag) != 0u;
 }
 
+void MarkDuplicateModelObjectNameFlags(mut u8 inOutFlags){
+    inOutFlags |= s_ModelDuplicateObjectNameFlag;
+}
+
+void ResolveModelStaticMeshParentState(
+    in Name objectName,
+    in Name parentObject,
+    in b8 foundParent,
+    in u8 parentFlags,
+    mut b8 outParentExists,
+    mut b8 outParentIsSkeleton
+){
+    outParentExists = parentObject == objectName;
+    outParentIsSkeleton = false;
+    if(parentObject != s_NameNone && foundParent){
+        outParentExists = true;
+        outParentIsSkeleton = IsModelObjectFlaggedSkeleton(parentFlags);
+    }
+}
+
+b8 ResolveModelSkinnedMeshTargetState(in b8 foundParent, in u8 parentFlags){
+    return foundParent && IsModelObjectFlaggedSkeleton(parentFlags);
+}
+
 Expected<usize> TryComputeTotalModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount){
     usize objectCount = 0u;
     if(skeletonCount > 0xffffffffffffffffu - objectCount)

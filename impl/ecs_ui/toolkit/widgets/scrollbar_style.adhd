@@ -599,6 +599,50 @@ void ResolveScrollbarBeforeAfterRects(
     }
 }
 
+b8 TryApplyTextAreaScrollControlAction(
+    in ControlAction action,
+    in ScrollViewportPlacement accepted,
+    mut Point inOutScroll,
+    mut b8 inOutManual
+){
+    Point next = inOutScroll;
+    if(action.kind == ControlActionKind::Wheel){
+        const Expected<f32> nextX = TryStepScrollbarOffset(cast<f64>(inOutScroll.x), action.deltaX, action.stepX, action.maximumX);
+        const Expected<f32> nextY = TryStepScrollbarOffset(cast<f64>(inOutScroll.y), -action.delta, action.step, action.maximum);
+        if(!nextX.has_value() || !nextY.has_value())
+            return false;
+        next.x = nextX.value();
+        next.y = nextY.value();
+        inOutManual = true;
+    }
+    else if(
+        action.kind == ControlActionKind::Activate
+        && action.value >= cast<u64>(s_TextAreaScrollHorizontalBefore)
+        && action.value <= cast<u64>(s_TextAreaScrollVerticalAfter)
+    ){
+        const b8 x = action.value <= cast<u64>(s_TextAreaScrollHorizontalAfter);
+        f64 direction = 1.0;
+        if(action.value == cast<u64>(s_TextAreaScrollHorizontalBefore) || action.value == cast<u64>(s_TextAreaScrollVerticalBefore))
+            direction = -1.0;
+        ScrollbarPlacement bar = accepted.vertical;
+        f64 currentOffset = cast<f64>(inOutScroll.y);
+        if(x){
+            bar = accepted.horizontal;
+            currentOffset = cast<f64>(inOutScroll.x);
+        }
+        const Expected<f32> stepped = TryStepScrollbarOffset(currentOffset, direction, bar.viewportExtent, bar.maximum);
+        if(!stepped.has_value())
+            return false;
+        if(x)
+            next.x = stepped.value();
+        else
+            next.y = stepped.value();
+        inOutManual = true;
+    }
+    inOutScroll = next;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

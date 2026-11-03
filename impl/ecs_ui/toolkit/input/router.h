@@ -25,44 +25,6 @@ NWB_IMPL_UI_BEGIN
 template<typename T>
 using InputVector = Vector<T, Core::Alloc::GlobalArena>;
 
-template<typename PopupsT, typename IsRootF>
-[[nodiscard]] inline b8 MarkRemovedPopupSubtree(const PopupsT& popups, IsRootF&& isRoot, Array<b8, s_InputMaxPopups>& outRemoved)noexcept{
-    outRemoved = {};
-    b8 found = false;
-    for(usize index = 0u; index < popups.size(); ++index){
-        outRemoved[index] = isRoot(popups[index].scope.token);
-        for(usize ancestor = 0u; ancestor < index && !outRemoved[index]; ++ancestor)
-            outRemoved[index] = outRemoved[ancestor] && popups[index].scope.parent == popups[ancestor].scope.token;
-        found |= outRemoved[index];
-    }
-    return found;
-}
-
-template<typename PopupsT>
-[[nodiscard]] inline b8 IsRemovedPopupToken(const PopupsT& popups, const Array<b8, s_InputMaxPopups>& removed, const PopupToken& token)noexcept{
-    for(usize popup = 0u; popup < popups.size(); ++popup){
-        if(removed[popup] && token == popups[popup].scope.token)
-            return true;
-    }
-    return false;
-}
-
-template<typename ItemsT, typename PopupsT, typename TokenOfF>
-inline void EraseIfRemovedPopupToken(ItemsT& items, const PopupsT& popups, const Array<b8, s_InputMaxPopups>& removed, TokenOfF&& tokenOf)noexcept{
-    for(usize index = items.size(); index > 0u; --index){
-        if(IsRemovedPopupToken(popups, removed, tokenOf(items[index - 1u])))
-            items.erase(items.begin() + static_cast<isize>(index - 1u));
-    }
-}
-
-template<typename PopupsT>
-inline void EraseRemovedPopups(PopupsT& popups, const Array<b8, s_InputMaxPopups>& removed)noexcept{
-    for(usize index = popups.size(); index > 0u; --index){
-        if(removed[index - 1u])
-            popups.erase(popups.begin() + static_cast<isize>(index - 1u));
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -93,17 +55,33 @@ public:
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
     // Context passes the focus-loss generation captured at preparation to fence delayed popup acceptance.
     [[nodiscard]] b8 commitTargets(Span<const HitTarget> targets, u64 layoutGeneration, Span<const PopupScope> popups = {}, u64 expectedFocusLossGeneration = Limit<u64>::s_Max);
-    [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token)noexcept;
-    [[nodiscard]] b8 dismissPopup(PopupDismissReason::Enum reason);
-    void closePopup(const PopupToken& token)noexcept;
-    void fencePopup(const PopupToken& token)noexcept;
+    [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token)noexcept{
+        return TryConsumeRouterPopupDismissal(token, m_popupDismissals);
+    }
+    [[nodiscard]] b8 dismissPopup(const PopupDismissReason::Enum reason){
+        if(!TryDismissRouterPopup(reason, m_popups, m_popupDismissals))
+            return false;
+        reconcileTargets();
+        return true;
+    }
+    void closePopup(const PopupToken& token)noexcept{
+        CloseRouterPopupSubtree(token, m_popups);
+        reconcileTargets();
+    }
+    void fencePopup(const PopupToken& token)noexcept{
+        FenceRouterPopup(token, m_popups);
+        reconcileTargets();
+    }
 
     [[nodiscard]] b8 hasPopup()const noexcept{ return !m_popups.empty(); }
 
     [[nodiscard]] usize popupCount()const noexcept{ return m_popups.size(); }
 
     // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
-    [[nodiscard]] const PopupScope* popupScope(const PopupToken& token)const noexcept;
+    [[nodiscard]] const PopupScope* popupScope(const PopupToken& token)const noexcept{
+        const auto scopeIndex = FindRouterPopupScopeIndex(m_popups, token);
+        return scopeIndex ? &m_popups[*scopeIndex].scope : nullptr;
+    }
     [[nodiscard]] const HitTarget* findTarget(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
         return FindTargetInTable(m_targets, m_lookup, id, declarationGeneration);
     }
@@ -119,42 +97,34 @@ public:
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset()noexcept;
     // Device termination may suppress releases; only this device's pending sources are removed.
-    void cancelDeviceInput(u64 device)noexcept;
-    [[nodiscard]] b8 consumeActivation(WidgetId id)noexcept;
-    [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(const WidgetId id, const u64 declarationGeneration)noexcept{
-        const HitTarget* target = findTarget(id, declarationGeneration);
-        if(declarationGeneration == 0u || target == nullptr || !target->contextMenu || !m_windowFocused || !isInteractive(*target))
-            return MakeUnexpected(Failure{});
-        for(usize index = 0u; index < m_contextMenuActions.size(); ++index){
-            const auto& candidate = m_contextMenuActions[index];
-            if(candidate.id.target != id || candidate.id.declarationGeneration != declarationGeneration || candidate.popup != target->popup || candidate.control != target->control)
-                continue;
-            const ContextMenuAction action = candidate;
-            m_contextMenuActions.erase(m_contextMenuActions.begin() + static_cast<isize>(index));
-            return action;
+    void cancelDeviceInput(const u64 device)noexcept{
+        if(m_activePointerSource.valid() && m_activePointerSource.device == device)
+            terminatePointerSource(m_activePointerSource);
+        EraseRouterDeviceInputs(device, m_pointerSources, m_pointerBindings, m_commandSources, m_boundSources, m_events);
+        if(m_hoverPointerSource.valid() && m_hoverPointerSource.device == device){
+            advanceHoverActivity();
+            clearHover();
+            m_pointerKnown = false;
+            m_hoverPointerSource = {};
         }
-        return MakeUnexpected(Failure{});
     }
-    [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
+    [[nodiscard]] b8 consumeActivation(const WidgetId id)noexcept{
+        return TryConsumeRouterActivation(m_targets, m_lookup, m_popups, id, m_actions);
+    }
+    [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(const WidgetId id, const u64 declarationGeneration)noexcept{
+        return TryConsumeRouterContextMenu(m_targets, m_lookup, m_popups, m_windowFocused, id, declarationGeneration, m_contextMenuActions);
+    }
+    [[nodiscard]] Expected<ControlAction> consumeControlAction(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
+        return TryConsumeRouterControlAction(m_targets, m_lookup, m_popups, host, declarationGeneration, token, m_controlActions);
+    }
     // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
-    void fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
+    void fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token)noexcept{
+        if(FenceRouterControlTargets(host, declarationGeneration, token, m_lookup, m_targets))
+            reconcileTargets();
+    }
     // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
     [[nodiscard]] Expected<PointerGesture> consumePointerGesture(const WidgetId id, const u64 declarationGeneration)noexcept{
-        const HitTarget* target = findTarget(id, declarationGeneration);
-        if(declarationGeneration == 0u || target == nullptr || !isInteractive(*target) || !target->pointerGesture)
-            return MakeUnexpected(Failure{});
-        for(usize index = 0u; index < m_pointerGestures.size(); ++index){
-            auto& record = m_pointerGestures[index];
-            if(record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration || !record.pendingUpdate || record.gesture.popup != target->popup || record.gesture.control != target->control)
-                continue;
-            const PointerGesture gesture = record.gesture;
-            if(record.gesture.state == PointerGestureState::Completed)
-                m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
-            else
-                record.pendingUpdate = false;
-            return gesture;
-        }
-        return MakeUnexpected(Failure{});
+        return TryConsumeRouterPointerGesture(m_targets, m_lookup, m_popups, id, declarationGeneration, m_pointerGestures);
     }
     [[nodiscard]] WidgetId hitTest(const Point& position)const noexcept;
     [[nodiscard]] b8 wouldConsumePointer(const Point& position)const noexcept;
@@ -178,7 +148,9 @@ public:
     // One spatial source can own activation and context-menu roles concurrently; other held contacts remain inert.
     [[nodiscard]] InputSource activePointerSource()const noexcept{ return m_activePointerSource; }
 
-    [[nodiscard]] b8 acceptsPointerSource(const InputSource& source)const noexcept;
+    [[nodiscard]] b8 acceptsPointerSource(const InputSource& source)const noexcept{
+        return AcceptsRouterPointerSource(m_activePointerSource, m_pointerSources, source);
+    }
     [[nodiscard]] b8 ownsPointerSource(const InputSource& source, PointerIntent::Enum intent = PointerIntent::Activate)const noexcept;
 
     [[nodiscard]] b8 primaryDown()const noexcept{ return m_primaryDown; }
@@ -192,7 +164,9 @@ public:
 
     [[nodiscard]] b8 windowFocused()const noexcept{ return m_windowFocused; }
 
-    [[nodiscard]] b8 wantsPointer()const noexcept;
+    [[nodiscard]] b8 wantsPointer()const noexcept{
+        return WantsRouterPointer(m_pointerSources, hasPopup(), m_hover);
+    }
     [[nodiscard]] b8 wantsCommands()const noexcept{
         return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{ return source.consumed; }) != m_commandSources.end();
     }
@@ -201,16 +175,30 @@ public:
     }
     [[nodiscard]] b8 ownsSource(const InputSource& source)const noexcept;
     // Held commands cannot switch editors or begin editing after their delegated owner has retired.
-    [[nodiscard]] b8 canEditCommand(const InputEvent& event)const noexcept;
+    [[nodiscard]] b8 canEditCommand(const InputEvent& event)const noexcept{
+        return CanRouterEditCommand(m_targets, m_lookup, m_popups, m_commandSources, m_windowFocused, m_focus, m_focusDeclaration, event);
+    }
     // Query a queued release before process retires its physical source.
-    [[nodiscard]] b8 canSubmitCommand(const InputEvent& event)const noexcept;
-    void cancelSubmitCommands(WidgetId id)noexcept;
-    [[nodiscard]] b8 pressed(WidgetId id)const noexcept;
+    [[nodiscard]] b8 canSubmitCommand(const InputEvent& event)const noexcept{
+        return CanRouterSubmitCommand(m_targets, m_lookup, m_popups, m_commandSources, m_windowFocused, m_focus, m_focusDeclaration, event);
+    }
+    void cancelSubmitCommands(const WidgetId id)noexcept{
+        CancelRouterSubmitCommands(id, m_commandSources);
+    }
+    [[nodiscard]] b8 pressed(const WidgetId id)const noexcept{
+        if(m_primaryDown && m_pointerSubmitArmed && m_capture == id && hitTest(m_interactionPosition) == id)
+            return true;
+        return IsRouterTargetPressedByCommand(m_targets, m_lookup, m_popups, m_commandSources, m_windowFocused, m_focus, m_focusDeclaration, id);
+    }
 
 
 private:
-    [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event);
-    [[nodiscard]] Expected<InputEvent> resolvePointerEvent(const InputEvent& event);
+    [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event){
+        return TryResolveRouterSourceEvent(m_bindings.bindings(), event, m_boundSources);
+    }
+    [[nodiscard]] Expected<InputEvent> resolvePointerEvent(const InputEvent& event){
+        return TryResolveRouterPointerEvent(event, m_pointerBindings);
+    }
     void retireQueuedReleases()noexcept;
     [[nodiscard]] PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)noexcept;
     [[nodiscard]] const PointerSource* findPointerSource(const InputSource& source, PointerIntent::Enum intent)const noexcept;
@@ -219,38 +207,71 @@ private:
     void terminatePointerSource(InputSource source)noexcept;
     [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept;
     [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept;
-    [[nodiscard]] b8 currentCommandFocus(const CommandSource& source)const noexcept;
-    void releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result);
-    void cancelCommandPresses()noexcept;
-    void retireCommandFocus()noexcept;
-    void reconcileCommandPresses()noexcept;
+    [[nodiscard]] b8 currentCommandFocus(const CommandSource& source)const noexcept{
+        return IsCurrentRouterCommandFocus(m_targets, m_lookup, m_popups, m_windowFocused, m_focus, m_focusDeclaration, source);
+    }
+    void releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result){
+        ReleaseRouterCommand(
+            m_targets,
+            m_lookup,
+            m_popups,
+            m_windowFocused,
+            m_focus,
+            m_focusDeclaration,
+            m_layoutGeneration,
+            event,
+            source,
+            m_actions,
+            m_controlActions,
+            m_contextMenuActions,
+            m_nextActionSequence,
+            result
+        );
+    }
+    void cancelCommandPresses()noexcept{
+        CancelRouterCommandPresses(m_commandSources);
+    }
+    void retireCommandFocus()noexcept{
+        RetireRouterCommandFocus(m_commandSources);
+    }
+    void reconcileCommandPresses()noexcept{
+        ReconcileRouterCommandPresses(m_targets, m_lookup, m_popups, m_windowFocused, m_focus, m_focusDeclaration, m_commandSources);
+    }
     void cancelPointerPress()noexcept;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const noexcept;
     [[nodiscard]] b8 isInteractive(const HitTarget& target)const noexcept{
-        return target.enabled && HasVisibleBounds(target) && allowedByPopup(target) && (!target.owner.valid() || controlHost(target) != nullptr);
+        return IsRouterTargetInteractive(m_targets, m_lookup, m_popups, target);
     }
-    [[nodiscard]] b8 validControlTargets()const noexcept;
-    [[nodiscard]] b8 validCommandOwners()const noexcept;
-    [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const noexcept;
-    [[nodiscard]] b8 currentControlCommandOwner(const CommandSource& held)const noexcept;
-    [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const noexcept;
-    [[nodiscard]] b8 currentControlAction(const ControlAction& action)const noexcept;
-    void reconcileControlActions()noexcept;
-    [[nodiscard]] b8 currentContextMenuOwner(const TargetOwner& owner)const noexcept;
+    [[nodiscard]] b8 validControlTargets()const noexcept{
+        return ValidateStagedHitTargetControlTargets(m_stagedTargets, m_stagedLookup);
+    }
+    [[nodiscard]] b8 validCommandOwners()const noexcept{
+        return ValidateStagedHitTargetCommandOwners(m_stagedTargets, m_stagedLookup);
+    }
+    [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const noexcept{
+        const auto hostIndex = TryResolveRouterCommandHostIndex(m_targets, m_lookup, m_popups, source);
+        return hostIndex ? &m_targets[*hostIndex] : nullptr;
+    }
+    [[nodiscard]] b8 currentControlCommandOwner(const CommandSource& held)const noexcept{
+        return IsCurrentRouterControlCommandOwner(m_targets, m_lookup, m_popups, held);
+    }
+    [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const noexcept{
+        if(!target.owner.valid())
+            return IsValidRouterControlHostTarget(m_popups, target, target) ? &target : nullptr;
+        const auto hostIndex = TryResolveRouterControlHostIndex(m_targets, m_lookup, m_popups, target);
+        return hostIndex ? &m_targets[*hostIndex] : nullptr;
+    }
+    [[nodiscard]] b8 currentControlAction(const ControlAction& action)const noexcept{
+        return IsCurrentRouterControlAction(m_targets, m_lookup, m_popups, action);
+    }
+    void reconcileControlActions()noexcept{
+        ReconcileRouterControlActions(m_targets, m_lookup, m_popups, m_controlActions, m_commandSources);
+    }
+    [[nodiscard]] b8 currentContextMenuOwner(const TargetOwner& owner)const noexcept{
+        return IsCurrentRouterContextMenuOwner(m_targets, m_lookup, m_popups, m_windowFocused, owner);
+    }
     void reconcileContextMenus()noexcept{
-        for(usize index = 0u; index < m_contextMenuActions.size();){
-            const auto& action = m_contextMenuActions[index];
-            if(!currentContextMenuOwner({ action.id.target, action.id.declarationGeneration, action.popup, action.control }))
-                m_contextMenuActions.erase(m_contextMenuActions.begin() + static_cast<isize>(index));
-            else
-                ++index;
-        }
-        if(!currentContextMenuOwner(m_secondaryOwner))
-            m_secondaryOwner = {};
-        for(auto& source : m_commandSources){
-            if(source.contextArmed && !currentContextMenuOwner(source.focusOwner))
-                source.contextArmed = false;
-        }
+        ReconcileRouterContextMenus(m_targets, m_lookup, m_popups, m_windowFocused, m_contextMenuActions, m_secondaryOwner, m_commandSources);
     }
     void appendContextMenu(const HitTarget& target, const Point& position, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
         AppendRouterContextMenu(target, m_layoutGeneration, position, origin, inputSource, m_contextMenuActions, m_nextActionSequence, result);
@@ -265,15 +286,77 @@ private:
     void appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, InputRoutingResult& result){
         appendControlAction(host, source, kind, delta, 0.0, result);
     }
-    [[nodiscard]] b8 routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, b8 alreadyPressed, CommandSource& held, InputRoutingResult& result);
-    void routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
-    [[nodiscard]] b8 allowedByPopup(const HitTarget& target)const noexcept;
-    [[nodiscard]] b8 popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept;
-    [[nodiscard]] b8 stagePopups(Span<const PopupScope> scopes);
-    [[nodiscard]] b8 validPopupTarget(const HitTarget& target)const noexcept;
-    void installPopups(u64 expectedFocusLossGeneration);
-    void retirePopup(WidgetId id);
-    void cancelPopupFocus();
+    [[nodiscard]] b8 routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const b8 alreadyPressed, CommandSource& held, InputRoutingResult& result){
+        return TryRouteRouterControlNavigation(event, host, source, alreadyPressed, m_layoutGeneration, held, m_controlActions, m_nextActionSequence, result);
+    }
+    void routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
+        RouteRouterWheel(
+            m_targets,
+            m_lookup,
+            m_popups,
+            event,
+            hit != nullptr,
+            hit != nullptr ? *hit : HitTarget{},
+            m_primaryDown,
+            m_pointerSequenceConsumed,
+            m_secondaryDown,
+            m_secondarySequenceConsumed,
+            m_layoutGeneration,
+            m_controlActions,
+            m_nextActionSequence,
+            result
+        );
+    }
+    [[nodiscard]] b8 allowedByPopup(const HitTarget& target)const noexcept{
+        return IsTargetAllowedByRouterPopup(m_popups, target);
+    }
+    [[nodiscard]] b8 popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
+        return IsPopupTokenDescendant(m_popups, token, ancestor);
+    }
+    [[nodiscard]] b8 stagePopups(const Span<const PopupScope> scopes){
+        return TryStageRouterPopups(scopes, m_popups, m_stagedPopups);
+    }
+    [[nodiscard]] b8 validPopupTarget(const HitTarget& target)const noexcept{
+        return ValidStagedPopupTarget(target, m_stagedPopups);
+    }
+    void installPopups(const u64 expectedFocusLossGeneration){
+        InstallRouterPopups(
+            m_targets,
+            m_lookup,
+            m_windowFocused,
+            m_focusLossGeneration,
+            expectedFocusLossGeneration,
+            m_popupDismissals,
+            m_stagedPopups,
+            m_popups,
+            m_commandSources,
+            m_focus,
+            m_focusDeclaration,
+            m_focusControl
+        );
+    }
+    void retirePopup(const WidgetId id){
+        b8 top = false;
+        PopupRecord restore;
+        if(!TryRetireRouterPopupSubtree(id, m_popups, m_targets, m_popupDismissals, top, restore))
+            return;
+        rebuildLookup();
+        if(top){
+            retireCommandFocus();
+            const HitTarget* target = findTarget(restore.restoreFocus, restore.restoreDeclaration);
+            if(m_windowFocused && target && target->popup == restore.restorePopup && target->focusable && isInteractive(*target)){
+                m_focus = target->id;
+                m_focusDeclaration = target->declarationGeneration;
+                m_focusControl = target->control;
+            }
+            else
+                clearFocus();
+        }
+        reconcileTargets();
+    }
+    void cancelPopupFocus(){
+        CancelRouterPopupFocus(m_popups, m_popupDismissals);
+    }
     void rebuildLookup();
     void reconcileTargets()noexcept;
     void updateHover()noexcept{ setHoverTarget(m_pointerKnown ? findHitTarget(m_pointer) : nullptr); }
@@ -301,23 +384,34 @@ private:
             TerminateInvariant();
     }
     void reconcilePointerGestures()noexcept{
-        for(usize index = 0u; index < m_pointerGestures.size();){
-            const auto& gesture = m_pointerGestures[index].gesture;
-            const HitTarget* target = findTarget(gesture.id.target, gesture.id.declarationGeneration);
-            if(target == nullptr || !isInteractive(*target) || !target->pointerGesture || gesture.popup != target->popup || gesture.control != target->control){
-                if(gesture.id.sequence == m_activeGestureSequence)
-                    m_activeGestureSequence = 0u;
-                m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
-            }
-            else
-                ++index;
-        }
+        ReconcileRouterPointerGestures(m_targets, m_lookup, m_popups, m_pointerGestures, m_activeGestureSequence);
     }
     void routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
-    void assignFocus(const HitTarget& target)noexcept;
-    [[nodiscard]] b8 moveFocus(b8 reverse)noexcept;
-    [[nodiscard]] b8 moveFocusForTraversal(b8 reverse);
+    void assignFocus(const HitTarget& target)noexcept{
+        AssignRouterFocus(target, m_commandSources, m_focus, m_focusDeclaration, m_focusControl);
+    }
+    [[nodiscard]] b8 moveFocus(const b8 reverse)noexcept{
+        return TryMoveRouterFocus(m_targets, m_lookup, m_popups, reverse, m_commandSources, m_focus, m_focusDeclaration, m_focusControl);
+    }
+    [[nodiscard]] b8 moveFocusForTraversal(const b8 reverse){
+        b8 dismissedPopup = false;
+        const b8 moved = TryMoveRouterFocusForTraversal(
+            m_targets,
+            m_lookup,
+            reverse,
+            m_popups,
+            m_popupDismissals,
+            m_commandSources,
+            m_focus,
+            m_focusDeclaration,
+            m_focusControl,
+            dismissedPopup
+        );
+        if(dismissedPopup)
+            reconcileTargets();
+        return moved;
+    }
 
 
 private:

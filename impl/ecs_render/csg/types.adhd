@@ -65,27 +65,27 @@ void RefreshRuntimeMeshCsgBounds(in f32x3_i32 minBounds, in f32x3_i32 maxBounds,
     outBounds.maxBounds.w = 0;
 }
 
-b8 BuildPositionStreamBounds(in Span<f32x3u> positions, mut CsgReceiverCpuBounds outBounds){
-    outBounds = CsgReceiverCpuBounds();
+Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(in Span<f32x3u> positions){
     if(positions.empty())
-        return false;
+        return makeUnexpected(Failure());
 
     f32x4 minBounds(f32.max, f32.max, f32.max, 0.0f);
     f32x4 maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
     for(usize i = 0u; i < positions.size(); ++i){
         const f32x3u pos = positions[i];
         if(!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z))
-            return false;
+            return makeUnexpected(Failure());
         const f32x4 p(pos.x, pos.y, pos.z, 0.0f);
         minBounds = min(minBounds, p);
         maxBounds = max(maxBounds, p);
     }
     if(minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z)
-        return false;
+        return makeUnexpected(Failure());
 
+    CsgReceiverCpuBounds outBounds;
     outBounds.minBounds = f32x3_i32(minBounds.x, minBounds.y, minBounds.z, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
     outBounds.maxBounds = f32x3_i32(maxBounds.x, maxBounds.y, maxBounds.z, 0);
-    return true;
+    return outBounds;
 }
 
 
@@ -459,26 +459,26 @@ b8 CsgClipCutterRequiresShapeBounds(in b8 receiverBoundsValid, in b8 hasShaderMo
     return !hasShaderModule && (shapeName == s_CsgBoxShapeName || shapeName == s_CsgSphereShapeName || shapeName == s_CsgCapsuleShapeName);
 }
 
-b8 ResolveCsgClipWorkBoundsFromCutterBounds(
+Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
     in CsgClipWorkBounds receiverBounds,
     in b8 cutterBoundsResolved,
     in b8 cutterFiniteBounds,
     in f32x4 cutterMinBounds,
-    in f32x4 cutterMaxBounds,
-    mut CsgClipWorkBounds outWorkBounds
+    in f32x4 cutterMaxBounds
 ){
-    outWorkBounds = CsgClipWorkBounds();
-    if(!cutterBoundsResolved)
-        return !receiverBounds.valid;
-    if(!cutterFiniteBounds){
-        outWorkBounds = receiverBounds;
-        return true;
+    CsgClipWorkBounds outWorkBounds;
+    if(!cutterBoundsResolved){
+        if(receiverBounds.valid)
+            return makeUnexpected(Failure());
+        return outWorkBounds;
     }
+    if(!cutterFiniteBounds)
+        return receiverBounds;
     if(!receiverBounds.valid){
         outWorkBounds.minBounds = cutterMinBounds;
         outWorkBounds.maxBounds = cutterMaxBounds;
         outWorkBounds.valid = true;
-        return true;
+        return outWorkBounds;
     }
     if(
         !isFinite(receiverBounds.minBounds.x) || !isFinite(receiverBounds.minBounds.y) || !isFinite(receiverBounds.minBounds.z)
@@ -492,20 +492,20 @@ b8 ResolveCsgClipWorkBoundsFromCutterBounds(
         || cutterMinBounds.y > cutterMaxBounds.y
         || cutterMinBounds.z > cutterMaxBounds.z
     )
-        return false;
+        return makeUnexpected(Failure());
     if(
         receiverBounds.maxBounds.x < cutterMinBounds.x || cutterMaxBounds.x < receiverBounds.minBounds.x
         || receiverBounds.maxBounds.y < cutterMinBounds.y || cutterMaxBounds.y < receiverBounds.minBounds.y
         || receiverBounds.maxBounds.z < cutterMinBounds.z || cutterMaxBounds.z < receiverBounds.minBounds.z
     )
-        return false;
+        return makeUnexpected(Failure());
 
     const f32x4 mergedMin = max(receiverBounds.minBounds, cutterMinBounds);
     const f32x4 mergedMax = min(receiverBounds.maxBounds, cutterMaxBounds);
     outWorkBounds.minBounds = mergedMin;
     outWorkBounds.maxBounds = mergedMax;
     outWorkBounds.valid = mergedMin.x <= mergedMax.x && mergedMin.y <= mergedMax.y && mergedMin.z <= mergedMax.z;
-    return true;
+    return outWorkBounds;
 }
 
 class CsgFrameStateCacheSignature{

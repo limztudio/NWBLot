@@ -91,10 +91,10 @@ class ComboBehavior final{
 public:
     // Rebinding after omission or to another field retires popup interaction while preserving committed selection.
     [[nodiscard]] static b8 Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
-        b8 shouldClose = false;
-        if(!TryBindComboOwner(owner, declarationGeneration, state.m_owner, state.m_ownerDeclaration, shouldClose))
+        const auto shouldClose = TryBindComboOwner(owner, declarationGeneration, state.m_owner, state.m_ownerDeclaration);
+        if(!shouldClose)
             return false;
-        if(shouldClose)
+        if(*shouldClose)
             Close(state);
         return true;
     }

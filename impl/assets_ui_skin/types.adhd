@@ -367,24 +367,22 @@ b8 IsValidUiSkinDefaultFontSize(in f32 defaultFontSize){
     return defaultFontSize >= s_UiSkinMinDefaultFontSize && defaultFontSize <= s_UiSkinMaxDefaultFontSize;
 }
 
-b8 TryLoadUiSkinSliceExtents(in UiSkinRegion region, mut f64x4 outSliceExtents){
-    outSliceExtents = f64x4(0.0, 0.0, 0.0, 0.0);
+Expected<f64x4> TryLoadUiSkinSliceExtents(in UiSkinRegion region){
     if(region.rectangle.width == 0u || region.rectangle.height == 0u)
-        return false;
+        return makeUnexpected(Failure());
     const u64 horizontal = cast<u64>(region.sliceInsets.left) + cast<u64>(region.sliceInsets.right);
     const u64 vertical = cast<u64>(region.sliceInsets.top) + cast<u64>(region.sliceInsets.bottom);
     if(region.drawMode == UiSkinDrawMode::Sprite){
         if(horizontal != 0u || vertical != 0u)
-            return false;
+            return makeUnexpected(Failure());
     }
     else if(region.drawMode == UiSkinDrawMode::NineSlice){
         if(horizontal > cast<u64>(region.rectangle.width) || vertical > cast<u64>(region.rectangle.height))
-            return false;
+            return makeUnexpected(Failure());
     }
     else
-        return false;
-    outSliceExtents = f64x4(cast<f64>(horizontal), cast<f64>(vertical), 0.0, 0.0);
-    return true;
+        return makeUnexpected(Failure());
+    return f64x4(cast<f64>(horizontal), cast<f64>(vertical), 0.0, 0.0);
 }
 
 b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHeight){
@@ -392,8 +390,7 @@ b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRegion region, in u32 atlasWidth, i
     if(rectangle.x > atlasWidth || rectangle.y > atlasHeight || rectangle.width > atlasWidth - rectangle.x || rectangle.height > atlasHeight - rectangle.y)
         return false;
 
-    f64x4 sliceExtents(0.0, 0.0, 0.0, 0.0);
-    return TryLoadUiSkinSliceExtents(region, sliceExtents);
+    return TryLoadUiSkinSliceExtents(region).has_value();
 }
 
 b8 IsValidUiSkinPaletteColor(in UiSkinColor color){
@@ -436,20 +433,17 @@ b8 IsValidUiSkinRegion(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHe
     ;
 }
 
-b8 TryFindUiSkinRegionIndex(
+Expected<usize> TryFindUiSkinRegionIndex(
     in Span<UiSkinRegion> regions,
     in Span<u32> regionIndex,
-    in Name name,
-    mut usize outIndex
+    in Name name
 ){
     if(regions.size() <= s_UiSkinLinearLookupRegionLimit || regions.size() > s_UiSkinMaxRegionCount){
         for(usize i = 0u; i < regions.size(); ++i){
-            if(regions[i].name == name){
-                outIndex = i;
-                return true;
-            }
+            if(regions[i].name == name)
+                return i;
         }
-        return false;
+        return makeUnexpected(Failure());
     }
     usize first = 0u;
     usize count = regionIndex.size();
@@ -465,12 +459,11 @@ b8 TryFindUiSkinRegionIndex(
             count = step;
     }
     if(first == regionIndex.size())
-        return false;
+        return makeUnexpected(Failure());
     const usize matchedPosition = cast<usize>(regionIndex[first]);
     if(regions[matchedPosition].name != name)
-        return false;
-    outIndex = matchedPosition;
-    return true;
+        return makeUnexpected(Failure());
+    return matchedPosition;
 }
 
 UiSkinRegionBinary PackUiSkinRegionBinary(in UiSkinRegion region){
@@ -527,27 +520,23 @@ f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region, in f
     return max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent);
 }
 
-b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64x4 sliceExtents, in f64x4 density, mut f32x4 outMinimumSize){
-    outMinimumSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+Expected<f32x4> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64x4 sliceExtents, in f64x4 density){
     if(!isFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !isFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
-        return false;
+        return makeUnexpected(Failure());
     const f64 maxFloatF64 = cast<f64>(f32.max);
     const f64x2 minimumSize(cast<f64>(region.minimumWidth), cast<f64>(region.minimumHeight));
     const f64x2 scaledSlices = f64x2(sliceExtents.x, sliceExtents.y) / f64x2(density.x, density.y);
     const f64x2 widthHeight = max(minimumSize, scaledSlices);
     if(!isFinite(widthHeight.x) || widthHeight.x > maxFloatF64 || !isFinite(widthHeight.y) || widthHeight.y > maxFloatF64)
-        return false;
-    outMinimumSize = f32x4(cast<f32>(widthHeight.x), cast<f32>(widthHeight.y), 0.0f, 0.0f);
-    return true;
+        return makeUnexpected(Failure());
+    return f32x4(cast<f32>(widthHeight.x), cast<f32>(widthHeight.y), 0.0f, 0.0f);
 }
 
-b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density, mut f32x4 outMinimumSize){
-    f64x4 sliceExtents(0.0, 0.0, 0.0, 0.0);
-    if(!TryLoadUiSkinSliceExtents(region, sliceExtents)){
-        outMinimumSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        return false;
-    }
-    return TryLoadUiSkinMinimumSize(region, sliceExtents, f64x4(density, density, 0.0, 0.0), outMinimumSize);
+Expected<f32x4> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density){
+    const Expected<f64x4> sliceExtents = TryLoadUiSkinSliceExtents(region);
+    if(!sliceExtents.has_value())
+        return makeUnexpected(Failure());
+    return TryLoadUiSkinMinimumSize(region, sliceExtents.value(), f64x4(density, density, 0.0, 0.0));
 }
 
 [subsystem("ui_subsystem")]

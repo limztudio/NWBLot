@@ -94,15 +94,13 @@ StringView VariantSegmentDefineName(in StringView segment){
     return segment.substr(0u, equalPos);
 }
 
-b8 TryFindVariantDefineAssignment(
+Expected<StringView> TryFindVariantDefineAssignment(
     in StringView variant,
     in StringView defineName,
-    in StringView defaultVariant,
-    mut StringView outAssignment
+    in StringView defaultVariant
 ){
-    outAssignment = "";
     if(variant.empty() || defineName.empty() || variant == defaultVariant)
-        return false;
+        return makeUnexpected(Failure());
 
     usize begin = 0u;
     while(begin < variant.size()){
@@ -113,18 +111,17 @@ b8 TryFindVariantDefineAssignment(
         const StringView segment = variant.substr(begin, segmentEnd - begin);
         const StringView segmentDefineName = VariantSegmentDefineName(segment);
         if(segmentDefineName.empty())
-            return false;
+            return makeUnexpected(Failure());
         if(segmentDefineName == defineName){
             const usize valueBegin = segmentDefineName.size() + 1u;
             if(valueBegin >= segment.size())
-                return false;
-            outAssignment = segment;
-            return true;
+                return makeUnexpected(Failure());
+            return segment;
         }
 
         begin = segmentEnd + 1u;
     }
-    return false;
+    return makeUnexpected(Failure());
 }
 
 
@@ -245,13 +242,11 @@ b8 TryStoreMaterialMutableParameter(mut MaterialInstanceComponent component, in 
     return true;
 }
 
-b8 TryFindMaterialInstanceOverrideField(
+Expected<MaterialInstanceOverrideField> TryFindMaterialInstanceOverrideField(
     in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
     in Span<MaterialTypedLayoutField> typedLayoutFields,
-    in MaterialInstanceParameter parameter,
-    mut MaterialInstanceOverrideField outField
+    in MaterialInstanceParameter parameter
 ){
-    outField = MaterialInstanceOverrideField();
     u32 constantBlockByteBegin = 0u;
     u32 mutableBlockByteBegin = 0u;
     for(usize blockIndex = 0u; blockIndex < typedLayoutBlocks.size(); ++blockIndex){
@@ -282,15 +277,16 @@ b8 TryFindMaterialInstanceOverrideField(
             if(field.fieldName != parameter.fieldName)
                 continue;
 
+            MaterialInstanceOverrideField outField;
             outField.field = field;
             outField.blockByteBegin = blockByteBegin;
             outField.mutableBlock = mutableBlock;
-            return true;
+            return outField;
         }
         break;
     }
 
-    return false;
+    return makeUnexpected(Failure());
 }
 
 b8 MaterialInstanceMutableCacheEntryMatches(
@@ -406,37 +402,36 @@ enum<u8> MaterialTypedByteAppendStatus{
     TotalCountExceedsU32 = 5u
 }
 
-MaterialTypedByteAppendStatus ResolveMaterialTypedByteAppendRange(
+Expected<MaterialTypedByteAppendRange, MaterialTypedByteAppendStatus> ResolveMaterialTypedByteAppendRange(
     in usize currentByteCount,
-    in usize appendByteCount,
-    mut MaterialTypedByteAppendRange outRange
+    in usize appendByteCount
 ){
-    outRange = MaterialTypedByteAppendRange();
+    MaterialTypedByteAppendRange outRange;
     if(appendByteCount == 0u)
-        return MaterialTypedByteAppendStatus::Success;
+        return outRange;
 
     if(appendByteCount > cast<usize>(u32.max))
-        return MaterialTypedByteAppendStatus::AppendCountExceedsU32;
+        return makeUnexpected(MaterialTypedByteAppendStatus::AppendCountExceedsU32);
 
     const usize wordBytes = cast<usize>(s_MaterialTypedWordBytes);
     const usize wordMask = wordBytes - 1u;
     if(currentByteCount > usize.max - wordMask)
-        return MaterialTypedByteAppendStatus::BeginAlignmentOverflow;
+        return makeUnexpected(MaterialTypedByteAppendStatus::BeginAlignmentOverflow);
     const usize alignedByteBegin = (currentByteCount + wordMask) & ~wordMask;
     if(appendByteCount > usize.max - alignedByteBegin)
-        return MaterialTypedByteAppendStatus::TotalCountOverflow;
+        return makeUnexpected(MaterialTypedByteAppendStatus::TotalCountOverflow);
 
     const usize byteEnd = alignedByteBegin + appendByteCount;
     if(byteEnd > usize.max - wordMask)
-        return MaterialTypedByteAppendStatus::EndAlignmentOverflow;
+        return makeUnexpected(MaterialTypedByteAppendStatus::EndAlignmentOverflow);
     const usize alignedByteEnd = (byteEnd + wordMask) & ~wordMask;
     if(alignedByteBegin > cast<usize>(u32.max) || alignedByteEnd > cast<usize>(u32.max))
-        return MaterialTypedByteAppendStatus::TotalCountExceedsU32;
+        return makeUnexpected(MaterialTypedByteAppendStatus::TotalCountExceedsU32);
 
     outRange.byteRange.byteOffset = cast<u32>(alignedByteBegin);
     outRange.byteRange.byteCount = cast<u32>(appendByteCount);
     outRange.alignedByteEnd = alignedByteEnd;
-    return MaterialTypedByteAppendStatus::Success;
+    return outRange;
 }
 
 b8 MaterialTypedByteRangeEmptyOffsetValid(in MaterialTypedByteRange range){

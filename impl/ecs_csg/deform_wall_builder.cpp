@@ -40,9 +40,10 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 s
     if(found != edgeSplits.end())
         return found.value();
     // A zero secondDistance selects the second endpoint.
-    f32 blendValue = 0.0f;
-    if(!TryComputeCsgDeformEdgeSplitBlend(firstDistance, secondDistance, blendValue))
+    const Expected<f32> blendResult = TryComputeCsgDeformEdgeSplitBlend(firstDistance, secondDistance);
+    if(!blendResult)
         return MakeUnexpected(Failure{});
+    const f32 blendValue = *blendResult;
     const SIMDVectorSingle blend = VectorReplicate(blendValue);
     const SIMDVectorSingle other = VectorSubtract(s_SIMDOne, blend);
     const CsgDeformVertex& firstVertex = vertices[first];

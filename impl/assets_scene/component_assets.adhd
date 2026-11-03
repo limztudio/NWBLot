@@ -196,9 +196,9 @@ LightComponentPayloadBinary PackLightComponentPayloadBinary(in LightComponent co
     return binaryPayload;
 }
 
-b8 UnpackLightComponentPayloadBinary(in LightComponentPayloadBinary binaryPayload, mut LightComponent outComponent){
+Expected<LightComponent> UnpackLightComponentPayloadBinary(in LightComponentPayloadBinary binaryPayload){
     if(binaryPayload.enableCaustics > 1u || binaryPayload.reserved != 0u)
-        return false;
+        return makeUnexpected(Failure());
 
     LightComponent unpacked;
     if(binaryPayload.type == 0u)
@@ -208,7 +208,7 @@ b8 UnpackLightComponentPayloadBinary(in LightComponentPayloadBinary binaryPayloa
     else if(binaryPayload.type == 2u)
         unpacked.type = LightType::Spot;
     else
-        return false;
+        return makeUnexpected(Failure());
 
     unpacked.colorIntensity = binaryPayload.colorIntensity;
     unpacked.range = binaryPayload.range;
@@ -217,8 +217,7 @@ b8 UnpackLightComponentPayloadBinary(in LightComponentPayloadBinary binaryPayloa
     unpacked.angularRadius = binaryPayload.angularRadius;
     unpacked.sourceRadius = binaryPayload.sourceRadius;
     unpacked.enableCaustics = binaryPayload.enableCaustics != 0u;
-    outComponent = unpacked;
-    return true;
+    return unpacked;
 }
 
 b8 IsValidLightComponentParameters(in LightComponent component){
@@ -292,14 +291,13 @@ b8 IsAllowedSceneAssetField(in StringView fieldName){
     ;
 }
 
-b8 TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w, mut f32x4 outRotation){
+Expected<f32x4> TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w){
     const f32x4 rawQuaternion(x, y, z, w);
     const f32 lenSq = lengthSq(rawQuaternion);
     if(!isFinite(lenSq) || lenSq <= s_SceneMinQuaternionLengthSq)
-        return false;
+        return makeUnexpected(Failure());
 
-    outRotation = normalize(rawQuaternion);
-    return true;
+    return normalize(rawQuaternion);
 }
 
 b8 IsValidTransformComponentParameters(in TransformComponent component){

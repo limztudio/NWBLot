@@ -34,20 +34,19 @@ using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<Reflecti
 
 
 TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
-    ReflectionFeedbackExtent partial;
-    ASSERT_TRUE(TryComputeReflectionFeedbackExtent(9u, 17u, partial));
-    EXPECT_EQ(partial.tilesX, 2u);
-    EXPECT_EQ(partial.tilesY, 3u);
-    EXPECT_EQ(partial.entryCount, 12u);
-    EXPECT_EQ(partial.byteCount, 64u);
-    ReflectionFeedbackExtent single;
-    ASSERT_TRUE(TryComputeReflectionFeedbackExtent(1u, 1u, single));
-    EXPECT_EQ(single.byteCount, 24u);
-    ReflectionFeedbackExtent invalid;
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(0u, 1u, invalid));
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(1u, 0u, invalid));
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(Limit<u32>::s_Max, 1u, invalid));
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(Limit<u32>::s_Max, Limit<u32>::s_Max, invalid));
+    const Expected<ReflectionFeedbackExtent> partial = TryComputeReflectionFeedbackExtent(9u, 17u);
+    ASSERT_TRUE(partial);
+    EXPECT_EQ(partial->tilesX, 2u);
+    EXPECT_EQ(partial->tilesY, 3u);
+    EXPECT_EQ(partial->entryCount, 12u);
+    EXPECT_EQ(partial->byteCount, 64u);
+    const Expected<ReflectionFeedbackExtent> single = TryComputeReflectionFeedbackExtent(1u, 1u);
+    ASSERT_TRUE(single);
+    EXPECT_EQ(single->byteCount, 24u);
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(0u, 1u));
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(1u, 0u));
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(Limit<u32>::s_Max, 1u));
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(Limit<u32>::s_Max, Limit<u32>::s_Max));
 }
 
 

@@ -94,13 +94,11 @@ void ApplySkinPaletteToWidgetStyle(in UiSkinPalette palette, mut WidgetStyle sty
     style.disabledText = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
 }
 
-b8 TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 density, mut Point outMinimumSize){
-    outMinimumSize = Point();
-    f32x4 minimum(0.0f, 0.0f, 0.0f, 0.0f);
-    if(!TryLoadUiSkinMinimumSize(region, cast<f64>(density), minimum))
-        return false;
-    outMinimumSize = Point(minimum.x, minimum.y);
-    return true;
+Expected<Point> TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 density){
+    const Expected<f32x4> minimum = TryLoadUiSkinMinimumSize(region, cast<f64>(density));
+    if(!minimum.has_value())
+        return makeUnexpected(Failure());
+    return Point(minimum.value().x, minimum.value().y);
 }
 
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in f32 lineHeight){

@@ -212,19 +212,17 @@ BytecodeValidationFailure ValidateBytecode(in Span<u8> binary){
     return BytecodeValidationFailure::None;
 }
 
-b8 TryComputeShaderAssetPayloadByteCount(
+Expected<usize> TryComputeShaderAssetPayloadByteCount(
     in usize entryPointByteLength,
-    in usize bytecodeByteLength,
-    mut usize outPayloadBytes
+    in usize bytecodeByteLength
 ){
     usize entryPointBytes = 4u + entryPointByteLength;
     if(entryPointBytes < entryPointByteLength || entryPointBytes > 0xFFFFFFFFFFFFFFFFu - s_AssetPayloadHeaderBytes)
-        return false;
+        return makeUnexpected(Failure());
     usize headerAndEntryPointBytes = s_AssetPayloadHeaderBytes + entryPointBytes;
     if(bytecodeByteLength > 0xFFFFFFFFFFFFFFFFu - headerAndEntryPointBytes)
-        return false;
-    outPayloadBytes = headerAndEntryPointBytes + bytecodeByteLength;
-    return true;
+        return makeUnexpected(Failure());
+    return headerAndEntryPointBytes + bytecodeByteLength;
 }
 
 StringView ShaderOptimizationLevelText(in ShaderOptimizationLevel optimizationLevel){
@@ -282,14 +280,14 @@ StringView TrimShaderSourceView(in StringView text){
     return text.substr(begin, end - begin);
 }
 
-b8 TryExtractIncludeDirective(in StringView line, mut IncludeDirective outInclude){
+Expected<IncludeDirective> TryExtractIncludeDirective(in StringView line){
     IncludeDirective include;
 
     usize cursor = 0u;
     while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size() || line[cursor] != '#')
-        return false;
+        return makeUnexpected(Failure());
     ++cursor;
     while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
         ++cursor;
@@ -300,17 +298,15 @@ b8 TryExtractIncludeDirective(in StringView line, mut IncludeDirective outInclud
     if(directive == "include_next" || directive == "import"){
         include.kind = IncludeKind::Unsupported;
         include.name = TrimShaderSourceView(line.substr(cursor));
-        outInclude = include;
-        return true;
+        return include;
     }
     if(directive != "include")
-        return false;
+        return makeUnexpected(Failure());
     while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size()){
         include.kind = IncludeKind::Unsupported;
-        outInclude = include;
-        return true;
+        return include;
     }
 
     i8 closingDelimiter = '"';
@@ -323,8 +319,7 @@ b8 TryExtractIncludeDirective(in StringView line, mut IncludeDirective outInclud
     else{
         include.kind = IncludeKind::Macro;
         include.name = TrimShaderSourceView(line.substr(cursor));
-        outInclude = include;
-        return true;
+        return include;
     }
     ++cursor;
     usize closingDelimiterPos = line.size();
@@ -336,12 +331,10 @@ b8 TryExtractIncludeDirective(in StringView line, mut IncludeDirective outInclud
     }
     if(closingDelimiterPos >= line.size() || closingDelimiterPos <= cursor){
         include.kind = IncludeKind::Unsupported;
-        outInclude = include;
-        return true;
+        return include;
     }
     include.name = line.substr(cursor, closingDelimiterPos - cursor);
-    outInclude = include;
-    return true;
+    return include;
 }
 
 b8 IsAllowedIncludeMetadataField(in StringView field){

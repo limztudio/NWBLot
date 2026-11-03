@@ -69,8 +69,7 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
         && cast<f64>(metrics.contentSize.y) >= cast<f64>(cast<f32>(height));
 }
 
-b8 TryMeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density, mut ProgressMetrics outMetrics){
-    outMetrics = ProgressMetrics();
+Expected<ProgressMetrics> TryMeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
     if(
         !IsValidLayoutSize(options.width)
         || !isFinite(options.height)
@@ -81,39 +80,41 @@ b8 TryMeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiS
         || !isFinite(density)
         || density <= 0.0f
     )
-        return false;
+        return makeUnexpected(Failure());
     if(!IsBoundedUiPadding(track.padding) || !IsBoundedUiPadding(fill.padding))
-        return false;
-    f32x4 trackMin(0.0f, 0.0f, 0.0f, 0.0f);
-    f32x4 fillMin(0.0f, 0.0f, 0.0f, 0.0f);
-    if(!TryLoadUiSkinMinimumSize(track, cast<f64>(density), trackMin) || !TryLoadUiSkinMinimumSize(fill, cast<f64>(density), fillMin))
-        return false;
+        return makeUnexpected(Failure());
+    const Expected<f32x4> trackMin = TryLoadUiSkinMinimumSize(track, cast<f64>(density));
+    const Expected<f32x4> fillMin = TryLoadUiSkinMinimumSize(fill, cast<f64>(density));
+    if(!trackMin.has_value() || !fillMin.has_value())
+        return makeUnexpected(Failure());
     ProgressMetrics candidate;
     candidate.padding = MaxUiPadding(style.padding, track.padding);
-    candidate.fillMinimum = Point(fillMin.x, fillMin.y);
-    const f64 innerW = (cast<f64>(candidate.padding.left) + cast<f64>(candidate.padding.right)) + cast<f64>(fillMin.x);
-    const f64 innerH = (cast<f64>(candidate.padding.top) + cast<f64>(candidate.padding.bottom)) + cast<f64>(fillMin.y);
-    const f64 width = max(cast<f64>(trackMin.x), innerW);
-    const f64 height = max(cast<f64>(options.height), max(cast<f64>(trackMin.y), innerH));
+    candidate.fillMinimum = Point(fillMin.value().x, fillMin.value().y);
+    const f64 innerW = (cast<f64>(candidate.padding.left) + cast<f64>(candidate.padding.right)) + cast<f64>(fillMin.value().x);
+    const f64 innerH = (cast<f64>(candidate.padding.top) + cast<f64>(candidate.padding.bottom)) + cast<f64>(fillMin.value().y);
+    const f64 width = max(cast<f64>(trackMin.value().x), innerW);
+    const f64 height = max(cast<f64>(options.height), max(cast<f64>(trackMin.value().y), innerH));
     if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
-        return false;
+        return makeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
     if(!IsValidProgressMetrics(candidate))
-        return false;
-    outMetrics = candidate;
-    return true;
+        return makeUnexpected(Failure());
+    return candidate;
 }
 
-b8 TryPlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction, mut ProgressPlacement outPlacement){
-    outPlacement = ProgressPlacement();
+Expected<ProgressPlacement> TryPlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !isFinite(fraction))
-        return false;
+        return makeUnexpected(Failure());
     ProgressPlacement candidate;
     candidate.bounds = bounds;
-    if(!TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint, candidate.clip))
-        return false;
-    if(!TryInsetUiRect(bounds, metrics.padding, UiRectPrecision::EmptyPaint, candidate.content))
-        return false;
+    const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint);
+    if(!clipped.has_value())
+        return makeUnexpected(Failure());
+    candidate.clip = clipped.value();
+    const Expected<Rect> content = TryInsetUiRect(bounds, metrics.padding, UiRectPrecision::EmptyPaint);
+    if(!content.has_value())
+        return makeUnexpected(Failure());
+    candidate.content = content.value();
     const f64 normalized = clamp(fraction, 0.0, 1.0);
     candidate.fillReveal = candidate.content;
     candidate.fillCanvas = candidate.content;
@@ -127,32 +128,29 @@ b8 TryPlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in
         const f64 contentW = cast<f64>(candidate.content.width);
         const f64 contentH = cast<f64>(candidate.content.height);
         const f64 revealW = contentW * normalized;
-        if(!TryMakeUiRect(contentX, contentY, revealW, contentH, UiRectPrecision::EmptyPaint, candidate.fillReveal))
-            return false;
+        const Expected<Rect> fillReveal = TryMakeUiRect(contentX, contentY, revealW, contentH, UiRectPrecision::EmptyPaint);
+        if(!fillReveal.has_value())
+            return makeUnexpected(Failure());
+        candidate.fillReveal = fillReveal.value();
         f64 canvasW = 0.0;
         if(candidate.fillReveal.width != 0.0f)
             canvasW = min(contentW, max(cast<f64>(candidate.fillReveal.width), cast<f64>(metrics.fillMinimum.x)));
-        if(!TryMakeUiRect(contentX, contentY, canvasW, contentH, UiRectPrecision::EmptyPaint, candidate.fillCanvas))
-            return false;
+        const Expected<Rect> fillCanvas = TryMakeUiRect(contentX, contentY, canvasW, contentH, UiRectPrecision::EmptyPaint);
+        if(!fillCanvas.has_value())
+            return makeUnexpected(Failure());
+        candidate.fillCanvas = fillCanvas.value();
     }
-    outPlacement = candidate;
-    return true;
+    return candidate;
 }
 
 // Finite fractions clamp visually to the unit interval.
 Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
-    ProgressMetrics candidate;
-    if(!TryMeasureProgress(options, style, track, fill, density, candidate))
-        return makeUnexpected(Failure());
-    return candidate;
+    return TryMeasureProgress(options, style, track, fill, density);
 }
 
 // Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
 Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
-    ProgressPlacement candidate;
-    if(!TryPlaceProgress(bounds, clip, metrics, fraction, candidate))
-        return makeUnexpected(Failure());
-    return candidate;
+    return TryPlaceProgress(bounds, clip, metrics, fraction);
 }
 
 

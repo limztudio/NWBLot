@@ -187,8 +187,8 @@ public:
         )
             return false;
         if(action.kind == ControlActionKind::Wheel){
-            f64 offset = 0.0;
-            if(!TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum, offset) || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(offset))
+            const auto offset = TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
+            if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(*offset))
                 return false;
             state.m_ensureCursor = false;
             result.valid = true;

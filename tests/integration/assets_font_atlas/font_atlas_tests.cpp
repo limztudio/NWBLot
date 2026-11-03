@@ -466,29 +466,27 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     payload.fontSha256 = ComputeSha256({ font.fontBytes().data(), font.fontBytes().size() });
     payload.positioningTables.clear();
     const Core::Assets::AssetBytes& source = font.fontBytes();
-    FontSfntDirectory directory;
-    const b8 directoryResult = ReadFontSfntDirectory({ source.data(), source.size() }, directory);
-    ASSERT_TRUE(directoryResult);
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory({ source.data(), source.size() });
+    ASSERT_TRUE(directory);
 
-    for(u16 index = 0u; index < directory.tableCount(); ++index){
-        FontSfntTable sourceTable;
-        const b8 sourceTableResult = directory.table(index, sourceTable);
-        ASSERT_TRUE(sourceTableResult);
+    for(u16 index = 0u; index < directory->tableCount(); ++index){
+        const Expected<FontSfntTable> sourceTable = directory->table(index);
+        ASSERT_TRUE(sourceTable);
 
-        if(sourceTable.tag == s_FontSfntHeadTag){
-            const auto unitsPerEmResult = ReadU16BigEndian(BinaryByteView{ sourceTable.bytes.data(), sourceTable.bytes.size() }, 18u);
+        if(sourceTable->tag == s_FontSfntHeadTag){
+            const auto unitsPerEmResult = ReadU16BigEndian(BinaryByteView{ sourceTable->bytes.data(), sourceTable->bytes.size() }, 18u);
             ASSERT_TRUE(unitsPerEmResult);
             payload.unitsPerEm = *unitsPerEmResult;
         }
-        if(sourceTable.tag == s_FontSfntMaxpTag){
-            const auto glyphCountResult = ReadU16BigEndian(BinaryByteView{ sourceTable.bytes.data(), sourceTable.bytes.size() }, 4u);
+        if(sourceTable->tag == s_FontSfntMaxpTag){
+            const auto glyphCountResult = ReadU16BigEndian(BinaryByteView{ sourceTable->bytes.data(), sourceTable->bytes.size() }, 4u);
             ASSERT_TRUE(glyphCountResult);
             payload.sourceGlyphCount = *glyphCountResult;
         }
-        if(sourceTable.tag == s_FontAtlasKernTag || sourceTable.tag == s_FontAtlasGposTag || sourceTable.tag == s_FontAtlasGdefTag){
+        if(sourceTable->tag == s_FontAtlasKernTag || sourceTable->tag == s_FontAtlasGposTag || sourceTable->tag == s_FontAtlasGdefTag){
             FontAtlasPositioningTable table(testArena.arena);
-            table.tag = sourceTable.tag;
-            table.bytes.assign(sourceTable.bytes.begin(), sourceTable.bytes.end());
+            table.tag = sourceTable->tag;
+            table.bytes.assign(sourceTable->bytes.begin(), sourceTable->bytes.end());
             table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
             payload.positioningTables.push_back(Move(table));
         }

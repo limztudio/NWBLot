@@ -54,14 +54,13 @@ public:
             return { UiEditClipboardStatus::InvalidOwner };
         if(!cancel())
             return { UiEditClipboardStatus::NativeFailure };
-        b8 reads = false;
-        UiEditClipboardStatus::Enum validationStatus = UiEditClipboardStatus::Idle;
-        if(!ValidateUiEditClipboardActionMode(action, channel <= Core::ClipboardChannel::PrimarySelection, readOnly, model.composition().active, model.hasSelection(), reads, validationStatus))
-            return { validationStatus };
+        const auto reads = ValidateUiEditClipboardActionMode(action, channel <= Core::ClipboardChannel::PrimarySelection, readOnly, model.composition().active, model.hasSelection());
+        if(!reads)
+            return { reads.error() };
         const auto capabilities = m_service.capabilities(channel);
-        if(reads ? !capabilities.readText : !capabilities.writeText)
+        if(*reads ? !capabilities.readText : !capabilities.writeText)
             return { UiEditClipboardStatus::Unsupported };
-        const auto result = reads ? m_service.requestReadText(channel) : m_service.requestWriteText(channel, model.selectedText());
+        const auto result = *reads ? m_service.requestReadText(channel) : m_service.requestWriteText(channel, model.selectedText());
         if(!result)
             return { result.error() == Core::ClipboardAdmission::WrongThread ? UiEditClipboardStatus::WrongThread : UiEditClipboardStatus::QueueFull };
         if(!result->valid())

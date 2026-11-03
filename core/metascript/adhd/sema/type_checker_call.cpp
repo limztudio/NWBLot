@@ -448,7 +448,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 }
             }
 
-            const b8 isStringFamily = (objType == "String" || objType == "CompactString" || objType == "StringView");
+            const b8 isStringFamily = IsStringLikeType(objType);
             if(isStringFamily && mName == "substr"){
                 if(callArgCount > 2u){
                     reportError(errors, expr.span, "'substr' accepts at most 2 arguments");

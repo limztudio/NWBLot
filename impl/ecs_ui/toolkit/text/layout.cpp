@@ -107,11 +107,10 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
                 if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
-                Double4 ink;
-                if(!TryTranslateTextInk(position, glyph.ink, ink) || !TryIncludeTextInk(ink, inkBounds, hasInk))
+                const auto ink = TryTranslateTextInk(position, glyph.ink);
+                if(!ink || !TryIncludeTextInk(*ink, inkBounds, hasInk))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                Double4 translatedCoverage;
-                if(glyph.coverage.known && !TryTranslateTextInk(position, glyph.coverage.ink, translatedCoverage))
+                if(glyph.coverage.known && !TryTranslateTextInk(position, glyph.coverage.ink))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 result.m_glyphs.push_back({ glyph.face, glyph.glyphId, line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage });
                 pen = static_cast<f32>(nextPen);

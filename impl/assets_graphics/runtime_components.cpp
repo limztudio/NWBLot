@@ -94,10 +94,12 @@ b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<RendererComponentPayloadBinary>(payload, NWB_TEXT("RendererComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
-    if(!UnpackRendererComponentPayloadBinary(*binaryPayload, component)){
+    const Expected<RendererComponent> unpacked = UnpackRendererComponentPayloadBinary(*binaryPayload);
+    if(!unpacked){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::loadComponentPayload failed: invalid renderer flags"));
         return false;
     }
+    component = *unpacked;
     return true;
 }
 

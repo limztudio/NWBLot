@@ -37,10 +37,10 @@ public:
 
 public:
     [[nodiscard]] virtual Expected<EditNavigationResult> resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight)override{
-        b8 page = false;
+        const auto page = ValidateTextAreaNavigationInputs(model.textMode(), model.composition().active, direction, m_fontSize, viewportHeight, preferred);
         if(
             !current()
-            || !ValidateTextAreaNavigationInputs(model.textMode(), model.composition().active, direction, m_fontSize, viewportHeight, preferred, page)
+            || !page
             || !m_state.navigation().matches(preferred)
         )
             return MakeUnexpected(Failure{});
@@ -55,16 +55,16 @@ public:
         const auto caret = geometry.caretRect(view.displayCaret());
         if(!caret)
             return MakeUnexpected(Failure{});
-        f32 preferredX = 0.0f;
-        if(!TryResolveTextAreaPreferredX(preferred, *caret, preferredX))
+        const auto preferredX = TryResolveTextAreaPreferredX(preferred, *caret);
+        if(!preferredX)
             return MakeUnexpected(Failure{});
         const b8 down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
-        const auto resolved = page
-            ? ResolveEditCaretPageTarget(geometry.lines(), geometry.caretStops(), model.caret(), *caret, down, preferredX, viewportHeight)
-            : geometry.verticalTarget(view.displayCaret(), down, preferredX);
+        const auto resolved = *page
+            ? ResolveEditCaretPageTarget(geometry.lines(), geometry.caretStops(), model.caret(), *caret, down, *preferredX, viewportHeight)
+            : geometry.verticalTarget(view.displayCaret(), down, *preferredX);
         if(!resolved)
             return MakeUnexpected(resolved.error());
-        return EditNavigationResult{ *resolved, preferredX };
+        return EditNavigationResult{ *resolved, *preferredX };
     }
 
 

@@ -389,7 +389,7 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
                 ok = false;
             }
         }
-        else if(baseRetTypeName != "String" && baseRetTypeName != "CompactString" && stmt.expr->kind == ExprKind::Identifier){
+        else if(!IsOwningStringType(baseRetTypeName) && stmt.expr->kind == ExprKind::Identifier){
             if(const ScopedVarInfo* retLocal = FindScopedVar(scope, stmt.expr->text); retLocal && retLocal->borrowsLocalStringOwner){
                 reportError(errors, stmt.span, "cannot return value containing 'StringView' borrowing a stack-local string");
                 ok = false;

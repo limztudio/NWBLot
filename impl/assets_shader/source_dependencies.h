@@ -90,10 +90,9 @@ template<typename SourceArenaT, typename DependencyVectorT>
             if(!line.empty() && line.back() == '\r')
                 line.remove_suffix(1);
 
-            ShaderBinaryPayload::IncludeDirective include;
-            if(ShaderBinaryPayload::TryExtractIncludeDirective(line, include)){
-                const AStringView includeName = include.name;
-                const auto includeKind = include.kind;
+            if(const Expected<ShaderBinaryPayload::IncludeDirective> include = ShaderBinaryPayload::TryExtractIncludeDirective(line)){
+                const AStringView includeName = include->name;
+                const auto includeKind = include->kind;
                 if(includeKind == ShaderBinaryPayload::IncludeKind::Macro || includeKind == ShaderBinaryPayload::IncludeKind::Unsupported){
                     const b8 plannedMacro = includeKind == ShaderBinaryPayload::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
                         return name == includeName;

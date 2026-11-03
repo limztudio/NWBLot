@@ -24,16 +24,16 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
     u32 sourceGlyphCount = 0u;
     if(!TryReadFontFaceMetricsFromSfnt(source, sourceUnitsPerEm, sourceGlyphCount) || sourceUnitsPerEm != payload.unitsPerEm || sourceGlyphCount != payload.sourceGlyphCount)
         return false;
-    FontSfntDirectory directory;
-    if(!ReadFontSfntDirectory({ source.data(), source.size() }, directory))
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory({ source.data(), source.size() });
+    if(!directory)
         return false;
     usize matched = 0u;
-    for(u16 index = 0u; index < directory.tableCount(); ++index){
-        FontSfntTable sourceTable;
-        if(!directory.table(index, sourceTable))
+    for(u16 index = 0u; index < directory->tableCount(); ++index){
+        const Expected<FontSfntTable> sourceTable = directory->table(index);
+        if(!sourceTable)
             return false;
-        const u32 tag = sourceTable.tag;
-        if(!IsFontAtlasPositioningTableTag(tag) || sourceTable.bytes.empty())
+        const u32 tag = sourceTable->tag;
+        if(!IsFontAtlasPositioningTableTag(tag) || sourceTable->bytes.empty())
             continue;
         const FontAtlasPositioningTable* exported = nullptr;
         for(const FontAtlasPositioningTable& table : payload.positioningTables){
@@ -42,7 +42,7 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
                 break;
             }
         }
-        if(!exported || exported->bytes.size() != sourceTable.bytes.size() || NWB_MEMCMP(exported->bytes.data(), sourceTable.bytes.data(), sourceTable.bytes.size()) != 0){
+        if(!exported || exported->bytes.size() != sourceTable->bytes.size() || NWB_MEMCMP(exported->bytes.data(), sourceTable->bytes.data(), sourceTable->bytes.size()) != 0){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
             return false;
         }

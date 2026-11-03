@@ -96,10 +96,10 @@ void ApplySkinPaletteToPopupStyle(in UiSkinPalette palette, mut PopupStyle style
     style.backdrop = ResolveUiSkinColor(palette, UiSkinColorRole::PopupBackdrop);
 }
 
-b8 TryPlacePopup(in PopupOptions options, in DisplayMetrics display, mut PopupPlacement outPlacement){
-    outPlacement = PopupPlacement();
+Expected<PopupPlacement> TryPlacePopup(in PopupOptions options, in DisplayMetrics display){
+    PopupPlacement outPlacement;
     if(!IsValidPopupOptions(options, display))
-        return false;
+        return makeUnexpected(Failure());
     const f32 width = min(options.size.x, display.logicalWidth);
     const f32 height = min(options.size.y, display.logicalHeight);
     PopupPlacementSide side = options.side;
@@ -157,19 +157,16 @@ b8 TryPlacePopup(in PopupOptions options, in DisplayMetrics display, mut PopupPl
     const f32 x = cast<f32>(clamp(originX, 0.0, maxX));
     const f32 y = cast<f32>(clamp(originY, 0.0, maxY));
     if(!isFinite(x + width) || !isFinite(y + height))
-        return false;
+        return makeUnexpected(Failure());
     outPlacement.bounds = Rect(x, y, width, height);
     outPlacement.viewport = Rect(0.0f, 0.0f, display.logicalWidth, display.logicalHeight);
     outPlacement.side = side;
-    return true;
+    return outPlacement;
 }
 
 // Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
 Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics display){
-    PopupPlacement placement;
-    if(!TryPlacePopup(options, display, placement))
-        return makeUnexpected(Failure());
-    return placement;
+    return TryPlacePopup(options, display);
 }
 
 

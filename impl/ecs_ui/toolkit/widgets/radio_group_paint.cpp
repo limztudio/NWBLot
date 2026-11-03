@@ -38,20 +38,20 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     host.focusOnCommit = frame.m_focusOnCommit;
     if(!m_context.addTarget(item.state, host))
         return false;
-    WidgetId choices;
-    if(!TryMakeWidgetId(item.state.id, s_WidgetPartChoices, choices))
+    const auto choices = TryMakeWidgetId(item.state.id, s_WidgetPartChoices);
+    if(!choices)
         return false;
     const UiSkinRegion* mark = placement->count != 0u ? region(frame.m_style.mark, frame.m_style.markFallback) : nullptr;
     for(u32 index = 0u; index < placement->count; ++index){
         const RadioGroupChoicePlacement& row = placement->rows[index];
-        WidgetId part;
-        if(!TryMakeWidgetPartId(choices, row.key, part))
+        const auto part = TryMakeWidgetPartId(*choices, row.key);
+        if(!part)
             return false;
         const InputRouter& input = m_context.input();
         const b8 enabled = frame.m_options.enabled && row.enabled;
         const b8 checked = frame.m_snapshot.selectedKey == row.key;
-        const b8 hover = input.hover() == part;
-        const b8 pressed = input.pressed(part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
+        const b8 hover = input.hover() == *part;
+        const b8 pressed = input.pressed(*part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
         const Name& preferred = checked ? frame.m_style.checked : !enabled ? frame.m_style.disabled : pressed ? frame.m_style.pressed : hover ? frame.m_style.hover : frame.m_style.normal;
         const Name& fallback = checked ? frame.m_style.checkedFallback : frame.m_style.normal;
         const UiSkinRegion* indicator = region(preferred, fallback);
@@ -86,7 +86,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
             target.activatable = enabled;
             target.control = frame.m_token;
             target.value = row.key;
-            if(!m_context.addPartTarget(item.state, part, target))
+            if(!m_context.addPartTarget(item.state, *part, target))
                 return false;
         }
     }

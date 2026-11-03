@@ -49,11 +49,12 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         return false;
     }
 
-    usize objectCount = 0u;
-    if(!TryComputeTotalModelObjectCount(m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size(), objectCount)){
+    const Expected<usize> objectCountResult = TryComputeTotalModelObjectCount(m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size());
+    if(!objectCountResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: total object count overflows"));
         return false;
     }
+    const usize objectCount = *objectCountResult;
     Optional<__hidden_model_runtime::ObjectNameMap> objectNames;
     // One object is necessarily unique and a mesh cannot have a separate skeleton parent in that model.
     // Larger models build the complete name index once, preserving validation order across all object kinds.

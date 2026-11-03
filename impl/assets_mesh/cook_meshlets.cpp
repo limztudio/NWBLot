@@ -59,7 +59,9 @@ b8 MeshCookMeshlets::AddMeshletTriangleToBuilder(
 ){
     for(const u32 vertexRefIndex : triangle.vertexRefs){
         u8 localVertex = 0u;
-        if(!TryFindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex, localVertex)){
+        if(const Expected<u8> foundVertex = TryFindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex))
+            localVertex = *foundVertex;
+        else{
             if(localSourceVertexRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;
@@ -213,13 +215,12 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
     };
 
     usize seedSearchOffset = 0u;
-    u32 seedTriangleIndex = 0u;
-    while(TryFindNextUnvisitedMeshletTriangle(trianglePrecompute.visitedTriangles, trianglePrecompute.triangles.size(), seedSearchOffset, seedTriangleIndex)){
-        seedSearchOffset = seedTriangleIndex;
+    while(const Expected<u32> seedTriangleIndex = TryFindNextUnvisitedMeshletTriangle(trianglePrecompute.visitedTriangles, trianglePrecompute.triangles.size(), seedSearchOffset)){
+        seedSearchOffset = *seedTriangleIndex;
         ClearMeshletFrontier(frontier, frontierFlags);
         resetCurrentMeshlet();
 
-        if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, seedTriangleIndex, trianglePrecompute, localSourceVertexRefs, localTriangleIndices, current, entry.meshletPrimitiveIndices, scoreState, frontier, frontierFlags))
+        if(!AddVisitedMeshletTriangle(nwbFilePath, metaKind, *seedTriangleIndex, trianglePrecompute, localSourceVertexRefs, localTriangleIndices, current, entry.meshletPrimitiveIndices, scoreState, frontier, frontierFlags))
             return false;
 
         if(!GrowMeshletFromFrontier(nwbFilePath, metaKind, seedSearchOffset, cpuScheduler, trianglePrecompute, localSourceVertexRefs, localTriangleIndices, current, entry.meshletPrimitiveIndices, scoreState, parallelCandidates, frontier, frontierFlags))

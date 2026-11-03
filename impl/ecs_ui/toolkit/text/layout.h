@@ -71,10 +71,7 @@ public:
 
     [[nodiscard]] TextHit hitTest(const Point point)const noexcept{ return HitTestTextLayout(m_lines, m_clusters, point); }
     [[nodiscard]] Expected<Rect> caretRect(const u32 byteOffset, const TextCaretEdge::Enum edge)const noexcept{
-        Rect rect;
-        if(!TryResolveTextCaretRect(m_lines, m_clusters, m_direction, byteOffset, edge, rect))
-            return MakeUnexpected(Failure{});
-        return rect;
+        return TryResolveTextCaretRect(m_lines, m_clusters, m_direction, byteOffset, edge);
     }
 
 

@@ -132,10 +132,10 @@ public:
     [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
         if(!m_ready)
             return MakeUnexpected(Failure{});
-        Rect viewport{};
-        if(!TryComputeEditBoxViewport(bounds, padding, clip, previousScroll, caretWidth, viewport))
+        const auto viewport = TryComputeEditBoxViewport(bounds, padding, clip, previousScroll, caretWidth);
+        if(!viewport)
             return MakeUnexpected(Failure{});
-        return arrangeViewport(bounds, viewport, clip, previousScroll, caretWidth, revealCaret);
+        return arrangeViewport(bounds, *viewport, clip, previousScroll, caretWidth, revealCaret);
     }
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.
     [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
@@ -144,8 +144,8 @@ public:
         const auto caret = m_geometry.caretRect(m_caret);
         if(!caret)
             return MakeUnexpected(Failure{});
-        EditBoxPlacement placement{};
-        if(!TryComputeEditBoxViewportPlacement(bounds, viewport, clip, previousScroll, caretWidth, revealCaret, m_textMode, m_visualBounds, layout().measure(), *caret, placement))
+        const auto placement = TryComputeEditBoxViewportPlacement(bounds, viewport, clip, previousScroll, caretWidth, revealCaret, m_textMode, m_visualBounds, layout().measure(), *caret);
+        if(!placement)
             return MakeUnexpected(Failure{});
         auto selection = m_geometry.rangeOnLine(m_selection, 0u, caretWidth);
         if(!selection)
@@ -157,9 +157,9 @@ public:
                 return MakeUnexpected(underline.error());
             preeditUnderline = *underline;
         }
-        if(!ValidateEditBoxArrangedSegments(placement, caretWidth, *selection, preeditUnderline, m_composing))
+        if(!ValidateEditBoxArrangedSegments(*placement, caretWidth, *selection, preeditUnderline, m_composing))
             return MakeUnexpected(Failure{});
-        return placement;
+        return *placement;
     }
     [[nodiscard]] Expected<usize> hitTest(const Point point, const EditBoxPlacement& placement)const noexcept{
         if(!m_ready || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))

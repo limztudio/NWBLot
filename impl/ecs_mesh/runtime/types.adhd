@@ -196,16 +196,14 @@ b8 ContainsInlineRuntimeMeshRequestLive(in Span<RuntimeMeshRequestEntry> entries
     return index < inlineCount && entries[index].found;
 }
 
-b8 TryComputePaddedRawByteCount(in usize logicalByteCount, mut usize outPaddedByteCount){
-    outPaddedByteCount = 0u;
+Expected<usize> TryComputePaddedRawByteCount(in usize logicalByteCount){
     if(logicalByteCount == 0u)
-        return false;
+        return makeUnexpected(Failure());
     const usize trailingByteCount = (s_RawByteLoadAlignmentBytes - (logicalByteCount % s_RawByteLoadAlignmentBytes)) % s_RawByteLoadAlignmentBytes;
     const usize paddedByteCount = logicalByteCount + trailingByteCount;
     if(paddedByteCount < logicalByteCount)
-        return false;
-    outPaddedByteCount = paddedByteCount;
-    return true;
+        return makeUnexpected(Failure());
+    return paddedByteCount;
 }
 
 usize ExpectedMeshletSolidTriangleWordCount(in u32 meshletPrimitiveIndexCount){

@@ -103,15 +103,15 @@ EditBoxResult TextAreaHost::editNavigated(
         else if(options.enabled && event.kind == AreaEventKind::Selection)
             result.valid = model.setSelection(event.anchor, event.caret);
         else if(options.enabled && event.kind == AreaEventKind::Key){
-            EditNavigationDirection::Enum direction = EditNavigationDirection::Up;
-            vertical = TryTranslateEditNavigation(event.intent, direction);
-            if(vertical && !model.composition().active){
+            const auto direction = TryTranslateEditNavigation(event.intent);
+            vertical = direction.has_value();
+            if(direction && !model.composition().active){
                 resolutions.emplace_back(m_arena);
                 AreaResolution& call = resolutions.back();
                 call.text.assign(model.text().data(), model.text().size());
                 call.caret = model.caret();
                 call.preferred = navigation.snapshot();
-                call.result = resolver.resolve(model, direction, call.preferred, viewportHeight);
+                call.result = resolver.resolve(model, *direction, call.preferred, viewportHeight);
                 if(call.result){
                     const usize targetAnchor = event.intent.extend ? model.anchor() : call.result->committedByte;
                     result.valid = model.setSelection(targetAnchor, call.result->committedByte) && navigation.setPreferredX(call.result->preferredX);

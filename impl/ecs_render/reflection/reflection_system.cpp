@@ -78,9 +78,10 @@ void RendererReflectionSystem::invalidateResources(){
 
 b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height, const b8 prepareHardware, const b8 prepareCsgHardware, const ReflectionSettings& settings){
     using namespace __hidden_reflection_system;
-    u32 capacity = 0u;
-    if(!TryResolveReflectionQueueCapacity(width, height, settings.maxHardwareRaysPerFrame, capacity))
+    const Expected<u32> capacityResult = TryResolveReflectionQueueCapacity(width, height, settings.maxHardwareRaysPerFrame);
+    if(!capacityResult)
         return false;
+    const u32 capacity = *capacityResult;
     const b8 csgHardwareWork = prepareCsgHardware && settings.maxHardwareRaysPerFrame > 0u && (settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid);
     if(csgHardwareWork && !prepareCsgDispatchResources())
         return false;

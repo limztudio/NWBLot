@@ -115,7 +115,7 @@ namespace __hidden_adhd_type_checker_infer{
         return true;
     if(stmt->kind == StmtKind::VarDecl && stmt->name != varName && stmt->varType && StmtReferencesIdentifier(stmt, varName)){
         const MStringView baseVarType = symbols.resolveBaseTypeName(stmt->varType->name);
-        if(symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None || baseVarType == "StringView" || baseVarType == "Span")
+        if(symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None || IsBorrowViewType(baseVarType))
             return true;
     }
     if(ExprHasMutLambdaCapture(stmt->expr, varName, symbols) || ExprHasMutLambdaCapture(stmt->condition, varName, symbols) || ExprHasMutLambdaCapture(stmt->stepExpr, varName, symbols))
@@ -549,7 +549,7 @@ b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDe
     const MStringView baseType = exprTypeRef
         ? m_symbols.resolveBaseTypeName(exprTypeRef->name)
         : inferExprTypeName(ownerClass, method, expr, scope);
-    if(baseType == "StringView" || baseType == "Span")
+    if(IsBorrowViewType(baseType))
         return false;
 
     switch(expr.kind){
@@ -563,7 +563,7 @@ b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDe
             return false;
         const TypeRef* containerTypeRef = nullptr;
         const MStringView lhsBase = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &containerTypeRef);
-        if(lhsBase == "Span" || lhsBase == "StringView")
+        if(IsBorrowViewType(lhsBase))
             return false;
         const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
         if(const MethodDecl* customOp = resolveCustomOperator(ownerClass, method, containerTypeRef, lhsBase, "[]", 1u, recvIsConst))
@@ -575,10 +575,10 @@ b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDe
             const MStringView mName = expr.lhs->text;
             const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
             if((mName == "value" && (recvBase == "Optional" || recvBase == "Expected"))
-                || ((mName == "front" || mName == "back") && (FindBuiltinGenericType(recvBase) != nullptr || recvBase == "String" || recvBase == "CompactString") && recvBase != "Span")){
+                || ((mName == "front" || mName == "back") && (FindBuiltinGenericType(recvBase) != nullptr || IsOwningStringType(recvBase)) && !IsBorrowViewType(recvBase))){
                 return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs->lhs, scope);
             }
-            if((mName == "front" || mName == "back") && (recvBase == "Span" || recvBase == "StringView"))
+            if((mName == "front" || mName == "back") && IsBorrowViewType(recvBase))
                 return false;
         }
         return true;
@@ -588,7 +588,7 @@ b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDe
             return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
         return true;
     case ExprKind::Unary:
-        if(!expr.isPostfix && (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus))
+        if(!expr.isPostfix && IsIncrementOrDecrementOperatorToken(expr.op))
             return expr.lhs != nullptr && isTemporaryOwnerExpr(ownerClass, method, *expr.lhs, scope);
         return true;
     default:
@@ -598,7 +598,7 @@ b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDe
 
 b8 TypeChecker::exprBorrowsTemporaryStringOwner(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope);
-    if(baseType == "String" || baseType == "CompactString")
+    if(IsOwningStringType(baseType))
         return isTemporaryOwnerExpr(ownerClass, method, expr, scope);
     if(baseType != "StringView")
         return false;
@@ -612,7 +612,7 @@ b8 TypeChecker::exprBorrowsTemporaryStringOwner(const ClassDecl* ownerClass, con
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView mName = expr.lhs->text;
             const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
-            if((recvBase == "StringView" && mName == "substr") || ((recvBase == "String" || recvBase == "CompactString") && (mName == "view" || mName == "c_str"))){
+            if((recvBase == "StringView" && mName == "substr") || (IsOwningStringType(recvBase) && (mName == "view" || mName == "c_str"))){
                 if(exprBorrowsTemporaryStringOwner(ownerClass, method, *expr.lhs->lhs, scope))
                     return true;
             }
@@ -621,7 +621,7 @@ b8 TypeChecker::exprBorrowsTemporaryStringOwner(const ClassDecl* ownerClass, con
             if(!arg)
                 continue;
             const MStringView argBase = inferExprBaseType(ownerClass, method, *arg, scope);
-            if((argBase == "String" || argBase == "CompactString" || argBase == "StringView") && exprBorrowsTemporaryStringOwner(ownerClass, method, *arg, scope))
+            if(IsStringLikeType(argBase) && exprBorrowsTemporaryStringOwner(ownerClass, method, *arg, scope))
                 return true;
         }
         return false;
@@ -659,7 +659,7 @@ b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const M
                 if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None)
                     return false;
                 const MStringView parentBase = inferExprBaseType(ownerClass, method, *root->lhs, scope);
-                if(parentBase == "Span" || parentBase == "StringView")
+                if(IsBorrowViewType(parentBase))
                     return false;
                 root = root->lhs;
                 continue;
@@ -668,7 +668,7 @@ b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const M
                 const MStringView mName = root->lhs->text;
                 const MStringView recvBase = inferExprBaseType(ownerClass, method, *root->lhs->lhs, scope);
                 if((mName == "value" && (recvBase == "Optional" || recvBase == "Expected"))
-                    || ((mName == "front" || mName == "back") && FindBuiltinGenericType(recvBase) != nullptr && recvBase != "Span")){
+                    || ((mName == "front" || mName == "back") && FindBuiltinGenericType(recvBase) != nullptr && !IsBorrowViewType(recvBase))){
                     root = root->lhs->lhs;
                     continue;
                 }
@@ -692,11 +692,11 @@ b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const M
             return true;
         }
         const MStringView candidateBase = inferExprBaseType(ownerClass, method, candidate, scope);
-        if((candidateBase == "String" || candidateBase == "CompactString")
+        if(IsOwningStringType(candidateBase)
             && !local->isParam
             && local->mode == ParamPassingMode::None
             && m_symbols.resolveRefMode(local->type) == ParamPassingMode::None
-            && resolveScopedVarBaseType(*local) != "Span"){
+            && !IsBorrowViewType(resolveScopedVarBaseType(*local))){
             if(outOwnerName)
                 *outOwnerName = local->name;
             if(outOwnerScopeIndex)
@@ -707,7 +707,7 @@ b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const M
     };
 
     const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope);
-    if(baseType == "String" || baseType == "CompactString")
+    if(IsOwningStringType(baseType))
         return checkRootLocalOwner(expr);
     if(checkRootLocalOwner(expr))
         return true;
@@ -723,7 +723,7 @@ b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const M
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView mName = expr.lhs->text;
             const MStringView recvBase = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope);
-            if((recvBase == "StringView" && mName == "substr") || ((recvBase == "String" || recvBase == "CompactString") && (mName == "view" || mName == "c_str"))){
+            if((recvBase == "StringView" && mName == "substr") || (IsOwningStringType(recvBase) && (mName == "view" || mName == "c_str"))){
                 if(exprBorrowsLocalStringOwner(ownerClass, method, *expr.lhs->lhs, scope, outOwnerName, outOwnerScopeIndex))
                     return true;
             }
@@ -732,7 +732,7 @@ b8 TypeChecker::exprBorrowsLocalStringOwner(const ClassDecl* ownerClass, const M
             if(!arg)
                 continue;
             const MStringView argBase = inferExprBaseType(ownerClass, method, *arg, scope);
-            if((argBase == "String" || argBase == "CompactString" || argBase == "StringView")
+            if(IsStringLikeType(argBase)
                 && exprBorrowsLocalStringOwner(ownerClass, method, *arg, scope, outOwnerName, outOwnerScopeIndex)){
                 return true;
             }

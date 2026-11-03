@@ -299,6 +299,12 @@ b8 IsStringLikeType(const MStringView name)noexcept{
     return false;
 }
 
+b8 IsOwningStringType(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
+        return info->isStringLike && !info->isBorrowView;
+    return false;
+}
+
 b8 IsNwbMapKeyType(const MStringView name)noexcept{
     if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
         return info->isNwbMapKey;

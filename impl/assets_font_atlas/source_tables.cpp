@@ -17,24 +17,24 @@ NWB_IMPL_BEGIN
 Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Span<const u8> fontBytes, const u32 faceIndex, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
     if(faceIndex != 0u)
         return MakeUnexpected(Failure{});
-    FontSfntDirectory directory;
-    if(!ReadFontSfntDirectory(fontBytes, directory))
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
+    if(!directory)
         return MakeUnexpected(Failure{});
     static constexpr Array<u32, s_FontAtlasMaxPositioningTableCount> s_Tags = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
     Core::Assets::AssetVector<FontAtlasPositioningTable> tables(arena);
     tables.reserve(s_FontAtlasMaxPositioningTableCount);
     u64 totalBytes = 0u;
     for(const u32 tag : s_Tags){
-        for(u16 index = 0u; index < directory.tableCount(); ++index){
-            u32 tableTag = 0u;
-            if(!directory.tableTag(index, tableTag))
+        for(u16 index = 0u; index < directory->tableCount(); ++index){
+            const Expected<u32> tableTag = directory->tableTag(index);
+            if(!tableTag)
                 return MakeUnexpected(Failure{});
-            if(tableTag != tag)
+            if(*tableTag != tag)
                 continue;
-            FontSfntTable sourceTable;
-            if(!directory.table(index, sourceTable))
+            const Expected<FontSfntTable> sourceTable = directory->table(index);
+            if(!sourceTable)
                 return MakeUnexpected(Failure{});
-            const Span<const u8> sourceBytes = sourceTable.bytes;
+            const Span<const u8> sourceBytes = sourceTable->bytes;
             const usize length = sourceBytes.size();
             if(length == 0u)
                 break;

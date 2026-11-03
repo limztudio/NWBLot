@@ -259,13 +259,13 @@ static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(const P
                 return MakeUnexpected(Failure{});
             }
 
-            ACompactString flattenedKey;
-            if(!BuildMaterialBindParameterKey(paramKeyText, blockParamKeyText, flattenedKey)){
+            const Expected<ACompactString> flattenedKey = BuildMaterialBindParameterKey(paramKeyText, blockParamKeyText);
+            if(!flattenedKey){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity"), PathToString<tchar>(nwbFilePath), ConvertString(paramKeyText), ConvertString(blockParamKeyText));
                 return MakeUnexpected(Failure{});
             }
 
-            if(!appendParameter(flattenedKey.view(), blockParamValue))
+            if(!appendParameter(flattenedKey->view(), blockParamValue))
                 return MakeUnexpected(Failure{});
         }
     }

@@ -108,8 +108,10 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
                     m_context.input().cancelSubmitCommands(entry->widget.id);
                 return;
             }
-            event.navigation = Ui::TryTranslateEditNavigation(intent, event.navigationDirection);
-            if(event.navigation){
+            const auto navigationDirection = Ui::TryTranslateEditNavigation(intent);
+            event.navigation = navigationDirection.has_value();
+            if(navigationDirection){
+                event.navigationDirection = *navigationDirection;
                 if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
                     return;
                 event.navigationViewportHeight = entry->displayed.placement.content.height;

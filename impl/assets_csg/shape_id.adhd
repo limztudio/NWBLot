@@ -68,9 +68,9 @@ b8 IsValidCsgRelativeIncludePathText(in StringView includePath){
 }
 
 // Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
-b8 TryResolveCsgShapeTypeIdFromName(in Name shapeName, mut CsgShapeTypeId outTypeId){
+Expected<CsgShapeTypeId> TryResolveCsgShapeTypeIdFromName(in Name shapeName){
     if(shapeName == s_NameNone)
-        return false;
+        return makeUnexpected(Failure());
 
     // HashValue returns usize and would make the cooked ID host-dependent.
     const NameHash shapeHash = shapeName.hash();
@@ -80,10 +80,8 @@ b8 TryResolveCsgShapeTypeIdFromName(in Name shapeName, mut CsgShapeTypeId outTyp
 
     const CsgShapeTypeId typeId = cast<CsgShapeTypeId>(foldedHash ^ (foldedHash >> s_CsgShapeHashFoldShiftBits));
     if(typeId != s_InvalidCsgShapeTypeId)
-        outTypeId = typeId;
-    else
-        outTypeId = u32.max;
-    return true;
+        return typeId;
+    return u32.max;
 }
 
 

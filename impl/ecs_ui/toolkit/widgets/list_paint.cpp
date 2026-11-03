@@ -163,10 +163,10 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
     frame.rows.clear();
     if(placement.scrollbarVisible){
         const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
-        WidgetId thumbId;
-        if(!TryMakeWidgetId(item.state.id, s_WidgetPartScrollbar, thumbId))
+        const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollbar);
+        if(!thumbId)
             return false;
-        const b8 hover = m_context.input().hover() == thumbId;
+        const b8 hover = m_context.input().hover() == *thumbId;
         const UiSkinRegion* thumb = region(hover ? frame.style.thumbHover : frame.style.thumb, frame.style.thumbFallback);
         if(!track || !thumb)
             return false;
@@ -181,14 +181,14 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
             target.rectangle = placement.track;
             target.clip = clip;
             target.control = frame.token;
-            WidgetId trackId;
-            if(!TryMakeWidgetId(item.state.id, s_WidgetPartTrack, trackId) || !m_context.addPartTarget(item.state, trackId, target))
+            const auto trackId = TryMakeWidgetId(item.state.id, s_WidgetPartTrack);
+            if(!trackId || !m_context.addPartTarget(item.state, *trackId, target))
                 return false;
             target.rectangle = placement.thumb;
             target.pointerGesture = placement.track.height > placement.thumb.height;
             target.gestureReference = placement.track;
             target.gestureMaximum = placement.maxOffset;
-            if(!m_context.addPartTarget(item.state, thumbId, target))
+            if(!m_context.addPartTarget(item.state, *thumbId, target))
                 return false;
         }
     }
@@ -197,8 +197,8 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
 
 b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement){
     const auto& rows = frame.rows;
-    WidgetId rowsId;
-    if(!TryMakeWidgetId(item.state.id, s_WidgetPartRows, rowsId))
+    const auto rowsId = TryMakeWidgetId(item.state.id, s_WidgetPartRows);
+    if(!rowsId)
         return false;
     const b8 focused = m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_context.input().focus() == frame.commandFocus);
     auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
@@ -208,13 +208,13 @@ b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const Scroll
         const ListRow& row = *found;
         const u64 key = row.key;
         const b8 enabled = item.enabled && row.enabled;
-        WidgetId part;
-        if(!TryMakeWidgetPartId(rowsId, key, part))
+        const auto part = TryMakeWidgetPartId(*rowsId, key);
+        if(!part)
             return false;
         const auto rectangle = CalculateScrollRowBounds(index, placement, frame.rowHeight);
         if(!rectangle)
             return false;
-        const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
+        const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_context.input().hover() == *part, focused && frame.state->cursorKey() == key };
         if(!PaintSelectable(m_paint, m_text, *m_skin, row.text, row.textBounds, frame.style.row.padding, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
             return false;
         if(item.enabled){
@@ -225,7 +225,7 @@ b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const Scroll
             target.activatable = enabled;
             target.control = frame.token;
             target.value = key;
-            if(!m_context.addPartTarget(item.state, part, target))
+            if(!m_context.addPartTarget(item.state, *part, target))
                 return false;
         }
     }

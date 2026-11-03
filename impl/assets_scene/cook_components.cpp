@@ -71,12 +71,12 @@ using namespace SceneAssetCook;
     if(!x || !y || !z || !w)
         return MakeUnexpected(Failure{});
 
-    Float4 normalized;
-    if(!TryNormalizeTransformQuaternion(*x, *y, *z, *w, normalized)){
+    const Expected<Float4> normalized = TryNormalizeTransformQuaternion(*x, *y, *z, *w);
+    if(!normalized){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-zero quaternion"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
-    return normalized;
+    return *normalized;
 }
 
 

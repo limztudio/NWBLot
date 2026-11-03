@@ -44,10 +44,34 @@ public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
 
     [[nodiscard]] f64 offset()const noexcept{ return m_offset; }
-    [[nodiscard]] b8 setOffset(const f64 offset)noexcept{ return TrySetScrollOffset(offset, m_offset); }
-    [[nodiscard]] b8 ensureVisible(const f64 start, const f64 end, const f64 viewportHeight)noexcept{ return TryEnsureScrollVisible(m_offset, start, end, viewportHeight, m_offset); }
-    [[nodiscard]] b8 scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{ return TryScrollByOffset(m_offset, delta, contentHeight, viewportHeight, m_offset); }
-    [[nodiscard]] b8 clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{ return TryClampScrollOffset(m_offset, contentHeight, viewportHeight, m_offset); }
+    [[nodiscard]] b8 setOffset(const f64 offset)noexcept{
+        const auto next = TrySetScrollOffset(offset);
+        if(!next)
+            return false;
+        m_offset = *next;
+        return true;
+    }
+    [[nodiscard]] b8 ensureVisible(const f64 start, const f64 end, const f64 viewportHeight)noexcept{
+        const auto next = TryEnsureScrollVisible(m_offset, start, end, viewportHeight);
+        if(!next)
+            return false;
+        m_offset = *next;
+        return true;
+    }
+    [[nodiscard]] b8 scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{
+        const auto next = TryScrollByOffset(m_offset, delta, contentHeight, viewportHeight);
+        if(!next)
+            return false;
+        m_offset = *next;
+        return true;
+    }
+    [[nodiscard]] b8 clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{
+        const auto next = TryClampScrollOffset(m_offset, contentHeight, viewportHeight);
+        if(!next)
+            return false;
+        m_offset = *next;
+        return true;
+    }
 
 
 private:

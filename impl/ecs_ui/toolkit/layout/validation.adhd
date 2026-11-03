@@ -102,20 +102,19 @@ b8 IsValidLayoutNodeDesc(in LayoutNodeDesc description){
     ;
 }
 
-b8 TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in UiRectPrecision precision, mut Rect outRect){
-    outRect = Rect();
+Expected<Rect> TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in UiRectPrecision precision){
     if(
         !isFinite(x) || x < -s_UiMaxFloatF64 || x > s_UiMaxFloatF64
         || !isFinite(y) || y < -s_UiMaxFloatF64 || y > s_UiMaxFloatF64
         || !isFinite(width) || width < 0.0 || width > s_UiMaxFloatF64
         || !isFinite(height) || height < 0.0 || height > s_UiMaxFloatF64
     )
-        return false;
+        return makeUnexpected(Failure());
     if(precision != UiRectPrecision::RoundedEndpoints){
         const f64 endX = x + width;
         const f64 endY = y + height;
         if(endX < -s_UiMaxFloatF64 || endX > s_UiMaxFloatF64 || endY < -s_UiMaxFloatF64 || endY > s_UiMaxFloatF64)
-            return false;
+            return makeUnexpected(Failure());
     }
     Rect candidate(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
     if(precision == UiRectPrecision::EmptyPaint){
@@ -124,18 +123,17 @@ b8 TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in UiRectPreci
         if(candidate.height > 0.0f && candidate.y + candidate.height <= candidate.y)
             candidate.height = 0.0f;
         if(!IsBoundedUiRect(candidate))
-            return false;
+            return makeUnexpected(Failure());
     }
     else{
         if(!IsValidUiRect(candidate))
-            return false;
+            return makeUnexpected(Failure());
         if(precision == UiRectPrecision::PreciseExtents){
             if((width > 0.0 && candidate.x + candidate.width <= candidate.x) || (height > 0.0 && candidate.y + candidate.height <= candidate.y))
-                return false;
+                return makeUnexpected(Failure());
         }
     }
-    outRect = candidate;
-    return true;
+    return candidate;
 }
 
 f64x4 ComputeInsetUiRectBounds(in Rect bounds, in Insets padding){
@@ -150,12 +148,12 @@ f64x4 ComputeInsetUiRectBounds(in Rect bounds, in Insets padding){
     return f64x4(cast<f64>(bounds.x) + firstW, cast<f64>(bounds.y) + firstH, remW - lastW, remH - lastH);
 }
 
-b8 TryInsetUiRect(in Rect bounds, in Insets padding, in UiRectPrecision precision, mut Rect outRect){
+Expected<Rect> TryInsetUiRect(in Rect bounds, in Insets padding, in UiRectPrecision precision){
     const f64x4 r = ComputeInsetUiRectBounds(bounds, padding);
-    return TryMakeUiRect(r.x, r.y, r.z, r.w, precision, outRect);
+    return TryMakeUiRect(r.x, r.y, r.z, r.w, precision);
 }
 
-b8 TryIntersectUiRects(in Rect lhs, in Rect rhs, in UiRectPrecision precision, mut Rect outRect){
+Expected<Rect> TryIntersectUiRects(in Rect lhs, in Rect rhs, in UiRectPrecision precision){
     const f64 lhsX = cast<f64>(lhs.x);
     const f64 lhsY = cast<f64>(lhs.y);
     const f64 rhsX = cast<f64>(rhs.x);
@@ -166,7 +164,7 @@ b8 TryIntersectUiRects(in Rect lhs, in Rect rhs, in UiRectPrecision precision, m
     const f64 endY = min(lhsY + cast<f64>(lhs.height), rhsY + cast<f64>(rhs.height));
     const f64 width = max(0.0, endX - originX);
     const f64 height = max(0.0, endY - originY);
-    return TryMakeUiRect(originX, originY, width, height, precision, outRect);
+    return TryMakeUiRect(originX, originY, width, height, precision);
 }
 
 Rect IntersectUiRectsBounds(in Rect lhs, in Rect rhs){
@@ -197,8 +195,7 @@ b8 CanAddLayoutTreeNode(in Span<LayoutTreeNode> nodes, in u32 maxNodes, in b8 bu
     return nodes[cast<usize>(parent)].description.direction != LayoutDirection::Leaf;
 }
 
-b8 MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<LayoutTreeWork> work, in u32 index, mut Point outMeasuredSize){
-    outMeasuredSize = Point();
+Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<LayoutTreeWork> work, in u32 index){
     const LayoutTreeNode node = nodes[cast<usize>(index)];
     const LayoutNodeDesc description = node.description;
     f64 extentX = 0.0;
@@ -246,15 +243,14 @@ b8 MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<LayoutTreeWork> 
     const f64 width = (maxX + cast<f64>(description.padding.left)) + cast<f64>(description.padding.right);
     const f64 height = (maxY + cast<f64>(description.padding.top)) + cast<f64>(description.padding.bottom);
     if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
-        return false;
+        return makeUnexpected(Failure());
     f32 resolvedWidth = cast<f32>(width);
     if(description.width.policy == LayoutSizePolicy::Fixed)
         resolvedWidth = description.width.value;
     f32 resolvedHeight = cast<f32>(height);
     if(description.height.policy == LayoutSizePolicy::Fixed)
         resolvedHeight = description.height.value;
-    outMeasuredSize = Point(resolvedWidth, resolvedHeight);
-    return true;
+    return Point(resolvedWidth, resolvedHeight);
 }
 
 b8 TryBeginArrangeLayoutTreeNode(
@@ -329,7 +325,7 @@ b8 TryBeginArrangeLayoutTreeNode(
     return true;
 }
 
-b8 TryArrangeLayoutTreeChild(
+Expected<Rect> TryArrangeLayoutTreeChild(
     in LayoutDirection parentDirection,
     in f32 parentGap,
     in Rect parentContent,
@@ -337,10 +333,8 @@ b8 TryArrangeLayoutTreeChild(
     in Point childMeasured,
     in f64 available,
     in f64 weight,
-    mut f64 inoutCursor,
-    mut Rect outChildRect
+    mut f64 inoutCursor
 ){
-    outChildRect = Rect();
     const b8 row = parentDirection == LayoutDirection::Row;
     const b8 column = parentDirection == LayoutDirection::Column;
     f32 width = childMeasured.x;
@@ -365,14 +359,13 @@ b8 TryArrangeLayoutTreeChild(
         y = cast<f32>(inoutCursor);
     const Rect rectangle(x, y, width, height);
     if(!IsValidUiRect(rectangle))
-        return false;
-    outChildRect = rectangle;
+        return makeUnexpected(Failure());
     const f64 gap = cast<f64>(parentGap);
     if(row)
         inoutCursor += cast<f64>(width) + gap;
     else if(column)
         inoutCursor += cast<f64>(height) + gap;
-    return true;
+    return rectangle;
 }
 
 

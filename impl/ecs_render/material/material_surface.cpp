@@ -166,9 +166,8 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
 
 
 Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInstanceOverrideField(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter){
-    MaterialInstanceOverrideField resolvedField;
-    if(TryFindMaterialInstanceOverrideField(materialInfo.typedLayoutBlocks, materialInfo.typedLayoutFields, parameter, resolvedField))
-        return resolvedField;
+    if(const Expected<MaterialInstanceOverrideField> resolvedField = TryFindMaterialInstanceOverrideField(materialInfo.typedLayoutBlocks, materialInfo.typedLayoutFields, parameter))
+        return *resolvedField;
 
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'"), ConvertString(parameter.parameterName.resolvedText()), entity.id, ConvertString(materialInfo.materialName.resolvedText()));
     return MakeUnexpected(Failure{});

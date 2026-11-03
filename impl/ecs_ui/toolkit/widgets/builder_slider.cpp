@@ -72,24 +72,24 @@ b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
     if(!track || !normal)
         return false;
     const f32 referenceDensity = m_skin->referenceDensity();
-    Point trackMinimum;
-    if(!TryResolveSkinRegionMinimumSize(*track, referenceDensity, trackMinimum))
+    const auto trackMinimum = TryResolveSkinRegionMinimumSize(*track, referenceDensity);
+    if(!trackMinimum)
         return false;
-    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum.y);
+    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum->y);
     const Array<const UiSkinRegion*, 4> thumbs{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
             continue;
-        Point minimum;
-        if(!TryResolveSkinRegionMinimumSize(*thumb, referenceDensity, minimum))
+        const auto minimum = TryResolveSkinRegionMinimumSize(*thumb, referenceDensity);
+        if(!minimum)
             return false;
-        frame.m_style.thumbExtent = { Max(frame.m_style.thumbExtent.x, minimum.x), Max(frame.m_style.thumbExtent.y, minimum.y) };
+        frame.m_style.thumbExtent = { Max(frame.m_style.thumbExtent.x, minimum->x), Max(frame.m_style.thumbExtent.y, minimum->y) };
     }
     const auto metrics = MeasureSlider(frame.m_options, frame.m_style);
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + static_cast<f64>(frame.m_metrics.padding.right) + static_cast<f64>(frame.m_metrics.thumbExtent.x) + static_cast<f64>(trackMinimum.x);
+    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + static_cast<f64>(frame.m_metrics.padding.right) + static_cast<f64>(frame.m_metrics.thumbExtent.x) + static_cast<f64>(trackMinimum->x);
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;
     frame.m_metrics.contentSize.x = Max(frame.m_metrics.contentSize.x, static_cast<f32>(width));
@@ -105,14 +105,14 @@ void Builder::publishSliderResults(const b8 valid)noexcept{
             result.focused = frame.m_interactive && input.focus() == frame.m_widget.id;
             result.dragging = false;
             if(frame.m_interactive && input.primaryDown()){
-                WidgetId track;
-                WidgetId thumb;
-                if(!TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack, track) || !TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb, thumb)){
+                const auto track = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
+                const auto thumb = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb);
+                if(!track || !thumb){
                     m_context.fail();
                     frame.m_state.m_result = {};
                     continue;
                 }
-                result.dragging = input.capture() == track || input.capture() == thumb;
+                result.dragging = input.capture() == *track || input.capture() == *thumb;
             }
         }
         frame.m_state.m_result = result;

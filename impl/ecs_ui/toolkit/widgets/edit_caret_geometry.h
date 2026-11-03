@@ -67,11 +67,11 @@ public:
         usize previousCommitted = 0u;
         usize previousDisplay = 0u;
         for(const EditCaretMapping& item : mapping){
-            EditBoxCaretStop stop{};
-            if(!TryMakeEditCaretStop(expectedText, layout.lines(), layout.clusters(), *boundaries, committedBytes, item, previousCommitted, previousDisplay, stop))
+            const auto stop = TryMakeEditCaretStop(expectedText, layout.lines(), layout.clusters(), *boundaries, committedBytes, item, previousCommitted, previousDisplay);
+            if(!stop)
                 return false;
-            stops.push_back(stop);
-            ++lines[stop.lineIndex].stopCount;
+            stops.push_back(*stop);
+            ++lines[stop->lineIndex].stopCount;
         }
         u32 firstStop = 0u;
         for(EditCaretLine& line : lines){

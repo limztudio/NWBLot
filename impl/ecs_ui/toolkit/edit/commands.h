@@ -73,9 +73,8 @@ namespace __hidden_ui_edit_commands{
     const usize anchor = model.anchor();
     const usize caret = model.caret();
     b8 applied = true;
-    EditMove::Enum movement = EditMove::Left;
-    if(TryMapEditCommandToMove(request.command, movement)){
-        applied = model.move(movement, request.extend);
+    if(const auto movement = TryMapEditCommandToMove(request.command)){
+        applied = model.move(*movement, request.extend);
     }
     else{
         switch(request.command){

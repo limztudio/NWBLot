@@ -359,10 +359,10 @@ b8 IsPointerInputEventType(in InputEventType type){
     }
 }
 
-b8 TryMakePointerInputEvent(in PointerInput input, mut InputEvent outEvent){
-    outEvent = InputEvent();
+Expected<InputEvent> TryMakePointerInputEvent(in PointerInput input){
+    InputEvent outEvent;
     if(input.phase > PointerPhase::Scroll || input.intent > PointerIntent::ContextMenu)
-        return false;
+        return makeUnexpected(Failure());
     switch(input.phase){
     case PointerPhase::Move:
         outEvent.type = InputEventType::PointerMove;
@@ -396,7 +396,7 @@ b8 TryMakePointerInputEvent(in PointerInput input, mut InputEvent outEvent){
     outEvent.timestampMs = input.timestampMs;
     outEvent.extend = input.extend;
     outEvent.hoverCapable = input.hoverCapable;
-    return true;
+    return outEvent;
 }
 
 b8 HasValidHitTargetControlProperties(in HitTarget target){
@@ -423,42 +423,34 @@ b8 HasValidHitTargetControlProperties(in HitTarget target){
         && !target.horizontalNavigation;
 }
 
-b8 TryTranslateControlNavigationCommand(in InputCommand command, in b8 horizontalNavigation, mut ControlActionKind outKind){
+Expected<ControlActionKind> TryTranslateControlNavigationCommand(in InputCommand command, in b8 horizontalNavigation){
     switch(command){
     case InputCommand::Left:
     case InputCommand::WordLeft:
         if(!horizontalNavigation)
-            return false;
-        outKind = ControlActionKind::Left;
-        return true;
+            return makeUnexpected(Failure());
+        return ControlActionKind::Left;
     case InputCommand::Right:
     case InputCommand::WordRight:
         if(!horizontalNavigation)
-            return false;
-        outKind = ControlActionKind::Right;
-        return true;
+            return makeUnexpected(Failure());
+        return ControlActionKind::Right;
     case InputCommand::Up:
-        outKind = ControlActionKind::Up;
-        return true;
+        return ControlActionKind::Up;
     case InputCommand::Down:
-        outKind = ControlActionKind::Down;
-        return true;
+        return ControlActionKind::Down;
     case InputCommand::PageUp:
-        outKind = ControlActionKind::PageUp;
-        return true;
+        return ControlActionKind::PageUp;
     case InputCommand::PageDown:
-        outKind = ControlActionKind::PageDown;
-        return true;
+        return ControlActionKind::PageDown;
     case InputCommand::DocumentHome:
     case InputCommand::Home:
-        outKind = ControlActionKind::Home;
-        return true;
+        return ControlActionKind::Home;
     case InputCommand::DocumentEnd:
     case InputCommand::End:
-        outKind = ControlActionKind::End;
-        return true;
+        return ControlActionKind::End;
     default:
-        return false;
+        return makeUnexpected(Failure());
     }
 }
 
@@ -476,8 +468,7 @@ b8 HasValidHitTargetCommandOwnerProperties(in HitTarget source){
         && source.commandControl.valid();
 }
 
-b8 FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in WidgetId id, in u64 declarationGeneration, mut usize outIndex){
-    outIndex = 0u;
+Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in WidgetId id, in u64 declarationGeneration){
     usize begin = 0u;
     usize end = lookup.size();
     while(begin < end){
@@ -488,15 +479,14 @@ b8 FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> look
             end = middle;
     }
     if(begin == lookup.size() || lookup[begin].value != id.value)
-        return false;
+        return makeUnexpected(Failure());
     usize targetIndex = cast<usize>(lookup[begin].index);
     if(targetIndex >= targets.size())
-        return false;
+        return makeUnexpected(Failure());
     HitTarget target = targets[targetIndex];
     if(declarationGeneration != 0u && target.declarationGeneration != declarationGeneration)
-        return false;
-    outIndex = targetIndex;
-    return true;
+        return makeUnexpected(Failure());
+    return targetIndex;
 }
 
 b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
@@ -506,10 +496,10 @@ b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<Tar
             return false;
         if(!target.owner.valid())
             continue;
-        usize hostIndex = 0u;
-        if(!FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration, hostIndex))
+        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
+        if(!hostIndex.has_value())
             return false;
-        const HitTarget host = targets[hostIndex];
+        const HitTarget host = targets[hostIndex.value()];
         if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
             return false;
     }
@@ -523,10 +513,10 @@ b8 ValidateStagedHitTargetCommandOwners(in Span<HitTarget> targets, in Span<Targ
             return false;
         if(!source.commandOwner.valid())
             continue;
-        usize hostIndex = 0u;
-        if(!FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration, hostIndex))
+        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
+        if(!hostIndex.has_value())
             return false;
-        const HitTarget host = targets[hostIndex];
+        const HitTarget host = targets[hostIndex.value()];
         if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer)
             return false;
     }

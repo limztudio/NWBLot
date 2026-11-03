@@ -30,11 +30,12 @@ b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
     if(!mesh.emulationVertexBuffer){
-        ComputeEmulationLayout layout{};
-        if(!TryResolveComputeEmulationLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount, layout)){
+        const Expected<ComputeEmulationLayout> layoutResult = TryResolveComputeEmulationLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
+        if(!layoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: generated geometry layout exceeds the index byte-address range for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             return false;
         }
+        const ComputeEmulationLayout& layout = *layoutResult;
         const auto emulationVertexBufferName = DeriveName(mesh.meshName, AStringView(":emulation_vb"));
         if(!emulationVertexBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));

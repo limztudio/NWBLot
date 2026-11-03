@@ -145,8 +145,7 @@ static b8 ValidateMaterialBindStructAttributes(const Path& bindFilePath, const M
 
 
 static b8 ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
-    MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-    const b8 isResourceField = TryParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
+    const b8 isResourceField = TryParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
     if(isResourceField && field.attributes.empty())
         return true;
     b8 foundRequiredAttribute = false;
@@ -194,10 +193,8 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
     if(!parsedName)
         return MakeUnexpected(Failure{});
     field.name = *parsedName;
-    MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-    const b8 isResourceField = TryParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
-    MaterialParameterType parameterType;
-    if(!IsAsciiIdentifier(field.type) || (!isResourceField && !TryParseMaterialParameterTypeText(AStringView(field.type), parameterType))){
+    const b8 isResourceField = TryParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
+    if(!IsAsciiIdentifier(field.type) || (!isResourceField && !TryParseMaterialParameterTypeText(AStringView(field.type)).has_value())){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name), ConvertString(field.name), ConvertString(field.type));
         return MakeUnexpected(Failure{});
     }

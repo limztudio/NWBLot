@@ -46,21 +46,21 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
     u64 pixelByteCount = 0u;
     for(usize index = 0u; index < groups.size(); ++index){
         const PreparedFontImageView& group = groups[index];
-        u32 expectedBytes = 0u;
-        if(!TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount, expectedBytes) || !group.pixels.data() || group.pixels.size() != expectedBytes || expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount){
+        const Expected<u32> expectedBytes = TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount);
+        if(!expectedBytes || !group.pixels.data() || group.pixels.size() != *expectedBytes || *expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes"), index);
             return MakeUnexpected(s_PreparedFontInvalidSerializeGroupReason);
         }
-        pixelByteCount += expectedBytes;
+        pixelByteCount += *expectedBytes;
     }
 
-    u64 expectedPayloadBytes = 0u;
-    if(!TryComputePreparedFontExpectedPayloadBytes(sfnt.size(), groups.size(), pixelByteCount, expectedPayloadBytes)){
+    const Expected<u64> expectedPayloadBytes = TryComputePreparedFontExpectedPayloadBytes(sfnt.size(), groups.size(), pixelByteCount);
+    if(!expectedPayloadBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
         return MakeUnexpected(s_PreparedFontInvalidSerializeInputReason);
     }
     Core::Assets::AssetBytes binary(arena);
-    binary.reserve(static_cast<usize>(expectedPayloadBytes));
+    binary.reserve(static_cast<usize>(*expectedPayloadBytes));
     AppendU32LittleEndian(binary, s_PreparedFontMagic);
     AppendU32LittleEndian(binary, s_PreparedFontVersion);
     AppendU32LittleEndian(binary, faceIndex);
@@ -127,21 +127,21 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         group.width = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data()));
         group.height = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupHeightOffset));
         group.channelCount = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupChannelCountOffset));
-        u32 expectedBytes = 0u;
+        const Expected<u32> expectedBytes = TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount);
         if(
-            !TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount, expectedBytes)
-            || ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupByteCountOffset)) != expectedBytes
-            || expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount
+            !expectedBytes
+            || ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupByteCountOffset)) != *expectedBytes
+            || *expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount
         )
             return ReadFailure(path, s_PreparedFontInvalidImageGroupReason);
-        pixelByteCount += expectedBytes;
-        groupByteCounts[index] = expectedBytes;
+        pixelByteCount += *expectedBytes;
+        groupByteCounts[index] = *expectedBytes;
         NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }
 
-    u64 expectedFileBytes = 0u;
-    if(!TryComputePreparedFontExpectedPayloadBytes(fontByteCount, groupCount, pixelByteCount, expectedFileBytes) || expectedFileBytes != static_cast<u64>(fileEnd))
+    const Expected<u64> expectedFileBytes = TryComputePreparedFontExpectedPayloadBytes(fontByteCount, groupCount, pixelByteCount);
+    if(!expectedFileBytes || *expectedFileBytes != static_cast<u64>(fileEnd))
         return ReadFailure(path, s_PreparedFontLayoutMismatchReason);
     candidate.fontBytes.resize(fontByteCount);
     if(!ReadStreamExact(stream, NotNull<void*>(candidate.fontBytes.data()), candidate.fontBytes.size()))

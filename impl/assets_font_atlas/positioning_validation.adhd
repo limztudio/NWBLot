@@ -267,8 +267,8 @@ class FontAtlasTableValidator{
             if(!this.range(list, s_FontAtlasGdefGlyphListHeaderBytes))
                 return false;
             const u32 count = cast<u32>(this.u16At(list + s_FontAtlasGdefGlyphListCountOffset));
-            u32 coverageCount = 0u;
-            if(!this.coverage(list + this.u16At(list), coverageCount) || count != coverageCount || !this.range(list + s_FontAtlasGdefGlyphListHeaderBytes, cast<u64>(count) * s_FontAtlasOtU16Bytes))
+            const Expected<u32> coverageCount = this.coverage(list + this.u16At(list));
+            if(!coverageCount.has_value() || count != coverageCount.value() || !this.range(list + s_FontAtlasGdefGlyphListHeaderBytes, cast<u64>(count) * s_FontAtlasOtU16Bytes))
                 return false;
             for(u32 index = 0u; index < count; ++index){
                 const u64 item = list + this.u16At(list + s_FontAtlasGdefGlyphListHeaderBytes + cast<u64>(index) * s_FontAtlasOtU16Bytes);
@@ -301,8 +301,7 @@ class FontAtlasTableValidator{
                 return false;
             for(u32 index = 0u; index < setCount; ++index){
                 const u32 offset = this.u32At(sets + s_FontAtlasMarkGlyphSetsHeaderBytes + cast<u64>(index) * s_FontAtlasOtU32Bytes);
-                u32 dummyCount = 0u;
-                if(offset == 0u || !this.coverage(sets + offset, dummyCount))
+                if(offset == 0u || !this.coverage(sets + offset).has_value())
                     return false;
             }
         }
@@ -338,20 +337,19 @@ class FontAtlasTableValidator{
         return ReadFontSfntU32BigEndian(this.m_bytes, cast<usize>(offset));
     }
 
-    private b8 coverage(in u64 offset, mut u32 outGlyphCount){
-        outGlyphCount = 0u;
+    private Expected<u32> coverage(in u64 offset){
         if(!this.range(offset, s_FontAtlasCoverageHeaderBytes))
-            return false;
+            return makeUnexpected(Failure());
         const u16 format = this.u16At(offset);
         const u32 count = cast<u32>(this.u16At(offset + s_FontAtlasCoverageCountOffset));
         u32 glyphCount = 0u;
         if(format != 1u && format != s_FontAtlasCoverageRangeFormat)
-            return false;
+            return makeUnexpected(Failure());
         u32 recordStride = s_FontAtlasOtRangeRecordBytes;
         if(format == 1u)
             recordStride = s_FontAtlasOtU16Bytes;
         if(!this.range(offset + s_FontAtlasCoverageHeaderBytes, cast<u64>(count) * recordStride) || !this.spend(count))
-            return false;
+            return makeUnexpected(Failure());
         u32 previous = 0u;
         for(u32 index = 0u; index < count; ++index){
             const u64 record = offset + s_FontAtlasCoverageHeaderBytes + cast<u64>(index) * recordStride;
@@ -360,12 +358,11 @@ class FontAtlasTableValidator{
             if(format != 1u)
                 end = cast<u32>(this.u16At(record + s_FontAtlasOtRangeRecordEndOffset));
             if(start > end || end >= this.m_glyphCount || (index > 0u && start <= previous) || (format == s_FontAtlasCoverageRangeFormat && cast<u32>(this.u16At(record + s_FontAtlasOtRangeRecordValueOffset)) != glyphCount))
-                return false;
+                return makeUnexpected(Failure());
             glyphCount += end - start + 1u;
             previous = end;
         }
-        outGlyphCount = glyphCount;
-        return true;
+        return glyphCount;
     }
 
     private b8 classDef(in u64 offset, in u32 classCount){
@@ -510,13 +507,13 @@ class FontAtlasTableValidator{
         const u16 secondFormat = this.u16At(offset + s_FontAtlasPairPosValueFormat2Offset);
         if(this.u16At(offset + s_FontAtlasPosCoverageOffset) == 0u)
             return false;
-        u32 coverageCount = 0u;
-        if(!this.coverage(offset + this.u16At(offset + s_FontAtlasPosCoverageOffset), coverageCount) || (cast<u32>(firstFormat | secondFormat) & s_FontAtlasValueFormatReservedMask) != 0u)
+        const Expected<u32> coverageCount = this.coverage(offset + this.u16At(offset + s_FontAtlasPosCoverageOffset));
+        if(!coverageCount.has_value() || (cast<u32>(firstFormat | secondFormat) & s_FontAtlasValueFormatReservedMask) != 0u)
             return false;
         const u32 stride = this.valueSize(firstFormat) + this.valueSize(secondFormat);
         if(format == 1u){
             const u32 count = cast<u32>(this.u16At(offset + s_FontAtlasPairPosSetCountOffset));
-            if(count != coverageCount || !this.range(offset + s_FontAtlasPairPosSetHeaderBytes, cast<u64>(count) * s_FontAtlasOtU16Bytes))
+            if(count != coverageCount.value() || !this.range(offset + s_FontAtlasPairPosSetHeaderBytes, cast<u64>(count) * s_FontAtlasOtU16Bytes))
                 return false;
             for(u32 index = 0u; index < count; ++index){
                 const u32 delta = cast<u32>(this.u16At(offset + s_FontAtlasPairPosSetHeaderBytes + cast<u64>(index) * s_FontAtlasOtU16Bytes));
@@ -581,23 +578,21 @@ class FontAtlasTableValidator{
             const u16 valueFormat = this.u16At(offset + s_FontAtlasSinglePosValueFormatOffset);
             if(this.u16At(offset + s_FontAtlasPosCoverageOffset) == 0u)
                 return false;
-            u32 count = 0u;
-            if(!this.coverage(offset + this.u16At(offset + s_FontAtlasPosCoverageOffset), count))
+            const Expected<u32> count = this.coverage(offset + this.u16At(offset + s_FontAtlasPosCoverageOffset));
+            if(!count.has_value())
                 return false;
             if(format == 1u)
                 return this.value(offset + s_FontAtlasSinglePosHeaderBytes, valueFormat, offset);
-            if(format != s_FontAtlasSinglePosArrayFormat || !this.range(offset, s_FontAtlasSinglePosArrayHeaderBytes) || count != cast<u32>(this.u16At(offset + s_FontAtlasSinglePosValueCountOffset)) || !this.spend(count))
+            if(format != s_FontAtlasSinglePosArrayFormat || !this.range(offset, s_FontAtlasSinglePosArrayHeaderBytes) || count.value() != cast<u32>(this.u16At(offset + s_FontAtlasSinglePosValueCountOffset)) || !this.spend(count.value()))
                 return false;
-            for(u32 index = 0u; index < count; ++index)
+            for(u32 index = 0u; index < count.value(); ++index)
                 if(!this.value(offset + s_FontAtlasSinglePosArrayHeaderBytes + cast<u64>(index) * this.valueSize(valueFormat), valueFormat, offset))
                     return false;
             return true;
         }
         // Non-pair positioning is retained opaque after bounded format/root admission; runtime executes the source font.
-        if(type >= s_FontAtlasGposCursiveLookupType && type <= s_FontAtlasGposMarkMarkLookupType){
-            u32 dummyCount = 0u;
-            return format == 1u && this.u16At(offset + s_FontAtlasPosCoverageOffset) != 0u && this.coverage(offset + this.u16At(offset + s_FontAtlasPosCoverageOffset), dummyCount);
-        }
+        if(type >= s_FontAtlasGposCursiveLookupType && type <= s_FontAtlasGposMarkMarkLookupType)
+            return format == 1u && this.u16At(offset + s_FontAtlasPosCoverageOffset) != 0u && this.coverage(offset + this.u16At(offset + s_FontAtlasPosCoverageOffset)).has_value();
         return (type == s_FontAtlasGposContextLookupType || type == s_FontAtlasGposChainedContextLookupType) && format >= 1u && format <= s_FontAtlasContextMaxFormat;
     }
 

@@ -17,10 +17,10 @@ NWB_IMPL_UI_BEGIN
 
 
 Expected<InputEvent> InputRouter::queuePointer(const PointerInput& input){
-    InputEvent event;
-    if(!TryMakePointerInputEvent(input, event))
+    const auto event = TryMakePointerInputEvent(input);
+    if(!event)
         return MakeUnexpected(Failure{});
-    return queue(event);
+    return queue(*event);
 }
 
 b8 InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{

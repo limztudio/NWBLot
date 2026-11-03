@@ -253,11 +253,12 @@ b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchA
         }
 
         CsgShapeCookEntry& entry = csgShapeEntries[index];
-        CsgShapeTypeId shapeTypeId = s_InvalidCsgShapeTypeId;
-        if(!TryResolveCsgShapeTypeIdFromName(entry.shapeName, shapeTypeId)){
+        const Expected<CsgShapeTypeId> shapeTypeIdResult = TryResolveCsgShapeTypeIdFromName(entry.shapeName);
+        if(!shapeTypeIdResult){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shape '{}' has an invalid canonical GPU id"), ConvertString(entry.shapeName.resolvedText()));
             return false;
         }
+        const CsgShapeTypeId shapeTypeId = *shapeTypeIdResult;
 
         const auto insertedShapeId = shapeIdNames.try_emplace(shapeTypeId, entry.shapeName);
         if(!insertedShapeId.second){

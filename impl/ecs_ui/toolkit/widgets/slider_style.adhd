@@ -173,8 +173,7 @@ b8 IsValidSliderMetrics(in SliderMetrics metrics){
         && cast<f64>(metrics.contentSize.y) >= cast<f64>(cast<f32>(height));
 }
 
-b8 TryMeasureSlider(in SliderOptions options, in SliderStyle style, mut SliderMetrics outMetrics){
-    outMetrics = SliderMetrics();
+Expected<SliderMetrics> TryMeasureSlider(in SliderOptions options, in SliderStyle style){
     if(
         !IsValidSliderOptions(options)
         || !IsValidUiPadding(style.padding)
@@ -183,7 +182,7 @@ b8 TryMeasureSlider(in SliderOptions options, in SliderStyle style, mut SliderMe
         || !isFinite(style.trackHeight) || style.trackHeight <= 0.0f
         || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
-        return false;
+        return makeUnexpected(Failure());
     SliderMetrics candidate;
     candidate.padding = style.padding;
     candidate.thumbExtent = style.thumbExtent;
@@ -194,22 +193,22 @@ b8 TryMeasureSlider(in SliderOptions options, in SliderStyle style, mut SliderMe
     const f64 intrinsicH = padH + max(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight));
     const f64 height = max(intrinsicH, cast<f64>(options.height));
     if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
-        return false;
+        return makeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
     if(!IsValidSliderMetrics(candidate))
-        return false;
-    outMetrics = candidate;
-    return true;
+        return makeUnexpected(Failure());
+    return candidate;
 }
 
-b8 TryPlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized, mut SliderPlacement outPlacement){
-    outPlacement = SliderPlacement();
+Expected<SliderPlacement> TryPlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized){
     if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !IsValidSliderMetrics(metrics) || !isFinite(normalized) || normalized < 0.0 || normalized > 1.0)
-        return false;
+        return makeUnexpected(Failure());
     SliderPlacement candidate;
     candidate.bounds = bounds;
-    if(!TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents, candidate.clip))
-        return false;
+    const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents);
+    if(!clipped.has_value())
+        return makeUnexpected(Failure());
+    candidate.clip = clipped.value();
     const f64x4 insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
     const f64 x = insetRect.x;
     const f64 y = insetRect.y;
@@ -226,19 +225,26 @@ b8 TryPlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64
         thumbX = x;
     else if(normalized == 1.0)
         thumbX = x + travelW;
-    if(!TryMakeUiRect(x, y, w, h, UiRectPrecision::PreciseExtents, candidate.travelBounds))
-        return false;
-    if(!TryMakeUiRect(centerStartX, y, travelW, h, UiRectPrecision::PreciseExtents, candidate.centerTravel))
-        return false;
+    const Expected<Rect> travelBounds = TryMakeUiRect(x, y, w, h, UiRectPrecision::PreciseExtents);
+    if(!travelBounds.has_value())
+        return makeUnexpected(Failure());
+    candidate.travelBounds = travelBounds.value();
+    const Expected<Rect> centerTravel = TryMakeUiRect(centerStartX, y, travelW, h, UiRectPrecision::PreciseExtents);
+    if(!centerTravel.has_value())
+        return makeUnexpected(Failure());
+    candidate.centerTravel = centerTravel.value();
     const f64 trackY = y + (h - trackH) * 0.5;
     const f64 thumbY = y + (h - thumbH) * 0.5;
-    if(!TryMakeUiRect(centerStartX, trackY, travelW, trackH, UiRectPrecision::PreciseExtents, candidate.track))
-        return false;
-    if(!TryMakeUiRect(thumbX, thumbY, thumbW, thumbH, UiRectPrecision::PreciseExtents, candidate.thumb))
-        return false;
+    const Expected<Rect> track = TryMakeUiRect(centerStartX, trackY, travelW, trackH, UiRectPrecision::PreciseExtents);
+    if(!track.has_value())
+        return makeUnexpected(Failure());
+    candidate.track = track.value();
+    const Expected<Rect> thumb = TryMakeUiRect(thumbX, thumbY, thumbW, thumbH, UiRectPrecision::PreciseExtents);
+    if(!thumb.has_value())
+        return makeUnexpected(Failure());
+    candidate.thumb = thumb.value();
     candidate.thumbExtent = Point(cast<f32>(thumbW), cast<f32>(thumbH));
-    outPlacement = candidate;
-    return true;
+    return candidate;
 }
 
 f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
@@ -268,8 +274,7 @@ f64 StepSliderValueOnce(in f64 value, in f64 minimum, in f64 maximum, in f64 ste
     return clamp(current - step, minimum, maximum);
 }
 
-b8 TryStepSliderValue(in f64 currentValue, in SliderOptions options, in ControlActionKind kind, mut f64 outValue){
-    outValue = currentValue;
+Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, in ControlActionKind kind){
     f64 step = 0.0;
     f64 value = currentValue;
     switch(kind){
@@ -296,18 +301,16 @@ b8 TryStepSliderValue(in f64 currentValue, in SliderOptions options, in ControlA
         value = options.maximum;
         break;
     default:
-        return true;
+        return currentValue;
     }
     if(!isFinite(value))
-        return false;
-    outValue = value;
-    return true;
+        return makeUnexpected(Failure());
+    return value;
 }
 
-b8 TryNormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value, mut f64 outNormalized){
-    outNormalized = 0.0;
+Expected<f64> TryNormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value){
     if(!IsValidSliderRange(minimum, maximum) || !isFinite(value))
-        return false;
+        return makeUnexpected(Failure());
     f64 normalizedValue = 0.0;
     if(minimum != maximum && value > minimum){
         if(value >= maximum)
@@ -325,16 +328,15 @@ b8 TryNormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value, mut f64
         }
     }
     if(!isFinite(normalizedValue))
-        return false;
+        return makeUnexpected(Failure());
     if(normalizedValue > 0.0)
-        outNormalized = min(1.0, normalizedValue);
-    return true;
+        return min(1.0, normalizedValue);
+    return 0.0;
 }
 
-b8 TryInterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized, mut f64 outValue){
-    outValue = 0.0;
+Expected<f64> TryInterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized){
     if(!IsValidSliderRange(minimum, maximum) || !isFinite(normalized) || normalized < 0.0 || normalized > 1.0)
-        return false;
+        return makeUnexpected(Failure());
     f64 value = minimum;
     if(normalized == 1.0)
         value = maximum;
@@ -350,18 +352,16 @@ b8 TryInterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized, 
         value = clamp(value, minimum, maximum);
     }
     if(!isFinite(value))
-        return false;
-    outValue = value;
-    return true;
+        return makeUnexpected(Failure());
+    return value;
 }
 
-b8 TryComputeSliderSeekValue(in SliderOptions options, in PointerGesture gesture, mut f64 outValue){
-    outValue = 0.0;
+Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGesture gesture){
     const f64 normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
     f64 normalized = 0.0;
     if(normalizedValue > 0.0)
         normalized = min(1.0, normalizedValue);
-    return TryInterpolateSliderValue(options.minimum, options.maximum, normalized, outValue);
+    return TryInterpolateSliderValue(options.minimum, options.maximum, normalized);
 }
 
 b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOptions options, in PointerGesture gesture, in b8 previouslyMoved, mut f64 outValue, mut b8 outMoved){
@@ -374,45 +374,35 @@ b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOpti
             outValue = baseline;
         return true;
     }
-    f64 normalized = 0.0;
-    if(!TryNormalizeSliderValue(options.minimum, options.maximum, baseline, normalized))
+    const Expected<f64> normalized = TryNormalizeSliderValue(options.minimum, options.maximum, baseline);
+    if(!normalized.has_value())
         return false;
-    const f64 normalizedValue = normalized + delta / travel;
+    const f64 normalizedValue = normalized.value() + delta / travel;
     f64 dragged = 0.0;
     if(normalizedValue > 0.0)
         dragged = min(1.0, normalizedValue);
-    if(!TryInterpolateSliderValue(options.minimum, options.maximum, dragged, outValue))
+    const Expected<f64> interpolated = TryInterpolateSliderValue(options.minimum, options.maximum, dragged);
+    if(!interpolated.has_value())
         return false;
+    outValue = interpolated.value();
     outMoved = true;
     return true;
 }
 
 Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle style){
-    SliderMetrics candidate;
-    if(!TryMeasureSlider(options, style, candidate))
-        return makeUnexpected(Failure());
-    return candidate;
+    return TryMeasureSlider(options, style);
 }
 
 Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized){
-    SliderPlacement candidate;
-    if(!TryPlaceSlider(bounds, clip, metrics, normalized, candidate))
-        return makeUnexpected(Failure());
-    return candidate;
+    return TryPlaceSlider(bounds, clip, metrics, normalized);
 }
 
 Expected<f64> NormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value){
-    f64 normalized = 0.0;
-    if(!TryNormalizeSliderValue(minimum, maximum, value, normalized))
-        return makeUnexpected(Failure());
-    return normalized;
+    return TryNormalizeSliderValue(minimum, maximum, value);
 }
 
 Expected<f64> InterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized){
-    f64 value = 0.0;
-    if(!TryInterpolateSliderValue(minimum, maximum, normalized, value))
-        return makeUnexpected(Failure());
-    return value;
+    return TryInterpolateSliderValue(minimum, maximum, normalized);
 }
 
 b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateStep, in b8 stateEnabled, in SliderOptions options){
@@ -422,7 +412,7 @@ b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateStep, i
         && stateEnabled == options.enabled;
 }
 
-b8 TryEvaluateSliderAdmission(
+Expected<b8> TryEvaluateSliderAdmission(
     in b8 admitted,
     in f64 stateMin,
     in f64 stateMax,
@@ -430,16 +420,13 @@ b8 TryEvaluateSliderAdmission(
     in b8 stateEnabled,
     in SliderPlacement stateAdmission,
     in SliderOptions options,
-    in SliderPlacement placement,
-    mut b8 outChanged
+    in SliderPlacement placement
 ){
-    outChanged = false;
     if(!IsValidSliderOptions(options) || !IsValidSliderPlacement(placement))
-        return false;
-    outChanged = !admitted
+        return makeUnexpected(Failure());
+    return !admitted
         || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
         || !SameSliderPlacementGeometry(stateAdmission, placement);
-    return true;
 }
 
 b8 TryApplySliderControlAction(
@@ -479,11 +466,11 @@ b8 TryApplySliderControlAction(
         inOutResult = accepted;
         return true;
     }
-    f64 value = currentValue;
-    if(!TryStepSliderValue(currentValue, options, action.kind, value))
+    const Expected<f64> value = TryStepSliderValue(currentValue, options, action.kind);
+    if(!value.has_value())
         return false;
-    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value);
-    outValue = value;
+    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value.value());
+    outValue = value.value();
     outAdvanceRevision = true;
     inOutResult = accepted;
     return true;
@@ -521,12 +508,12 @@ b8 TrySeekSliderPointerGesture(
         inOutResult = accepted;
         return true;
     }
-    f64 value = 0.0;
-    if(!TryComputeSliderSeekValue(options, gesture, value))
+    const Expected<f64> value = TryComputeSliderSeekValue(options, gesture);
+    if(!value.has_value())
         return false;
-    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value);
+    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value.value());
     accepted.dragging = gesture.state == PointerGestureState::Active;
-    outValue = value;
+    outValue = value.value();
     if(accepted.dragging)
         outPress = gesture.id;
     outAdvanceRevision = true;

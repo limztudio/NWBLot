@@ -149,10 +149,10 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
     const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
     if(!drawCount)
         return MakeUnexpected(drawCount.error());
-    LightSpacePlan plan;
-    if(!TryBuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests.data(), requestCount), m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg, plan) || plan.viewCount == 0u)
+    Expected<LightSpacePlan> plan = TryBuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests.data(), requestCount), m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg);
+    if(!plan || plan->viewCount == 0u)
         return MakeUnexpected(Failure{});
-    return Move(plan);
+    return Move(*plan);
 }
 
 // Graph declaration can change the admitted light list, but never creates or grows its GPU resources.

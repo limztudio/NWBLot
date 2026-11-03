@@ -457,16 +457,15 @@ class SingleLineTextStep{
     public b8 space = false;
 }
 
-b8 TryTranslateEditNavigation(in InputCommandIntent intent, mut EditNavigationDirection outDirection){
-    outDirection = EditNavigationDirection::Up;
+Expected<EditNavigationDirection> TryTranslateEditNavigation(in InputCommandIntent intent){
     if(!intent.edit)
-        return false;
+        return makeUnexpected(Failure());
     switch(intent.command){
-    case InputCommand::Up: outDirection = EditNavigationDirection::Up; return true;
-    case InputCommand::Down: outDirection = EditNavigationDirection::Down; return true;
-    case InputCommand::PageUp: outDirection = EditNavigationDirection::PageUp; return true;
-    case InputCommand::PageDown: outDirection = EditNavigationDirection::PageDown; return true;
-    default: return false;
+    case InputCommand::Up: return EditNavigationDirection::Up;
+    case InputCommand::Down: return EditNavigationDirection::Down;
+    case InputCommand::PageUp: return EditNavigationDirection::PageUp;
+    case InputCommand::PageDown: return EditNavigationDirection::PageDown;
+    default: return makeUnexpected(Failure());
     }
 }
 
@@ -555,8 +554,8 @@ f64 AdvanceCaretPhase(in f64 phase, in f64 deltaSeconds){
     return next;
 }
 
-b8 TryBuildMultilineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes, mut MultilineTextStep outStep){
-    outStep = MultilineTextStep();
+Expected<MultilineTextStep> TryBuildMultilineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes){
+    MultilineTextStep outStep;
     outStep.sourceBytes = decodedBytes;
     const b8 lineBreak = IsMultilineLineBreakScalar(scalar);
     if(lineBreak || scalar == s_EditUnicodeTab){
@@ -567,18 +566,18 @@ b8 TryBuildMultilineTextStep(in StringView source, in usize offset, in u32 scala
         outStep.outputBytes = 1u;
         if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
             ++outStep.sourceBytes;
-        return true;
+        return outStep;
     }
     if(!IsCanonicalMultilineScalar(scalar))
-        return false;
+        return makeUnexpected(Failure());
     outStep.outputBytes = outStep.sourceBytes;
-    return true;
+    return outStep;
 }
 
-b8 TryBuildSingleLineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes, mut SingleLineTextStep outStep){
-    outStep = SingleLineTextStep();
+Expected<SingleLineTextStep> TryBuildSingleLineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes){
+    SingleLineTextStep outStep;
     if(IsSingleLineRejectedScalar(scalar))
-        return false;
+        return makeUnexpected(Failure());
     const b8 space = IsSingleLineSpaceScalar(scalar);
     outStep.sourceBytes = decodedBytes;
     if(space)
@@ -588,7 +587,7 @@ b8 TryBuildSingleLineTextStep(in StringView source, in usize offset, in u32 scal
     outStep.space = space;
     if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
         ++outStep.sourceBytes;
-    return true;
+    return outStep;
 }
 
 b8 ValidateGraphemeText(in StringView text, in b8 singleLine){
@@ -627,10 +626,7 @@ Expected<SingleLineTextStep> ReadSingleLineTextStep(in StringView source, in usi
     usize byteCount = 0u;
     if(!tryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
         return makeUnexpected(Failure());
-    SingleLineTextStep step;
-    if(!TryBuildSingleLineTextStep(source, offset, scalar, byteCount, step))
-        return makeUnexpected(Failure());
-    return step;
+    return TryBuildSingleLineTextStep(source, offset, scalar, byteCount);
 }
 
 Expected<MultilineTextStep> ReadMultilineTextStep(in StringView source, in usize offset){
@@ -638,10 +634,7 @@ Expected<MultilineTextStep> ReadMultilineTextStep(in StringView source, in usize
     usize byteCount = 0u;
     if(!tryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
         return makeUnexpected(Failure());
-    MultilineTextStep step;
-    if(!TryBuildMultilineTextStep(source, offset, scalar, byteCount, step))
-        return makeUnexpected(Failure());
-    return step;
+    return TryBuildMultilineTextStep(source, offset, scalar, byteCount);
 }
 
 usize LowerBoundEditBoundaryIndex(in Span<usize> boundaries, in usize position){
@@ -742,19 +735,17 @@ Expected<EditWordRange> ResolveEditWordRangeAt(in StringView text, in Span<usize
     return range;
 }
 
-b8 TryResolveEditMoveTarget(
+Expected<usize> TryResolveEditMoveTarget(
     in StringView text,
     in Span<usize> boundaries,
     in EditTextMode textMode,
     in usize anchor,
     in usize caret,
     in EditMove movement,
-    in b8 extend,
-    mut usize outTarget
+    in b8 extend
 ){
-    outTarget = caret;
     if(cast<u8>(movement) > cast<u8>(EditMove::DocumentEnd))
-        return false;
+        return makeUnexpected(Failure());
     usize target = caret;
     if(!extend && anchor != caret && (movement == EditMove::Left || movement == EditMove::Right)){
         if(movement == EditMove::Left)
@@ -802,8 +793,7 @@ b8 TryResolveEditMoveTarget(
             break;
         }
     }
-    outTarget = target;
-    return true;
+    return target;
 }
 
 b8 TryResolveEditNavigationPreferredX(in f32 preferredX, mut f32 outPreferredX, mut b8 outValid){
@@ -880,18 +870,17 @@ b8 DifferentFloatEditValues(in f64 lhs, in f64 rhs){
     return bit_cast<u64>(lhs) != bit_cast<u64>(rhs);
 }
 
-b8 TryMapEditCommandToMove(in EditCommand command, mut EditMove outMove){
-    outMove = EditMove::Left;
+Expected<EditMove> TryMapEditCommandToMove(in EditCommand command){
     switch(command){
-    case EditCommand::Left: outMove = EditMove::Left; return true;
-    case EditCommand::Right: outMove = EditMove::Right; return true;
-    case EditCommand::Home: outMove = EditMove::Home; return true;
-    case EditCommand::End: outMove = EditMove::End; return true;
-    case EditCommand::WordLeft: outMove = EditMove::WordLeft; return true;
-    case EditCommand::WordRight: outMove = EditMove::WordRight; return true;
-    case EditCommand::DocumentHome: outMove = EditMove::DocumentHome; return true;
-    case EditCommand::DocumentEnd: outMove = EditMove::DocumentEnd; return true;
-    default: return false;
+    case EditCommand::Left: return EditMove::Left;
+    case EditCommand::Right: return EditMove::Right;
+    case EditCommand::Home: return EditMove::Home;
+    case EditCommand::End: return EditMove::End;
+    case EditCommand::WordLeft: return EditMove::WordLeft;
+    case EditCommand::WordRight: return EditMove::WordRight;
+    case EditCommand::DocumentHome: return EditMove::DocumentHome;
+    case EditCommand::DocumentEnd: return EditMove::DocumentEnd;
+    default: return makeUnexpected(Failure());
     }
 }
 

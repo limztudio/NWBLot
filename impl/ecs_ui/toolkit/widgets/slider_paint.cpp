@@ -50,14 +50,14 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     placement = PlaceSlider(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement)
         return false;
-    WidgetId trackId;
-    if(!TryMakeWidgetId(item.state.id, s_WidgetPartTrack, trackId))
+    const auto trackId = TryMakeWidgetId(item.state.id, s_WidgetPartTrack);
+    if(!trackId)
         return false;
-    WidgetId thumbId;
-    if(!TryMakeWidgetId(item.state.id, s_WidgetPartThumb, thumbId))
+    const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartThumb);
+    if(!thumbId)
         return false;
-    const b8 hover = interactive && input.hover() == thumbId;
-    const b8 pressed = interactive && input.primaryDown() && (input.capture() == trackId || input.capture() == thumbId);
+    const b8 hover = interactive && input.hover() == *thumbId;
+    const b8 pressed = interactive && input.primaryDown() && (input.capture() == *trackId || input.capture() == *thumbId);
     const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);
     const UiSkinRegion* thumb = !interactive ? m_skin->findRegion(frame.m_style.disabled) : pressed ? m_skin->findRegion(frame.m_style.pressed) : hover ? m_skin->findRegion(frame.m_style.hover) : nullptr;
     if(!thumb)
@@ -93,7 +93,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
         trackTarget.pointerGesture = true;
         trackTarget.gestureReference = placement->centerTravel;
         trackTarget.control = frame.m_token;
-        if(!m_context.addPartTarget(item.state, trackId, trackTarget))
+        if(!m_context.addPartTarget(item.state, *trackId, trackTarget))
             return false;
         HitTarget thumbTarget;
         thumbTarget.rectangle = placement->thumb;
@@ -102,7 +102,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
         thumbTarget.gestureReference = placement->travelBounds;
         thumbTarget.control = frame.m_token;
         thumbTarget.value = BitCast<u64>(frame.m_state.value());
-        if(!m_context.addPartTarget(item.state, thumbId, thumbTarget))
+        if(!m_context.addPartTarget(item.state, *thumbId, thumbTarget))
             return false;
     }
     if(!sliderMatches(frame))
@@ -117,17 +117,17 @@ b8 Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placemen
         return false;
     if(!interactive || placement.centerTravel.width <= 0.0f)
         return true;
-    WidgetId track;
-    if(!TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack, track))
+    const auto track = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
+    if(!track)
         return false;
-    WidgetId thumb;
-    if(!TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb, thumb))
+    const auto thumb = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb);
+    if(!thumb)
         return false;
     auto control = m_context.takeControlAction(frame.m_widget, true, frame.m_token);
     b8 hasControl = control.has_value();
-    auto trackGesture = m_context.takePartPointerGesture(frame.m_widget, track, true);
+    auto trackGesture = m_context.takePartPointerGesture(frame.m_widget, *track, true);
     b8 hasTrack = trackGesture.has_value();
-    auto thumbGesture = m_context.takePartPointerGesture(frame.m_widget, thumb, true);
+    auto thumbGesture = m_context.takePartPointerGesture(frame.m_widget, *thumb, true);
     b8 hasThumb = thumbGesture.has_value();
     while(hasControl || hasTrack || hasThumb){
         if(!sliderMatches(frame))
@@ -143,14 +143,14 @@ b8 Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placemen
             if(trackGesture->control != frame.m_token || !SliderBehavior::Seek(frame.m_options, *trackGesture, frame.m_state, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
-            trackGesture = m_context.takePartPointerGesture(frame.m_widget, track, true);
+            trackGesture = m_context.takePartPointerGesture(frame.m_widget, *track, true);
             hasTrack = trackGesture.has_value();
         }
         else{
             if(thumbGesture->control != frame.m_token || !SliderBehavior::Drag(frame.m_options, *thumbGesture, frame.m_state, frame.m_result))
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
-            thumbGesture = m_context.takePartPointerGesture(frame.m_widget, thumb, true);
+            thumbGesture = m_context.takePartPointerGesture(frame.m_widget, *thumb, true);
             hasThumb = thumbGesture.has_value();
         }
     }

@@ -376,20 +376,20 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSk
 }
 
 b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan){
-    MeshSkinningRestToSkinnedCopyByteCounts copyByteCounts;
-    if(!TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size(), copyByteCounts)){
+    const Expected<MeshSkinningRestToSkinnedCopyByteCounts> copyByteCounts = TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size());
+    if(!copyByteCounts){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
     const Array<Core::GpuCopyBufferTaskRegion, 3> copyRegions = {
-        Core::GpuCopyBufferTaskRegion{ .source = plan.restPositionResource, .destination = plan.skinnedPositionResource, .dataSizeBytes = copyByteCounts.positionBytes, },
+        Core::GpuCopyBufferTaskRegion{ .source = plan.restPositionResource, .destination = plan.skinnedPositionResource, .dataSizeBytes = copyByteCounts->positionBytes, },
         Core::GpuCopyBufferTaskRegion{
             .source = plan.restNormalResource,
             .destination = plan.skinnedNormalResource,
-            .dataSizeBytes = copyByteCounts.normalBytes,
+            .dataSizeBytes = copyByteCounts->normalBytes,
         },
-        Core::GpuCopyBufferTaskRegion{ .source = plan.restTangentResource, .destination = plan.skinnedTangentResource, .dataSizeBytes = copyByteCounts.tangentBytes, },
+        Core::GpuCopyBufferTaskRegion{ .source = plan.restTangentResource, .destination = plan.skinnedTangentResource, .dataSizeBytes = copyByteCounts->tangentBytes, },
     };
     Core::GpuTaskDesc copyDesc;
     const auto copyDescIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_RestToSkinnedCopySuffix);

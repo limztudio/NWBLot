@@ -89,18 +89,18 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
     for(usize meshletIndex = 0u; meshletIndex < instance.meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = instance.meshlets[meshletIndex];
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
-            MeshletPositionStreamRef ref;
-            if(TryDecodeMeshletPositionRef(instance.meshletPositionRefDeltas, meshlet, localPositionIndex, true, ref) && MeshletPositionRefInRange(ref, instance.restPositions.size(), instance.skin.size(), true))
+            const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(instance.meshletPositionRefDeltas, meshlet, localPositionIndex, true);
+            if(ref && MeshletPositionRefInRange(*ref, instance.restPositions.size(), instance.skin.size(), true))
                 continue;
 
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range"), ConvertString(RuntimeMeshSourceText(instance)), meshletIndex, localPositionIndex);
             return false;
         }
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
-            MeshletAttributeStreamRef ref;
+            const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(instance.meshletAttributeRefDeltas, meshlet, localAttributeIndex);
             if(
-                TryDecodeMeshletAttributeRef(instance.meshletAttributeRefDeltas, meshlet, localAttributeIndex, ref)
-                && MeshletAttributeRefInRange(ref, instance.restNormals.size(), instance.restTangents.size(), instance.uv0.size(), instance.colors.size())
+                ref
+                && MeshletAttributeRefInRange(*ref, instance.restNormals.size(), instance.restTangents.size(), instance.uv0.size(), instance.colors.size())
                 && logicalAttributeRefIndex < instance.attributeSkins.size()
                 && instance.attributeSkins[logicalAttributeRefIndex] < instance.skin.size()
             ){

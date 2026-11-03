@@ -97,8 +97,13 @@ b8 GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){
     usize pageIndex = 0u;
     while(pageIndex < m_pages.size()){
         const AtlasPage& page = m_pages[pageIndex];
-        if(page.face.get() == face.get() && TryPlaceGlyphInAtlasPage(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight, placement))
-            break;
+        if(page.face.get() == face.get()){
+            const auto placed = TryPlaceGlyphInAtlasPage(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight);
+            if(placed){
+                placement = *placed;
+                break;
+            }
+        }
         ++pageIndex;
     }
     if(pageIndex == m_pages.size()){

@@ -180,10 +180,10 @@ void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, 
 }
 
 const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{
-    usize regionPosition = 0u;
-    if(!TryFindUiSkinRegionIndex(Span<const UiSkinRegion>(m_regions), Span<const u32>(m_regionIndex), name, regionPosition))
+    const auto regionPosition = TryFindUiSkinRegionIndex(Span<const UiSkinRegion>(m_regions), Span<const u32>(m_regionIndex), name);
+    if(!regionPosition)
         return nullptr;
-    return &m_regions[regionPosition];
+    return &m_regions[*regionPosition];
 }
 
 void UiSkin::rebuildRegionIndex(){

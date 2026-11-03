@@ -136,17 +136,16 @@ b8 IsValidRadioGroupChoices(in RadioGroupChoices choices){
     return true;
 }
 
-b8 TryFindRadioGroupChoice(in RadioGroupChoices choices, in u64 key, mut u32 outIndex){
+Expected<u32> TryFindRadioGroupChoice(in RadioGroupChoices choices, in u64 key){
     if(key == 0u){
-        return false;
+        return makeUnexpected(Failure());
     }
     for(u32 candidate = 0u; candidate < choices.count; ++candidate){
         if(choices.rows[candidate].key == key){
-            outIndex = candidate;
-            return true;
+            return candidate;
         }
     }
-    return false;
+    return makeUnexpected(Failure());
 }
 
 u64 FindEnabledRadioGroupChoice(in RadioGroupChoices choices, in u32 start, in b8 reverse){
@@ -193,8 +192,8 @@ u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 curso
         return FindEnabledRadioGroupChoice(choices, choices.count - 1u, true);
     }
     const b8 reverse = kind == ControlActionKind::Up || kind == ControlActionKind::Left;
-    u32 current = 0u;
-    if(!TryFindRadioGroupChoice(choices, cursor, current)){
+    const Expected<u32> current = TryFindRadioGroupChoice(choices, cursor);
+    if(!current.has_value()){
         u32 fallbackStart = 0u;
         if(reverse){
             fallbackStart = choices.count - 1u;
@@ -203,19 +202,19 @@ u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 curso
     }
     u32 start = 0u;
     if(reverse){
-        if(current == 0u){
+        if(current.value() == 0u){
             start = choices.count - 1u;
         }
         else{
-            start = current - 1u;
+            start = current.value() - 1u;
         }
     }
     else{
-        if(current + 1u == choices.count){
+        if(current.value() + 1u == choices.count){
             start = 0u;
         }
         else{
-            start = current + 1u;
+            start = current.value() + 1u;
         }
     }
     return FindEnabledRadioGroupChoice(choices, start, reverse);
@@ -257,8 +256,7 @@ b8 IsValidRadioGroupMetrics(in RadioGroupMetrics metrics){
         && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(minimumWidth));
 }
 
-b8 TryMeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style, mut RadioGroupMetrics outMetrics){
-    outMetrics = RadioGroupMetrics();
+Expected<RadioGroupMetrics> TryMeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
     if(
         count > s_RadioGroupMaxChoices
         || !IsValidUiExtent(maximumLabel)
@@ -270,7 +268,7 @@ b8 TryMeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOption
         || !isFinite(style.markInset) || style.markInset < 0.0f || style.markInset > s_RadioGroupMaxMarkInset
         || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
-        return false;
+        return makeUnexpected(Failure());
     RadioGroupMetrics candidate;
     candidate.rowHeight = max(maximumLabel.y, style.indicatorExtent);
     candidate.indicatorExtent = style.indicatorExtent;
@@ -291,26 +289,28 @@ b8 TryMeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOption
     const f64 width = padW + labelW;
     const f64 height = padH + rowsH;
     if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
-        return false;
+        return makeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
     if(!IsValidRadioGroupMetrics(candidate))
-        return false;
-    outMetrics = candidate;
-    return true;
+        return makeUnexpected(Failure());
+    return candidate;
 }
 
-b8 TryPlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics, mut RadioGroupPlacement outPlacement){
-    outPlacement = RadioGroupPlacement();
+Expected<RadioGroupPlacement> TryPlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)
-        return false;
+        return makeUnexpected(Failure());
     RadioGroupPlacement candidate;
     candidate.bounds = bounds;
     candidate.count = choices.count;
-    if(!TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents, candidate.clip))
-        return false;
+    const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents);
+    if(!clipped.has_value())
+        return makeUnexpected(Failure());
+    candidate.clip = clipped.value();
     const f64x4 insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
-    if(!TryMakeUiRect(insetRect.x, insetRect.y, insetRect.z, insetRect.w, UiRectPrecision::PreciseExtents, candidate.content))
-        return false;
+    const Expected<Rect> content = TryMakeUiRect(insetRect.x, insetRect.y, insetRect.z, insetRect.w, UiRectPrecision::PreciseExtents);
+    if(!content.has_value())
+        return makeUnexpected(Failure());
+    candidate.content = content.value();
     const f64 contentX = insetRect.x;
     const f64 contentY = insetRect.y;
     const f64 contentW = insetRect.z;
@@ -320,10 +320,10 @@ b8 TryPlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices
     const f64 rowHeightScalar = cast<f64>(metrics.rowHeight);
     for(u32 index = 0u; index < candidate.count; ++index){
         if(choices.rows[index].key == 0u)
-            return false;
+            return makeUnexpected(Failure());
         for(u32 previous = 0u; previous < index; ++previous){
             if(choices.rows[previous].key == choices.rows[index].key)
-                return false;
+                return makeUnexpected(Failure());
         }
         RadioGroupChoicePlacement row;
         row.key = choices.rows[index].key;
@@ -332,40 +332,43 @@ b8 TryPlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices
         const f64 rowOriginScalar = contentY + rowOffset;
         const f64 indicatorSpace = rowHeightScalar - indicatorExtentScalar;
         const f64 indicatorYScalar = rowOriginScalar + (indicatorSpace * 0.5);
-        if(!TryMakeUiRect(contentX, rowOriginScalar, contentW, rowHeightScalar, UiRectPrecision::PreciseExtents, row.rectangle))
-            return false;
-        if(!TryIntersectUiRects(row.rectangle, candidate.clip, UiRectPrecision::PreciseExtents, row.clip))
-            return false;
-        if(!TryMakeUiRect(contentX, indicatorYScalar, indicatorExtentScalar, indicatorExtentScalar, UiRectPrecision::PreciseExtents, row.indicator))
-            return false;
+        const Expected<Rect> rowRect = TryMakeUiRect(contentX, rowOriginScalar, contentW, rowHeightScalar, UiRectPrecision::PreciseExtents);
+        if(!rowRect.has_value())
+            return makeUnexpected(Failure());
+        row.rectangle = rowRect.value();
+        const Expected<Rect> rowClip = TryIntersectUiRects(row.rectangle, candidate.clip, UiRectPrecision::PreciseExtents);
+        if(!rowClip.has_value())
+            return makeUnexpected(Failure());
+        row.clip = rowClip.value();
+        const Expected<Rect> indicator = TryMakeUiRect(contentX, indicatorYScalar, indicatorExtentScalar, indicatorExtentScalar, UiRectPrecision::PreciseExtents);
+        if(!indicator.has_value())
+            return makeUnexpected(Failure());
+        row.indicator = indicator.value();
         const f64 markX = contentX + markInsetScalar;
         const f64 markY = indicatorYScalar + markInsetScalar;
         const f64 markExtent = indicatorExtentScalar - cast<f64>(s_CheckmarkInsetSides) * markInsetScalar;
-        if(!TryMakeUiRect(markX, markY, markExtent, markExtent, UiRectPrecision::PreciseExtents, row.mark))
-            return false;
-        Rect labelRect;
-        if(!TryMakeUiRect(contentX + labelOffset, rowOriginScalar, contentW - labelOffset, rowHeightScalar, UiRectPrecision::PreciseExtents, labelRect))
-            return false;
-        if(!TryIntersectUiRects(labelRect, row.clip, UiRectPrecision::PreciseExtents, row.textClip))
-            return false;
+        const Expected<Rect> mark = TryMakeUiRect(markX, markY, markExtent, markExtent, UiRectPrecision::PreciseExtents);
+        if(!mark.has_value())
+            return makeUnexpected(Failure());
+        row.mark = mark.value();
+        const Expected<Rect> labelRect = TryMakeUiRect(contentX + labelOffset, rowOriginScalar, contentW - labelOffset, rowHeightScalar, UiRectPrecision::PreciseExtents);
+        if(!labelRect.has_value())
+            return makeUnexpected(Failure());
+        const Expected<Rect> textClip = TryIntersectUiRects(labelRect.value(), row.clip, UiRectPrecision::PreciseExtents);
+        if(!textClip.has_value())
+            return makeUnexpected(Failure());
+        row.textClip = textClip.value();
         candidate.rows[index] = row;
     }
-    outPlacement = candidate;
-    return true;
+    return candidate;
 }
 
 Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
-    RadioGroupMetrics candidate;
-    if(!TryMeasureRadioGroup(count, maximumLabel, options, style, candidate))
-        return makeUnexpected(Failure());
-    return candidate;
+    return TryMeasureRadioGroup(count, maximumLabel, options, style);
 }
 
 Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
-    RadioGroupPlacement candidate;
-    if(!TryPlaceRadioGroup(bounds, clip, choices, metrics, candidate))
-        return makeUnexpected(Failure());
-    return candidate;
+    return TryPlaceRadioGroup(bounds, clip, choices, metrics);
 }
 
 void ReconcileRadioGroupSelectionAndCursor(
@@ -381,14 +384,13 @@ void ReconcileRadioGroupSelectionAndCursor(
         selected = 0u;
         cursor = 0u;
     }
-    u32 selectedIndex = 0u;
-    if(!TryFindRadioGroupChoice(candidate, selected, selectedIndex))
+    if(!TryFindRadioGroupChoice(candidate, selected).has_value())
         selected = 0u;
-    u32 cursorIndex = 0u;
-    if(!TryFindRadioGroupChoice(candidate, cursor, cursorIndex))
+    const Expected<u32> cursorIndex = TryFindRadioGroupChoice(candidate, cursor);
+    if(!cursorIndex.has_value())
         cursor = FindEnabledRadioGroupChoice(candidate, 0u, false);
-    else if(!candidate.rows[cursorIndex].enabled){
-        u32 nextStart = cursorIndex + 1u;
+    else if(!candidate.rows[cursorIndex.value()].enabled){
+        u32 nextStart = cursorIndex.value() + 1u;
         if(nextStart == candidate.count)
             nextStart = 0u;
         cursor = FindEnabledRadioGroupChoice(candidate, nextStart, false);
@@ -432,8 +434,8 @@ b8 TryApplyRadioGroupControlAction(
         candidate = currentCursor;
         if(action.kind == ControlActionKind::Activate)
             candidate = action.value;
-        u32 index = 0u;
-        if(!TryFindRadioGroupChoice(choices, candidate, index) || !choices.rows[index].enabled){
+        const Expected<u32> index = TryFindRadioGroupChoice(choices, candidate);
+        if(!index.has_value() || !choices.rows[index.value()].enabled){
             if(action.kind == ControlActionKind::Activate)
                 return false;
             candidate = 0u;

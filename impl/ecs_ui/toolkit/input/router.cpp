@@ -42,10 +42,10 @@ template<typename TContainer, typename TPredicate>
 
 
 const HitTarget* InputRouter::FindTargetInTable(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const WidgetId id, const u64 declarationGeneration)noexcept{
-    usize targetIndex = 0u;
-    if(!FindTargetIndexInTable(targets, lookup, id, declarationGeneration, targetIndex))
+    const auto targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
+    if(!targetIndex)
         return nullptr;
-    return &targets[targetIndex];
+    return &targets[*targetIndex];
 }
 
 

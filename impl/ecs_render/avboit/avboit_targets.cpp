@@ -186,11 +186,12 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
         return false;
     }
 
-    AvboitTargetLayout layout;
-    if(!TryResolveAvboitTargetLayout(createdTargets.width, createdTargets.height, NWB_REFRACTION_GROUP_SIZE, layout)){
+    const Expected<AvboitTargetLayout> layoutResult = TryResolveAvboitTargetLayout(createdTargets.width, createdTargets.height, NWB_REFRACTION_GROUP_SIZE);
+    if(!layoutResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: invalid AVBOIT target layout dimensions"));
         return false;
     }
+    const AvboitTargetLayout& layout = *layoutResult;
 
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;

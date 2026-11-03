@@ -88,24 +88,23 @@ protected:
 
 TEST(UiWidgetIdTests, EmbeddedNulAndScopeConcatenationDoNotAliasAndInvalidKeysAreRejected){
     const WidgetRoot root{ 7u, 3u };
-    WidgetId rootId{};
-    ASSERT_TRUE(TryMakeRootId(root, rootId));
-    WidgetId embedded{};
-    WidgetId simple{};
-    WidgetId combined{};
-    ASSERT_TRUE(TryMakeWidgetId(rootId, AStringView("a\0b", 3u), embedded));
-    ASSERT_TRUE(TryMakeWidgetId(rootId, "a", simple));
-    ASSERT_TRUE(TryMakeWidgetId(rootId, "ab", combined));
-    EXPECT_NE(embedded, simple);
-    WidgetId first{};
-    WidgetId second{};
-    ASSERT_TRUE(TryMakeWidgetId(simple, "bc", first));
-    ASSERT_TRUE(TryMakeWidgetId(combined, "c", second));
-    EXPECT_NE(first, second);
-    WidgetId rejected{};
-    EXPECT_FALSE(TryMakeRootId({ 7u, 0u }, rejected));
-    EXPECT_FALSE(TryMakeWidgetId({}, s_ActionKey, rejected));
-    EXPECT_FALSE(TryMakeWidgetId(rootId, "", rejected));
+    const auto rootId = TryMakeRootId(root);
+    ASSERT_TRUE(rootId.has_value());
+    const auto embedded = TryMakeWidgetId(*rootId, AStringView("a\0b", 3u));
+    const auto simple = TryMakeWidgetId(*rootId, "a");
+    const auto combined = TryMakeWidgetId(*rootId, "ab");
+    ASSERT_TRUE(embedded.has_value());
+    ASSERT_TRUE(simple.has_value());
+    ASSERT_TRUE(combined.has_value());
+    EXPECT_NE(*embedded, *simple);
+    const auto first = TryMakeWidgetId(*simple, "bc");
+    const auto second = TryMakeWidgetId(*combined, "c");
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    EXPECT_NE(*first, *second);
+    EXPECT_FALSE(TryMakeRootId({ 7u, 0u }).has_value());
+    EXPECT_FALSE(TryMakeWidgetId({}, s_ActionKey).has_value());
+    EXPECT_FALSE(TryMakeWidgetId(*rootId, "").has_value());
 }
 
 TEST_F(UiContextTests, ReorderedDeclarationsAndScopedKeysRetainTheirExactIdentityAndLifetime){

@@ -72,15 +72,15 @@ b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
 b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token){
     TextAreaState& state = *frame.state;
     const b8 enabled = item.editOptions.enabled;
-    WidgetId horizontalId;
-    if(!TryMakeWidgetId(item.state.id, s_WidgetPartScrollHorizontalThumb, horizontalId))
+    const auto horizontalId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollHorizontalThumb);
+    if(!horizontalId)
         return false;
-    WidgetId verticalId;
-    if(!TryMakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb, verticalId))
+    const auto verticalId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb);
+    if(!verticalId)
         return false;
-    auto horizontal = m_context.takePartPointerGesture(item.state, horizontalId, enabled);
+    auto horizontal = m_context.takePartPointerGesture(item.state, *horizontalId, enabled);
     b8 haveHorizontal = horizontal && horizontal->control == token;
-    auto vertical = m_context.takePartPointerGesture(item.state, verticalId, enabled);
+    auto vertical = m_context.takePartPointerGesture(item.state, *verticalId, enabled);
     b8 haveVertical = vertical && vertical->control == token;
     auto action = m_context.takeControlAction(item.state, enabled, token);
     b8 haveAction = action.has_value();
@@ -91,24 +91,32 @@ b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fram
         const u64 verticalSequence = haveVertical ? vertical->updateSequence : Limit<u64>::s_Max;
         const u64 actionSequence = haveAction ? action->id.sequence : Limit<u64>::s_Max;
         if(haveHorizontal && horizontalSequence <= verticalSequence && horizontalSequence <= actionSequence){
-            if(!TryDragScrollbarOffset(*horizontal, true, scroll.x))
+            const auto dragged = TryDragScrollbarOffset(*horizontal, true);
+            if(!dragged)
                 return false;
+            scroll.x = *dragged;
             manual = true;
-            horizontal = m_context.takePartPointerGesture(item.state, horizontalId, enabled);
+            horizontal = m_context.takePartPointerGesture(item.state, *horizontalId, enabled);
             haveHorizontal = horizontal && horizontal->control == token;
         }
         else if(haveVertical && verticalSequence <= actionSequence){
-            if(!TryDragScrollbarOffset(*vertical, false, scroll.y))
+            const auto dragged = TryDragScrollbarOffset(*vertical, false);
+            if(!dragged)
                 return false;
+            scroll.y = *dragged;
             manual = true;
-            vertical = m_context.takePartPointerGesture(item.state, verticalId, enabled);
+            vertical = m_context.takePartPointerGesture(item.state, *verticalId, enabled);
             haveVertical = vertical && vertical->control == token;
         }
         else{
             Point next = scroll;
             if(action->kind == ControlActionKind::Wheel){
-                if(!TryStepScrollbarOffset(scroll.x, action->deltaX, action->stepX, action->maximumX, next.x) || !TryStepScrollbarOffset(scroll.y, -action->delta, action->step, action->maximum, next.y))
+                const auto nextX = TryStepScrollbarOffset(scroll.x, action->deltaX, action->stepX, action->maximumX);
+                const auto nextY = TryStepScrollbarOffset(scroll.y, -action->delta, action->step, action->maximum);
+                if(!nextX || !nextY)
                     return false;
+                next.x = *nextX;
+                next.y = *nextY;
                 manual = true;
             }
             else if(action->kind == ControlActionKind::Activate && action->value >= s_TextAreaScrollHorizontalBefore && action->value <= s_TextAreaScrollVerticalAfter){
@@ -116,8 +124,13 @@ b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fram
                 const b8 x = action->value <= s_TextAreaScrollHorizontalAfter;
                 const f64 direction = action->value == s_TextAreaScrollHorizontalBefore || action->value == s_TextAreaScrollVerticalBefore ? -1.0 : 1.0;
                 const ScrollbarPlacement& bar = x ? accepted.horizontal : accepted.vertical;
-                if(!TryStepScrollbarOffset(x ? scroll.x : scroll.y, direction, bar.viewportExtent, bar.maximum, x ? next.x : next.y))
+                const auto stepped = TryStepScrollbarOffset(x ? scroll.x : scroll.y, direction, bar.viewportExtent, bar.maximum);
+                if(!stepped)
                     return false;
+                if(x)
+                    next.x = *stepped;
+                else
+                    next.y = *stepped;
                 manual = true;
             }
             scroll = next;
@@ -142,13 +155,13 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;
-        WidgetId thumbId;
-        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb, thumbId)){
+        const auto thumbId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb);
+        if(!thumbId){
             painted = false;
             break;
         }
-        const b8 hovered = m_context.input().hover() == thumbId;
-        const b8 pressed = m_context.input().capture() == thumbId;
+        const b8 hovered = m_context.input().hover() == *thumbId;
+        const b8 pressed = m_context.input().capture() == *thumbId;
         const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
         const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback);
         const UiSkinRegion* thumb = region(thumbName, item.scrollbarStyle.thumbFallback);
@@ -193,8 +206,8 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
             target.rectangle.width = before;
         else
             target.rectangle.height = before;
-        WidgetId beforeId;
-        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalBefore : s_WidgetPartScrollVerticalBefore, beforeId) || !m_context.addPartTarget(item.state, beforeId, target))
+        const auto beforeId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalBefore : s_WidgetPartScrollVerticalBefore);
+        if(!beforeId || !m_context.addPartTarget(item.state, *beforeId, target))
             return false;
         target.value = horizontal ? s_TextAreaScrollHorizontalAfter : s_TextAreaScrollVerticalAfter;
         target.rectangle = bar.track;
@@ -206,8 +219,8 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
             target.rectangle.y = thumbStart + thumbExtent;
             target.rectangle.height = after;
         }
-        WidgetId afterId;
-        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalAfter : s_WidgetPartScrollVerticalAfter, afterId) || !m_context.addPartTarget(item.state, afterId, target))
+        const auto afterId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalAfter : s_WidgetPartScrollVerticalAfter);
+        if(!afterId || !m_context.addPartTarget(item.state, *afterId, target))
             return false;
         target.rectangle = bar.thumb;
         target.activatable = false;
@@ -215,8 +228,8 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         target.pointerGesture = trackExtent > thumbExtent;
         target.gestureReference = bar.track;
         target.gestureMaximum = bar.maximum;
-        WidgetId thumbId;
-        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb, thumbId) || !m_context.addPartTarget(item.state, thumbId, target))
+        const auto thumbId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb);
+        if(!thumbId || !m_context.addPartTarget(item.state, *thumbId, target))
             return false;
     }
     if(placement.corner.width > 0.0f && placement.corner.height > 0.0f){
@@ -224,8 +237,8 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         target.rectangle = placement.corner;
         target.clip = clip;
         target.control = token;
-        WidgetId cornerId;
-        if(!TryMakeWidgetId(item.state.id, s_WidgetPartScrollCorner, cornerId) || !m_context.addPartTarget(item.state, cornerId, target))
+        const auto cornerId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollCorner);
+        if(!cornerId || !m_context.addPartTarget(item.state, *cornerId, target))
             return false;
     }
     return true;

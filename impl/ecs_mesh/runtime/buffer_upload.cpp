@@ -30,18 +30,18 @@ Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupRequiredPaddedRawByt
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
 
-    usize paddedByteCount = 0u;
-    if(!TryComputePaddedRawByteCount(payload.size(), paddedByteCount))
+    const Expected<usize> paddedByteCount = TryComputePaddedRawByteCount(payload.size());
+    if(!paddedByteCount)
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 
-    if(paddedByteCount == payload.size())
+    if(*paddedByteCount == payload.size())
         return SetupBuffer<u8>(graphics, debugName, payload, flags);
 
     // Upload records before payload dies; explicitly zero the allocated tail.
     Vector<u8, Core::Alloc::ScratchArena> paddedPayload{scratchArena};
-    paddedPayload.reserve(paddedByteCount);
+    paddedPayload.reserve(*paddedByteCount);
     paddedPayload.assign(payload.begin(), payload.end());
-    paddedPayload.resize(paddedByteCount, 0u);
+    paddedPayload.resize(*paddedByteCount, 0u);
     return SetupBuffer<u8>(graphics, debugName, paddedPayload, flags);
 }
 

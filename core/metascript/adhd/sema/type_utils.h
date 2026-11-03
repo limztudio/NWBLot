@@ -275,6 +275,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 IsSingleValueCtorBuiltinType(MStringView name)noexcept;
 [[nodiscard]] b8 NeedsBraceDefaultFieldInit(MStringView name)noexcept;
 [[nodiscard]] b8 IsStringLikeType(MStringView name)noexcept;
+[[nodiscard]] b8 IsOwningStringType(MStringView name)noexcept;
 [[nodiscard]] b8 IsNwbMapKeyType(MStringView name)noexcept;
 [[nodiscard]] b8 RequiresTCharAdaptation(MStringView name)noexcept;
 [[nodiscard]] b8 IsImplicitlyConvertibleBuiltinType(MStringView fromTypeName, MStringView toTypeName)noexcept;

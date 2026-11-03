@@ -166,14 +166,23 @@ b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShap
         return true;
 
     const auto cutterBounds = shapeRegistry.buildShapeBounds(shapeType.id, shapeToWorld, parameterBytes);
-    if(!cutterBounds)
-        return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), outWorkBounds);
+    if(!cutterBounds){
+        const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f));
+        if(!resolved)
+            return false;
+        outWorkBounds = *resolved;
+        return true;
+    }
 
     Float4 cutterMinBounds(0.0f, 0.0f, 0.0f, 0.0f);
     Float4 cutterMaxBounds(0.0f, 0.0f, 0.0f, 0.0f);
     StoreFloat(cutterBounds->minBounds, cutterMinBounds);
     StoreFloat(cutterBounds->maxBounds, cutterMaxBounds);
-    return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds->finiteBounds, cutterMinBounds, cutterMaxBounds, outWorkBounds);
+    const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds->finiteBounds, cutterMinBounds, cutterMaxBounds);
+    if(!resolved)
+        return false;
+    outWorkBounds = *resolved;
+    return true;
 }
 
 

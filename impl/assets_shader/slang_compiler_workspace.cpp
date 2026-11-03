@@ -271,8 +271,7 @@ b8 __hidden_slang_compiler_workspace::WriteBomStrippedCompilerInput(
     for(usize begin = 0u; begin < scanView.size();){
         const usize foundEnd = scanView.find('\n', begin);
         const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
-        ShaderBinaryPayload::IncludeDirective include;
-        if(ShaderBinaryPayload::TryExtractIncludeDirective(scanView.substr(begin, end - begin), include))
+        if(ShaderBinaryPayload::TryExtractIncludeDirective(scanView.substr(begin, end - begin)).has_value())
             ++includeCount;
         begin = end < scanView.size() ? end + 1u : end;
     }
@@ -283,14 +282,13 @@ b8 __hidden_slang_compiler_workspace::WriteBomStrippedCompilerInput(
         const usize foundEnd = scanView.find('\n', begin);
         const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
         const AStringView scanLine = scanView.substr(begin, end - begin);
-        ShaderBinaryPayload::IncludeDirective include;
-        const b8 hasInclude = ShaderBinaryPayload::TryExtractIncludeDirective(scanLine, include);
-        if(hasInclude && include.kind == ShaderBinaryPayload::IncludeKind::Unsupported){
+        const Expected<ShaderBinaryPayload::IncludeDirective> include = ShaderBinaryPayload::TryExtractIncludeDirective(scanLine);
+        if(include && include->kind == ShaderBinaryPayload::IncludeKind::Unsupported){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported dependency directive '{}' in '{}'"), ConvertString(TrimView(scanLine)), PathToString<tchar>(sourcePath));
             return false;
         }
-        if(hasInclude && include.kind != ShaderBinaryPayload::IncludeKind::Macro){
-            const ScratchPath includePath(scratchArena, include.name);
+        if(include && include->kind != ShaderBinaryPayload::IncludeKind::Macro){
+            const ScratchPath includePath(scratchArena, include->name);
             if(includePath.isAbsolute()){
                 const auto absoluteIncludePath = AbsolutePath(includePath);
                 if(!absoluteIncludePath){
@@ -300,19 +298,19 @@ b8 __hidden_slang_compiler_workspace::WriteBomStrippedCompilerInput(
                 const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
                 auto overlayIncludePath = BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
                 if(!IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), ConvertString(include.name), PathToString<tchar>(sourcePath));
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), ConvertString(include->name), PathToString<tchar>(sourcePath));
                     return false;
                 }
                 auto pathText = BuildCompilerPathText(*overlayIncludePath, scratchArena);
                 if(!pathText)
                     return false;
-                if(pathText->size() > Limit<usize>::s_Max - (outputBytes - include.name.size())){
+                if(pathText->size() > Limit<usize>::s_Max - (outputBytes - include->name.size())){
                     NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: BOM-stripped compiler input '{}' exceeds representable size"), PathToString<tchar>(outputPath));
                     return false;
                 }
-                outputBytes = outputBytes - include.name.size() + pathText->size();
-                const usize sourceOffset = begin + static_cast<usize>(include.name.data() - scanLine.data());
-                replacements.push_back({ Move(*pathText), sourceOffset, include.name.size() });
+                outputBytes = outputBytes - include->name.size() + pathText->size();
+                const usize sourceOffset = begin + static_cast<usize>(include->name.data() - scanLine.data());
+                replacements.push_back({ Move(*pathText), sourceOffset, include->name.size() });
             }
         }
         begin = end < scanView.size() ? end + 1u : end;

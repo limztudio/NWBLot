@@ -42,10 +42,10 @@ namespace TextGlyphVisibility{
     const FontAtlasGlyph* record = atlas.glyph(glyph.glyphId);
     if(!record)
         return MakeUnexpected(Failure{});
-    Double4 candidate;
-    if(!TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), *record, candidate))
+    const auto candidate = TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), *record);
+    if(!candidate)
         return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ LoadDouble(candidate) };
+    return SIMDVectorDoubleResult{ LoadDouble(*candidate) };
 }
 
 [[nodiscard]] inline Expected<Rect> AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
@@ -97,10 +97,7 @@ namespace TextGlyphVisibility{
 }
 
 [[nodiscard]] inline Expected<Rect> CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale = { 1.0f, 1.0f })noexcept{
-    Rect candidate;
-    if(!TryResolveGlyphCoverageRectangle(glyph.position, record.pageIndex, record.pixels, record.bearingX, record.bearingY, rasterScale, topLeft, pixelScale, candidate))
-        return MakeUnexpected(Failure{});
-    return candidate;
+    return TryResolveGlyphCoverageRectangle(glyph.position, record.pageIndex, record.pixels, record.bearingX, record.bearingY, rasterScale, topLeft, pixelScale);
 }
 
 

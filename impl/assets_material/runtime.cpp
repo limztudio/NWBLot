@@ -200,12 +200,12 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed material resource reference at index {}"), i);
             return MakeUnexpected(Failure{});
         }
-        MaterialResourceReference resourceReference;
-        if(!TryUnpackMaterialResourceReferenceBinary(*resourceReferenceBinaryResult, resourceReference)){
+        const Expected<MaterialResourceReference> resourceReference = TryUnpackMaterialResourceReferenceBinary(*resourceReferenceBinaryResult);
+        if(!resourceReference){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference at index {} has an invalid asset identity"), i);
             return MakeUnexpected(Failure{});
         }
-        payload.resourceReferences.push_back(resourceReference);
+        payload.resourceReferences.push_back(*resourceReference);
     }
 
     if(!LogAndValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, s_MaterialLoadBinaryContext))

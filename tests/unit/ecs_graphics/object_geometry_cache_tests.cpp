@@ -27,20 +27,19 @@ using namespace NWB::Impl::ECSRenderDetail;
 
 
 TEST(ObjectGeometryCacheTests, LayoutKeepsSentinelVerticesAndPersistentIndicesInDisjointRegions){
-    ObjectGeometryCacheLayout layout{};
-    ASSERT_TRUE(TryResolveObjectGeometryCacheLayout(3u * sizeof(MeshletLocalVertexRef), 3u, layout));
-    EXPECT_EQ(layout.indexByteOffset, 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
-    EXPECT_EQ(layout.bufferByteSize, 5u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+    const Expected<ObjectGeometryCacheLayout> layout = TryResolveObjectGeometryCacheLayout(3u * sizeof(MeshletLocalVertexRef), 3u);
+    ASSERT_TRUE(layout);
+    EXPECT_EQ(layout->indexByteOffset, 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+    EXPECT_EQ(layout->bufferByteSize, 5u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
 }
 
 TEST(ObjectGeometryCacheTests, LayoutRejectsEmptyMisalignedAndOverflowingInputs){
-    ObjectGeometryCacheLayout layout{};
     const Array<u64, 4> sizes = { 0u, 1u, sizeof(MeshletLocalVertexRef) + 1u, Limit<u64>::s_Max - 3u };
     for(const u64 size : sizes){
-        EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(size, 3u, layout));
+        EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(size, 3u));
     }
-    EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(sizeof(MeshletLocalVertexRef), 0u, layout));
-    EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(sizeof(MeshletLocalVertexRef), Limit<u32>::s_Max, layout));
+    EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(sizeof(MeshletLocalVertexRef), 0u));
+    EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(sizeof(MeshletLocalVertexRef), Limit<u32>::s_Max));
 }
 
 TEST(ObjectGeometryCacheTests, LayoutChecksFinalStructuredPaddingWithinUintByteAddressing){
@@ -48,14 +47,14 @@ TEST(ObjectGeometryCacheTests, LayoutChecksFinalStructuredPaddingWithinUintByteA
     constexpr u64 s_MaximumRecords = s_AddressableBytes / NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
     // Reserve a full final structured record for the index region, including its view-alignment padding.
     constexpr u64 s_LastValidRefBytes = (s_MaximumRecords - 2u) * sizeof(MeshletLocalVertexRef);
-    ObjectGeometryCacheLayout layout{};
-    ASSERT_TRUE(TryResolveObjectGeometryCacheLayout(s_LastValidRefBytes, 3u, layout));
-    EXPECT_LE(layout.bufferByteSize, s_AddressableBytes);
-    EXPECT_EQ(layout.bufferByteSize % NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, 0u);
-    EXPECT_EQ(layout.indexByteOffset + 3u * sizeof(u32), layout.bufferByteSize - 36u);
+    const Expected<ObjectGeometryCacheLayout> layout = TryResolveObjectGeometryCacheLayout(s_LastValidRefBytes, 3u);
+    ASSERT_TRUE(layout);
+    EXPECT_LE(layout->bufferByteSize, s_AddressableBytes);
+    EXPECT_EQ(layout->bufferByteSize % NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, 0u);
+    EXPECT_EQ(layout->indexByteOffset + 3u * sizeof(u32), layout->bufferByteSize - 36u);
     // Structured alignment padding pushes this index span past uint32 addressing.
     EXPECT_LE(s_MaximumRecords * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE + 3u * sizeof(u32), s_AddressableBytes);
-    EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(s_LastValidRefBytes + sizeof(MeshletLocalVertexRef), 3u, layout));
+    EXPECT_FALSE(TryResolveObjectGeometryCacheLayout(s_LastValidRefBytes + sizeof(MeshletLocalVertexRef), 3u));
 }
 
 TEST(ObjectGeometryCacheTests, RuntimeReuseRequiresAcceptedNonzeroCurrentContent){

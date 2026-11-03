@@ -172,12 +172,12 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     }
     DeduplicateSubsystemRefs(outSubsystem.subsystems);
 
-    u64 totalCount = 0u;
-    if(!TrySumSubsystemFieldElementCounts(Span<const u64>(fieldCounts), totalCount)){
+    const Expected<u64> totalCount = TrySumSubsystemFieldElementCounts(Span<const u64>(fieldCounts));
+    if(!totalCount){
         NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: invalid field element count"));
         return false;
     }
-    if(totalCount != header.assetCount){
+    if(*totalCount != header.assetCount){
         NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: field element counts do not sum to asset count"));
         return false;
     }

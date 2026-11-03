@@ -37,8 +37,8 @@ Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, c
     const auto rectangle = SmokeListRowBounds(placement, index);
     if(!rectangle)
         return {};
-    Impl::Ui::Rect visible;
-    return Impl::Ui::TryIntersectUiRects(*rectangle, placement.contentClip, Impl::Ui::UiRectPrecision::PreciseExtents, visible) ? visible : Impl::Ui::Rect{};
+    const auto visible = Impl::Ui::TryIntersectUiRects(*rectangle, placement.contentClip, Impl::Ui::UiRectPrecision::PreciseExtents);
+    return visible ? *visible : Impl::Ui::Rect{};
 }
 
 void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){

@@ -57,7 +57,7 @@ void ApplySkinPaletteToTooltipStyle(in UiSkinPalette palette, mut TooltipStyle s
     style.text = ResolveUiSkinColor(palette, UiSkinColorRole::TextTooltip);
 }
 
-b8 TryEvaluateTooltipStateUpdate(
+Expected<b8> TryEvaluateTooltipStateUpdate(
     in WidgetId anchor,
     in u64 declarationGeneration,
     in PopupToken popup,
@@ -75,12 +75,10 @@ b8 TryEvaluateTooltipStateUpdate(
     mut PopupPlacement inOutPlacement,
     mut b8 inOutHovered,
     mut b8 inOutVisible,
-    mut f64 inOutElapsed,
-    mut b8 outChanged
+    mut f64 inOutElapsed
 ){
-    outChanged = false;
     if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !popup.empty()) || !isFinite(deltaSeconds) || deltaSeconds < 0.0f || !IsValidTooltipOptions(options))
-        return false;
+        return makeUnexpected(Failure());
     const b8 sameBinding = inOutAnchor == anchor
         && inOutDeclarationGeneration == declarationGeneration
         && inOutPopup == popup
@@ -92,8 +90,9 @@ b8 TryEvaluateTooltipStateUpdate(
     if(activeHover && inOutHovered && sameBinding && sameOptions)
         elapsed = min(inOutElapsed + cast<f64>(deltaSeconds), cast<f64>(options.delaySeconds));
     const b8 visible = activeHover && elapsed >= cast<f64>(options.delaySeconds);
+    b8 changed = false;
     if(!sameBinding || !sameOptions || inOutHovered != activeHover || inOutElapsed != elapsed || inOutVisible != visible){
-        outChanged = true;
+        changed = true;
         inOutAnchor = anchor;
         inOutDeclarationGeneration = declarationGeneration;
         inOutPopup = popup;
@@ -106,7 +105,7 @@ b8 TryEvaluateTooltipStateUpdate(
         if(!visible || !sameBinding || !sameOptions)
             inOutPlacement = PopupPlacement();
     }
-    return true;
+    return changed;
 }
 
 

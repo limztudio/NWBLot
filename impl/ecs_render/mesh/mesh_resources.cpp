@@ -223,10 +223,12 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         return MakeUnexpected(Failure{});
     const usize solidByteCount = mesh.solidTriangleWords().size() * sizeof(u32);
     NWB_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, mesh.solidTriangleWords().data(), solidByteCount);
-    if(!NWB::Impl::BuildPositionStreamBounds(mesh.positionStream(), createdMesh.csgLocalBounds)){
+    const Expected<CsgReceiverCpuBounds> csgLocalBounds = NWB::Impl::BuildPositionStreamBounds(mesh.positionStream());
+    if(!csgLocalBounds){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds"), ConvertString(meshPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
+    createdMesh.csgLocalBounds = *csgLocalBounds;
 
     const b8 rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
     // Both tracing backends read raw position/index buffers for material evaluation.

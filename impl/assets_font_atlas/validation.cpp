@@ -24,19 +24,19 @@ namespace __hidden_font_atlas_validation{
     Vector<u64, Core::Alloc::ScratchArena> occupied(scratchArena);
     usize maxWords = 0u;
     for(const FontAtlasGroup& group : payload.groups){
-        usize groupWords = 0u;
-        if(!TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount, groupWords))
+        const Expected<usize> groupWords = TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount);
+        if(!groupWords)
             return false;
-        maxWords = Max(maxWords, groupWords);
+        maxWords = Max(maxWords, *groupWords);
     }
     occupied.reserve(maxWords);
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         const FontAtlasGroup& group = payload.groups[groupIndex];
         const usize planePixels = static_cast<usize>(group.width) * group.height;
-        usize groupWords = 0u;
-        if(!TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount, groupWords))
+        const Expected<usize> groupWords = TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount);
+        if(!groupWords)
             return false;
-        occupied.assign(groupWords, 0u);
+        occupied.assign(*groupWords, 0u);
         for(const FontAtlasGlyph& glyph : payload.glyphs){
             if(glyph.drawable == 0u || glyph.group != groupIndex)
                 continue;

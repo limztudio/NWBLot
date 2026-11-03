@@ -83,29 +83,29 @@ template<typename FailureHandlerT>
     && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(meshletIndex, s_EncodedPositionRefDecodeMismatchMessage)))
     && noexcept(DeclVal<void(*)(b8)noexcept>()(onFailure(meshletIndex, s_EncodedAttributeRefDecodeMismatchMessage)))
 ){
-    usize encodedPositionBytes = 0u;
-    usize encodedAttributeBytes = 0u;
-    if(!TryComputeMeshletEncodedPositionRefByteCount(meshlet, skinRequired, encodedPositionBytes) || !TryComputeMeshletEncodedAttributeRefByteCount(meshlet, encodedAttributeBytes))
+    const Expected<usize> encodedPositionBytes = TryComputeMeshletEncodedPositionRefByteCount(meshlet, skinRequired);
+    const Expected<usize> encodedAttributeBytes = TryComputeMeshletEncodedAttributeRefByteCount(meshlet);
+    if(!encodedPositionBytes || !encodedAttributeBytes)
         return onFailure(meshletIndex, s_InvalidEncodedRefWidthMessage);
     if(
         meshlet.positionRefOffset > positionDeltas.size()
-        || encodedPositionBytes != positionDeltas.size() - meshlet.positionRefOffset
+        || *encodedPositionBytes != positionDeltas.size() - meshlet.positionRefOffset
         || meshlet.attributeRefOffset > attributeDeltas.size()
-        || encodedAttributeBytes != attributeDeltas.size() - meshlet.attributeRefOffset
+        || *encodedAttributeBytes != attributeDeltas.size() - meshlet.attributeRefOffset
     )
         return onFailure(meshletIndex, s_EncodedRefByteCountMismatchMessage);
 
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
         const MeshletPositionStreamRef& sourceRef = positionRefs[sourcePositionRefOffset + localPositionIndex];
-        MeshletPositionStreamRef decodedRef;
-        if(!TryDecodeMeshletPositionRef(positionDeltas, meshlet, localPositionIndex, skinRequired, decodedRef) || !MeshletDecodedPositionRefMatches(decodedRef, sourceRef, skinRequired))
+        const Expected<MeshletPositionStreamRef> decodedRef = TryDecodeMeshletPositionRef(positionDeltas, meshlet, localPositionIndex, skinRequired);
+        if(!decodedRef || !MeshletDecodedPositionRefMatches(*decodedRef, sourceRef, skinRequired))
             return onFailure(meshletIndex, s_EncodedPositionRefDecodeMismatchMessage);
     }
 
     for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
         const MeshletAttributeStreamRef& sourceRef = attributeRefs[sourceAttributeRefOffset + localAttributeIndex];
-        MeshletAttributeStreamRef decodedRef;
-        if(!TryDecodeMeshletAttributeRef(attributeDeltas, meshlet, localAttributeIndex, decodedRef) || !MeshletDecodedAttributeRefMatches(decodedRef, sourceRef))
+        const Expected<MeshletAttributeStreamRef> decodedRef = TryDecodeMeshletAttributeRef(attributeDeltas, meshlet, localAttributeIndex);
+        if(!decodedRef || !MeshletDecodedAttributeRefMatches(*decodedRef, sourceRef))
             return onFailure(meshletIndex, s_EncodedAttributeRefDecodeMismatchMessage);
     }
 

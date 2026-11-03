@@ -30,16 +30,20 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     if(shapeRegistry){
         const auto shapeType = shapeRegistry->findShapeType(shape.shapeType);
         if(shapeType && shapeType->desc.signedDistanceCallback){
-            FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> packedParameterBytes;
-            if(!PackCsgShapeDefaultParameterBytes(shapeType->desc.parameterByteSize, inlineParameters, packedParameterBytes))
+            const auto packedParameterBytes = PackCsgShapeDefaultParameterBytes(shapeType->desc.parameterByteSize, inlineParameters);
+            if(!packedParameterBytes)
                 return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-            inlineParameters = ReadCsgShapeInlineParameters(Span<const u8>(packedParameterBytes.data(), packedParameterBytes.size()));
+            inlineParameters = ReadCsgShapeInlineParameters(Span<const u8>(packedParameterBytes->data(), packedParameterBytes->size()));
             registryDistanceCallback = shapeType->desc.signedDistanceCallback;
         }
     }
 
-    if(!registryDistanceCallback && !TryResolveBuiltInCsgShapeKind(shape.shapeType, builtInKind))
-        return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+    if(!registryDistanceCallback){
+        const auto resolvedBuiltInKind = TryResolveBuiltInCsgShapeKind(shape.shapeType);
+        if(!resolvedBuiltInKind)
+            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+        builtInKind = *resolvedBuiltInKind;
+    }
 
     const usize vertexCount = vertices.size();
     outDistances.clear();

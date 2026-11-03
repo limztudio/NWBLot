@@ -82,7 +82,9 @@ template<
         const MeshletAttributeStreamRef attributeRef{ source.normal, source.tangent, source.uv0, source.color };
 
         u16 localPosition = 0u;
-        if(!TryFindMeshletPositionRef(outPositionRefs, positionRef, localPosition)){
+        if(const Expected<u16> foundPosition = TryFindMeshletPositionRef(outPositionRefs, positionRef))
+            localPosition = *foundPosition;
+        else{
             if(outPositionRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;
@@ -92,7 +94,9 @@ template<
         }
 
         u16 localAttribute = 0u;
-        if(!TryFindMeshletAttributeRef(outAttributeRefs, attributeRef, localAttribute)){
+        if(const Expected<u16> foundAttribute = TryFindMeshletAttributeRef(outAttributeRefs, attributeRef))
+            localAttribute = *foundAttribute;
+        else{
             if(outAttributeRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet attributes exceed local index limits"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;

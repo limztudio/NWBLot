@@ -38,26 +38,26 @@ static_assert(s_TextureRgba16FloatAlphaByteOffset == static_cast<u32>(sizeof(bas
 
 
 [[nodiscard]] static Expected<PrimaryUastcSlice> GetPrimaryUastcSlice(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex){
-    UastcSliceLayout layout;
-    if(!TryComputeUastcSliceLayout(mip, sliceIndex, layout)){
+    const Expected<UastcSliceLayout> layout = TryComputeUastcSliceLayout(mip, sliceIndex);
+    if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: invalid UASTC slice layout"));
         return MakeUnexpected(Failure{});
     }
-    u64 sourceOffsetBytes = 0u;
-    if(!TryComputeUastcSliceAbsoluteOffset(mip, layout, sourceOffsetBytes)){
+    const Expected<u64> sourceOffsetBytes = TryComputeUastcSliceAbsoluteOffset(mip, *layout);
+    if(!sourceOffsetBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC primary slice offset exceeds addressable memory"));
         return MakeUnexpected(Failure{});
     }
 
     const u64 primaryPayloadByteCount = textureAsset.primaryPayloadByteCount();
-    if(!IsUastcSliceRangeWithinPrimaryPayload(sourceOffsetBytes, layout.byteCount, primaryPayloadByteCount, textureAsset.payloadBytes().size())){
+    if(!IsUastcSliceRangeWithinPrimaryPayload(*sourceOffsetBytes, layout->byteCount, primaryPayloadByteCount, textureAsset.payloadBytes().size())){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC primary slice is outside the texture payload"));
         return MakeUnexpected(Failure{});
     }
 
     return PrimaryUastcSlice(
-        Span<const u8>(textureAsset.payloadBytes().data() + static_cast<usize>(sourceOffsetBytes), static_cast<usize>(layout.byteCount)),
-        layout.blockCount
+        Span<const u8>(textureAsset.payloadBytes().data() + static_cast<usize>(*sourceOffsetBytes), static_cast<usize>(layout->byteCount)),
+        layout->blockCount
     );
 }
 
@@ -67,28 +67,28 @@ static_assert(s_TextureRgba16FloatAlphaByteOffset == static_cast<u32>(sizeof(bas
         return MakeUnexpected(Failure{});
     }
 
-    UastcSliceLayout layout;
-    if(!TryComputeUastcSliceLayout(mip, sliceIndex, layout)){
+    const Expected<UastcSliceLayout> layout = TryComputeUastcSliceLayout(mip, sliceIndex);
+    if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: invalid UASTC slice layout"));
         return MakeUnexpected(Failure{});
     }
     const u64 primaryPayloadByteCount = textureAsset.primaryPayloadByteCount();
     const u8* const alphaBlocks = textureAsset.alphaUastcBlocks();
-    u64 alphaSliceOffsetBytes = 0u;
-    if(!TryComputeUastcSliceAbsoluteOffset(mip, layout, alphaSliceOffsetBytes)){
+    const Expected<u64> alphaSliceOffsetBytes = TryComputeUastcSliceAbsoluteOffset(mip, *layout);
+    if(!alphaSliceOffsetBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC alpha slice offset exceeds addressable memory"));
         return MakeUnexpected(Failure{});
     }
     if(
         !alphaBlocks
-        || !IsUastcSliceRangeWithinPrimaryPayload(alphaSliceOffsetBytes, layout.byteCount, primaryPayloadByteCount, textureAsset.payloadBytes().size())
+        || !IsUastcSliceRangeWithinPrimaryPayload(*alphaSliceOffsetBytes, layout->byteCount, primaryPayloadByteCount, textureAsset.payloadBytes().size())
         || primaryPayloadByteCount > textureAsset.payloadBytes().size() - primaryPayloadByteCount
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC alpha slice is outside the texture payload"));
         return MakeUnexpected(Failure{});
     }
 
-    return BinaryByteView{ alphaBlocks + static_cast<usize>(alphaSliceOffsetBytes), static_cast<usize>(layout.byteCount) };
+    return BinaryByteView{ alphaBlocks + static_cast<usize>(*alphaSliceOffsetBytes), static_cast<usize>(layout->byteCount) };
 }
 
 [[nodiscard]] static b8 DecodeTextureSliceAsAstc(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, const Span<u8> outUploadBytes){
@@ -340,13 +340,13 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& te
         }
     }
 
-    usize totalUploadByteCount = 0u;
-    if(!TryComputeTextureMipUploadTotalBytes(sliceUploadByteCount, mip.sliceCount, totalUploadByteCount)){
+    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(sliceUploadByteCount, mip.sliceCount);
+    if(!totalUploadByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: texture mip upload size exceeds addressable memory"));
         return MakeUnexpected(Failure{});
     }
     TextureDecodedMipUpload upload(arena);
-    upload.bytes.resize(totalUploadByteCount);
+    upload.bytes.resize(*totalUploadByteCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         const Span<u8> destination(upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount, sliceUploadByteCount);
         b8 decoded = false;
@@ -380,14 +380,14 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(const Texture& te
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR mip row pitch exceeds addressable memory"));
         return MakeUnexpected(Failure{});
     }
-    usize totalUploadByteCount = 0u;
-    if(!TryComputeTextureMipUploadTotalBytes(sliceUploadByteCount, mip.sliceCount, totalUploadByteCount)){
+    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(sliceUploadByteCount, mip.sliceCount);
+    if(!totalUploadByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR mip upload size exceeds addressable memory"));
         return MakeUnexpected(Failure{});
     }
 
     TextureDecodedMipUpload upload(arena);
-    upload.bytes.resize(totalUploadByteCount);
+    upload.bytes.resize(*totalUploadByteCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         const Span<u8> destination(upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount, sliceUploadByteCount);
         if(!__hidden_texture_mip_decoder::DecodeHdrTextureSlice(textureAsset, mip, mipLevel, sliceIndex, format, destination))

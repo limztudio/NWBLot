@@ -29,11 +29,12 @@ void RendererReflectionFeedback::invalidateResources(){
 }
 
 b8 RendererReflectionFeedback::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings, const b8 enabled){
-    ReflectionFeedbackExtent extent;
-    if(!TryComputeReflectionFeedbackExtent(width, height, extent)){
+    const Expected<ReflectionFeedbackExtent> extentResult = TryComputeReflectionFeedbackExtent(width, height);
+    if(!extentResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
         return false;
     }
+    const ReflectionFeedbackExtent& extent = *extentResult;
     auto& device = m_graphics.getDevice();
     const u16 deviceGeneration = device.getDeviceGeneration();
     if(!m_control){

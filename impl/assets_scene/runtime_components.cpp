@@ -169,10 +169,12 @@ b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<LightComponentPayloadBinary>(payload, NWB_TEXT("LightComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
-    if(!UnpackLightComponentPayloadBinary(*binaryPayload, component)){
+    const Expected<LightComponent> unpacked = UnpackLightComponentPayloadBinary(*binaryPayload);
+    if(!unpacked){
         NWB_LOGGER_ERROR(NWB_TEXT("LightComponentAsset::loadComponentPayload failed: invalid light flags"));
         return false;
     }
+    component = *unpacked;
     return true;
 }
 

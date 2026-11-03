@@ -254,10 +254,7 @@ Expected<usize> HitUiEditBoxWordGeometry(
     );
     if(!local.has_value())
         return makeUnexpected(Failure());
-    usize committedByte = 0u;
-    if(!TryHitEditWordCaretGeometry(lines, stops, local.value(), committedByte))
-        return makeUnexpected(Failure());
-    return committedByte;
+    return TryHitEditWordCaretGeometry(lines, stops, local.value());
 }
 
 usize ComputeUiTextEditRetainedBytes(in EditCompositionView composition, in usize textLength, in usize selectionStart, in usize selectionEnd){
@@ -275,40 +272,26 @@ b8 ValidateUiTextEditPollSequence(in u64 eventSequence, in u64 lastSequence, in 
     return eventSequence > lastSequence && eventIndex < maxEvents;
 }
 
-b8 ValidateUiEditClipboardActionMode(
+Expected<b8, UiEditClipboardStatus> ValidateUiEditClipboardActionMode(
     in EditClipboardAction action,
     in b8 validChannel,
     in b8 readOnly,
     in b8 compositionActive,
-    in b8 hasSelection,
-    mut b8 outReads,
-    mut UiEditClipboardStatus outStatus
+    in b8 hasSelection
 ){
-    outReads = false;
-    outStatus = UiEditClipboardStatus::Idle;
-    if(action == EditClipboardAction::None || cast<u8>(action) > cast<u8>(EditClipboardAction::PublishSelection)){
-        outStatus = UiEditClipboardStatus::InvalidAction;
-        return false;
-    }
-    if(!validChannel){
-        outStatus = UiEditClipboardStatus::Unsupported;
-        return false;
-    }
-    outReads = action == EditClipboardAction::Paste;
-    const b8 mutates = outReads || action == EditClipboardAction::Cut;
-    if(readOnly && mutates){
-        outStatus = UiEditClipboardStatus::ReadOnly;
-        return false;
-    }
-    if(compositionActive){
-        outStatus = UiEditClipboardStatus::CompositionActive;
-        return false;
-    }
-    if(!outReads && !hasSelection){
-        outStatus = UiEditClipboardStatus::NoSelection;
-        return false;
-    }
-    return true;
+    if(action == EditClipboardAction::None || cast<u8>(action) > cast<u8>(EditClipboardAction::PublishSelection))
+        return makeUnexpected(UiEditClipboardStatus::InvalidAction);
+    if(!validChannel)
+        return makeUnexpected(UiEditClipboardStatus::Unsupported);
+    const b8 reads = action == EditClipboardAction::Paste;
+    const b8 mutates = reads || action == EditClipboardAction::Cut;
+    if(readOnly && mutates)
+        return makeUnexpected(UiEditClipboardStatus::ReadOnly);
+    if(compositionActive)
+        return makeUnexpected(UiEditClipboardStatus::CompositionActive);
+    if(!reads && !hasSelection)
+        return makeUnexpected(UiEditClipboardStatus::NoSelection);
+    return reads;
 }
 
 

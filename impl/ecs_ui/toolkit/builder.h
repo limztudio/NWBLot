@@ -207,11 +207,11 @@ private:
         const WidgetState& rows, const ControlToken& token, const b8 enabled, const PopupToken* const popup,
         ListState& state, MatchF&& matches, ApplyActionF&& applyAction
     ){
-        WidgetId thumb;
-        if(!TryMakeWidgetId(rows.id, s_WidgetPartScrollbar, thumb))
+        const auto thumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollbar);
+        if(!thumb)
             return false;
         const auto nextGesture = [&](){
-            return popup ? m_context.input().consumePointerGesture(thumb, rows.declarationGeneration) : m_context.takePartPointerGesture(rows, thumb, enabled);
+            return popup ? m_context.input().consumePointerGesture(*thumb, rows.declarationGeneration) : m_context.takePartPointerGesture(rows, *thumb, enabled);
         };
         const auto validGesture = [&](const Expected<PointerGesture>& gesture)noexcept{
             return gesture && gesture->control == token && (!popup || gesture->popup == *popup);

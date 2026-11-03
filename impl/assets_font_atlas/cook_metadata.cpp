@@ -64,10 +64,12 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontAtlasPairedSideca
     auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasRasterModeField, true);
     if(!rasterModeResult)
         return false;
-    if(!TryParseFontAtlasRasterMode(rasterModeResult->text, payload.rasterMode)){
+    const Expected<FontAtlasRasterMode::Enum> parsedRasterMode = TryParseFontAtlasRasterMode(rasterModeResult->text);
+    if(!parsedRasterMode){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': unsupported raster_mode"), PathToString<tchar>(path));
         return false;
     }
+    payload.rasterMode = *parsedRasterMode;
     return true;
 }
 

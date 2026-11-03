@@ -262,32 +262,32 @@ class LightSpacePlan{
     public u32 totalPixels = 0u;
 }
 
-b8 TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpaceLightRequest> requests, in u64 maxStorageBufferRange, in u32 drawCount, in b8 csgIntervalDepth, mut LightSpacePlan outPlan){
-    outPlan = LightSpacePlan();
+Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpaceLightRequest> requests, in u64 maxStorageBufferRange, in u32 drawCount, in b8 csgIntervalDepth){
+    LightSpacePlan outPlan;
     const usize requestCount = requests.size();
     if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > s_SceneShadowSlotCount)
-        return false;
+        return makeUnexpected(Failure());
     u32 seenSlots = 0u;
     u64 seenLights = 0u;
     for(usize index = 0u; index < requestCount; ++index){
         const LightSpaceLightRequest request = requests[index];
         if(request.lightIndex >= s_SceneMaxLights || request.shadowSlot >= s_SceneShadowSlotCount || request.type >= s_LightSpaceLightTypeCount)
-            return false;
+            return makeUnexpected(Failure());
         const u32 slotBit = 1u << request.shadowSlot;
         const u64 lightBit = 1ull << request.lightIndex;
         if((seenSlots & slotBit) != 0u || (seenLights & lightBit) != 0u)
-            return false;
+            return makeUnexpected(Failure());
         seenSlots |= slotBit;
         seenLights |= lightBit;
     }
     if(settings.backend == SoftwareShadowBackend::SoftwareTrace)
-        return true;
+        return outPlan;
     for(usize index = 0u; index < requestCount; ++index){
         const LightSpaceLightRequest request = requests[index];
         if(!request.eligible || request.type == s_LightSpaceLightTypeSpot)
             continue;
         if(drawCount == 0u)
-            return false;
+            return makeUnexpected(Failure());
         const b8 point = request.type == s_LightSpaceLightTypePoint;
         u32 resolution = settings.directionalResolution;
         u32 viewCount = 1u;
@@ -349,7 +349,7 @@ b8 TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpace
         outPlan.drawArgumentByteSize = drawArgumentBytes;
         outPlan.totalByteSize = totalBytes;
     }
-    return true;
+    return outPlan;
 }
 
 

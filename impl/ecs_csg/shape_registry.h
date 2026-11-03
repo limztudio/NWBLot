@@ -41,10 +41,10 @@ template<typename ShapeT>
     static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
 
     const ShapeT shape{};
-    CsgShapeLocalBounds localBounds;
-    if(!ComputeCsgShapeLocalBoundsFromBytes(shape, parameterBytes, localBounds))
+    const Expected<CsgShapeLocalBounds> localBounds = ComputeCsgShapeLocalBoundsFromBytes(shape, parameterBytes);
+    if(!localBounds)
         return MakeUnexpected(Failure{});
-    return BuildCsgShapeWorldBoundsFromLocal(shapeToWorld, localBounds);
+    return BuildCsgShapeWorldBoundsFromLocal(shapeToWorld, *localBounds);
 }
 
 template<typename ShapeT>
@@ -87,10 +87,12 @@ template<typename ShapeT>
     desc.shaderModuleInclude = shaderModuleInclude;
     desc.parameterByteSize = shape.parameterByteSize();
     const CsgShapeInlineParameters defaults = shape.defaultParameters();
-    if(!PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults, desc.defaultParameterBytes)){
+    const auto packedDefaults = PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults);
+    if(!packedDefaults){
         LogCsgShapeInvalidParameterSize(desc.name);
         return MakeUnexpected(Failure{});
     }
+    desc.defaultParameterBytes = *packedDefaults;
     desc.boundsCallback = &EvaluateCsgShapeBoundsCallback<ShapeT>;
     desc.signedDistanceCallback = &EvaluateCsgShapeSignedDistanceCallback<ShapeT>;
     return desc;

@@ -47,10 +47,10 @@ static Atomic<u64> s_NextServiceIdentity{ 1u };
     const auto& pixels = page.pixels();
     Double4 planeVec;
     StoreDouble(plane->value, planeVec);
-    Double4 support;
-    if(!TryLoadSdfGlyphSupport(planeVec, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<const u8>(pixels.data(), pixels.size()), display, support))
+    const auto support = TryLoadSdfGlyphSupport(planeVec, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<const u8>(pixels.data(), pixels.size()), display);
+    if(!support)
         return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ LoadDouble(support) };
+    return SIMDVectorDoubleResult{ LoadDouble(*support) };
 }
 
 template<typename TPage, typename TValue>
@@ -110,12 +110,12 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
     using namespace __hidden_ui_text_service;
     if(layout.lines().empty())
         return MakeUnexpected(Failure{});
-    TextRasterMetrics rasterMetrics;
-    if(!TryResolveTextRasterMetrics(layout.fontSize(), display, rasterMetrics))
+    const auto rasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), display);
+    if(!rasterMetrics)
         return MakeUnexpected(Failure{});
-    const f32 physicalSize = rasterMetrics.physicalSize;
-    const f32 rasterScale = rasterMetrics.rasterScale;
-    const u32 pixelSize = rasterMetrics.pixelSize;
+    const f32 physicalSize = rasterMetrics->physicalSize;
+    const f32 rasterScale = rasterMetrics->rasterScale;
+    const u32 pixelSize = rasterMetrics->pixelSize;
     const Point logical = layout.measure();
     const Rect ink = layout.inkBounds();
     const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
@@ -158,17 +158,14 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
         minimum = VectorDoubleSelect(minimum, first, VectorDoubleLess(first, minimum));
         maximum = VectorDoubleSelect(maximum, last, VectorDoubleGreater(last, maximum));
     }
-    Rect measured;
-    if(!TryMakeMeasuredTextRect(VectorDoubleGetX(minimum), VectorDoubleGetY(minimum), VectorDoubleGetX(maximum), VectorDoubleGetY(maximum), measured))
-        return MakeUnexpected(Failure{});
-    return measured;
+    return TryMakeMeasuredTextRect(VectorDoubleGetX(minimum), VectorDoubleGetY(minimum), VectorDoubleGetX(maximum), VectorDoubleGetY(maximum));
 }
 
 b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     using namespace __hidden_ui_text_service;
     const DisplayMetrics& metrics = paint.displayMetrics();
-    TextRasterMetrics rasterMetrics;
-    if(layout.lines().empty() || !TryResolveTextRasterMetrics(layout.fontSize(), metrics, rasterMetrics) || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsValidPaintColor(color))
+    const auto rasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), metrics);
+    if(layout.lines().empty() || !rasterMetrics || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsValidPaintColor(color))
         return false;
     const Rect clip = paint.currentClip();
     const TextGlyphIntersection::Enum clipStatus = TryIntersectTextRects(clip, clip);
@@ -176,10 +173,10 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
         return false;
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
         return true;
-    const f32 physicalSize = rasterMetrics.physicalSize;
-    const f32 rasterPpem = rasterMetrics.rasterPpem;
-    const u32 pixelSize = rasterMetrics.pixelSize;
-    const f32 rasterScale = rasterMetrics.rasterScale;
+    const f32 physicalSize = rasterMetrics->physicalSize;
+    const f32 rasterPpem = rasterMetrics->rasterPpem;
+    const u32 pixelSize = rasterMetrics->pixelSize;
+    const f32 rasterScale = rasterMetrics->rasterScale;
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);

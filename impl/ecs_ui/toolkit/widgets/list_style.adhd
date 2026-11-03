@@ -146,10 +146,9 @@ class ListMeasureKey{
     public u32 scriptTag = 0u;
 }
 
-b8 TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 maximum, mut f64 outOffset){
-    outOffset = 0.0;
+Expected<f64> TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 maximum){
     if(!isFinite(delta) || !isFinite(step) || step <= 0.0 || !isFinite(maximum) || maximum < 0.0)
-        return false;
+        return makeUnexpected(Failure());
     f64 candidateValue = min(current, maximum);
     if(delta > 0.0){
         const f64 distanceInSteps = candidateValue / step;
@@ -170,23 +169,25 @@ b8 TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 m
     if(candidateValue > 0.0)
         candidate = min(maximum, candidateValue);
     if(!isFinite(candidate))
-        return false;
-    outOffset = candidate;
-    return true;
+        return makeUnexpected(Failure());
+    return candidate;
 }
 
-b8 TryResolveSelectableStateRegion(in UiSkin skin, in Name preferred, in Name fallback, mut UiSkinRegion outRegion){
+Expected<UiSkinRegion> TryResolveSelectableStateRegion(in UiSkin skin, in Name preferred, in Name fallback){
+    UiSkinRegion outRegion;
     if(skin.tryFindRegion(preferred, outRegion))
-        return true;
-    return skin.tryFindRegion(fallback, outRegion);
+        return outRegion;
+    if(skin.tryFindRegion(fallback, outRegion))
+        return outRegion;
+    return makeUnexpected(Failure());
 }
 
 b8 AccumulateSelectableStateMetrics(in UiSkin skin, in Name preferred, in Name fallback, mut SelectableMetrics metrics){
-    UiSkinRegion region;
-    if(!TryResolveSelectableStateRegion(skin, preferred, fallback, region))
+    const Expected<UiSkinRegion> region = TryResolveSelectableStateRegion(skin, preferred, fallback);
+    if(!region.has_value())
         return false;
-    const Insets padding(region.padding.left, region.padding.top, region.padding.right, region.padding.bottom);
-    const Point minimum(region.minimumWidth, region.minimumHeight);
+    const Insets padding(region.value().padding.left, region.value().padding.top, region.value().padding.right, region.value().padding.bottom);
+    const Point minimum(region.value().minimumWidth, region.value().minimumHeight);
     if(!IsBoundedUiPadding(padding) || !IsValidUiExtent(minimum))
         return false;
     metrics.padding = MaxUiPadding(metrics.padding, padding);
@@ -239,12 +240,12 @@ b8 PaintSelectable(
         preferred = style.hover;
         fallback = style.hoverFallback;
     }
-    UiSkinRegion region;
-    if(!TryResolveSelectableStateRegion(skin, preferred, fallback, region))
+    const Expected<UiSkinRegion> region = TryResolveSelectableStateRegion(skin, preferred, fallback);
+    if(!region.has_value())
         return false;
     paint.pushClip(clip);
     paint.pushClip(bounds);
-    b8 painted = paint.drawRegion(region.name, bounds);
+    b8 painted = paint.drawRegion(region.value().name, bounds);
     if(painted && flags.enabled && flags.focused && skin.hasRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
     const Rect content = InsetUiRectBounds(bounds, padding);

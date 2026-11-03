@@ -141,10 +141,10 @@ public:
     }
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
     [[nodiscard]] static b8 Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
-        b8 changed = false;
-        if(!TryEvaluateSliderAdmission(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.m_admission, options, placement, changed))
-            return false;
+        const auto changed = TryEvaluateSliderAdmission(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.m_admission, options, placement);
         if(!changed)
+            return false;
+        if(!*changed)
             return true;
         state.advanceRevision();
         state.advanceAdmission();

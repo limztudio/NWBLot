@@ -141,12 +141,11 @@ usize NextLoopVertexIndex(in usize vertexIndex, in usize loopSize){
     return (vertexIndex + 1u) % loopSize;
 }
 
-b8 TryComputeCsgDeformEdgeSplitBlend(in f32 firstDistance, in f32 secondDistance, mut f32 outBlend){
+Expected<f32> TryComputeCsgDeformEdgeSplitBlend(in f32 firstDistance, in f32 secondDistance){
     const f32 denominator = firstDistance - secondDistance;
     if(!isFinite(denominator) || abs(denominator) < s_SplitDenominatorEpsilon)
-        return false;
-    outBlend = saturate(abs(secondDistance / denominator));
-    return true;
+        return makeUnexpected(Failure());
+    return saturate(abs(secondDistance / denominator));
 }
 
 b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){

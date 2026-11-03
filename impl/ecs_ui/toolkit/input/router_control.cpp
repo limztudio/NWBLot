@@ -158,19 +158,19 @@ void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& so
 }
 
 b8 InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const b8 alreadyPressed, CommandSource& held, InputRoutingResult& result){
-    ControlActionKind::Enum kind = ControlActionKind::Wheel;
-    if(!TryTranslateControlNavigationCommand(event.command, host.horizontalNavigation, kind))
+    const auto kind = TryTranslateControlNavigationCommand(event.command, host.horizontalNavigation);
+    if(!kind)
         return false;
     ControlCommandOwner& owner = held.controlOwner;
     if(!alreadyPressed && !event.repeat)
-        owner = { host.id, host.declarationGeneration, host.popup, host.control, kind == ControlActionKind::Left || kind == ControlActionKind::Right };
+        owner = { host.id, host.declarationGeneration, host.popup, host.control, *kind == ControlActionKind::Left || *kind == ControlActionKind::Right };
     if(
         owner.host == host.id && owner.declarationGeneration == host.declarationGeneration
         && owner.popup == host.popup && owner.control == host.control
         && held.focusOwner.target == source.id && held.focusOwner.declarationGeneration == source.declarationGeneration
         && held.focusOwner.popup == source.popup && held.focusOwner.control == source.control
     )
-        appendControlAction(host, source, kind, 0.0, result);
+        appendControlAction(host, source, *kind, 0.0, result);
     return true;
 }
 

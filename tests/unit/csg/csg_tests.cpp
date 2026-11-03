@@ -63,20 +63,24 @@ static b8 TestCsgReceiverVisible(
 
 TEST(Csg, ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName){
     using namespace NWB::Impl;
-    CsgShapeTypeId invalid = s_InvalidCsgShapeTypeId, plane = s_InvalidCsgShapeTypeId, box = s_InvalidCsgShapeTypeId, sphere = s_InvalidCsgShapeTypeId, capsule = s_InvalidCsgShapeTypeId;
-    EXPECT_FALSE(TryResolveCsgShapeTypeIdFromName(Name{}, invalid));
-    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgPlaneShapeName, plane));
-    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgBoxShapeName, box));
-    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgSphereShapeName, sphere));
-    ASSERT_TRUE(TryResolveCsgShapeTypeIdFromName(s_CsgCapsuleShapeName, capsule));
-    ASSERT_TRUE(plane);
-    ASSERT_TRUE(box);
-    ASSERT_TRUE(sphere);
-    ASSERT_TRUE(capsule);
-    EXPECT_EQ(plane, 0x92f0021au);
-    EXPECT_EQ(box, 0xb957a584u);
-    EXPECT_EQ(sphere, 0x56176cbfu);
-    EXPECT_EQ(capsule, 0xe0e38c7bu);
+    const Expected<CsgShapeTypeId> invalid = TryResolveCsgShapeTypeIdFromName(Name{});
+    const Expected<CsgShapeTypeId> plane = TryResolveCsgShapeTypeIdFromName(s_CsgPlaneShapeName);
+    const Expected<CsgShapeTypeId> box = TryResolveCsgShapeTypeIdFromName(s_CsgBoxShapeName);
+    const Expected<CsgShapeTypeId> sphere = TryResolveCsgShapeTypeIdFromName(s_CsgSphereShapeName);
+    const Expected<CsgShapeTypeId> capsule = TryResolveCsgShapeTypeIdFromName(s_CsgCapsuleShapeName);
+    EXPECT_FALSE(invalid.has_value());
+    ASSERT_TRUE(plane.has_value());
+    ASSERT_TRUE(box.has_value());
+    ASSERT_TRUE(sphere.has_value());
+    ASSERT_TRUE(capsule.has_value());
+    ASSERT_TRUE(*plane);
+    ASSERT_TRUE(*box);
+    ASSERT_TRUE(*sphere);
+    ASSERT_TRUE(*capsule);
+    EXPECT_EQ(*plane, 0x92f0021au);
+    EXPECT_EQ(*box, 0xb957a584u);
+    EXPECT_EQ(*sphere, 0x56176cbfu);
+    EXPECT_EQ(*capsule, 0xe0e38c7bu);
 }
 
 TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
@@ -504,8 +508,8 @@ public:
         return NWB::Impl::MakeCsgShapeInlineParameters(Float4(0.5f, 1.0f, 1.0f, 0.0f), NWB::Impl::s_CsgZeroShapeParameter);
     }
 
-    virtual b8 computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters& parameters, NWB::Impl::CsgShapeLocalBounds& outBounds)const noexcept override{
-        return NWB::Impl::MakeCsgSymmetricLocalBounds(parameters.parameter0, outBounds);
+    virtual Expected<NWB::Impl::CsgShapeLocalBounds> computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
+        return NWB::Impl::MakeCsgSymmetricLocalBounds(parameters.parameter0);
     }
 
     virtual f32 evaluateSignedDistance(const Float4& shapePosition, const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
@@ -518,7 +522,7 @@ public:
     virtual Name shapeTypeName()const noexcept override{ return Name("project/csg/oversized"); }
     virtual u32 parameterByteSize()const noexcept override{ return static_cast<u32>(NWB::Impl::s_CsgShapeInlineParameterMaxBytes) + 1u; }
     virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{ return {}; }
-    virtual b8 computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters&, NWB::Impl::CsgShapeLocalBounds&)const noexcept override{ return false; }
+    virtual Expected<NWB::Impl::CsgShapeLocalBounds> computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return MakeUnexpected(Failure{}); }
     virtual f32 evaluateSignedDistance(const Float4&, const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return 0.0f; }
 };
 

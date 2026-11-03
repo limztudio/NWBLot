@@ -93,16 +93,12 @@ class FontAtlasGlyph{
     public u32 drawable = 0u;
 }
 
-b8 TryParseFontAtlasRasterMode(in StringView text, mut FontAtlasRasterMode outRasterMode){
-    if(text == s_FontAtlasRasterModeBitmap){
-        outRasterMode = FontAtlasRasterMode::Bitmap;
-        return true;
-    }
-    if(text == s_FontAtlasRasterModeOutline){
-        outRasterMode = FontAtlasRasterMode::Outline;
-        return true;
-    }
-    return false;
+Expected<FontAtlasRasterMode> TryParseFontAtlasRasterMode(in StringView text){
+    if(text == s_FontAtlasRasterModeBitmap)
+        return FontAtlasRasterMode::Bitmap;
+    if(text == s_FontAtlasRasterModeOutline)
+        return FontAtlasRasterMode::Outline;
+    return makeUnexpected(Failure());
 }
 
 b8 IsAllowedFontAtlasGlyphField(in StringView field, in b8 hasBitmap){
@@ -199,12 +195,11 @@ b8 IsValidFontAtlasGroupDimensions(in u32 width, in u32 height, in u32 channelCo
     ;
 }
 
-b8 TryComputeFontAtlasOccupancyWordCount(in u32 width, in u32 height, in u32 channelCount, mut usize outWordCount){
+Expected<usize> TryComputeFontAtlasOccupancyWordCount(in u32 width, in u32 height, in u32 channelCount){
     if(!IsValidFontAtlasGroupDimensions(width, height, channelCount))
-        return false;
+        return makeUnexpected(Failure());
     const usize totalBits = cast<usize>(width) * cast<usize>(height) * cast<usize>(channelCount);
-    outWordCount = (totalBits + s_FontAtlasOccupiedWordLastBit) / s_FontAtlasBitsPerOccupiedWord;
-    return true;
+    return (totalBits + s_FontAtlasOccupiedWordLastBit) / s_FontAtlasBitsPerOccupiedWord;
 }
 
 b8 IsValidFontAtlasBakeParameters(in u32 bakePpem, in u32 spreadPixels, in u32 guardTexels, in FontAtlasRasterMode rasterMode){
@@ -236,27 +231,27 @@ b8 IsFontAtlasPositioningTableTag(in u32 tag){
 }
 
 b8 TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes, mut u32 outUnitsPerEm, mut u32 outSourceGlyphCount){
-    FontSfntDirectory directory;
-    if(!ReadFontSfntDirectory(fontBytes, directory))
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
+    if(!directory.has_value())
         return false;
     u32 unitsPerEm = 0u;
     u32 sourceGlyphCount = 0u;
     b8 hasHead = false;
     b8 hasMaxp = false;
-    for(u16 index = 0u; index < directory.tableCount(); ++index){
-        FontSfntTable table;
-        if(!directory.table(cast<usize>(index), table))
+    for(u16 index = 0u; index < directory.value().tableCount(); ++index){
+        const Expected<FontSfntTable> table = directory.value().table(cast<usize>(index));
+        if(!table.has_value())
             return false;
-        if(table.tag == s_FontSfntHeadTag){
-            if(table.bytes.size() < s_FontSfntHeadUnitsPerEmOffset + s_FontSfntU16Bytes)
+        if(table.value().tag == s_FontSfntHeadTag){
+            if(table.value().bytes.size() < s_FontSfntHeadUnitsPerEmOffset + s_FontSfntU16Bytes)
                 return false;
-            unitsPerEm = cast<u32>(ReadFontSfntU16BigEndian(table.bytes, s_FontSfntHeadUnitsPerEmOffset));
+            unitsPerEm = cast<u32>(ReadFontSfntU16BigEndian(table.value().bytes, s_FontSfntHeadUnitsPerEmOffset));
             hasHead = true;
         }
-        else if(table.tag == s_FontSfntMaxpTag){
-            if(table.bytes.size() < s_FontSfntMaxpGlyphCountOffset + s_FontSfntU16Bytes)
+        else if(table.value().tag == s_FontSfntMaxpTag){
+            if(table.value().bytes.size() < s_FontSfntMaxpGlyphCountOffset + s_FontSfntU16Bytes)
                 return false;
-            sourceGlyphCount = cast<u32>(ReadFontSfntU16BigEndian(table.bytes, s_FontSfntMaxpGlyphCountOffset));
+            sourceGlyphCount = cast<u32>(ReadFontSfntU16BigEndian(table.value().bytes, s_FontSfntMaxpGlyphCountOffset));
             hasMaxp = true;
         }
     }

@@ -242,15 +242,14 @@ b8 FontFace::coverageInkReliable()const noexcept{ return m_state->m_coverageInkR
 const SharedBakedFontAtlas& FontFace::bakedAtlas()const noexcept{ return m_state->m_bakedAtlas; }
 
 Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
-    FontMetrics metrics{};
     if(!valid() || !IsValidTextFontSize(fontSize))
         return MakeUnexpected(Failure{});
     const i32 scale = ComputeTextFixedPointScale(fontSize);
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     hb_font_extents_t extents{};
-    if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents) || !TryResolveFontExtentsMetrics(extents.ascender, extents.descender, extents.line_gap, metrics))
+    if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents))
         return MakeUnexpected(Failure{});
-    return metrics;
+    return TryResolveFontExtentsMetrics(extents.ascender, extents.descender, extents.line_gap);
 }
 
 b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{

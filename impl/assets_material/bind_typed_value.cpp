@@ -74,12 +74,8 @@ namespace __hidden_bind_typed_value{
         numericToken = StripMaterialNumericSuffix(token, static_cast<u8>('u'), static_cast<u8>('U'));
 
     switch(type){
-    case MaterialParameterValueType::b8:{
-        u32 parsedValue = 0u;
-        if(!TryParseMaterialBoolToken(token, parsedValue))
-            return MakeUnexpected(Failure{});
-        return parsedValue;
-    }
+    case MaterialParameterValueType::b8:
+        return TryParseMaterialBoolToken(token);
     case MaterialParameterValueType::i8:
         return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i8>::s_Min), static_cast<i64>(Limit<i8>::s_Max), Limit<u8>::s_Max);
     case MaterialParameterValueType::u8:
@@ -160,23 +156,23 @@ Expected<MaterialTypedValueData> MaterialTypedValueParser::Parse(const AStringVi
     if(key.empty() || key.size() > ACompactString::s_MaxLength || value.empty() || value.size() > ACompactString::s_MaxLength)
         return MakeUnexpected(Failure{});
 
-    MaterialParameterCall call;
-    if(!SplitMaterialParameterCall(TrimView(value), call))
+    const Expected<MaterialParameterCall> call = SplitMaterialParameterCall(TrimView(value));
+    if(!call)
         return MakeUnexpected(Failure{});
-    MaterialParameterType type;
-    if(!TryParseMaterialParameterTypeText(call.typeText, type))
+    const Expected<MaterialParameterType> type = TryParseMaterialParameterTypeText(call->typeText);
+    if(!type)
         return MakeUnexpected(Failure{});
-    MaterialParameterTokens tokens;
-    if(!SplitMaterialParameterTokens(call.arguments, tokens) || tokens.count != type.componentCount)
+    const Expected<MaterialParameterTokens> tokens = SplitMaterialParameterTokens(call->arguments);
+    if(!tokens || tokens->count != type->componentCount)
         return MakeUnexpected(Failure{});
 
-    for(u32 i = 0u; i < tokens.count; ++i){
-        const auto parsedValue = ParseMaterialParameterToken(tokens.values[i], type.valueType);
-        if(!parsedValue || !StoreMaterialTypedValueComponent(type.valueType, i, *parsedValue, parameter))
+    for(u32 i = 0u; i < tokens->count; ++i){
+        const auto parsedValue = ParseMaterialParameterToken(tokens->values[i], type->valueType);
+        if(!parsedValue || !StoreMaterialTypedValueComponent(type->valueType, i, *parsedValue, parameter))
             return MakeUnexpected(Failure{});
     }
 
-    parameter.meta = PackMaterialTypedValueMeta(key, type);
+    parameter.meta = PackMaterialTypedValueMeta(key, *type);
     return parameter;
 }
 

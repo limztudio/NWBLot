@@ -187,20 +187,20 @@ void LogMeshletPrimitivePayloadValidation(const TStringView contextText, const T
             return false;
         }
 
-        usize encodedPositionBytes = 0u;
-        usize encodedAttributeBytes = 0u;
-        if(!TryComputeMeshletEncodedPositionRefByteCount(meshlet, false, encodedPositionBytes) || !TryComputeMeshletEncodedAttributeRefByteCount(meshlet, encodedAttributeBytes)){
+        const Expected<usize> encodedPositionBytes = TryComputeMeshletEncodedPositionRefByteCount(meshlet, false);
+        const Expected<usize> encodedAttributeBytes = TryComputeMeshletEncodedAttributeRefByteCount(meshlet);
+        if(!encodedPositionBytes || !encodedAttributeBytes){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid ref encoding width"));
             return false;
         }
-        if(encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount || encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount){
+        if(*encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount || *encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("encoded ref byte counts overflow"));
             return false;
         }
 
         expectedLocalVertexRefCount += vertexCount;
-        expectedPositionRefByteCount += encodedPositionBytes;
-        expectedAttributeRefByteCount += encodedAttributeBytes;
+        expectedPositionRefByteCount += *encodedPositionBytes;
+        expectedAttributeRefByteCount += *encodedAttributeBytes;
         expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * s_MeshletTriangleIndexCount;
         if(expectedLocalVertexRefCount > localVertexRefs.size() || expectedPositionRefByteCount > positionRefDeltas.size() || expectedAttributeRefByteCount > attributeRefDeltas.size() || expectedPrimitiveIndexCount > meshletPrimitiveIndices.size()){
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("exceeds meshlet stream bounds"));
@@ -223,8 +223,8 @@ void LogMeshletPrimitivePayloadValidation(const TStringView contextText, const T
         }
 
         for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
-            MeshletPositionStreamRef ref;
-            if(TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, false, ref) && MeshletPositionRefInRange(ref, positionCount, 0u, false))
+            const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, false);
+            if(ref && MeshletPositionRefInRange(*ref, positionCount, 0u, false))
                 continue;
 
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedPositionRefReason);
@@ -232,8 +232,8 @@ void LogMeshletPrimitivePayloadValidation(const TStringView contextText, const T
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
-            MeshletAttributeStreamRef ref;
-            if(TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex, ref) && MeshletAttributeRefInRange(ref, normalCount, tangentCount, uv0Count, colorCount))
+            const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
+            if(ref && MeshletAttributeRefInRange(*ref, normalCount, tangentCount, uv0Count, colorCount))
                 continue;
 
             __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedAttributeRefReason);

@@ -98,8 +98,7 @@ void ResolveWindowResizeGripBars(in Rect corner, mut Rect outHorizontal, mut Rec
     outVertical = Rect(origins.z, origins.w, thickness, scaledSize.w);
 }
 
-b8 TryMeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in f32 collapseExtent, in f32 resizeExtent, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density, mut WindowMetrics outMetrics){
-    outMetrics = WindowMetrics();
+Expected<WindowMetrics> TryMeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in f32 collapseExtent, in f32 resizeExtent, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
     if(
         !isFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
         || !isFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
@@ -107,7 +106,7 @@ b8 TryMeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in f32 collaps
         || !isFinite(density) || density <= 0.0f
         || !IsValidUiExtent(options.minimumSize)
     )
-        return false;
+        return makeUnexpected(Failure());
     WindowMetrics metrics;
     metrics.contentPadding = Insets(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
     metrics.titlePadding = Insets(title.padding.left, title.padding.top, title.padding.right, title.padding.bottom);
@@ -127,13 +126,11 @@ b8 TryMeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in f32 collaps
     const f32 minY = max(options.minimumSize.y, max(frame.minimumHeight, contentMinY));
     metrics.minimumSize = Point(minX, minY);
     if(!isFinite(metrics.titleHeight) || !isFinite(metrics.minimumSize.x) || !isFinite(metrics.minimumSize.y) || metrics.titleHeight <= 0.0f || metrics.minimumSize.x <= 0.0f || metrics.minimumSize.y <= 0.0f)
-        return false;
-    outMetrics = metrics;
-    return true;
+        return makeUnexpected(Failure());
+    return metrics;
 }
 
-b8 TryLoadWindowPointerDisplacement(in PointerGesture gesture, mut f64x4 outDisplacement){
-    outDisplacement = f64x4(0.0, 0.0, 0.0, 0.0);
+Expected<f64x4> TryLoadWindowPointerDisplacement(in PointerGesture gesture){
     if(
         !gesture.id.valid()
         || !isFinite(gesture.origin.x) || !isFinite(gesture.origin.y)
@@ -142,14 +139,13 @@ b8 TryLoadWindowPointerDisplacement(in PointerGesture gesture, mut f64x4 outDisp
         || gesture.referenceRectangle.width <= 0.0f || gesture.referenceRectangle.height <= 0.0f
         || gesture.state > PointerGestureState::Completed
     )
-        return false;
-    outDisplacement = f64x4(
+        return makeUnexpected(Failure());
+    return f64x4(
         cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x),
         cast<f64>(gesture.position.y) - cast<f64>(gesture.origin.y),
         0.0,
         0.0
     );
-    return true;
 }
 
 b8 TryInitializeWindow(in WindowOptions options, in WindowMetrics metrics, mut WindowState state){
@@ -179,16 +175,16 @@ b8 TryInitializeWindow(in WindowOptions options, in WindowMetrics metrics, mut W
 }
 
 b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
-    f64x4 displacement(0.0, 0.0, 0.0, 0.0);
-    if(!TryLoadWindowPointerDisplacement(gesture, displacement))
+    const Expected<f64x4> displacement = TryLoadWindowPointerDisplacement(gesture);
+    if(!displacement.has_value())
         return false;
     WindowGestureState movement = state.moveGesture;
     if(movement.id != gesture.id){
         movement.id = gesture.id;
         movement.initialBounds = gesture.referenceRectangle;
     }
-    const f64 left = cast<f64>(movement.initialBounds.x) + displacement.x;
-    const f64 top = cast<f64>(movement.initialBounds.y) + displacement.y;
+    const f64 left = cast<f64>(movement.initialBounds.x) + displacement.value().x;
+    const f64 top = cast<f64>(movement.initialBounds.y) + displacement.value().y;
     if(abs(left) > s_UiMaxFloatF64 || abs(top) > s_UiMaxFloatF64)
         return false;
     Rect candidate = state.bounds;
@@ -202,16 +198,16 @@ b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
 }
 
 b8 TryApplyWindowResize(in PointerGesture gesture, in Point minimumSize, mut WindowState state){
-    f64x4 displacement(0.0, 0.0, 0.0, 0.0);
-    if(!TryLoadWindowPointerDisplacement(gesture, displacement) || !isFinite(minimumSize.x) || minimumSize.x <= 0.0f || !isFinite(minimumSize.y) || minimumSize.y <= 0.0f)
+    const Expected<f64x4> displacement = TryLoadWindowPointerDisplacement(gesture);
+    if(!displacement.has_value() || !isFinite(minimumSize.x) || minimumSize.x <= 0.0f || !isFinite(minimumSize.y) || minimumSize.y <= 0.0f)
         return false;
     WindowGestureState resizing = state.resizeGesture;
     if(resizing.id != gesture.id){
         resizing.id = gesture.id;
         resizing.initialBounds = gesture.referenceRectangle;
     }
-    const f64 width = max(cast<f64>(minimumSize.x), cast<f64>(resizing.initialBounds.width) + displacement.x);
-    const f64 height = max(cast<f64>(minimumSize.y), cast<f64>(resizing.initialBounds.height) + displacement.y);
+    const f64 width = max(cast<f64>(minimumSize.x), cast<f64>(resizing.initialBounds.width) + displacement.value().x);
+    const f64 height = max(cast<f64>(minimumSize.y), cast<f64>(resizing.initialBounds.height) + displacement.value().y);
     if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
         return false;
     Rect candidate = state.bounds;
@@ -250,10 +246,7 @@ Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion tit
     if(options.collapsible)
         collapseExtent = ResolveUiSkinSquareExtent(style.windowCollapseExtent, collapse, density);
     const f32 resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
-    WindowMetrics metrics;
-    if(!TryMeasureWindow(frame, title, collapseExtent, resizeExtent, style, options, titleSize, density, metrics))
-        return makeUnexpected(Failure());
-    return metrics;
+    return TryMeasureWindow(frame, title, collapseExtent, resizeExtent, style, options, titleSize, density);
 }
 
 Rect ResolveWindowTitleContentBounds(in Rect header, in WindowMetrics metrics, in b8 collapsible, in f32 gap){

@@ -54,15 +54,15 @@ b8 Context::beginRoot(const WidgetRoot& root){
         fail();
         return false;
     }
-    WidgetId rootId;
-    if(!TryMakeRootId(root, rootId)){
+    const auto rootId = TryMakeRootId(root);
+    if(!rootId){
         fail();
         return false;
     }
     m_root = root;
     m_rootActive = true;
     m_scopes.clear();
-    m_scopes.push_back(rootId);
+    m_scopes.push_back(*rootId);
     return true;
 }
 
@@ -80,12 +80,12 @@ b8 Context::pushScope(const AStringView stableKey){
         fail();
         return false;
     }
-    WidgetId id;
-    if(!TryMakeWidgetId(m_scopes.back(), stableKey, id)){
+    const auto id = TryMakeWidgetId(m_scopes.back(), stableKey);
+    if(!id){
         fail();
         return false;
     }
-    m_scopes.push_back(id);
+    m_scopes.push_back(*id);
     return true;
 }
 
@@ -101,12 +101,12 @@ b8 Context::popScope()noexcept{
 Expected<NotNull<WidgetState*>> Context::declare(const AStringView stableKey, const WidgetKind::Enum kind){
     if(m_failed || !m_rootActive)
         return MakeUnexpected(Failure{});
-    WidgetId id;
-    if(!TryMakeWidgetId(m_scopes.back(), stableKey, id)){
+    const auto id = TryMakeWidgetId(m_scopes.back(), stableKey);
+    if(!id){
         fail();
         return MakeUnexpected(Failure{});
     }
-    return declareId(id, kind);
+    return declareId(*id, kind);
 }
 
 Expected<NotNull<WidgetState*>> Context::declarePart(const WidgetState& owner, const AStringView stableKey, const WidgetKind::Enum kind){
@@ -114,12 +114,12 @@ Expected<NotNull<WidgetState*>> Context::declarePart(const WidgetState& owner, c
         fail();
         return MakeUnexpected(Failure{});
     }
-    WidgetId id;
-    if(!TryMakeWidgetId(owner.id, stableKey, id)){
+    const auto id = TryMakeWidgetId(owner.id, stableKey);
+    if(!id){
         fail();
         return MakeUnexpected(Failure{});
     }
-    return declareId(id, kind);
+    return declareId(*id, kind);
 }
 
 b8 Context::claimState(const WidgetState& owner, const u64 instanceGeneration){

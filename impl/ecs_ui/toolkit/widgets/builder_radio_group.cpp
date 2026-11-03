@@ -215,10 +215,10 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
     for(const UiSkinRegion* skinRegion : states){
         if(!skinRegion)
             continue;
-        Point minimum;
-        if(!TryResolveSkinRegionMinimumSize(*skinRegion, referenceDensity, minimum))
+        const auto minimum = TryResolveSkinRegionMinimumSize(*skinRegion, referenceDensity);
+        if(!minimum)
             return false;
-        indicatorExtent = Max(indicatorExtent, Max(minimum.x, minimum.y));
+        indicatorExtent = Max(indicatorExtent, Max(minimum->x, minimum->y));
     }
     frame.m_style.indicatorExtent = indicatorExtent;
     const auto metrics = MeasureRadioGroup(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);

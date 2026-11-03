@@ -90,9 +90,10 @@ b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Cor
     if(!cache.buffer){
         if(!mesh.meshletLocalVertexRefBuffer)
             return false;
-        ObjectGeometryCacheLayout layout{};
-        if(!TryResolveObjectGeometryCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount, layout))
+        const Expected<ObjectGeometryCacheLayout> layoutResult = TryResolveObjectGeometryCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
+        if(!layoutResult)
             return false;
+        const ObjectGeometryCacheLayout& layout = *layoutResult;
         const auto bufferName = DeriveName(mesh.meshName, AStringView(":object_geometry"));
         if(!bufferName)
             return false;

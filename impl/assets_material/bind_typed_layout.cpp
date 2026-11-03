@@ -45,8 +45,8 @@ static Expected<UInt4U> BuildMaterialTypedLayoutDefaultValue(const Name& materia
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return UInt4U{};
 
-    ACompactString key;
-    if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), key)){
+    const Expected<ACompactString> key = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name));
+    if(!key){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity"), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(materialName.resolvedText()));
         return MakeUnexpected(Failure{});
     }
@@ -58,7 +58,7 @@ static Expected<UInt4U> BuildMaterialTypedLayoutDefaultValue(const Name& materia
         return MakeUnexpected(Failure{});
     }
 
-    const auto defaultParameter = MaterialTypedValueParser::Parse(key, defaultText);
+    const auto defaultParameter = MaterialTypedValueParser::Parse(*key, defaultText);
     if(!defaultParameter){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default '{}' for '{}.{}' in '{}' is invalid"), ConvertString(defaultArgument), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(materialName.resolvedText()));
         return MakeUnexpected(Failure{});
@@ -125,9 +125,8 @@ static b8 ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEnt
 
         for(const MaterialBindField& bindField : bindStruct->fields){
             usize fieldByteReserve = sizeof(UInt4U);
-            MaterialLayoutFieldType::Enum fieldType = MaterialLayoutFieldType::None;
-            if(TryParseMaterialLayoutFieldTypeText(AStringView(bindField.type), fieldType)){
-                const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
+            if(const Expected<MaterialLayoutFieldType::Enum> fieldType = TryParseMaterialLayoutFieldTypeText(AStringView(bindField.type))){
+                const u32 fieldByteSize = MaterialLayoutFieldByteSize(*fieldType);
                 if(fieldByteSize != 0u)
                     fieldByteReserve = fieldByteSize;
             }
@@ -247,8 +246,8 @@ static b8 BuildMaterialBindTypedLayoutParameterLookup(const AStringView contextL
             // Resource fields live in constant blocks, whose total size the builder already bounded to u32.
             NWB_ASSERT(!IsMaterialLayoutResourceFieldType(field.fieldType) || field.offset <= Limit<u32>::s_Max - blockEntry.constantByteBegin);
 
-            ACompactString parameterName;
-            if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), parameterName)){
+            const Expected<ACompactString> parameterName = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name));
+            if(!parameterName){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity"), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(contextLabel));
                 return false;
             }
@@ -258,8 +257,8 @@ static b8 BuildMaterialBindTypedLayoutParameterLookup(const AStringView contextL
             entry.byteOffset = blockEntry.byteBegin + field.offset;
             entry.constantByteOffset = blockEntry.constantByteBegin + field.offset;
             entry.blockName = block.blockName;
-            if(!inOutLayout.parameterLookup.emplace(parameterName, entry).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate parameter '{}' in '{}'"), ConvertString(parameterName.view()), ConvertString(contextLabel));
+            if(!inOutLayout.parameterLookup.emplace(*parameterName, entry).second){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate parameter '{}' in '{}'"), ConvertString(parameterName->view()), ConvertString(contextLabel));
                 return false;
             }
         }
@@ -425,8 +424,8 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
         block.byteSize = 0u;
 
         for(const MaterialBindField& bindField : bindStruct->fields){
-            MaterialLayoutFieldType::Enum fieldType = MaterialLayoutFieldType::None;
-            if(!TryParseMaterialLayoutFieldTypeText(AStringView(bindField.type), fieldType)){
+            const Expected<MaterialLayoutFieldType::Enum> fieldTypeResult = TryParseMaterialLayoutFieldTypeText(AStringView(bindField.type));
+            if(!fieldTypeResult){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' has " "unsupported type '{}' for '{}'")
                     , ConvertString(bindEntry.virtualPath)
                     , ConvertString(instance->name)
@@ -436,14 +435,15 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
                 );
                 return MakeUnexpected(Failure{});
             }
+            const MaterialLayoutFieldType::Enum fieldType = *fieldTypeResult;
             if(IsMaterialLayoutResourceFieldType(fieldType) && blockClass != MaterialBlockClass::MaterialConstant){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' must use material-constant storage for '{}'"), ConvertString(instance->name), ConvertString(bindField.name), ConvertString(contextName.resolvedText()));
                 return MakeUnexpected(Failure{});
             }
 
             const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
-            u32 fieldOffset = 0u;
-            if(fieldByteSize == 0u || !TryAlignMaterialLayoutFieldOffset(block.byteSize, fieldType, fieldOffset) || fieldOffset > Limit<u32>::s_Max - fieldByteSize){
+            const Expected<u32> fieldOffset = TryAlignMaterialLayoutFieldOffset(block.byteSize, fieldType);
+            if(fieldByteSize == 0u || !fieldOffset || *fieldOffset > Limit<u32>::s_Max - fieldByteSize){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' block '{}' exceeds " "u32 byte size for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
                 return MakeUnexpected(Failure{});
             }
@@ -461,7 +461,7 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
             }
             field.fieldName = *fieldName;
             field.fieldType = fieldType;
-            field.offset = fieldOffset;
+            field.offset = *fieldOffset;
             const auto defaultValue = BuildMaterialTypedLayoutDefaultValue(contextName, *instance, bindField, fieldType);
             if(!defaultValue)
                 return MakeUnexpected(Failure{});
@@ -479,15 +479,15 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
             AppendMaterialTypedLayoutFieldBytes(fieldType, field.defaultValue, layout.typedBlockBytes);
 
             layout.typedLayoutFields.push_back(field);
-            block.byteSize = fieldOffset + fieldByteSize;
+            block.byteSize = *fieldOffset + fieldByteSize;
         }
 
-        u32 alignedBlockByteSize = 0u;
-        if(!TryAlignMaterialLayoutBlockByteSize(block.byteSize, alignedBlockByteSize)){
+        const Expected<u32> alignedBlockByteSize = TryAlignMaterialLayoutBlockByteSize(block.byteSize);
+        if(!alignedBlockByteSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' block '{}' exceeds " "u32 byte size for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
             return MakeUnexpected(Failure{});
         }
-        block.byteSize = alignedBlockByteSize;
+        block.byteSize = *alignedBlockByteSize;
         if(static_cast<usize>(block.byteSize) > Limit<usize>::s_Max - blockByteBegin){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' block '{}' could " "not append alignment padding for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
             return MakeUnexpected(Failure{});
@@ -510,8 +510,8 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
         return MakeUnexpected(Failure{});
     }
 
-    usize expectedBlockByteSize = 0u;
-    if(!ComputeMaterialTypedBlockByteSize(layout.typedLayoutBlocks, expectedBlockByteSize) || expectedBlockByteSize != layout.typedBlockBytes.size()){
+    const Expected<usize> expectedBlockByteSize = ComputeMaterialTypedBlockByteSize(layout.typedLayoutBlocks);
+    if(!expectedBlockByteSize || *expectedBlockByteSize != layout.typedBlockBytes.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has inconsistent block storage for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(contextName.resolvedText()));
         return MakeUnexpected(Failure{});
     }

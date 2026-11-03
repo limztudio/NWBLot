@@ -155,13 +155,13 @@ static b8 AppendMaterialBindLayoutConstants(
     ScratchHashSet<ScratchString>& inOutSymbols,
     CookString& inOutSource
 ){
-    MaterialBindStorageByteSizes storageByteSizes;
-    if(!TryComputeMaterialBindStorageByteSizes(layout.typedLayoutBlocks, storageByteSizes)){
+    const Expected<MaterialBindStorageByteSizes> storageByteSizes = TryComputeMaterialBindStorageByteSizes(layout.typedLayoutBlocks);
+    if(!storageByteSizes){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32"), ConvertString(includePath));
         return false;
     }
-    const u32 constantByteSize = storageByteSizes.constantBytes;
-    const u32 mutableByteSize = storageByteSizes.mutableBytes;
+    const u32 constantByteSize = storageByteSizes->constantBytes;
+    const u32 mutableByteSize = storageByteSizes->mutableBytes;
 
     const NameHash& interfaceHash = interfaceName.hash();
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
@@ -232,12 +232,12 @@ static b8 AppendMaterialBindFieldConstants(
     const AStringView defaultAttribute = field.defaultArgument();
     NWB_ASSERT(!defaultAttribute.empty());
 
-    ACompactString keyText;
-    if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name), keyText)){
+    const Expected<ACompactString> keyText = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name));
+    if(!keyText){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': failed to build key for '{}.{}'"), ConvertString(includePath), ConvertString(instance.name), ConvertString(field.name));
         return false;
     }
-    const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText.view());
+    const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText->view());
 
     if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, scratchArena, inOutSymbols, inOutSource))
         return false;
@@ -348,8 +348,7 @@ static b8 AppendMaterialBindGeneratedInstance(
     inOutSource += bindStruct.name;
     inOutSource += s_MaterialBindBlockValueDeclSuffix;
     for(const MaterialBindField& field : bindStruct.fields){
-        MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-        if(TryParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+        if(TryParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value())
             continue;
 
         const ScratchString functionName = BuildMaterialBindAccessorName({ AStringView(instance.name), AStringView(field.name) }, scratchArena);
@@ -441,8 +440,7 @@ Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEn
         source += bindStruct.name;
         source += s_MaterialBindStructOpenBrace;
         for(const MaterialBindField& field : bindStruct.fields){
-            MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-            if(TryParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+            if(TryParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value())
                 continue;
 
             source += s_MaterialBindIndent;

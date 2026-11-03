@@ -188,19 +188,18 @@ b8 IsValidModelHeaderBinary(in ModelHeaderBinary header){
     return header.padding0 == 0u;
 }
 
-b8 TryComputeTotalModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount, mut usize outTotalCount){
+Expected<usize> TryComputeTotalModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount){
     usize objectCount = 0u;
     if(skeletonCount > 0xffffffffffffffffu - objectCount)
-        return false;
+        return makeUnexpected(Failure());
     objectCount += skeletonCount;
     if(staticMeshCount > 0xffffffffffffffffu - objectCount)
-        return false;
+        return makeUnexpected(Failure());
     objectCount += staticMeshCount;
     if(skinnedMeshCount > 0xffffffffffffffffu - objectCount)
-        return false;
+        return makeUnexpected(Failure());
     objectCount += skinnedMeshCount;
-    outTotalCount = objectCount;
-    return true;
+    return objectCount;
 }
 
 b8 IsCompleteModelSkeletonObject(in ModelSkeletonObject object){

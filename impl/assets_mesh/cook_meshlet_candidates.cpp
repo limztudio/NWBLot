@@ -83,8 +83,8 @@ void MeshletCandidateSearch::UpdateBestMeshletCandidateIfBetter(
     MeshletFrontierCandidate& outCandidate
 )noexcept{
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    MeshletVertexCounts vertexCounts;
-    if(!TryMeshletCanFitTriangle(meshlet, localVertexRefs, triangle, vertexCounts))
+    const Expected<MeshletVertexCounts> vertexCounts = TryMeshletCanFitTriangle(meshlet, localVertexRefs, triangle);
+    if(!vertexCounts)
         return;
 
     const f32 score = ScoreMeshletCandidate(
@@ -93,8 +93,8 @@ void MeshletCandidateSearch::UpdateBestMeshletCandidateIfBetter(
         triangleIndex,
         trianglePrecompute.loadTriangleVectors(triangleIndex),
         trianglePrecompute.triangleAreaNormalAt(),
-        vertexCounts.shared,
-        vertexCounts.missing,
+        vertexCounts->shared,
+        vertexCounts->missing,
         disconnected
     );
     if(!IsBetterMeshletCandidate(score, triangleIndex, found, outCandidate))

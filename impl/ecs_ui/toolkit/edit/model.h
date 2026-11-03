@@ -87,13 +87,13 @@ public:
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] b8 move(const EditMove::Enum movement, const b8 extend = false)noexcept{
-        usize target = m_caret;
-        if(!TryResolveEditMoveTarget(text(), m_boundaries, m_textMode, m_anchor, m_caret, movement, extend, target))
+        const auto target = TryResolveEditMoveTarget(text(), m_boundaries, m_textMode, m_anchor, m_caret, movement, extend);
+        if(!target)
             return false;
         cancelComposition();
         if(!extend)
-            m_anchor = target;
-        m_caret = target;
+            m_anchor = *target;
+        m_caret = *target;
         advanceSelectionGeneration();
         return true;
     }

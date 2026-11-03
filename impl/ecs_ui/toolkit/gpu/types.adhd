@@ -131,8 +131,8 @@ const Name s_GpuOutputPipelineName = "ui.output_pipeline";
 const Name s_GpuOutputTaskName = "ui.output";
 const Name s_GpuFrameTimingEndTaskName = "ui.frame_timing_end";
 
-b8 TryInitializeGpuPaintPushConstants(in GpuRasterGeometry geometry, in u32 samplerSlot, mut GpuPaintPushConstants outPush){
-    outPush = GpuPaintPushConstants();
+Expected<GpuPaintPushConstants> TryInitializeGpuPaintPushConstants(in GpuRasterGeometry geometry, in u32 samplerSlot){
+    GpuPaintPushConstants outPush;
     const f32x4 projection = f32x4(s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent, s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent) * geometry.pixelScale;
     const f32x4 projectionScale = projection / geometry.targetSize;
     outPush.scale.x = projectionScale.x;
@@ -140,11 +140,12 @@ b8 TryInitializeGpuPaintPushConstants(in GpuRasterGeometry geometry, in u32 samp
     outPush.translate.x = -1.0f;
     outPush.translate.y = 1.0f;
     outPush.samplerSlot = samplerSlot;
-    return isFinite(outPush.scale.x) && isFinite(outPush.scale.y);
+    if(!isFinite(outPush.scale.x) || !isFinite(outPush.scale.y))
+        return makeUnexpected(Failure());
+    return outPush;
 }
 
-b8 TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw, mut i32x4 outScissor){
-    outScissor = i32x4(0, 0, 0, 0);
+Expected<i32x4> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw){
     const f32x4 coordinates(draw.clip.x, draw.clip.y, draw.clip.x + draw.clip.width, draw.clip.y + draw.clip.height);
     const f32x4 physicalClip = coordinates * geometry.pixelScale;
     const f32x4 first = floor(f32x4(physicalClip.x, physicalClip.y, 0.0f, 0.0f));
@@ -152,9 +153,8 @@ b8 TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw
     const f32x4 minimum = max(first, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
     const f32x4 maximum = min(last, f32x4(geometry.targetSize.x, geometry.targetSize.y, 0.0f, 0.0f));
     if(maximum.x <= minimum.x || maximum.y <= minimum.y)
-        return false;
-    outScissor = i32x4(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));
-    return true;
+        return makeUnexpected(Failure());
+    return i32x4(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));
 }
 
 

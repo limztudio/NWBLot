@@ -35,16 +35,15 @@ class SubsystemHeaderBinary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TrySumSubsystemFieldElementCounts(in Span<u64> fieldCounts, mut u64 outTotalCount){
+Expected<u64> TrySumSubsystemFieldElementCounts(in Span<u64> fieldCounts){
     u64 totalCount = 0u;
     for(usize i = 0u; i < fieldCounts.size(); ++i){
         u64 count = fieldCounts[i];
         if(count == 0u || count > 0xFFFFFFFFFFFFFFFFu - totalCount)
-            return false;
+            return makeUnexpected(Failure());
         totalCount += count;
     }
-    outTotalCount = totalCount;
-    return true;
+    return totalCount;
 }
 
 

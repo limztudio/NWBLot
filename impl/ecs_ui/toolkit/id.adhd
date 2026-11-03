@@ -141,46 +141,46 @@ u64 UpdateWidgetFnv64U64LittleEndian(in u64 hash, in u64 value){
     return result;
 }
 
-b8 TryMakeRootId(in WidgetRoot root, mut WidgetId outId){
-    outId = WidgetId();
+Expected<WidgetId> TryMakeRootId(in WidgetRoot root){
     if(root.generation == 0u)
-        return false;
+        return makeUnexpected(Failure());
     u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, root.value);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, root.generation);
+    WidgetId outId;
     if(hash == 0u)
         outId.value = 1u;
     else
         outId.value = hash;
-    return true;
+    return outId;
 }
 
-b8 TryMakeWidgetPartId(in WidgetId parent, in u64 stableKey, mut WidgetId outId){
-    outId = WidgetId();
+Expected<WidgetId> TryMakeWidgetPartId(in WidgetId parent, in u64 stableKey){
     if(!parent.valid() || stableKey == 0u)
-        return false;
+        return makeUnexpected(Failure());
     u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, parent.value);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, 0u);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, stableKey);
+    WidgetId outId;
     if(hash == 0u)
         outId.value = 1u;
     else
         outId.value = hash;
-    return true;
+    return outId;
 }
 
-b8 TryMakeWidgetId(in WidgetId parent, in StringView stableKey, mut WidgetId outId){
-    outId = WidgetId();
+Expected<WidgetId> TryMakeWidgetId(in WidgetId parent, in StringView stableKey){
     if(!parent.valid() || stableKey.empty())
-        return false;
+        return makeUnexpected(Failure());
     u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, parent.value);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, cast<u64>(stableKey.size()));
     for(usize i = 0u; i < stableKey.size(); ++i)
         hash = UpdateWidgetFnv64Byte(hash, cast<u8>(stableKey[i]));
+    WidgetId outId;
     if(hash == 0u)
         outId.value = 1u;
     else
         outId.value = hash;
-    return true;
+    return outId;
 }
 
 b8 ValidateWidgetStateTouchRequest(in WidgetId id, in WidgetRoot root, in WidgetKind kind, in u64 frameGeneration){

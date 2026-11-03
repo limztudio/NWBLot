@@ -98,20 +98,18 @@ class AvboitTargetLayout{
     public u64 refractionTileCount = 0u;
 }
 
-b8 TryResolveAvboitTargetLayout(
+Expected<AvboitTargetLayout> TryResolveAvboitTargetLayout(
     in u32 width,
     in u32 height,
-    in u32 refractionTileSize,
-    mut AvboitTargetLayout outLayout
+    in u32 refractionTileSize
 ){
-    outLayout = AvboitTargetLayout();
     if(width == 0u || height == 0u || refractionTileSize == 0u)
-        return false;
+        return makeUnexpected(Failure());
 
     const u64 lowWidth64 = max(cast<u64>(1u), (cast<u64>(width) + cast<u64>(s_AvboitDownsample) - 1u) / cast<u64>(s_AvboitDownsample));
     const u64 lowHeight64 = max(cast<u64>(1u), (cast<u64>(height) + cast<u64>(s_AvboitDownsample) - 1u) / cast<u64>(s_AvboitDownsample));
     if(lowWidth64 > cast<u64>(4294967295u) || lowHeight64 > cast<u64>(4294967295u))
-        return false;
+        return makeUnexpected(Failure());
 
     const u32 lowWidth = cast<u32>(lowWidth64);
     const u32 lowHeight = cast<u32>(lowHeight64);
@@ -121,15 +119,16 @@ b8 TryResolveAvboitTargetLayout(
     const u64 depthWarpWordCount = cast<u64>(virtualSliceCount);
     const u64 pixelCount = cast<u64>(lowWidth) * cast<u64>(lowHeight);
     if(pixelCount > cast<u64>(4294967295u))
-        return false;
+        return makeUnexpected(Failure());
     const u32 physicalExtinctionWordCount = (physicalSliceCount + s_AvboitExtinctionSlicesPerWord - 1u) / s_AvboitExtinctionSlicesPerWord;
     if(physicalExtinctionWordCount == 0u || pixelCount > cast<u64>(4294967295u) / cast<u64>(physicalExtinctionWordCount))
-        return false;
+        return makeUnexpected(Failure());
     const u64 extinctionWordCount = pixelCount * cast<u64>(physicalExtinctionWordCount);
     const u64 refractionTileCount = ((cast<u64>(width) + cast<u64>(refractionTileSize) - 1u) / cast<u64>(refractionTileSize)) * ((cast<u64>(height) + cast<u64>(refractionTileSize) - 1u) / cast<u64>(refractionTileSize));
     if(refractionTileCount == 0u || refractionTileCount > cast<u64>(4294967295u) / 4u)
-        return false;
+        return makeUnexpected(Failure());
 
+    AvboitTargetLayout outLayout;
     outLayout.lowWidth = lowWidth;
     outLayout.lowHeight = lowHeight;
     outLayout.virtualSliceCount = virtualSliceCount;
@@ -139,7 +138,7 @@ b8 TryResolveAvboitTargetLayout(
     outLayout.extinctionWordCount = extinctionWordCount;
     outLayout.pixelCount = pixelCount;
     outLayout.refractionTileCount = refractionTileCount;
-    return true;
+    return outLayout;
 }
 
 RendererAvboitPushConstants ResolveRendererAvboitPushConstants(

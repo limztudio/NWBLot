@@ -105,7 +105,7 @@ RendererComponentPayloadBinary PackRendererComponentPayloadBinary(in RendererCom
     return binaryPayload;
 }
 
-b8 UnpackRendererComponentPayloadBinary(in RendererComponentPayloadBinary binaryPayload, mut RendererComponent outComponent){
+Expected<RendererComponent> UnpackRendererComponentPayloadBinary(in RendererComponentPayloadBinary binaryPayload){
     if(
         binaryPayload.visible > 1u
         || binaryPayload.opticalVolumeCoincidence > cast<u8>(OpticalVolumeCoincidence::SharedGroup)
@@ -113,8 +113,8 @@ b8 UnpackRendererComponentPayloadBinary(in RendererComponentPayloadBinary binary
         || binaryPayload.reserved0 != 0u
         || binaryPayload.reserved1 != 0u
     )
-        return false;
-    outComponent = RendererComponent();
+        return makeUnexpected(Failure());
+    RendererComponent outComponent;
     outComponent.material.virtualPath = Name(binaryPayload.materialHash);
     outComponent.opticalVolumeGroup = Name(binaryPayload.opticalVolumeGroupHash);
     outComponent.visible = binaryPayload.visible != 0u;
@@ -122,7 +122,7 @@ b8 UnpackRendererComponentPayloadBinary(in RendererComponentPayloadBinary binary
     outComponent.opticalVolumePriority = binaryPayload.opticalVolumePriority;
     outComponent.opticalBoundaryMode = cast<OpticalBoundaryMode>(binaryPayload.opticalBoundaryMode);
     outComponent.opticalMediumPriority = binaryPayload.opticalMediumPriority;
-    return true;
+    return outComponent;
 }
 
 b8 IsValidRendererComponentOpticalConfig(in RendererComponent component){

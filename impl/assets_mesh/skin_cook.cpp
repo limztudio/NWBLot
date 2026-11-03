@@ -116,11 +116,11 @@ using namespace Core::Metascript;
 
     const u32 jointCount = static_cast<u32>(entry.inverseBindMatrices.size());
     for(usize influenceIndex = 0u; influenceIndex < entry.influences.size(); ++influenceIndex){
-        usize componentIndex = 0u;
-        if(!TryFindOutOfRangeSkinInfluenceJoint(entry.influences[influenceIndex], jointCount, componentIndex))
+        const Expected<usize> componentIndex = TryFindOutOfRangeSkinInfluenceJoint(entry.influences[influenceIndex], jointCount);
+        if(!componentIndex)
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range"), PathToString<tchar>(nwbFilePath), influenceIndex, componentIndex);
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range"), PathToString<tchar>(nwbFilePath), influenceIndex, *componentIndex);
         return false;
     }
     return true;

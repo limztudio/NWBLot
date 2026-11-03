@@ -116,9 +116,10 @@ b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, const Core::GpuT
         return false;
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target.width, target.height);
-    GpuPaintPushConstants push;
-    if(!TryInitializeGpuPaintPushConstants(geometry, frame->m_resources->m_samplerDescriptor.slot(), push))
+    const auto initialPush = TryInitializeGpuPaintPushConstants(geometry, frame->m_resources->m_samplerDescriptor.slot());
+    if(!initialPush)
         return false;
+    GpuPaintPushConstants push = *initialPush;
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     Core::Rect boundScissor;
     b8 hasRasterState = false;

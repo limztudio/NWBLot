@@ -108,9 +108,8 @@ TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsRejectNavigation)
         { Core::Key::PageDown, Core::InputModifier::Shift | Core::InputModifier::Alt },
         { Core::Key::Unknown }, { Core::Key::Enter }, { Core::Key::Left }, { static_cast<i32>(Core::Key::Menu) + 1 }
     }};
-    EditNavigationDirection::Enum direction = EditNavigationDirection::Up;
     for(const auto& chord : chords){
-        EXPECT_FALSE(TryTranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers), direction));
+        EXPECT_FALSE(TryTranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers)).has_value());
     }
     const Array<InputCommandIntent, 6> rejected = {{
         { InputCommand::Up, true, false }, { InputCommand::Down, false, false },
@@ -118,7 +117,7 @@ TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsRejectNavigation)
         { InputCommand::FocusNext }, { static_cast<InputCommand::Enum>(255u), true }
     }};
     for(const InputCommandIntent& intent : rejected){
-        EXPECT_FALSE(TryTranslateEditNavigation(intent, direction));
+        EXPECT_FALSE(TryTranslateEditNavigation(intent).has_value());
     }
 }
 

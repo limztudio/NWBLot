@@ -99,10 +99,10 @@ private:
         const Span<const LayoutTreeNode> nodeSpan(m_nodes.data(), m_nodes.size());
         for(usize reverse = m_nodes.size(); reverse > 0u; --reverse){
             const u32 index = static_cast<u32>(reverse - 1u);
-            Point measuredSize;
-            if(!MeasureLayoutTreeNode(nodeSpan, Span<const LayoutTreeWork>(m_work.data(), m_work.size()), index, measuredSize))
+            const auto measuredSize = MeasureLayoutTreeNode(nodeSpan, Span<const LayoutTreeWork>(m_work.data(), m_work.size()), index);
+            if(!measuredSize)
                 return false;
-            m_work[index].box.measuredSize = measuredSize;
+            m_work[index].box.measuredSize = *measuredSize;
         }
         return true;
     }
@@ -119,10 +119,10 @@ private:
         const LayoutNodeDesc& description = node.description;
         const Rect content = m_work[index].box.content;
         for(u32 child = node.firstChild; child != s_LayoutNoParent; child = m_nodes[child].nextSibling){
-            Rect childRect;
-            if(!TryArrangeLayoutTreeChild(description.direction, description.gap, content, m_nodes[child].description, m_work[child].box.measuredSize, available, weight, cursor, childRect))
+            const auto childRect = TryArrangeLayoutTreeChild(description.direction, description.gap, content, m_nodes[child].description, m_work[child].box.measuredSize, available, weight, cursor);
+            if(!childRect)
                 return false;
-            m_work[child].box.rectangle = childRect;
+            m_work[child].box.rectangle = *childRect;
             m_work[child].inheritedClip = childClip;
         }
         return true;

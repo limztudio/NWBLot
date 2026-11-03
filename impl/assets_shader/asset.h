@@ -38,12 +38,12 @@ template<typename PayloadContainer>
     if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
         return AssetPayloadEncodeFailure::InvalidBytecode;
 
-    usize payloadBytes = 0u;
-    if(!TryComputeShaderAssetPayloadByteCount(entryPoint.size(), bytecode.size(), payloadBytes))
+    const Expected<usize> payloadBytes = TryComputeShaderAssetPayloadByteCount(entryPoint.size(), bytecode.size());
+    if(!payloadBytes)
         return AssetPayloadEncodeFailure::OutputSizeOverflow;
 
     outPayload.clear();
-    ReserveAppendBytesIfSupported(outPayload, payloadBytes);
+    ReserveAppendBytesIfSupported(outPayload, *payloadBytes);
     AppendPOD(outPayload, s_AssetPayloadMagic);
     AppendPOD(outPayload, s_AssetPayloadVersion);
     if(!AppendString(outPayload, entryPoint))

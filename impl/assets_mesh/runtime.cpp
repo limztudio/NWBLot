@@ -297,13 +297,13 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
     if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> b8 {
         const b8 skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
         const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
-        MeshletPositionStreamRef positionRef;
-        if(!TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, skinRequired, positionRef))
+        const Expected<MeshletPositionStreamRef> positionRef = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, skinRequired);
+        if(!positionRef)
             return false;
-        if(static_cast<usize>(positionRef.position) >= positionCount)
+        if(static_cast<usize>(positionRef->position) >= positionCount)
             return false;
 
-        outIndices[primitiveByte] = positionRef.position;
+        outIndices[primitiveByte] = positionRef->position;
         return true;
     }))
         return MakeUnexpected(Failure{});
@@ -327,15 +327,15 @@ Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttri
 
     if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> b8 {
             const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
-            MeshletAttributeStreamRef attributeRef;
-            if(!TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex, attributeRef))
+            const Expected<MeshletAttributeStreamRef> attributeRef = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
+            if(!attributeRef)
                 return false;
-            if(static_cast<usize>(attributeRef.normal) >= normalCount || static_cast<usize>(attributeRef.uv0) >= uv0Count)
+            if(static_cast<usize>(attributeRef->normal) >= normalCount || static_cast<usize>(attributeRef->uv0) >= uv0Count)
                 return false;
 
             AttribGpu& attribute = outAttributes[primitiveByte];
-            attribute.normal = normalStream[attributeRef.normal];
-            attribute.uv0 = uv0Stream[attributeRef.uv0];
+            attribute.normal = normalStream[attributeRef->normal];
+            attribute.uv0 = uv0Stream[attributeRef->uv0];
             return true;
         }
     ))

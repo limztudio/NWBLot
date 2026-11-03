@@ -36,11 +36,11 @@ TEST(LightSpaceShadowStorage, ReservesWholeCasterAndRoundedMeshletGroupDraws){
     EXPECT_EQ(*recounted, drawCount);
 
     const Array<LightSpaceLightRequest, 2> requests = {{ { 0u, 0u, Scene::LightType::Directional }, { 1u, 1u, Scene::LightType::Point } }};
-    LightSpacePlan plan;
-    ASSERT_TRUE(TryBuildLightSpacePlan(SoftwareShadowSettings{}, requests, Limit<u32>::s_Max, drawCount, false, plan));
-    ASSERT_EQ(plan.lightCount, 2u);
-    ASSERT_EQ(plan.viewCount, 7u);
-    EXPECT_EQ(plan.drawArgumentByteSize, 7u * 7u * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
+    const Expected<LightSpacePlan> plan = TryBuildLightSpacePlan(SoftwareShadowSettings{}, requests, Limit<u32>::s_Max, drawCount, false);
+    ASSERT_TRUE(plan);
+    ASSERT_EQ(plan->lightCount, 2u);
+    ASSERT_EQ(plan->viewCount, 7u);
+    EXPECT_EQ(plan->drawArgumentByteSize, 7u * 7u * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
 }
 
 TEST(LightSpaceShadowStorage, RejectsInvalidAndOverflowingDrawSpansWithoutWrapping){
@@ -64,42 +64,42 @@ TEST(LightSpaceShadowStorage, RejectsInvalidAndOverflowingDrawSpansWithoutWrappi
 
 TEST(LightSpaceShadowStorage, AcceptsExactGenerationAndRejectsEachInsufficientResource){
     const Array<LightSpaceLightRequest, 2> requests = {{ { 0u, 0u, Scene::LightType::Directional }, { 1u, 1u, Scene::LightType::Point } }};
-    LightSpacePlan plan;
-    ASSERT_TRUE(TryBuildLightSpacePlan(SoftwareShadowSettings{}, requests, Limit<u32>::s_Max, 20u, false, plan));
-    const LightSpaceShadowStorageCapacity exact{ plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize, plan.textureResolution, plan.viewCount };
-    ASSERT_TRUE(LightSpaceShadowStorageFits(plan, exact));
+    const Expected<LightSpacePlan> plan = TryBuildLightSpacePlan(SoftwareShadowSettings{}, requests, Limit<u32>::s_Max, 20u, false);
+    ASSERT_TRUE(plan);
+    const LightSpaceShadowStorageCapacity exact{ plan->countByteSize, plan->eventByteSize, plan->viewByteSize, plan->drawArgumentByteSize, plan->textureResolution, plan->viewCount };
+    ASSERT_TRUE(LightSpaceShadowStorageFits(*plan, exact));
     auto capacity = exact;
     --capacity.countBytes;
-    EXPECT_FALSE(LightSpaceShadowStorageFits(plan, capacity));
+    EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
     capacity = exact;
     --capacity.eventBytes;
-    EXPECT_FALSE(LightSpaceShadowStorageFits(plan, capacity));
+    EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
     capacity = exact;
     --capacity.viewBytes;
-    EXPECT_FALSE(LightSpaceShadowStorageFits(plan, capacity));
+    EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
     capacity = exact;
     --capacity.drawArgumentBytes;
-    EXPECT_FALSE(LightSpaceShadowStorageFits(plan, capacity));
+    EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
     capacity = exact;
     --capacity.textureResolution;
-    EXPECT_FALSE(LightSpaceShadowStorageFits(plan, capacity));
+    EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
     capacity = exact;
     --capacity.arrayLayers;
-    EXPECT_FALSE(LightSpaceShadowStorageFits(plan, capacity));
+    EXPECT_FALSE(LightSpaceShadowStorageFits(*plan, capacity));
 }
 
 TEST(LightSpaceShadowStorage, CanSelectSmallerCurrentPlanWithoutAllocatingAndDeclinesGrowth){
     const LightSpaceLightRequest directional{ 0u, 0u, Scene::LightType::Directional };
     const LightSpaceLightRequest point{ 1u, 1u, Scene::LightType::Point };
     const Array<LightSpaceLightRequest, 2> both = { directional, point };
-    LightSpacePlan larger;
-    LightSpacePlan smaller;
-    ASSERT_TRUE(TryBuildLightSpacePlan(SoftwareShadowSettings{}, both, Limit<u32>::s_Max, 20u, false, larger));
-    ASSERT_TRUE(TryBuildLightSpacePlan(SoftwareShadowSettings{}, Span<const LightSpaceLightRequest>(&point, 1u), Limit<u32>::s_Max, 20u, false, smaller));
-    const LightSpaceShadowStorageCapacity capacity{ larger.countByteSize, larger.eventByteSize, larger.viewByteSize, larger.drawArgumentByteSize, larger.textureResolution, larger.viewCount };
-    EXPECT_TRUE(LightSpaceShadowStorageFits(smaller, capacity));
-    const LightSpaceShadowStorageCapacity small{ smaller.countByteSize, smaller.eventByteSize, smaller.viewByteSize, smaller.drawArgumentByteSize, smaller.textureResolution, smaller.viewCount };
-    EXPECT_FALSE(LightSpaceShadowStorageFits(larger, small));
+    const Expected<LightSpacePlan> larger = TryBuildLightSpacePlan(SoftwareShadowSettings{}, both, Limit<u32>::s_Max, 20u, false);
+    const Expected<LightSpacePlan> smaller = TryBuildLightSpacePlan(SoftwareShadowSettings{}, Span<const LightSpaceLightRequest>(&point, 1u), Limit<u32>::s_Max, 20u, false);
+    ASSERT_TRUE(larger);
+    ASSERT_TRUE(smaller);
+    const LightSpaceShadowStorageCapacity capacity{ larger->countByteSize, larger->eventByteSize, larger->viewByteSize, larger->drawArgumentByteSize, larger->textureResolution, larger->viewCount };
+    EXPECT_TRUE(LightSpaceShadowStorageFits(*smaller, capacity));
+    const LightSpaceShadowStorageCapacity small{ smaller->countByteSize, smaller->eventByteSize, smaller->viewByteSize, smaller->drawArgumentByteSize, smaller->textureResolution, smaller->viewCount };
+    EXPECT_FALSE(LightSpaceShadowStorageFits(*larger, small));
     EXPECT_FALSE(LightSpaceShadowStorageFits(LightSpacePlan{}, capacity));
 }
 

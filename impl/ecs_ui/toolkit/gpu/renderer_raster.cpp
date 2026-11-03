@@ -17,10 +17,10 @@ NWB_IMPL_UI_BEGIN
 
 
 Optional<Core::Rect> ResolveGpuScissorRect(const GpuRasterGeometry& geometry, const DrawCommand& draw)noexcept{
-    Int4 bounds{};
-    if(!TryComputeGpuScissorBounds(geometry, draw, bounds))
+    const auto bounds = TryComputeGpuScissorBounds(geometry, draw);
+    if(!bounds)
         return {};
-    return Core::Rect(bounds.x, bounds.y, bounds.z, bounds.w);
+    return Core::Rect(bounds->x, bounds->y, bounds->z, bounds->w);
 }
 
 b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept{
@@ -84,9 +84,10 @@ b8 GpuRasterTask::Record(const Payload& payload, Core::CommandList& commands, co
         return RecordRasterCommandIr(payload, context, commands);
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target.width, target.height);
-    GpuPaintPushConstants push;
-    if(!TryInitializeGpuPaintPushConstants(geometry, frame->m_resources->m_samplerDescriptor.slot(), push))
+    const auto initialPush = TryInitializeGpuPaintPushConstants(geometry, frame->m_resources->m_samplerDescriptor.slot());
+    if(!initialPush)
         return false;
+    GpuPaintPushConstants push = *initialPush;
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     Core::Rect boundScissor;

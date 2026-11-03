@@ -156,7 +156,7 @@ b8 IsValidPreparedFontHeader(in u32 magic, in u32 version, in u32 faceIndex, in 
     ;
 }
 
-b8 TryComputePreparedFontExpectedPayloadBytes(in usize fontByteCount, in usize groupCount, in u64 pixelByteCount, mut u64 outExpectedBytes){
+Expected<u64> TryComputePreparedFontExpectedPayloadBytes(in usize fontByteCount, in usize groupCount, in u64 pixelByteCount){
     if(
         fontByteCount == 0u
         || fontByteCount > cast<usize>(s_FontMaxSourceBytes)
@@ -164,14 +164,13 @@ b8 TryComputePreparedFontExpectedPayloadBytes(in usize fontByteCount, in usize g
         || groupCount > cast<usize>(s_PreparedFontMaxGroupCount)
         || pixelByteCount > s_PreparedFontMaxPixelBytes
     )
-        return false;
-    outExpectedBytes =
+        return makeUnexpected(Failure());
+    return
         cast<u64>(s_PreparedFontHeaderBytes)
         + cast<u64>(groupCount) * cast<u64>(s_PreparedFontGroupHeaderBytes)
         + cast<u64>(fontByteCount)
         + pixelByteCount
     ;
-    return true;
 }
 
 NativeFontFailure MakeNativeFontFailure(in StringView operation, in i32 nativeError){
@@ -221,61 +220,60 @@ class FontSfntDirectory{
         return this.m_tableCount;
     }
 
-    public b8 table(in usize index, mut FontSfntTable outTable)const{
-        Span<u8> rec;
-        if(!this.record(index, rec))
-            return false;
-        const u32 offset = ReadFontSfntU32BigEndian(rec, s_FontSfntRecordOffsetFieldOffset);
-        const u32 length = ReadFontSfntU32BigEndian(rec, s_FontSfntRecordLengthFieldOffset);
+    public Expected<FontSfntTable> table(in usize index)const{
+        const Expected<Span<u8>> rec = this.record(index);
+        if(!rec.has_value())
+            return makeUnexpected(Failure());
+        const u32 offset = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordOffsetFieldOffset);
+        const u32 length = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordLengthFieldOffset);
         if(cast<usize>(offset) > this.m_bytes.size() || cast<usize>(length) > this.m_bytes.size() - cast<usize>(offset))
-            return false;
-        outTable.tag = ReadFontSfntU32BigEndian(rec, 0u);
+            return makeUnexpected(Failure());
+        FontSfntTable outTable;
+        outTable.tag = ReadFontSfntU32BigEndian(rec.value(), 0u);
         outTable.offset = offset;
         outTable.bytes = this.m_bytes.subspan(cast<usize>(offset), cast<usize>(length));
-        return true;
+        return outTable;
     }
 
-    public b8 tableTag(in usize index, mut u32 outTag)const{
-        Span<u8> rec;
-        if(!this.record(index, rec))
-            return false;
-        outTag = ReadFontSfntU32BigEndian(rec, 0u);
-        return true;
+    public Expected<u32> tableTag(in usize index)const{
+        const Expected<Span<u8>> rec = this.record(index);
+        if(!rec.has_value())
+            return makeUnexpected(Failure());
+        return ReadFontSfntU32BigEndian(rec.value(), 0u);
     }
 
     private Span<u8> m_bytes;
     private u16 m_tableCount = 0u;
 
-    private b8 record(in usize index, mut Span<u8> outRecord)const{
+    private Expected<Span<u8>> record(in usize index)const{
         if(index >= cast<usize>(this.m_tableCount))
-            return false;
-        outRecord = this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
-        return true;
+            return makeUnexpected(Failure());
+        return this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
     }
 }
 
-b8 ReadFontSfntDirectory(in Span<u8> bytes, mut FontSfntDirectory outDirectory){
+Expected<FontSfntDirectory> ReadFontSfntDirectory(in Span<u8> bytes){
     if(bytes.size() < s_FontSfntHeaderBytes)
-        return false;
+        return makeUnexpected(Failure());
     const u16 tableCount = ReadFontSfntU16BigEndian(bytes, s_FontSfntHeaderTableCountFieldOffset);
     if(tableCount == 0u || cast<u32>(tableCount) > s_FontMaxTableCount || cast<usize>(tableCount) * s_FontSfntTableRecordBytes > bytes.size() - s_FontSfntHeaderBytes)
-        return false;
-    outDirectory.assign(bytes, tableCount);
-    return true;
+        return makeUnexpected(Failure());
+    FontSfntDirectory directory;
+    directory.assign(bytes, tableCount);
+    return directory;
 }
 
-b8 TryComputePreparedFontImageByteCount(in u32 width, in u32 height, in u32 channels, mut u32 outByteCount){
+Expected<u32> TryComputePreparedFontImageByteCount(in u32 width, in u32 height, in u32 channels){
     if(width == 0u || width > s_PreparedFontMaxSide || height == 0u || height > s_PreparedFontMaxSide || channels == 0u || channels > s_PreparedFontMaxChannelCount)
-        return false;
-    outByteCount = width * height * channels;
-    return true;
+        return makeUnexpected(Failure());
+    return width * height * channels;
 }
 
 b8 ValidateFontSfntRequiredTables(in Span<u8> bytes){
-    FontSfntDirectory directory;
-    if(!ReadFontSfntDirectory(bytes, directory))
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(bytes);
+    if(!directory.has_value())
         return false;
-    const u32 signature = directory.signature();
+    const u32 signature = directory.value().signature();
     if(signature != s_TrueTypeSignature && signature != s_CffSignature)
         return false;
 
@@ -288,12 +286,12 @@ b8 ValidateFontSfntRequiredTables(in Span<u8> bytes){
     b8 hasGlyf = false;
     b8 hasLoca = false;
     b8 hasCff = false;
-    for(u16 index = 0u; index < directory.tableCount(); ++index){
-        FontSfntTable tableResult;
-        if(!directory.table(cast<usize>(index), tableResult) || cast<usize>(tableResult.offset) < directory.directoryBytes())
+    for(u16 index = 0u; index < directory.value().tableCount(); ++index){
+        const Expected<FontSfntTable> tableResult = directory.value().table(cast<usize>(index));
+        if(!tableResult.has_value() || cast<usize>(tableResult.value().offset) < directory.value().directoryBytes())
             return false;
-        const u32 tag = tableResult.tag;
-        const usize length = tableResult.bytes.size();
+        const u32 tag = tableResult.value().tag;
+        const usize length = tableResult.value().bytes.size();
         if(tag == s_FvarTag || tag == s_Cff2Tag)
             return false;
         for(u16 prev = 0u; prev < index; ++prev){

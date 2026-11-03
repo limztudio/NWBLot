@@ -161,13 +161,12 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         }
         csgProjectEvaluatorModuleAssignment = __hidden_material_pipeline::BuildCsgProjectEvaluatorModuleAssignment(m_arena, AStringView(*csgProjectEvaluatorModuleInclude));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
-            AStringView existingEvaluatorModuleAssignment;
-            const b8 hasExistingEvaluatorModuleAssignment = TryFindVariantDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName, Core::ShaderArchive::s_DefaultVariant, existingEvaluatorModuleAssignment);
-            if(hasExistingEvaluatorModuleAssignment && existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
+            const Expected<AStringView> existingEvaluatorModuleAssignment = TryFindVariantDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName, Core::ShaderArchive::s_DefaultVariant);
+            if(existingEvaluatorModuleAssignment && *existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), ConvertString(materialKey.resolvedText()));
                 return failMaterialPipeline();
             }
-            if(!hasExistingEvaluatorModuleAssignment)
+            if(!existingEvaluatorModuleAssignment)
                 materialProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
             avboitProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
         }

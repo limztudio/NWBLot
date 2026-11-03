@@ -63,10 +63,10 @@ b8 MaterialTypedByteContentKeyEqual::operator()(const MaterialTypedByteContentKe
 }
 
 Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(const usize currentByteCount, const usize appendByteCount){
-    MaterialTypedByteAppendRange appendRange;
-    switch(ResolveMaterialTypedByteAppendRange(currentByteCount, appendByteCount, appendRange)){
-    case MaterialTypedByteAppendStatus::Success:
-        return appendRange;
+    const auto appendRange = ResolveMaterialTypedByteAppendRange(currentByteCount, appendByteCount);
+    if(appendRange)
+        return *appendRange;
+    switch(appendRange.error()){
     case MaterialTypedByteAppendStatus::AppendCountExceedsU32:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
         return MakeUnexpected(Failure{});
@@ -80,6 +80,7 @@ Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(cons
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
         return MakeUnexpected(Failure{});
     case MaterialTypedByteAppendStatus::TotalCountExceedsU32:
+    case MaterialTypedByteAppendStatus::Success:
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
         return MakeUnexpected(Failure{});

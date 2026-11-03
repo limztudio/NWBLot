@@ -74,15 +74,13 @@ class SearchComboSourceSnapshot{
     public u64 count;
 }
 
-b8 TryBindComboOwner(in WidgetId owner, in u64 declarationGeneration, mut WidgetId inOutOwner, mut u64 inOutOwnerDeclaration, mut b8 outShouldClose){
-    outShouldClose = false;
+Expected<b8> TryBindComboOwner(in WidgetId owner, in u64 declarationGeneration, mut WidgetId inOutOwner, mut u64 inOutOwnerDeclaration){
     if(!owner.valid() || declarationGeneration == 0u)
-        return false;
-    if(inOutOwner.valid() && (inOutOwner != owner || inOutOwnerDeclaration != declarationGeneration))
-        outShouldClose = true;
+        return makeUnexpected(Failure());
+    const b8 shouldClose = inOutOwner.valid() && (inOutOwner != owner || inOutOwnerDeclaration != declarationGeneration);
     inOutOwner = owner;
     inOutOwnerDeclaration = declarationGeneration;
-    return true;
+    return shouldClose;
 }
 
 b8 EvaluateSearchComboRebuildNeed(

@@ -96,8 +96,7 @@ public:
         const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
         const b8 hovered, const f32 deltaSeconds, const TooltipOptions& options
     )noexcept{
-        b8 changed = false;
-        if(!TryEvaluateTooltipStateUpdate(
+        const auto changed = TryEvaluateTooltipStateUpdate(
             anchor,
             declarationGeneration,
             popup,
@@ -115,11 +114,11 @@ public:
             state.m_placement,
             state.m_hovered,
             state.m_visible,
-            state.m_elapsed,
-            changed
-        ))
+            state.m_elapsed
+        );
+        if(!changed)
             return false;
-        if(changed)
+        if(*changed)
             state.advanceRevision();
         return true;
     }

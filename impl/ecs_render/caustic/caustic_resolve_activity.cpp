@@ -59,8 +59,8 @@ b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, 
     if(current.valid() && current.halfWidth == halfWidth && current.halfHeight == halfHeight)
         return true;
     releaseCausticResolveActivity();
-    CausticResolveActivityLayout layout{};
-    if(!TryResolveCausticActivityLayout(halfWidth, halfHeight, layout))
+    const Expected<CausticResolveActivityLayout> layout = TryResolveCausticActivityLayout(halfWidth, halfHeight);
+    if(!layout)
         return false;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
@@ -68,7 +68,7 @@ b8 RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth, 
     auto& activity = m_rayTracingState.m_causticResolve.m_activity;
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
-        desc.setByteSize(layout.bufferByteSize)
+        desc.setByteSize(layout->bufferByteSize)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)

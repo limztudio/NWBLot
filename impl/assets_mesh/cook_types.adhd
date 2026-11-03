@@ -205,16 +205,15 @@ b8 MeshletDecodedAttributeRefMatches(in MeshletAttributeStreamRef decoded, in Me
     return decoded.normal == source.normal && decoded.tangent == source.tangent && decoded.uv0 == source.uv0 && decoded.color == source.color;
 }
 
-b8 TryFindMeshletLocalVertex(in Span<u32> localVertexRefs, in u32 vertexRefIndex, mut u8 outLocalVertex){
+Expected<u8> TryFindMeshletLocalVertex(in Span<u32> localVertexRefs, in u32 vertexRefIndex){
     for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
         if(localVertexRefs[localIndex] != vertexRefIndex)
             continue;
 
-        outLocalVertex = cast<u8>(localIndex);
-        return true;
+        return cast<u8>(localIndex);
     }
 
-    return false;
+    return makeUnexpected(Failure());
 }
 
 MeshletVertexCounts CountMeshletMissingVertices(in Span<u32> localVertexRefs, in MeshletTriangleData triangle){
@@ -231,8 +230,7 @@ MeshletVertexCounts CountMeshletMissingVertices(in Span<u32> localVertexRefs, in
         if(repeatedInTriangle)
             continue;
 
-        u8 localVertex = 0u;
-        if(TryFindMeshletLocalVertex(localVertexRefs, vertexRefIndex, localVertex))
+        if(TryFindMeshletLocalVertex(localVertexRefs, vertexRefIndex).has_value())
             ++counts.shared;
         else
             ++counts.missing;
@@ -241,15 +239,14 @@ MeshletVertexCounts CountMeshletMissingVertices(in Span<u32> localVertexRefs, in
     return counts;
 }
 
-b8 TryMeshletCanFitTriangle(in MeshletDesc meshlet, in Span<u32> localVertexRefs, in MeshletTriangleData triangle, mut MeshletVertexCounts outCounts){
+Expected<MeshletVertexCounts> TryMeshletCanFitTriangle(in MeshletDesc meshlet, in Span<u32> localVertexRefs, in MeshletTriangleData triangle){
     if(MeshletPrimitiveCount(meshlet) + 1u > s_MeshMaxMeshletTriangles)
-        return false;
+        return makeUnexpected(Failure());
 
     const MeshletVertexCounts counts = CountMeshletMissingVertices(localVertexRefs, triangle);
     if(localVertexRefs.size() + cast<usize>(counts.missing) > cast<usize>(s_MeshMaxMeshletVertices))
-        return false;
-    outCounts = counts;
-    return true;
+        return makeUnexpected(Failure());
+    return counts;
 }
 
 void UpdateBestMeshletCandidateFromResult(in MeshletCandidateSearchResult candidate, mut b8 found, mut MeshletFrontierCandidate outCandidate){
@@ -263,41 +260,38 @@ void UpdateBestMeshletCandidateFromResult(in MeshletCandidateSearchResult candid
     outCandidate = candidate.candidate;
 }
 
-b8 TryFindNextUnvisitedMeshletTriangle(in Span<u8> visitedTriangles, in usize triangleCount, in usize searchOffset, mut u32 outTriangleIndex){
+Expected<u32> TryFindNextUnvisitedMeshletTriangle(in Span<u8> visitedTriangles, in usize triangleCount, in usize searchOffset){
     for(usize triangleIndex = searchOffset; triangleIndex < triangleCount; ++triangleIndex){
         if(visitedTriangles[triangleIndex] != 0u)
             continue;
 
-        outTriangleIndex = cast<u32>(triangleIndex);
-        return true;
+        return cast<u32>(triangleIndex);
     }
 
-    return false;
+    return makeUnexpected(Failure());
 }
 
-b8 TryFindMeshletPositionRef(in Span<MeshletPositionStreamRef> refs, in MeshletPositionStreamRef targetRef, mut u16 outLocalIndex){
+Expected<u16> TryFindMeshletPositionRef(in Span<MeshletPositionStreamRef> refs, in MeshletPositionStreamRef targetRef){
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
         if(refs[localIndex].position != targetRef.position || refs[localIndex].skin != targetRef.skin)
             continue;
 
-        outLocalIndex = cast<u16>(localIndex);
-        return true;
+        return cast<u16>(localIndex);
     }
 
-    return false;
+    return makeUnexpected(Failure());
 }
 
-b8 TryFindMeshletAttributeRef(in Span<MeshletAttributeStreamRef> refs, in MeshletAttributeStreamRef targetRef, mut u16 outLocalIndex){
+Expected<u16> TryFindMeshletAttributeRef(in Span<MeshletAttributeStreamRef> refs, in MeshletAttributeStreamRef targetRef){
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
         const MeshletAttributeStreamRef existing = refs[localIndex];
         if(existing.normal != targetRef.normal || existing.tangent != targetRef.tangent || existing.uv0 != targetRef.uv0 || existing.color != targetRef.color)
             continue;
 
-        outLocalIndex = cast<u16>(localIndex);
-        return true;
+        return cast<u16>(localIndex);
     }
 
-    return false;
+    return makeUnexpected(Failure());
 }
 
 MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshlets, in Span<MeshletBounds> meshletBounds){

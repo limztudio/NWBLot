@@ -27,8 +27,10 @@ inline const Array<Name, s_CausticResolveActivityBufferCount> s_CausticResolveAc
     s_CausticResolveActivityBufferAName,
     s_CausticResolveActivityBufferBName,
 };
+inline constexpr u32 s_CausticResolveGroupThreadCount = NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+inline constexpr u32 s_CausticResolveGroupLaneCount = s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount;
 
-static_assert(NWB_CAUSTIC_RESOLVE_GROUP_SIZE * NWB_CAUSTIC_RESOLVE_GROUP_SIZE == 64u);
+static_assert(s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount == s_CausticResolveGroupLaneCount);
 
 struct CausticResolveActivitySnapshot{
     Array<Core::BufferHandle, s_CausticResolveActivityBufferCount> buffers{};

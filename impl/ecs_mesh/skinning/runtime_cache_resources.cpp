@@ -29,28 +29,6 @@ namespace __hidden_runtime_cache_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_RestPositionLabel = NWB_TEXT("rest position");
-static constexpr TStringView s_RestNormalLabel = NWB_TEXT("rest normal");
-static constexpr TStringView s_RestTangentLabel = NWB_TEXT("rest tangent");
-static constexpr TStringView s_SkinnedPositionLabel = NWB_TEXT("skinned position");
-static constexpr TStringView s_SkinnedNormalLabel = NWB_TEXT("skinned normal");
-static constexpr TStringView s_SkinnedTangentLabel = NWB_TEXT("skinned tangent");
-static constexpr TStringView s_Uv0Label = NWB_TEXT("uv0");
-static constexpr TStringView s_ColorLabel = NWB_TEXT("color");
-static constexpr TStringView s_MeshletDescriptorLabel = NWB_TEXT("meshlet descriptor");
-static constexpr TStringView s_MeshletBoundsLabel = NWB_TEXT("meshlet bounds");
-static constexpr TStringView s_MeshletPositionRefDeltaLabel = NWB_TEXT("meshlet position ref delta");
-static constexpr TStringView s_MeshletAttributeRefDeltaLabel = NWB_TEXT("meshlet attribute ref delta");
-static constexpr TStringView s_MeshletLocalVertexRefLabel = NWB_TEXT("meshlet local vertex ref");
-static constexpr TStringView s_MeshletPrimitiveIndexLabel = NWB_TEXT("meshlet primitive index");
-static constexpr TStringView s_AttributeSkinLabel = NWB_TEXT("attribute skin");
-static constexpr TStringView s_RtTriangleIndexLabel = NWB_TEXT("rt triangle index");
-static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle attribute");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] b8 ValidateRuntimeMeshUploadPayload(const MeshSkinningRuntimeInstance& instance){
     if(!ValidateRuntimeMeshUploadPayloadStreams(
         instance.sourceName,
@@ -81,17 +59,14 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
     return true;
 }
 
-[[nodiscard]] Name DeriveNamedRuntimeBuffer(const MeshSkinningRuntimeInstance& instance, const AStringView suffix, const TStringView label){
-    const Name bufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, suffix);
-    if(!bufferName)
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'"), label, instance.handle.value);
-    return bufferName;
+[[nodiscard]] Name DeriveNamedRuntimeBuffer(const MeshSkinningRuntimeInstance& instance, const AStringView suffix, const AStringView label){
+    return DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
 }
 
 [[nodiscard]] b8 FinalizeRuntimeBufferUpload(
     Expected<Core::BufferHandle, BufferSetupFailure::Enum>&& buffer,
     const MeshSkinningRuntimeInstance& instance,
-    const TStringView label,
+    const AStringView label,
     Core::BufferHandle& outBuffer
 ){
     if(buffer){
@@ -99,19 +74,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
         return true;
     }
     outBuffer.reset();
-    switch(buffer.error()){
-    case BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
-        return false;
-    case BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
-        return false;
-    case BufferSetupFailure::CreateFailed:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"), label, instance.handle.value);
-        return false;
-    }
-
-    NWB_ASSERT(false);
+    ReportRuntimeBufferUploadFailure(buffer.error(), label, instance.handle.value);
     return false;
 }
 
@@ -121,7 +84,7 @@ template<typename PayloadT>
     const AStringView suffix,
     const Span<const PayloadT> payload,
     const b8 canHaveUavs,
-    const TStringView label,
+    const AStringView label,
     Core::GraphicsRuntime& graphics,
     const b8 canHaveRawViews,
     const b8 accelStructBuildInput,
@@ -144,7 +107,7 @@ template<typename PayloadT>
     const AStringView suffix,
     const Span<const u8> payload,
     const b8 canHaveUavs,
-    const TStringView label,
+    const AStringView label,
     Core::GraphicsRuntime& graphics,
     Core::Alloc::ScratchArena& scratchArena,
     Core::BufferHandle& outBuffer
@@ -182,7 +145,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_RestPositionsSuffix,
         instance.restPositions,
         false,
-        __hidden_runtime_cache_resources::s_RestPositionLabel,
+        s_RuntimeCacheRestPositionLabel,
         m_graphics,
         false,
         false,
@@ -195,7 +158,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_RestNormalsSuffix,
         instance.restNormals,
         false,
-        __hidden_runtime_cache_resources::s_RestNormalLabel,
+        s_RuntimeCacheRestNormalLabel,
         m_graphics,
         false,
         false,
@@ -208,7 +171,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_RestTangentsSuffix,
         instance.restTangents,
         false,
-        __hidden_runtime_cache_resources::s_RestTangentLabel,
+        s_RuntimeCacheRestTangentLabel,
         m_graphics,
         false,
         false,
@@ -221,7 +184,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_SkinnedPositionsSuffix,
         instance.restPositions,
         true,
-        __hidden_runtime_cache_resources::s_SkinnedPositionLabel,
+        s_RuntimeCacheSkinnedPositionLabel,
         m_graphics,
         true,
         rtSupported,
@@ -234,7 +197,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_SkinnedNormalsSuffix,
         instance.restNormals,
         true,
-        __hidden_runtime_cache_resources::s_SkinnedNormalLabel,
+        s_RuntimeCacheSkinnedNormalLabel,
         m_graphics,
         false,
         false,
@@ -247,7 +210,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_SkinnedTangentsSuffix,
         instance.restTangents,
         true,
-        __hidden_runtime_cache_resources::s_SkinnedTangentLabel,
+        s_RuntimeCacheSkinnedTangentLabel,
         m_graphics,
         false,
         false,
@@ -260,7 +223,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_Uv0Suffix,
         instance.uv0,
         false,
-        __hidden_runtime_cache_resources::s_Uv0Label,
+        s_RuntimeCacheUv0Label,
         m_graphics,
         false,
         false,
@@ -273,7 +236,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_ColorsSuffix,
         instance.colors,
         false,
-        __hidden_runtime_cache_resources::s_ColorLabel,
+        s_RuntimeCacheColorLabel,
         m_graphics,
         false,
         false,
@@ -286,7 +249,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_MeshletsSuffix,
         instance.meshlets,
         false,
-        __hidden_runtime_cache_resources::s_MeshletDescriptorLabel,
+        s_RuntimeCacheMeshletDescriptorLabel,
         m_graphics,
         false,
         false,
@@ -299,7 +262,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_MeshletBoundsSuffix,
         instance.meshletBounds,
         true,
-        __hidden_runtime_cache_resources::s_MeshletBoundsLabel,
+        s_RuntimeCacheMeshletBoundsLabel,
         m_graphics,
         true,
         false,
@@ -312,7 +275,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_MeshletPositionRefDeltasSuffix,
         instance.meshletPositionRefDeltas,
         false,
-        __hidden_runtime_cache_resources::s_MeshletPositionRefDeltaLabel,
+        s_RuntimeCacheMeshletPositionRefDeltaLabel,
         m_graphics,
         scratchArena,
         instance.meshletPositionRefDeltaBuffer
@@ -322,7 +285,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_MeshletAttributeRefDeltasSuffix,
         instance.meshletAttributeRefDeltas,
         false,
-        __hidden_runtime_cache_resources::s_MeshletAttributeRefDeltaLabel,
+        s_RuntimeCacheMeshletAttributeRefDeltaLabel,
         m_graphics,
         scratchArena,
         instance.meshletAttributeRefDeltaBuffer
@@ -332,7 +295,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_MeshletLocalVertexRefsSuffix,
         instance.meshletLocalVertexRefs,
         false,
-        __hidden_runtime_cache_resources::s_MeshletLocalVertexRefLabel,
+        s_RuntimeCacheMeshletLocalVertexRefLabel,
         m_graphics,
         false,
         false,
@@ -345,7 +308,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_MeshletPrimitiveIndicesSuffix,
         instance.meshletPrimitiveIndices,
         false,
-        __hidden_runtime_cache_resources::s_MeshletPrimitiveIndexLabel,
+        s_RuntimeCacheMeshletPrimitiveIndexLabel,
         m_graphics,
         scratchArena,
         instance.meshletPrimitiveIndexBuffer
@@ -355,7 +318,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
         s_AttributeSkinsSuffix,
         instance.attributeSkins,
         false,
-        __hidden_runtime_cache_resources::s_AttributeSkinLabel,
+        s_RuntimeCacheAttributeSkinLabel,
         m_graphics,
         false,
         false,
@@ -372,17 +335,15 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
-        if(triangleIndices->size() != indexCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: reconstructed ray tracing index count {} does not match expected {} for runtime mesh '{}'"), static_cast<u64>(triangleIndices->size()), static_cast<u64>(indexCount), instance.handle.value);
+        if(!ValidateReconstructedRuntimeTriangleIndexCount(triangleIndices->size(), indexCount, instance.handle.value))
             return false;
-        }
 
         uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
             instance,
             s_RtTriangleIndicesBufferName,
             *triangleIndices,
             false,
-            __hidden_runtime_cache_resources::s_RtTriangleIndexLabel,
+            s_RuntimeCacheRtTriangleIndexLabel,
             m_graphics,
             true,
             rtSupported,
@@ -405,7 +366,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstanc
             s_RtTriangleAttributesBufferName,
             *triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
-            __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel,
+            s_RuntimeCacheRtTriangleAttributeLabel,
             m_graphics,
             true,
             false,

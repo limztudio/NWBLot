@@ -161,6 +161,53 @@ b8 TryAddCsgClipVariantCount(in StringView entryName, in u64 sourceVariantCount,
     return false;
 }
 
+b8 ValidateMaterialCookPixelShaderInterface(
+    in StringView materialVirtualPath,
+    in StringView materialInterfaceText,
+    in Name pixelShaderName,
+    in Name shaderMaterialInterface,
+    in StringView shaderMaterialInterfacePath,
+    in Name parsedMaterialInterface
+){
+    if(shaderMaterialInterface == s_NameNone){
+        error(
+            "Material '{}' declares interface '{}' but pixel shader '{}' does not include a generated material bind"
+            , materialVirtualPath
+            , materialInterfaceText
+            , pixelShaderName.resolvedText()
+        );
+        return false;
+    }
+    if(shaderMaterialInterface != parsedMaterialInterface){
+        error(
+            "Material '{}' declares interface '{}' but pixel shader '{}' includes generated material bind interface '{}'"
+            , materialVirtualPath
+            , materialInterfaceText
+            , pixelShaderName.resolvedText()
+            , shaderMaterialInterfacePath
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateMaterialCookStagePresence(
+    in StringView materialVirtualPath,
+    in StringView materialInterfaceText,
+    in b8 hasShaderStage,
+    in b8 hasInterfaceStage
+){
+    if(!hasShaderStage){
+        error("Material '{}' has no shader stages", materialVirtualPath);
+        return false;
+    }
+    if(!hasInterfaceStage){
+        error("Material '{}' declares interface '{}' but has no pixel shader stage", materialVirtualPath, materialInterfaceText);
+        return false;
+    }
+    return true;
+}
+
 SingleAssetRefComponentPayloadBinary PackSingleAssetRefComponentPayloadBinary(in Name assetName){
     SingleAssetRefComponentPayloadBinary binaryPayload;
     binaryPayload.assetHash = assetName.hash();

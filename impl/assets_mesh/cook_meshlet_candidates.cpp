@@ -171,19 +171,16 @@ Expected<MeshletFrontierCandidate> MeshletCandidateSearch::FindBestDisconnectedM
         return FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, searchOffset, triangleCount, triangleIndices, scoreState, meshlet, localVertexRefs);
     }
 
-    const usize workerCount = static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u;
-    const usize maxChunkCount = workerCount * s_MeshletDisconnectedCandidateParallelOversubscription;
-    const usize chunkCount = searchCount < maxChunkCount ? searchCount : maxChunkCount;
-    const usize chunkSize = searchCount / chunkCount;
-    const usize remainder = searchCount % chunkCount;
+    const usize chunkCount = ResolveMeshletDisconnectedCandidateChunkCount(searchCount, cpuScheduler.workerThreadCount());
 
     parallelCandidates.clear();
     parallelCandidates.resize(chunkCount);
     const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](const usize chunkIndex)noexcept(
         noexcept(FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, DeclVal<const usize&>(), DeclVal<const usize&>(), triangleIndices, scoreState, meshlet, localVertexRefs))
     ){
-        const usize chunkBegin = searchOffset + chunkIndex * chunkSize + (chunkIndex < remainder ? chunkIndex : remainder);
-        const usize chunkEnd = chunkBegin + chunkSize + (chunkIndex < remainder ? 1u : 0u);
+        usize chunkBegin = 0u;
+        usize chunkEnd = 0u;
+        ResolveMeshletDisconnectedCandidateChunkRange(searchOffset, searchCount, chunkCount, chunkIndex, chunkBegin, chunkEnd);
 
         MeshletCandidateSearchResult result;
         const auto foundCandidate = FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, chunkBegin, chunkEnd, triangleIndices, scoreState, meshlet, localVertexRefs);

@@ -94,13 +94,13 @@ Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintCon
     const auto korean = m_korean.measure(context.text, context.display);
     if(!caption || !korean)
         return MakeUnexpected(Failure{});
-    const f32 captionHeight = caption->height + korean->height + s_CaptionPadding;
-    return UiWidgetGallery::LayoutBounds(context.display, s_GalleryMargin + s_PanelBaseHeight + captionHeight + s_PanelBottomGap);
+    const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption->height, korean->height);
+    return UiWidgetGallery::LayoutBounds(context.display, ResolveSkinGalleryPreferredTop(captionHeight));
 }
 
 void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     using namespace __hidden_ui_skin_preview;
-    const f32 originX = Max(s_GalleryMargin, (context.display.logicalWidth - s_OrdinaryGalleryWidth) - s_GalleryMargin);
+    const f32 originX = ResolveSkinGalleryOriginX(context.display.logicalWidth);
     const f32 originY = s_GalleryMargin;
     const auto caption = m_caption.measure(context.text, context.display);
     const auto korean = m_korean.measure(context.text, context.display);
@@ -113,8 +113,8 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label measurement failed"));
         return;
     }
-    const f32 captionHeight = caption->height + korean->height + s_CaptionPadding;
-    const f32 preferredTop = s_GalleryMargin + s_PanelBaseHeight + captionHeight + s_PanelBottomGap;
+    const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption->height, korean->height);
+    const f32 preferredTop = ResolveSkinGalleryPreferredTop(captionHeight);
     const NWB::Impl::Ui::Rect gallery = UiWidgetGallery::LayoutBounds(context.display, preferredTop);
     m_widgets.paint(context, gallery);
     if(gallery.y < preferredTop || originX < s_MinimumGalleryX)
@@ -128,11 +128,11 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const f32 captionY = originY + s_CaptionY;
     const f32 leftTextX = originX + s_LeftTextX;
     const f32 rightTextX = originX + s_RightTextX;
-    const f32 normalY = originY + s_ButtonTopY + (s_ButtonHeight - normal->height) * 0.5f;
-    const f32 hoverY = originY + s_ButtonTopY + (s_ButtonHeight - hover->height) * 0.5f;
-    const f32 pressedY = originY + s_ButtonBottomY + (s_ButtonHeight - pressed->height) * 0.5f;
-    const f32 disabledY = originY + s_ButtonBottomY + (s_ButtonHeight - disabled->height) * 0.5f;
-    const f32 editY = originY + s_EditFocusedY + (s_EditFocusedHeight - edit->height) * 0.5f;
+    const f32 normalY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonTopY, s_ButtonHeight, normal->height);
+    const f32 hoverY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonTopY, s_ButtonHeight, hover->height);
+    const f32 pressedY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonBottomY, s_ButtonHeight, pressed->height);
+    const f32 disabledY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonBottomY, s_ButtonHeight, disabled->height);
+    const f32 editY = ResolveSkinGalleryCenteredTextY(originY, s_EditFocusedY, s_EditFocusedHeight, edit->height);
     const b8 captionPainted = m_caption.paint(context.text, context.paint, { captionX, captionY, s_CaptionWidth, caption->height })
         && m_korean.paint(context.text, context.paint, { captionX, captionY + caption->height, s_CaptionWidth, korean->height });
     if(!captionPainted){

@@ -105,40 +105,41 @@ b8 ValidateMaterials(const Span<const PreparedShaderEntry> preparedEntries, cons
                 hasInterfaceStage = true;
                 const Name shaderMaterialInterface = foundShader.value()->materialTypedBindingInterface;
                 const Core::Assets::CookString& shaderMaterialInterfacePath = foundShader.value()->materialTypedBindingInterfacePath;
-                if(!shaderMaterialInterface){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' " "does not include a generated material bind")
-                        , ConvertString(AStringView(materialEntry.virtualPath))
-                        , ConvertString(AStringView(materialEntry.materialInterface))
-                        , ConvertString(shaderAsset.name().resolvedText())
-                    );
-                    return false;
+                if(shaderMaterialInterface){
+                    const auto materialInterface = Name::FromText(AStringView(materialEntry.materialInterface));
+                    if(!materialInterface){
+                        NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' interface has invalid text (failure {})"), ConvertString(AStringView(materialEntry.virtualPath)), static_cast<u32>(materialInterface.error()));
+                        return false;
+                    }
+                    if(!ValidateMaterialCookPixelShaderInterface(
+                        AStringView(materialEntry.virtualPath),
+                        AStringView(materialEntry.materialInterface),
+                        shaderAsset.name(),
+                        shaderMaterialInterface,
+                        AStringView(shaderMaterialInterfacePath),
+                        *materialInterface
+                    ))
+                        return false;
                 }
-                const auto materialInterface = Name::FromText(AStringView(materialEntry.materialInterface));
-                if(!materialInterface){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' interface has invalid text (failure {})"), ConvertString(AStringView(materialEntry.virtualPath)), static_cast<u32>(materialInterface.error()));
+                else if(!ValidateMaterialCookPixelShaderInterface(
+                    AStringView(materialEntry.virtualPath),
+                    AStringView(materialEntry.materialInterface),
+                    shaderAsset.name(),
+                    s_NameNone,
+                    AStringView(),
+                    s_NameNone
+                ))
                     return false;
-                }
-                if(shaderMaterialInterface != *materialInterface){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' " "includes generated material bind interface '{}'")
-                        , ConvertString(AStringView(materialEntry.virtualPath))
-                        , ConvertString(AStringView(materialEntry.materialInterface))
-                        , ConvertString(shaderAsset.name().resolvedText())
-                        , ConvertString(shaderMaterialInterfacePath)
-                    );
-                    return false;
-                }
             }
         }
 
-        if(!hasShaderStage){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has no shader stages"), ConvertString(AStringView(materialEntry.virtualPath)));
+        if(!ValidateMaterialCookStagePresence(
+            AStringView(materialEntry.virtualPath),
+            AStringView(materialEntry.materialInterface),
+            hasShaderStage,
+            hasInterfaceStage
+        ))
             return false;
-        }
-
-        if(!hasInterfaceStage){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but has no pixel shader stage"), ConvertString(AStringView(materialEntry.virtualPath)), ConvertString(AStringView(materialEntry.materialInterface)));
-            return false;
-        }
     }
 
     return true;

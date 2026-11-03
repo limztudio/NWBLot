@@ -70,20 +70,7 @@ b8 IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderTy
 
     const auto payload = ShaderBinaryPayload::DecodeAssetPayload(binary);
     if(!payload){
-        switch(payload.error()){
-        case ShaderBinaryPayload::AssetPayloadDecodeFailure::InvalidHeader:
-            NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: invalid shader payload header"));
-            return false;
-        case ShaderBinaryPayload::AssetPayloadDecodeFailure::UnsupportedVersion:
-            NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: unsupported shader payload version"));
-            return false;
-        case ShaderBinaryPayload::AssetPayloadDecodeFailure::InvalidEntryPoint:
-            NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: invalid shader entry point"));
-            return false;
-        case ShaderBinaryPayload::AssetPayloadDecodeFailure::InvalidBytecode:
-            NWB_LOGGER_ERROR(NWB_TEXT("IShader::loadBinaryForStage failed: invalid SPIR-V bytecode"));
-            return false;
-        }
+        ShaderBinaryPayload::ReportShaderAssetPayloadDecodeFailure(payload.error());
         return false;
     }
 

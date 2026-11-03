@@ -122,21 +122,11 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
 b8 ShaderCook::ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena){
     using namespace ShaderBinaryPayload;
 
-    if(variantSignature.empty())
+    b8 isComplete = false;
+    if(!ValidateVariantSignaturePreamble(contextLabel, variantSignature, defineValues.empty(), isComplete))
+        return false;
+    if(isComplete)
         return true;
-
-    if(variantSignature == s_ShaderDefaultVariantText){
-        if(defineValues.empty())
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant 'default' is only valid when no defines are specified"), ConvertString(contextLabel));
-        return false;
-    }
-
-    if(defineValues.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' requires defines to be specified"), ConvertString(contextLabel), ConvertString(variantSignature));
-        return false;
-    }
 
     using ScratchStringSet = __hidden_shader_cook::ScratchHashSet<AStringView>;
     ScratchStringSet seenDefines{0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena};
@@ -145,46 +135,27 @@ b8 ShaderCook::ValidateVariantSignature(const AStringView contextLabel, const AS
         variantSignature,
         [&](const AStringView defineName, const AStringView defineValue) -> b8{
             const auto defineIt = defineValues.find(defineName);
-            if(defineIt == defineValues.end()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' references unknown define '{}'"), ConvertString(contextLabel), ConvertString(variantSignature), ConvertString(defineName));
-                return false;
-            }
-
+            const b8 defineKnown = defineIt != defineValues.end();
             b8 valueFound = false;
-            for(const CookString& allowedValue : defineIt.value().values){
-                if(AStringView(allowedValue) == defineValue){
-                    valueFound = true;
-                    break;
+            if(defineKnown){
+                for(const CookString& allowedValue : defineIt.value().values){
+                    if(AStringView(allowedValue) == defineValue){
+                        valueFound = true;
+                        break;
+                    }
                 }
             }
-            if(!valueFound){
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has unsupported value '{}' for define '{}'"), ConvertString(contextLabel), ConvertString(variantSignature), ConvertString(defineValue), ConvertString(defineName));
-                return false;
-            }
-
-            if(!seenDefines.insert(defineName).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' assigns define '{}' more than once"), ConvertString(contextLabel), ConvertString(variantSignature), ConvertString(defineName));
-                return false;
-            }
-
-            return true;
+            const b8 insertedUnique = defineKnown && valueFound && seenDefines.insert(defineName).second;
+            return ValidateVariantSignatureAssignmentStatus(contextLabel, variantSignature, defineName, defineValue, defineKnown, valueFound, insertedUnique);
         },
         [&](const VariantSignatureSegmentError::Enum error, const AStringView segment){
-            if(error == VariantSignatureSegmentError::EmptySegment)
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid empty segment"), ConvertString(contextLabel), ConvertString(variantSignature));
-            else
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid assignment '{}'"), ConvertString(contextLabel), ConvertString(variantSignature), ConvertString(segment));
+            ReportVariantSignatureSegmentError(contextLabel, variantSignature, error, segment);
         }
     );
     if(!parsedAssignments)
         return false;
 
-    if(seenDefines.size() != defineValues.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' must assign all defines"), ConvertString(contextLabel), ConvertString(variantSignature));
-        return false;
-    }
-
-    return true;
+    return ValidateVariantSignatureSeenCount(contextLabel, variantSignature, seenDefines.size(), defineValues.size());
 }
 
 Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, Alloc::ScratchArena& scratchArena){

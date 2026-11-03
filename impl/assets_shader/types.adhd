@@ -431,6 +431,98 @@ u64 UpdateShaderFnv64NameHash(in u64 hash, in NameHash nameHash){
     return result;
 }
 
+void ReportShaderAssetPayloadDecodeFailure(in AssetPayloadDecodeFailure failure){
+    switch(failure){
+    case AssetPayloadDecodeFailure::InvalidHeader:
+        error("IShader::loadBinaryForStage failed: invalid shader payload header");
+        break;
+    case AssetPayloadDecodeFailure::UnsupportedVersion:
+        error("IShader::loadBinaryForStage failed: unsupported shader payload version");
+        break;
+    case AssetPayloadDecodeFailure::InvalidEntryPoint:
+        error("IShader::loadBinaryForStage failed: invalid shader entry point");
+        break;
+    case AssetPayloadDecodeFailure::InvalidBytecode:
+        error("IShader::loadBinaryForStage failed: invalid SPIR-V bytecode");
+        break;
+    }
+}
+
+b8 ValidateVariantSignaturePreamble(
+    in StringView contextLabel,
+    in StringView variantSignature,
+    in b8 definesEmpty,
+    mut b8 outIsComplete
+){
+    outIsComplete = false;
+    if(variantSignature.empty()){
+        outIsComplete = true;
+        return true;
+    }
+    if(variantSignature == s_ShaderDefaultVariantText){
+        if(definesEmpty){
+            outIsComplete = true;
+            return true;
+        }
+        error("Meta '{}': variant 'default' is only valid when no defines are specified", contextLabel);
+        return false;
+    }
+    if(definesEmpty){
+        error("Meta '{}': variant '{}' requires defines to be specified", contextLabel, variantSignature);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateVariantSignatureAssignmentStatus(
+    in StringView contextLabel,
+    in StringView variantSignature,
+    in StringView defineName,
+    in StringView defineValue,
+    in b8 defineKnown,
+    in b8 valueFound,
+    in b8 insertedUnique
+){
+    if(!defineKnown){
+        error("Meta '{}': variant '{}' references unknown define '{}'", contextLabel, variantSignature, defineName);
+        return false;
+    }
+    if(!valueFound){
+        error("Meta '{}': variant '{}' has unsupported value '{}' for define '{}'", contextLabel, variantSignature, defineValue, defineName);
+        return false;
+    }
+    if(!insertedUnique){
+        error("Meta '{}': variant '{}' assigns define '{}' more than once", contextLabel, variantSignature, defineName);
+        return false;
+    }
+    return true;
+}
+
+void ReportVariantSignatureSegmentError(
+    in StringView contextLabel,
+    in StringView variantSignature,
+    in VariantSignatureSegmentError segmentError,
+    in StringView segment
+){
+    if(segmentError == VariantSignatureSegmentError::EmptySegment)
+        error("Meta '{}': variant '{}' has invalid empty segment", contextLabel, variantSignature);
+    else
+        error("Meta '{}': variant '{}' has invalid assignment '{}'", contextLabel, variantSignature, segment);
+}
+
+b8 ValidateVariantSignatureSeenCount(
+    in StringView contextLabel,
+    in StringView variantSignature,
+    in usize seenCount,
+    in usize expectedCount
+){
+    if(seenCount == expectedCount)
+        return true;
+
+    error("Meta '{}': variant '{}' must assign all defines", contextLabel, variantSignature);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

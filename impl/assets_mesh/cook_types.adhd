@@ -505,6 +505,32 @@ f64 ComputeTriangleRelativeVolumeAtIndices(in Span<f32x3u> positions, in u32 a, 
     );
 }
 
+usize ResolveMeshletDisconnectedCandidateChunkCount(in usize searchCount, in u32 workerThreadCount){
+    const usize workerCount = cast<usize>(workerThreadCount) + 1u;
+    const usize maxChunkCount = workerCount * s_MeshletDisconnectedCandidateParallelOversubscription;
+    return min(searchCount, maxChunkCount);
+}
+
+void ResolveMeshletDisconnectedCandidateChunkRange(
+    in usize searchOffset,
+    in usize searchCount,
+    in usize chunkCount,
+    in usize chunkIndex,
+    mut usize outChunkBegin,
+    mut usize outChunkEnd
+){
+    const usize chunkSize = searchCount / chunkCount;
+    const usize remainder = searchCount % chunkCount;
+    usize extraOffset = remainder;
+    usize extraCount = 0u;
+    if(chunkIndex < remainder){
+        extraOffset = chunkIndex;
+        extraCount = 1u;
+    }
+    outChunkBegin = searchOffset + chunkIndex * chunkSize + extraOffset;
+    outChunkEnd = outChunkBegin + chunkSize + extraCount;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

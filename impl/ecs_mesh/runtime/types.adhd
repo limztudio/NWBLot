@@ -106,6 +106,24 @@ const StringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
 const StringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
 const StringView s_AttributeSkinsSuffix = "attribute_skins";
 
+const StringView s_RuntimeCacheRestPositionLabel = "rest position";
+const StringView s_RuntimeCacheRestNormalLabel = "rest normal";
+const StringView s_RuntimeCacheRestTangentLabel = "rest tangent";
+const StringView s_RuntimeCacheSkinnedPositionLabel = "skinned position";
+const StringView s_RuntimeCacheSkinnedNormalLabel = "skinned normal";
+const StringView s_RuntimeCacheSkinnedTangentLabel = "skinned tangent";
+const StringView s_RuntimeCacheUv0Label = "uv0";
+const StringView s_RuntimeCacheColorLabel = "color";
+const StringView s_RuntimeCacheMeshletDescriptorLabel = "meshlet descriptor";
+const StringView s_RuntimeCacheMeshletBoundsLabel = "meshlet bounds";
+const StringView s_RuntimeCacheMeshletPositionRefDeltaLabel = "meshlet position ref delta";
+const StringView s_RuntimeCacheMeshletAttributeRefDeltaLabel = "meshlet attribute ref delta";
+const StringView s_RuntimeCacheMeshletLocalVertexRefLabel = "meshlet local vertex ref";
+const StringView s_RuntimeCacheMeshletPrimitiveIndexLabel = "meshlet primitive index";
+const StringView s_RuntimeCacheAttributeSkinLabel = "attribute skin";
+const StringView s_RuntimeCacheRtTriangleIndexLabel = "rt triangle index";
+const StringView s_RuntimeCacheRtTriangleAttributeLabel = "rt triangle attribute";
+
 const usize s_RuntimeMeshRequestInlineCapacity = 32u;
 const usize s_RuntimeMeshIndexBucketsPerRequest = 2u;
 
@@ -236,6 +254,46 @@ Name DeriveRuntimeResourceName(in Name sourceName, in u64 ownerId, in u32 editRe
         }
     }
     return outName;
+}
+
+Name DeriveNamedRuntimeBufferName(
+    in Name sourceName,
+    in u64 handleValue,
+    in u32 editRevision,
+    in StringView suffix,
+    in StringView label
+){
+    const Name bufferName = DeriveRuntimeResourceName(sourceName, handleValue, editRevision, suffix);
+    if(bufferName == s_NameNone)
+        error("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'", label, handleValue);
+    return bufferName;
+}
+
+void ReportRuntimeBufferUploadFailure(in BufferSetupFailure failure, in StringView label, in u64 handleValue){
+    switch(failure){
+    case BufferSetupFailure::EmptyPayload:
+        error("MeshSkinningRuntimeCache: {} payload is empty", label);
+        break;
+    case BufferSetupFailure::ByteSizeOverflow:
+        error("MeshSkinningRuntimeCache: {} payload byte size overflows", label);
+        break;
+    case BufferSetupFailure::CreateFailed:
+        error("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'", label, handleValue);
+        break;
+    }
+}
+
+b8 ValidateReconstructedRuntimeTriangleIndexCount(in usize reconstructedCount, in usize expectedCount, in u64 handleValue){
+    if(reconstructedCount == expectedCount)
+        return true;
+
+    error(
+        "MeshSkinningRuntimeCache: reconstructed ray tracing index count {} does not match expected {} for runtime mesh '{}'"
+        , cast<u64>(reconstructedCount)
+        , cast<u64>(expectedCount)
+        , handleValue
+    );
+    return false;
 }
 
 

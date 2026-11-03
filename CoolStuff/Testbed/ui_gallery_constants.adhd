@@ -323,6 +323,22 @@ StringView ResolveSearchComboLabel(in u64 index){
     }
 }
 
+f32 ResolveSkinGalleryCaptionHeight(in f32 captionHeight, in f32 koreanHeight){
+    return captionHeight + koreanHeight + s_CaptionPadding;
+}
+
+f32 ResolveSkinGalleryPreferredTop(in f32 captionHeight){
+    return s_GalleryMargin + s_PanelBaseHeight + captionHeight + s_PanelBottomGap;
+}
+
+f32 ResolveSkinGalleryOriginX(in f32 logicalWidth){
+    return max(s_GalleryMargin, (logicalWidth - s_OrdinaryGalleryWidth) - s_GalleryMargin);
+}
+
+f32 ResolveSkinGalleryCenteredTextY(in f32 originY, in f32 boxOffsetY, in f32 boxHeight, in f32 textHeight){
+    return originY + boxOffsetY + (boxHeight - textHeight) * 0.5f;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

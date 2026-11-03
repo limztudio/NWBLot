@@ -24,11 +24,9 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
-        if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->op == TokenType::Equal){
-            if(stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember){
-                outMembers.push_back(stmt->expr->lhs->text);
-                outSpans.push_back(stmt->expr->lhs->span);
-            }
+        if(IsThisMemberSimpleAssignStmt(*stmt)){
+            outMembers.push_back(stmt->expr->lhs->text);
+            outSpans.push_back(stmt->expr->lhs->span);
         }
         if(!stmt->statements.empty())
             CollectAssignedThisMembers(stmt->statements, outMembers, outSpans);
@@ -47,10 +45,8 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
             continue;
         if(stmt->kind == StmtKind::Return)
             return true;
-        if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->op == TokenType::Equal){
-            if(stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember && stmt->expr->lhs->text == fieldName)
-                return false;
-        }
+        if(IsThisMemberSimpleAssignStmt(*stmt, fieldName))
+            return false;
         if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::ParallelBlock){
             if(StmtListMayReturnWithoutInit(stmt->statements, fieldName))
                 return true;
@@ -69,7 +65,7 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
                     return true;
             }
         }
-        else if(stmt->kind == StmtKind::While || stmt->kind == StmtKind::DoWhile || stmt->kind == StmtKind::ForRange || stmt->kind == StmtKind::ForIndex){
+        else if(IsSequentialLoopStmtKind(stmt->kind)){
             if(StmtListMayReturnWithoutInit(stmt->statements, fieldName))
                 return true;
         }
@@ -81,12 +77,10 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
-        if(stmt->kind == StmtKind::Return || stmt->kind == StmtKind::Break || stmt->kind == StmtKind::Continue)
+        if(IsTerminalJumpStmtKind(stmt->kind))
             return false;
-        if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->op == TokenType::Equal){
-            if(stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember && stmt->expr->lhs->text == fieldName)
-                return true;
-        }
+        if(IsThisMemberSimpleAssignStmt(*stmt, fieldName))
+            return true;
         else if(stmt->kind == StmtKind::NativeBlock){
             for(const NativeBinding& binding : stmt->nativeBindings){
                 if(binding.mode == ParamPassingMode::Mut && binding.sourceExpr && binding.sourceExpr->kind == ExprKind::ThisMember && binding.sourceExpr->text == fieldName)
@@ -123,7 +117,7 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
                     return false;
             }
         }
-        else if(stmt->kind == StmtKind::While || stmt->kind == StmtKind::DoWhile || stmt->kind == StmtKind::ForRange || stmt->kind == StmtKind::ForIndex){
+        else if(IsSequentialLoopStmtKind(stmt->kind)){
             if(StmtListMayReturnWithoutInit(stmt->statements, fieldName))
                 return false;
         }
@@ -207,17 +201,9 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
             reportError(errors, method.params[0].span, "operator overload parameter must be passed by 'in', not 'mut'");
             ok = false;
         }
-        if(
-            method.name == "=="
-            || method.name == "!="
-            || method.name == "<"
-            || method.name == "<="
-            || method.name == ">"
-            || method.name == ">="
-            || method.name == "!"
-        ){
+        if(IsBoolReturnOperatorSymbol(method.name)){
             const MStringView retBase = method.returnType ? m_symbols.resolveBaseTypeName(method.returnType->name) : MStringView{};
-            if(!method.returnType || retBase != "b8" || m_symbols.resolveRefMode(method.returnType) != ParamPassingMode::None){
+            if(!method.returnType || !IsBoolScalarType(retBase) || m_symbols.resolveRefMode(method.returnType) != ParamPassingMode::None){
                 reportError(errors, method.span, "comparison and logical '!' operator overloads must return 'b8' by value");
                 ok = false;
             }
@@ -271,19 +257,9 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 ok = false;
                 continue;
             }
-            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-            b8 validSubsystemField = false;
-            if(resolved && resolved->refMode == ParamPassingMode::None){
-                if(resolved->name == "AssetRef" && resolved->templateArgs.size() == 1u && resolved->templateArgs[0].type && !resolved->templateArgs[0].type->name.empty()){
-                    validSubsystemField = true;
-                }
-                else if(resolved->name == "Vector" && resolved->templateArgs.size() == 1u && resolved->templateArgs[0].type){
-                    const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-                    if(elemType && elemType->name == "AssetRef" && elemType->templateArgs.size() == 1u && elemType->templateArgs[0].type && !elemType->templateArgs[0].type->name.empty())
-                        validSubsystemField = true;
-                }
-            }
-            if(!validSubsystemField){
+            MStringView assetName;
+            b8 isVectorField = false;
+            if(!TryResolveSubsystemFieldAssetType(*field, m_symbols, assetName, isVectorField)){
                 reportError(errors, field->span, "'[subsystem(\"...\")]' field must have type 'AssetRef<TAsset>' or 'Vector<AssetRef<TAsset>>'");
                 ok = false;
             }
@@ -463,7 +439,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         MethodDecl fieldInitDummy(m_arena);
         MVector<ScopedVarInfo> emptyScope(m_arena);
-        if(unwrappedFieldType && unwrappedFieldType->name == "Path"){
+        if(unwrappedFieldType && RequiresTCharAdaptation(unwrappedFieldType->name)){
             if(field->defaultExpr)
                 markStringToPathAdaptation(&classDecl, &fieldInitDummy, emptyScope, *field->defaultExpr);
             for(Expr* arg : field->ctorArgs){
@@ -478,28 +454,9 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             if(field->defaultExpr){
                 if(!checkExpr(&classDecl, emptyScope, fieldRefMode == ParamPassingMode::Mut, fieldInitDummy, *field->defaultExpr, errors))
                     ok = false;
-                if(fieldRefMode == ParamPassingMode::In){
-                    b8 isRvalueDefault = (
-                        field->defaultExpr->kind == ExprKind::IntegerLiteral
-                        || field->defaultExpr->kind == ExprKind::FloatLiteral
-                        || field->defaultExpr->kind == ExprKind::DoubleLiteral
-                        || field->defaultExpr->kind == ExprKind::StringLiteral
-                        || field->defaultExpr->kind == ExprKind::BoolLiteral
-                        || field->defaultExpr->kind == ExprKind::Binary
-                        || field->defaultExpr->kind == ExprKind::Cast
-                        || field->defaultExpr->kind == ExprKind::BitCast
-                        || field->defaultExpr->kind == ExprKind::Lambda
-                        || field->defaultExpr->kind == ExprKind::ScopeAccess
-                    );
-                    if(!isRvalueDefault && (field->defaultExpr->kind == ExprKind::Call || field->defaultExpr->kind == ExprKind::Unary)){
-                        const TypeRef* exprRetType = inferExprTypeRef(&classDecl, &fieldInitDummy, *field->defaultExpr, emptyScope);
-                        if(m_symbols.resolveRefMode(exprRetType) == ParamPassingMode::None)
-                            isRvalueDefault = true;
-                    }
-                    if(isRvalueDefault){
-                        reportError(errors, field->span, "cannot bind 'in' reference member default initializer to a literal or rvalue temporary");
-                        ok = false;
-                    }
+                if(fieldRefMode == ParamPassingMode::In && isRvalueTemporaryExpr(&classDecl, &fieldInitDummy, *field->defaultExpr, emptyScope)){
+                    reportError(errors, field->span, "cannot bind 'in' reference member default initializer to a literal or rvalue temporary");
+                    ok = false;
                 }
             }
             if(field->hasCtorInit){

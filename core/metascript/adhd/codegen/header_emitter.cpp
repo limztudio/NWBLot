@@ -348,35 +348,6 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     return out;
 }
 
-b8 HeaderEmitter::tryResolveSubsystemFieldAssetType(const FieldDecl& field, MStringView& outAssetTypeName, b8& outIsVector)const noexcept{
-    outAssetTypeName = {};
-    outIsVector = false;
-    if(!field.type)
-        return false;
-
-    const TypeRef* resolved = m_symbols.unwrapTypeAlias(field.type);
-    if(!resolved)
-        return false;
-
-    if(resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-        outIsVector = true;
-        const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-        if(elemType && elemType->name == "AssetRef" && !elemType->templateArgs.empty() && elemType->templateArgs[0].type){
-            const TypeRef* targetType = m_symbols.unwrapTypeAlias(elemType->templateArgs[0].type);
-            if(targetType)
-                outAssetTypeName = targetType->name;
-        }
-        return !outAssetTypeName.empty();
-    }
-    if(resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-        const TypeRef* targetType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-        if(targetType)
-            outAssetTypeName = targetType->name;
-        return !outAssetTypeName.empty();
-    }
-    return false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -26,33 +26,27 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     m_cursor.advance();
 
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "serialize" && attr.arguments.empty())
-            decl->isSerialize = true;
-        else if(attr.name == "reflect" && attr.arguments.empty())
-            decl->isReflect = true;
-        else if(attr.name == "asset"){
-            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){
-                m_cursor.error(attr.line, attr.column, "'[asset(\"...\")]' requires a single string literal argument");
-                return nullptr;
-            }
-            decl->assetTypeName = attr.arguments[0].text;
-            decl->isReflect = true;
+        b8 matchedAttr = false;
+#define NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE(attrName, declField) \
+        if(attr.name == attrName && attr.arguments.empty()){ \
+            decl->declField = true; \
+            matchedAttr = true; \
         }
-        else if(attr.name == "subsystem"){
-            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){
-                m_cursor.error(attr.line, attr.column, "'[subsystem(\"...\")]' requires a single string literal argument");
-                return nullptr;
-            }
-            decl->subsystemTypeName = attr.arguments[0].text;
+#define NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE(attrName, declField, impliesReflect, argErrorMessage) \
+        if(!matchedAttr && attr.name == attrName){ \
+            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){ \
+                m_cursor.error(attr.line, attr.column, argErrorMessage); \
+                return nullptr; \
+            } \
+            decl->declField = attr.arguments[0].text; \
+            if constexpr(impliesReflect) \
+                decl->isReflect = true; \
+            matchedAttr = true; \
         }
-        else if(attr.name == "component_asset"){
-            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){
-                m_cursor.error(attr.line, attr.column, "'[component_asset(\"...\")]' requires a single string literal argument");
-                return nullptr;
-            }
-            decl->componentAssetTypeName = attr.arguments[0].text;
-        }
-        else{
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE
+#undef NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE
+        if(!matchedAttr){
             m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'serialize', 'reflect', 'asset(\"...\")', 'subsystem(\"...\")', or 'component_asset(\"...\")'");
             return nullptr;
         }
@@ -98,17 +92,16 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
 }
 
 void DeclParser::parseClassMethodQualifiers(MethodDecl& method){
-    while(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
-        if(m_cursor.matchIdentifier("const")){
-            if(method.isConst)
-                m_cursor.error("duplicate 'const' qualifier on method");
-            method.isConst = true;
+    while(m_cursor.check(TokenType::Identifier) && IsMethodQualifierKeyword(m_cursor.current().text)){
+#define NWB_ADHD_EXPORT_METHOD_QUALIFIER(adhdKeyword, declField, duplicateErrorMessage) \
+        if(m_cursor.matchIdentifier(adhdKeyword)){ \
+            if(method.declField) \
+                m_cursor.error(duplicateErrorMessage); \
+            method.declField = true; \
+            continue; \
         }
-        else if(m_cursor.matchIdentifier("override")){
-            if(method.isOverride)
-                m_cursor.error("duplicate 'override' qualifier on method");
-            method.isOverride = true;
-        }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_METHOD_QUALIFIER
     }
 }
 
@@ -202,17 +195,12 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.error("C++-style 'public:' section labels are prohibited in adhd; write the access specifier on each member");
         return false;
     }
-    if(m_cursor.checkIdentifier("static")){
-        m_cursor.error("'static' members are prohibited in adhd");
-        return false;
-    }
-    if(m_cursor.checkIdentifier("virtual")){
-        m_cursor.error("'virtual' is prohibited in adhd; declare contracts in an 'interface' and mark implementations with 'override'");
-        return false;
-    }
-    if(m_cursor.checkIdentifier("inline") || m_cursor.checkIdentifier("noinline")){
-        m_cursor.error("'inline' and 'noinline' are prohibited in adhd; inlining is decided automatically by the adhd compiler");
-        return false;
+    if(m_cursor.check(TokenType::Identifier)){
+        const MStringView prohibitedErr = FindProhibitedMemberKeywordError(m_cursor.current().text, false);
+        if(!prohibitedErr.empty()){
+            m_cursor.error(prohibitedErr);
+            return false;
+        }
     }
     if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
         m_cursor.error("nested type declarations inside a class are prohibited in adhd");
@@ -360,13 +348,17 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     field->originalIndex = classDecl.fields.size();
 
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "transient" && attr.arguments.empty())
-            field->isTransient = true;
-        else if(attr.name == "reflect" && attr.arguments.empty()){
-            field->isReflect = true;
-            classDecl.isReflect = true;
+        b8 matchedAttr = false;
+#define NWB_ADHD_EXPORT_FIELD_ATTRIBUTE(attrName, declField, impliesClassReflect) \
+        if(attr.name == attrName && attr.arguments.empty()){ \
+            field->declField = true; \
+            if constexpr(impliesClassReflect) \
+                classDecl.isReflect = true; \
+            matchedAttr = true; \
         }
-        else{
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_FIELD_ATTRIBUTE
+        if(!matchedAttr){
             m_cursor.error(attr.line, attr.column, "unsupported attribute on field; expected 'transient' or 'reflect'");
             return false;
         }

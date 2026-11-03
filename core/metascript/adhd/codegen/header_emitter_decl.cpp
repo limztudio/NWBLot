@@ -53,31 +53,29 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
 
     out.append("    };\r\n");
     if(decl.isFlag){
-        out.append("    [[nodiscard]] constexpr Enum operator|(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(a) | static_cast<::");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(b)); }\r\n");
-        out.append("    [[nodiscard]] constexpr Enum operator&(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(a) & static_cast<::");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(b)); }\r\n");
-        out.append("    [[nodiscard]] constexpr Enum operator^(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(a) ^ static_cast<::");
-        out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
-        out.append(">(b)); }\r\n");
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, returnsBool, isBitwiseFlagOp, isPrefixUnary, isIncDec, binaryPrecedence, minMemberParams, maxMemberParams, prohibitsUnaryOverload) \
+        if constexpr(isBitwiseFlagOp && !isAssignment){ \
+            out.append("    [[nodiscard]] constexpr Enum operator" symbol "(const Enum a, const Enum b)noexcept{ return static_cast<Enum>(static_cast<::"); \
+            out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size()); \
+            out.append(">(a) " symbol " static_cast<::"); \
+            out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size()); \
+            out.append(">(b)); }\r\n"); \
+        }
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
         out.append("    [[nodiscard]] constexpr Enum operator~(const Enum a)noexcept{ return static_cast<Enum>(~static_cast<::");
         out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
         out.append(">(a)); }\r\n");
-        out.append("    constexpr Enum& operator|=(Enum& a, const Enum b)noexcept{ a = (a | b); return a; }\r\n");
-        out.append("    constexpr Enum& operator&=(Enum& a, const Enum b)noexcept{ a = (a & b); return a; }\r\n");
-        out.append("    constexpr Enum& operator^=(Enum& a, const Enum b)noexcept{ a = (a ^ b); return a; }\r\n");
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, returnsBool, isBitwiseFlagOp, isPrefixUnary, isIncDec, binaryPrecedence, minMemberParams, maxMemberParams, prohibitsUnaryOverload) \
+        if constexpr(isBitwiseFlagOp && !isAssignment){ \
+            out.append("    constexpr Enum& operator" symbol "=(Enum& a, const Enum b)noexcept{ a = (a " symbol " b); return a; }\r\n"); \
+        }
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
     }
     usize reflectedEntryCount = 0u;
     for(const EnumEntry& entry : decl.entries){
-        if(entry.name != "kCount")
+        if(IsEnumEntryReflected(entry))
             ++reflectedEntryCount;
     }
     out.append("    [[nodiscard]] constexpr usize reflectedEnumeratorCount()noexcept{ return ");
@@ -86,7 +84,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     out.append("    [[nodiscard]] constexpr AStringView reflectedEnumeratorName([[maybe_unused]] const usize index)noexcept{\r\n");
     usize reflectedIndex = 0u;
     for(const EnumEntry& entry : decl.entries){
-        if(entry.name == "kCount")
+        if(!IsEnumEntryReflected(entry))
             continue;
         out.append("        if(index == ");
         AppendAdhdUnsigned(out, reflectedIndex++);
@@ -98,7 +96,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     if(reflectedEntryCount > 0u){
         usize namedEnumCaseCount = reflectedEntryCount;
         for(const EnumEntry& entry : decl.entries){
-            if(entry.name == "kCount")
+            if(!IsEnumEntryReflected(entry))
                 continue;
             MString snakeName(m_arena);
             AppendCamelToSnakeCase(snakeName, entry.name);
@@ -109,7 +107,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         AppendAdhdUnsigned(out, namedEnumCaseCount);
         out.append("u> s_NamedEnumCases = {{\r\n");
         for(const EnumEntry& entry : decl.entries){
-            if(entry.name == "kCount")
+            if(!IsEnumEntryReflected(entry))
                 continue;
             out.append("        { \"");
             out.append(entry.name.data(), entry.name.size());
@@ -118,7 +116,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             out.append(" },\r\n");
         }
         for(const EnumEntry& entry : decl.entries){
-            if(entry.name == "kCount")
+            if(!IsEnumEntryReflected(entry))
                 continue;
             MString snakeName(m_arena);
             AppendCamelToSnakeCase(snakeName, entry.name);

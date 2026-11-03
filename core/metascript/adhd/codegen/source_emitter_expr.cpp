@@ -111,10 +111,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     case ExprKind::MemberAccess:{
         if(expr.lhs && expr.lhs->kind == ExprKind::Identifier && expr.lhs->callTemplateArgs.empty() && !expr.derefNotNull && !expr.isPointerMemberAccess && !m_symbols.findGlobalConstant(expr.lhs->text)){
             const MStringView resolvedBaseType = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if(IsNumericScalarType(resolvedBaseType) && (expr.text == "min" || expr.text == "max")){
+            MStringView limitSuffix;
+            if(IsNumericScalarType(resolvedBaseType) && TryMapScalarLimitMember(expr.text, &limitSuffix)){
                 out.append("::Limit<::");
                 out.append(resolvedBaseType.data(), resolvedBaseType.size());
-                out.append((expr.text == "min") ? ">::s_Min" : ">::s_Max");
+                out.append(limitSuffix.data(), limitSuffix.size());
                 break;
             }
         }

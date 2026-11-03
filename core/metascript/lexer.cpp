@@ -366,7 +366,7 @@ Token Lexer::readNumber()noexcept{
             advance();
             return makeErrorToken(invalidLitMsg, startLine, startColumn);
         }
-        while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
+        while(!isAtEnd() && IsIntegerLiteralSuffixChar(peek()))
             advance();
         if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
             while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
@@ -443,7 +443,7 @@ Token Lexer::readNumber()noexcept{
                 advance();
             return makeErrorToken(MStringView("invalid suffix on hexadecimal integer literal"), startLine, startColumn);
         }
-        while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
+        while(!isAtEnd() && IsIntegerLiteralSuffixChar(peek()))
             advance();
         if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
             while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
@@ -498,7 +498,7 @@ Token Lexer::readNumber()noexcept{
         advance();
     }
     else if(!isDouble){
-        while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
+        while(!isAtEnd() && IsIntegerLiteralSuffixChar(peek()))
             advance();
     }
 
@@ -552,7 +552,7 @@ Token Lexer::readString()noexcept{
                     const MChar hc = advance();
                     codePoint = (codePoint << 4u) | HexDigitValue(hc);
                 }
-                if(codePoint > 0x10FFFFu || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
+                if(!IsValidUnicodeScalarCodePoint(codePoint))
                     return makeErrorToken(MStringView("invalid unicode code point in string literal"), startLine, startColumn);
             }
             continue;
@@ -618,18 +618,18 @@ Token Lexer::readCharLiteral()noexcept{
                 const MChar hc = advance();
                 codePoint = (codePoint << 4u) | HexDigitValue(hc);
             }
-            if(codePoint > 0x10FFFFu || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
+            if(!IsValidUnicodeScalarCodePoint(codePoint))
                 return makeErrorToken(MStringView("invalid unicode code point in character literal"), startLine, startColumn);
         }
-        else if(esc >= '0' && esc <= '7'){
+        else if(IsOctalDigit(esc)){
             for(usize oct = 0u; oct < 2u; ++oct){
-                if(!isAtEnd() && peek() >= '0' && peek() <= '7')
+                if(!isAtEnd() && IsOctalDigit(peek()))
                     advance();
                 else
                     break;
             }
         }
-        else if(esc != 'n' && esc != 'r' && esc != 't' && esc != '\\' && esc != '\'' && esc != '"' && esc != '?' && esc != 'a' && esc != 'b' && esc != 'f' && esc != 'v'){
+        else if(!TryDecodeSimpleEscapeChar(esc)){
             return makeErrorToken(MStringView("invalid escape sequence in character literal"), startLine, startColumn);
         }
     }

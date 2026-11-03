@@ -118,7 +118,7 @@ b8 ParallelGraphValidator::validateBlock(const Span<const Stmt* const> statement
             break;
         }
         case StmtKind::ExprStmt:{
-            if(stmt->expr && stmt->expr->kind == ExprKind::Call && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::Identifier && stmt->expr->lhs->text == "wait"){
+            if(IsParallelWaitCallExpr(stmt->expr)){
                 for(usize aIdx = 0u; aIdx < stmt->expr->arguments.size(); ++aIdx){
                     const Expr* arg = stmt->expr->arguments[aIdx];
                     if(!arg || arg->kind != ExprKind::Identifier){

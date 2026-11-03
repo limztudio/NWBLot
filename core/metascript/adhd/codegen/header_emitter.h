@@ -32,7 +32,6 @@ public:
 
 
 private:
-    [[nodiscard]] b8 tryResolveSubsystemFieldAssetType(const FieldDecl& field, MStringView& outAssetTypeName, b8& outIsVector)const noexcept;
     void emitEnumDecl(MString& out, const EnumDecl& decl)const;
     void emitTypeAliasDecl(MString& out, const TypeAliasDecl& decl)const;
     void emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const;

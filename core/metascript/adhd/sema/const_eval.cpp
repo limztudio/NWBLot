@@ -21,25 +21,18 @@ namespace __hidden_adhd_const_eval{
 
 
 [[nodiscard]] constexpr b8 TryEvaluateIntegerScalarLimit(const MStringView scalarType, const MStringView member, i64& outVal)noexcept{
-    if(member == "min"){
-        if(scalarType == "i8"){ outVal = Limit<i8>::s_Min; return true; }
-        if(scalarType == "i16"){ outVal = Limit<i16>::s_Min; return true; }
-        if(scalarType == "i32"){ outVal = Limit<i32>::s_Min; return true; }
-        if(scalarType == "i64" || scalarType == "isize"){ outVal = Limit<i64>::s_Min; return true; }
-        if(scalarType == "u8" || scalarType == "u16" || scalarType == "u32" || scalarType == "u64" || scalarType == "usize"){ outVal = 0; return true; }
+    b8 isMin = false;
+    if(!TryMapScalarLimitMember(member, nullptr, &isMin))
         return false;
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, cppType, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
+    if constexpr(isInteger){ \
+        if(scalarType == adhdName){ \
+            outVal = isMin ? static_cast<i64>(Limit<::cppType>::s_Min) : static_cast<i64>(Limit<::cppType>::s_Max); \
+            return true; \
+        } \
     }
-    if(member == "max"){
-        if(scalarType == "i8"){ outVal = Limit<i8>::s_Max; return true; }
-        if(scalarType == "i16"){ outVal = Limit<i16>::s_Max; return true; }
-        if(scalarType == "i32"){ outVal = Limit<i32>::s_Max; return true; }
-        if(scalarType == "i64" || scalarType == "isize"){ outVal = Limit<i64>::s_Max; return true; }
-        if(scalarType == "u8"){ outVal = static_cast<i64>(Limit<u8>::s_Max); return true; }
-        if(scalarType == "u16"){ outVal = static_cast<i64>(Limit<u16>::s_Max); return true; }
-        if(scalarType == "u32"){ outVal = static_cast<i64>(Limit<u32>::s_Max); return true; }
-        if(scalarType == "u64" || scalarType == "usize"){ outVal = static_cast<i64>(Limit<u64>::s_Max); return true; }
-        return false;
-    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
     return false;
 }
 
@@ -47,7 +40,7 @@ namespace __hidden_adhd_const_eval{
     if(!globalConst || !globalConst->varType)
         return false;
     const MStringView baseName = symbols.resolveBaseTypeName(globalConst->varType->name);
-    return baseName == "b8" || IsIntegerScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
+    return IsIntegralOrBoolScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
 }
 
 [[nodiscard]] b8 HasMatchingOuterParens(const MStringView text)noexcept{
@@ -216,8 +209,7 @@ b8 TryEvaluateExprConstant(const Expr* expr, const SymbolTable& symbols, const u
     case ExprKind::Identifier:
         return TryEvaluateTextConstant(expr->text, symbols, depth + 1u, contextEnum, outVal);
     case ExprKind::BoolLiteral:
-        outVal = (expr->text == "true") ? 1 : 0;
-        return true;
+        return TryParseBoolLiteral(expr->text, &outVal);
     case ExprKind::MemberAccess:{
         if(!expr->lhs || expr->lhs->kind != ExprKind::Identifier || !expr->lhs->callTemplateArgs.empty() || symbols.findGlobalConstant(expr->lhs->text))
             return false;
@@ -335,37 +327,30 @@ b8 TryEvaluateTextConstant(MStringView text, const SymbolTable& symbols, const u
 
     usize opPos = 0u;
     usize opLen = 0u;
-    if(findTopLevelBinary("|", "", opPos, opLen))
-        return evalBinaryOp(opPos, opLen, TokenType::Pipe);
-    if(findTopLevelBinary("^", "", opPos, opLen))
-        return evalBinaryOp(opPos, opLen, TokenType::Caret);
-    if(findTopLevelBinary("&", "", opPos, opLen))
-        return evalBinaryOp(opPos, opLen, TokenType::Ampersand);
-    if(findTopLevelBinary("<<", ">>", opPos, opLen))
-        return evalBinaryOp(opPos, opLen, (text.substr(opPos, opLen) == "<<") ? TokenType::LessLess : TokenType::GreaterGreater);
-    if(findTopLevelBinary("+", "-", opPos, opLen))
-        return evalBinaryOp(opPos, opLen, (text[opPos] == '+') ? TokenType::Plus : TokenType::Minus);
-    if(findTopLevelBinary("*", "/", opPos, opLen) || findTopLevelBinary("%", "", opPos, opLen)){
-        const TokenType::Enum op = (text[opPos] == '*') ? TokenType::Star : ((text[opPos] == '/') ? TokenType::Slash : TokenType::Percent);
-        return evalBinaryOp(opPos, opLen, op);
+    constexpr Array<Array<MStringView, 2>, 7> s_ConstBinaryPrecedenceLevels = {{
+        { "|", "" },
+        { "^", "" },
+        { "&", "" },
+        { "<<", ">>" },
+        { "+", "-" },
+        { "*", "/" },
+        { "%", "" },
+    }};
+    for(const auto& level : s_ConstBinaryPrecedenceLevels){
+        if(findTopLevelBinary(level[0], level[1], opPos, opLen))
+            return evalBinaryOp(opPos, opLen, MapOperatorSymbolToTokenType(text.substr(opPos, opLen)));
     }
 
-    if(text[0] == '+' || text[0] == '-' || text[0] == '~' || text[0] == '!'){
+    const TokenType::Enum leadingUnaryOp = MapOperatorSymbolToTokenType(text.substr(0u, 1u));
+    if(IsPrefixUnaryOperatorToken(leadingUnaryOp) && !IsIncrementOrDecrementOperatorToken(leadingUnaryOp)){
         i64 inner = 0;
         if(!TryEvaluateTextConstant(text.substr(1u), symbols, depth + 1u, contextEnum, inner))
             return false;
-        const TokenType::Enum op = (text[0] == '+') ? TokenType::Plus : ((text[0] == '-') ? TokenType::Minus : ((text[0] == '~') ? TokenType::Tilde : TokenType::Bang));
-        return __hidden_adhd_const_eval::TryApplyUnaryConstantOp(op, inner, outVal);
+        return __hidden_adhd_const_eval::TryApplyUnaryConstantOp(leadingUnaryOp, inner, outVal);
     }
 
-    if(text == "true"){
-        outVal = 1;
+    if(TryParseBoolLiteral(text, &outVal))
         return true;
-    }
-    if(text == "false"){
-        outVal = 0;
-        return true;
-    }
 
     if((text.size() >= 3u && text.front() == '\'' && text.back() == '\'') || IsAsciiDigit(text[0])){
         u64 parsedVal = 0u;
@@ -420,9 +405,7 @@ b8 AreConstantTemplateArgsEquivalent(const MStringView a, const MStringView b, c
         return true;
     if(a.empty() || b.empty())
         return false;
-    const b8 aIsBool = (a == "true" || a == "false");
-    const b8 bIsBool = (b == "true" || b == "false");
-    if(aIsBool != bIsBool)
+    if(IsBoolLiteralText(a) != IsBoolLiteralText(b))
         return false;
     i64 valA = 0;
     i64 valB = 0;
@@ -456,7 +439,7 @@ b8 NormalizeConstantTemplateArg(TypeArg& arg, const ClassDecl* enclosingClass, c
     if(!arg.type || arg.type->refMode != ParamPassingMode::None || !arg.type->templateArgs.empty() || arg.type->isFuncType)
         return false;
     const MStringView name = arg.type->name;
-    if(name == "true" || name == "false" || IsConcreteConstTemplateArgText(name, symbols) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name)){
+    if(IsBoolLiteralText(name) || IsConcreteConstTemplateArgText(name, symbols) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name)){
         arg.constantText = name;
         arg.type = nullptr;
         return true;

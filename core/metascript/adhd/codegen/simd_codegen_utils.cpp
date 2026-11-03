@@ -21,10 +21,10 @@ namespace __hidden_adhd_simd_codegen_utils{
 
 
 inline constexpr Array<MStringView, 4> s_LaneCallSuffixes = {
-    "X(",
-    "Y(",
-    "Z(",
-    "W("
+#define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT(xyzwChar, rgbaChar, laneIndex, cppLaneCallSuffix) \
+    cppLaneCallSuffix,
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
 };
 
 
@@ -146,7 +146,7 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
 
 [[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(const TokenType::Enum op)noexcept{
     switch(op){
-#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol) \
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, isIntLaneFallback, bitwiseIntrinsicSingle, bitwiseIntrinsicDouble) \
     case assignToken: return binaryToken;
 #include "../export_operators.h"
 #undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
@@ -156,8 +156,28 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
 
 [[nodiscard]] MStringView SimdBinaryScalarOpSymbol(const TokenType::Enum binaryOp)noexcept{
     switch(binaryOp){
-#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol) \
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, isIntLaneFallback, bitwiseIntrinsicSingle, bitwiseIntrinsicDouble) \
     case binaryToken: return paddedBinarySymbol;
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
+    default: return {};
+    }
+}
+
+[[nodiscard]] b8 IsSimdIntLaneFallbackBinaryOp(const TokenType::Enum binaryOp)noexcept{
+    switch(binaryOp){
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, isIntLaneFallback, bitwiseIntrinsicSingle, bitwiseIntrinsicDouble) \
+    case binaryToken: return isIntLaneFallback;
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
+    default: return false;
+    }
+}
+
+[[nodiscard]] MStringView MapSimdBitwiseBinaryIntrinsic(const TokenType::Enum binaryOp, const b8 isDouble)noexcept{
+    switch(binaryOp){
+#define NWB_ADHD_EXPORT_SIMD_BINARY_OP(binaryToken, assignToken, paddedBinarySymbol, isIntLaneFallback, bitwiseIntrinsicSingle, bitwiseIntrinsicDouble) \
+    case binaryToken: return isDouble ? MStringView(bitwiseIntrinsicDouble) : MStringView(bitwiseIntrinsicSingle);
 #include "../export_operators.h"
 #undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
     default: return {};

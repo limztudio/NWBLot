@@ -41,6 +41,22 @@ namespace __hidden_adhd_expr_parser{
     return node;
 }
 
+[[nodiscard]] constexpr b8 IsUnambiguousCastOperandStartToken(const TokenType::Enum type)noexcept{
+    switch(type){
+    case TokenType::Identifier:
+    case TokenType::IntegerLiteral:
+    case TokenType::FloatLiteral:
+    case TokenType::DoubleLiteral:
+    case TokenType::StringLiteral:
+    case TokenType::LeftParen:
+    case TokenType::Bang:
+    case TokenType::Tilde:
+        return true;
+    default:
+        return false;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -57,7 +73,7 @@ b8 ExprParser::parseArgumentList(MVector<Expr*>& outArgs){
 
     if(!m_cursor.check(TokenType::RightParen)){
         for(;;){
-            if((m_cursor.checkIdentifier("in") || m_cursor.checkIdentifier("mut"))){
+            if(m_cursor.check(TokenType::Identifier) && ParseParamPassingModeKeyword(m_cursor.current().text) != ParamPassingMode::None){
                 m_cursor.error("do not write 'in' or 'mut' at call sites in adhd");
                 return false;
             }
@@ -76,22 +92,8 @@ b8 ExprParser::parseArgumentList(MVector<Expr*>& outArgs){
     return m_cursor.expect(TokenType::RightParen, "expected ')' after argument list");
 }
 
-template<typename ParseNext, typename MatchOp>
-Expr* ExprParser::parseLeftAssocBinary(ParseNext&& parseNext, MatchOp&& matchOp){
-    Expr* left = parseNext();
-    while(left && matchOp(m_cursor.current().type)){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseNext();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
-}
-
 Expr* ExprParser::parseAssignment(){
-    Expr* lhs = parseLogicalOr();
+    Expr* lhs = parseBinaryFromPrecedence();
     if(!lhs)
         return nullptr;
 
@@ -118,57 +120,30 @@ Expr* ExprParser::parseAssignment(){
     return lhs;
 }
 
-Expr* ExprParser::parseLogicalOr(){
-    return parseLeftAssocBinary([this](){ return parseLogicalAnd(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::PipePipe; });
-}
-
-Expr* ExprParser::parseLogicalAnd(){
-    return parseLeftAssocBinary([this](){ return parseBitwiseOr(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::AmpersandAmpersand; });
-}
-
-Expr* ExprParser::parseBitwiseOr(){
-    return parseLeftAssocBinary([this](){ return parseBitwiseXor(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::Pipe; });
-}
-
-Expr* ExprParser::parseBitwiseXor(){
-    return parseLeftAssocBinary([this](){ return parseBitwiseAnd(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::Caret; });
-}
-
-Expr* ExprParser::parseBitwiseAnd(){
-    return parseLeftAssocBinary([this](){ return parseEquality(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::Ampersand; });
-}
-
-Expr* ExprParser::parseEquality(){
-    return parseLeftAssocBinary([this](){ return parseRelational(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::EqualEqual || t == TokenType::BangEqual; });
-}
-
-Expr* ExprParser::parseRelational(){
-    return parseLeftAssocBinary([this](){ return parseShift(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::Less || t == TokenType::LessEqual || t == TokenType::Greater || t == TokenType::GreaterEqual; });
-}
-
-Expr* ExprParser::parseShift(){
-    return parseLeftAssocBinary([this](){ return parseAdditive(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::LessLess || t == TokenType::GreaterGreater; });
-}
-
-Expr* ExprParser::parseAdditive(){
-    return parseLeftAssocBinary([this](){ return parseMultiplicative(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::Plus || t == TokenType::Minus; });
-}
-
-Expr* ExprParser::parseMultiplicative(){
-    return parseLeftAssocBinary([this](){ return parseUnary(); }, [](const TokenType::Enum t)noexcept{ return t == TokenType::Star || t == TokenType::Slash || t == TokenType::Percent; });
+Expr* ExprParser::parseBinaryFromPrecedence(const u8 minPrecedence){
+    Expr* left = parseUnary();
+    while(left){
+        const u8 prec = BinaryOperatorPrecedence(m_cursor.current().type);
+        if(prec == 0u || prec < minPrecedence)
+            break;
+        const Token opTok = m_cursor.current();
+        m_cursor.advance();
+        Expr* right = parseBinaryFromPrecedence(static_cast<u8>(prec + 1u));
+        if(!right)
+            return nullptr;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
+    }
+    return left;
 }
 
 Expr* ExprParser::parseUnary(){
-    if(m_cursor.check(TokenType::Star)){
-        m_cursor.error("unary '*' dereference is prohibited in adhd");
-        return nullptr;
-    }
-    if(m_cursor.check(TokenType::Ampersand)){
-        m_cursor.error("unary '&' address-of is prohibited in adhd");
+    const MStringView prohibitedUnaryErr = FindProhibitedUnaryOperatorError(m_cursor.current().type);
+    if(!prohibitedUnaryErr.empty()){
+        m_cursor.error(prohibitedUnaryErr);
         return nullptr;
     }
 
-    if(m_cursor.check(TokenType::Plus) || m_cursor.check(TokenType::Minus) || m_cursor.check(TokenType::Bang) || m_cursor.check(TokenType::Tilde) || m_cursor.check(TokenType::PlusPlus) || m_cursor.check(TokenType::MinusMinus)){
+    if(IsPrefixUnaryOperatorToken(m_cursor.current().type)){
         const Token opTok = m_cursor.current();
         m_cursor.advance();
         Expr* operand = parseUnary();
@@ -263,7 +238,7 @@ Expr* ExprParser::parsePostfix(){
             continue;
         }
 
-        if(m_cursor.check(TokenType::PlusPlus) || m_cursor.check(TokenType::MinusMinus)){
+        if(IsIncrementOrDecrementOperatorToken(m_cursor.current().type)){
             const Token opTok = m_cursor.current();
             m_cursor.advance();
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
@@ -287,24 +262,10 @@ Expr* ExprParser::parsePrimary(){
     const Token tok = m_cursor.current();
     const SourceSpan span{tok.line, tok.column};
 
-    if(tok.type == TokenType::IntegerLiteral){
+    ExprKind::Enum literalKind = ExprKind::IntegerLiteral;
+    if(TryMapLiteralTokenToExprKind(tok.type, literalKind)){
         m_cursor.advance();
-        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::IntegerLiteral, tok, span);
-    }
-
-    if(tok.type == TokenType::FloatLiteral){
-        m_cursor.advance();
-        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::FloatLiteral, tok, span);
-    }
-
-    if(tok.type == TokenType::DoubleLiteral){
-        m_cursor.advance();
-        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::DoubleLiteral, tok, span);
-    }
-
-    if(tok.type == TokenType::StringLiteral){
-        m_cursor.advance();
-        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::StringLiteral, tok, span);
+        return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), literalKind, tok, span);
     }
 
     if(m_cursor.match(TokenType::LeftParen)){
@@ -320,14 +281,7 @@ Expr* ExprParser::parsePrimary(){
                 while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
                     m_cursor.advance();
                 if(m_cursor.match(TokenType::RightParen)){
-                    const b8 nextIsCastOperand = m_cursor.check(TokenType::Identifier)
-                        || m_cursor.check(TokenType::IntegerLiteral)
-                        || m_cursor.check(TokenType::FloatLiteral)
-                        || m_cursor.check(TokenType::DoubleLiteral)
-                        || m_cursor.check(TokenType::StringLiteral)
-                        || m_cursor.check(TokenType::LeftParen)
-                        || m_cursor.check(TokenType::Bang)
-                        || m_cursor.check(TokenType::Tilde)
+                    const b8 nextIsCastOperand = __hidden_adhd_expr_parser::IsUnambiguousCastOperandStartToken(m_cursor.current().type)
                         || m_cursor.check(TokenType::Plus)
                         || m_cursor.check(TokenType::Minus);
                     if(nextIsCastOperand)
@@ -337,14 +291,7 @@ Expr* ExprParser::parsePrimary(){
             if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
                 const b8 isKnownType = maybeType->refMode != ParamPassingMode::None || maybeType->isFuncType || !maybeType->templateArgs.empty() || IsBuiltinTypeName(maybeType->name);
                 const b8 looksLikeType = isKnownType || (!maybeType->name.empty() && IsAsciiUpper(maybeType->name[0]));
-                const b8 nextIsUnambiguousCastOperand = m_cursor.check(TokenType::Identifier)
-                    || m_cursor.check(TokenType::IntegerLiteral)
-                    || m_cursor.check(TokenType::FloatLiteral)
-                    || m_cursor.check(TokenType::DoubleLiteral)
-                    || m_cursor.check(TokenType::StringLiteral)
-                    || m_cursor.check(TokenType::LeftParen)
-                    || m_cursor.check(TokenType::Bang)
-                    || m_cursor.check(TokenType::Tilde);
+                const b8 nextIsUnambiguousCastOperand = __hidden_adhd_expr_parser::IsUnambiguousCastOperandStartToken(m_cursor.current().type);
                 const b8 nextIsPlusOrMinus = m_cursor.check(TokenType::Plus) || m_cursor.check(TokenType::Minus);
                 if((looksLikeType && nextIsUnambiguousCastOperand) || (isKnownType && nextIsPlusOrMinus)){
                     m_cursor.error("C-style '(T)x' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'");
@@ -369,7 +316,7 @@ Expr* ExprParser::parsePrimary(){
             return nullptr;
         }
 
-        if(tok.text == "true" || tok.text == "false"){
+        if(IsBoolLiteralText(tok.text)){
             m_cursor.advance();
             return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::BoolLiteral, tok, span);
         }
@@ -393,8 +340,8 @@ Expr* ExprParser::parsePrimary(){
             return node;
         }
 
-        if(tok.text == "cast" || tok.text == "bit_cast"){
-            const b8 isBitCast = (tok.text == "bit_cast");
+        ExprKind::Enum castKind = ExprKind::Cast;
+        if(TryParseCastKeyword(tok.text, castKind)){
             m_cursor.advance();
             if(!m_cursor.expect(TokenType::Less, "expected '<' after cast keyword"))
                 return nullptr;
@@ -412,7 +359,7 @@ Expr* ExprParser::parsePrimary(){
                 return nullptr;
 
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-            node->kind = isBitCast ? ExprKind::BitCast : ExprKind::Cast;
+            node->kind = castKind;
             node->targetType = targetType;
             node->lhs = inner;
             node->span = span;

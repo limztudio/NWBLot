@@ -47,18 +47,15 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
 }
 
 [[nodiscard]] b8 IsScalarOrStringLikeNwbElement(const MStringView typeName)noexcept{
-    if(IsScalarType(typeName))
-        return true;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
-        return objInfo->isSelfDefaulted && typeName != "NameHash";
-    return typeName == "AssetRef";
+    return IsScalarType(typeName) || FindBuiltinNwbValueType(typeName) != nullptr;
 }
 
 void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const MStringView valueAccessor){
-    if(typeName == "b8"){
-        out.push_back('(');
+    if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName)){
+        out.append(nwbVal->valuePrefix.data(), nwbVal->valuePrefix.size());
         out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asInteger() != 0)");
+        out.append(nwbVal->nwbAccessorMethod.data(), nwbVal->nwbAccessorMethod.size());
+        out.append(nwbVal->valueSuffix.data(), nwbVal->valueSuffix.size());
     }
     else if(IsIntegerScalarType(typeName) || IsFloatScalarType(typeName)){
         out.append("static_cast<");
@@ -66,36 +63,6 @@ void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const 
         out.append(">(");
         out.append(valueAccessor.data(), valueAccessor.size());
         out.append(IsIntegerScalarType(typeName) ? ".asInteger())" : ".toDouble())");
-    }
-    else if(typeName == "String"){
-        out.append("AString(");
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString(), s_ClassArena)");
-    }
-    else if(typeName == "CompactString"){
-        out.append("ACompactString(");
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString())");
-    }
-    else if(typeName == "Path"){
-        out.append("Path(::ConvertString(");
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString()))");
-    }
-    else if(typeName == "EntityID"){
-        out.append("::NWB::Core::ECS::EntityID(static_cast<u32>(");
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asInteger()))");
-    }
-    else if(typeName == "Name"){
-        out.append("::Name::FromText(");
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString()).value_or(::Name{})");
-    }
-    else{
-        out.append("{::Name::FromText(");
-        out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString()).value_or(::Name{})}");
     }
 }
 
@@ -111,7 +78,7 @@ void EmitNwbSimdVectorCtorExpr(MString& out, const MStringView vecTypeName, cons
     for(u32 lane = 0u; lane < simdLanes; ++lane){
         if(lane > 0u)
             out.append(", ");
-        if(vecTypeName == "f16x2u" || vecTypeName == "f16x4u"){
+        if(unalignedInfo && unalignedInfo->isHalfFloat){
             out.append("::ConvertFloatToHalf(static_cast<f32>(");
             out.append(listAccessor.data(), listAccessor.size());
             out.push_back('[');
@@ -133,16 +100,14 @@ void EmitNwbSimdVectorCtorExpr(MString& out, const MStringView vecTypeName, cons
 }
 
 void EmitNwbMapKeyExpr(MString& out, const MStringView keyName, const b8 isEnumKey = false){
-    if(isEnumKey)
+    if(isEnumKey){
         out.append("*__ek");
-    else if(keyName == "String")
-        out.append("AString(__k, s_ClassArena)");
-    else if(keyName == "CompactString")
-        out.append("ACompactString(__k)");
-    else if(keyName == "Name")
-        out.append("::Name::FromText(__k).value_or(::Name{})");
-    else
-        out.append("Path(::ConvertString(__k))");
+    }
+    else if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(keyName)){
+        out.append(nwbVal->valuePrefix.data(), nwbVal->valuePrefix.size());
+        out.append("__k");
+        out.append(nwbVal->valueSuffix.data(), nwbVal->valueSuffix.size());
+    }
 }
 
 void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, const MStringView enumName, const b8 isFlag){
@@ -206,12 +171,14 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
     out.push_back(' ');
 }
 
-[[nodiscard]] b8 TryEmitNwbSharedScalarOrVectorFieldDeserialize(MString& out, const MStringView fieldName, const MStringView typeName, const SymbolTable& symbols){
-    if(typeName == "b8"){
+[[nodiscard]] b8 TryEmitNwbSharedScalarOrVectorFieldDeserialize(MString& out, const MStringView fieldName, const MStringView typeName, const SymbolTable& symbols, const b8 isOptional = false){
+    if(const BuiltinNwbValueTypeInfo* nwbVal = FindBuiltinNwbValueType(typeName)){
         EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isInteger()) this->");
+        const MStringView prefix = isOptional ? nwbVal->optionalFieldPrefix : nwbVal->directFieldPrefix;
+        const MStringView suffix = isOptional ? nwbVal->optionalFieldSuffix : nwbVal->directFieldSuffix;
+        out.append(prefix.data(), prefix.size());
         out.append(fieldName.data(), fieldName.size());
-        out.append(" = (__f->asInteger() != 0);\r\n");
+        out.append(suffix.data(), suffix.size());
         return true;
     }
     if(IsIntegerScalarType(typeName)){
@@ -234,20 +201,6 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
     }
     if(const EnumDecl* ed = symbols.findEnum(typeName)){
         EmitNwbEnumFieldDeserialize(out, fieldName, typeName, ed->isFlag);
-        return true;
-    }
-    if(typeName == "EntityID"){
-        EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isInteger()) this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.append(" = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));\r\n");
-        return true;
-    }
-    if(typeName == "Name"){
-        EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.append(" = *__name; }\r\n");
         return true;
     }
     u32 simdLanes = 0u;
@@ -287,10 +240,12 @@ void EmitNwbListContainerLoopHeader(MString& out, const MStringView fieldName, c
 }
 
 void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldName, const MStringView containerTypeName, const MStringView elemName, const SymbolTable& symbols){
-    const b8 isSetContainer = (containerTypeName.size() >= 3u && containerTypeName.substr(containerTypeName.size() - 3u) == "Set");
-    const b8 isForwardList = (containerTypeName == "ForwardList");
-    const b8 isFixedVec = (containerTypeName == "FixedVector");
-    const b8 isDynVec = !isForwardList && !isFixedVec && (containerTypeName != "Array");
+    const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(containerTypeName);
+    const ReflectedLinearKind::Enum linearKind = genericInfo ? genericInfo->reflectedLinearKind : ReflectedLinearKind::None;
+    const b8 isSetContainer = (linearKind == ReflectedLinearKind::Set);
+    const b8 isForwardList = (linearKind == ReflectedLinearKind::ForwardList);
+    const b8 isFixedVec = (linearKind == ReflectedLinearKind::FixedVector);
+    const b8 isDynVec = (linearKind == ReflectedLinearKind::DynamicBack || isSetContainer);
     const b8 isPushContainer = isForwardList || isFixedVec || isDynVec;
     const MStringView elemAccessor = isForwardList ? "__f->asList()[__i - 1u]" : "__f->asList()[__i]";
     const MStringView elemListAccessor = isForwardList ? "__f->asList()[__i - 1u].asList()" : "__f->asList()[__i].asList()";
@@ -372,27 +327,9 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
 }
 
 void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, const MStringView innerName, const SymbolTable& symbols){
-    if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, fieldName, innerName, symbols))
+    if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, fieldName, innerName, symbols, true))
         return;
-    if(innerName == "String"){
-        EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isString()) this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.append(" = AString(__f->asString(), s_ClassArena);\r\n");
-    }
-    else if(innerName == "CompactString" || innerName == "Path"){
-        EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isString()) this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.append(innerName == "CompactString" ? " = ACompactString(__f->asString());\r\n" : " = Path(::ConvertString(__f->asString()));\r\n");
-    }
-    else if(innerName == "AssetRef"){
-        EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->");
-        out.append(fieldName.data(), fieldName.size());
-        out.append(" = {*__name}; }\r\n");
-    }
-    else if(SymbolTable::IsSimdMatrixType(innerName)){
+    if(SymbolTable::IsSimdMatrixType(innerName)){
         const u32 elemCount = SimdMatrixElementCount(innerName);
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isList() && __f->asList().size() == ");
@@ -534,7 +471,7 @@ void EmitCppTypeOrBaseName(MString& out, const TypeRef* typeRef, const MStringVi
 void EmitNwbContainerElementDependencyExtract(MString& out, const TypeRef* itemTypeRef, const MStringView itemBaseName, const MStringView itemExpr, const SymbolTable& symbols){
     out.append("if(");
     out.append(itemExpr.data(), itemExpr.size());
-    if(itemBaseName == "AssetRef"){
+    if(IsAssetHandleType(itemBaseName)){
         out.append(".isString()){ if(const auto __name = ::Name::FromText(");
         out.append(itemExpr.data(), itemExpr.size());
         out.append(".asString()); __name && *__name) callback(*__name); }");
@@ -573,24 +510,6 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const 
         if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, field->name, tname, m_symbols)){
             continue;
         }
-        else if(tname == "String" || tname == "CompactString"){
-            EmitNwbFieldFindPrefix(out, field->name);
-            out.append("__f->isString()) this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(".assign(__f->asString());\r\n");
-        }
-        else if(tname == "Path"){
-            EmitNwbFieldFindPrefix(out, field->name);
-            out.append("__f->isString()) this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(" = ::ConvertString(__f->asString());\r\n");
-        }
-        else if(tname == "AssetRef"){
-            EmitNwbFieldFindPrefix(out, field->name);
-            out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(".virtualPath = *__name; }\r\n");
-        }
         else if(SymbolTable::IsSimdMatrixType(tname)){
             const u32 elemCount = SimdMatrixElementCount(tname);
             EmitNwbFieldFindPrefix(out, field->name);
@@ -610,7 +529,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const 
             const MStringView elemName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
             EmitNwbListContainerFieldDeserialize(out, field->name, tname, elemName, m_symbols);
         }
-        else if(tname == "Optional" && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type){
+        else if(IsOptionalContainerType(tname) && resolvedFieldType && !resolvedFieldType->templateArgs.empty() && resolvedFieldType->templateArgs[0].type){
             const MStringView innerName = m_symbols.resolveBaseTypeName(resolvedFieldType->templateArgs[0].type->name);
             EmitNwbOptionalFieldDeserialize(out, field->name, innerName, m_symbols);
         }
@@ -638,7 +557,7 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
         MStringView effectiveScalarOrClassType;
         const TypeRef* effectiveTypeRef = UnwrapOptionalFieldType(field->type, m_symbols, isOptional, effectiveScalarOrClassType);
 
-        if(effectiveScalarOrClassType == "AssetRef"){
+        if(IsAssetHandleType(effectiveScalarOrClassType)){
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString()); __name && *__name) callback(*__name); }\r\n");
         }
@@ -651,7 +570,7 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
         else if(IsReflectedLinearContainerType(effectiveScalarOrClassType) && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type){
             const TypeRef* elemTypeRef = m_symbols.unwrapTypeAlias(effectiveTypeRef->templateArgs[0].type);
             const MStringView elemName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
-            if(elemName == "AssetRef" || m_symbols.findClass(elemName)){
+            if(IsAssetHandleType(elemName) || m_symbols.findClass(elemName)){
                 EmitNwbFieldFindPrefix(out, field->name);
                 out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ ");
                 EmitNwbContainerElementDependencyExtract(out, elemTypeRef, elemName, "__f->asList()[__i]", m_symbols);
@@ -661,7 +580,7 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
         else if(IsReflectedMapContainerType(effectiveScalarOrClassType) && effectiveTypeRef && effectiveTypeRef->templateArgs.size() >= 2u && effectiveTypeRef->templateArgs[1].type){
             const TypeRef* valTypeRef = m_symbols.unwrapTypeAlias(effectiveTypeRef->templateArgs[1].type);
             const MStringView valName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[1].type->name);
-            if(valName == "AssetRef" || m_symbols.findClass(valName)){
+            if(IsAssetHandleType(valName) || m_symbols.findClass(valName)){
                 EmitNwbFieldFindPrefix(out, field->name);
                 out.append("__f->isMap()){ for([[maybe_unused]] const auto& [__k, __v] : __f->asMap()){ ");
                 EmitNwbContainerElementDependencyExtract(out, valTypeRef, valName, "__v", m_symbols);

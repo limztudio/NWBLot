@@ -164,13 +164,13 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier && expr.lhs->callTemplateArgs.empty() && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
             const MStringView resolvedBaseType = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if(IsNumericScalarType(resolvedBaseType) && (expr.text == "min" || expr.text == "max"))
+            if(IsNumericScalarType(resolvedBaseType) && TryMapScalarLimitMember(expr.text))
                 return resolvedBaseType;
         }
         const MStringView lhsType = inferExprTypeName(ownerClass, method, *expr.lhs, scope);
         if(const BuiltinSimdVectorInfo* simdInfo = FindBuiltinSimdVectorType(lhsType); simdInfo && expr.text.size() == 1u){
-            const MChar c = expr.text[0];
-            return (c == 'w' || c == 'a') ? simdInfo->wScalarType : simdInfo->xyzScalarType;
+            u32 lane = 0u;
+            return (TryMapSwizzleCharToLane(expr.text[0], lane) && lane == 3u) ? simdInfo->wScalarType : simdInfo->xyzScalarType;
         }
         if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(lhsType); unalignedInfo && expr.text.size() == 1u)
             return unalignedInfo->laneScalarType;
@@ -184,24 +184,19 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
         if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(lhsType))
             return unalignedInfo->laneScalarType;
         if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(lhsType))
-            return (matInfo->adhdName == "f64x3x3") ? "f64x3u" : (matInfo->isDoubleReg ? "f64x4" : "f32x4");
+            return matInfo->rowVectorType;
     }
 
     if(const TypeRef* resolvedRef = inferExprTypeRef(ownerClass, method, expr, scope))
         return m_symbols.resolveBaseTypeName(resolvedRef->name);
 
     if(expr.kind == ExprKind::Unary && expr.lhs){
-        if(expr.op == TokenType::Bang)
+        if(IsBoolReturnOperatorToken(expr.op))
             return "b8";
         return inferExprTypeName(ownerClass, method, *expr.lhs, scope);
     }
     if(expr.kind == ExprKind::Binary){
-        if(
-            expr.op == TokenType::EqualEqual || expr.op == TokenType::BangEqual
-            || expr.op == TokenType::Less || expr.op == TokenType::LessEqual
-            || expr.op == TokenType::Greater || expr.op == TokenType::GreaterEqual
-            || expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe
-        )
+        if(IsBoolReturnOperatorToken(expr.op))
             return "b8";
         const MStringView lhsT = expr.lhs ? inferExprTypeName(ownerClass, method, *expr.lhs, scope) : MStringView{};
         const MStringView rhsT = expr.rhs ? inferExprTypeName(ownerClass, method, *expr.rhs, scope) : MStringView{};
@@ -219,53 +214,17 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
         if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView recvBase = inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
             const MStringView mName = expr.lhs->text;
-            if(recvBase == "Name"){
-                if(mName == "hash" || mName == "identityHash")
-                    return "NameHash";
-                if(mName == "resolvedText")
-                    return "StringView";
-            }
-            else if(recvBase == "AssetRef" && mName == "name"){
-                return "Name";
-            }
-            else if(recvBase == "EntityID" && (mName == "index" || mName == "generation")){
-                return "u32";
-            }
-            else if((recvBase == "String" || recvBase == "CompactString" || recvBase == "StringView") && mName == "find"){
-                return "usize";
-            }
-            else if((recvBase == "String" || recvBase == "CompactString" || recvBase == "StringView") && (mName == "front" || mName == "back")){
-                return "u8";
-            }
-            else if(recvBase == "CompactString" && (mName == "assign" || mName == "append")){
-                return "b8";
-            }
+            if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(recvBase, mName))
+                return recvMethod->returnTypeName;
             if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName)){
-                if(memberInfo->returnRule == BuiltinMemberReturnRule::Void)
-                    return "void";
-                if(memberInfo->returnRule == BuiltinMemberReturnRule::Usize)
-                    return "usize";
-                if(memberInfo->returnRule == BuiltinMemberReturnRule::Bool)
-                    return "b8";
-                if(memberInfo->returnRule == BuiltinMemberReturnRule::StringView)
-                    return "StringView";
+                if(memberInfo->returnRule == BuiltinMemberReturnRule::FixedType)
+                    return memberInfo->returnTypeName;
             }
         }
         if(expr.lhs->kind == ExprKind::Identifier && !expr.arguments.empty() && expr.arguments[0]){
             if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::Bool)
-                    return "b8";
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::Usize)
-                    return "usize";
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::StringView)
-                    return "StringView";
-                if(
-                    fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedI64
-                    || fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedU64
-                    || fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedF32
-                    || fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedF64
-                )
-                    return "Expected";
+                if(fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType)
+                    return fnInfo->returnTypeName;
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar){
                     const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
                     if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(argType))
@@ -298,30 +257,19 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
     else if(expr.kind == ExprKind::ScopeAccess && !expr.scopeChain.empty()){
         return resolveScopeAccessEnumTypeName(ownerClass, method, expr, scope);
     }
-    else if(expr.kind == ExprKind::StringLiteral){
-        return "StringView";
-    }
-    else if(expr.kind == ExprKind::BoolLiteral){
-        return "b8";
-    }
-    else if(expr.kind == ExprKind::FloatLiteral){
-        return "f32";
-    }
-    else if(expr.kind == ExprKind::DoubleLiteral){
-        return "f64";
+    else if(const MStringView fixedLitType = LookupFixedLiteralExprTypeName(expr.kind); !fixedLitType.empty()){
+        return fixedLitType;
     }
     else if(expr.kind == ExprKind::IntegerLiteral){
         const MStringView t = expr.text;
         b8 hasU = false;
         b8 hasL = false;
-        for(usize i = t.size(); i > 0u; --i){
+        for(usize i = t.size(); i > 0u && IsIntegerLiteralSuffixChar(t[i - 1u]); --i){
             const MChar c = t[i - 1u];
             if(c == 'u' || c == 'U')
                 hasU = true;
-            else if(c == 'l' || c == 'L')
-                hasL = true;
             else
-                break;
+                hasL = true;
         }
         if(hasL)
             return hasU ? "u64" : "i64";
@@ -353,22 +301,21 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
-        if(lhsType == "AssetRef" && expr.text == "virtualPath"){
+        if(const BuiltinFieldInfo* fieldInfo = FindBuiltinField(lhsType, expr.text)){
             TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-            synth->name = "Name";
-            return synth;
-        }
-        if(lhsType == "NameHash" && expr.text == "qwords"){
-            TypeRef* elemType = AllocateAstNode<TypeRef>(m_arena);
-            elemType->name = "u64";
-            TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-            synth->name = "Array";
-            TypeArg elemArg;
-            elemArg.type = elemType;
-            TypeArg countArg;
-            countArg.constantText = "8u";
-            synth->templateArgs.push_back(elemArg);
-            synth->templateArgs.push_back(countArg);
+            synth->name = fieldInfo->fieldTypeName;
+            if(!fieldInfo->elemTypeName.empty()){
+                TypeRef* elemType = AllocateAstNode<TypeRef>(m_arena);
+                elemType->name = fieldInfo->elemTypeName;
+                TypeArg elemArg;
+                elemArg.type = elemType;
+                synth->templateArgs.push_back(elemArg);
+            }
+            if(!fieldInfo->countText.empty()){
+                TypeArg countArg;
+                countArg.constantText = fieldInfo->countText;
+                synth->templateArgs.push_back(countArg);
+            }
             return synth;
         }
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
@@ -383,7 +330,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
     else if(expr.kind == ExprKind::Index && expr.lhs){
         const TypeRef* containerType = nullptr;
         const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &containerType);
-        if(lhsType == "String" || lhsType == "CompactString" || lhsType == "StringView"){
+        if(IsStringLikeType(lhsType)){
             TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
             synth->name = "u8";
             return synth;
@@ -454,31 +401,16 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     return m_symbols.unwrapTypeAlias(local->lambdaExpr->lambdaReturnType);
             }
             if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
-                if(fnInfo->returnRule == BuiltinFunctionReturnRule::StringView){
+                if(fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType && !fnInfo->returnTypeName.empty()){
                     TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                    synth->name = "StringView";
-                    return synth;
-                }
-                if(
-                    fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedI64
-                    || fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedU64
-                    || fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedF32
-                    || fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedF64
-                ){
-                    TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
-                    if(fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedI64)
-                        valType->name = "i64";
-                    else if(fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedU64)
-                        valType->name = "u64";
-                    else if(fnInfo->returnRule == BuiltinFunctionReturnRule::ExpectedF32)
-                        valType->name = "f32";
-                    else
-                        valType->name = "f64";
-                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                    synth->name = "Expected";
-                    TypeArg valArg;
-                    valArg.type = valType;
-                    synth->templateArgs.push_back(valArg);
+                    synth->name = fnInfo->returnTypeName;
+                    if(!fnInfo->returnTypeArgName.empty()){
+                        TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
+                        valType->name = fnInfo->returnTypeArgName;
+                        TypeArg valArg;
+                        valArg.type = valType;
+                        synth->templateArgs.push_back(valArg);
+                    }
                     return synth;
                 }
             }
@@ -517,27 +449,23 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             const TypeRef* recvTypeRef = nullptr;
             const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs->lhs, scope, &recvTypeRef);
             const MStringView mName = expr.lhs->text;
-            if((lhsType == "String" || lhsType == "CompactString" || lhsType == "StringView") && (mName == "front" || mName == "back")){
+            if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(lhsType, mName); recvMethod && recvMethod->synthesizeTypeRef){
                 TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                synth->name = "u8";
+                synth->name = recvMethod->returnTypeName;
                 return synth;
             }
-            if(recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
+            if(recvTypeRef && FindBuiltinGenericType(lhsType) && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
                 if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName)){
-                    if(memberInfo->returnRule == BuiltinMemberReturnRule::OptionalOrExpectedValue && (lhsType == "Optional" || lhsType == "Expected"))
+                    if(memberInfo->returnRule == BuiltinMemberReturnRule::FirstTypeArg)
                         return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
-                    if(memberInfo->returnRule == BuiltinMemberReturnRule::ExpectedError && lhsType == "Expected"){
+                    if(memberInfo->returnRule == BuiltinMemberReturnRule::SecondTypeArgOrDefault){
                         if(recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type)
                             return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[1].type);
                         TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                        synth->name = "Failure";
+                        synth->name = memberInfo->returnTypeName;
                         return synth;
                     }
-                    if(memberInfo->returnRule == BuiltinMemberReturnRule::FirstTypeArg && (IsSingleTypeParamBuiltinGeneric(lhsType) || IsTypeAndCountBuiltinGeneric(lhsType)))
-                        return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
-                    if(memberInfo->returnRule == BuiltinMemberReturnRule::AtomicValue && lhsType == "Atomic")
-                        return m_symbols.unwrapTypeAlias(recvTypeRef->templateArgs[0].type);
-                    if(mName == "subspan" && lhsType == "Span")
+                    if(memberInfo->returnRule == BuiltinMemberReturnRule::ReceiverType)
                         return m_symbols.unwrapTypeAlias(recvTypeRef);
                 }
             }

@@ -168,7 +168,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
             m_cursor.error(span.line, span.column, "'reflect' attribute is only permitted on class or interface methods, not free functions");
             return nullptr;
         }
-        if(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
+        if(m_cursor.check(TokenType::Identifier) && IsMethodQualifierKeyword(m_cursor.current().text)){
             m_cursor.error(span.line, span.column, "'const' and 'override' qualifiers are only permitted on class methods, not free functions");
             return nullptr;
         }
@@ -203,8 +203,13 @@ b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attribu
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE
         if(!matchedAttr){
-            if(attr.name == "inline" || attr.name == "noinline")
-                m_cursor.error(attr.line, attr.column, "'inline' and 'noinline' attributes are prohibited in adhd; inlining is decided automatically by the adhd compiler");
+            MStringView prohibitedErr;
+#define NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE(attrName, errorMessage) \
+            if(attr.name == attrName) prohibitedErr = errorMessage;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE
+            if(!prohibitedErr.empty())
+                m_cursor.error(attr.line, attr.column, prohibitedErr);
             else
                 m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; only '[reflect]' is permitted");
             return false;
@@ -214,8 +219,9 @@ b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attribu
 }
 
 b8 DeclParser::parseOperatorName(MStringView& outOpName){
-    if(m_cursor.check(TokenType::AmpersandAmpersand) || m_cursor.check(TokenType::PipePipe)){
-        m_cursor.error("overloading 'operator&&' and 'operator||' is prohibited in adhd");
+    const MStringView prohibitedOverloadErr = FindProhibitedOperatorOverloadError(m_cursor.current().type);
+    if(!prohibitedOverloadErr.empty()){
+        m_cursor.error(prohibitedOverloadErr);
         return false;
     }
 

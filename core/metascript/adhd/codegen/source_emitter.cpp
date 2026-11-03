@@ -31,11 +31,7 @@ namespace __hidden_adhd_source_emitter{
         for(const Stmt* stmt : list){
             if(!stmt)
                 continue;
-            if(
-                stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary
-                && stmt->expr->op == TokenType::Equal && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember
-                && stmt->expr->lhs->text == fieldName && stmt->expr->rhs
-            ){
+            if(IsThisMemberSimpleAssignStmt(*stmt, fieldName) && stmt->expr->rhs){
                 if(!firstFound){
                     firstFound = stmt->expr;
                     firstIsTopLevel = topLevel;

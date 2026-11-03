@@ -507,7 +507,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
 
         if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written){
-            const b8 endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && (stmt.statements.back()->kind == StmtKind::Return || stmt.statements.back()->kind == StmtKind::Break || stmt.statements.back()->kind == StmtKind::Continue);
+            const b8 endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && IsTerminalJumpStmtKind(stmt.statements.back()->kind);
             if(!endsWithTerminal)
                 emitSimdStoreForBinding(out, *loopBinding, indent + 1u);
         }

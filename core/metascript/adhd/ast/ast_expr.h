@@ -45,6 +45,57 @@ namespace ExprKind{
     };
 };
 
+[[nodiscard]] constexpr b8 IsLiteralExprKind(const ExprKind::Enum kind)noexcept{
+    if(kind == ExprKind::BoolLiteral)
+        return true;
+#define NWB_ADHD_EXPORT_LITERAL_TOKEN(litTokenType, exprKind, adhdTypeName) \
+    if(kind == exprKind) return true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_LITERAL_TOKEN
+    return false;
+}
+
+[[nodiscard]] constexpr b8 IsAlwaysRvalueExprKind(const ExprKind::Enum kind)noexcept{
+    if(IsLiteralExprKind(kind))
+        return true;
+    switch(kind){
+    case ExprKind::ScopeAccess:
+    case ExprKind::Binary:
+    case ExprKind::Cast:
+    case ExprKind::BitCast:
+    case ExprKind::Lambda:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] constexpr b8 TryParseCastKeyword(const MStringView text, ExprKind::Enum& outKind)noexcept{
+#define NWB_ADHD_EXPORT_CAST_KEYWORD(adhdKeyword, exprKind) \
+    if(text == adhdKeyword){ outKind = exprKind; return true; }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_CAST_KEYWORD
+    return false;
+}
+
+[[nodiscard]] constexpr b8 TryMapLiteralTokenToExprKind(const TokenType::Enum tokenType, ExprKind::Enum& outKind)noexcept{
+#define NWB_ADHD_EXPORT_LITERAL_TOKEN(litTokenType, exprKind, adhdTypeName) \
+    if(tokenType == litTokenType){ outKind = exprKind; return true; }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_LITERAL_TOKEN
+    return false;
+}
+
+[[nodiscard]] constexpr MStringView LookupFixedLiteralExprTypeName(const ExprKind::Enum kind)noexcept{
+    if(kind == ExprKind::BoolLiteral)
+        return "b8";
+#define NWB_ADHD_EXPORT_LITERAL_TOKEN(litTokenType, exprKind, adhdTypeName) \
+    if(kind == exprKind) return adhdTypeName;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_LITERAL_TOKEN
+    return {};
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -117,6 +168,10 @@ public:
         , lambdaBody(arena)
     {}
 };
+
+[[nodiscard]] constexpr b8 IsParallelWaitCallExpr(const Expr* expr)noexcept{
+    return expr && expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier && expr->lhs->text == "wait";
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

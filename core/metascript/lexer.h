@@ -34,6 +34,46 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
     return c == '0' || c == '1';
 }
 
+[[nodiscard]] constexpr b8 IsOctalDigit(const MChar c)noexcept{
+    return c >= '0' && c <= '7';
+}
+
+[[nodiscard]] constexpr b8 IsIntegerLiteralSuffixChar(const MChar c)noexcept{
+    return c == 'u' || c == 'U' || c == 'l' || c == 'L';
+}
+
+[[nodiscard]] constexpr b8 IsValidUnicodeScalarCodePoint(const u64 val)noexcept{
+    return val <= 0x10FFFFu && (val < 0xD800u || val > 0xDFFFu);
+}
+
+[[nodiscard]] constexpr b8 TryDecodeSimpleEscapeChar(const MChar esc, MChar* outDecoded = nullptr)noexcept{
+    struct SimpleEscapePair{
+        MChar escapeChar;
+        MChar decodedChar;
+    };
+    constexpr Array<SimpleEscapePair, 11> s_SimpleEscapes = {{
+        { 'n',  '\n' },
+        { 'r',  '\r' },
+        { 't',  '\t' },
+        { '\\', '\\' },
+        { '\'', '\'' },
+        { '"',  '"'  },
+        { '?',  '?'  },
+        { 'a',  '\a' },
+        { 'b',  '\b' },
+        { 'f',  '\f' },
+        { 'v',  '\v' },
+    }};
+    for(const SimpleEscapePair& pair : s_SimpleEscapes){
+        if(pair.escapeChar == esc){
+            if(outDecoded)
+                *outDecoded = pair.decodedChar;
+            return true;
+        }
+    }
+    return false;
+}
+
 [[nodiscard]] constexpr b8 TryDecodeCharLiteral(const MStringView text, i64& outValue)noexcept{
     if(text.size() < 3u || text.front() != '\'' || text.back() != '\'')
         return false;
@@ -46,62 +86,15 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
     if(text.size() < 4u)
         return false;
 
+    MChar simpleDecoded = '\0';
+    if(TryDecodeSimpleEscapeChar(text[2], &simpleDecoded)){
+        if(text.size() != 4u)
+            return false;
+        outValue = static_cast<i64>(static_cast<u8>(simpleDecoded));
+        return true;
+    }
+
     switch(text[2]){
-    case 'n':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\n';
-        return true;
-    case 'r':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\r';
-        return true;
-    case 't':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\t';
-        return true;
-    case '\\':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\\';
-        return true;
-    case '\'':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\'';
-        return true;
-    case '"':
-        if(text.size() != 4u)
-            return false;
-        outValue = '"';
-        return true;
-    case '?':
-        if(text.size() != 4u)
-            return false;
-        outValue = '?';
-        return true;
-    case 'a':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\a';
-        return true;
-    case 'b':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\b';
-        return true;
-    case 'f':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\f';
-        return true;
-    case 'v':
-        if(text.size() != 4u)
-            return false;
-        outValue = '\v';
-        return true;
     case 'x':
     case 'X':
     case 'u':
@@ -115,16 +108,16 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
                 return false;
             val = (val << 4u) | static_cast<u64>(HexDigitValue(ch));
         }
-        if((text[2] == 'u' || text[2] == 'U') && (val > 0x10FFFFu || (val >= 0xD800u && val <= 0xDFFFu)))
+        if((text[2] == 'u' || text[2] == 'U') && !IsValidUnicodeScalarCodePoint(val))
             return false;
         outValue = static_cast<i64>(val);
         return true;
     }
     default:
-        if(text[2] >= '0' && text[2] <= '7'){
+        if(IsOctalDigit(text[2])){
             u64 val = 0u;
             for(usize i = 2u; i + 1u < text.size(); ++i){
-                if(text[i] < '0' || text[i] > '7' || val > (Limit<u64>::s_Max >> 3u))
+                if(!IsOctalDigit(text[i]) || val > (Limit<u64>::s_Max >> 3u))
                     return false;
                 val = (val << 3u) | static_cast<u64>(text[i] - '0');
             }
@@ -148,7 +141,7 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
         return true;
     }
 
-    while(!text.empty() && (text.back() == 'u' || text.back() == 'U' || text.back() == 'l' || text.back() == 'L'))
+    while(!text.empty() && IsIntegerLiteralSuffixChar(text.back()))
         text.remove_suffix(1u);
     if(text.empty())
         return false;

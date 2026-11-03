@@ -44,10 +44,13 @@ namespace __hidden_adhd_type_parser{
 
 
 ParamPassingMode::Enum MatchParamPassingMode(ParserCursor& cursor){
-    if(cursor.matchIdentifier("in"))
-        return ParamPassingMode::In;
-    if(cursor.matchIdentifier("mut"))
-        return ParamPassingMode::Mut;
+    if(cursor.check(TokenType::Identifier)){
+        const ParamPassingMode::Enum mode = ParseParamPassingModeKeyword(cursor.current().text);
+        if(mode != ParamPassingMode::None){
+            cursor.advance();
+            return mode;
+        }
+    }
     return ParamPassingMode::None;
 }
 
@@ -190,9 +193,12 @@ b8 TypeParser::parseTemplateParamList(MVector<TemplateParamDecl>& outParams){
             m_cursor.advance();
         }
         else{
-            if(m_cursor.checkIdentifier("typename") || m_cursor.checkIdentifier("class")){
-                m_cursor.error("do not write 'typename' or 'class' inside '<...>' template parameters in adhd");
-                return false;
+            if(m_cursor.check(TokenType::Identifier)){
+                const MStringView prohibitedErr = FindProhibitedTemplateParamKeywordError(m_cursor.current().text);
+                if(!prohibitedErr.empty()){
+                    m_cursor.error(prohibitedErr);
+                    return false;
+                }
             }
             if(!m_cursor.check(TokenType::Identifier)){
                 m_cursor.errorExpected("expected template type parameter name");

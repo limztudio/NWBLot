@@ -163,7 +163,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
     case ExprKind::MemberAccess:{
         if(expr.lhs && expr.lhs->kind == ExprKind::Identifier && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
             const MStringView resolvedBaseType = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if(IsNumericScalarType(resolvedBaseType) && expr.lhs->callTemplateArgs.empty() && (expr.text == "min" || expr.text == "max")){
+            if(IsNumericScalarType(resolvedBaseType) && expr.lhs->callTemplateArgs.empty() && TryMapScalarLimitMember(expr.text)){
                 if(isMutationTarget){
                     reportError(errors, expr.span, "cannot mutate a scalar type limit constant");
                     ok = false;
@@ -255,7 +255,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const MStringView lhsBaseType = expr.lhs
             ? inferExprBaseType(ownerClass, &method, *expr.lhs, scope, &containerTypeRef)
             : MStringView{};
-        if(lhsBaseType != "Map" && lhsBaseType != "HashMap")
+        const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsBaseType);
+        if(!(genericInfo && genericInfo->isReflectedMap && genericInfo->isNonThreadSafeContainer))
             m_parallelDepth = 0u;
         u32 vecIdxLanes = 0u;
         if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(lhsBaseType); simdVecInfo && simdVecInfo->isMixed){
@@ -275,11 +276,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 ok = false;
             }
             else if(!lhsBaseType.empty() && IsKnownConcreteTypeName(lhsBaseType, m_symbols)){
-                const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsBaseType);
                 const b8 isBuiltinIndexable = (genericInfo && (genericInfo->isIndexableSequence || genericInfo->isReflectedMap))
-                    || lhsBaseType == "String"
-                    || lhsBaseType == "CompactString"
-                    || lhsBaseType == "StringView"
+                    || IsStringLikeType(lhsBaseType)
                     || SymbolTable::IsSimdType(lhsBaseType)
                     || SymbolTable::IsUnalignedVectorType(lhsBaseType);
                 if(!isBuiltinIndexable){
@@ -324,7 +322,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             ok = false;
         break;
     case ExprKind::Unary:{
-        b8 mutates = (expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus);
+        b8 mutates = IsIncrementOrDecrementOperatorToken(expr.op);
         if(expr.lhs){
             const TypeRef* lhsTypeRef = nullptr;
             const MStringView lhsType = inferExprBaseType(ownerClass, &method, *expr.lhs, scope, &lhsTypeRef);
@@ -337,7 +335,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     reportError(errors, expr.span, "bitwise '~' is only supported on 'flag' types, not 'enum' types");
                     ok = false;
                 }
-                else if(expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus){
+                else if(IsIncrementOrDecrementOperatorToken(expr.op)){
                     reportError(errors, expr.span, "increment and decrement operators are not supported on 'enum' or 'flag' types");
                     ok = false;
                 }
@@ -347,7 +345,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     reportError(errors, expr.span, "unary operator is not defined on operand type");
                     ok = false;
                 }
-                else if((expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus) && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !IsNumericScalarType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
+                else if(IsIncrementOrDecrementOperatorToken(expr.op) && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !IsNumericScalarType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
                     reportError(errors, expr.span, "increment and decrement operators require a numeric scalar operand");
                     ok = false;
                 }
@@ -471,24 +469,7 @@ b8 TypeChecker::applyInterfaceRefRebind(
         inOutRhsNeedsMut = true;
     }
     else if(targetRefMode == ParamPassingMode::In && assignExpr.rhs){
-        b8 isRvalueRebind = (
-            assignExpr.rhs->kind == ExprKind::IntegerLiteral
-            || assignExpr.rhs->kind == ExprKind::FloatLiteral
-            || assignExpr.rhs->kind == ExprKind::DoubleLiteral
-            || assignExpr.rhs->kind == ExprKind::StringLiteral
-            || assignExpr.rhs->kind == ExprKind::BoolLiteral
-            || assignExpr.rhs->kind == ExprKind::Binary
-            || assignExpr.rhs->kind == ExprKind::Cast
-            || assignExpr.rhs->kind == ExprKind::BitCast
-            || assignExpr.rhs->kind == ExprKind::Lambda
-            || assignExpr.rhs->kind == ExprKind::ScopeAccess
-        );
-        if(!isRvalueRebind && (assignExpr.rhs->kind == ExprKind::Call || assignExpr.rhs->kind == ExprKind::Unary)){
-            const TypeRef* rhsRetType = inferExprTypeRef(ownerClass, &method, *assignExpr.rhs, scope);
-            if(m_symbols.resolveRefMode(rhsRetType) == ParamPassingMode::None)
-                isRvalueRebind = true;
-        }
-        if(isRvalueRebind){
+        if(isRvalueTemporaryExpr(ownerClass, &method, *assignExpr.rhs, scope)){
             reportError(errors, assignExpr.span, "cannot rebind 'in' reference to a literal or rvalue temporary");
             return false;
         }
@@ -677,14 +658,7 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, const Span<const ScopedVa
         const MStringView rhsType = inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
         const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType);
         const EnumDecl* rhsEnum = m_symbols.findEnum(rhsType);
-        if(
-            expr.op == TokenType::Pipe
-            || expr.op == TokenType::Ampersand
-            || expr.op == TokenType::Caret
-            || expr.op == TokenType::PipeEqual
-            || expr.op == TokenType::AmpersandEqual
-            || expr.op == TokenType::CaretEqual
-        ){
+        if(IsBitwiseFlagOperatorToken(expr.op)){
             if((lhsEnum && !lhsEnum->isFlag) || (!m_symbols.findClass(lhsType) && rhsEnum && !rhsEnum->isFlag)){
                 reportError(errors, expr.span, "bitwise operators are only supported on 'flag' types, not 'enum' types");
                 ok = false;
@@ -694,21 +668,11 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, const Span<const ScopedVa
                 ok = false;
             }
         }
-        else if(
-            lhsEnum && (
-                expr.op == TokenType::PlusEqual
-                || expr.op == TokenType::MinusEqual
-                || expr.op == TokenType::StarEqual
-                || expr.op == TokenType::SlashEqual
-                || expr.op == TokenType::PercentEqual
-                || expr.op == TokenType::LessLessEqual
-                || expr.op == TokenType::GreaterGreaterEqual
-            )
-        ){
+        else if(lhsEnum && IsArithmeticOrShiftAssignOperatorToken(expr.op)){
             reportError(errors, expr.span, "arithmetic and shift compound assignment operators are not supported on 'enum' or 'flag' types");
             ok = false;
         }
-        if(lhsType == "Path")
+        if(RequiresTCharAdaptation(lhsType))
             markStringToPathAdaptation(ownerClass, &method, scope, *expr.rhs);
     }
 

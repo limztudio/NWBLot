@@ -15,26 +15,21 @@ NWB_ADHD_BEGIN
 
 
 b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize paramCount, MStringView& outErrorMsg)noexcept{
-    if((opName == "*" || opName == "&") && paramCount == 0u){
+    usize minParams = 1u;
+    usize maxParams = 1u;
+    b8 prohibitsUnary = false;
+    (void)TryGetMemberOperatorArityRules(opName, minParams, maxParams, prohibitsUnary);
+    if(prohibitsUnary && paramCount == 0u){
         outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
         return false;
     }
-    if(opName == "~"){
-        if(paramCount != 0u){
+    if(paramCount < minParams || paramCount > maxParams){
+        if(maxParams == 0u)
             outErrorMsg = "member 'operator~' cannot take parameters";
-            return false;
-        }
-        return true;
-    }
-    if(opName == "+" || opName == "-"){
-        if(paramCount > 1u){
+        else if(minParams == 0u)
             outErrorMsg = "member 'operator+' and 'operator-' may take at most 1 parameter";
-            return false;
-        }
-        return true;
-    }
-    if(paramCount != 1u){
-        outErrorMsg = "binary or indexing member operator overload must take exactly 1 parameter";
+        else
+            outErrorMsg = "binary or indexing member operator overload must take exactly 1 parameter";
         return false;
     }
     return true;
@@ -111,8 +106,9 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
         return true;
     }
 
-    const b8 isFlagDecl = m_cursor.matchIdentifier("flag");
-    if(isFlagDecl || m_cursor.matchIdentifier("enum")){
+    b8 isFlagDecl = false;
+    if(m_cursor.check(TokenType::Identifier) && TryParseEnumDeclKeyword(m_cursor.current().text, &isFlagDecl)){
+        m_cursor.advance();
         EnumDecl* enumDecl = parseEnumDecl(span, attributes, isFlagDecl);
         if(!enumDecl)
             return false;
@@ -189,7 +185,13 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const Span<cons
 
 EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes, const b8 isFlag){
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name != "reflect" || !attr.arguments.empty()){
+        b8 matchedAttr = false;
+#define NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE(attrName) \
+        if(attr.name == attrName && attr.arguments.empty()) \
+            matchedAttr = true;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE
+        if(!matchedAttr){
             m_cursor.error(attr.line, attr.column, isFlag ? "unsupported attribute on 'flag'; only '[reflect]' is permitted" : "unsupported attribute on 'enum'; only '[reflect]' is permitted");
             return nullptr;
         }
@@ -247,7 +249,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
         entry.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
         m_cursor.advance();
 
-        if((entry.name == "enum" || entry.name == "flag") && m_cursor.check(TokenType::Identifier)){
+        if(TryParseEnumDeclKeyword(entry.name) && m_cursor.check(TokenType::Identifier)){
             m_cursor.error("enumerator entries must not be prefixed with 'enum' or 'flag'");
             return nullptr;
         }
@@ -274,26 +276,32 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
 }
 
 InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes){
-    MStringView assetTypeName;
+    InterfaceDecl* decl = AllocateAstNode<InterfaceDecl>(m_cursor.arena());
+    decl->span = span;
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "reflect" && attr.arguments.empty())
-            continue;
-        if(attr.name == "asset" && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral){
-            assetTypeName = attr.arguments[0].text;
-            continue;
+        b8 matchedAttr = false;
+#define NWB_ADHD_EXPORT_INTERFACE_FLAG_ATTRIBUTE(attrName) \
+        if(attr.name == attrName && attr.arguments.empty()) \
+            matchedAttr = true;
+#define NWB_ADHD_EXPORT_INTERFACE_STRING_ATTRIBUTE(attrName, declField) \
+        if(!matchedAttr && attr.name == attrName && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral){ \
+            decl->declField = attr.arguments[0].text; \
+            matchedAttr = true; \
         }
-        m_cursor.error(attr.line, attr.column, "unsupported attribute on 'interface'; expected 'reflect' or 'asset(\"...\")'");
-        return nullptr;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_INTERFACE_STRING_ATTRIBUTE
+#undef NWB_ADHD_EXPORT_INTERFACE_FLAG_ATTRIBUTE
+        if(!matchedAttr){
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on 'interface'; expected 'reflect' or 'asset(\"...\")'");
+            return nullptr;
+        }
     }
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected interface name");
         return nullptr;
     }
 
-    InterfaceDecl* decl = AllocateAstNode<InterfaceDecl>(m_cursor.arena());
     decl->name = m_cursor.current().text;
-    decl->assetTypeName = assetTypeName;
-    decl->span = span;
     m_cursor.advance();
 
     if(m_cursor.check(TokenType::Less)){
@@ -328,17 +336,12 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
             m_cursor.error("interface methods are implicitly public; do not write access specifiers inside 'interface'");
             return nullptr;
         }
-        if(m_cursor.checkIdentifier("virtual")){
-            m_cursor.error("'virtual' keyword is prohibited in adhd; interface methods are implicitly abstract contracts");
-            return nullptr;
-        }
-        if(m_cursor.checkIdentifier("static")){
-            m_cursor.error("'static' methods and members are prohibited inside 'interface' in adhd");
-            return nullptr;
-        }
-        if(m_cursor.checkIdentifier("inline") || m_cursor.checkIdentifier("noinline")){
-            m_cursor.error("'inline' and 'noinline' are prohibited in adhd; inlining is decided automatically by the adhd compiler");
-            return nullptr;
+        if(m_cursor.check(TokenType::Identifier)){
+            const MStringView prohibitedErr = FindProhibitedMemberKeywordError(m_cursor.current().text, true);
+            if(!prohibitedErr.empty()){
+                m_cursor.error(prohibitedErr);
+                return nullptr;
+            }
         }
         if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
             m_cursor.error("nested type declarations inside 'interface' are prohibited in adhd; declare types at file scope");

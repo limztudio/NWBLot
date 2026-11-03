@@ -61,9 +61,9 @@ void EmitReflectedCountMethod(MString& out, const MStringView methodName, const 
 
 struct BinaryFieldClassInfo{
     MStringView elemName;
+    MStringView hashMemberSuffix;
     const TypeRef* elemType = nullptr;
     b8 isNameOrAssetRef = false;
-    b8 isAssetRef = false;
     b8 isSerializeSubObject = false;
     b8 isArray = false;
 };
@@ -72,22 +72,20 @@ struct BinaryFieldClassInfo{
     BinaryFieldClassInfo info;
     const TypeRef* resolved = symbols.unwrapTypeAlias(field.type);
     const MStringView tname = resolved ? resolved->name : field.type->name;
-    if(tname == "Name" || tname == "AssetRef"){
+    if(FindBuiltinBinaryHashMemberSuffix(tname, info.hashMemberSuffix)){
         info.isNameOrAssetRef = true;
-        info.isAssetRef = (tname == "AssetRef");
         return info;
     }
     if(const ClassDecl* subCls = symbols.findClass(tname); subCls && subCls->isSerialize){
         info.isSerializeSubObject = true;
         return info;
     }
-    if(tname == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+    if(IsFixedArrayContainerType(tname) && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
         info.elemType = symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
         info.elemName = info.elemType ? info.elemType->name : resolved->templateArgs[0].type->name;
-        if(info.elemName == "Name" || info.elemName == "AssetRef"){
+        if(FindBuiltinBinaryHashMemberSuffix(info.elemName, info.hashMemberSuffix)){
             info.isArray = true;
             info.isNameOrAssetRef = true;
-            info.isAssetRef = (info.elemName == "AssetRef");
             return info;
         }
         if(const ClassDecl* elemCls = symbols.findClass(info.elemName); elemCls && elemCls->isSerialize){
@@ -147,7 +145,7 @@ void EmitSerializedBinarySizeMethod(MString& out, const Span<const FieldDecl* co
     out.append("; }\r\n");
 }
 
-void EmitSerializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 isAssetRef, const b8 singleLineReturn){
+void EmitSerializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const MStringView hashMemberSuffix, const b8 singleLineReturn){
     out.append(indent.data(), indent.size());
     out.append(singleLineReturn
         ? "if(offset + sizeof(::NameHash) > bufferCapacity) return 0u;\r\n"
@@ -160,8 +158,7 @@ void EmitSerializeNameOrAssetRefStep(MString& out, const MStringView indent, con
     out.append("NWB_MEMCPY(outBuffer + offset, bufferCapacity - offset, &");
     out.append(targetPrefix.data(), targetPrefix.size());
     out.append(targetName.data(), targetName.size());
-    if(isAssetRef)
-        out.append(".virtualPath");
+    out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
     out.append(".identityHash(), sizeof(::NameHash));\r\n");
     out.append(indent.data(), indent.size());
     out.append("offset += sizeof(::NameHash);\r\n");
@@ -200,7 +197,7 @@ void EmitSerializeSubObjectStep(MString& out, const MStringView indent, const MS
     out.append(".serializedBinarySize();\r\n");
 }
 
-void EmitDeserializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 isAssetRef, const b8 singleLineReturn){
+void EmitDeserializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const MStringView hashMemberSuffix, const b8 singleLineReturn){
     out.append(indent.data(), indent.size());
     out.append(singleLineReturn
         ? "if(offset + sizeof(::NameHash) > bufferSize) return false;\r\n"
@@ -213,8 +210,7 @@ void EmitDeserializeNameOrAssetRefStep(MString& out, const MStringView indent, c
     out.append("{ ::NameHash __hash{}; NWB_MEMCPY(&__hash, sizeof(::NameHash), inBuffer + offset, sizeof(::NameHash)); ");
     out.append(targetPrefix.data(), targetPrefix.size());
     out.append(targetName.data(), targetName.size());
-    if(isAssetRef)
-        out.append(".virtualPath");
+    out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
     out.append(" = ::Name(__hash); }\r\n");
     out.append(indent.data(), indent.size());
     out.append("offset += sizeof(::NameHash);\r\n");
@@ -263,7 +259,7 @@ void EmitSerializeBinaryBody(MString& out, const Span<const FieldDecl* const> fi
             continue;
         const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, symbols);
         if(!info.isArray && info.isNameOrAssetRef){
-            EmitSerializeNameOrAssetRefStep(out, indent, "this->", field->name, info.isAssetRef, false);
+            EmitSerializeNameOrAssetRefStep(out, indent, "this->", field->name, info.hashMemberSuffix, false);
             continue;
         }
         if(!info.isArray && info.isSerializeSubObject){
@@ -276,7 +272,7 @@ void EmitSerializeBinaryBody(MString& out, const Span<const FieldDecl* const> fi
             out.append(field->name.data(), field->name.size());
             out.append("){\r\n");
             if(info.isNameOrAssetRef)
-                EmitSerializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.isAssetRef, true);
+                EmitSerializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.hashMemberSuffix, true);
             else
                 EmitSerializeSubObjectStep(out, innerIndentView, "", "__elem", true);
             out.append(indent.data(), indent.size());
@@ -317,7 +313,7 @@ void EmitDeserializeBinaryBody(MString& out, const Span<const FieldDecl* const> 
             continue;
         const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, symbols);
         if(!info.isArray && info.isNameOrAssetRef){
-            EmitDeserializeNameOrAssetRefStep(out, indent, "this->", field->name, info.isAssetRef, false);
+            EmitDeserializeNameOrAssetRefStep(out, indent, "this->", field->name, info.hashMemberSuffix, false);
             continue;
         }
         if(!info.isArray && info.isSerializeSubObject){
@@ -330,7 +326,7 @@ void EmitDeserializeBinaryBody(MString& out, const Span<const FieldDecl* const> 
             out.append(field->name.data(), field->name.size());
             out.append("){\r\n");
             if(info.isNameOrAssetRef)
-                EmitDeserializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.isAssetRef, true);
+                EmitDeserializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.hashMemberSuffix, true);
             else
                 EmitDeserializeSubObjectStep(out, innerIndentView, "", "__elem", true);
             out.append(indent.data(), indent.size());
@@ -404,7 +400,7 @@ void EmitContainerAssetDependencyLoop(MString& out, const MStringView fieldName,
     else{
         out.append("        ");
     }
-    if(elemName == "AssetRef"){
+    if(IsAssetHandleType(elemName)){
         out.append(isMapContainer ? "for([[maybe_unused]] const auto& [__k, __dep] : " : "for(const auto& __dep : ");
         out.append(containerDerefPrefix.data(), containerDerefPrefix.size());
         out.append(fieldName.data(), fieldName.size());
@@ -569,7 +565,7 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<cons
         const MStringView memberDotOrArrow = isOptional ? "->" : ".";
         const MStringView containerDerefPrefix = isOptional ? "*this->" : "this->";
 
-        if(tname == "AssetRef"){
+        if(IsAssetHandleType(tname)){
             out.append("        if(this->");
             out.append(field->name.data(), field->name.size());
             if(isOptional){
@@ -597,12 +593,12 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<cons
         }
         else if(IsReflectedLinearContainerType(tname) && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type){
             const MStringView elemName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
-            if(elemName == "AssetRef" || m_symbols.findClass(elemName))
+            if(IsAssetHandleType(elemName) || m_symbols.findClass(elemName))
                 __hidden_adhd_reflection_emitter::EmitContainerAssetDependencyLoop(out, field->name, elemName, containerDerefPrefix, isOptional, false);
         }
         else if(IsReflectedMapContainerType(tname) && effectiveTypeRef && effectiveTypeRef->templateArgs.size() >= 2u && effectiveTypeRef->templateArgs[1].type){
             const MStringView valName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[1].type->name);
-            if(valName == "AssetRef" || m_symbols.findClass(valName))
+            if(IsAssetHandleType(valName) || m_symbols.findClass(valName))
                 __hidden_adhd_reflection_emitter::EmitContainerAssetDependencyLoop(out, field->name, valName, containerDerefPrefix, isOptional, true);
         }
     }

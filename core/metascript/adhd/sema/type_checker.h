@@ -62,6 +62,7 @@ private:
     [[nodiscard]] b8 isThisConstInScope(const MethodDecl& method, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] b8 validateThisAccess(const ClassDecl* ownerClass, SourceSpan span, Span<const ScopedVarInfo> scope, MVector<ParseError>& errors)const;
     [[nodiscard]] b8 isConstructibleTypeName(MStringView calleeName, MStringView baseCallee)const noexcept;
+    [[nodiscard]] b8 isRvalueTemporaryExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] const MethodDecl* resolveCustomOperator(
         const ClassDecl* ownerClass,
         const MethodDecl* method,

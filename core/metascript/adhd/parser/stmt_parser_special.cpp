@@ -143,22 +143,24 @@ Stmt* StmtParser::parseNativeStatement(const SourceSpan span){
 }
 
 Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const DiagnosticKind::Enum kind, const Span<const ParsedAttribute> attributes){
-    b8 isEssential = false;
+    Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
+    stmt->kind = StmtKind::Diagnostic;
+    stmt->diagnosticKind = kind;
+    stmt->span = span;
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "essential" && attr.arguments.empty()){
-            isEssential = true;
+        b8 matchedAttr = false;
+#define NWB_ADHD_EXPORT_DIAGNOSTIC_ATTRIBUTE(attrName, stmtField) \
+        if(attr.name == attrName && attr.arguments.empty()){ \
+            stmt->stmtField = true; \
+            matchedAttr = true; \
         }
-        else{
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_DIAGNOSTIC_ATTRIBUTE
+        if(!matchedAttr){
             m_cursor.error(attr.line, attr.column, "only '[essential]' is permitted on diagnostic statements");
             return nullptr;
         }
     }
-
-    Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
-    stmt->kind = StmtKind::Diagnostic;
-    stmt->diagnosticKind = kind;
-    stmt->isEssential = isEssential;
-    stmt->span = span;
 
     if(!m_exprParser.parseArgumentList(stmt->arguments))
         return nullptr;
@@ -225,37 +227,27 @@ b8 StmtParser::applySchedulingAttributes(const Span<const ParsedAttribute> attri
     b8 seenCore = false;
     b8 seenPriority = false;
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "core"){
-            if(seenCore){
-                m_cursor.error(attr.line, attr.column, "duplicate 'core' attribute on parallel statement");
-                return false;
-            }
-            seenCore = true;
-            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::Identifier){
-                m_cursor.error(attr.line, attr.column, "'core' attribute requires a single identifier argument (Heavy, Light, MainThread, or Any)");
-                return false;
-            }
-            if(!TryParseParallelCoreKind(attr.arguments[0].text, outCore)){
-                m_cursor.error(attr.line, attr.column, "invalid 'core' attribute value; expected Heavy, Light, MainThread, or Any");
-                return false;
-            }
+        b8 matchedAttr = false;
+#define NWB_ADHD_EXPORT_SCHEDULING_ATTRIBUTE(attrName, seenVar, outVar, parseFn, duplicateErrorMessage, argErrorMessage, invalidValueErrorMessage) \
+        if(attr.name == attrName){ \
+            if(seenVar){ \
+                m_cursor.error(attr.line, attr.column, duplicateErrorMessage); \
+                return false; \
+            } \
+            seenVar = true; \
+            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::Identifier){ \
+                m_cursor.error(attr.line, attr.column, argErrorMessage); \
+                return false; \
+            } \
+            if(!parseFn(attr.arguments[0].text, outVar)){ \
+                m_cursor.error(attr.line, attr.column, invalidValueErrorMessage); \
+                return false; \
+            } \
+            matchedAttr = true; \
         }
-        else if(attr.name == "priority"){
-            if(seenPriority){
-                m_cursor.error(attr.line, attr.column, "duplicate 'priority' attribute on parallel statement");
-                return false;
-            }
-            seenPriority = true;
-            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::Identifier){
-                m_cursor.error(attr.line, attr.column, "'priority' attribute requires a single identifier argument (Critical, Normal, or Background)");
-                return false;
-            }
-            if(!TryParseParallelPriorityKind(attr.arguments[0].text, outPriority)){
-                m_cursor.error(attr.line, attr.column, "invalid 'priority' attribute value; expected Critical, Normal, or Background");
-                return false;
-            }
-        }
-        else{
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_SCHEDULING_ATTRIBUTE
+        if(!matchedAttr){
             m_cursor.error(attr.line, attr.column, "unsupported attribute on parallel statement; only 'core(...)' and 'priority(...)' are permitted");
             return false;
         }

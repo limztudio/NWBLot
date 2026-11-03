@@ -23,14 +23,14 @@ namespace __hidden_adhd_source_emitter_parallel{
 void AppendTaskOptions(MString& out, const Stmt& stmt){
     MStringView costEnum = "Any";
     MStringView targetEnum = "Worker";
-#define NWB_ADHD_EXPORT_PARALLEL_CORE(adhdName, astEnum, cppCostEnum, cppTargetEnum) \
-    if(stmt.parallelCore == astEnum){ costEnum = cppCostEnum; targetEnum = cppTargetEnum; }
+#define NWB_ADHD_EXPORT_PARALLEL_CORE(adhdName, enumName, cppCostEnum, cppTargetEnum) \
+    if(stmt.parallelCore == ParallelCoreKind::enumName){ costEnum = cppCostEnum; targetEnum = cppTargetEnum; }
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_PARALLEL_CORE
 
     MStringView priorityEnum = "Normal";
-#define NWB_ADHD_EXPORT_PARALLEL_PRIORITY(adhdName, astEnum, cppPriorityEnum) \
-    if(stmt.parallelPriority == astEnum) priorityEnum = cppPriorityEnum;
+#define NWB_ADHD_EXPORT_PARALLEL_PRIORITY(adhdName, enumName, cppPriorityEnum) \
+    if(stmt.parallelPriority == ParallelPriorityKind::enumName) priorityEnum = cppPriorityEnum;
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_PARALLEL_PRIORITY
 
@@ -63,7 +63,7 @@ void SourceEmitter::emitTaskScopePrologue(MString& out, const u32 indent)const{
 }
 
 b8 SourceEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, const u32 indent)const{
-    if(!stmt.expr || stmt.expr->kind != ExprKind::Call || !stmt.expr->lhs || stmt.expr->lhs->kind != ExprKind::Identifier || stmt.expr->lhs->text != "wait")
+    if(!IsParallelWaitCallExpr(stmt.expr))
         return false;
 
     if(stmt.expr->arguments.empty()){
@@ -362,8 +362,8 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
     case StmtKind::Diagnostic:{
         emitIndent(out, indent);
         MStringView macroPrefix;
-#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, astEnum, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
-        if(stmt.diagnosticKind == astEnum){ \
+#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, enumName, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
+        if(stmt.diagnosticKind == DiagnosticKind::enumName){ \
             if(stmt.arguments.size() > 1u) \
                 macroPrefix = stmt.isEssential ? MStringView(essentialMsgMacroPrefix) : MStringView(defaultMsgMacroPrefix); \
             else \

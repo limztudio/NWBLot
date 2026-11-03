@@ -52,7 +52,7 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
             else{
                 const TypeRef* unwrappedConstType = m_symbols.unwrapTypeAlias(param.constValueType);
                 const MStringView baseConstName = unwrappedConstType ? m_symbols.resolveBaseTypeName(unwrappedConstType->name) : MStringView{};
-                if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(baseConstName == "b8" || IsIntegerScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr)){
+                if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(IsIntegralOrBoolScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr)){
                     reportError(errors, param.span, "non-type template parameter must have an integer, b8, enum, or flag value type");
                     ok = false;
                 }
@@ -151,15 +151,15 @@ b8 TypeChecker::checkTemplateArgBounds(const Span<const TemplateParamDecl> param
             }
             const MStringView ctext = TrimView(arg.constantText);
             const MStringView paramConstBase = m_symbols.resolveBaseTypeName(param.constValueType->name);
-            const b8 isBoolLit = (ctext == "true" || ctext == "false");
-            if(paramConstBase == "b8" && !isBoolLit && !HasConstValueTemplateParam(enclosingClass, enclosingMethod, ctext)){
+            const b8 isBoolLit = IsBoolLiteralText(ctext);
+            if(IsBoolScalarType(paramConstBase) && !isBoolLit && !HasConstValueTemplateParam(enclosingClass, enclosingMethod, ctext)){
                 const Stmt* gc = m_symbols.findGlobalConstant(ctext);
-                if(!gc || !gc->varType || m_symbols.resolveBaseTypeName(gc->varType->name) != "b8"){
+                if(!gc || !gc->varType || !IsBoolScalarType(m_symbols.resolveBaseTypeName(gc->varType->name))){
                     reportError(errors, span, "expected boolean constant value argument for 'const b8' template parameter");
                     ok = false;
                 }
             }
-            else if(paramConstBase != "b8" && isBoolLit){
+            else if(!IsBoolScalarType(paramConstBase) && isBoolLit){
                 reportError(errors, span, "cannot pass boolean literal for non-'b8' template value parameter");
                 ok = false;
             }
@@ -267,46 +267,54 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
                 ok = false;
         }
     }
-    if(IsSingleTypeParamBuiltinGeneric(typeRef.name)){
-        if(typeRef.templateArgs.size() != 1u || !typeRef.templateArgs[0].type){
-            reportError(errors, typeRef.span, "built-in generic type requires exactly 1 type argument");
-            ok = false;
-        }
-    }
-    else if(IsTwoTypeParamBuiltinGeneric(typeRef.name)){
-        if(typeRef.templateArgs.size() != 2u || !typeRef.templateArgs[0].type || !typeRef.templateArgs[1].type){
-            reportError(errors, typeRef.span, "built-in generic type requires exactly 2 type arguments");
-            ok = false;
-        }
-    }
-    else if(IsOneOrTwoTypeParamBuiltinGeneric(typeRef.name)){
-        if(
-            (typeRef.templateArgs.size() != 1u && typeRef.templateArgs.size() != 2u)
-            || !typeRef.templateArgs[0].type
-            || (typeRef.templateArgs.size() == 2u && !typeRef.templateArgs[1].type)
-        ){
-            reportError(errors, typeRef.span, "built-in generic type requires 1 or 2 type arguments");
-            ok = false;
-        }
-    }
-    else if(IsTypeAndCountBuiltinGeneric(typeRef.name)){
-        b8 validCapacity = typeRef.templateArgs.size() == 2u
-            && typeRef.templateArgs[0].type != nullptr
-            && NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols);
-        if(validCapacity){
-            const MStringView capText = TrimView(typeRef.templateArgs[1].constantText);
-            if(capText == "true" || capText == "false" || (!capText.empty() && capText[0] == '-') || IsValidScopedEnumTemplateArg(capText, m_symbols)){
-                validCapacity = false;
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeRef.name)){
+        switch(genericInfo->paramKind){
+        case GenericParamKind::SingleType:{
+            if(typeRef.templateArgs.size() != 1u || !typeRef.templateArgs[0].type){
+                reportError(errors, typeRef.span, "built-in generic type requires exactly 1 type argument");
+                ok = false;
             }
-            else if(!HasConstValueTemplateParam(enclosingClass, enclosingMethod, capText)){
-                i64 capVal = 0;
-                if(TryEvaluateTextConstant(capText, m_symbols, capVal) && capVal <= 0)
+            break;
+        }
+        case GenericParamKind::TwoType:{
+            if(typeRef.templateArgs.size() != 2u || !typeRef.templateArgs[0].type || !typeRef.templateArgs[1].type){
+                reportError(errors, typeRef.span, "built-in generic type requires exactly 2 type arguments");
+                ok = false;
+            }
+            break;
+        }
+        case GenericParamKind::OneOrTwoType:{
+            if(
+                (typeRef.templateArgs.size() != 1u && typeRef.templateArgs.size() != 2u)
+                || !typeRef.templateArgs[0].type
+                || (typeRef.templateArgs.size() == 2u && !typeRef.templateArgs[1].type)
+            ){
+                reportError(errors, typeRef.span, "built-in generic type requires 1 or 2 type arguments");
+                ok = false;
+            }
+            break;
+        }
+        case GenericParamKind::TypeAndCount:{
+            b8 validCapacity = typeRef.templateArgs.size() == 2u
+                && typeRef.templateArgs[0].type != nullptr
+                && NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols);
+            if(validCapacity){
+                const MStringView capText = TrimView(typeRef.templateArgs[1].constantText);
+                if(IsBoolLiteralText(capText) || (!capText.empty() && capText[0] == '-') || IsValidScopedEnumTemplateArg(capText, m_symbols)){
                     validCapacity = false;
+                }
+                else if(!HasConstValueTemplateParam(enclosingClass, enclosingMethod, capText)){
+                    i64 capVal = 0;
+                    if(TryEvaluateTextConstant(capText, m_symbols, capVal) && capVal <= 0)
+                        validCapacity = false;
+                }
             }
+            if(!validCapacity){
+                reportError(errors, typeRef.span, "built-in bounded container requires 1 element type argument and 1 positive integer compile-time constant capacity argument");
+                ok = false;
+            }
+            break;
         }
-        if(!validCapacity){
-            reportError(errors, typeRef.span, "built-in bounded container requires 1 element type argument and 1 positive integer compile-time constant capacity argument");
-            ok = false;
         }
     }
     else if(const ClassDecl* targetCls = m_symbols.findClass(typeRef.name)){
@@ -354,7 +362,7 @@ b8 TypeChecker::checkReturnTypeRef(const TypeRef& returnType, const ClassDecl* e
 
 void TypeChecker::markStringToPathAdaptation(const ClassDecl* ownerClass, const MethodDecl* method, const Span<const ScopedVarInfo> scope, Expr& expr)const noexcept{
     const MStringView exprType = inferExprTypeName(ownerClass, method, expr, scope);
-    if(expr.kind == ExprKind::StringLiteral || exprType == "String" || exprType == "StringView" || exprType == "CompactString")
+    if(expr.kind == ExprKind::StringLiteral || IsStringLikeType(exprType))
         expr.adaptToTChar = true;
 }
 

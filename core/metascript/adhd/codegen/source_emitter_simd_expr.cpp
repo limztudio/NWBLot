@@ -188,7 +188,7 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
         emitBinaryRegCall(isDouble ? "::VectorDoubleSubtract(" : "::VectorSubtract(", lhs, rhs);
         return true;
     }
-    if(isInt && (binaryOp == TokenType::Star || binaryOp == TokenType::Slash || binaryOp == TokenType::Percent || binaryOp == TokenType::LessLess || binaryOp == TokenType::GreaterGreater)){
+    if(isInt && IsSimdIntLaneFallbackBinaryOp(binaryOp)){
         const MStringView regType = SimdRegisterCppType(simdType);
         const MStringView laneType = IntSimdLaneType(simdType);
         const MStringView rawWordType = IntSimdRawWordType(isDouble);
@@ -247,16 +247,8 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
         emitBinaryRegCall(isDouble ? "::VectorDoubleDivide(" : "::VectorDivide(", lhs, rhs);
         return true;
     }
-    if(binaryOp == TokenType::Ampersand){
-        emitBinaryRegCall(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(", lhs, rhs);
-        return true;
-    }
-    if(binaryOp == TokenType::Pipe){
-        emitBinaryRegCall(isDouble ? "::VectorDoubleOrInt(" : "::VectorOrInt(", lhs, rhs);
-        return true;
-    }
-    if(binaryOp == TokenType::Caret){
-        emitBinaryRegCall(isDouble ? "::VectorDoubleXorInt(" : "::VectorXorInt(", lhs, rhs);
+    if(const MStringView bitwisePrefix = MapSimdBitwiseBinaryIntrinsic(binaryOp, isDouble); !bitwisePrefix.empty()){
+        emitBinaryRegCall(bitwisePrefix, lhs, rhs);
         return true;
     }
     return false;

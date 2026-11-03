@@ -102,8 +102,10 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     const MStringView name = type.name;
-    if(name == "Span" && type.templateArgs.size() == 1u && type.templateArgs[0].type){
-        out.append("Span<const ");
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && genericInfo->isBorrowView && type.templateArgs.size() == 1u && type.templateArgs[0].type){
+        const MStringView cppViewName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : name;
+        out.append(cppViewName.data(), cppViewName.size());
+        out.append("<const ");
         emitTypeCpp(out, *type.templateArgs[0].type);
         out.push_back('>');
         return;
@@ -147,7 +149,7 @@ void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum
         return;
     }
 
-    if(m_symbols.isSmallValueType(type.name) && (type.templateArgs.empty() || m_symbols.resolveBaseTypeName(type.name) == "Span") && !type.isFuncType){
+    if(m_symbols.isSmallValueType(type.name) && (type.templateArgs.empty() || IsBorrowViewType(m_symbols.resolveBaseTypeName(type.name))) && !type.isFuncType){
         if(topLevelConst)
             out.append("const ");
         emitTypeCpp(out, type);

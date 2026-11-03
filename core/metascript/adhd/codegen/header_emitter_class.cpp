@@ -23,12 +23,14 @@ namespace __hidden_adhd_header_emitter_class{
 
 
 void EmitAccessSpecifier(MString& out, const AccessSpecifier::Enum access, const b8 maybeUnusedPrivate){
-    if(access == AccessSpecifier::Public)
-        out.append("public:\r\n    ");
-    else if(access == AccessSpecifier::Protected)
-        out.append("protected:\r\n    ");
-    else
-        out.append(maybeUnusedPrivate ? "private:\r\n    [[maybe_unused]] " : "private:\r\n    ");
+#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, enumName, cppLabelPrefix, maybeUnusedOnField) \
+    if(access == AccessSpecifier::enumName){ \
+        out.append((maybeUnusedOnField && maybeUnusedPrivate) ? (cppLabelPrefix "[[maybe_unused]] ") : cppLabelPrefix); \
+        return; \
+    }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
+    out.append(maybeUnusedPrivate ? "private:\r\n    [[maybe_unused]] " : "private:\r\n    ");
 }
 
 
@@ -59,7 +61,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
                 continue;
             MStringView assetName;
             b8 isVectorField = false;
-            if(tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField) && isVectorField){
+            if(TryResolveSubsystemFieldAssetType(*field, m_symbols, assetName, isVectorField) && isVectorField){
                 hasVectorField = true;
                 break;
             }
@@ -78,7 +80,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
                         continue;
                     MStringView assetName;
                     b8 isVectorField = false;
-                    if(tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField) && isVectorField){
+                    if(TryResolveSubsystemFieldAssetType(*field, m_symbols, assetName, isVectorField) && isVectorField){
                         out.append("        , ");
                         out.append(field->name.data(), field->name.size());
                         out.append("(arena)\r\n");
@@ -105,7 +107,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
                 continue;
             MStringView assetName;
             b8 isVectorField = false;
-            if(!tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
+            if(!TryResolveSubsystemFieldAssetType(*field, m_symbols, assetName, isVectorField))
                 continue;
             out.append(isVectorField ? "    ::NWB::Impl::SubsystemAssetRefVector<" : "    ::NWB::Core::Assets::AssetRef<");
             out.append(assetName.data(), assetName.size());
@@ -123,7 +125,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
                 continue;
             MStringView assetName;
             b8 isVectorField = false;
-            if(!tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
+            if(!TryResolveSubsystemFieldAssetType(*field, m_symbols, assetName, isVectorField))
                 continue;
             out.append("        ::NWB::Impl::MakeSubsystemFieldDescriptor<");
             out.append(decl.name.data(), decl.name.size());
@@ -379,10 +381,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
         else if(fieldRefMode == ParamPassingMode::None){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
             if(
-                baseFieldType == "Array"
-                || baseFieldType == "Span"
-                || baseFieldType == "StringView"
-                || baseFieldType == "NameHash"
+                NeedsBraceDefaultFieldInit(baseFieldType)
                 || SymbolTable::IsUnalignedVectorType(baseFieldType)
                 || m_symbols.findEnum(baseFieldType) != nullptr
                 || m_symbols.findClass(baseFieldType) != nullptr

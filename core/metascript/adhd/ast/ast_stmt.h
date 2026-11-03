@@ -40,6 +40,14 @@ namespace StmtKind{
     };
 };
 
+[[nodiscard]] constexpr b8 IsTerminalJumpStmtKind(const StmtKind::Enum kind)noexcept{
+    return kind == StmtKind::Return || kind == StmtKind::Break || kind == StmtKind::Continue;
+}
+
+[[nodiscard]] constexpr b8 IsSequentialLoopStmtKind(const StmtKind::Enum kind)noexcept{
+    return kind == StmtKind::While || kind == StmtKind::DoWhile || kind == StmtKind::ForRange || kind == StmtKind::ForIndex;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -117,6 +125,14 @@ public:
         , nativeBindings(arena)
     {}
 };
+
+[[nodiscard]] constexpr b8 IsThisMemberSimpleAssignStmt(const Stmt& stmt, const MStringView expectedFieldName = {})noexcept{
+    if(stmt.kind != StmtKind::ExprStmt || !stmt.expr || stmt.expr->kind != ExprKind::Binary || stmt.expr->op != TokenType::Equal)
+        return false;
+    if(!stmt.expr->lhs || stmt.expr->lhs->kind != ExprKind::ThisMember)
+        return false;
+    return expectedFieldName.empty() || stmt.expr->lhs->text == expectedFieldName;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -39,19 +39,8 @@ public:
 
 
 private:
-    template<typename ParseNext, typename MatchOp>
-    [[nodiscard]] Expr* parseLeftAssocBinary(ParseNext&& parseNext, MatchOp&& matchOp);
     [[nodiscard]] Expr* parseAssignment();
-    [[nodiscard]] Expr* parseLogicalOr();
-    [[nodiscard]] Expr* parseLogicalAnd();
-    [[nodiscard]] Expr* parseBitwiseOr();
-    [[nodiscard]] Expr* parseBitwiseXor();
-    [[nodiscard]] Expr* parseBitwiseAnd();
-    [[nodiscard]] Expr* parseEquality();
-    [[nodiscard]] Expr* parseRelational();
-    [[nodiscard]] Expr* parseShift();
-    [[nodiscard]] Expr* parseAdditive();
-    [[nodiscard]] Expr* parseMultiplicative();
+    [[nodiscard]] Expr* parseBinaryFromPrecedence(u8 minPrecedence = 1u);
     [[nodiscard]] Expr* parseUnary();
     [[nodiscard]] Expr* parsePostfix();
     [[nodiscard]] Expr* parsePrimary();

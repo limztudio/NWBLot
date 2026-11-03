@@ -28,56 +28,32 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             return;
         }
         out.append(isDouble ? "::MatrixDoubleSet(" : "::MatrixSet(");
-        if(arguments.size() == 1u && arguments[0]){
-            const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType);
-            const u32 elemCount = matInfo ? matInfo->elemCount : 16u;
-            if(simdType == "f64x3x3" && elemCount == 9u){
-                for(usize r = 0u; r < 3u; ++r){
-                    for(usize c = 0u; c < 3u; ++c){
-                        if(r > 0u || c > 0u)
-                            out.append(", ");
-                        emitExpr(out, *arguments[0]);
-                    }
-                    out.append(", 0.0");
-                }
-                out.append(", 0.0, 0.0, 0.0, 1.0)");
-                return;
-            }
-            for(usize i = 0u; i < 16u; ++i){
-                if(i > 0u)
-                    out.append(", ");
-                if(i < elemCount)
-                    emitExpr(out, *arguments[0]);
-                else if(i == 15u && elemCount == 12u)
-                    out.append(isDouble ? "1.0" : "1.0f");
-                else
-                    out.append(isDouble ? "0.0" : "0.0f");
-            }
-            out.push_back(')');
-            return;
-        }
-        if(simdType == "f64x3x3" && arguments.size() == 9u){
+        const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType);
+        const u32 elemCount = matInfo ? matInfo->elemCount : 16u;
+        const b8 isSplat = (arguments.size() == 1u);
+        if(elemCount == 9u){
             for(usize r = 0u; r < 3u; ++r){
                 for(usize c = 0u; c < 3u; ++c){
                     if(r > 0u || c > 0u)
                         out.append(", ");
-                    const usize argIdx = r * 3u + c;
-                    if(arguments[argIdx])
+                    const usize argIdx = isSplat ? 0u : (r * 3u + c);
+                    if(argIdx < arguments.size() && arguments[argIdx])
                         emitExpr(out, *arguments[argIdx]);
                     else
-                        out.append("0.0");
+                        out.append(isDouble ? "0.0" : "0.0f");
                 }
-                out.append(", 0.0");
+                out.append(isDouble ? ", 0.0" : ", 0.0f");
             }
-            out.append(", 0.0, 0.0, 0.0, 1.0)");
+            out.append(isDouble ? ", 0.0, 0.0, 0.0, 1.0)" : ", 0.0f, 0.0f, 0.0f, 1.0f)");
             return;
         }
         for(usize i = 0u; i < 16u; ++i){
             if(i > 0u)
                 out.append(", ");
-            if(i < arguments.size() && arguments[i])
-                emitExpr(out, *arguments[i]);
-            else if(i == 15u && arguments.size() == 12u)
+            const usize argIdx = isSplat ? 0u : i;
+            if(i < elemCount && argIdx < arguments.size() && arguments[argIdx])
+                emitExpr(out, *arguments[argIdx]);
+            else if(i == 15u && elemCount == 12u)
                 out.append(isDouble ? "1.0" : "1.0f");
             else
                 out.append(isDouble ? "0.0" : "0.0f");
@@ -279,7 +255,7 @@ void SourceEmitter::emitScopedSimdBody(MString& out, const Span<const Stmt* cons
 
     emitStatementList(out, statements, indent);
 
-    const b8 endsWithTerminal = !statements.empty() && statements.back() && (statements.back()->kind == StmtKind::Return || statements.back()->kind == StmtKind::Break || statements.back()->kind == StmtKind::Continue);
+    const b8 endsWithTerminal = !statements.empty() && statements.back() && IsTerminalJumpStmtKind(statements.back()->kind);
     if(!endsWithTerminal)
         emitSimdBlockStores(out, indent);
 

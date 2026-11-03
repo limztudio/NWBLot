@@ -86,6 +86,12 @@ b8 TypeChecker::checkCallableArguments(
         b8 paramIsMut = false;
         TypeRef* expectedParamTypeRef = nullptr;
         MStringView expectedParamType;
+        const BuiltinFunctionInfo* builtinFnInfo = (!recvTypeRef && !calledMemberName.empty())
+            ? FindBuiltinFunction(calledMemberName)
+            : nullptr;
+        const BuiltinFunctionArgRuleInfo* builtinArgRule = (builtinFnInfo && i < builtinFnInfo->argRules.size())
+            ? FindBuiltinFunctionArgRule(builtinFnInfo->argRules[i])
+            : nullptr;
         if(targetCallable && i < targetCallable->params.size()){
             paramIsMut = (targetCallable->params[i].mode == ParamPassingMode::Mut);
             if(targetCallable->params[i].type){
@@ -116,60 +122,37 @@ b8 TypeChecker::checkCallableArguments(
             }
         }
         else if(recvTypeRef && !recvTypeRef->templateArgs.empty()){
-            if(i == 0u && (calledMemberName == "compare_exchange_weak" || calledMemberName == "compare_exchange_strong"))
-                paramIsMut = true;
-            if(i == 0u && recvTypeRef->templateArgs[0].type){
-                if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(calledMemberName); memberInfo && memberInfo->adaptsFirstArgToElement){
+            if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(calledMemberName)){
+                if(i == 0u && memberInfo->firstArgIsMut)
+                    paramIsMut = true;
+                if(i == 0u && memberInfo->adaptsFirstArgToElement && recvTypeRef->templateArgs[0].type){
                     expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
                     expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
                     PropagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
                 }
-            }
-            else if(i == 1u && recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type && (calledMemberName == "try_emplace" || calledMemberName == "insert_or_assign")){
-                expectedParamTypeRef = recvTypeRef->templateArgs[1].type;
-                expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
-                PropagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
-            }
-        }
-        else if(!recvTypeRef && !calledMemberName.empty()){
-            if(calledMemberName == "tryDecodeUtf8CodePoint" || calledMemberName == "tryDecodeUtf8Scalar"){
-                if(i == 0u)
-                    expectedParamType = "StringView";
-                else if(i == 1u || i == 2u)
-                    paramIsMut = true;
-            }
-            else if(i == 0u && (calledMemberName == "trimView" || calledMemberName == "trimLeftView" || calledMemberName == "parseI64" || calledMemberName == "parseU64" || calledMemberName == "parseF32" || calledMemberName == "parseF64" || calledMemberName == "isUtf8ScalarBoundary")){
-                expectedParamType = "StringView";
+                else if(i == 1u && memberInfo->adaptsSecondArgToElement && recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type){
+                    expectedParamTypeRef = recvTypeRef->templateArgs[1].type;
+                    expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+                    PropagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
+                }
             }
         }
-        arg->isMutArg = paramIsMut || expectedParamType == "Span" || expectedParamType == "StringView";
-        if(expectedParamType == "Path")
+        else if(builtinArgRule){
+            expectedParamType = builtinArgRule->expectedParamType;
+            paramIsMut = builtinArgRule->isMut;
+        }
+        arg->isMutArg = paramIsMut || IsBorrowViewType(expectedParamType);
+        if(RequiresTCharAdaptation(expectedParamType))
             markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         if(!checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
-        if(!recvTypeRef && (calledMemberName == "tryDecodeUtf8CodePoint" || calledMemberName == "tryDecodeUtf8Scalar")){
+        if(builtinArgRule && !builtinArgRule->errorMessage.empty()){
             const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
-            if(i == 0u && !actualArgType.empty() && actualArgType != "StringView" && actualArgType != "String" && actualArgType != "CompactString"){
-                reportError(errors, arg->span, "first argument to UTF-8 decode built-in must be StringView, String, or CompactString");
-                ok = false;
-            }
-            else if(i == 1u && actualArgType != "u32"){
-                reportError(errors, arg->span, "second argument to UTF-8 decode built-in must be a mutable 'u32' variable");
-                ok = false;
-            }
-            else if(i == 2u && actualArgType != "usize"){
-                reportError(errors, arg->span, "third argument to UTF-8 decode built-in must be a mutable 'usize' variable");
-                ok = false;
-            }
-        }
-        else if(!recvTypeRef && calledMemberName == "isUtf8ScalarBoundary"){
-            const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
-            if(i == 0u && !actualArgType.empty() && actualArgType != "StringView" && actualArgType != "String" && actualArgType != "CompactString"){
-                reportError(errors, arg->span, "first argument to 'isUtf8ScalarBoundary' must be StringView, String, or CompactString");
-                ok = false;
-            }
-            else if(i == 1u && !actualArgType.empty() && !IsIntegerScalarType(actualArgType)){
-                reportError(errors, arg->span, "second argument to 'isUtf8ScalarBoundary' must be an integer type");
+            const b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && actualArgType != builtinArgRule->requiredExactType)
+                || (builtinArgRule->requiresStringLike && !actualArgType.empty() && !IsStringLikeType(actualArgType))
+                || (builtinArgRule->requiresIntegerScalar && !actualArgType.empty() && !IsIntegerScalarType(actualArgType));
+            if(typeMismatch){
+                reportError(errors, arg->span, builtinArgRule->errorMessage);
                 ok = false;
             }
         }
@@ -361,7 +344,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     }
                 }
             }
-            if(baseCallee == "Path"){
+            if(RequiresTCharAdaptation(baseCallee)){
                 for(Expr* arg : expr.arguments){
                     if(arg)
                         markStringToPathAdaptation(ownerClass, &method, scope, *arg);

@@ -77,9 +77,7 @@ namespace __hidden_adhd_type_checker{
                 return false;
             break;
         case StmtKind::ExprStmt:
-            if(!s->expr || s->expr->kind != ExprKind::Binary || s->expr->op != TokenType::Equal)
-                return false;
-            if(!s->expr->lhs || s->expr->lhs->kind != ExprKind::ThisMember)
+            if(!IsThisMemberSimpleAssignStmt(*s))
                 return false;
             if(ExprUsesOutOfLineConstruct(s->expr->lhs) || ExprUsesOutOfLineConstruct(s->expr->rhs))
                 return false;
@@ -259,11 +257,11 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 reportError(errors, gc->span, "file-level 'const' cannot declare an 'in' or 'mut' reference");
                 ok = false;
             }
-            if(SymbolTable::IsArenaBackedContainer(baseGcType) || baseGcType == "Atomic"){
+            if(SymbolTable::IsArenaBackedContainer(baseGcType) || IsAtomicGenericType(baseGcType)){
                 reportError(errors, gc->span, "file-level 'const' cannot have an arena-backed or 'Atomic' type; use compile-time fixed types");
                 ok = false;
             }
-            if(baseGcType == "Path"){
+            if(RequiresTCharAdaptation(baseGcType)){
                 if(gc->expr)
                     markStringToPathAdaptation(nullptr, &dummyGlobalCtx, emptyScope, *gc->expr);
                 for(Expr* arg : gc->arguments){
@@ -641,6 +639,16 @@ b8 TypeChecker::isConstructibleTypeName(const MStringView calleeName, const MStr
         || SymbolTable::IsSimdType(baseCallee)
         || SymbolTable::IsArenaBackedContainer(baseCallee)
         || m_symbols.isSelfDefaultedType(baseCallee);
+}
+
+b8 TypeChecker::isRvalueTemporaryExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    if(IsAlwaysRvalueExprKind(expr.kind))
+        return true;
+    if(expr.kind == ExprKind::Call || expr.kind == ExprKind::Unary){
+        const TypeRef* retType = inferExprTypeRef(ownerClass, method, expr, scope);
+        return m_symbols.resolveRefMode(retType) == ParamPassingMode::None;
+    }
+    return false;
 }
 
 const MethodDecl* TypeChecker::resolveCustomOperator(

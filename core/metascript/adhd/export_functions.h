@@ -2,8 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
+#define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ruleName, expectedParamType, isMut, requiredExactType, requiresStringLike, requiresIntegerScalar, errorMessage)
+#define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_FUNCTION
-#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule)
+#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule)
 #define NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #endif
 
@@ -28,8 +33,18 @@
 #endif
 
 #ifndef NWB_ADHD_EXPORT_MEMBER_METHOD
-#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule)
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, returnRule, returnTypeName)
 #define NWB_ADHD_EXPORT_MEMBER_METHOD_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD(receiverTypeName, methodName, returnTypeName, synthesizeTypeRef)
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_BUILTIN_FIELD
+#define NWB_ADHD_EXPORT_BUILTIN_FIELD(receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText)
+#define NWB_ADHD_EXPORT_BUILTIN_FIELD_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
@@ -41,43 +56,50 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ADHD_EXPORT_FUNCTION("min",              "::Min",                  2u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("max",              "::Max",                  2u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("abs",              "::Abs",                  1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("clamp",            "::Clamp",                3u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("saturate",         "::Saturate",             1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("floor",            "::Floor",                1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("ceil",             "::Ceil",                 1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("round",            "::Round",                1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("sqrt",             "::Sqrt",                 1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("rsqrt",            "::VectorReciprocalSqrt", 1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("lerp",             "::VectorLerp",           3u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("dot",              "::Vector4Dot",           2u, LaneScalar)
-NWB_ADHD_EXPORT_FUNCTION("cross",            "::Vector3Cross",         2u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("length",           "::Vector4Length",        1u, LaneScalar)
-NWB_ADHD_EXPORT_FUNCTION("lengthSq",         "::Vector4LengthSq",      1u, LaneScalar)
-NWB_ADHD_EXPORT_FUNCTION("normalize",        "::Vector4Normalize",     1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("mul",              "::MatrixMultiply",       2u, MatrixMultiply)
-NWB_ADHD_EXPORT_FUNCTION("transpose",        "::MatrixTranspose",      1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("inverse",          "::MatrixInverse",        1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("sin",              "::Sin",                  1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("cos",              "::Cos",                  1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("tan",              "::Tan",                  1u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("isFinite",         "::IsFinite",             1u, Bool)
-NWB_ADHD_EXPORT_FUNCTION("divideUp",         "::DivideUp",             2u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("alignUp",          "::AlignUp",              2u, PromoteSimd)
-NWB_ADHD_EXPORT_FUNCTION("hashValue",        "::HashValue",            1u, Usize)
-NWB_ADHD_EXPORT_FUNCTION("hashCombineValue", "::HashCombineValue",     2u, Usize)
-NWB_ADHD_EXPORT_FUNCTION("makeUnexpected",   "::MakeUnexpected",       1u, Unexpected)
-NWB_ADHD_EXPORT_FUNCTION("trimView",         "::TrimView",             1u, StringView)
-NWB_ADHD_EXPORT_FUNCTION("trimLeftView",     "::TrimLeftView",         1u, StringView)
-NWB_ADHD_EXPORT_FUNCTION("parseI64",         "::ParseI64",             1u, ExpectedI64)
-NWB_ADHD_EXPORT_FUNCTION("parseU64",         "::ParseU64",             1u, ExpectedU64)
-NWB_ADHD_EXPORT_FUNCTION("parseF32",               "::ParseF32FromChars",        1u, ExpectedF32)
-NWB_ADHD_EXPORT_FUNCTION("parseF64",               "::ParseF64FromChars",        1u, ExpectedF64)
-NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8CodePoint", "::TryDecodeUtf8CodePoint",   3u, Bool)
-NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8Scalar",    "::TryDecodeUtf8Scalar",      3u, Bool)
-NWB_ADHD_EXPORT_FUNCTION("isUtf8ScalarBoundary",   "::IsUtf8ScalarBoundary",     2u, Bool)
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(Any,        "",           false, "",      false, false, "")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(StringView, "StringView", false, "",      false, false, "")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(TextView,   "StringView", false, "",      true,  false, "built-in function argument must be StringView, String, or CompactString")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutU32,     "",           true,  "u32",   false, false, "built-in function argument must be a mutable 'u32' variable")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutUsize,   "",           true,  "usize", false, false, "built-in function argument must be a mutable 'usize' variable")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(Integer,    "",           false, "",      false, true,  "built-in function argument must be an integer type")
+
+NWB_ADHD_EXPORT_FUNCTION("min",                    "::Min",                    2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("max",                    "::Max",                    2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("abs",                    "::Abs",                    1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("clamp",                  "::Clamp",                  3u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("saturate",               "::Saturate",               1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("floor",                  "::Floor",                  1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("ceil",                   "::Ceil",                   1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("round",                  "::Round",                  1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("sqrt",                   "::Sqrt",                   1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("rsqrt",                  "::VectorReciprocalSqrt",   1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("lerp",                   "::VectorLerp",             3u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("dot",                    "::Vector4Dot",             2u, LaneScalar,     "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("cross",                  "::Vector3Cross",           2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("length",                 "::Vector4Length",          1u, LaneScalar,     "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("lengthSq",               "::Vector4LengthSq",        1u, LaneScalar,     "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("normalize",              "::Vector4Normalize",       1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("mul",                    "::MatrixMultiply",         2u, MatrixMultiply, "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("transpose",              "::MatrixTranspose",        1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("inverse",                "::MatrixInverse",          1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("sin",                    "::Sin",                    1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("cos",                    "::Cos",                    1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("tan",                    "::Tan",                    1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("isFinite",               "::IsFinite",               1u, FixedType,      "b8",         "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("divideUp",               "::DivideUp",               2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("alignUp",                "::AlignUp",                2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("hashValue",              "::HashValue",              1u, FixedType,      "usize",      "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("hashCombineValue",       "::HashCombineValue",       2u, FixedType,      "usize",      "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("makeUnexpected",         "::MakeUnexpected",         1u, Unexpected,     "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("trimView",               "::TrimView",               1u, FixedType,      "StringView", "",    StringView, Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("trimLeftView",           "::TrimLeftView",           1u, FixedType,      "StringView", "",    StringView, Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("parseI64",               "::ParseI64",               1u, FixedType,      "Expected",   "i64", StringView, Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("parseU64",               "::ParseU64",               1u, FixedType,      "Expected",   "u64", StringView, Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("parseF32",               "::ParseF32FromChars",      1u, FixedType,      "Expected",   "f32", StringView, Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("parseF64",               "::ParseF64FromChars",      1u, FixedType,      "Expected",   "f64", StringView, Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8CodePoint", "::TryDecodeUtf8CodePoint", 3u, FixedType,      "b8",         "",    TextView,   MutU32,  MutUsize)
+NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8Scalar",    "::TryDecodeUtf8Scalar",    3u, FixedType,      "b8",         "",    TextView,   MutU32,  MutUsize)
+NWB_ADHD_EXPORT_FUNCTION("isUtf8ScalarBoundary",   "::IsUtf8ScalarBoundary",   2u, FixedType,      "b8",         "",    TextView,   Integer, Any)
 
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("min",     "::VectorMin(",                  "::VectorDoubleMin(")
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("max",     "::VectorMax(",                  "::VectorDoubleMax(")
@@ -106,57 +128,78 @@ NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION("dot",      "Dot")
 NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION("length",   "Length")
 NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION("lengthSq", "LengthSq")
 
-NWB_ADHD_EXPORT_MEMBER_METHOD("push_back",               true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("emplace_back",            true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("pop_back",                true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("push_front",              true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("emplace_front",           true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("pop_front",               true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("push",                    true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("pop",                     true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("emplace",                 true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("try_emplace",             true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("insert_or_assign",        true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("clear",                   true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("insert",                  true,  true,  Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("erase",                   true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("resize",                  true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("reserve",                 true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("shrink_to_fit",           true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("swap",                    true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("assign",                  true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("append",                  true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("reset",                   true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("store",                   true,  false, Void)
-NWB_ADHD_EXPORT_MEMBER_METHOD("find",                    false, false, None)
-NWB_ADHD_EXPORT_MEMBER_METHOD("size",                    false, false, Usize)
-NWB_ADHD_EXPORT_MEMBER_METHOD("length",                  false, false, Usize)
-NWB_ADHD_EXPORT_MEMBER_METHOD("capacity",                false, false, Usize)
-NWB_ADHD_EXPORT_MEMBER_METHOD("count",                   false, false, Usize)
-NWB_ADHD_EXPORT_MEMBER_METHOD("max_size",                false, false, Usize)
-NWB_ADHD_EXPORT_MEMBER_METHOD("hash",                    false, false, Usize)
-NWB_ADHD_EXPORT_MEMBER_METHOD("empty",                   false, false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("has_value",               false, false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("valid",                   false, false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("contains",                false, false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("starts_with",             false, false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("ends_with",               false, false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("compare_exchange_weak",   true,  false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("compare_exchange_strong", true,  false, Bool)
-NWB_ADHD_EXPORT_MEMBER_METHOD("c_str",                   false, false, StringView)
-NWB_ADHD_EXPORT_MEMBER_METHOD("substr",                  false, false, StringView)
-NWB_ADHD_EXPORT_MEMBER_METHOD("subspan",                 false, false, None)
-NWB_ADHD_EXPORT_MEMBER_METHOD("value",                   false, false, OptionalOrExpectedValue)
-NWB_ADHD_EXPORT_MEMBER_METHOD("error",                   false, false, ExpectedError)
-NWB_ADHD_EXPORT_MEMBER_METHOD("front",                   false, false, FirstTypeArg)
-NWB_ADHD_EXPORT_MEMBER_METHOD("back",                    false, false, FirstTypeArg)
-NWB_ADHD_EXPORT_MEMBER_METHOD("load",                    false, false, AtomicValue)
-NWB_ADHD_EXPORT_MEMBER_METHOD("exchange",                true,  false, AtomicValue)
-NWB_ADHD_EXPORT_MEMBER_METHOD("fetch_add",               true,  false, AtomicValue)
-NWB_ADHD_EXPORT_MEMBER_METHOD("fetch_sub",               true,  false, AtomicValue)
+NWB_ADHD_EXPORT_MEMBER_METHOD("push_back",               true,  false, true,  false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("emplace_back",            true,  false, true,  false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("pop_back",                true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("push_front",              true,  false, true,  false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("emplace_front",           true,  false, true,  false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("pop_front",               true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("push",                    true,  false, true,  false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("pop",                     true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("emplace",                 true,  false, true,  false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("try_emplace",             true,  false, true,  true,  FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("insert_or_assign",        true,  false, true,  true,  FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("clear",                   true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("insert",                  true,  false, true,  false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("erase",                   true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("resize",                  true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("reserve",                 true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("shrink_to_fit",           true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("swap",                    true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("assign",                  true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("append",                  true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("reset",                   true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("store",                   true,  false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("find",                    false, false, false, false, None,                   "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("size",                    false, false, false, false, FixedType,              "usize")
+NWB_ADHD_EXPORT_MEMBER_METHOD("length",                  false, false, false, false, FixedType,              "usize")
+NWB_ADHD_EXPORT_MEMBER_METHOD("capacity",                false, false, false, false, FixedType,              "usize")
+NWB_ADHD_EXPORT_MEMBER_METHOD("count",                   false, false, false, false, FixedType,              "usize")
+NWB_ADHD_EXPORT_MEMBER_METHOD("max_size",                false, false, false, false, FixedType,              "usize")
+NWB_ADHD_EXPORT_MEMBER_METHOD("hash",                    false, false, false, false, FixedType,              "usize")
+NWB_ADHD_EXPORT_MEMBER_METHOD("empty",                   false, false, false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("has_value",               false, false, false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("valid",                   false, false, false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("contains",                false, false, false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("starts_with",             false, false, false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("ends_with",               false, false, false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("compare_exchange_weak",   true,  true,  false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("compare_exchange_strong", true,  true,  false, false, FixedType,              "b8")
+NWB_ADHD_EXPORT_MEMBER_METHOD("c_str",                   false, false, false, false, FixedType,              "StringView")
+NWB_ADHD_EXPORT_MEMBER_METHOD("substr",                  false, false, false, false, FixedType,              "StringView")
+NWB_ADHD_EXPORT_MEMBER_METHOD("subspan",                 false, false, false, false, ReceiverType,           "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("value",                   false, false, false, false, FirstTypeArg,           "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("error",                   false, false, false, false, SecondTypeArgOrDefault, "Failure")
+NWB_ADHD_EXPORT_MEMBER_METHOD("front",                   false, false, false, false, FirstTypeArg,           "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("back",                    false, false, false, false, FirstTypeArg,           "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("load",                    false, false, false, false, FirstTypeArg,           "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("exchange",                true,  false, false, false, FirstTypeArg,           "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("fetch_add",               true,  false, false, false, FirstTypeArg,           "")
+NWB_ADHD_EXPORT_MEMBER_METHOD("fetch_sub",               true,  false, false, false, FirstTypeArg,           "")
+
+NWB_ADHD_EXPORT_RECEIVER_METHOD("Name",          "hash",         "NameHash",   false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("Name",          "identityHash", "NameHash",   false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("Name",          "resolvedText", "StringView", false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("AssetRef",      "name",         "Name",       false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("EntityID",      "index",        "u32",        false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("EntityID",      "generation",   "u32",        false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("String",        "find",         "usize",      false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("CompactString", "find",         "usize",      false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("StringView",    "find",         "usize",      false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("String",        "front",        "u8",         true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("String",        "back",         "u8",         true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("CompactString", "front",        "u8",         true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("CompactString", "back",         "u8",         true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("StringView",    "front",        "u8",         true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("StringView",    "back",         "u8",         true)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("CompactString", "assign",       "b8",         false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD("CompactString", "append",       "b8",         false)
+
+NWB_ADHD_EXPORT_BUILTIN_FIELD("AssetRef", "virtualPath", "Name",  "",    "")
+NWB_ADHD_EXPORT_BUILTIN_FIELD("NameHash", "qwords",      "Array", "u64", "8u")
 
 NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_InvalidEntityId", "::NWB::Core::ECS::s_InvalidEntityId", "EntityID")
-NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NameNone",        "s_NameNone",                         "Name")
+NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NameNone",        "s_NameNone",                          "Name")
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,6 +208,16 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NameNone",        "s_NameNone",              
 #ifdef NWB_ADHD_EXPORT_GLOBAL_CONSTANT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
+#endif
+
+#ifdef NWB_ADHD_EXPORT_BUILTIN_FIELD_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_BUILTIN_FIELD_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_BUILTIN_FIELD
+#endif
+
+#ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD
 #endif
 
 #ifdef NWB_ADHD_EXPORT_MEMBER_METHOD_AUTO_UNDEF
@@ -195,6 +248,11 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NameNone",        "s_NameNone",              
 #ifdef NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION
+#endif
+
+#ifdef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
 #endif
 
 

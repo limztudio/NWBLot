@@ -21,50 +21,92 @@ namespace __hidden_adhd_type_utils{
 
 
 inline constexpr Array s_BuiltinObjectTypes = {
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
-    BuiltinObjectTypeInfo{ adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey },
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation) \
+    BuiltinObjectTypeInfo{ adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_OBJECT_TYPE
 };
 
 inline constexpr Array s_BuiltinGenericTypes = {
-#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
-    BuiltinGenericTypeInfo{ adhdName, cppExportName, GenericParamKind::paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap },
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle) \
+    BuiltinGenericTypeInfo{ adhdName, cppExportName, GenericParamKind::paramKind, InlineLayoutKind::inlineLayoutKind, ReflectedLinearKind::reflectedLinearKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedMap, isAssetHandle },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE
 };
 
+inline constexpr Array s_BuiltinBinaryHashTypes = {
+#define NWB_ADHD_EXPORT_BINARY_HASH_TYPE(adhdName, memberSuffix) \
+    BuiltinBinaryHashTypeInfo{ adhdName, memberSuffix },
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_BINARY_HASH_TYPE
+};
+
+inline constexpr Array s_BuiltinNwbValueTypes = {
+#define NWB_ADHD_EXPORT_NWB_VALUE_TYPE(adhdName, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix) \
+    BuiltinNwbValueTypeInfo{ adhdName, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix },
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_NWB_VALUE_TYPE
+};
+
+inline constexpr Array s_BuiltinImplicitConversions = {
+#define NWB_ADHD_EXPORT_IMPLICIT_CONVERSION(fromTypeName, toTypeName, propagatesFirstTypeArg) \
+    BuiltinImplicitConversionInfo{ fromTypeName, toTypeName, propagatesFirstTypeArg },
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_IMPLICIT_CONVERSION
+};
+
 inline constexpr Array s_BuiltinUnalignedVectorTypes = {
-#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, laneScalarType) \
-    BuiltinUnalignedVectorInfo{ adhdName, cppExportName, laneScalarType, lanes, byteSize, byteAlign },
+#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, laneScalarType, isHalfFloat) \
+    BuiltinUnalignedVectorInfo{ adhdName, cppExportName, laneScalarType, lanes, altCtorArity, byteSize, byteAlign, isHalfFloat },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
 };
 
 inline constexpr Array s_BuiltinSimdVectorTypes = {
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    BuiltinSimdVectorInfo{ adhdName, cppExportName, xyzScalarType, wScalarType, regCppType, loadCppFunc, storeCppFunc, lanes, byteSize, byteAlign, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed },
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    BuiltinSimdVectorInfo{ adhdName, cppExportName, xyzScalarType, wScalarType, regCppType, loadCppFunc, storeCppFunc, lanes, altCtorArity, byteSize, byteAlign, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
 };
 
 inline constexpr Array s_BuiltinSimdMatrixTypes = {
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    BuiltinSimdMatrixInfo{ adhdName, cppExportName, elemScalarType, regCppType, loadCppFunc, storeCppFunc, elemCount, byteSize, byteAlign, isDoubleReg },
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, rowVectorType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    BuiltinSimdMatrixInfo{ adhdName, cppExportName, elemScalarType, rowVectorType, regCppType, loadCppFunc, storeCppFunc, elemCount, byteSize, byteAlign, isDoubleReg },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
 };
 
 inline constexpr Array s_BuiltinMemberMethods = {
-#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule) \
-    BuiltinMemberMethodInfo{ methodName, BuiltinMemberReturnRule::returnRule, isMutating, adaptsFirstArgToElement },
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, returnRule, returnTypeName) \
+    BuiltinMemberMethodInfo{ methodName, returnTypeName, BuiltinMemberReturnRule::returnRule, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_MEMBER_METHOD
 };
 
+inline constexpr Array s_BuiltinReceiverMethods = {
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD(receiverTypeName, methodName, returnTypeName, synthesizeTypeRef) \
+    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, synthesizeTypeRef },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD
+};
+
+inline constexpr Array s_BuiltinFields = {
+#define NWB_ADHD_EXPORT_BUILTIN_FIELD(receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText) \
+    BuiltinFieldInfo{ receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_BUILTIN_FIELD
+};
+
+inline constexpr Array s_BuiltinFunctionArgRules = {
+#define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ruleName, expectedParamType, isMut, requiredExactType, requiresStringLike, requiresIntegerScalar, errorMessage) \
+    BuiltinFunctionArgRuleInfo{ BuiltinFunctionArgRule::ruleName, expectedParamType, requiredExactType, errorMessage, isMut, requiresStringLike, requiresIntegerScalar },
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
+};
+
 inline constexpr Array s_BuiltinFunctions = {
-#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, arity, BuiltinFunctionReturnRule::returnRule },
+#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, arity, BuiltinFunctionReturnRule::returnRule, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule } },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION
 };
@@ -75,6 +117,15 @@ inline constexpr Array s_BuiltinGlobalConstants = {
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
 };
+
+template<typename EntryT, usize N>
+[[nodiscard]] constexpr const EntryT* FindBuiltinByAdhdName(const Array<EntryT, N>& table, const MStringView name)noexcept{
+    for(const EntryT& info : table){
+        if(info.adhdName == name)
+            return &info;
+    }
+    return nullptr;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,43 +138,35 @@ inline constexpr Array s_BuiltinGlobalConstants = {
 
 
 const BuiltinObjectTypeInfo* FindBuiltinObjectType(const MStringView name)noexcept{
-    for(const BuiltinObjectTypeInfo& info : __hidden_adhd_type_utils::s_BuiltinObjectTypes){
-        if(info.adhdName == name)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinObjectTypes, name);
 }
 
 const BuiltinGenericTypeInfo* FindBuiltinGenericType(const MStringView name)noexcept{
-    for(const BuiltinGenericTypeInfo& info : __hidden_adhd_type_utils::s_BuiltinGenericTypes){
-        if(info.adhdName == name)
-            return &info;
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinGenericTypes, name);
+}
+
+b8 FindBuiltinBinaryHashMemberSuffix(const MStringView name, MStringView& outMemberSuffix)noexcept{
+    if(const BuiltinBinaryHashTypeInfo* info = __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinBinaryHashTypes, name)){
+        outMemberSuffix = info->memberSuffix;
+        return true;
     }
-    return nullptr;
+    return false;
+}
+
+const BuiltinNwbValueTypeInfo* FindBuiltinNwbValueType(const MStringView name)noexcept{
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinNwbValueTypes, name);
 }
 
 const BuiltinUnalignedVectorInfo* FindBuiltinUnalignedVectorType(const MStringView name)noexcept{
-    for(const BuiltinUnalignedVectorInfo& info : __hidden_adhd_type_utils::s_BuiltinUnalignedVectorTypes){
-        if(info.adhdName == name)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinUnalignedVectorTypes, name);
 }
 
 const BuiltinSimdVectorInfo* FindBuiltinSimdVectorType(const MStringView name)noexcept{
-    for(const BuiltinSimdVectorInfo& info : __hidden_adhd_type_utils::s_BuiltinSimdVectorTypes){
-        if(info.adhdName == name)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinSimdVectorTypes, name);
 }
 
 const BuiltinSimdMatrixInfo* FindBuiltinSimdMatrixType(const MStringView name)noexcept{
-    for(const BuiltinSimdMatrixInfo& info : __hidden_adhd_type_utils::s_BuiltinSimdMatrixTypes){
-        if(info.adhdName == name)
-            return &info;
-    }
-    return nullptr;
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinSimdMatrixTypes, name);
 }
 
 b8 IsValidBuiltinVectorOrMatrixCtorArity(const MStringView baseTypeName, const usize argCount)noexcept{
@@ -131,13 +174,13 @@ b8 IsValidBuiltinVectorOrMatrixCtorArity(const MStringView baseTypeName, const u
         return argCount == 0u
             || argCount == 1u
             || argCount == vecInfo->lanes
-            || ((baseTypeName == "f32x4" || baseTypeName == "f64x4") && argCount == 3u);
+            || (vecInfo->altCtorArity > 0u && argCount == vecInfo->altCtorArity);
     }
     if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(baseTypeName)){
         return argCount == 0u
             || argCount == 1u
             || argCount == unalignedInfo->lanes
-            || (baseTypeName == "f16x4u" && argCount == 2u);
+            || (unalignedInfo->altCtorArity > 0u && argCount == unalignedInfo->altCtorArity);
     }
     if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(baseTypeName))
         return argCount == 0u || argCount == 1u || argCount == matInfo->elemCount;
@@ -145,10 +188,11 @@ b8 IsValidBuiltinVectorOrMatrixCtorArity(const MStringView baseTypeName, const u
 }
 
 b8 FindBuiltinFixedLayout(const MStringView name, usize& outSize, usize& outAlign)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
-    if(name == adhdName){ outSize = byteSize; outAlign = byteAlign; return true; }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    if(const BuiltinScalarTypeInfo* scalarInfo = FindBuiltinScalarType(name)){
+        outSize = scalarInfo->byteSize;
+        outAlign = scalarInfo->byteAlign;
+        return true;
+    }
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name)){
         outSize = objInfo->byteSize;
         outAlign = objInfo->byteAlign;
@@ -185,25 +229,101 @@ const BuiltinMemberMethodInfo* FindBuiltinMemberMethod(const MStringView name)no
     return nullptr;
 }
 
-const BuiltinFunctionInfo* FindBuiltinFunction(const MStringView name)noexcept{
-    for(const BuiltinFunctionInfo& info : __hidden_adhd_type_utils::s_BuiltinFunctions){
-        if(info.adhdName == name)
+const BuiltinReceiverMethodInfo* FindBuiltinReceiverMethod(const MStringView receiverTypeName, const MStringView methodName)noexcept{
+    for(const BuiltinReceiverMethodInfo& info : __hidden_adhd_type_utils::s_BuiltinReceiverMethods){
+        if(info.receiverTypeName == receiverTypeName && info.methodName == methodName)
             return &info;
     }
     return nullptr;
 }
 
-const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView name)noexcept{
-    for(const BuiltinGlobalConstantInfo& info : __hidden_adhd_type_utils::s_BuiltinGlobalConstants){
-        if(info.adhdName == name)
+const BuiltinFieldInfo* FindBuiltinField(const MStringView receiverTypeName, const MStringView fieldName)noexcept{
+    for(const BuiltinFieldInfo& info : __hidden_adhd_type_utils::s_BuiltinFields){
+        if(info.receiverTypeName == receiverTypeName && info.fieldName == fieldName)
             return &info;
     }
     return nullptr;
+}
+
+const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
+    for(const BuiltinFunctionArgRuleInfo& info : __hidden_adhd_type_utils::s_BuiltinFunctionArgRules){
+        if(info.rule == rule)
+            return &info;
+    }
+    return nullptr;
+}
+
+const BuiltinFunctionInfo* FindBuiltinFunction(const MStringView name)noexcept{
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinFunctions, name);
+}
+
+const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView name)noexcept{
+    return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, name);
+}
+
+b8 IsBorrowViewType(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
+        return objInfo->isBorrowView;
+    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
+        return info->isBorrowView;
+    return false;
+}
+
+b8 IsNonSerializableBuiltinType(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
+        return !objInfo->isBinarySerializable;
+    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
+        return !info->isBinarySerializable;
+    return false;
+}
+
+b8 IsSingleValueCtorBuiltinType(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
+        return objInfo->isSingleValueCtor;
+    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
+        return info->isSingleValueCtor;
+    return false;
+}
+
+b8 NeedsBraceDefaultFieldInit(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
+        return objInfo->emitsBraceFieldInit;
+    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
+        return info->emitsBraceFieldInit;
+    return false;
+}
+
+b8 IsStringLikeType(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
+        return info->isStringLike;
+    return false;
 }
 
 b8 IsNwbMapKeyType(const MStringView name)noexcept{
     if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
         return info->isNwbMapKey;
+    return false;
+}
+
+b8 RequiresTCharAdaptation(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
+        return info->requiresTCharAdaptation;
+    return false;
+}
+
+b8 IsImplicitlyConvertibleBuiltinType(const MStringView fromTypeName, const MStringView toTypeName)noexcept{
+    for(const BuiltinImplicitConversionInfo& info : __hidden_adhd_type_utils::s_BuiltinImplicitConversions){
+        if(info.fromTypeName == fromTypeName && info.toTypeName == toTypeName)
+            return true;
+    }
+    return false;
+}
+
+b8 DoesImplicitConversionPropagateFirstTypeArg(const MStringView fromTypeName, const MStringView toTypeName)noexcept{
+    for(const BuiltinImplicitConversionInfo& info : __hidden_adhd_type_utils::s_BuiltinImplicitConversions){
+        if(info.fromTypeName == fromTypeName && info.toTypeName == toTypeName)
+            return info.propagatesFirstTypeArg;
+    }
     return false;
 }
 
@@ -215,27 +335,27 @@ b8 IsNonThreadSafeContainer(const MStringView typeName)noexcept{
     return false;
 }
 
-b8 IsSingleTypeParamBuiltinGeneric(const MStringView name)noexcept{
+b8 IsFixedArrayContainerType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return info->paramKind == GenericParamKind::SingleType;
+        return info->inlineLayoutKind == InlineLayoutKind::Array;
     return false;
 }
 
-b8 IsTwoTypeParamBuiltinGeneric(const MStringView name)noexcept{
+b8 IsOptionalContainerType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return info->paramKind == GenericParamKind::TwoType;
+        return info->inlineLayoutKind == InlineLayoutKind::Optional;
     return false;
 }
 
-b8 IsOneOrTwoTypeParamBuiltinGeneric(const MStringView name)noexcept{
+b8 IsAtomicGenericType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return info->paramKind == GenericParamKind::OneOrTwoType;
+        return info->inlineLayoutKind == InlineLayoutKind::Atomic;
     return false;
 }
 
-b8 IsTypeAndCountBuiltinGeneric(const MStringView name)noexcept{
+b8 IsAssetHandleType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
-        return info->paramKind == GenericParamKind::TypeAndCount;
+        return info->isAssetHandle;
     return false;
 }
 
@@ -361,7 +481,7 @@ TypeRef* ExtractUnderlyingFuncType(TypeRef* type, const SymbolTable& symbols)noe
                 continue;
             }
         }
-        if((IsSingleTypeParamBuiltinGeneric(type->name) || IsOneOrTwoTypeParamBuiltinGeneric(type->name) || IsTypeAndCountBuiltinGeneric(type->name)) && !type->templateArgs.empty() && type->templateArgs[0].type){
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(type->name); genericInfo && genericInfo->paramKind != GenericParamKind::TwoType && !type->templateArgs.empty() && type->templateArgs[0].type){
             type = type->templateArgs[0].type;
             continue;
         }
@@ -394,7 +514,7 @@ b8 IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept{
         }
         return true;
     }
-    if(type.name == "AssetRef")
+    if(IsAssetHandleType(type.name))
         return type.templateArgs.size() == 1u && type.templateArgs[0].type != nullptr;
     if(!IsKnownConcreteTypeName(type.name, symbols))
         return false;
@@ -450,7 +570,7 @@ b8 ShouldPackSerializeClass(const Span<const FieldDecl* const> fields, const Sym
         const MStringView baseName = resolved ? resolved->name : field->type->name;
         if(SymbolTable::IsSimdType(baseName) || (symbols.findClass(baseName) && !ShouldPackSerializeClass(symbols.findClass(baseName)->fields, symbols)))
             return false;
-        if(baseName == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+        if(IsFixedArrayContainerType(baseName) && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
             if(SymbolTable::IsSimdType(symbols.resolveBaseTypeName(resolved->templateArgs[0].type->name)))
                 return false;
         }
@@ -470,14 +590,9 @@ i32 ScoreCallableParams(const SymbolTable& symbols, const Span<const ParamDecl> 
         if(i < argTypeNames.size() && !argTypeNames[i].empty() && params[i].type){
             const MStringView paramBase = symbols.resolveBaseTypeName(params[i].type->name);
             const MStringView argBase = symbols.resolveBaseTypeName(argTypeNames[i]);
-            if(paramBase == argBase){
+            if(paramBase == argBase)
                 score += 16;
-            }
-            else if(
-                (paramBase == "StringView" && (argBase == "String" || argBase == "CompactString"))
-                || (paramBase == "Path" && argBase == "StringView")
-                || (paramBase == "Span" && (argBase == "Vector" || argBase == "ParallelVector" || argBase == "Array" || argBase == "FixedVector"))
-            )
+            else if(IsImplicitlyConvertibleBuiltinType(argBase, paramBase))
                 score += 8;
         }
     }
@@ -486,7 +601,7 @@ i32 ScoreCallableParams(const SymbolTable& symbols, const Span<const ParamDecl> 
 
 b8 IsReflectedLinearContainerType(const MStringView baseName)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(baseName))
-        return info->isReflectedLinear;
+        return info->reflectedLinearKind != ReflectedLinearKind::None;
     return false;
 }
 
@@ -504,7 +619,7 @@ const TypeRef* UnwrapOptionalFieldType(const TypeRef* const fieldType, const Sym
     const TypeRef* resolvedFieldType = symbols.unwrapTypeAlias(fieldType);
     const MStringView outerName = resolvedFieldType ? resolvedFieldType->name : fieldType->name;
     outIsOptional = (
-        outerName == "Optional"
+        IsOptionalContainerType(outerName)
         && resolvedFieldType
         && !resolvedFieldType->templateArgs.empty()
         && resolvedFieldType->templateArgs[0].type
@@ -525,7 +640,7 @@ b8 IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, 
     if(!resolved)
         return false;
     const MStringView tname = resolved->name;
-    if(tname == "AssetRef")
+    if(IsAssetHandleType(tname))
         return true;
     if(const ClassDecl* cls = symbols.findClass(tname)){
         for(const FieldDecl* f : cls->orderedFields){
@@ -536,11 +651,33 @@ b8 IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, 
                 return true;
         }
     }
-    if((tname == "Optional" || IsReflectedLinearContainerType(tname)) && !resolved->templateArgs.empty() && resolved->templateArgs[0].type)
+    if((IsOptionalContainerType(tname) || IsReflectedLinearContainerType(tname)) && !resolved->templateArgs.empty() && resolved->templateArgs[0].type)
         return IsAssetDependencyType(resolved->templateArgs[0].type, symbols, depth + 1u);
     if(IsReflectedMapContainerType(tname) && resolved->templateArgs.size() >= 2u && resolved->templateArgs[1].type)
         return IsAssetDependencyType(resolved->templateArgs[1].type, symbols, depth + 1u);
     return false;
+}
+
+b8 TryResolveSubsystemFieldAssetType(const FieldDecl& field, const SymbolTable& symbols, MStringView& outAssetTypeName, b8& outIsVector)noexcept{
+    outAssetTypeName = {};
+    outIsVector = false;
+    if(!field.type)
+        return false;
+
+    const TypeRef* resolved = symbols.unwrapTypeAlias(field.type);
+    if(!resolved || resolved->refMode != ParamPassingMode::None)
+        return false;
+
+    const TypeRef* assetRefType = resolved;
+    if(resolved->name == "Vector" && resolved->templateArgs.size() == 1u && resolved->templateArgs[0].type){
+        outIsVector = true;
+        assetRefType = symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+    }
+    if(assetRefType && IsAssetHandleType(assetRefType->name) && assetRefType->templateArgs.size() == 1u && assetRefType->templateArgs[0].type){
+        if(const TypeRef* targetType = symbols.unwrapTypeAlias(assetRefType->templateArgs[0].type))
+            outAssetTypeName = targetType->name;
+    }
+    return !outAssetTypeName.empty();
 }
 
 const TypeRef* DeduceTemplateParamTypeRef(const TypeRef* const paramType, const TypeRef* const argType, const MStringView tpName, const SymbolTable& symbols, const u32 depth)noexcept{
@@ -560,12 +697,7 @@ const TypeRef* DeduceTemplateParamTypeRef(const TypeRef* const paramType, const 
                 return found;
         }
     }
-    else if(
-        up->name == "Span"
-        && up->templateArgs.size() == 1u
-        && !ua->templateArgs.empty()
-        && (ua->name == "Vector" || ua->name == "ParallelVector" || ua->name == "Array" || ua->name == "FixedVector")
-    ){
+    else if(DoesImplicitConversionPropagateFirstTypeArg(ua->name, up->name) && up->templateArgs.size() == 1u && !ua->templateArgs.empty()){
         if(const TypeRef* found = DeduceTemplateParamTypeRef(up->templateArgs[0].type, ua->templateArgs[0].type, tpName, symbols, depth + 1u))
             return found;
     }

@@ -109,10 +109,7 @@ b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, const TypeR
             && (
                 IsScalarType(baseTargetName)
                 || m_symbols.findEnum(baseTargetName) != nullptr
-                || baseTargetName == "StringView"
-                || baseTargetName == "Name"
-                || baseTargetName == "Path"
-                || baseTargetName == "Optional"
+                || IsSingleValueCtorBuiltinType(baseTargetName)
             )
         ){
             reportError(errors, errorSpan, "scalar, enum, or single-value constructor accepts at most 1 argument");
@@ -175,7 +172,7 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
             }
         }
         b8 isSelfDefaultedVar = m_symbols.isSelfDefaultedType(stmt.varType->name, ownerClass);
-        if(isSelfDefaultedVar && baseVarTypeName == "Array"){
+        if(isSelfDefaultedVar && IsFixedArrayContainerType(baseVarTypeName)){
             if(const TypeRef* unwrappedArr = m_symbols.unwrapTypeAlias(stmt.varType); unwrappedArr && !unwrappedArr->templateArgs.empty() && unwrappedArr->templateArgs[0].type){
                 const TypeRef* elemRef = unwrappedArr->templateArgs[0].type;
                 const MStringView elemBase = m_symbols.resolveBaseTypeName(elemRef->name);
@@ -199,7 +196,7 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
                     PropagateFuncCaptureBytes(stmt.varType, arg, scope, m_symbols);
             }
         }
-        if(baseVarTypeName == "Path"){
+        if(RequiresTCharAdaptation(baseVarTypeName)){
             if(stmt.expr)
                 markStringToPathAdaptation(ownerClass, &method, scope, *stmt.expr);
             if(stmt.isCtorInit){
@@ -215,28 +212,9 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
         const b8 isMutRefBinding = (varRefMode == ParamPassingMode::Mut);
         if(!checkExpr(ownerClass, scope, isMutRefBinding, method, *stmt.expr, errors))
             ok = false;
-        if(varRefMode == ParamPassingMode::In){
-            b8 isRvalueBind = (
-                stmt.expr->kind == ExprKind::IntegerLiteral
-                || stmt.expr->kind == ExprKind::FloatLiteral
-                || stmt.expr->kind == ExprKind::DoubleLiteral
-                || stmt.expr->kind == ExprKind::StringLiteral
-                || stmt.expr->kind == ExprKind::BoolLiteral
-                || stmt.expr->kind == ExprKind::Binary
-                || stmt.expr->kind == ExprKind::Cast
-                || stmt.expr->kind == ExprKind::BitCast
-                || stmt.expr->kind == ExprKind::Lambda
-                || stmt.expr->kind == ExprKind::ScopeAccess
-            );
-            if(!isRvalueBind && (stmt.expr->kind == ExprKind::Call || stmt.expr->kind == ExprKind::Unary)){
-                const TypeRef* exprRetType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
-                if(m_symbols.resolveRefMode(exprRetType) == ParamPassingMode::None)
-                    isRvalueBind = true;
-            }
-            if(isRvalueBind){
-                reportError(errors, stmt.span, "cannot bind 'in' reference variable to a literal or rvalue temporary");
-                ok = false;
-            }
+        if(varRefMode == ParamPassingMode::In && isRvalueTemporaryExpr(ownerClass, &method, *stmt.expr, scope)){
+            reportError(errors, stmt.span, "cannot bind 'in' reference variable to a literal or rvalue temporary");
+            ok = false;
         }
         if(stmt.varType && stmt.varType->isAuto && !stmt.expr->resolvedSimdType.empty()){
             stmt.varType->isAuto = false;
@@ -320,7 +298,7 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
     if(activeRetType && stmt.expr){
         PropagateFuncCaptureBytes(const_cast<TypeRef*>(activeRetType), stmt.expr, scope, m_symbols);
         const MStringView baseRetTypeName = m_symbols.resolveBaseTypeName(activeRetType->name);
-        if(baseRetTypeName == "Path")
+        if(RequiresTCharAdaptation(baseRetTypeName))
             markStringToPathAdaptation(ownerClass, &method, scope, *stmt.expr);
         if(retRefMode != ParamPassingMode::None){
             stmt.wrapReturnNotNull = true;
@@ -330,24 +308,8 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
                 if(local && !local->isParam && m_symbols.resolveRefMode(local->type) == ParamPassingMode::None && local->mode == ParamPassingMode::None)
                     isDanglingReturn = true;
             }
-            else if(
-                stmt.expr->kind == ExprKind::IntegerLiteral
-                || stmt.expr->kind == ExprKind::FloatLiteral
-                || stmt.expr->kind == ExprKind::DoubleLiteral
-                || stmt.expr->kind == ExprKind::StringLiteral
-                || stmt.expr->kind == ExprKind::BoolLiteral
-                || stmt.expr->kind == ExprKind::Binary
-                || stmt.expr->kind == ExprKind::Cast
-                || stmt.expr->kind == ExprKind::BitCast
-                || stmt.expr->kind == ExprKind::Lambda
-                || stmt.expr->kind == ExprKind::ScopeAccess
-            ){
+            else if(isRvalueTemporaryExpr(ownerClass, &method, *stmt.expr, scope)){
                 isDanglingReturn = true;
-            }
-            else if(stmt.expr->kind == ExprKind::Call || stmt.expr->kind == ExprKind::Unary){
-                const TypeRef* retExprType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
-                if(m_symbols.resolveRefMode(retExprType) == ParamPassingMode::None)
-                    isDanglingReturn = true;
             }
             else if(stmt.expr->kind == ExprKind::MemberAccess || stmt.expr->kind == ExprKind::Index){
                 const TypeRef* subTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
@@ -355,7 +317,7 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
                     const Expr* root = stmt.expr->lhs;
                     while(root && (root->kind == ExprKind::MemberAccess || root->kind == ExprKind::Index)){
                         const TypeRef* midType = inferExprTypeRef(ownerClass, &method, *root, scope);
-                        if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None || (midType && m_symbols.resolveBaseTypeName(midType->name) == "Span")){
+                        if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None || (midType && IsBorrowViewType(m_symbols.resolveBaseTypeName(midType->name)))){
                             root = nullptr;
                             break;
                         }
@@ -367,7 +329,7 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
                                 !rootLocal->isParam
                                 && rootLocal->mode == ParamPassingMode::None
                                 && m_symbols.resolveRefMode(rootLocal->type) == ParamPassingMode::None
-                                && resolveScopedVarBaseType(*rootLocal) != "Span"
+                                && !IsBorrowViewType(resolveScopedVarBaseType(*rootLocal))
                             ){
                                 isDanglingReturn = true;
                             }
@@ -440,7 +402,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         break;
     }
     case StmtKind::ExprStmt:{
-        if(stmt.expr && stmt.expr->kind == ExprKind::Call && stmt.expr->lhs && stmt.expr->lhs->kind == ExprKind::Identifier && stmt.expr->lhs->text == "wait"){
+        if(IsParallelWaitCallExpr(stmt.expr)){
             method.usesTaskScope = true;
             if(m_parallelDepth > 0u){
                 reportError(errors, stmt.span, "'wait' cannot be used inside a 'parallel' or 'parallel_for' construct");
@@ -557,7 +519,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                         continue;
                     b8 isDup = false;
                     if(prevSc.matchExpr->kind == sc.matchExpr->kind){
-                        if(sc.matchExpr->kind == ExprKind::IntegerLiteral || sc.matchExpr->kind == ExprKind::BoolLiteral || sc.matchExpr->kind == ExprKind::StringLiteral || sc.matchExpr->kind == ExprKind::Identifier){
+                        if(IsLiteralExprKind(sc.matchExpr->kind) || sc.matchExpr->kind == ExprKind::Identifier){
                             isDup = (prevSc.matchExpr->text == sc.matchExpr->text);
                         }
                         else if(sc.matchExpr->kind == ExprKind::ScopeAccess && prevSc.matchExpr->scopeChain.size() == 2u && sc.matchExpr->scopeChain.size() == 2u){

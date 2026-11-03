@@ -23,7 +23,7 @@ namespace __hidden_adhd_stmt_parser{
 [[nodiscard]] b8 CaseBranchTerminates(const Stmt* stmt)noexcept{
     if(!stmt)
         return false;
-    if(stmt->kind == StmtKind::Break || stmt->kind == StmtKind::Return || stmt->kind == StmtKind::Continue)
+    if(IsTerminalJumpStmtKind(stmt->kind))
         return true;
     if(stmt->kind == StmtKind::Block)
         return !stmt->statements.empty() && CaseBranchTerminates(stmt->statements.back());
@@ -87,56 +87,25 @@ Stmt* StmtParser::parseStatement(){
         }
     }
 
-    if(m_cursor.matchIdentifier("if")){
-        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'if' statements"))
-            return nullptr;
-        return parseIfStatement(span);
+#define NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD(adhdKeyword, parserMethod, rejectAttrMessage) \
+    if(m_cursor.matchIdentifier(adhdKeyword)){ \
+        if(!rejectStatementAttributes(attributes, span, rejectAttrMessage)) \
+            return nullptr; \
+        return parserMethod(span); \
     }
-
-    if(m_cursor.matchIdentifier("switch")){
-        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'switch' statements"))
-            return nullptr;
-        return parseSwitchStatement(span);
-    }
-
-    if(m_cursor.matchIdentifier("for"))
-        return parseForOrParallelFor(span, false, attributes);
-
-    if(m_cursor.matchIdentifier("parallel_for"))
-        return parseForOrParallelFor(span, true, attributes);
-
-    if(m_cursor.matchIdentifier("while")){
-        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'while' statements"))
-            return nullptr;
-        return parseWhileStatement(span);
-    }
-
-    if(m_cursor.matchIdentifier("do")){
-        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'do-while' statements"))
-            return nullptr;
-        return parseDoWhileStatement(span);
-    }
-
-    if(m_cursor.matchIdentifier("break"))
-        return parseSimpleKeywordStatement(StmtKind::Break, span, attributes, "attributes are not permitted on 'break' statements", "expected ';' after 'break'");
-
-    if(m_cursor.matchIdentifier("continue"))
-        return parseSimpleKeywordStatement(StmtKind::Continue, span, attributes, "attributes are not permitted on 'continue' statements", "expected ';' after 'continue'");
-
-    if(m_cursor.matchIdentifier("return")){
-        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'return' statements"))
-            return nullptr;
-        return parseReturnStatement(span);
-    }
+#define NWB_ADHD_EXPORT_FOR_STMT_KEYWORD(adhdKeyword, isParallel) \
+    if(m_cursor.matchIdentifier(adhdKeyword)) \
+        return parseForOrParallelFor(span, isParallel, attributes);
+#define NWB_ADHD_EXPORT_SIMPLE_STMT_KEYWORD(adhdKeyword, stmtKind, rejectAttrMessage, missingSemiMessage) \
+    if(m_cursor.matchIdentifier(adhdKeyword)) \
+        return parseSimpleKeywordStatement(stmtKind, span, attributes, rejectAttrMessage, missingSemiMessage);
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_SIMPLE_STMT_KEYWORD
+#undef NWB_ADHD_EXPORT_FOR_STMT_KEYWORD
+#undef NWB_ADHD_EXPORT_UNATTRIBUTED_STMT_KEYWORD
 
     if(m_cursor.matchIdentifier("parallel"))
         return parseParallelStatement(span, attributes);
-
-    if(m_cursor.matchIdentifier("native")){
-        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'native' blocks"))
-            return nullptr;
-        return parseNativeStatement(span);
-    }
 
     if(m_cursor.check(TokenType::Identifier)){
         DiagnosticKind::Enum diagKind = DiagnosticKind::Assert;
@@ -146,18 +115,11 @@ Stmt* StmtParser::parseStatement(){
         }
     }
 
-    if(m_cursor.matchIdentifier("const")){
-        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on local 'const' declarations"))
-            return nullptr;
-        return parseConstDeclaration(span);
-    }
-
     if(!rejectStatementAttributes(attributes, span, "unexpected attributes before statement"))
         return nullptr;
 
     if(m_cursor.check(TokenType::Identifier)){
-        const b8 startsWithRefOrProhibitedType = m_cursor.checkIdentifier("in")
-            || m_cursor.checkIdentifier("mut")
+        const b8 startsWithRefOrProhibitedType = ParseParamPassingModeKeyword(m_cursor.current().text) != ParamPassingMode::None
             || !FindProhibitedTypeKeywordError(m_cursor.current().text).empty();
         const ParserCursor::Checkpoint cp = m_cursor.save();
         TypeRef* maybeType = m_typeParser.parseType(true, true);

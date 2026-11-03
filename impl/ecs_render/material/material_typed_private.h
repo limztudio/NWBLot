@@ -43,14 +43,28 @@ struct MaterialTypedByteContentKey{
 
 
 public:
-    MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteContentLookup& lookup);
+    MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteContentLookup& lookup)
+        : byteHash(lookup.byteHash)
+        , bytes(arena)
+    {
+        if(!lookup.bytes.empty()){
+            bytes.reserve(lookup.bytes.size());
+            bytes.assign(lookup.bytes.begin(), lookup.bytes.end());
+        }
+    }
 };
 
-[[nodiscard]] b8 operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept;
+[[nodiscard]] inline b8 operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept{
+    return EqualMaterialTypedByteContent(lhs.byteHash, lhs.bytes, rhs.byteHash, rhs.bytes);
+}
 
 struct MaterialTypedByteContentKeyHasher{
-    [[nodiscard]] usize operator()(const MaterialTypedByteContentKey& key)const noexcept;
-    [[nodiscard]] usize operator()(const MaterialTypedByteContentLookup& lookup)const noexcept;
+    [[nodiscard]] usize operator()(const MaterialTypedByteContentKey& key)const noexcept{
+        return HashMaterialTypedByteContent(key.byteHash, key.bytes.size());
+    }
+    [[nodiscard]] usize operator()(const MaterialTypedByteContentLookup& lookup)const noexcept{
+        return HashMaterialTypedByteContent(lookup.byteHash, lookup.bytes.size());
+    }
 };
 
 struct MaterialTypedByteContentKeyEqual{
@@ -62,14 +76,16 @@ public:
         return lhs == rhs;
     }
 
-    [[nodiscard]] b8 operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const noexcept;
+    [[nodiscard]] b8 operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const noexcept{
+        return EqualMaterialTypedByteContent(lhs.byteHash, lhs.bytes, rhs.byteHash, rhs.bytes);
+    }
 };
 
 // Dedup map for mutable typed ranges; identical blocks share one range.
 // Used by the material draw pass and the shadow occluder packing alike.
 using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteContentKeyHasher, MaterialTypedByteContentKeyEqual>;
 
-[[nodiscard]] Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(usize currentByteCount, usize appendByteCount);
+using NWB::Impl::TryBuildMaterialTypedByteAppendRange;
 
 template<typename DestinationByteVector>
 [[nodiscard]] inline Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes){
@@ -138,7 +154,7 @@ template<typename DestinationByteVector, typename MaterialTypedByteRangeMap>
     return range;
 }
 
-[[nodiscard]] usize ResolveMaterialTypedUploadByteCount(Span<const u8> materialTypedBytes)noexcept;
+using NWB::Impl::ResolveMaterialTypedUploadByteCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,12 +166,19 @@ template<typename DestinationByteVector, typename MaterialTypedByteRangeMap>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AssertMaterialTypedUploadRange(const MaterialTypedByteRange& range, usize uploadByteCount, TStringView rangeName)noexcept;
-void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& ranges, usize uploadByteCount)noexcept;
-
 using MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena>;
 
-void AssertMaterialTypedUploadRanges(Span<const MaterialTypedInstanceRanges> instanceRanges, Span<const u8> materialTypedBytes)noexcept;
+inline void AssertMaterialTypedUploadRange(const MaterialTypedByteRange& range, const usize uploadByteCount, const AStringView rangeName)noexcept{
+    ValidateMaterialTypedUploadRange(range, uploadByteCount, rangeName);
+}
+
+inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& ranges, const usize uploadByteCount)noexcept{
+    ValidateMaterialTypedInstanceRange(ranges, uploadByteCount);
+}
+
+inline void AssertMaterialTypedUploadRanges(const Span<const MaterialTypedInstanceRanges> instanceRanges, const Span<const u8> materialTypedBytes)noexcept{
+    ValidateMaterialTypedUploadRanges(instanceRanges, materialTypedBytes);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

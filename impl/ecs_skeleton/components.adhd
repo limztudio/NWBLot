@@ -57,6 +57,17 @@ b8 CanEvaluateSkeletonPoseJoint(in SkeletonPoseComponent pose, in u32 targetJoin
     return HasSkeletonPoseData(pose) && ValidSkeletonPoseTopology(pose) && cast<usize>(targetJointIndex) < pose.localJoints.size();
 }
 
+void InitializeSkeletonPoseFromJoints(in Span<SkeletonJoint> joints, mut SkeletonPoseComponent outPose){
+    outPose.parentJoints.clear();
+    outPose.localJoints.clear();
+    outPose.parentJoints.reserve(joints.size());
+    outPose.localJoints.reserve(joints.size());
+    for(in SkeletonJoint joint : joints){
+        outPose.parentJoints.push_back(joint.parentIndex);
+        outPose.localJoints.push_back(joint.localBindPose);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

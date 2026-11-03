@@ -60,6 +60,39 @@ b8 TryResolveModelAttachmentJointQuery(in Span<SkeletonJointMatrix> jointPalette
     return true;
 }
 
+b8 ValidateModelStaticMeshParentEntity(in Name objectName, in Name parentObjectName, in b8 parentEntityValid, in b8 parentIsSkeleton){
+    if(!parentEntityValid){
+        error("ModelSystem: static mesh object '{}' targets missing parent object '{}'", objectName.resolvedText(), parentObjectName.resolvedText());
+        return false;
+    }
+    if(!parentIsSkeleton){
+        error("ModelSystem: static mesh object '{}' parent_object '{}' is not a skeleton object", objectName.resolvedText(), parentObjectName.resolvedText());
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateModelStaticMeshParentJoint(in Name objectName, in Name parentObjectName, in Name parentJointName, in u32 parentJointIndex){
+    if(parentJointIndex != s_SkeletonInvalidJointIndex)
+        return true;
+
+    error(
+        "ModelSystem: static mesh object '{}' targets missing joint '{}' on skeleton object '{}'"
+        , objectName.resolvedText()
+        , parentJointName.resolvedText()
+        , parentObjectName.resolvedText()
+    );
+    return false;
+}
+
+b8 ValidateModelSkinnedMeshSkeletonEntity(in Name objectName, in b8 skeletonEntityValid){
+    if(skeletonEntityValid)
+        return true;
+
+    error("ModelSystem: skinned mesh object '{}' targets missing skeleton object", objectName.resolvedText());
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

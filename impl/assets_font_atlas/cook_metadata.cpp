@@ -133,10 +133,13 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     Font font(arena, candidate.payload.font.name());
     font.setFontBytes(Move(source.fontBytes), source.faceIndex);
     candidate.payload.faceIndex = font.faceIndex();
-    if(!TryReadFontFaceMetricsFromSfnt(font.fontBytes(), candidate.payload.unitsPerEm, candidate.payload.sourceGlyphCount)){
+    const Expected<FontFaceSfntMetrics> sfntMetrics = TryReadFontFaceMetricsFromSfnt(font.fontBytes());
+    if(!sfntMetrics){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
+    candidate.payload.unitsPerEm = sfntMetrics->unitsPerEm;
+    candidate.payload.sourceGlyphCount = sfntMetrics->sourceGlyphCount;
     if(!font.validatePayload())
         return MakeUnexpected(Failure{});
     auto positioningTablesResult = CopyFontAtlasPositioningTables(font.fontBytes(), font.faceIndex(), candidate.payload.sourceGlyphCount, arena);

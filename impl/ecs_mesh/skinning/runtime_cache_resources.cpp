@@ -51,30 +51,24 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolve the name only when a diagnostic is emitted.
-[[nodiscard]] AStringView RuntimeMeshSourceText(const MeshSkinningRuntimeInstance& instance){
-    return instance.sourceName ? instance.sourceName.resolvedText() : AStringView("<unnamed>");
-}
-
 [[nodiscard]] b8 ValidateRuntimeMeshUploadPayload(const MeshSkinningRuntimeInstance& instance){
-    if(!instance.hasCompleteSplitMeshPayload()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload"), ConvertString(RuntimeMeshSourceText(instance)));
+    if(!ValidateRuntimeMeshUploadPayloadStreams(
+        instance.sourceName,
+        instance.hasCompleteSplitMeshPayload(),
+        instance.restPositions.size(),
+        instance.restNormals.size(),
+        instance.restTangents.size(),
+        instance.uv0.size(),
+        instance.colors.size(),
+        instance.skin.size(),
+        instance.meshlets,
+        instance.meshletPositionRefDeltas,
+        instance.meshletAttributeRefDeltas,
+        instance.meshletLocalVertexRefs.size(),
+        instance.meshletPrimitiveIndices.size(),
+        instance.attributeSkins
+    ))
         return false;
-    }
-    if(
-        !FitsU32(instance.restPositions.size())
-        || !FitsU32(instance.uv0.size())
-        || !FitsU32(instance.colors.size())
-        || !FitsU32(instance.skin.size())
-        || !FitsU32(instance.meshlets.size())
-        || !FitsU32(instance.meshletPositionRefDeltas.size())
-        || !FitsU32(instance.meshletAttributeRefDeltas.size())
-        || !FitsU32(instance.meshletLocalVertexRefs.size())
-        || !FitsU32(instance.meshletPrimitiveIndices.size())
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits"), ConvertString(RuntimeMeshSourceText(instance)));
-        return false;
-    }
     // Skin::loadBinary already admitted the copied skin and inverse bind data.
     NWB_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
     NWB_ASSERT(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
@@ -84,39 +78,6 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
     for(const SkinInfluence4& skin : instance.skin)
         NWB_ASSERT(ValidSkinInfluenceWeights(skin.weight) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
 #endif
-
-    usize logicalAttributeRefIndex = 0u;
-    for(usize meshletIndex = 0u; meshletIndex < instance.meshlets.size(); ++meshletIndex){
-        const MeshletDesc& meshlet = instance.meshlets[meshletIndex];
-        for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
-            const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(instance.meshletPositionRefDeltas, meshlet, localPositionIndex, true);
-            if(ref && MeshletPositionRefInRange(*ref, instance.restPositions.size(), instance.skin.size(), true))
-                continue;
-
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range"), ConvertString(RuntimeMeshSourceText(instance)), meshletIndex, localPositionIndex);
-            return false;
-        }
-        for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
-            const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(instance.meshletAttributeRefDeltas, meshlet, localAttributeIndex);
-            if(
-                ref
-                && MeshletAttributeRefInRange(*ref, instance.restNormals.size(), instance.restTangents.size(), instance.uv0.size(), instance.colors.size())
-                && logicalAttributeRefIndex < instance.attributeSkins.size()
-                && instance.attributeSkins[logicalAttributeRefIndex] < instance.skin.size()
-            ){
-                ++logicalAttributeRefIndex;
-                continue;
-            }
-
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range"), ConvertString(RuntimeMeshSourceText(instance)), meshletIndex, localAttributeIndex);
-            return false;
-        }
-    }
-    if(logicalAttributeRefIndex != instance.attributeSkins.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload"), ConvertString(RuntimeMeshSourceText(instance)));
-        return false;
-    }
-
     return true;
 }
 

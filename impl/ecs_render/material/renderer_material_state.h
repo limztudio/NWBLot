@@ -54,7 +54,23 @@ public:
 
 
 public:
-    void invalidateResources()noexcept;
+    void invalidateResources()noexcept{
+        m_pipelines.clear();
+        m_materialPassBindingLayout.reset();
+        m_computeBindingLayout.reset();
+        m_instanceBuffer.reset();
+        m_materialTypedBuffer.reset();
+        m_emulationVertexShader.reset();
+        m_emulationInputLayout.reset();
+        m_objectGeometryDecodeShader.reset();
+        m_objectGeometryDecodePipeline.reset();
+        m_objectGeometryInputLayout.reset();
+        m_instanceMutableCache.clear();
+        m_loggedMaterialPaths.clear();
+        m_instanceBufferCapacity = 0u;
+        m_materialTypedBufferCapacity = 0u;
+        m_instanceMutableCacheComponentMutationVersion = 0u;
+    }
 
 
 public:

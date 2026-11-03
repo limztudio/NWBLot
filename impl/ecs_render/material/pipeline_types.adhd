@@ -456,6 +456,125 @@ Expected<MaterialInstanceOverrideField> TryFindMaterialInstanceOverrideField(
     return makeUnexpected(Failure());
 }
 
+Expected<MaterialInstanceOverrideField> ResolveMaterialInstanceOverrideField(
+    in u32 entityId,
+    in Name materialName,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in MaterialInstanceParameter parameter
+){
+    const Expected<MaterialInstanceOverrideField> resolvedField = TryFindMaterialInstanceOverrideField(typedLayoutBlocks, typedLayoutFields, parameter);
+    if(resolvedField.has_value())
+        return resolvedField.value();
+
+    error("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
+    return makeUnexpected(Failure());
+}
+
+b8 ValidateMaterialInstanceOverrideInterface(
+    in u32 entityId,
+    in Name instanceInterface,
+    in Name materialName,
+    in Name materialInterface
+){
+    if(instanceInterface == s_NameNone){
+        error("RendererSystem: material instance overrides for entity {} require a material interface", entityId);
+        return false;
+    }
+    if(instanceInterface != materialInterface){
+        error(
+            "RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'"
+            , entityId
+            , instanceInterface.resolvedText()
+            , materialName.resolvedText()
+            , materialInterface.resolvedText()
+        );
+        return false;
+    }
+    return true;
+}
+
+Expected<u32> ResolveMaterialInstanceOverrideByteOffset(
+    in u32 entityId,
+    in Name materialName,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in MaterialInstanceParameter parameter,
+    in usize mutableByteCapacity
+){
+    if(parameter.blockName == s_NameNone || parameter.fieldName == s_NameNone){
+        error("RendererSystem: material instance override for entity {} has an invalid parameter name", entityId);
+        return makeUnexpected(Failure());
+    }
+
+    const Expected<MaterialInstanceOverrideField> resolvedField = ResolveMaterialInstanceOverrideField(entityId, materialName, typedLayoutBlocks, typedLayoutFields, parameter);
+    if(!resolvedField.has_value())
+        return makeUnexpected(Failure());
+
+    const MaterialTypedLayoutField field = resolvedField.value().field;
+    if(!resolvedField.value().mutableBlock){
+        error("RendererSystem: material instance override '{}' for entity {} targets material-constant storage", parameter.parameterName.resolvedText(), entityId);
+        return makeUnexpected(Failure());
+    }
+    if(field.fieldType != parameter.fieldType){
+        error(
+            "RendererSystem: material instance override '{}' for entity {} type does not match material '{}'"
+            , parameter.parameterName.resolvedText()
+            , entityId
+            , materialName.resolvedText()
+        );
+        return makeUnexpected(Failure());
+    }
+
+    assert(field.offset <= 0xFFFFFFFFu - resolvedField.value().blockByteBegin);
+    const u32 fieldByteOffset = resolvedField.value().blockByteBegin + field.offset;
+    const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
+    assert(fieldByteSize != 0u);
+    if(cast<usize>(fieldByteOffset) > mutableByteCapacity || cast<usize>(fieldByteSize) > mutableByteCapacity - cast<usize>(fieldByteOffset)){
+        error("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
+        return makeUnexpected(Failure());
+    }
+    return fieldByteOffset;
+}
+
+void SplitMaterialTypedBlockBytesByClass(
+    in Span<MaterialTypedLayoutBlock> blocks,
+    in Span<u8> packedTypedBytes,
+    mut Vector<u8> outConstantTypedBytes,
+    mut Vector<u8> outMutableDefaultTypedBytes
+){
+    outConstantTypedBytes.clear();
+    outMutableDefaultTypedBytes.clear();
+
+    usize constantByteSize = 0u;
+    usize mutableByteSize = 0u;
+    for(in MaterialTypedLayoutBlock block : blocks){
+        if(block.blockClass == MaterialBlockClass::MaterialConstant)
+            constantByteSize += cast<usize>(block.byteSize);
+        else
+            mutableByteSize += cast<usize>(block.byteSize);
+    }
+    outConstantTypedBytes.reserve(constantByteSize);
+    outMutableDefaultTypedBytes.reserve(mutableByteSize);
+    usize sourceByteOffset = 0u;
+    for(in MaterialTypedLayoutBlock block : blocks){
+        assert(IsValidMaterialBlockClass(block.blockClass));
+        assert((block.byteSize & 3u) == 0u);
+        const usize blockByteCount = cast<usize>(block.byteSize);
+        assert(sourceByteOffset <= packedTypedBytes.size() && blockByteCount <= packedTypedBytes.size() - sourceByteOffset);
+        if(block.blockClass == MaterialBlockClass::MaterialConstant){
+            for(usize i = 0u; i < blockByteCount; ++i)
+                outConstantTypedBytes.push_back(packedTypedBytes[sourceByteOffset + i]);
+        }
+        else{
+            for(usize i = 0u; i < blockByteCount; ++i)
+                outMutableDefaultTypedBytes.push_back(packedTypedBytes[sourceByteOffset + i]);
+        }
+        sourceByteOffset += blockByteCount;
+    }
+    assert(sourceByteOffset == packedTypedBytes.size());
+}
+
 b8 MaterialInstanceMutableCacheEntryMatches(
     in Name cacheMaterialName,
     in Name cacheMaterialInterface,
@@ -603,6 +722,83 @@ Expected<MaterialTypedByteAppendRange, MaterialTypedByteAppendStatus> ResolveMat
 
 b8 MaterialTypedByteRangeEmptyOffsetValid(in MaterialTypedByteRange range){
     return range.byteCount != 0u || range.byteOffset == 0u;
+}
+
+Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(
+    in usize currentByteCount,
+    in usize appendByteCount
+){
+    const Expected<MaterialTypedByteAppendRange, MaterialTypedByteAppendStatus> appendRange = ResolveMaterialTypedByteAppendRange(currentByteCount, appendByteCount);
+    if(appendRange.has_value())
+        return appendRange.value();
+    switch(appendRange.error()){
+    case MaterialTypedByteAppendStatus::AppendCountExceedsU32:
+        error("RendererSystem: material typed byte count exceeds u32 limits");
+        return makeUnexpected(Failure());
+    case MaterialTypedByteAppendStatus::BeginAlignmentOverflow:
+        error("RendererSystem: material typed byte offset overflows alignment");
+        return makeUnexpected(Failure());
+    case MaterialTypedByteAppendStatus::TotalCountOverflow:
+        error("RendererSystem: gathered material typed byte count overflows");
+        return makeUnexpected(Failure());
+    case MaterialTypedByteAppendStatus::EndAlignmentOverflow:
+        error("RendererSystem: material typed byte end overflows alignment");
+        return makeUnexpected(Failure());
+    case MaterialTypedByteAppendStatus::TotalCountExceedsU32:
+    case MaterialTypedByteAppendStatus::Success:
+    default:
+        error("RendererSystem: gathered material typed byte count exceeds u32 limits");
+        return makeUnexpected(Failure());
+    }
+}
+
+usize HashMaterialTypedByteContent(in u64 byteHash, in usize byteCount){
+    usize seed = hashValue(byteHash);
+    return hashCombineValue(seed, byteCount);
+}
+
+b8 EqualMaterialTypedByteContent(in u64 lhsByteHash, in Span<u8> lhsBytes, in u64 rhsByteHash, in Span<u8> rhsBytes){
+    if(lhsByteHash != rhsByteHash || lhsBytes.size() != rhsBytes.size())
+        return false;
+    for(usize i = 0u; i < lhsBytes.size(); ++i){
+        if(lhsBytes[i] != rhsBytes[i])
+            return false;
+    }
+    return true;
+}
+
+usize ResolveMaterialTypedUploadByteCount(in Span<u8> materialTypedBytes){
+    const usize uploadByteCount = materialTypedBytes.size();
+    assert(uploadByteCount != 0u, "RendererSystem: material typed data upload is empty");
+    assert((uploadByteCount & (cast<usize>(s_MaterialTypedWordBytes) - 1u)) == 0u, "RendererSystem: material typed data upload is not word-aligned");
+    return uploadByteCount;
+}
+
+void ValidateMaterialTypedUploadRange(in MaterialTypedByteRange range, in usize uploadByteCount, in StringView rangeName){
+    if(range.byteCount == 0u){
+        assert(MaterialTypedByteRangeEmptyOffsetValid(range), "RendererSystem: {} material typed byte range has zero count with nonzero offset", rangeName);
+        return;
+    }
+
+    assert(((range.byteOffset | range.byteCount) & (s_MaterialTypedWordBytes - 1u)) == 0u, "RendererSystem: {} material typed byte range is not word-aligned", rangeName);
+
+    const usize byteOffset = cast<usize>(range.byteOffset);
+    assert(byteOffset <= uploadByteCount, "RendererSystem: {} material typed byte range offset exceeds upload data", rangeName);
+    assert(byteOffset <= uploadByteCount && cast<usize>(range.byteCount) <= uploadByteCount - byteOffset, "RendererSystem: {} material typed byte range exceeds upload data", rangeName);
+}
+
+void ValidateMaterialTypedInstanceRange(in MaterialTypedInstanceRanges ranges, in usize uploadByteCount){
+    ValidateMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, "constant");
+    ValidateMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, "mutable");
+}
+
+void ValidateMaterialTypedUploadRanges(in Span<MaterialTypedInstanceRanges> instanceRanges, in Span<u8> materialTypedBytes){
+    if(instanceRanges.empty())
+        return;
+
+    const usize uploadByteCount = ResolveMaterialTypedUploadByteCount(materialTypedBytes);
+    for(in MaterialTypedInstanceRanges ranges : instanceRanges)
+        ValidateMaterialTypedInstanceRange(ranges, uploadByteCount);
 }
 
 

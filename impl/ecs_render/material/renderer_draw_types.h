@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/mesh/object_geometry_cache.h>
+#include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -72,7 +73,9 @@ struct MaterialPassMeshResourceSnapshot{
 
 
 public:
-    [[nodiscard]] b8 valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept{
+        return sourceBuffers.buffersValid() && GeometryHeapHandlesReady(geometryHeapHandles) && meshletCount > 0u && meshletPrimitiveIndexCount > 0u;
+    }
 };
 
 struct MaterialPassPipelineResourceSnapshot{
@@ -160,7 +163,11 @@ public:
 public:
     [[nodiscard]] b8 empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
 
-    void reserve(usize capacity);
+    void reserve(const usize capacity){
+        meshDrawItems.reserve(capacity);
+        indexedDrawItems.reserve(capacity);
+        computeDrawItems.reserve(capacity);
+    }
 };
 
 struct MaterialPassDrawItemsView{
@@ -204,7 +211,11 @@ public:
 public:
     [[nodiscard]] b8 empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
 
-    void reserve(usize capacity);
+    void reserve(const usize capacity){
+        regular.reserve(capacity);
+        csg.reserve(capacity);
+        csgReceiverSurface.reserve(capacity);
+    }
 };
 
 struct MaterialPassDrawItemPartitionsView{

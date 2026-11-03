@@ -35,26 +35,16 @@ Expected<PointerGesture> InputRouter::consumePointerGesture(const WidgetId id, c
 }
 
 void InputRouter::appendPointerGesture(const HitTarget& target, InputRoutingResult& result){
-    m_activeGestureSequence = 0u;
-    if(m_pointerGestures.size() == s_InputMaxPointerGestures || m_nextActionSequence == 0u){
-        result.gestureOverflow = true;
-        return;
-    }
-    PointerGesture gesture;
-    gesture.id = { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence };
-    gesture.inputSource = m_activePointerSource;
-    gesture.origin = m_interactionPosition;
-    gesture.position = m_interactionPosition;
-    gesture.targetRectangle = target.rectangle;
-    gesture.referenceRectangle = target.gestureReference.width > 0.0f ? target.gestureReference : target.rectangle;
-    gesture.popup = target.popup;
-    gesture.control = target.control;
-    gesture.maximum = target.gestureMaximum;
-    gesture.updateSequence = m_nextActionSequence;
-    gesture.value = target.value;
-    m_pointerGestures.push_back({ gesture, true });
-    m_activeGestureSequence = m_nextActionSequence;
-    ++m_nextActionSequence;
+    AppendRouterPointerGesture(
+        target,
+        m_layoutGeneration,
+        m_activePointerSource,
+        m_interactionPosition,
+        m_pointerGestures,
+        m_activeGestureSequence,
+        m_nextActionSequence,
+        result
+    );
 }
 
 void InputRouter::updatePointerGesture(const Point& position, const b8 completed)noexcept{

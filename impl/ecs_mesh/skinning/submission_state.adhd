@@ -290,6 +290,53 @@ b8 CanStageMeshSkinningDeformationCandidate(in b8 hasResourceSlotsBuffer, in usi
     ;
 }
 
+b8 CanReuseMeshSkinningDeformationState(
+    in b8 inputDirty,
+    in u64 acceptedRevision,
+    in b8 sameResourceSlotsBuffer,
+    in u32 editRevision,
+    in u32 acceptedEditRevision,
+    in u32 skinningMode,
+    in u32 acceptedSkinningMode,
+    in b8 hasJointData,
+    in Span<SkeletonJointMatrix> joints,
+    in Span<SkeletonJointMatrix> acceptedJoints
+){
+    if(
+        inputDirty
+        || acceptedRevision == 0u
+        || !sameResourceSlotsBuffer
+        || editRevision != acceptedEditRevision
+        || skinningMode != acceptedSkinningMode
+        || joints.size() != acceptedJoints.size()
+        || (!joints.empty() && !hasJointData)
+    )
+        return false;
+    return EqualSkeletonJointMatrixSpan(joints, acceptedJoints);
+}
+
+Expected<u64> TryStageMeshSkinningDeformationCandidate(
+    in b8 hasResourceSlotsBuffer,
+    in Span<SkeletonJointMatrix> joints,
+    in b8 hasJointData,
+    mut u64 inoutCandidateSerial,
+    in u64 acceptedRevision,
+    mut Vector<SkeletonJointMatrix> outPendingJoints
+){
+    if(!CanStageMeshSkinningDeformationCandidate(hasResourceSlotsBuffer, joints.size(), hasJointData, inoutCandidateSerial, acceptedRevision)){
+        error("MeshSkinningDeformationState: invalid or exhausted deformation candidate");
+        return makeUnexpected(Failure());
+    }
+    outPendingJoints.clear();
+    if(!joints.empty()){
+        outPendingJoints.reserve(joints.size());
+        for(in SkeletonJointMatrix joint : joints)
+            outPendingJoints.push_back(joint);
+    }
+    ++inoutCandidateSerial;
+    return inoutCandidateSerial;
+}
+
 b8 TryAcceptMeshSkinningDeformationCandidate(in u64 candidate, mut u64 inoutPendingCandidate, mut u64 inoutAcceptedRevision, mut b8 outCurrent){
     if(candidate == 0u || candidate != inoutPendingCandidate)
         return false;
@@ -369,6 +416,83 @@ b8 HasCompleteSplitMeshSkinningPayload(
         && meshletAttributeRefCount > 0u
         && attributeSkinCount == cast<usize>(meshletAttributeRefCount)
     ;
+}
+
+StringView RuntimeMeshSourceText(in Name sourceName){
+    if(sourceName != s_NameNone)
+        return sourceName.resolvedText();
+    return "<unnamed>";
+}
+
+b8 ValidateRuntimeMeshUploadPayloadStreams(
+    in Name sourceName,
+    in b8 hasCompleteSplitPayload,
+    in usize restPositionCount,
+    in usize restNormalCount,
+    in usize restTangentCount,
+    in usize uv0Count,
+    in usize colorCount,
+    in usize skinCount,
+    in Span<MeshletDesc> meshlets,
+    in Span<u8> meshletPositionRefDeltas,
+    in Span<u8> meshletAttributeRefDeltas,
+    in usize meshletLocalVertexRefCount,
+    in usize meshletPrimitiveIndexCount,
+    in Span<u32> attributeSkins
+){
+    if(!hasCompleteSplitPayload){
+        error("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload", RuntimeMeshSourceText(sourceName));
+        return false;
+    }
+    const usize maxU32 = cast<usize>(u32.max);
+    if(
+        restPositionCount > maxU32
+        || uv0Count > maxU32
+        || colorCount > maxU32
+        || skinCount > maxU32
+        || meshlets.size() > maxU32
+        || meshletPositionRefDeltas.size() > maxU32
+        || meshletAttributeRefDeltas.size() > maxU32
+        || meshletLocalVertexRefCount > maxU32
+        || meshletPrimitiveIndexCount > maxU32
+    ){
+        error("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits", RuntimeMeshSourceText(sourceName));
+        return false;
+    }
+
+    usize logicalAttributeRefIndex = 0u;
+    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
+        const MeshletDesc meshlet = meshlets[meshletIndex];
+        for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
+            const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(meshletPositionRefDeltas, meshlet, localPositionIndex, true);
+            if(ref.has_value() && MeshletPositionRefInRange(ref.value(), restPositionCount, skinCount, true))
+                continue;
+
+            error("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range", RuntimeMeshSourceText(sourceName), meshletIndex, localPositionIndex);
+            return false;
+        }
+        for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
+            const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(meshletAttributeRefDeltas, meshlet, localAttributeIndex);
+            if(
+                ref.has_value()
+                && MeshletAttributeRefInRange(ref.value(), restNormalCount, restTangentCount, uv0Count, colorCount)
+                && logicalAttributeRefIndex < attributeSkins.size()
+                && cast<usize>(attributeSkins[logicalAttributeRefIndex]) < skinCount
+            ){
+                ++logicalAttributeRefIndex;
+                continue;
+            }
+
+            error("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range", RuntimeMeshSourceText(sourceName), meshletIndex, localAttributeIndex);
+            return false;
+        }
+    }
+    if(logicalAttributeRefIndex != attributeSkins.size()){
+        error("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload", RuntimeMeshSourceText(sourceName));
+        return false;
+    }
+
+    return true;
 }
 
 

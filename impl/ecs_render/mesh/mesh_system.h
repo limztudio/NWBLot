@@ -106,27 +106,12 @@ public:
     [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
 
     template<typename BindingHandler>
-    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(handler(NWB_MESH_BINDING_POSITION, false))){
-        handler(NWB_MESH_BINDING_POSITION, false);
-        handler(NWB_MESH_BINDING_NORMAL, false);
-        handler(NWB_MESH_BINDING_TANGENT, false);
-        handler(NWB_MESH_BINDING_UV0, false);
-        handler(NWB_MESH_BINDING_COLOR, false);
-        handler(NWB_MESH_BINDING_MESHLET_DESC, false);
-        handler(NWB_MESH_BINDING_MESHLET_BOUNDS, true);
-        handler(NWB_MESH_BINDING_MESHLET_POSITION_REFS, true);
-        handler(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS, true);
-        handler(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS, false);
-        handler(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, true);
+    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(NWB::Impl::ForEachMeshSourceBindingSlot(Forward<BindingHandler>(handler)))){
+        NWB::Impl::ForEachMeshSourceBindingSlot(Forward<BindingHandler>(handler));
     }
 
     [[nodiscard]] static b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
-        b8 ready = true;
-        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
-            const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
-            ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-        });
-        return ready;
+        return NWB::Impl::GeometryHeapHandlesReady(geometryHeapHandles);
     }
 
     [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot)noexcept;

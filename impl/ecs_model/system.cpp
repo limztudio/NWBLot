@@ -11,7 +11,6 @@
 #include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/assets/manager.h>
-#include <core/common/log.h>
 #include <core/ecs/entity.h>
 
 
@@ -210,14 +209,7 @@ b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Model
     Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::Skeleton);
 
     auto& pose = entity.addComponent<SkeletonPoseComponent>();
-    pose.parentJoints.clear();
-    pose.localJoints.clear();
-    pose.parentJoints.reserve(skeleton.joints().size());
-    pose.localJoints.reserve(skeleton.joints().size());
-    for(const SkeletonJoint& joint : skeleton.joints()){
-        pose.parentJoints.push_back(joint.parentIndex);
-        pose.localJoints.push_back(joint.localBindPose);
-    }
+    InitializeSkeletonPoseFromJoints(skeleton.joints(), pose);
 
     auto& skeletonComponent = entity.addComponent<ModelSkeletonComponent>();
     skeletonComponent.skeleton = object.skeleton;
@@ -239,16 +231,11 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
     NWB_ASSERT(object.parentObject || !object.parentJoint);
     if(object.parentObject){
         attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
-        if(!attachment.parentEntity.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing parent object '{}'"), ConvertString(object.name.resolvedText()), ConvertString(object.parentObject.resolvedText()));
+        const ModelSkeletonComponent* skeletonComponent = attachment.parentEntity.valid()
+            ? m_world.tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity)
+            : nullptr;
+        if(!ValidateModelStaticMeshParentEntity(object.name, object.parentObject, attachment.parentEntity.valid(), skeletonComponent != nullptr))
             return false;
-        }
-
-        const ModelSkeletonComponent* skeletonComponent = m_world.tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity);
-        if(!skeletonComponent){
-            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' parent_object '{}' is not a skeleton object"), ConvertString(object.name.resolvedText()), ConvertString(object.parentObject.resolvedText()));
-            return false;
-        }
 
         if(object.parentJoint){
             const Name skeletonName = skeletonComponent->skeleton.name();
@@ -260,14 +247,8 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
             const Skeleton& skeleton = **skeletonAsset;
 
             attachment.parentJointIndex = skeleton.findJointIndex(object.parentJoint);
-            if(attachment.parentJointIndex == s_SkeletonInvalidJointIndex){
-                NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing joint '{}' on skeleton object '{}'")
-                    , ConvertString(object.name.resolvedText())
-                    , ConvertString(object.parentJoint.resolvedText())
-                    , ConvertString(object.parentObject.resolvedText())
-                );
+            if(!ValidateModelStaticMeshParentJoint(object.name, object.parentObject, object.parentJoint, attachment.parentJointIndex))
                 return false;
-            }
         }
     }
 
@@ -276,10 +257,8 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
 
 b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object){
     const Core::ECS::EntityID skeletonEntity = findSpawnedObject(owner, object.skeletonObject);
-    if(!skeletonEntity.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: skinned mesh object '{}' targets missing skeleton object"), ConvertString(object.name.resolvedText()));
+    if(!ValidateModelSkinnedMeshSkeletonEntity(object.name, skeletonEntity.valid()))
         return false;
-    }
 
     Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::SkinnedMesh);
     if(m_applyRenderer)

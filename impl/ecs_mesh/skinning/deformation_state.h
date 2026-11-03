@@ -10,8 +10,6 @@
 #include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include <impl/ecs_skeleton/components.adhd.h>
 
-#include <core/common/log.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,33 +48,33 @@ public:
     }
     void refreshCurrent(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints, const b8 inputDirty)noexcept{
         invalidateCurrent();
-        const usize jointCount = joints.size();
-        if(
-            inputDirty
-            || m_acceptedRevision == 0u
-            || !inputs.resourceSlotsBuffer
-            || inputs.resourceSlotsBuffer != m_acceptedInputs.resourceSlotsBuffer
-            || inputs.editRevision != m_acceptedInputs.editRevision
-            || inputs.skinningMode != m_acceptedInputs.skinningMode
-            || jointCount != m_acceptedJoints.size()
-            || (jointCount != 0u && !joints.data())
-        )
-            return;
-        m_current = EqualSkeletonJointMatrixSpan(joints, Span<const SkeletonJointMatrix>(m_acceptedJoints.data(), m_acceptedJoints.size()));
+        m_current = CanReuseMeshSkinningDeformationState(
+            inputDirty,
+            m_acceptedRevision,
+            inputs.resourceSlotsBuffer != nullptr && inputs.resourceSlotsBuffer == m_acceptedInputs.resourceSlotsBuffer,
+            inputs.editRevision,
+            m_acceptedInputs.editRevision,
+            inputs.skinningMode,
+            m_acceptedInputs.skinningMode,
+            joints.data() != nullptr,
+            joints,
+            Span<const SkeletonJointMatrix>(m_acceptedJoints.data(), m_acceptedJoints.size())
+        );
     }
     [[nodiscard]] Expected<u64> stage(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints){
         invalidateCurrent();
-        const usize jointCount = joints.size();
-        if(!CanStageMeshSkinningDeformationCandidate(inputs.resourceSlotsBuffer != nullptr, jointCount, joints.data() != nullptr, m_candidateSerial, m_acceptedRevision)){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningDeformationState: invalid or exhausted deformation candidate"));
+        const auto candidate = TryStageMeshSkinningDeformationCandidate(
+            inputs.resourceSlotsBuffer != nullptr,
+            joints,
+            joints.data() != nullptr,
+            m_candidateSerial,
+            m_acceptedRevision,
+            m_pendingJoints
+        );
+        if(!candidate)
             return MakeUnexpected(Failure{});
-        }
-        if(jointCount == 0u)
-            m_pendingJoints.clear();
-        else
-            m_pendingJoints.assign(joints.begin(), joints.end());
         m_pendingInputs = inputs;
-        m_pendingCandidate = ++m_candidateSerial;
+        m_pendingCandidate = *candidate;
         return m_pendingCandidate;
     }
     [[nodiscard]] b8 accept(const u64 candidate)noexcept{

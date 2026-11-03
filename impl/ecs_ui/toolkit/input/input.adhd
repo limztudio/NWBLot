@@ -533,6 +533,44 @@ b8 ValidStagedPopupTarget(in HitTarget target, in Span<PopupRecord> stagedPopups
     return false;
 }
 
+void AppendRouterPointerGesture(
+    in HitTarget target,
+    in u64 layoutGeneration,
+    in InputSource activePointerSource,
+    in Point interactionPosition,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut u64 outActiveGestureSequence,
+    mut u64 inoutNextActionSequence,
+    mut InputRoutingResult inoutResult
+){
+    outActiveGestureSequence = 0u;
+    if(pointerGestures.size() == s_InputMaxPointerGestures || inoutNextActionSequence == 0u){
+        inoutResult.gestureOverflow = true;
+        return;
+    }
+    PointerGesture gesture;
+    gesture.id.target = target.id;
+    gesture.id.declarationGeneration = target.declarationGeneration;
+    gesture.id.layoutGeneration = layoutGeneration;
+    gesture.id.sequence = inoutNextActionSequence;
+    gesture.inputSource = activePointerSource;
+    gesture.origin = interactionPosition;
+    gesture.position = interactionPosition;
+    gesture.targetRectangle = target.rectangle;
+    if(target.gestureReference.width > 0.0f)
+        gesture.referenceRectangle = target.gestureReference;
+    else
+        gesture.referenceRectangle = target.rectangle;
+    gesture.popup = target.popup;
+    gesture.control = target.control;
+    gesture.maximum = target.gestureMaximum;
+    gesture.updateSequence = inoutNextActionSequence;
+    gesture.value = target.value;
+    pointerGestures.push_back(PointerGestureRecord(gesture, true));
+    outActiveGestureSequence = inoutNextActionSequence;
+    ++inoutNextActionSequence;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

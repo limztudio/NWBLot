@@ -20,9 +20,8 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
         return false;
     }
-    u32 sourceUnitsPerEm = 0u;
-    u32 sourceGlyphCount = 0u;
-    if(!TryReadFontFaceMetricsFromSfnt(source, sourceUnitsPerEm, sourceGlyphCount) || sourceUnitsPerEm != payload.unitsPerEm || sourceGlyphCount != payload.sourceGlyphCount)
+    const Expected<FontFaceSfntMetrics> sfntMetrics = TryReadFontFaceMetricsFromSfnt(source);
+    if(!sfntMetrics || sfntMetrics->unitsPerEm != payload.unitsPerEm || sfntMetrics->sourceGlyphCount != payload.sourceGlyphCount)
         return false;
     const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory({ source.data(), source.size() });
     if(!directory)

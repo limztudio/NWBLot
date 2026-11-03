@@ -8,6 +8,7 @@
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/mesh/object_geometry_cache.h>
+#include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 
@@ -21,6 +22,31 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename BindingHandler>
+void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(handler(NWB_MESH_BINDING_POSITION, false))){
+    handler(NWB_MESH_BINDING_POSITION, false);
+    handler(NWB_MESH_BINDING_NORMAL, false);
+    handler(NWB_MESH_BINDING_TANGENT, false);
+    handler(NWB_MESH_BINDING_UV0, false);
+    handler(NWB_MESH_BINDING_COLOR, false);
+    handler(NWB_MESH_BINDING_MESHLET_DESC, false);
+    handler(NWB_MESH_BINDING_MESHLET_BOUNDS, true);
+    handler(NWB_MESH_BINDING_MESHLET_POSITION_REFS, true);
+    handler(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS, true);
+    handler(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS, false);
+    handler(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, true);
+}
+
+[[nodiscard]] inline b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
+    b8 ready = true;
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
+        const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
+        ready = ready && handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    });
+    return ready;
+}
 
 
 static_assert(s_MeshInstanceGeometrySlotCount == NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT, "s_MeshInstanceGeometrySlotCount must match NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT");

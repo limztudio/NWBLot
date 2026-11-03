@@ -230,10 +230,15 @@ b8 IsFontAtlasPositioningTableTag(in u32 tag){
     return tag == s_FontAtlasKernTag || tag == s_FontAtlasGposTag || tag == s_FontAtlasGdefTag;
 }
 
-b8 TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes, mut u32 outUnitsPerEm, mut u32 outSourceGlyphCount){
+class FontFaceSfntMetrics{
+    public u32 unitsPerEm = 0u;
+    public u32 sourceGlyphCount = 0u;
+}
+
+Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes){
     const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
     if(!directory.has_value())
-        return false;
+        return makeUnexpected(Failure());
     u32 unitsPerEm = 0u;
     u32 sourceGlyphCount = 0u;
     b8 hasHead = false;
@@ -241,16 +246,16 @@ b8 TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes, mut u32 outUnitsPerEm, 
     for(u16 index = 0u; index < directory.value().tableCount(); ++index){
         const Expected<FontSfntTable> table = directory.value().table(cast<usize>(index));
         if(!table.has_value())
-            return false;
+            return makeUnexpected(Failure());
         if(table.value().tag == s_FontSfntHeadTag){
             if(table.value().bytes.size() < s_FontSfntHeadUnitsPerEmOffset + s_FontSfntU16Bytes)
-                return false;
+                return makeUnexpected(Failure());
             unitsPerEm = cast<u32>(ReadFontSfntU16BigEndian(table.value().bytes, s_FontSfntHeadUnitsPerEmOffset));
             hasHead = true;
         }
         else if(table.value().tag == s_FontSfntMaxpTag){
             if(table.value().bytes.size() < s_FontSfntMaxpGlyphCountOffset + s_FontSfntU16Bytes)
-                return false;
+                return makeUnexpected(Failure());
             sourceGlyphCount = cast<u32>(ReadFontSfntU16BigEndian(table.value().bytes, s_FontSfntMaxpGlyphCountOffset));
             hasMaxp = true;
         }
@@ -262,10 +267,11 @@ b8 TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes, mut u32 outUnitsPerEm, 
         || unitsPerEm > s_FontAtlasMaxUnitsPerEm
         || sourceGlyphCount == 0u
     )
-        return false;
-    outUnitsPerEm = unitsPerEm;
-    outSourceGlyphCount = sourceGlyphCount;
-    return true;
+        return makeUnexpected(Failure());
+    FontFaceSfntMetrics out;
+    out.unitsPerEm = unitsPerEm;
+    out.sourceGlyphCount = sourceGlyphCount;
+    return out;
 }
 
 class FontAtlasGroupCompactBounds{

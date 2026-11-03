@@ -135,24 +135,15 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     return samplerResource->samplerHeapHandle.slot();
 }
 
-[[nodiscard]] static b8 WriteMaterialInstanceOverrideBytes(
-    const Core::ECS::EntityID entity,
-    const Name& materialName,
+static void WriteMaterialInstanceOverrideBytes(
     const MaterialInstanceParameter& parameter,
-    const MaterialTypedLayoutField& field,
+    const u32 fieldByteSize,
     const u32 byteOffset,
     const Span<u8> inOutMutableTypedBytes
 ){
-    const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
     NWB_ASSERT(fieldByteSize != 0u);
-    if(byteOffset > inOutMutableTypedBytes.size() || static_cast<usize>(fieldByteSize) > inOutMutableTypedBytes.size() - static_cast<usize>(byteOffset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'"), ConvertString(parameter.parameterName.resolvedText()), entity.id, ConvertString(materialName.resolvedText()));
-        return false;
-    }
-
     const NotNull<const u8*> valueBytes = MakeNotNull(static_cast<const u8*>(static_cast<const void*>(parameter.value.raw)));
     NWB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes.get(), fieldByteSize);
-    return true;
 }
 
 
@@ -166,56 +157,25 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
 
 
 Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInstanceOverrideField(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter){
-    if(const Expected<MaterialInstanceOverrideField> resolvedField = TryFindMaterialInstanceOverrideField(materialInfo.typedLayoutBlocks, materialInfo.typedLayoutFields, parameter))
-        return *resolvedField;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'"), ConvertString(parameter.parameterName.resolvedText()), entity.id, ConvertString(materialInfo.materialName.resolvedText()));
-    return MakeUnexpected(Failure{});
+    return ResolveMaterialInstanceOverrideField(entity.id, materialInfo.materialName, materialInfo.typedLayoutBlocks, materialInfo.typedLayoutFields, parameter);
 }
 
 b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, const Span<u8> inOutMutableTypedBytes){
-    if(!materialInstance.materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} require a material interface"), entity.id);
+    if(!ValidateMaterialInstanceOverrideInterface(entity.id, materialInstance.materialInterface, materialInfo.materialName, materialInfo.materialInterface))
         return false;
-    }
-    if(materialInstance.materialInterface != materialInfo.materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'")
-            , entity.id
-            , ConvertString(materialInstance.materialInterface.resolvedText())
-            , ConvertString(materialInfo.materialName.resolvedText())
-            , ConvertString(materialInfo.materialInterface.resolvedText())
-        );
-        return false;
-    }
 
     for(const MaterialInstanceParameter& parameter : materialInstance.overrides){
-        if(!parameter.blockName || !parameter.fieldName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override for entity {} has an invalid parameter name"), entity.id);
+        const Expected<u32> fieldByteOffset = ResolveMaterialInstanceOverrideByteOffset(
+            entity.id,
+            materialInfo.materialName,
+            materialInfo.typedLayoutBlocks,
+            materialInfo.typedLayoutFields,
+            parameter,
+            inOutMutableTypedBytes.size()
+        );
+        if(!fieldByteOffset)
             return false;
-        }
-
-        const auto resolvedField = FindMaterialInstanceOverrideField(entity, materialInfo, parameter);
-        if(!resolvedField)
-            return false;
-
-        const MaterialTypedLayoutField& field = resolvedField->field;
-        if(!resolvedField->mutableBlock){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} targets material-constant storage"), ConvertString(parameter.parameterName.resolvedText()), entity.id);
-            return false;
-        }
-        if(field.fieldType != parameter.fieldType){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} type does not match material '{}'")
-                , ConvertString(parameter.parameterName.resolvedText())
-                , entity.id
-                , ConvertString(materialInfo.materialName.resolvedText())
-            );
-            return false;
-        }
-
-        NWB_ASSERT(field.offset <= Limit<u32>::s_Max - resolvedField->blockByteBegin);
-        const u32 fieldByteOffset = resolvedField->blockByteBegin + field.offset;
-        if(!__hidden_material_surface::WriteMaterialInstanceOverrideBytes(entity, materialInfo.materialName, parameter, field, fieldByteOffset, inOutMutableTypedBytes))
-            return false;
+        __hidden_material_surface::WriteMaterialInstanceOverrideBytes(parameter, MaterialLayoutFieldByteSize(parameter.fieldType), *fieldByteOffset, inOutMutableTypedBytes);
     }
 
     return true;
@@ -223,31 +183,7 @@ b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Entit
 
 void RendererMaterialSystem::SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes){
     NWB_ASSERT(material.typedLayoutHash() != 0u);
-    outConstantTypedBytes.clear();
-    outMutableDefaultTypedBytes.clear();
-
-    const auto& packedTypedBytes = material.typedBlockBytes();
-    usize constantByteSize = 0u;
-    usize mutableByteSize = 0u;
-    for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
-        usize& targetByteSize = block.blockClass == MaterialBlockClass::MaterialConstant ? constantByteSize : mutableByteSize;
-        targetByteSize += block.byteSize;
-    }
-    outConstantTypedBytes.reserve(constantByteSize);
-    outMutableDefaultTypedBytes.reserve(mutableByteSize);
-    usize sourceByteOffset = 0u;
-    for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
-        // Material::loadBinary already ran ValidateMaterialTypedLayout; keep a debug-only invariant here.
-        NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
-        NWB_ASSERT((block.byteSize & (sizeof(u32) - 1u)) == 0u);
-        NWB_ASSERT(sourceByteOffset <= packedTypedBytes.size() && block.byteSize <= packedTypedBytes.size() - sourceByteOffset);
-
-        MaterialTypedByteVector& targetTypedBytes = block.blockClass == MaterialBlockClass::MaterialConstant ? outConstantTypedBytes : outMutableDefaultTypedBytes;
-        targetTypedBytes.insert(targetTypedBytes.end(), packedTypedBytes.begin() + sourceByteOffset, packedTypedBytes.begin() + sourceByteOffset + block.byteSize);
-        sourceByteOffset += block.byteSize;
-    }
-    // Material::loadBinary already validated the packed byte count against the cooked layout.
-    NWB_ASSERT(sourceByteOffset == packedTypedBytes.size());
+    SplitMaterialTypedBlockBytesByClass(material.typedLayoutBlocks(), material.typedBlockBytes(), outConstantTypedBytes, outMutableDefaultTypedBytes);
 }
 
 

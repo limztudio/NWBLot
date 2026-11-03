@@ -164,18 +164,13 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
     MeshletTrianglePrecompute& trianglePrecompute = *precomputed;
 
     MeshletDesc current;
+    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
     Vector<u32, Core::Alloc::ScratchArena> localSourceVertexRefs(scratchArena);
-    Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> localPositionRefs(scratchArena);
-    Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> localAttributeRefs(scratchArena);
-    Vector<MeshletLocalVertexRef, Core::Alloc::ScratchArena> localVertexRefs(scratchArena);
     Vector<u32, Core::Alloc::ScratchArena> localTriangleIndices(scratchArena);
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena> parallelCandidates(scratchArena);
     Vector<u32, Core::Alloc::ScratchArena> frontier(scratchArena);
     Vector<u8, Core::Alloc::ScratchArena> frontierFlags(scratchArena);
     localSourceVertexRefs.reserve(s_MeshMaxMeshletVertices);
-    localPositionRefs.reserve(s_MeshMaxMeshletVertices);
-    localAttributeRefs.reserve(s_MeshMaxMeshletVertices);
-    localVertexRefs.reserve(s_MeshMaxMeshletVertices);
     localTriangleIndices.reserve(s_MeshMaxMeshletTriangles);
     parallelCandidates.reserve((static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription);
     frontier.reserve(trianglePrecompute.triangles.size());
@@ -192,23 +187,21 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
     };
 
     auto flushMeshlet = [&]() -> b8{
-        const u32 primitiveCount = MeshletPrimitiveCount(current);
-        if(primitiveCount == 0u)
-            return true;
-
-        if(!MeshletZippedRefBuilder::BuildZippedMeshletRefs(nwbFilePath, metaKind, entry, localSourceVertexRefs, localPositionRefs, localAttributeRefs, localVertexRefs))
+        if(!FlushBuiltMeshlet(
+            s_MeshMetaKindText,
+            AStringView(filePathText),
+            entry.positions,
+            entry.vertexRefs,
+            entry.meshletPrimitiveIndices,
+            localSourceVertexRefs,
+            current,
+            entry.meshletPositionStreamRefs,
+            entry.meshletAttributeStreamRefs,
+            entry.meshletLocalVertexRefs,
+            entry.meshlets,
+            entry.meshletBounds
+        ))
             return false;
-
-        current.localVertexOffset = static_cast<u32>(entry.meshletLocalVertexRefs.size());
-        current.positionRefOffset = static_cast<u32>(entry.meshletPositionStreamRefs.size());
-        current.attributeRefOffset = static_cast<u32>(entry.meshletAttributeStreamRefs.size());
-        current.counts = PackMeshletCounts(static_cast<u32>(localVertexRefs.size()), primitiveCount, static_cast<u32>(localPositionRefs.size()), static_cast<u32>(localAttributeRefs.size()));
-
-        entry.meshletPositionStreamRefs.insert(entry.meshletPositionStreamRefs.end(), localPositionRefs.begin(), localPositionRefs.end());
-        entry.meshletAttributeStreamRefs.insert(entry.meshletAttributeStreamRefs.end(), localAttributeRefs.begin(), localAttributeRefs.end());
-        entry.meshletLocalVertexRefs.insert(entry.meshletLocalVertexRefs.end(), localVertexRefs.begin(), localVertexRefs.end());
-        entry.meshlets.push_back(current);
-        entry.meshletBounds.push_back(MeshletBoundsBuilder::BuildMeshletBounds(entry, current));
 
         resetCurrentMeshlet();
         return true;
@@ -236,7 +229,23 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
         return false;
     }
 
-    MeshletCookMetricsReport::LogMeshletCookMetrics(nwbFilePath, metaKind, indices, entry);
+    LogMeshletCookMetrics(
+        s_MeshMetaKindText,
+        AStringView(filePathText),
+        indices,
+        entry.positions,
+        entry.normals,
+        entry.tangents,
+        entry.uv0,
+        entry.colors,
+        entry.vertexRefs,
+        entry.meshlets,
+        entry.meshletBounds,
+        entry.meshletPositionStreamRefs,
+        entry.meshletAttributeStreamRefs,
+        entry.meshletLocalVertexRefs,
+        entry.meshletPrimitiveIndices
+    );
     return true;
 }
 

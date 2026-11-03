@@ -11,7 +11,6 @@
 #include "cook.h"
 #include "cook_metadata.h"
 #include "cook_source_streams.h"
-#include "cook_stream_reorder.h"
 #include "meshlet_ref_encode.h"
 #include "cook_meshlets.h"
 #include "binary_payload_io.h"
@@ -95,7 +94,17 @@ Expected<MeshCookEntry> ParseMeshCookMetadata(const Name virtualPath, const Path
 }
 
 Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
+    if(!ReorderMeshStreamsByMeshletTraversal(
+        meshEntry.virtualPath,
+        meshEntry.meshlets,
+        meshEntry.positions,
+        meshEntry.normals,
+        meshEntry.tangents,
+        meshEntry.uv0,
+        meshEntry.colors,
+        meshEntry.meshletPositionStreamRefs,
+        meshEntry.meshletAttributeStreamRefs
+    ))
         return MakeUnexpected(Failure{});
     if(!EncodeMeshletRefDeltas(meshEntry.meshletPositionStreamRefs, meshEntry.meshletAttributeStreamRefs, false, [&](const usize meshletIndex, const TStringView reason){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}"), s_MeshMetaKind, ConvertString(meshEntry.virtualPath.resolvedText()), meshletIndex, reason);

@@ -169,6 +169,65 @@ b8 ValidateSkeletonJointBinaryPadding(in SkeletonJointBinary jointBinary){
     return false;
 }
 
+b8 AppendUnpackedSkeletonJointBinary(
+    in SkeletonJointBinary jointBinary,
+    mut Vector<SkeletonJoint> inOutJoints,
+    mut HashMap<Name, u32> inOutJointIndices
+){
+    if(!ValidateSkeletonJointBinaryPadding(jointBinary))
+        return false;
+    const Name jointName(jointBinary.nameHash);
+    if(inOutJointIndices.contains(jointName)){
+        error("Skeleton::loadBinary failed: duplicate joint '{}'", jointName.resolvedText());
+        return false;
+    }
+    inOutJointIndices.try_emplace(jointName, cast<u32>(inOutJoints.size()));
+    inOutJoints.push_back(UnpackSkeletonJointBinary(jointBinary));
+    return true;
+}
+
+b8 BuildSkeletonCookJoints(
+    in Name virtualPath,
+    in Span<SkeletonCookJoint> cookJoints,
+    mut Vector<SkeletonJoint> outJoints,
+    mut HashMap<Name, u32> outJointIndices
+){
+    outJoints.reserve(cookJoints.size());
+    outJointIndices.reserve(cookJoints.size());
+
+    for(usize jointIndex = 0u; jointIndex < cookJoints.size(); ++jointIndex){
+        const SkeletonCookJoint cookJoint = cookJoints[jointIndex];
+        u32 parentIndex = s_SkeletonInvalidJointIndex;
+        if(cookJoint.parent != s_NameNone){
+            if(!outJointIndices.contains(cookJoint.parent)){
+                error(
+                    "Skeleton meta '{}': joint '{}' references missing or later parent '{}'"
+                    , virtualPath.resolvedText()
+                    , cookJoint.name.resolvedText()
+                    , cookJoint.parent.resolvedText()
+                );
+                return false;
+            }
+            parentIndex = outJointIndices[cookJoint.parent];
+        }
+        if(outJointIndices.contains(cookJoint.name)){
+            error(
+                "Skeleton meta '{}': duplicate joint name '{}'"
+                , virtualPath.resolvedText()
+                , cookJoint.name.resolvedText()
+            );
+            return false;
+        }
+        outJointIndices.try_emplace(cookJoint.name, cast<u32>(outJoints.size()));
+
+        SkeletonJoint joint;
+        joint.localBindPose = cookJoint.localBindPose;
+        joint.parentIndex = parentIndex;
+        outJoints.push_back(joint);
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

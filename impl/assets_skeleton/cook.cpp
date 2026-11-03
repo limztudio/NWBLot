@@ -63,23 +63,6 @@ using namespace Core::Metascript;
     return joint;
 }
 
-template<typename JointIndexMapT>
-[[nodiscard]] Expected<u32> ResolveParentIndex(const SkeletonCookEntry& skeletonEntry, const JointIndexMapT& earlierJointIndices, const usize jointIndex, const Name& parent){
-    if(!parent)
-        return s_SkeletonInvalidJointIndex;
-
-    const auto foundParent = earlierJointIndices.find(parent);
-    if(foundParent != earlierJointIndices.end())
-        return foundParent.value();
-
-    NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': joint '{}' references missing or later parent '{}'")
-        , ConvertString(skeletonEntry.virtualPath.resolvedText())
-        , ConvertString(skeletonEntry.joints[jointIndex].name.resolvedText())
-        , ConvertString(parent.resolvedText())
-    );
-    return MakeUnexpected(Failure{});
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -209,25 +192,8 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Path& assetRoot, con
 Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     Skeleton::JointVector joints(arena);
     Skeleton::JointIndexMap jointIndices(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    joints.reserve(skeletonEntry.joints.size());
-    jointIndices.reserve(skeletonEntry.joints.size());
-
-    for(usize jointIndex = 0u; jointIndex < skeletonEntry.joints.size(); ++jointIndex){
-        const SkeletonCookJoint& cookJoint = skeletonEntry.joints[jointIndex];
-
-        SkeletonJoint joint;
-        joint.localBindPose = cookJoint.localBindPose;
-        auto parentIndexResult = __hidden_skeleton_cook::ResolveParentIndex(skeletonEntry, jointIndices, jointIndex, cookJoint.parent);
-        if(!parentIndexResult)
-            return MakeUnexpected(Failure{});
-        joint.parentIndex = *parentIndexResult;
-        if(!jointIndices.emplace(cookJoint.name, static_cast<u32>(joints.size())).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': duplicate joint name '{}'"), ConvertString(skeletonEntry.virtualPath.resolvedText()), ConvertString(cookJoint.name.resolvedText()));
-            return MakeUnexpected(Failure{});
-        }
-
-        joints.push_back(joint);
-    }
+    if(!BuildSkeletonCookJoints(skeletonEntry.virtualPath, skeletonEntry.joints, joints, jointIndices))
+        return MakeUnexpected(Failure{});
 
     Skeleton asset(arena, skeletonEntry.virtualPath);
     asset.setJoints(Move(joints), Move(jointIndices));

@@ -92,16 +92,8 @@ b8 Skeleton::loadBinary(const Span<const u8> binary){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed joint {}"), jointIndex);
             return false;
         }
-        const SkeletonJointBinary& jointBinary = *jointBinaryResult;
-        if(!ValidateSkeletonJointBinaryPadding(jointBinary))
+        if(!AppendUnpackedSkeletonJointBinary(*jointBinaryResult, candidate.m_joints, candidate.m_jointIndices))
             return false;
-        const Name jointName(jointBinary.nameHash);
-        if(!candidate.m_jointIndices.emplace(jointName, static_cast<u32>(candidate.m_joints.size())).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), ConvertString(jointName.resolvedText()));
-            return false;
-        }
-
-        candidate.m_joints.push_back(UnpackSkeletonJointBinary(jointBinary));
     }
 
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SkeletonLoadBinaryContext) || !candidate.validatePayload(scratchArena))

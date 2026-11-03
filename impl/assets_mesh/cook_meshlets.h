@@ -12,10 +12,7 @@
 
 
 #include "cook_metadata.h"
-#include "cook_meshlet_bounds.h"
 #include "cook_meshlet_candidates.h"
-#include "cook_meshlet_metrics.h"
-#include "cook_meshlet_refs.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

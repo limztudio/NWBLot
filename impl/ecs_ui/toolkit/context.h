@@ -31,16 +31,6 @@ private:
         [[nodiscard]] usize operator()(const WidgetRoot& root)const noexcept{ return HashCombineValue(HashValue(root.value), root.generation); }
     };
 
-    struct ContextOwnedTarget{
-        HitTarget target;
-        WidgetRoot root;
-    };
-
-    struct ContextOwnedPopup{
-        PopupScope scope;
-        WidgetRoot root;
-    };
-
 
 private:
     using StateClaims = HashSet<ContextStateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<ContextStateClaim>>;
@@ -69,20 +59,57 @@ public:
     [[nodiscard]] Expected<ControlAction> takeControlAction(const WidgetState& state, b8 enabled, const ControlToken& token);
     [[nodiscard]] Expected<PointerGesture> takePartPointerGesture(const WidgetState& owner, WidgetId part, b8 enabled);
     // Registration reserves the declaration-order layer; activation may be repeated during deferred painting.
-    [[nodiscard]] b8 registerPopupScope(const WidgetState& state, PopupScope scope);
-    [[nodiscard]] b8 activatePopupScope(const PopupToken& token)noexcept;
-    [[nodiscard]] b8 updatePopupScope(const PopupToken& token, PopupScope scope)noexcept;
+    [[nodiscard]] b8 registerPopupScope(const WidgetState& state, const PopupScope scope){
+        PopupToken fenceToken;
+        if(m_failed || !currentDeclaration(state) || !TryRegisterContextPopupScope(state, m_currentPopup, scope, m_popups, fenceToken)){
+            fail();
+            return false;
+        }
+        m_input.fencePopup(fenceToken);
+        return true;
+    }
+    [[nodiscard]] b8 activatePopupScope(const PopupToken& token)noexcept{
+        if(m_failed || !m_rootActive || !TryActivateContextPopupScope(token, m_root, m_currentPopup, m_popups, m_popupStack, m_popupDepth, m_currentPopup, m_popupLayer)){
+            fail();
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] b8 updatePopupScope(const PopupToken& token, const PopupScope scope)noexcept{
+        if(m_failed || !m_rootActive || !TryUpdateContextPopupScope(token, m_root, scope, m_popups)){
+            fail();
+            return false;
+        }
+        return true;
+    }
     [[nodiscard]] b8 beginPopupScope(const WidgetState& state, const PopupScope scope){ return registerPopupScope(state, scope) && activatePopupScope(scope.token); }
-    [[nodiscard]] b8 endPopupScope(b8 visible)noexcept;
+    [[nodiscard]] b8 endPopupScope(const b8 visible)noexcept{
+        PopupToken ended;
+        if(!TryEndContextPopupScope(m_popups, m_popupStack, m_popupDepth, m_currentPopup, m_popupLayer, ended)){
+            fail();
+            return false;
+        }
+        if(!visible)
+            discardPopupScope(ended);
+        return !m_failed;
+    }
     // Discard an inactive scope and its descendants without disturbing the current parent activation.
-    void discardPopupScope(const PopupToken& token)noexcept;
+    void discardPopupScope(const PopupToken& token)noexcept{
+        b8 removedAny = false;
+        if(!DiscardContextPopupScope(token, m_popupStack, m_popupDepth, m_targets, m_popups, removedAny)){
+            fail();
+            return;
+        }
+        if(removedAny)
+            m_input.closePopup(token);
+    }
     [[nodiscard]] b8 hasPopupScope(const PopupToken& token)const noexcept{ return popupLayer(token) != 0u; }
     [[nodiscard]] WidgetId scopeId()const noexcept{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
 
     [[nodiscard]] PopupToken popupToken()const noexcept{ return m_currentPopup; }
 
     [[nodiscard]] u32 popupLayer()const noexcept{ return m_popupLayer; }
-    [[nodiscard]] u32 popupLayer(const PopupToken& token)const noexcept;
+    [[nodiscard]] u32 popupLayer(const PopupToken& token)const noexcept{ return ResolveContextPopupLayer(m_popups, token); }
     [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
     [[nodiscard]] b8 finishFrame();
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.

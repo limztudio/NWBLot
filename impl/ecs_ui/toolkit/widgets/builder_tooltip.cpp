@@ -94,13 +94,7 @@ b8 Builder::paintTooltips(){
         if(!textBounds)
             return false;
         const Point measured{ textBounds->width, textBounds->height };
-        PopupOptions options;
-        options.anchor = box->rectangle;
-        const f32 paddedWidth = Max(measured.x + padding.left + padding.right, background->minimumWidth);
-        const f32 paddedHeight = Max(measured.y + padding.top + padding.bottom, background->minimumHeight);
-        options.size = { Min(paddedWidth, frame.options.maximumWidth), paddedHeight };
-        options.gap = frame.options.gap;
-        options.side = frame.options.side;
+        const PopupOptions options = BuildTooltipPopupOptions(box->rectangle, measured, padding, *background, frame.options);
         const auto placement = PlacePopup(options, m_paint.displayMetrics());
         if(!placement || !m_paint.beginOverlay(frame.layer))
             return false;

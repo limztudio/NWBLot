@@ -37,10 +37,7 @@ b8 InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
 }
 
 void InputRouter::closePopup(const PopupToken& token)noexcept{
-    for(auto& record : m_popups){
-        if(popupDescendant(record.scope.token, token))
-            record.closing = true;
-    }
+    CloseRouterPopupSubtree(token, m_popups);
     reconcileTargets();
 }
 
@@ -226,17 +223,7 @@ void InputRouter::retirePopup(const WidgetId id){
 }
 
 void InputRouter::cancelPopupFocus(){
-    for(auto& record : m_popups){
-        // Window focus loss must not restore command focus into an unfocused window.
-        record.restoreFocus = {};
-        record.restoreDeclaration = 0u;
-        record.restorePopup = {};
-        if(record.closing)
-            continue;
-        if(m_popupDismissals.size() < s_InputMaxPopups)
-            m_popupDismissals.push_back({ record.scope.token, PopupDismissReason::FocusLost });
-        record.closing = true;
-    }
+    CancelRouterPopupFocus(m_popups, m_popupDismissals);
 }
 
 

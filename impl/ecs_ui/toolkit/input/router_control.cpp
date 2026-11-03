@@ -132,31 +132,6 @@ void InputRouter::reconcileControlActions()noexcept{
     }
 }
 
-void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, const f64 deltaX, InputRoutingResult& result){
-    if(m_controlActions.size() == s_InputMaxControlActions || m_nextActionSequence == 0u){
-        result.activationOverflow = true;
-        return;
-    }
-    ControlAction action;
-    action.id = { host.id, host.declarationGeneration, m_layoutGeneration, m_nextActionSequence };
-    action.source = source.id;
-    action.popup = host.popup;
-    action.control = host.control;
-    action.kind = kind;
-    action.delta = delta;
-    action.value = source.value;
-    action.step = host.scrollStep;
-    action.pageRows = host.pageRows;
-    action.maximum = host.gestureMaximum;
-    action.sourceDeclarationGeneration = source.declarationGeneration;
-    action.sourceControl = source.control;
-    action.deltaX = deltaX;
-    action.stepX = host.scrollStepX;
-    action.maximumX = host.gestureMaximumX;
-    m_controlActions.push_back(action);
-    ++m_nextActionSequence;
-}
-
 b8 InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const b8 alreadyPressed, CommandSource& held, InputRoutingResult& result){
     const auto kind = TryTranslateControlNavigationCommand(event.command, host.horizontalNavigation);
     if(!kind)

@@ -49,34 +49,21 @@ namespace __hidden_encode{
 
 [[nodiscard]] static b8 PrepareLinearPlane(const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const b8 hdr, const b8 srgb, basisu::imagef& inOutPlane){
     const f32 maxRgb = ResolveMaxTexConvRgb(hdr);
-    const SIMDVectorSingle maximumRgb = VectorReplicate(maxRgb);
     for(u32 y = 0u; y < inOutPlane.get_height(); ++y){
         for(u32 x = 0u; x < inOutPlane.get_width(); ++x){
             basisu::vec4F& pixel = inOutPlane(x, y);
-            const SIMDVectorSingle rgb = VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f);
-            if(!Vector3IsFinite(rgb) || !Vector3GreaterOrEqual(rgb, VectorZero()) || !Vector3LessOrEqual(rgb, maximumRgb)){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: RGB input must contain finite values in [0, {}]."), maxRgb);
+            const Float4 rgbVec(pixel[0u], pixel[1u], pixel[2u], 0.0f);
+            if(!ValidateTexConvRgbPixel(rgbVec, maxRgb))
                 return false;
-            }
+            const SIMDVectorSingle rgb = LoadFloat(rgbVec);
 
-            f32 alpha = pixel[3u];
-            if(alphaSource.mode == AlphaSourceMode::Constant)
-                alpha = alphaSource.constant;
-            else if(alphaSource.mode == AlphaSourceMode::Image)
-                alpha = alphaMask(x, y)[0u];
-            if(!IsFinite(alpha)){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha input contains a non-finite value."));
+            const f32 maskAlpha = alphaSource.mode == AlphaSourceMode::Image ? alphaMask(x, y)[0u] : 0.0f;
+            const auto alpha = TryResolveTexConvPixelAlpha(alphaSource.mode, pixel[3u], alphaSource.constant, maskAlpha);
+            if(!alpha)
                 return false;
-            }
-            if(alphaSource.mode != AlphaSourceMode::Original)
-                alpha = Clamp(alpha, 0.0f, 1.0f);
-            else if(alpha < 0.0f || alpha > 1.0f){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: original alpha input must be in [0, 1]."));
-                return false;
-            }
 
             const SIMDVectorSingle linearRgb = srgb ? SrgbToLinearRgb(rgb) : rgb;
-            pixel.set(VectorGetX(linearRgb), VectorGetY(linearRgb), VectorGetZ(linearRgb), alpha);
+            pixel.set(VectorGetX(linearRgb), VectorGetY(linearRgb), VectorGetZ(linearRgb), *alpha);
         }
     }
     return true;

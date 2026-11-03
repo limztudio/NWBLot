@@ -1082,6 +1082,16 @@ b8 CanRecordEditHistory(in usize maxHistoryRecords, in usize maxHistoryBytes, in
     return maxHistoryRecords != 0u && cost <= maxHistoryBytes;
 }
 
+void MergeNumericEditResult(in NumericEditResult delta, mut NumericEditResult inOutResult){
+    inOutResult.valid = inOutResult.valid && delta.valid;
+    inOutResult.committed = inOutResult.committed || delta.committed;
+    inOutResult.valueChanged = inOutResult.valueChanged || delta.valueChanged;
+    inOutResult.cancelled = inOutResult.cancelled || delta.cancelled;
+    inOutResult.rejected = inOutResult.rejected || delta.rejected;
+    inOutResult.clamped = inOutResult.clamped || delta.clamped;
+    inOutResult.restored = inOutResult.restored || delta.restored;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

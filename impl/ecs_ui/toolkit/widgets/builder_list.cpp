@@ -136,21 +136,21 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
     if(!metrics)
         return false;
     frame.style.row.padding = metrics->padding;
-    ListMeasureKey key;
-    key.sourceGeneration = frame.token.contentGeneration;
-    key.sourceRevision = frame.token.contentRevision;
-    key.rowCount = frame.rowCount;
-    key.textIdentity = m_text.identity();
-    key.textGeneration = m_text.generation();
-    key.fontSize = frame.widgetStyle.fontSize;
-    key.pixelScaleX = m_paint.displayMetrics().pixelScaleX;
-    key.pixelScaleY = m_paint.displayMetrics().pixelScaleY;
-    key.rowMetrics = { metrics->padding.left, metrics->padding.top, metrics->padding.right, metrics->padding.bottom, metrics->minimum.x, metrics->minimum.y };
-    key.scriptTag = m_textScriptTag;
-    if(m_textLanguage.size() >= key.language.size())
+    const auto keyResult = TryBuildListMeasureKey(
+        frame.token.contentGeneration,
+        frame.token.contentRevision,
+        frame.rowCount,
+        m_text.identity(),
+        m_text.generation(),
+        frame.widgetStyle.fontSize,
+        m_paint.displayMetrics(),
+        *metrics,
+        m_textScriptTag,
+        StringView(m_textLanguage.data(), m_textLanguage.size())
+    );
+    if(!keyResult)
         return false;
-    for(usize index = 0u; index < m_textLanguage.size(); ++index)
-        key.language[index] = static_cast<u8>(m_textLanguage[index]);
+    const ListMeasureKey key = *keyResult;
     frame.measureKey = key;
     ListState& state = *frame.state;
     if(key != state.m_measureKey || state.m_rowHeight <= 0.0f){

@@ -93,15 +93,13 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
         return false;
     }
     m_scope->m_bounds = ResolveWindowContentBounds(candidate, m_scope->m_window.metrics);
-    LayoutNodeDesc description;
-    description.direction = options.direction;
-    description.width = m_scope->m_window.firstUse && options.contentWidthFirstUse ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
-    description.height = m_scope->m_window.firstUse && options.contentHeightFirstUse ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
-    description.padding = m_scope->m_window.metrics.contentPadding;
-    description.gap = m_style.gap;
-    const f32 intrinsicWidth = (m_scope->m_window.metrics.minimumSize.x - description.padding.left) - description.padding.right;
-    const f32 intrinsicHeight = ((m_scope->m_window.metrics.minimumSize.y - m_scope->m_window.metrics.titleHeight) - description.padding.top) - description.padding.bottom;
-    description.intrinsicSize = { Max(0.0f, intrinsicWidth), Max(0.0f, intrinsicHeight) };
+    const LayoutNodeDesc description = BuildWindowRootLayoutNodeDesc(
+        options,
+        m_scope->m_window.metrics,
+        m_scope->m_bounds,
+        m_scope->m_window.firstUse,
+        m_style.gap
+    );
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
     if(!admittedNode){
@@ -131,10 +129,7 @@ b8 Builder::endWindow(){
         arranged = m_scope->m_layout.arrange(viewport);
         const LayoutBox* root = m_scope->m_layout.box(0u);
         if(arranged && root){
-            if(m_scope->m_window.firstUse && m_scope->m_window.options.contentWidthFirstUse)
-                state.bounds.width = Max(root->rectangle.width, m_scope->m_window.metrics.minimumSize.x);
-            if(m_scope->m_window.firstUse && m_scope->m_window.options.contentHeightFirstUse)
-                state.bounds.height = Max(root->rectangle.height + m_scope->m_window.metrics.titleHeight, m_scope->m_window.metrics.minimumSize.y);
+            ApplyWindowFirstUseContentBounds(m_scope->m_window.options, m_scope->m_window.metrics, root->rectangle, m_scope->m_window.firstUse, state);
             arranged = TryConstrainWindow(display, m_scope->m_window.metrics.titleHeight, state);
             m_scope->m_bounds = ResolveWindowContentBounds(state, m_scope->m_window.metrics);
             if(arranged)

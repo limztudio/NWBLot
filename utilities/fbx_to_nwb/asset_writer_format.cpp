@@ -147,11 +147,9 @@ b8 ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh asset cannot contain a source skin stream"));
         return false;
     }
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(ref.skin != Impl::s_MeshMissingStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index"));
-            return false;
-        }
+    if(!SourceVertexRefsHaveNoSkin(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index"));
+        return false;
     }
     return true;
 }

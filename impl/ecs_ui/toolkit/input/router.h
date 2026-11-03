@@ -121,12 +121,41 @@ public:
     // Device termination may suppress releases; only this device's pending sources are removed.
     void cancelDeviceInput(u64 device)noexcept;
     [[nodiscard]] b8 consumeActivation(WidgetId id)noexcept;
-    [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration)noexcept;
+    [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(const WidgetId id, const u64 declarationGeneration)noexcept{
+        const HitTarget* target = findTarget(id, declarationGeneration);
+        if(declarationGeneration == 0u || target == nullptr || !target->contextMenu || !m_windowFocused || !isInteractive(*target))
+            return MakeUnexpected(Failure{});
+        for(usize index = 0u; index < m_contextMenuActions.size(); ++index){
+            const auto& candidate = m_contextMenuActions[index];
+            if(candidate.id.target != id || candidate.id.declarationGeneration != declarationGeneration || candidate.popup != target->popup || candidate.control != target->control)
+                continue;
+            const ContextMenuAction action = candidate;
+            m_contextMenuActions.erase(m_contextMenuActions.begin() + static_cast<isize>(index));
+            return action;
+        }
+        return MakeUnexpected(Failure{});
+    }
     [[nodiscard]] Expected<ControlAction> consumeControlAction(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
     // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
     void fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token)noexcept;
     // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
-    [[nodiscard]] Expected<PointerGesture> consumePointerGesture(WidgetId id, u64 declarationGeneration)noexcept;
+    [[nodiscard]] Expected<PointerGesture> consumePointerGesture(const WidgetId id, const u64 declarationGeneration)noexcept{
+        const HitTarget* target = findTarget(id, declarationGeneration);
+        if(declarationGeneration == 0u || target == nullptr || !isInteractive(*target) || !target->pointerGesture)
+            return MakeUnexpected(Failure{});
+        for(usize index = 0u; index < m_pointerGestures.size(); ++index){
+            auto& record = m_pointerGestures[index];
+            if(record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration || !record.pendingUpdate || record.gesture.popup != target->popup || record.gesture.control != target->control)
+                continue;
+            const PointerGesture gesture = record.gesture;
+            if(record.gesture.state == PointerGestureState::Completed)
+                m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
+            else
+                record.pendingUpdate = false;
+            return gesture;
+        }
+        return MakeUnexpected(Failure{});
+    }
     [[nodiscard]] WidgetId hitTest(const Point& position)const noexcept;
     [[nodiscard]] b8 wouldConsumePointer(const Point& position)const noexcept;
 
@@ -208,12 +237,32 @@ private:
     [[nodiscard]] b8 currentControlAction(const ControlAction& action)const noexcept;
     void reconcileControlActions()noexcept;
     [[nodiscard]] b8 currentContextMenuOwner(const TargetOwner& owner)const noexcept;
-    void reconcileContextMenus()noexcept;
-    void appendContextMenu(const HitTarget& target, const Point& position, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
-    [[nodiscard]] b8 routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, b8 alreadyPressed, CommandSource& source)noexcept;
+    void reconcileContextMenus()noexcept{
+        for(usize index = 0u; index < m_contextMenuActions.size();){
+            const auto& action = m_contextMenuActions[index];
+            if(!currentContextMenuOwner({ action.id.target, action.id.declarationGeneration, action.popup, action.control }))
+                m_contextMenuActions.erase(m_contextMenuActions.begin() + static_cast<isize>(index));
+            else
+                ++index;
+        }
+        if(!currentContextMenuOwner(m_secondaryOwner))
+            m_secondaryOwner = {};
+        for(auto& source : m_commandSources){
+            if(source.contextArmed && !currentContextMenuOwner(source.focusOwner))
+                source.contextArmed = false;
+        }
+    }
+    void appendContextMenu(const HitTarget& target, const Point& position, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
+        AppendRouterContextMenu(target, m_layoutGeneration, position, origin, inputSource, m_contextMenuActions, m_nextActionSequence, result);
+    }
+    [[nodiscard]] b8 routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, const b8 alreadyPressed, CommandSource& source)noexcept{
+        return focused != nullptr && m_windowFocused && isInteractive(*focused) && TryRouteRouterContextMenuCommand(event, *focused, alreadyPressed, source);
+    }
     void routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
-    void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, f64 deltaX, InputRoutingResult& result);
-    void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result){
+    void appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, const f64 deltaX, InputRoutingResult& result){
+        AppendRouterControlAction(host, source, m_layoutGeneration, kind, delta, deltaX, m_controlActions, m_nextActionSequence, result);
+    }
+    void appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, InputRoutingResult& result){
         appendControlAction(host, source, kind, delta, 0.0, result);
     }
     [[nodiscard]] b8 routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, b8 alreadyPressed, CommandSource& held, InputRoutingResult& result);
@@ -232,10 +281,38 @@ private:
     void advanceHoverActivity()noexcept;
     void clearHover()noexcept;
     void cancelInteraction()noexcept;
-    void appendActivation(const HitTarget& target, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
-    void appendPointerGesture(const HitTarget& target, InputRoutingResult& result);
-    void updatePointerGesture(const Point& position, b8 completed)noexcept;
-    void reconcilePointerGestures()noexcept;
+    void appendActivation(const HitTarget& target, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
+        AppendRouterActivation(target, m_layoutGeneration, origin, inputSource, m_actions, m_nextActionSequence, result);
+    }
+    void appendPointerGesture(const HitTarget& target, InputRoutingResult& result){
+        AppendRouterPointerGesture(
+            target,
+            m_layoutGeneration,
+            m_activePointerSource,
+            m_interactionPosition,
+            m_pointerGestures,
+            m_activeGestureSequence,
+            m_nextActionSequence,
+            result
+        );
+    }
+    void updatePointerGesture(const Point& position, const b8 completed)noexcept{
+        if(!TryUpdateRouterPointerGesture(position, completed, m_pointerGestures, m_activeGestureSequence, m_nextActionSequence))
+            TerminateInvariant();
+    }
+    void reconcilePointerGestures()noexcept{
+        for(usize index = 0u; index < m_pointerGestures.size();){
+            const auto& gesture = m_pointerGestures[index].gesture;
+            const HitTarget* target = findTarget(gesture.id.target, gesture.id.declarationGeneration);
+            if(target == nullptr || !isInteractive(*target) || !target->pointerGesture || gesture.popup != target->popup || gesture.control != target->control){
+                if(gesture.id.sequence == m_activeGestureSequence)
+                    m_activeGestureSequence = 0u;
+                m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
+            }
+            else
+                ++index;
+        }
+    }
     void routePointer(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     void routeCommand(const InputEvent& event, InputRoutingResult& result);
     void assignFocus(const HitTarget& target)noexcept;

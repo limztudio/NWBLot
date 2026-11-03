@@ -32,7 +32,7 @@ public:
 
 
 private:
-    static constexpr Array<StringView, s_NestedPopupLabelCount> s_Labels{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Echo" };
+    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolveNestedPopupLabel(index); }
 };
 
 

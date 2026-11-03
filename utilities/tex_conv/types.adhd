@@ -77,6 +77,70 @@ f32x4 QuantizeUnorm(in f32x4 value){
     return saturate(value) * s_UnormScale + s_UnormRoundingBias;
 }
 
+class VolumeMipZSlabRange{
+    public u64 intervalBegin = 0u;
+    public u64 intervalEnd = 0u;
+    public u32 first = 0u;
+    public u32 end = 0u;
+}
+
+b8 ValidateTexConvRgbPixel(in f32x4 rgb, in f32 maxRgb){
+    if(
+        !isFinite(rgb.x)
+        || !isFinite(rgb.y)
+        || !isFinite(rgb.z)
+        || rgb.x < 0.0f
+        || rgb.y < 0.0f
+        || rgb.z < 0.0f
+        || rgb.x > maxRgb
+        || rgb.y > maxRgb
+        || rgb.z > maxRgb
+    ){
+        error("tex_conv: RGB input must contain finite values in [0, {}].", maxRgb);
+        return false;
+    }
+    return true;
+}
+
+Expected<f32> TryResolveTexConvPixelAlpha(
+    in AlphaSourceMode mode,
+    in f32 sourceAlpha,
+    in f32 constantAlpha,
+    in f32 maskAlpha
+){
+    f32 alpha = sourceAlpha;
+    if(mode == AlphaSourceMode::Constant)
+        alpha = constantAlpha;
+    else if(mode == AlphaSourceMode::Image)
+        alpha = maskAlpha;
+    if(!isFinite(alpha)){
+        error("tex_conv: alpha input contains a non-finite value.");
+        return makeUnexpected(Failure());
+    }
+    if(mode != AlphaSourceMode::Original)
+        return clamp(alpha, 0.0f, 1.0f);
+    if(alpha < 0.0f || alpha > 1.0f){
+        error("tex_conv: original alpha input must be in [0, 1].");
+        return makeUnexpected(Failure());
+    }
+    return alpha;
+}
+
+VolumeMipZSlabRange ComputeVolumeMipZSlabRange(in u32 z, in u32 sourceDepth, in u32 targetDepth){
+    VolumeMipZSlabRange range;
+    range.intervalBegin = cast<u64>(z) * cast<u64>(sourceDepth);
+    range.intervalEnd = cast<u64>(z + 1u) * cast<u64>(sourceDepth);
+    range.first = cast<u32>(range.intervalBegin / cast<u64>(targetDepth));
+    range.end = cast<u32>(divideUp(range.intervalEnd, cast<u64>(targetDepth)));
+    return range;
+}
+
+f32 ComputeVolumeMipZSlabOverlap(in VolumeMipZSlabRange range, in u32 sourceZ, in u32 targetDepth){
+    const u64 slabBegin = cast<u64>(sourceZ) * cast<u64>(targetDepth);
+    const u64 slabEnd = cast<u64>(sourceZ + 1u) * cast<u64>(targetDepth);
+    return cast<f32>(min(range.intervalEnd, slabEnd) - max(range.intervalBegin, slabBegin));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

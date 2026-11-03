@@ -414,21 +414,6 @@ void InputRouter::cancelInteraction()noexcept{
     retireCommandFocus();
 }
 
-void InputRouter::appendActivation(const HitTarget& target, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
-    if(m_actions.size() == s_InputMaxActions || m_nextActionSequence == 0u){
-        result.activationOverflow = true;
-        return;
-    }
-    InputAction action;
-    action.id = { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence };
-    action.origin = origin;
-    action.popup = target.popup;
-    action.control = target.control;
-    action.inputSource = inputSource;
-    m_actions.push_back(action);
-    ++m_nextActionSequence;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

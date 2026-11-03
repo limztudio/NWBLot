@@ -148,10 +148,7 @@ b8 GpuOutputTask::Record(const Payload& payload, Core::CommandList& commands, co
     commands.setGraphicsState(state);
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
     heap.bindGraphics(commands, *payload.pipeline);
-    GpuOutputPushConstants push;
-    push.textureSlot = frame->m_target->m_sampledImage.slot();
-    push.samplerSlot = frame->m_resources->m_samplerDescriptor.slot();
-    push.presentationMode = payload.presentationMode;
+    const GpuOutputPushConstants push = MakeGpuOutputPushConstants(frame->m_target->m_sampledImage.slot(), frame->m_resources->m_samplerDescriptor.slot(), payload.presentationMode);
     commands.setPushConstants(&push, sizeof(push));
     commands.draw(Core::DrawArguments().setVertexCount(s_GpuFullscreenTriangleVertexCount));
     commands.endRenderPass();

@@ -169,6 +169,26 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
     return TryPlacePopup(options, display);
 }
 
+b8 IsValidContextMenuDeclarationOptions(in ContextMenuOptions options, in usize currentMenuCount, in usize maxPopups){
+    return
+        isFinite(options.size.x) && isFinite(options.size.y)
+        && options.size.x > 0.0f && options.size.y > 0.0f
+        && isFinite(options.wheelRows) && options.wheelRows > 0.0f
+        && currentMenuCount < maxPopups
+    ;
+}
+
+b8 IsContextMenuAnchorVisible(in Rect anchorRect, in Rect clip, in b8 anchorEnabled){
+    return
+        anchorEnabled
+        && clip.width > 0.0f && clip.height > 0.0f
+        && anchorRect.x < clip.x + clip.width
+        && anchorRect.y < clip.y + clip.height
+        && anchorRect.x + anchorRect.width > clip.x
+        && anchorRect.y + anchorRect.height > clip.y
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

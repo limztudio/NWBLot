@@ -108,6 +108,23 @@ Expected<b8> TryEvaluateTooltipStateUpdate(
     return changed;
 }
 
+PopupOptions BuildTooltipPopupOptions(
+    in Rect anchorRect,
+    in Point measured,
+    in Insets padding,
+    in UiSkinRegion background,
+    in TooltipOptions tooltipOptions
+){
+    PopupOptions options;
+    options.anchor = anchorRect;
+    const f32 paddedWidth = max(measured.x + padding.left + padding.right, background.minimumWidth);
+    const f32 paddedHeight = max(measured.y + padding.top + padding.bottom, background.minimumHeight);
+    options.size = Point(min(paddedWidth, tooltipOptions.maximumWidth), paddedHeight);
+    options.gap = tooltipOptions.gap;
+    options.side = tooltipOptions.side;
+    return options;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

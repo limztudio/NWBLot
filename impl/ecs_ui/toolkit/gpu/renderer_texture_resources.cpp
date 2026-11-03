@@ -89,11 +89,7 @@ b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept
                 return false;
         }
     }
-    for(const DrawCommand& command : snapshot.commands()){
-        if(!ValidDrawCommandImageBinding(command, images.size()))
-            return false;
-    }
-    return true;
+    return ValidateDrawCommandImageBindings(snapshot.commands(), images.size());
 }
 
 Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureImage(const SharedImageSource& source){

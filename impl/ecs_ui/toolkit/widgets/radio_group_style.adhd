@@ -462,6 +462,41 @@ b8 TryApplyRadioGroupControlAction(
     return true;
 }
 
+void ResolveRadioGroupIndicatorNames(
+    in RadioGroupStyle style,
+    in b8 checked,
+    in b8 enabled,
+    in b8 pressed,
+    in b8 hover,
+    mut Name outPreferred,
+    mut Name outFallback
+){
+    if(checked)
+        outPreferred = style.checked;
+    else if(!enabled)
+        outPreferred = style.disabled;
+    else if(pressed)
+        outPreferred = style.pressed;
+    else if(hover)
+        outPreferred = style.hover;
+    else
+        outPreferred = style.normal;
+    if(checked)
+        outFallback = style.checkedFallback;
+    else
+        outFallback = style.normal;
+}
+
+Color ResolveRadioGroupChoiceTint(in RadioGroupStyle style, in b8 enabled, in b8 pressed, in b8 hover){
+    if(!enabled)
+        return style.disabledTint;
+    if(pressed)
+        return style.pressedTint;
+    if(hover)
+        return style.hoverTint;
+    return Color();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

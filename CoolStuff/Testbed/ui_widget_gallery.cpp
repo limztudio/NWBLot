@@ -54,7 +54,7 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
     if(previous != selected)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
 
-    const f32 width = selected == Section::TextArea ? s_SelectorWidth : s_OrdinaryGalleryWidth;
+    const f32 width = ResolveWidgetGalleryContentWidth(selected);
     const f32 x = bounds.x + (bounds.width - width) * 0.5f;
     const f32 y = bounds.y + s_SelectorHeight + s_ContentGap;
     switch(selected){

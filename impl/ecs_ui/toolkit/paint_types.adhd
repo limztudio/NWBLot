@@ -134,6 +134,26 @@ b8 SameTextureImageKey(in ImageSource first, in ImageSource second){
     return first.identity() == second.identity() && first.generation() == second.generation();
 }
 
+b8 SameSkinBindingKey(in SkinBinding lhs, in SkinBinding rhs){
+    return lhs.skin == rhs.skin && lhs.texture == rhs.texture && lhs.generation == rhs.generation;
+}
+
+b8 SameSkinBinding(in SkinBinding lhs, in SkinBinding rhs){
+    return SameSkinBindingKey(lhs, rhs)
+        && lhs.atlasWidth == rhs.atlasWidth
+        && lhs.atlasHeight == rhs.atlasHeight
+        && lhs.referenceDensity == rhs.referenceDensity;
+}
+
+b8 IsValidDisplayMetricsForGpuSubmit(in DisplayMetrics display){
+    return
+        isFinite(display.logicalWidth) && isFinite(display.logicalHeight)
+        && isFinite(display.pixelScaleX) && isFinite(display.pixelScaleY)
+        && display.logicalWidth > 0.0f && display.logicalHeight > 0.0f
+        && display.pixelScaleX > 0.0f && display.pixelScaleY > 0.0f
+    ;
+}
+
 b8 ValidDrawCommandGlyphBinding(in DrawCommand command, in usize pageCount){
     if(command.material == PaintMaterial::Glyph)
         return cast<usize>(command.glyphPageIndex) < pageCount && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
@@ -144,10 +164,26 @@ b8 ValidDrawCommandGlyphBinding(in DrawCommand command, in usize pageCount){
     return false;
 }
 
+b8 ValidateDrawCommandGlyphBindings(in Span<DrawCommand> commands, in usize pageCount){
+    for(in DrawCommand command : commands){
+        if(!ValidDrawCommandGlyphBinding(command, pageCount))
+            return false;
+    }
+    return true;
+}
+
 b8 ValidDrawCommandImageBinding(in DrawCommand command, in usize imageCount){
     if(command.material == PaintMaterial::Image)
         return cast<usize>(command.textureImageIndex) < imageCount && command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
     return command.textureImageIndex == 0xffffffffu;
+}
+
+b8 ValidateDrawCommandImageBindings(in Span<DrawCommand> commands, in usize imageCount){
+    for(in DrawCommand command : commands){
+        if(!ValidDrawCommandImageBinding(command, imageCount))
+            return false;
+    }
+    return true;
 }
 
 b8 ValidDrawCommandSdfBinding(in DrawCommand command, in usize pageCount, in u32 pageChannelCount){

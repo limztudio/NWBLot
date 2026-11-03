@@ -87,7 +87,7 @@ Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph
     const auto outputResult = graph.addTask<GpuOutputTask>(
         Core::GpuTaskDesc().setIdentity(s_GpuOutputTaskName).setMarkerLabel(s_GpuStandaloneOutputMarkerLabel).setScheduling(scheduling)
             .setDependencies({ &layer->readyTask, 1u }).setResourceUses({ uses.data(), s_GpuOutputResourceUseCount }).setResourceVersionUses({ &consume, 1u })
-            .setTiming({ 0u, m_width ^ (m_height << s_GpuTimingHeightShift), Core::GpuTaskTimingPolicy::Task }),
+            .setTiming({ 0u, ComputeGpuTimingResolutionHash(m_width, m_height), Core::GpuTaskTimingPolicy::Task }),
         GpuOutputTask::Payload{ frame, backBuffer, layer->color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
     );
     if(!outputResult)

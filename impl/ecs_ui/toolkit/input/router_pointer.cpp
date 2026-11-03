@@ -295,6 +295,40 @@ void InputRouter::routePointer(const InputEvent& event, const HitTarget* hit, In
     m_captureControl = {};
 }
 
+void InputRouter::routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
+    if(event.type == InputEventType::SecondaryUp){
+        result.pointerConsumed |= m_secondaryDown ? m_secondarySequenceConsumed : m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
+        const HitTarget* anchor = hit != nullptr && !hit->contextMenu && hit->owner.valid() ? controlHost(*hit) : hit;
+        if(m_secondaryDown && m_secondarySequenceConsumed && anchor != nullptr && anchor->id == m_secondaryOwner.target && currentContextMenuOwner(m_secondaryOwner))
+            appendContextMenu(*anchor, m_secondaryPosition, InputActionSource::Pointer, event.source, result);
+        m_secondaryDown = false;
+        m_secondarySequenceConsumed = false;
+        m_secondaryOwner = {};
+        return;
+    }
+    if(m_secondaryDown){
+        result.pointerConsumed |= m_secondarySequenceConsumed;
+        return;
+    }
+    advanceHoverActivity();
+    m_secondaryDown = true;
+    m_secondarySequenceConsumed = m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
+    result.pointerConsumed |= m_secondarySequenceConsumed;
+    if(!m_secondarySequenceConsumed)
+        return;
+    if(hasPopup() && hit == nullptr){
+        const b8 dismissed = dismissPopup(PopupDismissReason::OutsideClick);
+        if(dismissed)
+            updateHover();
+        return;
+    }
+    const HitTarget* anchor = hit != nullptr && !hit->contextMenu && hit->owner.valid() ? controlHost(*hit) : hit;
+    if(anchor == nullptr || !anchor->contextMenu || !m_windowFocused)
+        return;
+    m_secondaryOwner = { anchor->id, anchor->declarationGeneration, anchor->popup, anchor->control };
+    m_secondaryPosition = event.position;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -43,20 +43,6 @@ ScratchString FormatUfbxError(const ufbx_error& error, Core::Alloc::ScratchArena
     return ScratchString(buffer.data(), written, scratchArena);
 }
 
-Expected<usize> ParseIndexSelector(const AStringView text)noexcept{
-    const AStringView trimmed = TrimView(text);
-    if(trimmed.empty())
-        return MakeUnexpected(Failure{});
-
-    const auto parsed = ParseU64(trimmed);
-    if(!parsed)
-        return MakeUnexpected(Failure{});
-    if(*parsed > static_cast<u64>(Limit<usize>::s_Max))
-        return MakeUnexpected(Failure{});
-
-    return static_cast<usize>(*parsed);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -165,7 +151,7 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
         return outSelection;
     }
 
-    const auto parsedIndex = __hidden_fbx_scene::ParseIndexSelector(normalized);
+    const auto parsedIndex = TryParseMeshIndexSelector(normalized);
     if(parsedIndex){
         if(*parsedIndex >= instances.size()){
             NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), ConvertString(selector));

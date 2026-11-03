@@ -368,6 +368,41 @@ Expected<f64> TryComputeListGestureScrollOffset(in PointerGesture gesture){
     return fraction * gesture.maximum;
 }
 
+Expected<ListMeasureKey> TryBuildListMeasureKey(
+    in u64 sourceGeneration,
+    in u64 sourceRevision,
+    in u64 rowCount,
+    in u64 textIdentity,
+    in u64 textGeneration,
+    in f32 fontSize,
+    in DisplayMetrics display,
+    in SelectableMetrics metrics,
+    in u32 scriptTag,
+    in StringView textLanguage
+){
+    ListMeasureKey key;
+    if(textLanguage.size() >= key.language.size())
+        return makeUnexpected(Failure());
+    key.sourceGeneration = sourceGeneration;
+    key.sourceRevision = sourceRevision;
+    key.rowCount = rowCount;
+    key.textIdentity = textIdentity;
+    key.textGeneration = textGeneration;
+    key.fontSize = fontSize;
+    key.pixelScaleX = display.pixelScaleX;
+    key.pixelScaleY = display.pixelScaleY;
+    key.rowMetrics[0u] = metrics.padding.left;
+    key.rowMetrics[1u] = metrics.padding.top;
+    key.rowMetrics[2u] = metrics.padding.right;
+    key.rowMetrics[3u] = metrics.padding.bottom;
+    key.rowMetrics[4u] = metrics.minimum.x;
+    key.rowMetrics[5u] = metrics.minimum.y;
+    key.scriptTag = scriptTag;
+    for(usize index = 0u; index < textLanguage.size(); ++index)
+        key.language[index] = cast<u8>(textLanguage[index]);
+    return key;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

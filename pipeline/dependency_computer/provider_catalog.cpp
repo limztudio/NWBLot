@@ -159,17 +159,12 @@ Expected<usize> DependencyProviderCatalog::resolve(
     if(!virtualPath)
         return MakeUnexpected(Failure{});
 
-    const AStringView virtualPathText = !virtualPathTextHint.empty() ? virtualPathTextHint : virtualPath.resolvedText();
+    const AStringView virtualPathText = ResolveDependencyVirtualPathText(virtualPath, virtualPathTextHint);
     const Optional<Name> parentVirtualPath = ExtractParentVirtualPath(virtualPathText);
 
     usize matched = s_InvalidProviderIndex;
     const auto recordMatch = [&](const usize index) -> b8{
-        if(matched != s_InvalidProviderIndex && matched != index){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), ConvertString(virtualPath));
-            return false;
-        }
-        matched = index;
-        return true;
+        return RecordDependencyProviderMatch(virtualPath, index, matched);
     };
 
     for(usize index = 0u; index < m_files.size(); ++index){

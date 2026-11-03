@@ -571,6 +571,350 @@ void AppendRouterPointerGesture(
     ++inoutNextActionSequence;
 }
 
+class ContextOwnedTarget{
+    public HitTarget target;
+    public WidgetRoot root;
+}
+
+class ContextOwnedPopup{
+    public PopupScope scope;
+    public WidgetRoot root;
+}
+
+b8 TryRegisterContextPopupScope(
+    in WidgetState state,
+    in PopupToken currentPopup,
+    in PopupScope scope,
+    mut Vector<ContextOwnedPopup> popups,
+    mut PopupToken outFenceToken
+){
+    outFenceToken = PopupToken();
+    if(
+        state.kind != WidgetKind::Popup
+        || !scope.token.valid()
+        || scope.token.widget != state.id
+        || scope.token.declarationGeneration != state.declarationGeneration
+        || scope.parent != currentPopup
+        || popups.size() == s_InputMaxPopups
+        || !HasValidPopupScopeGeometry(scope)
+    )
+        return false;
+    for(in ContextOwnedPopup previous : popups){
+        if(previous.scope.token.widget == scope.token.widget)
+            return false;
+    }
+    PopupScope admitted = scope;
+    if(popups.empty())
+        admitted.layer = 1u;
+    else
+        admitted.layer = popups.back().scope.layer + 1u;
+    ContextOwnedPopup owned;
+    owned.scope = admitted;
+    owned.root = state.root;
+    popups.push_back(owned);
+    outFenceToken = admitted.token;
+    return true;
+}
+
+b8 TryActivateContextPopupScope(
+    in PopupToken token,
+    in WidgetRoot root,
+    in PopupToken currentPopup,
+    in Span<ContextOwnedPopup> popups,
+    mut Array<PopupToken, s_InputMaxPopups> popupStack,
+    mut usize inOutPopupDepth,
+    mut PopupToken outCurrentPopup,
+    mut u32 outPopupLayer
+){
+    if(!token.valid() || inOutPopupDepth == s_InputMaxPopups)
+        return false;
+    for(in ContextOwnedPopup owned : popups){
+        if(owned.scope.token != token)
+            continue;
+        if(owned.root != root || owned.scope.parent != currentPopup)
+            return false;
+        popupStack[inOutPopupDepth] = token;
+        ++inOutPopupDepth;
+        outCurrentPopup = token;
+        outPopupLayer = owned.scope.layer;
+        return true;
+    }
+    return false;
+}
+
+b8 TryUpdateContextPopupScope(
+    in PopupToken token,
+    in WidgetRoot root,
+    in PopupScope scope,
+    mut Vector<ContextOwnedPopup> popups
+){
+    if(!token.valid() || scope.token != token || !HasValidPopupScopeGeometry(scope))
+        return false;
+    for(usize index = 0u; index < popups.size(); ++index){
+        const ContextOwnedPopup owned = popups[index];
+        if(owned.scope.token != token)
+            continue;
+        if(owned.root != root || scope.parent != owned.scope.parent || (scope.layer != 0u && scope.layer != owned.scope.layer))
+            return false;
+        PopupScope updated = scope;
+        updated.layer = owned.scope.layer;
+        popups[index].scope = updated;
+        return true;
+    }
+    return false;
+}
+
+u32 ResolveContextPopupLayer(in Span<ContextOwnedPopup> popups, in PopupToken token){
+    for(in ContextOwnedPopup owned : popups){
+        if(owned.scope.token == token)
+            return owned.scope.layer;
+    }
+    return 0u;
+}
+
+b8 TryEndContextPopupScope(
+    in Span<ContextOwnedPopup> popups,
+    mut Array<PopupToken, s_InputMaxPopups> popupStack,
+    mut usize inOutPopupDepth,
+    mut PopupToken inOutCurrentPopup,
+    mut u32 outPopupLayer,
+    mut PopupToken outEndedToken
+){
+    outEndedToken = PopupToken();
+    if(inOutPopupDepth == 0u || !inOutCurrentPopup.valid())
+        return false;
+    outEndedToken = inOutCurrentPopup;
+    --inOutPopupDepth;
+    popupStack[inOutPopupDepth] = PopupToken();
+    if(inOutPopupDepth == 0u)
+        inOutCurrentPopup = PopupToken();
+    else
+        inOutCurrentPopup = popupStack[inOutPopupDepth - 1u];
+    outPopupLayer = ResolveContextPopupLayer(popups, inOutCurrentPopup);
+    return true;
+}
+
+b8 DiscardContextPopupScope(
+    in PopupToken token,
+    in Array<PopupToken, s_InputMaxPopups> popupStack,
+    in usize popupDepth,
+    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<ContextOwnedPopup> popups,
+    mut b8 outRemovedAny
+){
+    outRemovedAny = false;
+    Array<b8, s_InputMaxPopups> removed;
+    b8 found = false;
+    for(usize index = 0u; index < popups.size(); ++index){
+        b8 isRemoved = popups[index].scope.token == token;
+        for(usize ancestor = 0u; ancestor < index && !isRemoved; ++ancestor)
+            isRemoved = removed[ancestor] && popups[index].scope.parent == popups[ancestor].scope.token;
+        removed[index] = isRemoved;
+        found = found || isRemoved;
+    }
+    if(!found)
+        return true;
+    for(usize active = 0u; active < popupDepth; ++active){
+        const PopupToken activeToken = popupStack[active];
+        for(usize popup = 0u; popup < popups.size(); ++popup){
+            if(removed[popup] && activeToken == popups[popup].scope.token)
+                return false;
+        }
+    }
+    usize keptTargets = 0u;
+    for(usize index = 0u; index < targets.size(); ++index){
+        const PopupToken targetPopup = targets[index].target.popup;
+        b8 removeTarget = false;
+        for(usize popup = 0u; popup < popups.size(); ++popup){
+            if(removed[popup] && targetPopup == popups[popup].scope.token){
+                removeTarget = true;
+                break;
+            }
+        }
+        if(!removeTarget){
+            if(keptTargets != index)
+                targets[keptTargets] = targets[index];
+            ++keptTargets;
+        }
+    }
+    targets.resize(keptTargets);
+    usize keptPopups = 0u;
+    for(usize index = 0u; index < popups.size(); ++index){
+        if(!removed[index]){
+            if(keptPopups != index)
+                popups[keptPopups] = popups[index];
+            ++keptPopups;
+        }
+    }
+    popups.resize(keptPopups);
+    outRemovedAny = true;
+    return true;
+}
+
+b8 TryUpdateRouterPointerGesture(
+    in Point position,
+    in b8 completed,
+    mut Vector<PointerGestureRecord> pointerGestures,
+    mut u64 inOutActiveGestureSequence,
+    mut u64 inOutNextActionSequence
+){
+    if(inOutActiveGestureSequence == 0u)
+        return true;
+    for(usize index = 0u; index < pointerGestures.size(); ++index){
+        PointerGestureRecord record = pointerGestures[index];
+        if(record.gesture.id.sequence != inOutActiveGestureSequence)
+            continue;
+        if(completed || record.gesture.position.x != position.x || record.gesture.position.y != position.y){
+            if(inOutNextActionSequence == 0u)
+                return false;
+            record.gesture.position = position;
+            if(completed)
+                record.gesture.state = PointerGestureState::Completed;
+            else
+                record.gesture.state = PointerGestureState::Active;
+            record.gesture.updateSequence = inOutNextActionSequence;
+            ++inOutNextActionSequence;
+            record.pendingUpdate = true;
+            pointerGestures[index] = record;
+        }
+        break;
+    }
+    if(completed)
+        inOutActiveGestureSequence = 0u;
+    return true;
+}
+
+void AppendRouterActivation(
+    in HitTarget target,
+    in u64 layoutGeneration,
+    in InputActionSource origin,
+    in InputSource inputSource,
+    mut Vector<InputAction> actions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    if(actions.size() == s_InputMaxActions || inOutNextActionSequence == 0u){
+        inOutResult.activationOverflow = true;
+        return;
+    }
+    InputAction action;
+    action.id.target = target.id;
+    action.id.declarationGeneration = target.declarationGeneration;
+    action.id.layoutGeneration = layoutGeneration;
+    action.id.sequence = inOutNextActionSequence;
+    action.origin = origin;
+    action.popup = target.popup;
+    action.control = target.control;
+    action.inputSource = inputSource;
+    actions.push_back(action);
+    ++inOutNextActionSequence;
+}
+
+void AppendRouterContextMenu(
+    in HitTarget target,
+    in u64 layoutGeneration,
+    in Point position,
+    in InputActionSource origin,
+    in InputSource inputSource,
+    mut Vector<ContextMenuAction> contextMenuActions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    if(contextMenuActions.size() == s_InputMaxContextMenuActions || inOutNextActionSequence == 0u){
+        inOutResult.activationOverflow = true;
+        return;
+    }
+    ContextMenuAction action;
+    action.id.target = target.id;
+    action.id.declarationGeneration = target.declarationGeneration;
+    action.id.layoutGeneration = layoutGeneration;
+    action.id.sequence = inOutNextActionSequence;
+    action.popup = target.popup;
+    action.control = target.control;
+    action.position = position;
+    action.origin = origin;
+    action.inputSource = inputSource;
+    contextMenuActions.push_back(action);
+    ++inOutNextActionSequence;
+}
+
+b8 TryRouteRouterContextMenuCommand(
+    in InputEvent event,
+    in HitTarget focused,
+    in b8 alreadyPressed,
+    mut CommandSource inOutSource
+){
+    if(event.command != InputCommand::ContextMenu || !focused.contextMenu)
+        return false;
+    if(!alreadyPressed && !event.repeat){
+        inOutSource.contextArmed = true;
+        inOutSource.contextPosition = Point(focused.rectangle.x, focused.rectangle.y + focused.rectangle.height);
+    }
+    return true;
+}
+
+void AppendRouterControlAction(
+    in HitTarget host,
+    in HitTarget source,
+    in u64 layoutGeneration,
+    in ControlActionKind kind,
+    in f64 delta,
+    in f64 deltaX,
+    mut Vector<ControlAction> controlActions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    if(controlActions.size() == s_InputMaxControlActions || inOutNextActionSequence == 0u){
+        inOutResult.activationOverflow = true;
+        return;
+    }
+    ControlAction action;
+    action.id.target = host.id;
+    action.id.declarationGeneration = host.declarationGeneration;
+    action.id.layoutGeneration = layoutGeneration;
+    action.id.sequence = inOutNextActionSequence;
+    action.source = source.id;
+    action.popup = host.popup;
+    action.control = host.control;
+    action.kind = kind;
+    action.delta = delta;
+    action.value = source.value;
+    action.step = host.scrollStep;
+    action.pageRows = host.pageRows;
+    action.maximum = host.gestureMaximum;
+    action.sourceDeclarationGeneration = source.declarationGeneration;
+    action.sourceControl = source.control;
+    action.deltaX = deltaX;
+    action.stepX = host.scrollStepX;
+    action.maximumX = host.gestureMaximumX;
+    controlActions.push_back(action);
+    ++inOutNextActionSequence;
+}
+
+void CloseRouterPopupSubtree(in PopupToken token, mut Vector<PopupRecord> popups){
+    for(usize index = 0u; index < popups.size(); ++index){
+        if(IsPopupTokenDescendant(popups, popups[index].scope.token, token))
+            popups[index].closing = true;
+    }
+}
+
+void CancelRouterPopupFocus(mut Vector<PopupRecord> popups, mut Vector<PopupDismissal> popupDismissals){
+    for(usize index = 0u; index < popups.size(); ++index){
+        popups[index].restoreFocus = WidgetId();
+        popups[index].restoreDeclaration = 0u;
+        popups[index].restorePopup = PopupToken();
+        if(popups[index].closing)
+            continue;
+        if(popupDismissals.size() < s_InputMaxPopups){
+            PopupDismissal dismissal;
+            dismissal.token = popups[index].scope.token;
+            dismissal.reason = PopupDismissReason::FocusLost;
+            popupDismissals.push_back(dismissal);
+        }
+        popups[index].closing = true;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

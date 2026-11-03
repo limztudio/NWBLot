@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 
 
 SearchComboResult Builder::searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options){
-    if(declarationBlocked() || !IsFinite(options.queryHeight) || options.queryHeight <= 0.0f || !IsFinite(options.queryGap) || options.queryGap < 0.0f){
+    if(declarationBlocked() || !IsValidSearchComboDeclarationOptions(options)){
         m_context.fail();
         return {};
     }
@@ -93,8 +93,9 @@ b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
         return false;
     const Item& item = m_scope->m_comboEditors[frame.editor];
     const f32 measuredHeight = (item.editView.visualBounds().height + item.padding.top) + item.padding.bottom;
+    Rect nextContentRect = content.rectangle;
     LayoutBox box = content;
-    box.rectangle.height = Min(Max(frame.queryHeight, measuredHeight), content.rectangle.height);
+    box.rectangle = ResolveComboQueryBoxAndAdvanceContent(measuredHeight, frame.queryHeight, frame.queryGap, nextContentRect);
     HitTarget navigation;
     if(frame.options.enabled && !item.editView.composing()){
         navigation.commandOwner = frame.rows.id;
@@ -103,9 +104,7 @@ b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     }
     if(!paintEditBox(item, box, &navigation))
         return false;
-    const f32 extent = Min(content.rectangle.height, box.rectangle.height + frame.queryGap);
-    content.rectangle.y += extent;
-    content.rectangle.height -= extent;
+    content.rectangle = nextContentRect;
     return comboMatches(frame);
 }
 

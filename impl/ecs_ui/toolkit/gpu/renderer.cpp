@@ -125,7 +125,7 @@ void GpuRenderer::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsyste
 }
 
 b8 GpuRenderer::validateResources(const u32 width, const u32 height){
-    if(width == 0u || height == 0u || width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
+    if(!IsValidGpuRendererExtent(width, height))
         return false;
     m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), s_GpuFrameTimingQueryCount);
     if(!m_state->m_frameTimingScopePrepared)
@@ -193,8 +193,8 @@ b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const Ui
     const SkinBinding binding{ identity, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
     if(m_state->m_skin){
         const SkinBinding& existing = m_state->m_skin->m_binding;
-        if(existing.skin == binding.skin && existing.texture == binding.texture && existing.generation == binding.generation)
-            return existing.atlasWidth == binding.atlasWidth && existing.atlasHeight == binding.atlasHeight && existing.referenceDensity == binding.referenceDensity;
+        if(SameSkinBindingKey(existing, binding))
+            return SameSkinBinding(existing, binding);
     }
     auto loadedAsset = m_state->m_assets.loadTypedSync<Texture>(binding.texture.name(), s_GpuRendererContext);
     const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
@@ -216,16 +216,9 @@ b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const Ui
 b8 GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
     if(m_state->m_pending || !m_state->m_resources || !m_state->m_skin || snapshot.generation() == 0u)
         return false;
-    const SkinBinding& binding = snapshot.skinBinding();
-    const SkinBinding& loaded = m_state->m_skin->m_binding;
-    if(binding.skin != loaded.skin || binding.texture != loaded.texture || binding.generation != loaded.generation || binding.atlasWidth != loaded.atlasWidth || binding.atlasHeight != loaded.atlasHeight || binding.referenceDensity != loaded.referenceDensity)
+    if(!SameSkinBinding(snapshot.skinBinding(), m_state->m_skin->m_binding))
         return false;
-    const DisplayMetrics& display = snapshot.displayMetrics();
-    if(
-        !IsFinite(display.logicalWidth) || !IsFinite(display.logicalHeight) || !IsFinite(display.pixelScaleX)
-        || !IsFinite(display.pixelScaleY) || display.logicalWidth <= 0.0f || display.logicalHeight <= 0.0f
-        || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f
-    )
+    if(!IsValidDisplayMetricsForGpuSubmit(snapshot.displayMetrics()))
         return false;
     if(!GpuRendererState::ValidateGlyphPages(snapshot) || !GpuRendererState::ValidateSdfPages(snapshot) || !GpuRendererState::ValidateTextureImages(snapshot))
         return false;

@@ -44,21 +44,15 @@ public:
 public:
     // Replacement is atomic, accepts an empty profile, and rejects overlapping chords for the same physical key.
     [[nodiscard]] b8 set(const Span<const InputKeyBinding> bindings){
-        if(!ValidateInputKeyBindingProfile(bindings, s_InputBindingModifierMask))
-            return false;
         BindingVector candidate(m_bindings.get_allocator());
-        candidate.reserve(s_InputMaxBindings);
-        if(!bindings.empty())
-            candidate.assign(bindings.begin(), bindings.end());
+        if(!TryBuildInputKeyBindingProfile(bindings, candidate))
+            return false;
         m_bindings.swap(candidate);
         return true;
     }
     void restoreDefaults(){
         BindingVector candidate(m_bindings.get_allocator());
-        candidate.reserve(s_InputMaxBindings);
-        for(usize index = 0u; index < s_DefaultInputKeyBindingCount; ++index)
-            candidate.push_back(ResolveDefaultInputKeyBinding(index));
-        if(!ValidateInputKeyBindingProfile(candidate, s_InputBindingModifierMask))
+        if(!BuildDefaultInputKeyBindingProfile(candidate))
             TerminateInvariant();
         m_bindings.swap(candidate);
     }

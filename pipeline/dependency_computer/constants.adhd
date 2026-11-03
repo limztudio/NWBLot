@@ -17,6 +17,21 @@ Expected<StringView> ExtractParentVirtualPathText(in StringView virtualPathText)
     return virtualPathText.substr(0u, lastSlash);
 }
 
+StringView ResolveDependencyVirtualPathText(in Name virtualPath, in StringView virtualPathTextHint){
+    if(!virtualPathTextHint.empty())
+        return virtualPathTextHint;
+    return virtualPath.resolvedText();
+}
+
+b8 RecordDependencyProviderMatch(in Name virtualPath, in usize index, mut usize inOutMatched){
+    if(inOutMatched != s_InvalidProviderIndex && inOutMatched != index){
+        error("DependencyComputer: multiple physical providers for '{}'", virtualPath.resolvedText());
+        return false;
+    }
+    inOutMatched = index;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -157,6 +157,22 @@ Expected<i32x4> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in Dra
     return i32x4(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));
 }
 
+GpuOutputPushConstants MakeGpuOutputPushConstants(in u32 textureSlot, in u32 samplerSlot, in u32 presentationMode){
+    GpuOutputPushConstants push;
+    push.textureSlot = textureSlot;
+    push.samplerSlot = samplerSlot;
+    push.presentationMode = presentationMode;
+    return push;
+}
+
+u32 ComputeGpuTimingResolutionHash(in u32 width, in u32 height){
+    return width ^ (height << s_GpuTimingHeightShift);
+}
+
+b8 IsValidGpuRendererExtent(in u32 width, in u32 height){
+    return width != 0u && height != 0u && width <= cast<u32>(i32.max) && height <= cast<u32>(i32.max);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -21,12 +21,7 @@ NWB_IMPL_UI_BEGIN
 ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options){
     ContextMenuResult result;
     Item* anchor = annotationAnchor(anchorKey);
-    if(
-        panelDeclarationBlocked()
-        || !anchor || !IsFinite(options.size.x) || !IsFinite(options.size.y) || options.size.x <= 0.0f || options.size.y <= 0.0f
-        || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
-        || m_scope->m_contextMenus.size() >= s_InputMaxPopups
-    ){
+    if(panelDeclarationBlocked() || !anchor || !IsValidContextMenuDeclarationOptions(options, m_scope->m_contextMenus.size(), s_InputMaxPopups)){
         m_context.fail();
         return result;
     }
@@ -238,11 +233,7 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     if(!anchorBox || !background || !contextMenuMatches(frame))
         return false;
     const Rect clip = visibleClip(anchorBox->clip);
-    if(
-        !anchor.enabled || clip.width <= 0.0f || clip.height <= 0.0f
-        || anchorBox->rectangle.x >= clip.x + clip.width || anchorBox->rectangle.y >= clip.y + clip.height
-        || anchorBox->rectangle.x + anchorBox->rectangle.width <= clip.x || anchorBox->rectangle.y + anchorBox->rectangle.height <= clip.y
-    ){
+    if(!IsContextMenuAnchorVisible(anchorBox->rectangle, clip, anchor.enabled)){
         frame.state->close();
         m_context.discardPopupScope(frame.popupToken);
         snapshotContextMenu(frame);

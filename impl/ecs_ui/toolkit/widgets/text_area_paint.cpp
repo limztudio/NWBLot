@@ -162,7 +162,7 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         }
         const b8 hovered = m_context.input().hover() == *thumbId;
         const b8 pressed = m_context.input().capture() == *thumbId;
-        const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
+        const Name thumbName = ResolveScrollbarThumbRegionName(item.scrollbarStyle, enabled, pressed, hovered);
         const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback);
         const UiSkinRegion* thumb = region(thumbName, item.scrollbarStyle.thumbFallback);
         if(track)
@@ -190,35 +190,22 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;
-        const f32 start = horizontal ? bar.track.x : bar.track.y;
-        const f32 thumbStart = horizontal ? bar.thumb.x : bar.thumb.y;
         const f32 trackExtent = horizontal ? bar.track.width : bar.track.height;
         const f32 thumbExtent = horizontal ? bar.thumb.width : bar.thumb.height;
-        const f32 before = Max(0.0f, thumbStart - start);
-        const f32 after = Max(0.0f, ((start + trackExtent) - thumbStart) - thumbExtent);
+        Rect beforeRect;
+        Rect afterRect;
+        ResolveScrollbarBeforeAfterRects(bar, horizontal, beforeRect, afterRect);
         HitTarget target;
         target.clip = clip;
         target.control = token;
         target.activatable = true;
         target.value = horizontal ? s_TextAreaScrollHorizontalBefore : s_TextAreaScrollVerticalBefore;
-        target.rectangle = bar.track;
-        if(horizontal)
-            target.rectangle.width = before;
-        else
-            target.rectangle.height = before;
+        target.rectangle = beforeRect;
         const auto beforeId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalBefore : s_WidgetPartScrollVerticalBefore);
         if(!beforeId || !m_context.addPartTarget(item.state, *beforeId, target))
             return false;
         target.value = horizontal ? s_TextAreaScrollHorizontalAfter : s_TextAreaScrollVerticalAfter;
-        target.rectangle = bar.track;
-        if(horizontal){
-            target.rectangle.x = thumbStart + thumbExtent;
-            target.rectangle.width = after;
-        }
-        else{
-            target.rectangle.y = thumbStart + thumbExtent;
-            target.rectangle.height = after;
-        }
+        target.rectangle = afterRect;
         const auto afterId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalAfter : s_WidgetPartScrollVerticalAfter);
         if(!afterId || !m_context.addPartTarget(item.state, *afterId, target))
             return false;

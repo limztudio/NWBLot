@@ -236,6 +236,93 @@ Rect ResolveWidgetGalleryLayoutBounds(in DisplayMetrics display, in f32 preferre
     return Rect(x, y, s_SelectorWidth, height);
 }
 
+u64 ResolveImmutableListSourceKey(in u64 index, in usize labelCount){
+    if(index < cast<u64>(labelCount))
+        return index + 1u;
+    return 0u;
+}
+
+Expected<u64> TryResolveImmutableListSourceIndex(in u64 keyValue, in usize labelCount){
+    if(keyValue == 0u || keyValue > cast<u64>(labelCount))
+        return makeUnexpected(Failure());
+    return keyValue - 1u;
+}
+
+b8 IsImmutableListSourceRowEnabled(in u64 index, in usize labelCount, in u64 disabledKey){
+    return index < cast<u64>(labelCount) && index + 1u != disabledKey;
+}
+
+Expected<u64> TryFindFilteredListSourceIndex(in Span<u64> indices, in u64 count, in usize labelCount, in u64 keyValue){
+    for(u64 candidate = 0u; candidate < count && cast<usize>(candidate) < indices.size(); ++candidate){
+        if(ResolveImmutableListSourceKey(indices[cast<usize>(candidate)], labelCount) == keyValue)
+            return candidate;
+    }
+    return makeUnexpected(Failure());
+}
+
+StringView ResolvePopupGalleryCaption(in u32 choice){
+    if(choice == 0u)
+        return "Popup menu";
+    if(choice == s_PopupFirstChoice)
+        return "First choice selected";
+    return "Second choice selected";
+}
+
+f32 ResolveWidgetGalleryContentWidth(in u32 selected){
+    if(selected == cast<u32>(Section::TextArea))
+        return s_SelectorWidth;
+    return s_OrdinaryGalleryWidth;
+}
+
+StringView ResolveNestedPopupLabel(in u64 index){
+    switch(index){
+    case 0u: return "Alpha";
+    case 1u: return "Beta";
+    case 2u: return "Gamma (disabled)";
+    case 3u: return "Delta";
+    case 4u: return "Echo";
+    default: return "";
+    }
+}
+
+StringView ResolvePopupToolsLabel(in u64 index){
+    switch(index){
+    case 0u: return "Inspect selection";
+    case 1u: return "Duplicate";
+    case 2u: return "Delete (disabled)";
+    case 3u: return "Rename";
+    case 4u: return "Reset view";
+    default: return "";
+    }
+}
+
+StringView ResolveRadioGroupLabel(in u64 index){
+    switch(index){
+    case 0u: return "Balanced";
+    case 1u: return "High quality";
+    case 2u: return "Unavailable";
+    default: return "";
+    }
+}
+
+StringView ResolveSearchComboLabel(in u64 index){
+    switch(index){
+    case 0u: return "Apple";
+    case 1u: return "Banana";
+    case 2u: return "Blueberry";
+    case 3u: return "Cherry";
+    case 4u: return "Fig (disabled)";
+    case 5u: return "Grape";
+    case 6u: return "Kiwi";
+    case 7u: return "Lemon";
+    case 8u: return "Mango";
+    case 9u: return "Orange";
+    case 10u: return "Pear";
+    case 11u: return "Plum";
+    default: return "";
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

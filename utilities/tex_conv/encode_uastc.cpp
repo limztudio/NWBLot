@@ -109,20 +109,15 @@ struct AlphaTransport{
     target.resize(targetDepth);
     for(u32 z = 0u; z < targetDepth; ++z){
         // Integer interval coordinates preserve fractional source-slab coverage when the depth is odd.
-        const u64 intervalBegin = static_cast<u64>(z) * sourceDepth;
-        const u64 intervalEnd = static_cast<u64>(z + 1u) * sourceDepth;
-        const u32 first = static_cast<u32>(intervalBegin / targetDepth);
-        const u32 end = static_cast<u32>(DivideUp(intervalEnd, static_cast<u64>(targetDepth)));
+        const VolumeMipZSlabRange slabRange = ComputeVolumeMipZSlabRange(z, sourceDepth, targetDepth);
         basisu::imagef& plane = target[z];
         plane.resize(targetWidth, targetHeight);
         for(u32 y = 0u; y < targetHeight; ++y){
             for(u32 x = 0u; x < targetWidth; ++x){
                 SIMDVectorSingle sum = VectorZero();
-                for(u32 sourceZ = first; sourceZ < end; ++sourceZ){
+                for(u32 sourceZ = slabRange.first; sourceZ < slabRange.end; ++sourceZ){
                     const basisu::vec4F& color = filtered[sourceZ](x, y);
-                    const u64 slabBegin = static_cast<u64>(sourceZ) * targetDepth;
-                    const u64 slabEnd = static_cast<u64>(sourceZ + 1u) * targetDepth;
-                    const f32 overlap = static_cast<f32>(Min(intervalEnd, slabEnd) - Max(intervalBegin, slabBegin));
+                    const f32 overlap = ComputeVolumeMipZSlabOverlap(slabRange, sourceZ, targetDepth);
                     sum = VectorAdd(sum, VectorScale(VectorSet(color[0u], color[1u], color[2u], color[3u]), overlap));
                 }
                 const SIMDVectorSingle mean = VectorMultiply(sum, inverseDepth);

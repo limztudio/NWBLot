@@ -171,10 +171,7 @@ b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, const Core::GpuT
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     if(!__hidden_ui_gpu_command_ir::CaptureOutputState(payload, context, *descriptorOwner, viewport, heap, capture))
         return false;
-    GpuOutputPushConstants push;
-    push.textureSlot = frame->m_target->m_sampledImage.slot();
-    push.samplerSlot = frame->m_resources->m_samplerDescriptor.slot();
-    push.presentationMode = payload.presentationMode;
+    const GpuOutputPushConstants push = MakeGpuOutputPushConstants(frame->m_target->m_sampledImage.slot(), frame->m_resources->m_samplerDescriptor.slot(), payload.presentationMode);
     if(!capture.capturePushConstants(context.task, context.packet, context.queue, BinaryByteView{ reinterpret_cast<const u8*>(&push), sizeof(push) }))
         return false;
     if(!capture.captureDraw(context.task, context.packet, context.queue, Core::DrawArguments().setVertexCount(s_GpuFullscreenTriangleVertexCount), false) || !capture.captureEndRenderPass(context.task, context.packet, context.queue))

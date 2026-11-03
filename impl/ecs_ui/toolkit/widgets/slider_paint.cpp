@@ -62,7 +62,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
         thumb = region(frame.m_style.normal, frame.m_style.thumbFallback);
     if(!track || !thumb)
         return false;
-    const Color tint = !interactive ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint : hover ? frame.m_style.hoverTint : Color{};
+    const Color tint = ResolveSliderThumbTint(frame.m_style, interactive, pressed, hover);
     m_paint.pushClip(placement->clip);
     b8 painted = m_paint.drawRegion(track->name, placement->track, interactive ? Color{} : frame.m_style.disabledTint);
     if(painted)

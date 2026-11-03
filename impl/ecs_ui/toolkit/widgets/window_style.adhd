@@ -258,6 +258,44 @@ Rect ResolveWindowTitleContentBounds(in Rect header, in WindowMetrics metrics, i
 
 }
 
+LayoutNodeDesc BuildWindowRootLayoutNodeDesc(
+    in WindowOptions options,
+    in WindowMetrics metrics,
+    in Rect bounds,
+    in b8 firstUse,
+    in f32 gap
+){
+    LayoutNodeDesc description;
+    description.direction = options.direction;
+    if(firstUse && options.contentWidthFirstUse)
+        description.width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    else
+        description.width = LayoutSize(LayoutSizePolicy::Fixed, bounds.width);
+    if(firstUse && options.contentHeightFirstUse)
+        description.height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    else
+        description.height = LayoutSize(LayoutSizePolicy::Fixed, bounds.height);
+    description.padding = metrics.contentPadding;
+    description.gap = gap;
+    const f32 intrinsicWidth = (metrics.minimumSize.x - description.padding.left) - description.padding.right;
+    const f32 intrinsicHeight = ((metrics.minimumSize.y - metrics.titleHeight) - description.padding.top) - description.padding.bottom;
+    description.intrinsicSize = Point(max(0.0f, intrinsicWidth), max(0.0f, intrinsicHeight));
+    return description;
+}
+
+void ApplyWindowFirstUseContentBounds(
+    in WindowOptions options,
+    in WindowMetrics metrics,
+    in Rect rootRectangle,
+    in b8 firstUse,
+    mut WindowState inOutState
+){
+    if(firstUse && options.contentWidthFirstUse)
+        inOutState.bounds.width = max(rootRectangle.width, metrics.minimumSize.x);
+    if(firstUse && options.contentHeightFirstUse)
+        inOutState.bounds.height = max(rootRectangle.height + metrics.titleHeight, metrics.minimumSize.y);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

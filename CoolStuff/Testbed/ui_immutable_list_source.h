@@ -45,12 +45,10 @@ public:
 
     virtual u64 rowCount()const noexcept override final{ return LabelCount; }
 
-    virtual u64 key(const u64 index)const noexcept override final{ return index < LabelCount ? index + 1u : 0u; }
+    virtual u64 key(const u64 index)const noexcept override final{ return ResolveImmutableListSourceKey(index, LabelCount); }
 
     virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override final{
-        if(keyValue == 0u || keyValue > LabelCount)
-            return MakeUnexpected(Failure{});
-        return keyValue - 1u;
+        return TryResolveImmutableListSourceIndex(keyValue, LabelCount);
     }
 
     virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override final{
@@ -58,13 +56,15 @@ public:
     }
 
     virtual StringView text(const u64 index)const noexcept override{
-        if constexpr(requires{ Source::s_Labels; })
+        if constexpr(requires{ Source::ResolveLabel(index); })
+            return Source::ResolveLabel(index);
+        else if constexpr(requires{ Source::s_Labels; })
             return index < LabelCount ? Source::s_Labels[index] : StringView{};
         else
             return {};
     }
 
-    virtual b8 enabled(const u64 index)const noexcept override final{ return index < LabelCount && index + 1u != DisabledKey; }
+    virtual b8 enabled(const u64 index)const noexcept override final{ return IsImmutableListSourceRowEnabled(index, LabelCount, DisabledKey); }
 };
 
 
@@ -91,12 +91,7 @@ private:
         virtual u64 key(const u64 index)const noexcept override{ return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u; }
 
         virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
-            for(u64 candidate = 0u; candidate < rowCount(); ++candidate){
-                if(key(candidate) == keyValue){
-                    return candidate;
-                }
-            }
-            return MakeUnexpected(Failure{});
+            return TryFindFilteredListSourceIndex(m_source.m_indices, rowCount(), LabelCount, keyValue);
         }
 
         virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
@@ -137,7 +132,7 @@ public:
             m_query.assign(query.data(), query.size());
         m_count = 0u;
         for(u64 index = 0u; index < LabelCount; ++index){
-            if(!ContainsAsciiIgnoreCase<char>(Source::s_Labels[index], query))
+            if(!ContainsAsciiIgnoreCase<char>(this->text(index), query))
                 continue;
             m_indices[m_count] = index;
             ++m_count;

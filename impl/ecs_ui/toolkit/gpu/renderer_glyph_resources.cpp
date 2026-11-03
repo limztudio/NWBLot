@@ -59,11 +59,7 @@ b8 GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
                 return false;
         }
     }
-    for(const DrawCommand& command : snapshot.commands()){
-        if(!ValidDrawCommandGlyphBinding(command, pages.size()))
-            return false;
-    }
-    return true;
+    return ValidateDrawCommandGlyphBindings(snapshot.commands(), pages.size());
 }
 
 Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const SharedGlyphPage& page){

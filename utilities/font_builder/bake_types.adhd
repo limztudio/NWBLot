@@ -18,6 +18,9 @@ using NWB::Impl::s_FontAtlasMaxExtent;
 using NWB::Impl::s_FontAtlasMaxGroupCount;
 using NWB::Impl::s_FontAtlasMaxChannelCount;
 using NWB::Impl::s_FontAtlasMaxPixelBytes;
+using NWB::Impl::s_FontAtlasRasterModeBitmap;
+using NWB::Impl::s_FontAtlasRasterModeOutline;
+using NWB::Impl::FontAtlasGlyph;
 }
 }
 
@@ -84,6 +87,57 @@ b8 IsValidBakeNumericOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 m
         && maxGroups <= s_FontAtlasMaxGroupCount
         && cast<u64>(extent) * cast<u64>(extent) * cast<u64>(s_FontAtlasMaxChannelCount) * cast<u64>(maxGroups) <= s_FontAtlasMaxPixelBytes
     ;
+}
+
+const usize s_MaxBakeShelfPages = s_FontAtlasMaxGroupCount * s_FontAtlasMaxChannelCount;
+
+class ShelfPlacement{
+    public u32 page = 0u;
+    public u32 group = 0u;
+    public u32 channel = 0u;
+    public u32 x = 0u;
+    public u32 y = 0u;
+}
+
+Expected<b8> TryParseBakeRendererOutline(in StringView rendererArgument){
+    if(rendererArgument == s_FontAtlasRasterModeBitmap)
+        return false;
+    if(rendererArgument == s_FontAtlasRasterModeOutline)
+        return true;
+    error("font_builder: unknown renderer; choose bitmap or outline");
+    return makeUnexpected(Failure());
+}
+
+b8 IsFontAtlasGlyphPackOrderBefore(in FontAtlasGlyph lhs, in FontAtlasGlyph rhs){
+    if(lhs.height != rhs.height)
+        return lhs.height > rhs.height;
+    if(lhs.width != rhs.width)
+        return lhs.width > rhs.width;
+    return lhs.glyphId < rhs.glyphId;
+}
+
+Expected<ShelfPlacement> TryPlaceGlyphInShelves(
+    in u32 width,
+    in u32 height,
+    in u32 extent,
+    in u32 maxGroups,
+    mut Array<Shelf, s_MaxBakeShelfPages> inOutShelves
+){
+    const u32 pageCount = maxGroups * s_FontAtlasMaxChannelCount;
+    for(u32 page = 0u; page < pageCount; ++page){
+        u32 placedX = 0u;
+        u32 placedY = 0u;
+        if(!TryPlaceGlyphOnShelf(width, height, extent, inOutShelves[cast<usize>(page)], placedX, placedY))
+            continue;
+        ShelfPlacement placement;
+        placement.page = page;
+        placement.group = page / s_FontAtlasMaxChannelCount;
+        placement.channel = page % s_FontAtlasMaxChannelCount;
+        placement.x = placedX;
+        placement.y = placedY;
+        return placement;
+    }
+    return makeUnexpected(Failure());
 }
 
 

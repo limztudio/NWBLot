@@ -184,14 +184,7 @@ template<typename Value, typename WriteValue>
     if(before.colors != after.colors.size() && !AddReplacement(source, variableName, Impl::s_MeshColorsFieldNameView, WriteValueList<Vec4>(after.colors, WriteVec4<ScratchStringStream>, scratchArena), inOutReplacements))
         return false;
 
-    const b8 componentRefsChanged =
-        before.positions != after.positions.size()
-        || before.normals != after.normals.size()
-        || before.tangents != after.tangents.size()
-        || before.uv0 != after.uv0.size()
-        || before.colors != after.colors.size()
-        || before.vertexRefs != after.vertexRefs.size()
-    ;
+    const b8 componentRefsChanged = DidSourceMeshComponentRefsChange(before, CountSourceMeshStreams(after));
     if(componentRefsChanged && !AddReplacement(source, variableName, Impl::s_MeshVertexRefsFieldNameView, WriteVertexRefList(after.vertexRefs, scratchArena), inOutReplacements))
         return false;
     if(before.vertexRefs != after.vertexRefs.size() && !AddReplacement(source, variableName, Impl::s_MeshIndicesFieldNameView, WriteIndexList(after.indices, scratchArena), inOutReplacements))

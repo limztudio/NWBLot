@@ -150,7 +150,7 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskG
         Core::GpuTaskDesc().setIdentity(s_GpuRasterTaskName).setMarkerLabel(s_GpuRasterMarkerLabel).setScheduling(scheduling)
             .setDependencies(dependencies).setResourceUses(uses)
             .setResourceVersionUses({ &produce, 1u })
-            .setTiming({ 0u, m_width ^ (m_height << s_GpuTimingHeightShift), Core::GpuTaskTimingPolicy::Task }),
+            .setTiming({ 0u, ComputeGpuTimingResolutionHash(m_width, m_height), Core::GpuTaskTimingPolicy::Task }),
         GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(*glyphPages), Move(*sdfPages), Move(*textureImages) }
     );
     if(!rasterResult)

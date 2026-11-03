@@ -31,7 +31,7 @@ public:
 
 
 private:
-    static constexpr Array<StringView, s_RadioGroupLabelCount> s_Labels{ "Balanced", "High quality", "Unavailable" };
+    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolveRadioGroupLabel(index); }
 };
 
 class UiRadioGroupGallery final : NoCopy{

@@ -594,6 +594,16 @@ b8 IsSliderPlacementInteractive(in SliderOptions options, in SliderPlacement pla
         && placement.clip.height > 0.0f;
 }
 
+Color ResolveSliderThumbTint(in SliderStyle style, in b8 interactive, in b8 pressed, in b8 hover){
+    if(!interactive)
+        return style.disabledTint;
+    if(pressed)
+        return style.pressedTint;
+    if(hover)
+        return style.hoverTint;
+    return Color();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

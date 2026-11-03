@@ -34,7 +34,7 @@ public:
 
 
 private:
-    static constexpr Array<StringView, s_PopupToolsLabelCount> s_Labels{ "Inspect selection", "Duplicate", "Delete (disabled)", "Rename", "Reset view" };
+    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolvePopupToolsLabel(index); }
 };
 
 

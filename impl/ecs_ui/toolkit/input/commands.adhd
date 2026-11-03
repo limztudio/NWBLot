@@ -277,6 +277,24 @@ InputKeyBinding ResolveDefaultInputKeyBinding(in usize index){
     }
 }
 
+b8 TryBuildInputKeyBindingProfile(in Span<InputKeyBinding> bindings, mut Vector<InputKeyBinding> outBindings){
+    if(!ValidateInputKeyBindingProfile(bindings, s_InputBindingModifierMask))
+        return false;
+    outBindings.clear();
+    outBindings.reserve(s_InputMaxBindings);
+    for(in InputKeyBinding binding : bindings)
+        outBindings.push_back(binding);
+    return true;
+}
+
+b8 BuildDefaultInputKeyBindingProfile(mut Vector<InputKeyBinding> outBindings){
+    outBindings.clear();
+    outBindings.reserve(s_InputMaxBindings);
+    for(usize index = 0u; index < s_DefaultInputKeyBindingCount; ++index)
+        outBindings.push_back(ResolveDefaultInputKeyBinding(index));
+    return ValidateInputKeyBindingProfile(outBindings, s_InputBindingModifierMask);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

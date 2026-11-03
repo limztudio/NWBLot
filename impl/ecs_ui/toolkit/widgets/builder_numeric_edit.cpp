@@ -61,13 +61,7 @@ public:
         default: break;
         }
         m_revision = m_model.revision();
-        m_result.valid &= result.valid;
-        m_result.committed |= result.committed;
-        m_result.valueChanged |= result.valueChanged;
-        m_result.cancelled |= result.cancelled;
-        m_result.rejected |= result.rejected;
-        m_result.clamped |= result.clamped;
-        m_result.restored |= result.restored;
+        MergeNumericEditResult(result, m_result);
         return result.valid && !m_context.failed();
     }
 

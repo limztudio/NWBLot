@@ -557,6 +557,48 @@ Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(
     return TryCalculateScrollViewportPlacement(bounds, clip, padding, contentMeasure, caretWidth, previousScroll, thickness, minThumb);
 }
 
+Name ResolveScrollbarThumbRegionName(in ScrollbarStyle style, in b8 enabled, in b8 pressed, in b8 hovered){
+    if(!enabled)
+        return style.thumbDisabled;
+    if(pressed)
+        return style.thumbPressed;
+    if(hovered)
+        return style.thumbHover;
+    return style.thumb;
+}
+
+void ResolveScrollbarBeforeAfterRects(
+    in ScrollbarPlacement bar,
+    in b8 horizontal,
+    mut Rect outBeforeRect,
+    mut Rect outAfterRect
+){
+    f32 start = bar.track.y;
+    f32 thumbStart = bar.thumb.y;
+    f32 trackExtent = bar.track.height;
+    f32 thumbExtent = bar.thumb.height;
+    if(horizontal){
+        start = bar.track.x;
+        thumbStart = bar.thumb.x;
+        trackExtent = bar.track.width;
+        thumbExtent = bar.thumb.width;
+    }
+    const f32 before = max(0.0f, thumbStart - start);
+    const f32 after = max(0.0f, ((start + trackExtent) - thumbStart) - thumbExtent);
+    outBeforeRect = bar.track;
+    outAfterRect = bar.track;
+    if(horizontal){
+        outBeforeRect.width = before;
+        outAfterRect.x = thumbStart + thumbExtent;
+        outAfterRect.width = after;
+    }
+    else{
+        outBeforeRect.height = before;
+        outAfterRect.y = thumbStart + thumbExtent;
+        outAfterRect.height = after;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

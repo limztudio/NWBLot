@@ -168,35 +168,9 @@ template<typename Value>
     return outRemap;
 }
 
-[[nodiscard]] b8 RemapRequiredIndex(const Span<const u32> remap, const AStringView streamName, u32& inOutIndex){
-    if(inOutIndex < remap.size()){
-        inOutIndex = remap[inOutIndex];
-        return true;
-    }
-
-    NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: vertex_ref {} index is out of range"), ConvertString(streamName));
-    return false;
-}
-
-[[nodiscard]] b8 RemapOptionalIndex(const Span<const u32> remap, const AStringView streamName, u32& inOutIndex){
-    if(inOutIndex == Impl::s_MeshMissingStreamIndex)
-        return true;
-    return RemapRequiredIndex(remap, streamName, inOutIndex);
-}
-
 [[nodiscard]] b8 RemapComponentRefs(const Span<const u32> positions, const Span<const u32> normals, const Span<const u32> tangents, const Span<const u32> uv0, const Span<const u32> colors, const Span<const u32> skin, SourceMeshStreams& inOutMesh){
     for(SourceVertexRef& ref : inOutMesh.vertexRefs){
-        if(!RemapRequiredIndex(positions, Impl::s_VertexRefPositionName, ref.position))
-            return false;
-        if(!RemapRequiredIndex(normals, Impl::s_VertexRefNormalName, ref.normal))
-            return false;
-        if(!RemapRequiredIndex(tangents, Impl::s_VertexRefTangentName, ref.tangent))
-            return false;
-        if(!RemapRequiredIndex(uv0, Impl::s_MeshUv0FieldNameView, ref.uv0))
-            return false;
-        if(!RemapRequiredIndex(colors, Impl::s_VertexRefColorName, ref.color))
-            return false;
-        if(!RemapOptionalIndex(skin, s_SkinStreamLabel, ref.skin))
+        if(!RemapSourceVertexRef(positions, normals, tangents, uv0, colors, skin, ref))
             return false;
     }
     return true;

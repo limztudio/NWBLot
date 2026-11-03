@@ -33,7 +33,7 @@ public:
 
 
 private:
-    static constexpr Array<StringView, s_SearchComboLabelCount> s_Labels{ "Apple", "Banana", "Blueberry", "Cherry", "Fig (disabled)", "Grape", "Kiwi", "Lemon", "Mango", "Orange", "Pear", "Plum" };
+    [[nodiscard]] static StringView ResolveLabel(const u64 index)noexcept{ return ResolveSearchComboLabel(index); }
 };
 
 

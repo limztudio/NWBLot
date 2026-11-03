@@ -52,14 +52,15 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const b8 checked = frame.m_snapshot.selectedKey == row.key;
         const b8 hover = input.hover() == *part;
         const b8 pressed = input.pressed(*part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
-        const Name& preferred = checked ? frame.m_style.checked : !enabled ? frame.m_style.disabled : pressed ? frame.m_style.pressed : hover ? frame.m_style.hover : frame.m_style.normal;
-        const Name& fallback = checked ? frame.m_style.checkedFallback : frame.m_style.normal;
+        Name preferred;
+        Name fallback;
+        ResolveRadioGroupIndicatorNames(frame.m_style, checked, enabled, pressed, hover, preferred, fallback);
         const UiSkinRegion* indicator = region(preferred, fallback);
         if(!indicator)
             indicator = region(frame.m_style.normal, frame.m_style.fallback);
         if(!indicator || !mark)
             return false;
-        const Color tint = !enabled ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint : hover ? frame.m_style.hoverTint : Color{};
+        const Color tint = ResolveRadioGroupChoiceTint(frame.m_style, enabled, pressed, hover);
         const Rect& textBounds = frame.m_labels[index].bounds;
         m_paint.pushClip(row.clip);
         b8 painted = m_paint.drawRegion(indicator->name, row.indicator, tint);

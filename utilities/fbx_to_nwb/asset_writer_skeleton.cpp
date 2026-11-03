@@ -70,23 +70,7 @@ b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
 
 
 b8 ValidateSplitSkinSource(const SourceMeshStreams& mesh, const Span<ufbx_node* const> skeletonJoints, const Span<const JointMatrix> skeletonBindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices){
-    if(mesh.skin.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model requires source skin influences"));
-        return false;
-    }
-    if(skeletonJoints.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model requires skeleton joints"));
-        return false;
-    }
-    if(skeletonBindPoseMatrices.size() != skeletonJoints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skeleton bind-pose matrix count must match joint count"));
-        return false;
-    }
-    if(inverseBindMatrices.size() != skeletonJoints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skin inverse bind matrix count must match joint count"));
-        return false;
-    }
-    return true;
+    return ValidateSplitSkinSourceCounts(mesh.skin.size(), skeletonJoints.size(), skeletonBindPoseMatrices.size(), inverseBindMatrices.size());
 }
 
 ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
@@ -102,14 +86,8 @@ ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::A
 Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     SkeletonOutputData outData;
 
-    if(joints.size() != bindPoseMatrices.size() || inverseBindMatrices.size() != joints.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint and matrix counts differ"));
+    if(!ValidateSkeletonOutputInputCounts(joints.size(), bindPoseMatrices.size(), inverseBindMatrices.size()))
         return MakeUnexpected(Failure{});
-    }
-    if(joints.size() > s_MaxSkeletonJointCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
-        return MakeUnexpected(Failure{});
-    }
 
     UtilityScratchMap<NotNull<const ufbx_node*>, usize> sourceJointLookup(scratchArena);
     sourceJointLookup.reserve(joints.size());
@@ -144,17 +122,10 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     UtilityScratchVector<u32> parentDepths(scratchArena);
     parentDepths.resize(joints.size(), 0u);
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
-        u32 depth = 0u;
-        u32 parentIndex = parentIndices[jointIndex];
-        for(usize guard = 0u; parentIndex != Impl::s_MeshMissingStreamIndex; ++guard){
-            if(guard >= joints.size()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton hierarchy contains a cycle"));
-                return MakeUnexpected(Failure{});
-            }
-            ++depth;
-            parentIndex = parentIndices[parentIndex];
-        }
-        parentDepths[jointIndex] = depth;
+        const auto depth = TryComputeSkeletonJointHierarchyDepth(parentIndices, jointIndex);
+        if(!depth)
+            return MakeUnexpected(Failure{});
+        parentDepths[jointIndex] = *depth;
     }
 
     UtilityScratchVector<usize> sortedJointIndices(scratchArena);
@@ -210,14 +181,8 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
 
 b8 RemapSkinInfluences(const Span<const u16> oldToNewJointIndices, const Span<MeshSkinInfluence> inOutInfluences){
     for(MeshSkinInfluence& influence : inOutInfluences){
-        for(usize slot = 0u; slot < Impl::s_SkinInfluenceJointCount; ++slot){
-            const u16 oldJointIndex = influence.joint[slot];
-            if(oldJointIndex >= oldToNewJointIndices.size()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: skin influence references out-of-range joint {}"), oldJointIndex);
-                return false;
-            }
-            influence.joint[slot] = oldToNewJointIndices[oldJointIndex];
-        }
+        if(!RemapSkinInfluence(oldToNewJointIndices, influence))
+            return false;
     }
     return true;
 }

@@ -19,12 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource){
     ComboResult result;
-    if(
-        itemDeclarationBlocked() || !IsFinite(options.popupHeight) || options.popupHeight <= 0.0f
-        || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
-        || !IsFinite(m_comboStyle.arrowExtent) || m_comboStyle.arrowExtent <= 0.0f
-        || !IsFinite(m_comboStyle.arrowGap) || m_comboStyle.arrowGap < 0.0f
-    ){
+    if(itemDeclarationBlocked() || !IsValidComboDeclarationOptions(options, m_comboStyle)){
         m_context.fail();
         return result;
     }
@@ -161,9 +156,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const f32 paddedWidth = ((measured.x + frame.arrowExtent) + frame.style.arrowGap) + item.padding.left + item.padding.right;
-    const f32 paddedHeight = Max(measured.y, frame.arrowExtent) + item.padding.top + item.padding.bottom;
-    description.intrinsicSize = { Max(minimumSize.x, paddedWidth), Max(minimumSize.y, paddedHeight) };
+    description.intrinsicSize = ComputeComboFieldIntrinsicSize(minimumSize, measured, frame.arrowExtent, frame.style.arrowGap, item.padding);
     if(!addItemNode(description, item))
         return {};
     frame.list = static_cast<u32>(m_scope->m_lists.size());

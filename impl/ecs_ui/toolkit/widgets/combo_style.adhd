@@ -141,5 +141,34 @@ void ResolveComboFieldLayout(in Rect bounds, in Insets padding, in f32 arrowExte
 
 }
 
+b8 IsValidComboDeclarationOptions(in ComboOptions options, in ComboStyle style){
+    return
+        isFinite(options.popupHeight) && options.popupHeight > 0.0f
+        && isFinite(options.wheelRows) && options.wheelRows > 0.0f
+        && isFinite(style.arrowExtent) && style.arrowExtent > 0.0f
+        && isFinite(style.arrowGap) && style.arrowGap >= 0.0f
+    ;
+}
+
+Point ComputeComboFieldIntrinsicSize(in Point minimumSize, in Point measured, in f32 arrowExtent, in f32 arrowGap, in Insets padding){
+    const f32 paddedWidth = ((measured.x + arrowExtent) + arrowGap) + padding.left + padding.right;
+    const f32 paddedHeight = max(measured.y, arrowExtent) + padding.top + padding.bottom;
+    return Point(max(minimumSize.x, paddedWidth), max(minimumSize.y, paddedHeight));
+}
+
+b8 IsValidSearchComboDeclarationOptions(in SearchComboOptions options){
+    return isFinite(options.queryHeight) && options.queryHeight > 0.0f && isFinite(options.queryGap) && options.queryGap >= 0.0f;
+}
+
+Rect ResolveComboQueryBoxAndAdvanceContent(in f32 measuredHeight, in f32 queryHeight, in f32 queryGap, mut Rect inOutContentRect){
+    Rect queryRect = inOutContentRect;
+    queryRect.height = min(max(queryHeight, measuredHeight), inOutContentRect.height);
+    const f32 extent = min(inOutContentRect.height, queryRect.height + queryGap);
+    inOutContentRect.y += extent;
+    inOutContentRect.height -= extent;
+    return queryRect;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

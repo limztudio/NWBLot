@@ -11,6 +11,7 @@
 #include "text/sdf_page.h"
 
 #include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 #include <impl/ecs_ui/toolkit/paint_types.adhd.h>
 
 #include <global/simplemath.h>
@@ -103,15 +104,67 @@ public:
 
 public:
     // Skin payload validation belongs to loading; begin captures its descriptor for this frame.
-    void begin(const DisplayMetrics& metrics, u64 generation, u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin);
-    void reserve(usize quadCount, usize clipDepth = s_PaintDefaultClipDepth);
-    void pushClip(const Rect& clip);
-    [[nodiscard]] b8 popClip()noexcept;
+    void begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
+        NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
+        NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
+        NWB_ASSERT(IsFinite(skin.referenceDensity()));
+        NWB_ASSERT(IsFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
+        NWB_ASSERT(IsFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
+        NWB_ASSERT(IsFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
+        NWB_ASSERT(IsFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
+        m_snapshot.m_generation = generation;
+        m_snapshot.m_displayMetrics = metrics;
+        m_snapshot.m_skinBinding = { skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
+        m_snapshot.m_vertices.clear();
+        m_snapshot.m_indices.clear();
+        m_snapshot.m_commands.clear();
+        m_snapshot.m_glyphPages.clear();
+        m_snapshot.m_sdfPages.clear();
+        m_snapshot.m_textureImages.clear();
+        m_regions.assign(skin.regions().begin(), skin.regions().end());
+        m_clips.clear();
+        m_clips.push_back({ 0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight });
+        m_overlayDepth = 0u;
+        m_layer = 0u;
+        m_commandsOrdered = true;
+        m_recording = true;
+    }
+    void reserve(const usize quadCount, const usize clipDepth = s_PaintDefaultClipDepth){
+        ReservePaintSnapshot(quadCount, clipDepth, m_snapshot.m_vertices, m_snapshot.m_indices, m_snapshot.m_commands, m_clips);
+    }
+    void pushClip(const Rect& clip){
+        PushPaintClip(m_recording, clip, m_clips);
+    }
+    [[nodiscard]] b8 popClip()noexcept{
+        return PopPaintClip(m_recording, m_overlayDepth, m_overlays, m_clips);
+    }
     // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.
-    [[nodiscard]] b8 beginOverlay(u32 layer);
-    [[nodiscard]] b8 endOverlay()noexcept;
+    [[nodiscard]] b8 beginOverlay(const u32 layer){
+        return BeginPaintOverlay(m_recording, layer, m_snapshot.m_displayMetrics, m_overlays, m_overlayDepth, m_layer, m_clips);
+    }
+    [[nodiscard]] b8 endOverlay()noexcept{
+        return EndPaintOverlay(m_recording, m_overlays, m_overlayDepth, m_layer, m_clips);
+    }
     void fillRect(const Rect& rectangle, const Color& color = {}){ emitQuad(rectangle, {}, color, PaintMaterial::Solid); }
-    [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {});
+    [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {}){
+        NWB_ASSERT(m_recording);
+        return DrawPaintSkinRegion(
+            m_recording,
+            m_clips.back(),
+            m_regions,
+            regionName,
+            rectangle,
+            tint,
+            m_snapshot.m_skinBinding.atlasWidth,
+            m_snapshot.m_skinBinding.atlasHeight,
+            m_snapshot.m_skinBinding.referenceDensity,
+            m_layer,
+            m_snapshot.m_vertices,
+            m_snapshot.m_indices,
+            m_snapshot.m_commands,
+            m_commandsOrdered
+        );
+    }
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
     [[nodiscard]] b8 prepareGlyphPages(const Span<const SharedGlyphPage> pages){ return prepareImages(pages, {}); }
     [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
@@ -121,14 +174,63 @@ public:
     [[nodiscard]] b8 prepareTextureImages(const Span<const SharedImageSource> images){ return prepareImages({}, {}, images); }
     // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
     [[nodiscard]] b8 drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {});
-    [[nodiscard]] DrawSnapshot freeze();
+    [[nodiscard]] DrawSnapshot freeze(){
+        NWB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayDepth == 0u);
+        if(!m_commandsOrdered){
+            Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
+                return IsPaintDrawCommandBefore(lhs, rhs);
+            });
+        }
+        m_recording = false;
+        m_clips.clear();
+        return Move(m_snapshot);
+    }
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
-    [[nodiscard]] Rect currentClip()const noexcept;
+    [[nodiscard]] Rect currentClip()const noexcept{
+        NWB_ASSERT(m_recording);
+        return m_clips.back();
+    }
 
 
 private:
-    void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material, u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u, u32 textureImageIndex = Limit<u32>::s_Max);
-    void emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint);
+    void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material, const u32 glyphPageIndex = Limit<u32>::s_Max, const u32 sdfPageIndex = Limit<u32>::s_Max, const u32 sdfChannel = 0u, const u32 textureImageIndex = Limit<u32>::s_Max){
+        NWB_ASSERT(m_recording);
+        EmitPaintQuad(
+            m_recording,
+            m_clips.back(),
+            rectangle,
+            uv,
+            color,
+            material,
+            m_layer,
+            glyphPageIndex,
+            sdfPageIndex,
+            sdfChannel,
+            textureImageIndex,
+            m_snapshot.m_vertices,
+            m_snapshot.m_indices,
+            m_snapshot.m_commands,
+            m_commandsOrdered
+        );
+    }
+    void emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint){
+        NWB_ASSERT(m_recording);
+        EmitPaintNineSlice(
+            m_recording,
+            m_clips.back(),
+            region,
+            rectangle,
+            tint,
+            m_snapshot.m_skinBinding.atlasWidth,
+            m_snapshot.m_skinBinding.atlasHeight,
+            m_snapshot.m_skinBinding.referenceDensity,
+            m_layer,
+            m_snapshot.m_vertices,
+            m_snapshot.m_indices,
+            m_snapshot.m_commands,
+            m_commandsOrdered
+        );
+    }
 
 
 private:

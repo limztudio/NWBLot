@@ -37,11 +37,10 @@ int Run(const int argc, char** argv){
     app.add_flag(AInteropString(s_OverwriteOptionFlag.data(), s_OverwriteOptionFlag.size()), options.overwrite, "Replace an existing complete .nwb/.font pair");
     return InvokeTerminalEntry<CLI::ParseError>([&](){
                 app.parse(argc, argv);
-                if(rendererArgument != Impl::s_FontAtlasRasterModeBitmap && rendererArgument != Impl::s_FontAtlasRasterModeOutline){
-                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unknown renderer; choose bitmap or outline"));
+                const auto outline = TryParseBakeRendererOutline(AStringView(rendererArgument.data(), rendererArgument.size()));
+                if(!outline)
                     return 1;
-                }
-                options.outline = rendererArgument == Impl::s_FontAtlasRasterModeOutline;
+                options.outline = *outline;
                 options.source = AStringView(sourceArgument.data(), sourceArgument.size());
                 options.output = AStringView(outputArgument.data(), outputArgument.size());
                 Core::Alloc::ScratchArena scratch(s_FontBuilderBakeArena);

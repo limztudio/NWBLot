@@ -55,11 +55,9 @@ namespace MeshRefreshParseDetail{
     ))
         return false;
 
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(ref.skin != Impl::s_MeshMissingStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath));
-            return false;
-        }
+    if(!SourceVertexRefsHaveNoSkin(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath));
+        return false;
     }
 
     return Impl::MeshCookSourceStreams::ValidateSourceIndexStream(

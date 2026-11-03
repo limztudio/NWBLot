@@ -16,6 +16,11 @@ using NWB::Impl::SkinInfluence4;
 using NWB::Impl::s_MeshMissingStreamIndex;
 using NWB::Impl::s_SkinInfluenceJointCount;
 using NWB::Impl::s_SkeletonJointMatrixFloatCount;
+using NWB::Impl::s_VertexRefPositionName;
+using NWB::Impl::s_VertexRefNormalName;
+using NWB::Impl::s_VertexRefTangentName;
+using NWB::Impl::s_MeshUv0FieldNameView;
+using NWB::Impl::s_VertexRefColorName;
 }
 }
 
@@ -357,6 +362,137 @@ b8 SourceVertexRefsHaveCompleteTangents(in Span<SourceVertexRef> vertexRefs, in 
             return false;
     }
     return true;
+}
+
+Expected<usize> TryParseMeshIndexSelector(in StringView text){
+    const StringView trimmed = trimView(text);
+    if(trimmed.empty())
+        return makeUnexpected(Failure());
+    const Expected<u64> parsed = parseU64(trimmed);
+    if(!parsed.has_value())
+        return makeUnexpected(Failure());
+    if(parsed.value() > cast<u64>(usize.max))
+        return makeUnexpected(Failure());
+    return cast<usize>(parsed.value());
+}
+
+b8 ValidateSplitSkinSourceCounts(
+    in usize skinCount,
+    in usize skeletonJointCount,
+    in usize bindPoseMatrixCount,
+    in usize inverseBindMatrixCount
+){
+    if(skinCount == 0u){
+        error("Failed to write NWB model: skinned model requires source skin influences");
+        return false;
+    }
+    if(skeletonJointCount == 0u){
+        error("Failed to write NWB model: skinned model requires skeleton joints");
+        return false;
+    }
+    if(bindPoseMatrixCount != skeletonJointCount){
+        error("Failed to write NWB model: skeleton bind-pose matrix count must match joint count");
+        return false;
+    }
+    if(inverseBindMatrixCount != skeletonJointCount){
+        error("Failed to write NWB model: skin inverse bind matrix count must match joint count");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSkeletonOutputInputCounts(in usize jointCount, in usize bindPoseCount, in usize inverseBindCount){
+    if(jointCount != bindPoseCount || inverseBindCount != jointCount){
+        error("Failed to write NWB skeleton: joint and matrix counts differ");
+        return false;
+    }
+    if(jointCount > s_MaxSkeletonJointCount){
+        error("Failed to write NWB skeleton: skeleton has more than {} joints", s_MaxSkeletonJointCount);
+        return false;
+    }
+    return true;
+}
+
+Expected<u32> TryComputeSkeletonJointHierarchyDepth(in Span<u32> parentIndices, in usize jointIndex){
+    u32 depth = 0u;
+    u32 parentIndex = parentIndices[jointIndex];
+    for(usize guard = 0u; parentIndex != s_MeshMissingStreamIndex; ++guard){
+        if(guard >= parentIndices.size() || cast<usize>(parentIndex) >= parentIndices.size()){
+            error("Failed to write NWB skeleton: skeleton hierarchy contains a cycle");
+            return makeUnexpected(Failure());
+        }
+        ++depth;
+        parentIndex = parentIndices[cast<usize>(parentIndex)];
+    }
+    return depth;
+}
+
+b8 RemapSkinInfluence(in Span<u16> oldToNewJointIndices, mut MeshSkinInfluence inOutInfluence){
+    for(usize slot = 0u; slot < s_SkinInfluenceJointCount; ++slot){
+        const u16 oldJointIndex = inOutInfluence.joint[slot];
+        if(cast<usize>(oldJointIndex) >= oldToNewJointIndices.size()){
+            error("Failed to write NWB skin: skin influence references out-of-range joint {}", oldJointIndex);
+            return false;
+        }
+        inOutInfluence.joint[slot] = oldToNewJointIndices[cast<usize>(oldJointIndex)];
+    }
+    return true;
+}
+
+b8 SourceVertexRefsHaveNoSkin(in Span<SourceVertexRef> vertexRefs){
+    for(in SourceVertexRef ref : vertexRefs){
+        if(ref.skin != s_MeshMissingStreamIndex)
+            return false;
+    }
+    return true;
+}
+
+b8 DidSourceMeshComponentRefsChange(in SourceMeshStreamCounts before, in SourceMeshStreamCounts after){
+    return
+        before.positions != after.positions
+        || before.normals != after.normals
+        || before.tangents != after.tangents
+        || before.uv0 != after.uv0
+        || before.colors != after.colors
+        || before.vertexRefs != after.vertexRefs
+    ;
+}
+
+b8 RemapRequiredSourceStreamIndex(in Span<u32> remap, in StringView streamName, mut u32 inOutIndex){
+    if(cast<usize>(inOutIndex) < remap.size()){
+        inOutIndex = remap[cast<usize>(inOutIndex)];
+        return true;
+    }
+    error("Failed to canonicalize mesh: vertex_ref {} index is out of range", streamName);
+    return false;
+}
+
+b8 RemapOptionalSourceStreamIndex(in Span<u32> remap, in StringView streamName, mut u32 inOutIndex){
+    if(inOutIndex == s_MeshMissingStreamIndex)
+        return true;
+    return RemapRequiredSourceStreamIndex(remap, streamName, inOutIndex);
+}
+
+b8 RemapSourceVertexRef(
+    in Span<u32> positions,
+    in Span<u32> normals,
+    in Span<u32> tangents,
+    in Span<u32> uv0,
+    in Span<u32> colors,
+    in Span<u32> skin,
+    mut SourceVertexRef inOutRef
+){
+    if(!RemapRequiredSourceStreamIndex(positions, s_VertexRefPositionName, inOutRef.position))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(normals, s_VertexRefNormalName, inOutRef.normal))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(tangents, s_VertexRefTangentName, inOutRef.tangent))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(uv0, s_MeshUv0FieldNameView, inOutRef.uv0))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(colors, s_VertexRefColorName, inOutRef.color))
+        return false;
+    return RemapOptionalSourceStreamIndex(skin, s_SkinStreamLabel, inOutRef.skin);
 }
 
 

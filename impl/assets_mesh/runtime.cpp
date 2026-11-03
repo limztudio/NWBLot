@@ -261,8 +261,12 @@ f32 ConservativePackedMeshletConeCutoff(const SIMDVectorSingle axis, const f32 c
     const SIMDVectorSingle normalizedAxis = Vector3NormalizeOr(axis, unpackedAxis, s_MeshletConeAxisLengthSquaredEpsilon);
     const f32 axisDot = Clamp(VectorGetX(Vector3Dot(normalizedAxis, unpackedAxis)), -1.0f, 1.0f);
     const f32 safeCutoff = Clamp(cutoff, 0.0f, 1.0f);
-    const f32 cutoffSin = Sqrt(Max(0.0f, 1.0f - safeCutoff * safeCutoff));
-    const f32 axisSin = Sqrt(Max(0.0f, 1.0f - axisDot * axisDot));
+    const SIMDVectorSingle anglePair = VectorSet(safeCutoff, axisDot, 0.0f, 0.0f);
+    const SIMDVectorSingle oneMinusSquare = VectorSubtract(s_SIMDOne, VectorMultiply(anglePair, anglePair));
+    const SIMDVectorSingle clampedSquare = VectorMax(oneMinusSquare, VectorZero());
+    const SIMDVectorSingle sinPair = VectorSqrt(clampedSquare);
+    const f32 cutoffSin = VectorGetX(sinPair);
+    const f32 axisSin = VectorGetY(sinPair);
     return safeCutoff * axisDot - cutoffSin * axisSin;
 }
 

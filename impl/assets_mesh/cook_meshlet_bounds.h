@@ -95,12 +95,12 @@ MeshletBoundsCalculation MeshletBoundsBuilder::CalculateMeshletBounds(const u32 
         AabbTests::Expand(positionAt(localPositionIndex), minBounds, maxBounds);
 
     result.center = AabbTests::Center(minBounds, maxBounds);
-    f32 radiusSquared = 0.0f;
+    SIMDVectorSingle radiusSquaredLanes = VectorZero();
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
         const SIMDVectorSingle delta = VectorSubtract(positionAt(localPositionIndex), result.center);
-        radiusSquared = Max(radiusSquared, VectorGetX(Vector3LengthSq(delta)));
+        radiusSquaredLanes = VectorMax(radiusSquaredLanes, Vector3LengthSq(delta));
     }
-    result.radius = Sqrt(radiusSquared);
+    result.radius = VectorGetX(Vector3Length(radiusSquaredLanes));
 
     SIMDVectorSingle areaWeightedNormal = VectorZero();
     u32 validFaceNormalCount = 0u;

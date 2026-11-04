@@ -94,13 +94,6 @@ const u32 s_SceneVersion = 1u;
 
 
 [serialize]
-class ProjectHeaderBinary{
-    public u32 magic = s_ProjectMagic;
-    public u32 version = s_ProjectVersion;
-    public NameHash startSceneHash;
-}
-
-[serialize]
 class ComponentHeaderBinary{
     public u32 magic = s_ComponentMagic;
     public u32 version = s_ComponentVersion;
@@ -133,28 +126,6 @@ class LightComponentPayloadBinary{
     public u16 reserved = 0u;
 }
 
-[serialize]
-class EntityHeaderBinary{
-    public u32 magic = s_EntityMagic;
-    public u32 version = s_EntityVersion;
-    public u64 componentCount = 0u;
-}
-
-[serialize]
-class SceneHeaderBinary{
-    public u32 magic = s_SceneMagic;
-    public u32 version = s_SceneVersion;
-    public u64 subsystemCount = 0u;
-    public u64 entityCount = 0u;
-    public u64 assetCount = 0u;
-}
-
-[serialize]
-class SceneAssetEntryBinary{
-    public NameHash nicknameHash;
-    public NameHash assetHash;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -178,30 +149,10 @@ class LightComponentAsset{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ProjectHeaderBinary MakeProjectHeaderBinary(in NameHash startSceneHash){
-    ProjectHeaderBinary header;
-    header.startSceneHash = startSceneHash;
-    return header;
-}
-
 ComponentHeaderBinary MakeComponentHeaderBinary(in NameHash componentTypeHash, in u64 payloadByteCount){
     ComponentHeaderBinary header;
     header.componentTypeHash = componentTypeHash;
     header.payloadByteCount = payloadByteCount;
-    return header;
-}
-
-EntityHeaderBinary MakeEntityHeaderBinary(in u64 componentCount){
-    EntityHeaderBinary header;
-    header.componentCount = componentCount;
-    return header;
-}
-
-SceneHeaderBinary MakeSceneHeaderBinary(in u64 subsystemCount, in u64 entityCount, in u64 assetCount){
-    SceneHeaderBinary header;
-    header.subsystemCount = subsystemCount;
-    header.entityCount = entityCount;
-    header.assetCount = assetCount;
     return header;
 }
 
@@ -334,22 +285,6 @@ b8 IsAllowedLightComponentField(in StringView fieldName){
     ;
 }
 
-b8 IsAllowedEntityAssetField(in StringView fieldName){
-    return fieldName == s_EntityComponentsField;
-}
-
-b8 IsAllowedProjectAssetField(in StringView fieldName){
-    return fieldName == s_SceneStartSceneField;
-}
-
-b8 IsAllowedSceneAssetField(in StringView fieldName){
-    return
-        fieldName == s_SceneSubsystemsField
-        || fieldName == s_SceneEntitiesField
-        || fieldName == s_SceneAssetsField
-    ;
-}
-
 Expected<VectorSingle> TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w){
     const VectorSingle rawQuaternion(x, y, z, w);
     const f32 lenSq = lengthSq(rawQuaternion);
@@ -431,89 +366,6 @@ b8 ValidateLightComponentAssetPayload(in LightComponent component, in Name virtu
         , virtualPath.resolvedText()
     );
     return false;
-}
-
-b8 ValidateEntityHeaderBinary(in EntityHeaderBinary header){
-    if(header.version == s_EntityVersion)
-        return true;
-
-    error("EntityAsset::loadBinary failed: unsupported version {}", header.version);
-    return false;
-}
-
-b8 ValidateProjectHeaderBinary(in ProjectHeaderBinary header){
-    if(header.version == s_ProjectVersion)
-        return true;
-
-    error("ProjectAsset::loadBinary failed: unsupported version {}", header.version);
-    return false;
-}
-
-b8 ValidateSceneHeaderBinary(in SceneHeaderBinary header){
-    if(header.version == s_SceneVersion)
-        return true;
-
-    error("SceneAsset::loadBinary failed: unsupported version {}", header.version);
-    return false;
-}
-
-b8 ValidateSceneAssetMapEntry(in Name nickname, in b8 hasValidRef){
-    if(nickname == s_NameNone){
-        error("SceneAsset::validatePayload failed: asset entry has an empty nickname");
-        return false;
-    }
-    if(!hasValidRef){
-        error("SceneAsset::validatePayload failed: asset nickname '{}' has an empty asset reference", nickname.resolvedText());
-        return false;
-    }
-    return true;
-}
-
-b8 ValidateSceneAssetBinaryEntry(in Name nickname, in b8 hasValidRef, in usize index){
-    if(nickname != s_NameNone && hasValidRef)
-        return true;
-
-    error("SceneAsset::loadBinary failed: invalid asset entry at index {}", index);
-    return false;
-}
-
-void AssignAssetRefsFromHashes<TAsset>(in Span<NameHash> hashes, mut Vector<AssetRef<TAsset>> outRefs){
-    outRefs.clear();
-    outRefs.reserve(hashes.size());
-    for(in NameHash hash : hashes){
-        AssetRef<TAsset> ref;
-        ref.virtualPath = Name(hash);
-        outRefs.push_back(ref);
-    }
-}
-
-b8 ValidateProjectAssetPayload(in b8 hasStartScene){
-    if(hasStartScene)
-        return true;
-
-    error("ProjectAsset::validatePayload failed: start_scene must not be empty");
-    return false;
-}
-
-b8 ValidateEntityAssetComponentCount(in usize componentCount){
-    if(componentCount != 0u)
-        return true;
-
-    error("EntityAsset::validatePayload failed: entity must declare at least one component");
-    return false;
-}
-
-b8 ValidateSceneAssetSubsystemCount(in usize subsystemCount){
-    if(subsystemCount != 0u)
-        return true;
-
-    error("SceneAsset::validatePayload failed: scene must declare at least one subsystem");
-    return false;
-}
-
-b8 IsValidSceneAssetNicknameText(in StringView nicknameView){
-    const StringView trimmed = trimView(nicknameView);
-    return !trimmed.empty() && nicknameView == trimmed;
 }
 
 

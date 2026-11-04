@@ -2,7 +2,7 @@ nwb_declare_static_library(nwb_assets_shader_types)
 nwb_target_adhd_sources(nwb_assets_shader_types
     NAMESPACE NWB::Impl::ShaderBinaryPayload
     SOURCES
-        "${CMAKE_CURRENT_LIST_DIR}/types.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
 target_link_libraries(nwb_assets_shader_types PUBLIC nwb_assets)
 

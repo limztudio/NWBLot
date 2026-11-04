@@ -9,7 +9,7 @@
 
 
 #include "cook_components.h"
-#include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_graphics/cook_types.adhd.h>
 
 #include <impl/assets_subsystem/cook.h>
 

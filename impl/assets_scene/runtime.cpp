@@ -174,19 +174,8 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
 
     AssignAssetRefsFromHashes(Span<const NameHash>(entityHashes), candidate.m_entities);
 
-    candidate.m_assets.reserve(assetEntries.size());
-    for(usize i = 0u; i < assetEntries.size(); ++i){
-        const SceneAssetEntryBinary& entry = assetEntries[i];
-        const Name nickname(entry.nicknameHash);
-        AssetRef ref;
-        ref.virtualPath = Name(entry.assetHash);
-        if(!ValidateSceneAssetBinaryEntry(nickname, ref.valid(), i))
-            return false;
-        if(!candidate.m_assets.emplace(nickname, ref).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("SceneAsset::loadBinary failed: duplicate asset nickname at index {}"), i);
-            return false;
-        }
-    }
+    if(!UnpackSceneAssetEntriesBinary(Span<const SceneAssetEntryBinary>(assetEntries), candidate.m_assets))
+        return false;
 
     if(!candidate.validatePayload(scratchArena))
         return false;

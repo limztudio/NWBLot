@@ -275,8 +275,7 @@ Core::ECS::Entity ModelSystem::createSpawnedObjectEntity(const Core::ECS::Entity
     const SIMDMatrix localMatrix = LoadFloat(localTransform);
     entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localMatrix, kind);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, owner), localMatrix)))
-        Scene::AssignDecomposedTransformComponent(decomposition->translation, decomposition->rotation, decomposition->scale, transform);
+    (void)Scene::TryDecomposeAndAssignTransformComponent(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, owner), localMatrix), transform);
     return entity;
 }
 

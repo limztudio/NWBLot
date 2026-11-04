@@ -439,5 +439,21 @@ f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region, in f
     return max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent);
 }
 
+void RebuildUiSkinRegionIndex(in Span<UiSkinRegion> regions, mut Vector<u32> outIndex){
+    outIndex.clear();
+    if(regions.size() <= cast<usize>(s_UiSkinMaxRegionCount)){
+        outIndex.reserve(regions.size());
+        for(u32 position = 0u; position < cast<u32>(regions.size()); ++position)
+            outIndex.push_back(position);
+        native(in regions, mut outIndex){
+            ::Sort(outIndex.begin(), outIndex.end(), [&regions](const u32 left, const u32 right)noexcept{
+                const Name& a = regions[left].name;
+                const Name& b = regions[right].name;
+                return a == b ? left < right : a < b;
+            });
+        }
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

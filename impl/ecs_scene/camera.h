@@ -58,15 +58,7 @@ public:
 
 [[nodiscard]] inline SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
     const auto tryBuildSceneCameraView = [fallbackAspectRatio](const Core::ECS::EntityID entity, TransformComponent& transform, CameraComponent& camera)noexcept -> Expected<SceneCameraView>{
-        if(!IsValidCameraTransformVectors(LoadFloat(transform.position), LoadFloat(transform.rotation), LoadFloat(transform.scale)))
-            return MakeUnexpected(Failure{});
-        const auto projection = TryBuildCameraProjection(
-            camera.projection.x,
-            camera.projection.y,
-            camera.projection.z,
-            camera.projection.w,
-            fallbackAspectRatio
-        );
+        const auto projection = TryResolveCameraComponentProjection(transform, camera, fallbackAspectRatio);
         if(!projection)
             return MakeUnexpected(Failure{});
         return SceneCameraView{ entity, &transform, &camera, *projection };

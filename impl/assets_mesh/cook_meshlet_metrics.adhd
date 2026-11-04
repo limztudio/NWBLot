@@ -1,0 +1,309 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook_meshlet_scoring.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f64 s_MeshletPercentScale = 100.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshletCookMetrics{
+    public u64 primitiveCountSum = 0u;
+    public u64 vertexCountSum = 0u;
+    public u64 positionCountSum = 0u;
+    public u64 attributeCountSum = 0u;
+    public f64 radiusSum = 0.0;
+    public f64 coneCutoffSum = 0.0;
+    public u32 meshletCount = 0u;
+    public u32 minPrimitiveCount = 0xffffffffu;
+    public u32 maxPrimitiveCount = 0u;
+    public u32 minVertexCount = 0xffffffffu;
+    public u32 maxVertexCount = 0u;
+    public f32 worstConeCutoff = 1.0f;
+    public u32 coneDisabledCount = 0u;
+    public u32 coneEnabledCount = 0u;
+}
+
+class MeshletCookSummary{
+    public f64 primitiveCountAverage = 0.0;
+    public f64 vertexCountAverage = 0.0;
+    public f64 positionCountAverage = 0.0;
+    public f64 attributeCountAverage = 0.0;
+    public f64 radiusAverage = 0.0;
+    public f64 coneDisabledPercentage = 0.0;
+    public f64 coneCutoffAverage = 0.0;
+    public f32 worstConeCutoff = 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshlets, in Span<MeshletBounds> meshletBounds){
+    MeshletCookMetrics metrics;
+    metrics.meshletCount = cast<u32>(meshlets.size());
+    VectorDouble radiusAndCutoffSums(0.0, 0.0, 0.0, 0.0);
+    VectorSingle worstConeCutoff(metrics.worstConeCutoff);
+    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
+        const MeshletDesc meshlet = meshlets[meshletIndex];
+        const MeshletBounds bounds = meshletBounds[meshletIndex];
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+        const u32 vertexCount = MeshletVertexCount(meshlet);
+        metrics.minPrimitiveCount = min(metrics.minPrimitiveCount, primitiveCount);
+        metrics.maxPrimitiveCount = max(metrics.maxPrimitiveCount, primitiveCount);
+        metrics.minVertexCount = min(metrics.minVertexCount, vertexCount);
+        metrics.maxVertexCount = max(metrics.maxVertexCount, vertexCount);
+        metrics.primitiveCountSum += cast<u64>(primitiveCount);
+        metrics.vertexCountSum += cast<u64>(vertexCount);
+        metrics.positionCountSum += cast<u64>(MeshletPositionCount(meshlet));
+        metrics.attributeCountSum += cast<u64>(MeshletAttributeCount(meshlet));
+        if(!MeshletConeEnabled(bounds)){
+            radiusAndCutoffSums = radiusAndCutoffSums + VectorDouble(cast<f64>(bounds.sphere.w), 0.0, 0.0, 0.0);
+            ++metrics.coneDisabledCount;
+            continue;
+        }
+
+        const VectorSingle coneCutoff = VectorSingle(cast<f32>(MeshletConePackedCutoff(bounds))) * (1.0f / s_MeshletUnorm8Max);
+        ++metrics.coneEnabledCount;
+        radiusAndCutoffSums = radiusAndCutoffSums + VectorDouble(cast<f64>(bounds.sphere.w), cast<f64>(coneCutoff.x), 0.0, 0.0);
+        worstConeCutoff = min(worstConeCutoff, coneCutoff);
+    }
+    metrics.worstConeCutoff = worstConeCutoff.x;
+    metrics.radiusSum = radiusAndCutoffSums.x;
+    metrics.coneCutoffSum = radiusAndCutoffSums.y;
+
+    if(metrics.meshletCount == 0u){
+        metrics.minPrimitiveCount = 0u;
+        metrics.minVertexCount = 0u;
+    }
+
+    return metrics;
+}
+
+MeshletCookSummary SummarizeMeshletCookMetrics(in MeshletCookMetrics metrics){
+    MeshletCookSummary summary;
+    if(metrics.meshletCount == 0u)
+        return summary;
+
+    const f64 invMeshletCount = 1.0 / cast<f64>(metrics.meshletCount);
+    summary.primitiveCountAverage = cast<f64>(metrics.primitiveCountSum) * invMeshletCount;
+    summary.vertexCountAverage = cast<f64>(metrics.vertexCountSum) * invMeshletCount;
+    summary.positionCountAverage = cast<f64>(metrics.positionCountSum) * invMeshletCount;
+    summary.attributeCountAverage = cast<f64>(metrics.attributeCountSum) * invMeshletCount;
+    summary.radiusAverage = metrics.radiusSum * invMeshletCount;
+    summary.coneDisabledPercentage = cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
+    if(metrics.coneEnabledCount != 0u){
+        summary.coneCutoffAverage = metrics.coneCutoffSum / cast<f64>(metrics.coneEnabledCount);
+        summary.worstConeCutoff = metrics.worstConeCutoff;
+    }
+    return summary;
+}
+
+usize EstimateMeshletSourceBytes(
+    in usize indexCount,
+    in usize positionCount,
+    in usize normalCount,
+    in usize tangentCount,
+    in usize uv0Count,
+    in usize colorCount,
+    in usize vertexRefCount
+){
+    return
+        indexCount * 4u
+        + positionCount * 12u
+        + normalCount * 8u
+        + tangentCount * 8u
+        + uv0Count * 8u
+        + colorCount * 8u
+        + vertexRefCount * 20u
+    ;
+}
+
+usize EstimateMeshletRuntimeBytes(
+    in usize positionCount,
+    in usize normalCount,
+    in usize tangentCount,
+    in usize uv0Count,
+    in usize colorCount,
+    in usize meshletCount,
+    in usize meshletBoundsCount,
+    in usize positionRefCount,
+    in usize attributeRefCount,
+    in usize localVertexRefCount,
+    in usize primitiveIndexCount
+){
+    return
+        positionCount * 12u
+        + normalCount * 8u
+        + tangentCount * 8u
+        + uv0Count * 8u
+        + colorCount * 8u
+        + meshletCount * 32u
+        + meshletBoundsCount * 20u
+        + positionRefCount * 8u
+        + attributeRefCount * 16u
+        + localVertexRefCount * 4u
+        + primitiveIndexCount
+    ;
+}
+
+void LogMeshletCookMetrics(
+    in StringView metaKind,
+    in StringView filePathText,
+    in Span<u32> indices,
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<MeshVertexRef> vertexRefs,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
+    in Span<MeshletAttributeStreamRef> meshletAttributeStreamRefs,
+    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+    in Span<u8> meshletPrimitiveIndices
+){
+    const MeshletCookMetrics metrics = BuildMeshletCookMetricsFromStreams(meshlets, meshletBounds);
+    if(metrics.meshletCount == 0u)
+        return;
+
+    const MeshletCookSummary summary = SummarizeMeshletCookMetrics(metrics);
+    const usize sourceBytes = EstimateMeshletSourceBytes(
+        indices.size(),
+        positions.size(),
+        normals.size(),
+        tangents.size(),
+        uv0.size(),
+        colors.size(),
+        vertexRefs.size()
+    );
+    const usize runtimeBytes = EstimateMeshletRuntimeBytes(
+        positions.size(),
+        normals.size(),
+        tangents.size(),
+        uv0.size(),
+        colors.size(),
+        meshlets.size(),
+        meshletBounds.size(),
+        meshletPositionStreamRefs.size(),
+        meshletAttributeStreamRefs.size(),
+        meshletLocalVertexRefs.size(),
+        meshletPrimitiveIndices.size()
+    );
+
+    [essential] info(
+        "{} meta '{}': meshlet cook metrics - meshlets {}, primitives avg {:.2f} min {} max {}, local vertices avg {:.2f} min {} max {}, deformed positions avg {:.2f}, attributes avg {:.2f}, sphere radius avg {:.4f}, cones disabled {:.2f}% ({}/{}), cone cutoff avg {:.4f} worst {:.4f}, bytes source {} runtime {}"
+        , metaKind
+        , filePathText
+        , metrics.meshletCount
+        , summary.primitiveCountAverage
+        , metrics.minPrimitiveCount
+        , metrics.maxPrimitiveCount
+        , summary.vertexCountAverage
+        , metrics.minVertexCount
+        , metrics.maxVertexCount
+        , summary.positionCountAverage
+        , summary.attributeCountAverage
+        , summary.radiusAverage
+        , summary.coneDisabledPercentage
+        , metrics.coneDisabledCount
+        , metrics.meshletCount
+        , summary.coneCutoffAverage
+        , summary.worstConeCutoff
+        , sourceBytes
+        , runtimeBytes
+    );
+}
+
+void ResetMeshletBuilderState(
+    in usize primitiveOffset,
+    mut MeshletDesc outCurrent,
+    mut Vector<u32> outLocalSourceVertexRefs,
+    mut Vector<u32> outLocalTriangleIndices,
+    mut MeshletScoreState outScoreState
+){
+    outCurrent = MeshletDesc();
+    outCurrent.primitiveOffset = cast<u32>(primitiveOffset);
+    outLocalSourceVertexRefs.clear();
+    outLocalTriangleIndices.clear();
+    ResetMeshletScoreState(outScoreState);
+}
+
+b8 AddMeshletTriangleToBuilder(
+    in StringView metaKind,
+    in StringView filePathText,
+    in MeshletTriangleData triangle,
+    mut Vector<u32> localSourceVertexRefs,
+    mut MeshletDesc meshlet,
+    mut Vector<u8> primitiveIndices
+){
+    for(in u32 vertexRefIndex : triangle.vertexRefs){
+        u8 localVertex = 0u;
+        const Expected<u8> foundVertex = TryFindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex);
+        if(foundVertex.has_value())
+            localVertex = foundVertex.value();
+        else{
+            if(localSourceVertexRefs.size() >= cast<usize>(s_MeshMaxMeshletVertices)){
+                error("{} meta '{}': triangle cannot fit within one meshlet", metaKind, filePathText);
+                return false;
+            }
+            localVertex = cast<u8>(localSourceVertexRefs.size());
+            localSourceVertexRefs.push_back(vertexRefIndex);
+        }
+        primitiveIndices.push_back(localVertex);
+    }
+    meshlet.counts = PackMeshletCounts(0u, MeshletPrimitiveCount(meshlet) + 1u, 0u, 0u);
+    return true;
+}
+
+b8 AddVisitedMeshletTriangle(
+    in StringView metaKind,
+    in StringView filePathText,
+    in u32 triangleIndex,
+    in Span<MeshletTriangleData> triangles,
+    in Span<MeshletTriangleCalculation> triangleCalculations,
+    in Span<u32> positionTriangleOffsets,
+    in Span<u32> positionTriangleIndices,
+    mut Vector<u8> visitedTriangles,
+    mut Vector<u32> localSourceVertexRefs,
+    mut Vector<u32> localTriangleIndices,
+    mut MeshletDesc meshlet,
+    mut Vector<u8> primitiveIndices,
+    mut MeshletScoreState scoreState,
+    mut Vector<u32> frontier,
+    mut Vector<u8> frontierFlags
+){
+    const MeshletTriangleData triangle = triangles[cast<usize>(triangleIndex)];
+    if(!AddMeshletTriangleToBuilder(metaKind, filePathText, triangle, localSourceVertexRefs, meshlet, primitiveIndices))
+        return false;
+
+    localTriangleIndices.push_back(triangleIndex);
+    AddMeshletTriangleToScoreStateFromCalculations(
+        triangleCalculations,
+        localTriangleIndices,
+        triangleIndex,
+        scoreState
+    );
+    visitedTriangles[cast<usize>(triangleIndex)] = 1u;
+    AddMeshletTriangleNeighborsToFrontier(
+        triangles,
+        positionTriangleOffsets,
+        positionTriangleIndices,
+        visitedTriangles,
+        triangleIndex,
+        frontier,
+        frontierFlags
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

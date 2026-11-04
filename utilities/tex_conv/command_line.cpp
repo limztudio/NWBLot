@@ -130,22 +130,10 @@ i32 Run(const i32 argc, char** argv){
 
             if(alphaOption.count() > s_AlphaOptionPresentCount){
                 const AStringView alphaText(alphaArgument);
-                if(EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword)){
-                    alphaSource.mode = AlphaSourceMode::Constant;
-                    alphaSource.constant = s_AlphaWhiteConstant;
-                }
-                else if(EqualsAsciiIgnoreCase(alphaText, s_AlphaBlackKeyword)){
-                    alphaSource.mode = AlphaSourceMode::Constant;
-                    alphaSource.constant = s_AlphaBlackConstant;
-                }
-                else if(alphaText.empty()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --alpha expects an image path, white, or black."));
+                if(!TryParseTexConvAlphaOption(alphaText, alphaSource.mode, alphaSource.constant))
                     return s_TexConvExitFailure;
-                }
-                else{
-                    alphaSource.mode = AlphaSourceMode::Image;
+                if(alphaSource.mode == AlphaSourceMode::Image)
                     alphaSource.path = alphaText;
-                }
             }
 
             for(const ScratchPath& inputPath : inputPaths){

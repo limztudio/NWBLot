@@ -97,21 +97,14 @@ static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep stor
 
         [[maybe_unused]] auto&& [entity, transform, light] = *it;
 
-        SIMDVectorSingle position{};
-        SIMDVectorSingle direction{};
-        if(TryBuildSceneLightVectors(transform, light, position, direction)){
-            outLights[count] = MakeSceneLight(light, position, direction);
+        if(const Expected<SceneLight> resolvedLight = TryBuildSceneLight(transform, light)){
+            outLights[count] = *resolvedLight;
             ++count;
         }
     }
 
     if(count == 0u){
-        const SIMDVectorSingle direction = NormalizeSceneVector3Or(
-            VectorNegate(VectorAndInt(defaultForward, s_SIMDMask3)),
-            VectorSet(0.0f, 0.0f, -1.0f, 0.0f),
-            s_NormalizeLengthSquaredEpsilon
-        );
-        outLights[0] = MakeDefaultSceneLight(direction);
+        outLights[0] = MakeDefaultSceneLightFromForward(defaultForward);
         count = 1u;
     }
 

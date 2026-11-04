@@ -189,6 +189,124 @@ Expected<usize> TryComputeTexConvPayloadByteCount(in u64 primaryByteCount, in b8
     return cast<usize>(primaryByteCount) * multiplier;
 }
 
+VectorSingle SrgbToLinearRgb(in VectorSingle rgb){
+    VectorSingle result(0.0f, 0.0f, 0.0f, 0.0f);
+    native(in rgb, mut result){
+        const ::SIMDVectorSingle linearPart = ::VectorScale(rgb, 1.0f / s_SrgbLinearSegmentScale);
+        const ::SIMDVectorSingle nonlinearPart = ::VectorPow(::VectorScale(::VectorAdd(rgb, ::VectorReplicate(s_SrgbOffset)), 1.0f / s_SrgbOffsetScale), ::VectorReplicate(s_SrgbDecodeExponent));
+        result = ::VectorSelect(nonlinearPart, linearPart, ::VectorLessOrEqual(rgb, ::VectorReplicate(s_SrgbLinearThreshold)));
+    }
+    return result;
+}
+
+Expected<VectorSingle> TryPrepareTexConvLinearPixel(
+    in VectorSingle rgb,
+    in f32 sourceAlpha,
+    in AlphaSourceMode alphaMode,
+    in f32 constantAlpha,
+    in f32 maskAlpha,
+    in f32 maxRgb,
+    in b8 srgb
+){
+    if(!ValidateTexConvRgbPixel(rgb, maxRgb))
+        return makeUnexpected(Failure());
+    const Expected<f32> alpha = TryResolveTexConvPixelAlpha(alphaMode, sourceAlpha, constantAlpha, maskAlpha);
+    if(!alpha.has_value())
+        return makeUnexpected(Failure());
+    VectorSingle linearRgb = rgb;
+    if(srgb)
+        linearRgb = SrgbToLinearRgb(rgb);
+    return VectorSingle(linearRgb, alpha.value());
+}
+
+VectorSingle AccumulateVolumeMipZSlabTexel(
+    in VolumeMipZSlabRange range,
+    in u32 sourceZ,
+    in u32 targetDepth,
+    in VectorSingle color,
+    in VectorSingle currentSum
+){
+    const f32 overlap = ComputeVolumeMipZSlabOverlap(range, sourceZ, targetDepth);
+    return currentSum + color * overlap;
+}
+
+Array<u8, 4u> QuantizeTexConvUnormBytes(
+    in VectorSingle color,
+    in b8 alphaOnly,
+    in u8 opaqueAlphaUnorm8
+){
+    const VectorSingle quantized = QuantizeUnorm(color);
+    Array<u8, 4u> outBytes;
+    if(alphaOnly){
+        const u8 alpha = cast<u8>(quantized.w);
+        outBytes[0u] = alpha;
+        outBytes[1u] = alpha;
+        outBytes[2u] = alpha;
+        outBytes[3u] = opaqueAlphaUnorm8;
+        return outBytes;
+    }
+    outBytes[0u] = cast<u8>(quantized.x);
+    outBytes[1u] = cast<u8>(quantized.y);
+    outBytes[2u] = cast<u8>(quantized.z);
+    outBytes[3u] = cast<u8>(quantized.w);
+    return outBytes;
+}
+
+b8 IsValidTexConvEncodedSliceDesc(
+    in u32 sourceFileIndex,
+    in u32 mipIndex,
+    in u32 origWidth,
+    in u32 origHeight,
+    in u32 numBlocksX,
+    in u32 numBlocksY,
+    in usize sliceByteCount,
+    in u32 expectedSliceCount,
+    in u32 expectedWidth,
+    in u32 expectedHeight,
+    in u32 expectedBlockCountX,
+    in u32 expectedBlockCountY,
+    in u64 expectedPlaneByteCount,
+    in usize currentSliceEntry
+){
+    return sourceFileIndex < expectedSliceCount
+        && mipIndex == 0u
+        && origWidth == expectedWidth
+        && origHeight == expectedHeight
+        && numBlocksX == expectedBlockCountX
+        && numBlocksY == expectedBlockCountY
+        && currentSliceEntry == s_InvalidSlice
+        && cast<u64>(sliceByteCount) == expectedPlaneByteCount;
+}
+
+b8 TryParseTexConvAlphaOption(
+    in StringView alphaText,
+    mut AlphaSourceMode outMode,
+    mut f32 outConstant
+){
+    if(alphaText.empty()){
+        error("tex_conv: --alpha expects an image path, white, or black.");
+        return false;
+    }
+    b8 isWhite = false;
+    b8 isBlack = false;
+    native(in alphaText, mut isWhite, mut isBlack){
+        isWhite = ::EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword);
+        isBlack = ::EqualsAsciiIgnoreCase(alphaText, s_AlphaBlackKeyword);
+    }
+    if(isWhite){
+        outMode = AlphaSourceMode::Constant;
+        outConstant = s_AlphaWhiteConstant;
+        return true;
+    }
+    if(isBlack){
+        outMode = AlphaSourceMode::Constant;
+        outConstant = s_AlphaBlackConstant;
+        return true;
+    }
+    outMode = AlphaSourceMode::Image;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

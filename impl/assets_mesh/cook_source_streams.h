@@ -88,32 +88,6 @@ b8 ParseSourceSkinInfluencesInto(
     SkinInfluenceVectorT& outInfluences
 );
 #if defined(NWB_COOK)
-inline void CopySourceStreams(const SourceMeshStreams& streams, MeshCookEntry& outEntry){
-    outEntry.positions.clear();
-    outEntry.normals.clear();
-    outEntry.tangents.clear();
-    outEntry.uv0.clear();
-    outEntry.colors.clear();
-    outEntry.vertexRefs.clear();
-
-    outEntry.positions.reserve(streams.positions.size());
-    outEntry.normals.reserve(streams.normals.size());
-    outEntry.tangents.reserve(streams.tangents.size());
-    outEntry.uv0.reserve(streams.uv0.size());
-    outEntry.colors.reserve(streams.colors.size());
-    outEntry.vertexRefs.reserve(streams.vertexRefs.size());
-
-    outEntry.positions.insert(outEntry.positions.end(), streams.positions.begin(), streams.positions.end());
-    for(const Float3U& normal : streams.normals)
-        outEntry.normals.push_back(MakeHalf4U(normal.x, normal.y, normal.z, 0.0f));
-    for(const Float4U& tangent : streams.tangents)
-        outEntry.tangents.push_back(MakeHalf4U(tangent.x, tangent.y, tangent.z, tangent.w));
-    outEntry.uv0.insert(outEntry.uv0.end(), streams.uv0.begin(), streams.uv0.end());
-    for(const Float4U& color : streams.colors)
-        outEntry.colors.push_back(MakeHalf4U(color.x, color.y, color.z, color.w));
-    outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end());
-}
-
 inline Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,

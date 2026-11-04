@@ -62,8 +62,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObject
             if(object.kind == ModelObjectKind::StaticMesh)
                 return;
 
-            if(const auto decomposition = MatrixDecompose(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, object.owner), LoadFloat(object.localTransform))))
-                Scene::AssignDecomposedTransformComponent(decomposition->translation, decomposition->rotation, decomposition->scale, transform);
+            (void)Scene::TryDecomposeAndAssignTransformComponent(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, object.owner), LoadFloat(object.localTransform)), transform);
         }
     );
 }
@@ -97,10 +96,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             __hidden_model_system_transforms::ResolveAttachmentJointQueries({}, m_world, m_scratchJoints, queries);
         else{
             Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
-            BuildModelAttachmentIdentityOrder(queryCount, parentOrder);
-            Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
-                return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
-            });
+            BuildSortedModelAttachmentParentOrder(queries, parentOrder);
             __hidden_model_system_transforms::ResolveAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), m_world, m_scratchJoints, queries);
         }
     }
@@ -136,8 +132,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             worldTransform = MatrixMultiply(MatrixMultiply(parentMatrix, jointMatrix), localMatrix);
         }
 
-        if(const auto decomposition = MatrixDecompose(worldTransform))
-            Scene::AssignDecomposedTransformComponent(decomposition->translation, decomposition->rotation, decomposition->scale, transform);
+        (void)Scene::TryDecomposeAndAssignTransformComponent(worldTransform, transform);
     });
 }
 

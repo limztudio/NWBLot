@@ -41,28 +41,25 @@ namespace __hidden_encode{
     return image;
 }
 
-[[nodiscard]] static SIMDVectorSingle SrgbToLinearRgb(const SIMDVectorSingle rgb)noexcept{
-    const SIMDVectorSingle linearPart = VectorScale(rgb, 1.0f / s_SrgbLinearSegmentScale);
-    const SIMDVectorSingle nonlinearPart = VectorPow(VectorScale(VectorAdd(rgb, VectorReplicate(s_SrgbOffset)), 1.0f / s_SrgbOffsetScale), VectorReplicate(s_SrgbDecodeExponent));
-    return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(rgb, VectorReplicate(s_SrgbLinearThreshold)));
-}
-
 [[nodiscard]] static b8 PrepareLinearPlane(const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const b8 hdr, const b8 srgb, basisu::imagef& inOutPlane){
     const f32 maxRgb = ResolveMaxTexConvRgb(hdr);
     for(u32 y = 0u; y < inOutPlane.get_height(); ++y){
         for(u32 x = 0u; x < inOutPlane.get_width(); ++x){
             basisu::vec4F& pixel = inOutPlane(x, y);
-            const SIMDVectorSingle rgb = VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f);
-            if(!ValidateTexConvRgbPixel(rgb, maxRgb))
-                return false;
-
             const f32 maskAlpha = alphaSource.mode == AlphaSourceMode::Image ? alphaMask(x, y)[0u] : 0.0f;
-            const auto alpha = TryResolveTexConvPixelAlpha(alphaSource.mode, pixel[3u], alphaSource.constant, maskAlpha);
-            if(!alpha)
+            const Expected<SIMDVectorSingleResult> prepared = TryPrepareTexConvLinearPixel(
+                VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f),
+                pixel[3u],
+                alphaSource.mode,
+                alphaSource.constant,
+                maskAlpha,
+                maxRgb,
+                srgb
+            );
+            if(!prepared)
                 return false;
-
-            const SIMDVectorSingle linearRgb = srgb ? SrgbToLinearRgb(rgb) : rgb;
-            pixel.set(VectorGetX(linearRgb), VectorGetY(linearRgb), VectorGetZ(linearRgb), *alpha);
+            const SIMDVectorSingle linear = prepared->value;
+            pixel.set(VectorGetX(linear), VectorGetY(linear), VectorGetZ(linear), VectorGetW(linear));
         }
     }
     return true;

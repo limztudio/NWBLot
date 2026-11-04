@@ -10,7 +10,7 @@
 
 #include "cook_components.h"
 
-#include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_graphics/cook_types.adhd.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_model/asset.h>

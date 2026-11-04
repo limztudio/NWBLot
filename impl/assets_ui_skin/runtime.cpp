@@ -146,19 +146,7 @@ const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{
 }
 
 void UiSkin::rebuildRegionIndex(){
-    Core::Assets::AssetVector<u32> index(m_regions.get_allocator().arena());
-    if(m_regions.size() <= s_UiSkinMaxRegionCount){
-        index.reserve(m_regions.size());
-        for(u32 position = 0u; position < m_regions.size(); ++position)
-            index.push_back(position);
-        const Span<const UiSkinRegion> regions = m_regions;
-        Sort(index.begin(), index.end(), [&regions](const u32 left, const u32 right)noexcept{
-            const Name& a = regions[left].name;
-            const Name& b = regions[right].name;
-            return a == b ? left < right : a < b;
-        });
-    }
-    m_regionIndex = Move(index);
+    RebuildUiSkinRegionIndex(m_regions, m_regionIndex);
 }
 
 b8 ValidateUiSkinToolkitContract(const UiSkin& skin){

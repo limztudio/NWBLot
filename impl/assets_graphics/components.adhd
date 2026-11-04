@@ -11,50 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_CsgClipImplicitDefineName = "NWB_CSG_ENABLED";
-const StringView s_CsgIntervalSampleEnabledImplicitDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
-const StringView s_EnabledImplicitDefineValue = "1";
-const StringView s_IntervalSampleEnabledImplicitDefineValue = "1";
-const usize s_CsgClipAddedDefineCount = 2u;
-const StringView s_DependencyRepoRootAlias = "repo";
-const StringView s_DependencyGeneratedCacheRootAlias = "generated_cache";
-const usize s_MaxPreparedEntriesPerShaderEntry = 2u;
-const StringView s_ShaderVariantBytecodeExtension = ".spv";
-const u32 s_ShaderVariantCookKeyVersion = 2u;
-const Name s_GraphicsVolumeMetadataExtensionName = "assets_graphics/volume_metadata";
-const Name s_IncludeAssetTypeName = "include";
-const StringView s_MaterialBxdfSourceLabel = "bxdf";
-const StringView s_MaterialSurfaceSourceLabel = "surface";
-const StringView s_EngineGraphicsIncludeRoot = "engine/graphics";
-const StringView s_GraphicsComponentAssetField = "asset";
-const StringView s_RendererComponentMaterialField = "material";
-const StringView s_RendererComponentVisibleField = "visible";
-const StringView s_RendererComponentOpticalVolumeCoincidenceField = "optical_volume_coincidence";
-const StringView s_RendererComponentOpticalVolumeGroupField = "optical_volume_group";
-const StringView s_RendererComponentOpticalVolumePriorityField = "optical_volume_priority";
-const StringView s_RendererComponentOpticalBoundaryModeField = "optical_boundary_mode";
-const StringView s_RendererComponentOpticalMediumPriorityField = "optical_medium_priority";
-const StringView s_ModelComponentDiagnosticPrefix = "Model component meta";
-const StringView s_MeshComponentDiagnosticPrefix = "Mesh component meta";
-const StringView s_RendererComponentDiagnosticPrefix = "Renderer component meta";
-const StringView s_OpticalVolumeCoincidenceIndependentText = "independent";
-const StringView s_OpticalVolumeCoincidenceIdenticalMaterialText = "identical_material";
-const StringView s_OpticalVolumeCoincidenceSharedGroupText = "shared_group";
-const StringView s_OpticalBoundaryModeUnspecifiedText = "unspecified";
-const StringView s_OpticalBoundaryModeClosedNestedText = "closed_nested";
-const StringView s_OpticalBoundaryModeClosedPriorityText = "closed_priority";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[reflect]
-enum<u8> ShaderVariantCacheReadStatus{
-    Hit = 0u,
-    Miss = 1u,
-    Error = 2u
-}
-
 [component_asset("model_component")]
 class ModelComponentAsset{
     public ModelComponent component;
@@ -86,30 +42,6 @@ class RendererComponentPayloadBinary{
     public u8 opticalBoundaryMode = 0u;
     public u8 reserved0 = 0u;
     public u32 reserved1 = 0u;
-}
-
-class ShaderStageKey{
-    public Name shaderName;
-    public Name stageName;
-
-    public ShaderStageKey(){
-        this.shaderName = s_NameNone;
-        this.stageName = s_NameNone;
-    }
-
-    public ShaderStageKey(in Name inShaderName, in Name inStageName){
-        this.shaderName = inShaderName;
-        this.stageName = inStageName;
-    }
-
-    public b8 operator==(in ShaderStageKey rhs)const{
-        return this.shaderName == rhs.shaderName && this.stageName == rhs.stageName;
-    }
-
-    public usize hash()const{
-        usize seed = hashValue(this.shaderName);
-        return hashCombineValue(seed, this.stageName);
-    }
 }
 
 [subsystem("bvh_subsystem")]
@@ -296,63 +228,6 @@ b8 ValidateRendererComponentAssetPayload(in RendererComponent component, in Name
     return true;
 }
 
-b8 TryAddCsgClipVariantCount(in StringView entryName, in u64 sourceVariantCount, mut u64 inOutVariantCount){
-    if(sourceVariantCount <= u64.max - inOutVariantCount){
-        inOutVariantCount += sourceVariantCount;
-        return true;
-    }
-
-    error("GraphicsCook: CSG clip variant count overflow for entry '{}'", entryName);
-    return false;
-}
-
-b8 ValidateMaterialCookPixelShaderInterface(
-    in StringView materialVirtualPath,
-    in StringView materialInterfaceText,
-    in Name pixelShaderName,
-    in Name shaderMaterialInterface,
-    in StringView shaderMaterialInterfacePath,
-    in Name parsedMaterialInterface
-){
-    if(shaderMaterialInterface == s_NameNone){
-        error(
-            "Material '{}' declares interface '{}' but pixel shader '{}' does not include a generated material bind"
-            , materialVirtualPath
-            , materialInterfaceText
-            , pixelShaderName.resolvedText()
-        );
-        return false;
-    }
-    if(shaderMaterialInterface != parsedMaterialInterface){
-        error(
-            "Material '{}' declares interface '{}' but pixel shader '{}' includes generated material bind interface '{}'"
-            , materialVirtualPath
-            , materialInterfaceText
-            , pixelShaderName.resolvedText()
-            , shaderMaterialInterfacePath
-        );
-        return false;
-    }
-    return true;
-}
-
-b8 ValidateMaterialCookStagePresence(
-    in StringView materialVirtualPath,
-    in StringView materialInterfaceText,
-    in b8 hasShaderStage,
-    in b8 hasInterfaceStage
-){
-    if(!hasShaderStage){
-        error("Material '{}' has no shader stages", materialVirtualPath);
-        return false;
-    }
-    if(!hasInterfaceStage){
-        error("Material '{}' declares interface '{}' but has no pixel shader stage", materialVirtualPath, materialInterfaceText);
-        return false;
-    }
-    return true;
-}
-
 SingleAssetRefComponentPayloadBinary PackSingleAssetRefComponentPayloadBinary(in Name assetName){
     SingleAssetRefComponentPayloadBinary binaryPayload;
     binaryPayload.assetHash = assetName.hash();
@@ -371,53 +246,6 @@ b8 ValidateSingleAssetRefComponentAssetPayload(in b8 validAssetRef, in Name virt
 
     error("{} failed: {} '{}' asset must not be empty", context, kindLabel, virtualPath.resolvedText());
     return false;
-}
-
-b8 IsAllowedRendererComponentMetadataField(in StringView field){
-    return
-        field == s_RendererComponentMaterialField
-        || field == s_RendererComponentVisibleField
-        || field == s_RendererComponentOpticalVolumeCoincidenceField
-        || field == s_RendererComponentOpticalVolumeGroupField
-        || field == s_RendererComponentOpticalVolumePriorityField
-        || field == s_RendererComponentOpticalBoundaryModeField
-        || field == s_RendererComponentOpticalMediumPriorityField
-    ;
-}
-
-u64 BuildShaderVariantCookKeyHash(in NameHash virtualPathHash, in u64 sourceChecksum, in u64 bytecodeChecksum){
-    u64 hash = s_Fnv64OffsetBasis;
-    hash = updateFnv64U32(hash, s_ShaderVariantCookKeyVersion);
-    hash = updateFnv64NameHash(hash, virtualPathHash);
-    hash = updateFnv64U64(hash, sourceChecksum);
-    hash = updateFnv64U64(hash, bytecodeChecksum);
-    return hash;
-}
-
-b8 ValidateShaderDoesNotUseImplicitDefine(in StringView entryName, in StringView defineName, in b8 hasDefine){
-    if(!hasDefine)
-        return true;
-
-    error("GraphicsCook: shader '{}' uses reserved implicit define '{}' as a variant define", entryName, defineName);
-    return false;
-}
-
-b8 TryAccumulateShaderDefineVariantCount(
-    in StringView entryName,
-    in StringView defineName,
-    in u64 valueCount,
-    mut u64 inOutVariantCount
-){
-    if(valueCount == 0u){
-        error("GraphicsCook: entry '{}' has define '{}' with no values", entryName, defineName);
-        return false;
-    }
-    if(inOutVariantCount > u64.max / valueCount){
-        error("GraphicsCook: variant count overflow for entry '{}'", entryName);
-        return false;
-    }
-    inOutVariantCount *= valueCount;
-    return true;
 }
 
 

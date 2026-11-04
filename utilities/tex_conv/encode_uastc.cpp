@@ -117,8 +117,7 @@ struct AlphaTransport{
                 SIMDVectorSingle sum = VectorZero();
                 for(u32 sourceZ = slabRange.first; sourceZ < slabRange.end; ++sourceZ){
                     const basisu::vec4F& color = filtered[sourceZ](x, y);
-                    const f32 overlap = ComputeVolumeMipZSlabOverlap(slabRange, sourceZ, targetDepth);
-                    sum = VectorAdd(sum, VectorScale(VectorSet(color[0u], color[1u], color[2u], color[3u]), overlap));
+                    sum = AccumulateVolumeMipZSlabTexel(slabRange, sourceZ, targetDepth, VectorSet(color[0u], color[1u], color[2u], color[3u]), sum);
                 }
                 const SIMDVectorSingle mean = VectorMultiply(sum, inverseDepth);
                 plane(x, y).set(VectorGetX(mean), VectorGetY(mean), VectorGetZ(mean), VectorGetW(mean));
@@ -178,9 +177,22 @@ struct AlphaTransport{
     for(usize index = 0u; index < output.m_slice_desc.size(); ++index){
         const basisu::basisu_backend_slice_desc& desc = output.m_slice_desc[index];
         if(
-            desc.m_source_file_index >= mip.sliceCount || desc.m_mip_index != 0u || desc.m_orig_width != mip.width || desc.m_orig_height != mip.height
-            || desc.m_num_blocks_x != mip.blockCountX || desc.m_num_blocks_y != mip.blockCountY || slices[desc.m_source_file_index] != s_InvalidSlice
-            || output.m_slice_image_data[index].size_in_bytes() != planeByteCount
+            !IsValidTexConvEncodedSliceDesc(
+                desc.m_source_file_index,
+                desc.m_mip_index,
+                desc.m_orig_width,
+                desc.m_orig_height,
+                desc.m_num_blocks_x,
+                desc.m_num_blocks_y,
+                output.m_slice_image_data[index].size_in_bytes(),
+                mip.sliceCount,
+                mip.width,
+                mip.height,
+                mip.blockCountX,
+                mip.blockCountY,
+                planeByteCount,
+                desc.m_source_file_index < mip.sliceCount ? slices[desc.m_source_file_index] : 0u
+            )
         )
             return false;
         slices[desc.m_source_file_index] = index;
@@ -228,13 +240,8 @@ struct AlphaTransport{
             for(u32 y = 0u; y < mip.height; ++y){
                 for(u32 x = 0u; x < mip.width; ++x){
                     const basisu::vec4F& color = source(x, y);
-                    const SIMDVectorSingle quantized = QuantizeUnorm(VectorSet(color[0u], color[1u], color[2u], color[3u]));
-                    if(alphaOnly){
-                        const u8 alpha = static_cast<u8>(VectorGetW(quantized));
-                        target(x, y) = basisu::color_rgba(alpha, alpha, alpha, TextureFormat::s_OpaqueAlphaUnorm8);
-                    }
-                    else
-                        target(x, y) = basisu::color_rgba(static_cast<u8>(VectorGetX(quantized)), static_cast<u8>(VectorGetY(quantized)), static_cast<u8>(VectorGetZ(quantized)), static_cast<u8>(VectorGetW(quantized)));
+                    const Array<u8, 4u> rgba = QuantizeTexConvUnormBytes(VectorSet(color[0u], color[1u], color[2u], color[3u]), alphaOnly, TextureFormat::s_OpaqueAlphaUnorm8);
+                    target(x, y) = basisu::color_rgba(rgba[0u], rgba[1u], rgba[2u], rgba[3u]);
                 }
             }
         }

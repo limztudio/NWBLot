@@ -100,6 +100,18 @@ void BuildModelAttachmentIdentityOrder(in usize queryCount, mut Vector<usize> ou
         outOrder.push_back(queryIndex);
 }
 
+void BuildSortedModelAttachmentParentOrder(
+    in Span<ModelAttachmentJointQuery> jointQueries,
+    mut Vector<usize> outOrder
+){
+    BuildModelAttachmentIdentityOrder(jointQueries.size(), outOrder);
+    native(in jointQueries, mut outOrder){
+        ::Sort(outOrder.begin(), outOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
+            return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
+        });
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

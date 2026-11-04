@@ -7,7 +7,7 @@
 
 #include "components.h"
 
-#include <impl/assets_scene/component_assets.adhd.h>
+#include <impl/assets_scene/scene_assets.adhd.h>
 #include <impl/assets_subsystem/asset.h>
 
 #include <core/assets/manager.h>

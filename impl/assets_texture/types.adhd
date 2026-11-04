@@ -149,6 +149,64 @@ u64 ComputeTexturePrimaryPayloadByteCount(in Span<TextureMipLevel> mipLevels){
     return lastMip.offsetBytes + lastMip.sizeBytes;
 }
 
+Expected<PrimaryUastcSlice> TryGetPrimaryUastcSlice(
+    in Span<u8> payloadBytes,
+    in u64 primaryPayloadByteCount,
+    in TextureMipLevel mip,
+    in u32 sliceIndex
+){
+    const Expected<UastcSliceLayout> layout = TryComputeUastcSliceLayout(mip, sliceIndex);
+    if(!layout.has_value()){
+        error("TextureAssetLoader: invalid UASTC slice layout");
+        return makeUnexpected(Failure());
+    }
+    const Expected<u64> sourceOffsetBytes = TryComputeUastcSliceAbsoluteOffset(mip, layout.value());
+    if(!sourceOffsetBytes.has_value()){
+        error("TextureAssetLoader: UASTC primary slice offset exceeds addressable memory");
+        return makeUnexpected(Failure());
+    }
+    if(!IsUastcSliceRangeWithinPrimaryPayload(sourceOffsetBytes.value(), layout.value().byteCount, primaryPayloadByteCount, payloadBytes.size())){
+        error("TextureAssetLoader: UASTC primary slice is outside the texture payload");
+        return makeUnexpected(Failure());
+    }
+
+    PrimaryUastcSlice slice;
+    slice.bytes = payloadBytes.subspan(cast<usize>(sourceOffsetBytes.value()), cast<usize>(layout.value().byteCount));
+    slice.blockCount = layout.value().blockCount;
+    return slice;
+}
+
+Expected<Span<u8>> TryGetSeparateAlphaUastcSlice(
+    in Span<u8> payloadBytes,
+    in u64 primaryPayloadByteCount,
+    in b8 hasSeparateAlpha,
+    in TextureMipLevel mip,
+    in u32 sliceIndex
+){
+    if(!hasSeparateAlpha){
+        error("TextureAssetLoader: texture does not have a separate UASTC alpha stream");
+        return makeUnexpected(Failure());
+    }
+    const Expected<UastcSliceLayout> layout = TryComputeUastcSliceLayout(mip, sliceIndex);
+    if(!layout.has_value()){
+        error("TextureAssetLoader: invalid UASTC slice layout");
+        return makeUnexpected(Failure());
+    }
+    const Expected<u64> alphaSliceOffsetBytes = TryComputeUastcSliceAbsoluteOffset(mip, layout.value());
+    if(!alphaSliceOffsetBytes.has_value()){
+        error("TextureAssetLoader: UASTC alpha slice offset exceeds addressable memory");
+        return makeUnexpected(Failure());
+    }
+    if(
+        !IsUastcSliceRangeWithinPrimaryPayload(alphaSliceOffsetBytes.value(), layout.value().byteCount, primaryPayloadByteCount, payloadBytes.size())
+        || primaryPayloadByteCount > cast<u64>(payloadBytes.size()) - primaryPayloadByteCount
+    ){
+        error("TextureAssetLoader: UASTC alpha slice is outside the texture payload");
+        return makeUnexpected(Failure());
+    }
+    return payloadBytes.subspan(cast<usize>(primaryPayloadByteCount + alphaSliceOffsetBytes.value()), cast<usize>(layout.value().byteCount));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

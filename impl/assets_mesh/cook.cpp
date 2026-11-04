@@ -41,7 +41,20 @@ static b8 ParseSourceMeshMeta(const Path& nwbFilePath, const Core::Metascript::V
         return false;
 
     SourceMeshStreams& streams = *streamsResult;
-    MeshCookSourceStreams::CopySourceStreams(streams, outEntry);
+    CopySourceMeshStreamsToCookStreams(
+        streams.positions,
+        streams.normals,
+        streams.tangents,
+        streams.uv0,
+        streams.colors,
+        streams.vertexRefs,
+        outEntry.positions,
+        outEntry.normals,
+        outEntry.tangents,
+        outEntry.uv0,
+        outEntry.colors,
+        outEntry.vertexRefs
+    );
     return MeshCookMeshlets::BuildMeshlets(nwbFilePath, s_MeshMetaKind, streams.indices, cpuScheduler, scratchArena, outEntry);
 }
 

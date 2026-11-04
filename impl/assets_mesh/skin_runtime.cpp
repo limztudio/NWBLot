@@ -64,16 +64,7 @@ b8 Skin::loadBinary(const Span<const u8> binary){
 b8 Skin::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("Skin::validatePayload")))
         return false;
-    if(!ValidateSkinAssetHeaderAndCounts(m_mesh.valid(), m_skeleton.valid(), m_influences.size(), m_inverseBindMatrices.size()))
-        return false;
-    const u32 jointCount = static_cast<u32>(m_inverseBindMatrices.size());
-    if(!ValidateSkinInfluenceStream(m_influences, jointCount))
-        return false;
-    for(usize index = 0u; index < m_inverseBindMatrices.size(); ++index){
-        if(!ValidateSkinInverseBindMatrixAt(LoadFloat(m_inverseBindMatrices[index]), index))
-            return false;
-    }
-    return true;
+    return ValidateSkinAssetPayload(m_mesh.valid(), m_skeleton.valid(), m_influences, m_inverseBindMatrices);
 }
 
 

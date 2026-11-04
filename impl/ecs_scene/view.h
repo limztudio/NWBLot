@@ -33,10 +33,6 @@ static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0u, "Tr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDMatrix LoadTransformMatrix(const TransformComponent& transform)noexcept{
-    return MatrixAffineTransformation(LoadFloat(transform.scale), VectorZero(), LoadFloat(transform.rotation), LoadFloat(transform.position));
-}
-
 [[nodiscard]] inline SIMDMatrix LoadEntityTransformMatrix(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
     const TransformComponent* transform = world.tryGetComponent<TransformComponent>(entity);
     return transform

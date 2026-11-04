@@ -11,7 +11,7 @@
 #pragma once
 
 
-#include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_graphics/cook_types.adhd.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/cook.h>
 

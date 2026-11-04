@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/cook_meshlet_scoring.adhd>
+#include <impl/assets_mesh/cook_meshlet_metrics.adhd>
 #include <impl/assets_mesh/cook_solid_topology.adhd>
 
 
@@ -146,6 +146,48 @@ SourceIndexStreamFailure ValidateSourceIndexStreamValues(in Span<u32> indices, i
             return SourceIndexStreamFailure::IndexOutOfRange;
     }
     return SourceIndexStreamFailure::None;
+}
+
+void CopySourceMeshStreamsToCookStreams(
+    in Span<f32x3u> sourcePositions,
+    in Span<f32x3u> sourceNormals,
+    in Span<f32x4u> sourceTangents,
+    in Span<f32x2u> sourceUv0,
+    in Span<f32x4u> sourceColors,
+    in Span<MeshVertexRef> sourceVertexRefs,
+    mut Vector<f32x3u> outPositions,
+    mut Vector<f16x4u> outNormals,
+    mut Vector<f16x4u> outTangents,
+    mut Vector<f32x2u> outUv0,
+    mut Vector<f16x4u> outColors,
+    mut Vector<MeshVertexRef> outVertexRefs
+){
+    outPositions.clear();
+    outNormals.clear();
+    outTangents.clear();
+    outUv0.clear();
+    outColors.clear();
+    outVertexRefs.clear();
+
+    outPositions.reserve(sourcePositions.size());
+    outNormals.reserve(sourceNormals.size());
+    outTangents.reserve(sourceTangents.size());
+    outUv0.reserve(sourceUv0.size());
+    outColors.reserve(sourceColors.size());
+    outVertexRefs.reserve(sourceVertexRefs.size());
+
+    for(in f32x3u position : sourcePositions)
+        outPositions.push_back(position);
+    for(in f32x3u normal : sourceNormals)
+        outNormals.push_back(MakeHalf4U(normal.x, normal.y, normal.z, 0.0f));
+    for(in f32x4u tangent : sourceTangents)
+        outTangents.push_back(MakeHalf4U(tangent.x, tangent.y, tangent.z, tangent.w));
+    for(in f32x2u uv : sourceUv0)
+        outUv0.push_back(uv);
+    for(in f32x4u color : sourceColors)
+        outColors.push_back(MakeHalf4U(color.x, color.y, color.z, color.w));
+    for(in MeshVertexRef ref : sourceVertexRefs)
+        outVertexRefs.push_back(ref);
 }
 
 

@@ -211,6 +211,67 @@ b8 TryBuildSceneLightVectors(
     }
 }
 
+Expected<SceneLight> TryBuildSceneLight(in TransformComponent transform, in LightComponent light){
+    VectorSingle position(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle direction(0.0f, 0.0f, 0.0f, 0.0f);
+    if(!TryBuildSceneLightVectors(transform, light, position, direction))
+        return makeUnexpected(Failure());
+    return MakeSceneLight(light, position, direction);
+}
+
+SceneLight MakeDefaultSceneLightFromForward(in VectorSingle defaultForward){
+    const VectorSingle negatedForward(-defaultForward.x, -defaultForward.y, -defaultForward.z, 0.0f);
+    const VectorSingle direction = NormalizeSceneVector3Or(
+        negatedForward,
+        VectorSingle(0.0f, 0.0f, -1.0f, 0.0f),
+        s_NormalizeLengthSquaredEpsilon
+    );
+    return MakeDefaultSceneLight(direction);
+}
+
+Expected<CameraProjection> TryResolveCameraComponentProjection(
+    in TransformComponent transform,
+    in CameraComponent camera,
+    in f32 fallbackAspectRatio
+){
+    if(!IsValidCameraTransformVectors(VectorSingle(transform.position), VectorSingle(transform.rotation), VectorSingle(transform.scale)))
+        return makeUnexpected(Failure());
+    return TryBuildCameraProjection(
+        camera.projection.x,
+        camera.projection.y,
+        camera.projection.z,
+        camera.projection.w,
+        fallbackAspectRatio
+    );
+}
+
+MatrixSingle LoadTransformMatrix(in TransformComponent transform){
+    MatrixSingle result(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    native(in transform, mut result){
+        result = ::MatrixAffineTransformation(::LoadFloat(transform.scale), ::VectorZero(), ::LoadFloat(transform.rotation), ::LoadFloat(transform.position));
+    }
+    return result;
+}
+
+b8 TryDecomposeAndAssignTransformComponent(in MatrixSingle matrix, mut TransformComponent outTransform){
+    VectorSingle translation(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    VectorSingle scale(1.0f, 1.0f, 1.0f, 0.0f);
+    b8 decomposed = false;
+    native(in matrix, mut translation, mut rotation, mut scale, mut decomposed){
+        if(const auto decomposition = ::MatrixDecompose(matrix)){
+            translation = decomposition->translation;
+            rotation = decomposition->rotation;
+            scale = decomposition->scale;
+            decomposed = true;
+        }
+    }
+    if(!decomposed)
+        return false;
+    AssignDecomposedTransformComponent(translation, rotation, scale, outTransform);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

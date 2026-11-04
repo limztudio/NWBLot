@@ -12,7 +12,7 @@
 
 
 #include "../global.h"
-#include <impl/assets_shader/types.adhd.h>
+#include <impl/assets_shader/cook_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_paths.h>

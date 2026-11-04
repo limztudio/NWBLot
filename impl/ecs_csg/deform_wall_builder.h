@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 
-#include <impl/ecs_csg/deform_types.adhd.h>
+#include <impl/ecs_csg/deform_clip_plan.adhd.h>
 #include <impl/ecs_csg/shape_registry.h>
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>

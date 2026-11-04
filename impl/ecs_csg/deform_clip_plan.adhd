@@ -1,0 +1,219 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_csg/deform_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<VectorSingle> TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> vertices, in Span<u32> loop){
+    if(loop.size() < cast<usize>(s_MinLoopVertices))
+        return makeUnexpected(Failure());
+    const CsgDeformVertex originVertex = vertices[cast<usize>(loop[0u])];
+    const VectorSingle origin(originVertex.position);
+    VectorSingle area(0.0f, 0.0f, 0.0f, 0.0f);
+    for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
+        const CsgDeformVertex firstVertex = vertices[cast<usize>(loop[vertexIndex])];
+        const CsgDeformVertex secondVertex = vertices[cast<usize>(loop[vertexIndex + 1u])];
+        const VectorSingle first(firstVertex.position);
+        const VectorSingle second(secondVertex.position);
+        area = area + cross(first - origin, second - origin);
+    }
+    if(lengthSq(area.xyz) <= s_LoopAreaEpsilonSq)
+        return makeUnexpected(Failure());
+    const VectorSingle normalized = normalize(area.xyz);
+    return VectorSingle(normalized, 0.0f);
+}
+
+Expected<CsgDeformVertex> TryBuildCsgDeformCapCenterVertex(in Span<CsgDeformVertex> vertices, in Span<u32> loop, in VectorSingle loopNormal){
+    if(loop.size() < cast<usize>(s_MinLoopVertices))
+        return makeUnexpected(Failure());
+    VectorSingle centerPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle centerUv(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle centerColor(0.0f, 0.0f, 0.0f, 0.0f);
+    for(in u32 vertexIndex : loop){
+        assert(cast<usize>(vertexIndex) < vertices.size());
+        const CsgDeformVertex vertex = vertices[cast<usize>(vertexIndex)];
+        centerPosition = centerPosition + VectorSingle(vertex.position);
+        centerUv = centerUv + VectorSingle(vertex.uv0);
+        centerColor = centerColor + VectorSingle(vertex.color);
+    }
+    const f32 loopSize = cast<f32>(loop.size());
+    const VectorSingle position = centerPosition / loopSize;
+    const VectorSingle uv = centerUv / loopSize;
+    const VectorSingle color = centerColor / loopSize;
+    CsgDeformVertex center;
+    center.position = f32x3u(position);
+    center.normal = f32x4(NormalizeCsgDeformNormal(loopNormal));
+    center.tangent = f32x4(NormalizeCsgDeformTangent(VectorSingle(1.0f, 0.0f, 0.0f, 1.0f)));
+    center.uv0 = f32x2u(uv);
+    center.color = f32x4(color);
+    if(!IsFiniteCsgDeformVertex(center))
+        return makeUnexpected(Failure());
+    return center;
+}
+
+Expected<CsgDeformVertex> TryResolveCsgDeformCapLoopCenter(
+    in Span<CsgDeformVertex> vertices,
+    in Span<u32> loop,
+    in usize currentTriangleCount
+){
+    if(vertices.size() + 1u > s_MaxDeformVertices || loop.size() > s_MaxDeformTriangles || currentTriangleCount > s_MaxDeformTriangles - loop.size())
+        return makeUnexpected(Failure());
+    const Expected<VectorSingle> loopNormal = TryComputeCsgDeformLoopNormal(vertices, loop);
+    if(!loopNormal.has_value())
+        return makeUnexpected(Failure());
+    return TryBuildCsgDeformCapCenterVertex(vertices, loop, loopNormal.value());
+}
+
+CsgDeformTriangle MakeCsgDeformCapLoopTriangle(in u32 centerIndex, in Span<u32> loop, in usize vertexIndex){
+    const u32 first = loop[vertexIndex];
+    const u32 second = loop[NextLoopVertexIndex(vertexIndex, loop.size())];
+    return MakeCsgDeformTriangle(centerIndex, second, first);
+}
+
+VectorSingle TransformCsgDeformVertexPosition(in CsgDeformVertex vertex, in MatrixSingle worldToShape){
+    return mul(VectorSingle(vertex.position, s_AffineW), worldToShape);
+}
+
+Expected<f32, CsgDeformViabilityReason> TrySnapCsgDeformSignedDistance(in f32 distance, in f32 boundaryEpsilon){
+    if(!isFinite(distance))
+        return makeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
+    if(abs(distance) <= boundaryEpsilon)
+        return s_KeepDistanceZero;
+    return distance;
+}
+
+CsgDeformTriangleClipPlan ClassifyCsgDeformTriangleClip(in CsgDeformTriangle triangle, in Span<f32> distances){
+    CsgDeformTriangleClipPlan plan;
+    Array<f32, s_TriangleCornerCount> cornerDistances;
+    Array<b8, s_TriangleCornerCount> kept;
+    for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
+        const f32 dist = distances[cast<usize>(triangle.indices[corner])];
+        cornerDistances[corner] = dist;
+        const b8 isKept = dist >= s_KeepDistanceZero;
+        kept[corner] = isKept;
+        if(isKept)
+            ++plan.keepCount;
+    }
+    if(plan.keepCount == 1u){
+        u32 keepCorner = 0u;
+        for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
+            if(kept[corner]){
+                keepCorner = corner;
+                break;
+            }
+        }
+        const u32 nextA = (keepCorner + 1u) % s_TriangleCornerCount;
+        const u32 nextB = (keepCorner + 2u) % s_TriangleCornerCount;
+        plan.primaryCorner = triangle.indices[keepCorner];
+        plan.firstEdgeStart = triangle.indices[keepCorner];
+        plan.firstEdgeEnd = triangle.indices[nextA];
+        plan.firstEdgeStartDistance = cornerDistances[keepCorner];
+        plan.firstEdgeEndDistance = cornerDistances[nextA];
+        plan.secondEdgeStart = triangle.indices[keepCorner];
+        plan.secondEdgeEnd = triangle.indices[nextB];
+        plan.secondEdgeStartDistance = cornerDistances[keepCorner];
+        plan.secondEdgeEndDistance = cornerDistances[nextB];
+    }
+    else if(plan.keepCount == 2u){
+        u32 dropCorner = 0u;
+        for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
+            if(!kept[corner]){
+                dropCorner = corner;
+                break;
+            }
+        }
+        const u32 keepCornerA = (dropCorner + 1u) % s_TriangleCornerCount;
+        const u32 keepCornerB = (dropCorner + 2u) % s_TriangleCornerCount;
+        plan.primaryCorner = triangle.indices[keepCornerA];
+        plan.secondKeepVertex = triangle.indices[keepCornerB];
+        plan.firstEdgeStart = triangle.indices[keepCornerA];
+        plan.firstEdgeEnd = triangle.indices[dropCorner];
+        plan.firstEdgeStartDistance = cornerDistances[keepCornerA];
+        plan.firstEdgeEndDistance = cornerDistances[dropCorner];
+        plan.secondEdgeStart = triangle.indices[keepCornerB];
+        plan.secondEdgeEnd = triangle.indices[dropCorner];
+        plan.secondEdgeStartDistance = cornerDistances[keepCornerB];
+        plan.secondEdgeEndDistance = cornerDistances[dropCorner];
+    }
+    return plan;
+}
+
+Expected<f32, CsgDeformViabilityReason> TryValidateCsgDeformPreviewInputs(
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in CsgDeformBuildOptions options
+){
+    const usize inputVertexCount = inputVertices.size();
+    const usize inputTriangleCount = inputTriangles.size();
+    if(inputVertexCount == 0u || inputTriangleCount == 0u)
+        return makeUnexpected(CsgDeformViabilityReason::EmptyInput);
+    if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles)
+        return makeUnexpected(CsgDeformViabilityReason::TooLarge);
+    if(!CsgDeformValidOptions(options))
+        return makeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+    if(!IsFiniteCsgDeformVertices(inputVertices))
+        return makeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
+    if(!CsgDeformValidTopology(inputTriangles, inputVertexCount))
+        return makeUnexpected(CsgDeformViabilityReason::InvalidTopology);
+    return max(options.distanceEpsilon, s_MinEpsilon);
+}
+
+u32 FindInitialCsgDeformBoundaryLoopVertex(in Span<CsgDeformCutLoopEdge> edges){
+    u32 start = edges[0u].first;
+    for(in CsgDeformCutLoopEdge edge : edges){
+        if(edge.first < start)
+            start = edge.first;
+        if(edge.second < start)
+            start = edge.second;
+    }
+    return start;
+}
+
+Expected<usize> TryFindIncidentCsgDeformLoopEdge(in Span<CsgDeformCutLoopEdge> edges, in u32 cursor){
+    for(usize i = 0u; i < edges.size(); ++i){
+        const CsgDeformCutLoopEdge edge = edges[i];
+        if(edge.first == cursor || edge.second == cursor)
+            return i;
+    }
+    return makeUnexpected(Failure());
+}
+
+u32 OtherCsgDeformLoopEdgeVertex(in CsgDeformCutLoopEdge edge, in u32 cursor){
+    if(edge.first == cursor)
+        return edge.second;
+    return edge.first;
+}
+
+CsgDeformViabilityReason ClassifyPostCutCsgDeformViability(in usize vertexCount, in usize triangleCount){
+    if(triangleCount == 0u)
+        return CsgDeformViabilityReason::NoKeptGeometry;
+    if(vertexCount > s_MaxDeformVertices || triangleCount > s_MaxDeformTriangles)
+        return CsgDeformViabilityReason::TooLarge;
+    return CsgDeformViabilityReason::Ok;
+}
+
+Expected<CsgDeformStats, CsgDeformFailure> FinalizeCsgDeformStats(
+    in Span<CsgDeformVertex> outVertices,
+    in Span<CsgDeformTriangle> outTriangles,
+    in u32 appliedCuts,
+    in u32 capTriangles,
+    in CsgDeformStats baseStats
+){
+    if(outVertices.empty() || outTriangles.empty())
+        return makeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, baseStats));
+    if(!IsFiniteCsgDeformVertices(outVertices))
+        return makeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, baseStats));
+    CsgDeformStats stats = baseStats;
+    stats.outputVertexCount = cast<u32>(outVertices.size());
+    stats.outputTriangleCount = cast<u32>(outTriangles.size());
+    stats.appliedCutCount = appliedCuts;
+    stats.capTriangleCount = capTriangles;
+    return stats;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

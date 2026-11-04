@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_csg/components.adhd.h>
-#include <impl/ecs_csg/shape_types.adhd.h>
+#include <impl/ecs_csg/shape_registry_validation.adhd.h>
 #include <impl/assets_csg/shape_id.adhd.h>
 
 #include <global/span.h>

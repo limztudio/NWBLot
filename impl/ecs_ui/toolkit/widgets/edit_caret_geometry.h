@@ -8,7 +8,7 @@
 #include <impl/ecs_ui/toolkit/edit/model.h>
 #include <impl/ecs_ui/toolkit/edit/grapheme.h>
 #include <impl/ecs_ui/toolkit/text/layout.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_caret_layout.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd.h>
 
 #include <global/not_null.h>
 

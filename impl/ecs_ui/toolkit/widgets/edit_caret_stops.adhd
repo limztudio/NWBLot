@@ -1,0 +1,216 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "edit_caret_layout.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Rect> ResolveEditCaretRect(
+    in StringView text,
+    in Span<TextLine> lines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in usize byte
+){
+    if(lines.empty() || !IsUtf8ScalarBoundary(text, byte))
+        return makeUnexpected(Failure());
+    const TextLine line = lines[cast<usize>(LineForEditCaretByte(lines, byte))];
+    if(byte < cast<usize>(line.byteBegin) || byte > cast<usize>(line.byteEnd))
+        return makeUnexpected(Failure());
+    f32 x = 0.0f;
+    if(line.clusterCount != 0u){
+        const usize firstCluster = cast<usize>(line.firstCluster);
+        const usize lastCluster = firstCluster + cast<usize>(line.clusterCount);
+        const usize clusterIndex = LowerBoundEditClusterByEnd(clusters, firstCluster, lastCluster, byte);
+        if(clusterIndex == lastCluster || byte < cast<usize>(clusters[clusterIndex].byteBegin))
+            return makeUnexpected(Failure());
+        const TextCluster cluster = clusters[clusterIndex];
+        const usize clusterBegin = cast<usize>(cluster.byteBegin);
+        const usize clusterEnd = cast<usize>(cluster.byteEnd);
+        if(byte == clusterBegin || byte == clusterEnd){
+            if(byte == clusterBegin)
+                x = cluster.leadingX;
+            else
+                x = cluster.trailingX;
+        }
+        else{
+            usize first = lowerBoundIndex(boundaries, clusterBegin);
+            if(first != boundaries.size() && boundaries[first] == clusterBegin)
+                ++first;
+            const usize last = first + lowerBoundIndex(boundaries.subspan(first, boundaries.size() - first), clusterEnd);
+            const usize next = first + lowerBoundIndex(boundaries.subspan(first, last - first), byte);
+            const usize intervals = (last - first) + 1u;
+            f32 ordinal = cast<f32>(next - first);
+            if(next != last && boundaries[next] == byte)
+                ordinal += 1.0f;
+            else{
+                usize begin = clusterBegin;
+                if(next != first)
+                    begin = boundaries[next - 1u];
+                usize end = clusterEnd;
+                if(next != last)
+                    end = boundaries[next];
+                ordinal += ComputeEditScalarFraction(text, begin, end, byte);
+            }
+            const f32 span = cluster.trailingX - cluster.leadingX;
+            x = cluster.leadingX + ((span * ordinal) / cast<f32>(intervals));
+        }
+    }
+    if(!isFinite(x))
+        return makeUnexpected(Failure());
+    return Rect(x, line.top, 0.0f, line.height);
+}
+
+EditCaretLine MakeEditCaretLine(in TextLine line){
+    EditCaretLine caretLine;
+    caretLine.byteBegin = cast<usize>(line.byteBegin);
+    caretLine.byteEnd = cast<usize>(line.byteEnd);
+    caretLine.breakEnd = cast<usize>(line.breakEnd);
+    caretLine.firstStop = 0u;
+    caretLine.stopCount = 0u;
+    caretLine.top = line.top;
+    caretLine.height = line.height;
+    caretLine.advance = line.advance;
+    return caretLine;
+}
+
+Expected<EditBoxCaretStop> TryMakeEditCaretStop(
+    in StringView expectedText,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in usize committedBytes,
+    in EditCaretMapping item,
+    mut usize inOutPreviousCommitted,
+    mut usize inOutPreviousDisplay
+){
+    if(item.committedByte < inOutPreviousCommitted || item.committedByte > committedBytes || item.displayByte < inOutPreviousDisplay || item.displayByte > expectedText.size())
+        return makeUnexpected(Failure());
+    const Expected<Rect> caret = ResolveEditCaretRect(expectedText, textLines, clusters, boundaries, item.displayByte);
+    if(!caret.has_value())
+        return makeUnexpected(Failure());
+    const u32 lineIndex = LineForEditCaretByte(textLines, item.displayByte);
+    EditBoxCaretStop stop;
+    stop.committedByte = item.committedByte;
+    stop.displayByte = item.displayByte;
+    stop.x = caret.value().x;
+    stop.lineIndex = lineIndex;
+    inOutPreviousCommitted = item.committedByte;
+    inOutPreviousDisplay = item.displayByte;
+    return stop;
+}
+
+Expected<usize> ResolveEditCaretVerticalTarget(
+    in StringView text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in Span<EditBoxCaretStop> stops,
+    in usize displayCaret,
+    in b8 down,
+    in f32 preferredX
+){
+    if(!isFinite(preferredX))
+        return makeUnexpected(Failure());
+    const Expected<Rect> caret = ResolveEditCaretRect(text, textLines, clusters, boundaries, displayCaret);
+    if(!caret.has_value())
+        return makeUnexpected(Failure());
+    const u32 current = LineForEditCaretByte(textLines, displayCaret);
+    u32 target = 0u;
+    if(down)
+        target = min(current + 1u, cast<u32>(caretLines.size() - 1u));
+    else if(current != 0u)
+        target = current - 1u;
+    if(target == current){
+        for(usize i = 0u; i < stops.size(); ++i){
+            if(stops[i].displayByte == displayCaret)
+                return stops[i].committedByte;
+        }
+        const f32 center = caret.value().y + (caret.value().height * s_RectCenterFraction);
+        return TryFindNearestEditCaretStop(caretLines, stops, current, Point(caret.value().x, center));
+    }
+    const EditCaretLine line = caretLines[cast<usize>(target)];
+    const f32 center = line.top + (line.height * s_RectCenterFraction);
+    return TryFindNearestEditCaretStop(caretLines, stops, target, Point(preferredX, center));
+}
+
+Expected<Rect> ResolveEditCaretRangeOnLine(
+    in StringView text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in EditBoxRange range,
+    in u32 lineIndex,
+    in f32 breakWidth
+){
+    if(
+        cast<usize>(lineIndex) >= caretLines.size() || range.begin > range.end || range.end > text.size()
+        || !isFinite(breakWidth) || breakWidth < 0.0f
+        || !IsUtf8ScalarBoundary(text, range.begin)
+        || !IsUtf8ScalarBoundary(text, range.end)
+    )
+        return makeUnexpected(Failure());
+    if(range.begin == range.end)
+        return Rect();
+    const EditCaretLine line = caretLines[cast<usize>(lineIndex)];
+    const usize begin = max(range.begin, line.byteBegin);
+    const usize end = min(range.end, line.byteEnd);
+    const b8 selectedBreak = line.breakEnd != line.byteEnd && range.begin <= line.byteEnd && range.end > line.byteEnd;
+    if(begin >= end && !selectedBreak)
+        return Rect();
+    const Expected<Rect> first = ResolveEditCaretRect(text, textLines, clusters, boundaries, begin);
+    if(!first.has_value())
+        return makeUnexpected(Failure());
+    const Expected<Rect> last = ResolveEditCaretRect(text, textLines, clusters, boundaries, end);
+    if(!last.has_value())
+        return makeUnexpected(Failure());
+    const f32 firstX = first.value().x;
+    f32 breakCap = 0.0f;
+    if(selectedBreak)
+        breakCap = breakWidth;
+    const f32 width = max(0.0f, last.value().x - firstX) + breakCap;
+    if(!isFinite(width) || !isFinite(firstX + width))
+        return makeUnexpected(Failure());
+    return Rect(firstX, line.top, width, line.height);
+}
+
+b8 BuildEditCaretStopsAndLinesInto(
+    in StringView expectedText,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in usize committedBytes,
+    in Span<EditCaretMapping> mapping,
+    mut Vector<EditBoxCaretStop> outStops,
+    mut Vector<EditCaretLine> outLines
+){
+    outStops.clear();
+    outLines.clear();
+    outStops.reserve(mapping.size());
+    outLines.reserve(textLines.size());
+    for(in TextLine line : textLines)
+        outLines.push_back(MakeEditCaretLine(line));
+    usize previousCommitted = 0u;
+    usize previousDisplay = 0u;
+    for(in EditCaretMapping item : mapping){
+        const Expected<EditBoxCaretStop> stop = TryMakeEditCaretStop(expectedText, textLines, clusters, boundaries, committedBytes, item, previousCommitted, previousDisplay);
+        if(!stop.has_value())
+            return false;
+        outStops.push_back(stop.value());
+        ++outLines[cast<usize>(stop.value().lineIndex)].stopCount;
+    }
+    u32 firstStop = 0u;
+    for(mut EditCaretLine line : outLines){
+        line.firstStop = firstStop;
+        firstStop += line.stopCount;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

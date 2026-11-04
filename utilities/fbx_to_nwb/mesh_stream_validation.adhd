@@ -1,0 +1,208 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/fbx_to_nwb/mesh_stream_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 FbxFloatingHashBits(in f32 value){
+    if(value == 0.0f)
+        return 0u;
+    return bit_cast<u32>(value);
+}
+
+PositionKey MakePositionKey(in VectorSingle position){
+    PositionKey key;
+    key.x = FbxFloatingHashBits(position.x);
+    key.y = FbxFloatingHashBits(position.y);
+    key.z = FbxFloatingHashBits(position.z);
+    return key;
+}
+
+b8 LessEmittedF32(in f32 lhs, in f32 rhs){
+    return FbxFloatingHashBits(CleanFloat(lhs)) < FbxFloatingHashBits(CleanFloat(rhs));
+}
+
+b8 SameEmittedF32(in f32 lhs, in f32 rhs){
+    return FbxFloatingHashBits(CleanFloat(lhs)) == FbxFloatingHashBits(CleanFloat(rhs));
+}
+
+b8 LessEmittedStreamValue(in Vec2 lhs, in Vec2 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    return LessEmittedF32(lhs.y, rhs.y);
+}
+
+b8 LessEmittedStreamValue(in Vec3 lhs, in Vec3 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    return LessEmittedF32(lhs.z, rhs.z);
+}
+
+b8 LessEmittedStreamValue(in Vec4 lhs, in Vec4 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    if(!SameEmittedF32(lhs.z, rhs.z))
+        return LessEmittedF32(lhs.z, rhs.z);
+    return LessEmittedF32(lhs.w, rhs.w);
+}
+
+b8 SameEmittedStreamValue(in Vec2 lhs, in Vec2 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y);
+}
+
+b8 SameEmittedStreamValue(in Vec3 lhs, in Vec3 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z);
+}
+
+b8 SameEmittedStreamValue(in Vec4 lhs, in Vec4 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
+}
+
+b8 ValidateSourceMeshGeometryStreams(
+    in SourceMeshStreamCounts counts,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices,
+    in StringView context
+){
+    if(
+        counts.positions == 0u
+        || counts.normals == 0u
+        || counts.uv0 == 0u
+        || counts.colors == 0u
+        || vertexRefs.empty()
+        || indices.empty()
+    ){
+        error("{}: mesh payload is incomplete", context);
+        return false;
+    }
+    if(counts.tangents == 0u){
+        error("{}: mesh tangent stream is required", context);
+        return false;
+    }
+    if((indices.size() % cast<usize>(s_MeshletTriangleIndexCount)) != 0u){
+        error("{}: mesh index stream must contain whole triangles", context);
+        return false;
+    }
+
+    for(in SourceVertexRef ref : vertexRefs){
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefPositionName, ref.position, counts.positions))
+            return false;
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefNormalName, ref.normal, counts.normals))
+            return false;
+        if(ref.tangent == s_MeshMissingStreamIndex){
+            error("{}: mesh vertex_ref tangent is missing", context);
+            return false;
+        }
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefTangentName, ref.tangent, counts.tangents))
+            return false;
+        if(!ValidateSourceStreamIndexWithContext(context, s_MeshUv0FieldNameView, ref.uv0, counts.uv0))
+            return false;
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefColorName, ref.color, counts.colors))
+            return false;
+    }
+
+    for(in u32 index : indices){
+        if(cast<usize>(index) >= vertexRefs.size()){
+            error("{}: mesh triangle index references an out-of-range vertex_ref", context);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+b8 ValidateSkinnedModelSourceMeshRefs(
+    in SourceMeshStreamCounts counts,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices
+){
+    if(!ValidateSourceMeshGeometryStreams(counts, vertexRefs, indices, s_WriteNwbModelContext))
+        return false;
+    if(counts.skin == 0u){
+        error("Failed to write NWB model: skinned model source mesh requires skin influences");
+        return false;
+    }
+    for(in SourceVertexRef ref : vertexRefs){
+        if(!ValidateSourceStreamIndexWithContext(s_WriteNwbModelContext, s_SkinStreamLabel, ref.skin, counts.skin))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidatePlainMeshSourceSkin(
+    in SourceMeshStreamCounts counts,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices
+){
+    if(!ValidateSourceMeshGeometryStreams(counts, vertexRefs, indices, s_WriteNwbMeshContext))
+        return false;
+    if(counts.skin != 0u){
+        error("Failed to write NWB mesh: mesh asset cannot contain a source skin stream");
+        return false;
+    }
+    if(!SourceVertexRefsHaveNoSkin(vertexRefs)){
+        error("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index");
+        return false;
+    }
+    return true;
+}
+
+b8 IsFiniteSourceTriangleCornerValues(
+    in VectorSingle position,
+    in VectorSingle normal,
+    in SourceTriangleCorner corner,
+    in b8 wantsSkinning
+){
+    if(
+        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
+        || !isFinite(normal.x) || !isFinite(normal.y) || !isFinite(normal.z)
+        || !isFinite(corner.uv0.x) || !isFinite(corner.uv0.y)
+        || !isFinite(corner.color.x) || !isFinite(corner.color.y) || !isFinite(corner.color.z) || !isFinite(corner.color.w)
+    )
+        return false;
+    if(
+        corner.hasTangent
+        && (!isFinite(corner.tangent.x) || !isFinite(corner.tangent.y) || !isFinite(corner.tangent.z) || !isFinite(corner.tangent.w))
+    )
+        return false;
+    return !wantsSkinning
+        || (
+            isFinite(corner.skin.weight[0u])
+            && isFinite(corner.skin.weight[1u])
+            && isFinite(corner.skin.weight[2u])
+            && isFinite(corner.skin.weight[3u])
+        );
+}
+
+SourceMeshStreamCounts MakeSourceMeshStreamCounts(
+    in usize positions,
+    in usize normals,
+    in usize tangents,
+    in usize uv0,
+    in usize colors,
+    in usize skin,
+    in usize vertexRefs,
+    in usize indices
+){
+    SourceMeshStreamCounts counts;
+    counts.positions = positions;
+    counts.normals = normals;
+    counts.tangents = tangents;
+    counts.uv0 = uv0;
+    counts.colors = colors;
+    counts.skin = skin;
+    counts.vertexRefs = vertexRefs;
+    counts.indices = indices;
+    return counts;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

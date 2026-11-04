@@ -1,0 +1,259 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/types.adhd>
+#include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_MaterialInstanceVectorComponentCount = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialInstanceParameterNames{
+    public Name parameterName;
+    public Name blockName;
+    public Name fieldName;
+}
+
+class MaterialInstanceOverrideField{
+    public MaterialTypedLayoutField field;
+    public u32 blockByteBegin = 0u;
+    public b8 mutableBlock = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MaterialInstanceParameter BuildMaterialInstanceParameter(
+    in MaterialInstanceParameterNames names,
+    in MaterialLayoutFieldType fieldType,
+    in u32x4u value
+){
+    MaterialInstanceParameter parameter;
+    parameter.parameterName = names.parameterName;
+    parameter.blockName = names.blockName;
+    parameter.fieldName = names.fieldName;
+    parameter.fieldType = fieldType;
+    parameter.value = value;
+    return parameter;
+}
+
+u32x4u PackMaterialInstanceBytes(in Span<u8> bytes){
+    assert(bytes.size() <= 16u);
+    if(bytes.empty())
+        return u32x4u(0u, 0u, 0u, 0u);
+
+    return u32x4u(
+        readPartialU32LittleEndian(bytes, 0u),
+        readPartialU32LittleEndian(bytes, 4u),
+        readPartialU32LittleEndian(bytes, 8u),
+        readPartialU32LittleEndian(bytes, 12u)
+    );
+}
+
+b8 TryStoreMaterialMutableParameter(mut MaterialInstanceComponent component, in MaterialInstanceParameter parameter){
+    for(usize index = 0u; index < component.overrides.size(); ++index){
+        if(component.overrides[index].parameterName != parameter.parameterName)
+            continue;
+
+        if(component.overrides[index].fieldType != parameter.fieldType)
+            return false;
+
+        component.overrides[index] = parameter;
+        ++component.revision;
+        return true;
+    }
+
+    component.overrides.push_back(parameter);
+    ++component.revision;
+    return true;
+}
+
+Expected<usize> TryFindMaterialParameterNameDotIndex(in StringView parameterName){
+    const usize dotIndex = parameterName.find('.');
+    if(parameterName.empty() || dotIndex >= parameterName.size() || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
+        error("MaterialInstanceComponent: parameter '{}' must use block.field form", parameterName);
+        return makeUnexpected(Failure());
+    }
+    if(parameterName.find('.', dotIndex + 1u) < parameterName.size()){
+        error("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator", parameterName);
+        return makeUnexpected(Failure());
+    }
+    return dotIndex;
+}
+
+b8 ValidateMaterialInstanceInterface(in MaterialInstanceComponent component, in Name materialInterface, in StringView parameterNameText){
+    if(materialInterface == s_NameNone){
+        error("MaterialInstanceComponent: parameter '{}' requires a material interface", parameterNameText);
+        return false;
+    }
+    if(component.materialInterface == s_NameNone){
+        error("MaterialInstanceComponent: parameter '{}' requires a component material interface", parameterNameText);
+        return false;
+    }
+    if(component.materialInterface == materialInterface)
+        return true;
+
+    error(
+        "MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'"
+        , parameterNameText
+        , materialInterface.resolvedText()
+        , component.materialInterface.resolvedText()
+    );
+    return false;
+}
+
+b8 StoreMaterialMutableParameter(mut MaterialInstanceComponent component, in MaterialInstanceParameter parameter, in StringView parameterNameText){
+    if(TryStoreMaterialMutableParameter(component, parameter))
+        return true;
+
+    error("MaterialInstanceComponent: parameter '{}' was already set with a different type", parameterNameText);
+    return false;
+}
+
+b8 ValidateMaterialInstanceNumericFieldType(in MaterialLayoutFieldType fieldType, in StringView parameterNameText){
+    if(IsMaterialLayoutNumericFieldType(fieldType))
+        return true;
+
+    error("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type", parameterNameText);
+    return false;
+}
+
+Expected<MaterialInstanceOverrideField> TryFindMaterialInstanceOverrideField(
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in MaterialInstanceParameter parameter
+){
+    u32 constantBlockByteBegin = 0u;
+    u32 mutableBlockByteBegin = 0u;
+    for(usize blockIndex = 0u; blockIndex < typedLayoutBlocks.size(); ++blockIndex){
+        MaterialTypedLayoutBlock block = typedLayoutBlocks[blockIndex];
+        assert(IsValidMaterialBlockClass(block.blockClass));
+
+        b8 mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
+        u32 blockByteBegin = constantBlockByteBegin;
+        if(mutableBlock){
+            blockByteBegin = mutableBlockByteBegin;
+            assert(block.byteSize <= 0xFFFFFFFFu - mutableBlockByteBegin);
+            mutableBlockByteBegin += block.byteSize;
+        }
+        else{
+            assert(block.byteSize <= 0xFFFFFFFFu - constantBlockByteBegin);
+            constantBlockByteBegin += block.byteSize;
+        }
+
+        if(block.blockName != parameter.blockName)
+            continue;
+
+        usize fieldBegin = cast<usize>(block.fieldBegin);
+        usize fieldCount = cast<usize>(block.fieldCount);
+        assert(fieldBegin <= typedLayoutFields.size() && fieldCount <= typedLayoutFields.size() - fieldBegin);
+
+        for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
+            MaterialTypedLayoutField field = typedLayoutFields[fieldIndex];
+            if(field.fieldName != parameter.fieldName)
+                continue;
+
+            MaterialInstanceOverrideField outField;
+            outField.field = field;
+            outField.blockByteBegin = blockByteBegin;
+            outField.mutableBlock = mutableBlock;
+            return outField;
+        }
+        break;
+    }
+
+    return makeUnexpected(Failure());
+}
+
+Expected<MaterialInstanceOverrideField> ResolveMaterialInstanceOverrideField(
+    in u32 entityId,
+    in Name materialName,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in MaterialInstanceParameter parameter
+){
+    const Expected<MaterialInstanceOverrideField> resolvedField = TryFindMaterialInstanceOverrideField(typedLayoutBlocks, typedLayoutFields, parameter);
+    if(resolvedField.has_value())
+        return resolvedField.value();
+
+    error("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
+    return makeUnexpected(Failure());
+}
+
+b8 ValidateMaterialInstanceOverrideInterface(
+    in u32 entityId,
+    in Name instanceInterface,
+    in Name materialName,
+    in Name materialInterface
+){
+    if(instanceInterface == s_NameNone){
+        error("RendererSystem: material instance overrides for entity {} require a material interface", entityId);
+        return false;
+    }
+    if(instanceInterface != materialInterface){
+        error(
+            "RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'"
+            , entityId
+            , instanceInterface.resolvedText()
+            , materialName.resolvedText()
+            , materialInterface.resolvedText()
+        );
+        return false;
+    }
+    return true;
+}
+
+Expected<u32> ResolveMaterialInstanceOverrideByteOffset(
+    in u32 entityId,
+    in Name materialName,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in MaterialInstanceParameter parameter,
+    in usize mutableByteCapacity
+){
+    if(parameter.blockName == s_NameNone || parameter.fieldName == s_NameNone){
+        error("RendererSystem: material instance override for entity {} has an invalid parameter name", entityId);
+        return makeUnexpected(Failure());
+    }
+
+    const Expected<MaterialInstanceOverrideField> resolvedField = ResolveMaterialInstanceOverrideField(entityId, materialName, typedLayoutBlocks, typedLayoutFields, parameter);
+    if(!resolvedField.has_value())
+        return makeUnexpected(Failure());
+
+    const MaterialTypedLayoutField field = resolvedField.value().field;
+    if(!resolvedField.value().mutableBlock){
+        error("RendererSystem: material instance override '{}' for entity {} targets material-constant storage", parameter.parameterName.resolvedText(), entityId);
+        return makeUnexpected(Failure());
+    }
+    if(field.fieldType != parameter.fieldType){
+        error(
+            "RendererSystem: material instance override '{}' for entity {} type does not match material '{}'"
+            , parameter.parameterName.resolvedText()
+            , entityId
+            , materialName.resolvedText()
+        );
+        return makeUnexpected(Failure());
+    }
+
+    assert(field.offset <= 0xFFFFFFFFu - resolvedField.value().blockByteBegin);
+    const u32 fieldByteOffset = resolvedField.value().blockByteBegin + field.offset;
+    const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
+    assert(fieldByteSize != 0u);
+    if(cast<usize>(fieldByteOffset) > mutableByteCapacity || cast<usize>(fieldByteSize) > mutableByteCapacity - cast<usize>(fieldByteOffset)){
+        error("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'", parameter.parameterName.resolvedText(), entityId, materialName.resolvedText());
+        return makeUnexpected(Failure());
+    }
+    return fieldByteOffset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

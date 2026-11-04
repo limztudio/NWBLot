@@ -1,0 +1,250 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "edit_box_style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
+    in Rect bounds,
+    in Rect viewport,
+    in Rect clip,
+    in Point previousScroll,
+    in f32 caretWidth,
+    in b8 revealCaret,
+    in EditTextMode textMode,
+    in Rect visualBounds,
+    in Point logicalSize,
+    in Rect caretRect
+){
+    EditBoxPlacement placement;
+    placement.bounds = bounds;
+    placement.frameClip = IntersectUiRectsBounds(bounds, clip);
+    placement.content = viewport;
+    placement.clip = IntersectUiRectsBounds(viewport, clip);
+    const f32 left = viewport.x;
+    const f32 top = viewport.y;
+    const f32 overhangX = max(0.0f, (visualBounds.x + visualBounds.width) - logicalSize.x);
+    const f32 maximumScroll = max(0.0f, (visualBounds.width + caretWidth) - placement.content.width);
+    // Scroll offsets start at the visual envelope; reveal its overhang with the logical caret at either text edge.
+    const f32 caretEndX = ((caretRect.x - visualBounds.x) + caretWidth) + overhangX;
+    if(!isFinite(maximumScroll) || !isFinite(caretEndX))
+        return makeUnexpected(Failure());
+    f32 scrollX = 0.0f;
+    if(previousScroll.x > 0.0f)
+        scrollX = min(maximumScroll, previousScroll.x);
+    if(revealCaret && caretRect.x < scrollX)
+        scrollX = caretRect.x;
+    if(revealCaret && caretEndX > scrollX + placement.content.width)
+        scrollX = caretEndX - placement.content.width;
+    if(scrollX > 0.0f)
+        scrollX = min(maximumScroll, scrollX);
+    else
+        scrollX = 0.0f;
+    placement.scroll = scrollX;
+    if(textMode == EditTextMode::Multiline){
+        const f32 overhangY = max(0.0f, (visualBounds.y + visualBounds.height) - logicalSize.y);
+        const f32 maximumScrollY = max(0.0f, visualBounds.height - placement.content.height);
+        const f32 caretEndY = ((caretRect.y - visualBounds.y) + caretRect.height) + overhangY;
+        if(!isFinite(maximumScrollY) || !isFinite(caretEndY))
+            return makeUnexpected(Failure());
+        f32 scrollY = 0.0f;
+        if(previousScroll.y > 0.0f)
+            scrollY = min(maximumScrollY, previousScroll.y);
+        if(revealCaret && caretRect.y < scrollY)
+            scrollY = caretRect.y;
+        if(revealCaret && caretEndY > scrollY + placement.content.height)
+            scrollY = caretEndY - placement.content.height;
+        if(scrollY > 0.0f)
+            scrollY = min(maximumScrollY, scrollY);
+        else
+            scrollY = 0.0f;
+        placement.scrollY = scrollY;
+        placement.textOrigin = Point((left - visualBounds.x) - scrollX, (top - visualBounds.y) - scrollY);
+    }
+    else{
+        const f32 verticalOffset = max(0.0f, (placement.content.height - visualBounds.height) * s_RectCenterFraction);
+        placement.textOrigin = Point((left - visualBounds.x) - placement.scroll, (top - visualBounds.y) + verticalOffset);
+    }
+    placement.caret = Rect(placement.textOrigin.x + caretRect.x, placement.textOrigin.y + caretRect.y, caretWidth, caretRect.height);
+    return placement;
+}
+
+b8 ValidateEditBoxArrangedSegments(in EditBoxPlacement placement, in f32 caretWidth, in Rect selectionIn, in Rect preeditUnderlineIn, in b8 composing){
+    Rect selection = selectionIn;
+    Rect preeditUnderline = preeditUnderlineIn;
+    if(selection.width > 0.0f){
+        selection.x += placement.textOrigin.x;
+        selection.y += placement.textOrigin.y;
+    }
+    if(composing)
+        PlaceEditPreeditUnderline(placement.textOrigin, caretWidth, preeditUnderline);
+    return IsValidUiRect(placement.caret) && IsValidUiRect(selection) && IsValidUiRect(preeditUnderline) && isFinite(placement.textOrigin.x) && isFinite(placement.textOrigin.y);
+}
+
+b8 IsValidEditBoxPaintStyle(in EditBoxStyle style){
+    return IsValidPaintColor(style.background)
+        && IsValidPaintColor(style.text)
+        && IsValidPaintColor(style.disabledText)
+        && IsValidPaintColor(style.selection)
+        && IsValidPaintColor(style.inactiveSelection)
+        && IsValidPaintColor(style.caret)
+        && IsValidPaintColor(style.preedit);
+}
+
+Name ResolvePreferredEditBoxBackgroundName(in EditBoxStyle style, in EditBoxPaintFlags flags){
+    if(!flags.enabled)
+        return style.disabled;
+    if(flags.focused)
+        return style.focused;
+    if(flags.hovered)
+        return style.hover;
+    return style.normal;
+}
+
+Expected<b8> ValidateTextAreaNavigationInputs(
+    in EditTextMode textMode,
+    in b8 compositionActive,
+    in EditNavigationDirection direction,
+    in f32 fontSize,
+    in f32 viewportHeight,
+    in EditNavigationSnapshot preferred
+){
+    const b8 page = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
+    if(
+        textMode != EditTextMode::Multiline
+        || compositionActive
+        || cast<u8>(direction) > cast<u8>(EditNavigationDirection::PageDown)
+        || !isFinite(fontSize)
+        || fontSize <= 0.0f
+        || !isFinite(viewportHeight)
+        || viewportHeight < 0.0f
+        || (page && viewportHeight == 0.0f)
+        || !isFinite(preferred.preferredX)
+    )
+        return makeUnexpected(Failure());
+    return page;
+}
+
+Expected<f32> TryResolveTextAreaPreferredX(in EditNavigationSnapshot preferred, in Rect caret){
+    f32 outPreferredX = caret.x;
+    if(preferred.valid)
+        outPreferredX = preferred.preferredX;
+    if(!isFinite(outPreferredX))
+        return makeUnexpected(Failure());
+    return outPreferredX;
+}
+
+b8 TryResolveEditBoxSnapshotSizes(
+    in usize committedBytes,
+    in EditCompositionView composition,
+    mut usize outReplaced,
+    mut usize outPreeditBytes,
+    mut usize outDisplayBytes
+){
+    outReplaced = 0u;
+    outPreeditBytes = 0u;
+    outDisplayBytes = 0u;
+    if(composition.active){
+        outReplaced = composition.replacementEnd - composition.replacementStart;
+        outPreeditBytes = composition.text.size();
+    }
+    if(committedBytes > s_TextMaxBytes || outPreeditBytes > s_TextMaxBytes - (committedBytes - outReplaced))
+        return false;
+    outDisplayBytes = (committedBytes - outReplaced) + outPreeditBytes;
+    return true;
+}
+
+EditCaretMapping MakeEditCaretMapping(in usize committedByte, in usize displayByte){
+    EditCaretMapping item;
+    item.committedByte = committedByte;
+    item.displayByte = displayByte;
+    return item;
+}
+
+b8 BuildEditBoxSnapshotInto(
+    in StringView committed,
+    in Span<usize> graphemeBoundaries,
+    in EditCompositionView composition,
+    in EditTextMode textMode,
+    mut String outDisplay,
+    mut Vector<EditCaretMapping> outStops,
+    mut usize outPreeditBytes
+){
+    usize replaced = 0u;
+    usize preeditBytes = 0u;
+    usize displayBytes = 0u;
+    if(!TryResolveEditBoxSnapshotSizes(committed.size(), composition, replaced, preeditBytes, displayBytes))
+        return false;
+    outDisplay.clear();
+    outDisplay.reserve(displayBytes);
+    if(composition.active){
+        outDisplay.append(committed.substr(0u, composition.replacementStart));
+        if(preeditBytes != 0u)
+            outDisplay.append(composition.text.substr(0u, preeditBytes));
+        outDisplay.append(committed.substr(composition.replacementEnd, committed.size() - composition.replacementEnd));
+    }
+    else if(!committed.empty())
+        outDisplay.assign(committed);
+    if(!ValidateEditTextForMode(outDisplay, textMode))
+        return false;
+    outStops.clear();
+    outStops.reserve(graphemeBoundaries.size() + 1u);
+    for(in usize boundary : graphemeBoundaries){
+        if(!composition.active || boundary <= composition.replacementStart)
+            outStops.push_back(MakeEditCaretMapping(boundary, boundary));
+        if(composition.active && boundary >= composition.replacementEnd)
+            outStops.push_back(MakeEditCaretMapping(boundary, boundary - replaced + preeditBytes));
+    }
+    outPreeditBytes = preeditBytes;
+    return true;
+}
+
+void ResolveEditBoxSnapshotRanges(
+    in EditCompositionView composition,
+    in usize preeditBytes,
+    in usize modelSelectionStart,
+    in usize modelSelectionEnd,
+    in usize modelCaret,
+    mut EditBoxRange outPreedit,
+    mut EditBoxRange outReplacement,
+    mut EditBoxRange outSelection,
+    mut usize outCaret
+){
+    outPreedit = EditBoxRange();
+    outReplacement = EditBoxRange();
+    outSelection = EditBoxRange();
+    outCaret = modelCaret;
+    if(composition.active){
+        outPreedit.begin = composition.replacementStart;
+        outPreedit.end = composition.replacementStart + preeditBytes;
+        outReplacement.begin = composition.replacementStart;
+        outReplacement.end = composition.replacementEnd;
+        outSelection.begin = outPreedit.begin + min(composition.anchor, composition.caret);
+        outSelection.end = outPreedit.begin + max(composition.anchor, composition.caret);
+        outCaret = outPreedit.begin + composition.caret;
+    }
+    else{
+        outSelection.begin = modelSelectionStart;
+        outSelection.end = modelSelectionEnd;
+    }
+}
+
+b8 ShouldPaintEditBoxCaret(in EditBoxPaintFlags flags, in b8 composing){
+    if(!flags.focused || !flags.enabled || flags.readOnly)
+        return false;
+    if(composing)
+        return flags.preeditCaretVisible;
+    return flags.caretVisible;
+}
+
+void OffsetEditBoxSegmentOrigin(in Point textOrigin, mut Rect inOutSegment){
+    inOutSegment.x += textOrigin.x;
+    inOutSegment.y += textOrigin.y;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

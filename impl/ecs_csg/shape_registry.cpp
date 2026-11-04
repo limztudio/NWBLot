@@ -24,17 +24,13 @@ namespace __hidden_shape_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<Span<const u8>> ResolveShapeParameterBytes(const CsgShapeTypeInfo& shapeType, Span<const u8> parameterBytes)noexcept{
-    if(parameterBytes.empty() && !parameterBytes.data() && !shapeType.desc.defaultParameterBytes.empty())
-        parameterBytes = Span<const u8>(shapeType.desc.defaultParameterBytes.data(), shapeType.desc.defaultParameterBytes.size());
-
-    if(shapeType.desc.parameterByteSize != parameterBytes.size())
-        return MakeUnexpected(Failure{});
-    return parameterBytes;
-}
-
 [[nodiscard]] Expected<CsgShapeBounds> BuildShapeBoundsForShapeType(const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes){
-    const auto resolvedBytes = ResolveShapeParameterBytes(shapeType, parameterBytes);
+    const auto resolvedBytes = TryResolveCsgShapeParameterBytes(
+        shapeType.desc.parameterByteSize,
+        shapeType.desc.defaultParameterBytes,
+        parameterBytes.data() != nullptr,
+        parameterBytes
+    );
     if(!resolvedBytes)
         return MakeUnexpected(Failure{});
 
@@ -48,7 +44,12 @@ namespace __hidden_shape_registry{
     if(!shapeType.desc.signedDistanceCallback)
         return MakeUnexpected(Failure{});
 
-    const auto resolvedBytes = ResolveShapeParameterBytes(shapeType, parameterBytes);
+    const auto resolvedBytes = TryResolveCsgShapeParameterBytes(
+        shapeType.desc.parameterByteSize,
+        shapeType.desc.defaultParameterBytes,
+        parameterBytes.data() != nullptr,
+        parameterBytes
+    );
     if(!resolvedBytes)
         return MakeUnexpected(Failure{});
 
@@ -67,15 +68,12 @@ namespace __hidden_shape_registry{
 
 
 Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
-    if(!localBounds.finiteBounds)
-        return CsgShapeBounds{};
-
-    const SIMDVectorSingle localMin = VectorSetW(LoadFloat(localBounds.minBounds), s_CsgShapeBoundsW);
-    const SIMDVectorSingle localMax = VectorSetW(LoadFloat(localBounds.maxBounds), s_CsgShapeBoundsW);
-    const auto transformed = AabbTests::Transform(shapeToWorld, localMin, localMax);
-    if(!transformed)
+    const Expected<CsgShapeLocalBounds> worldBounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds);
+    if(!worldBounds)
         return MakeUnexpected(Failure{});
-    return CsgShapeBounds{ transformed->minBounds, transformed->maxBounds, true };
+    if(!worldBounds->finiteBounds)
+        return CsgShapeBounds{};
+    return CsgShapeBounds{ LoadFloat(worldBounds->minBounds), LoadFloat(worldBounds->maxBounds), true };
 }
 
 

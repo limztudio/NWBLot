@@ -1,0 +1,188 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/reflection/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class ReflectionFrameParameters{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 traceMode = 0u;
+    public u32 hardwareEnabled = 0u;
+    public u32 opaqueSpecularSlot = 0u;
+    public u32 glassSpecularSlot = 0u;
+    public u32 opaqueOutputSlot = 0u;
+    public u32 glassOutputSlot = 0u;
+    public u32 opaqueRadianceSlot = 0u;
+    public u32 glassRadianceSlot = 0u;
+    public u32 queueSlot = 0u;
+    public u32 counterSlot = 0u;
+    public u32 argsSlot = 0u;
+    public u32 queueCapacity = 0u;
+    public u32 maxHardwareRays = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 deferredResourcesSlot = 0u;
+    public u32 viewSlot = 0u;
+    public u32 materialContextSlot = 0u;
+    public u32 debugView = 0u;
+    public u32 depthPyramidSlot = 0u;
+    public u32 depthMipCount = 0u;
+    public u32 screenMaxSteps = s_ReflectionDefaultScreenMaxSteps;
+    public u32 diagnosticsEnabled = 0u;
+    public u32 samplingSeed = 0u;
+    public u32 sampleBaseX = 0u;
+    public u32 sampleBaseY = 0u;
+    public u32 maxOpticalQueries = s_ReflectionDefaultMaxOpticalQueries;
+    public u32 feedbackReadSlot = 0u;
+    public u32 feedbackWriteSlot = 0u;
+    public u32 feedbackFlags = 0u;
+    public u32 feedbackProbeIndex = 0u;
+    public f32 maxRayDistance = s_ReflectionDefaultMaxRayDistance;
+    public f32 distanceFadeStart = s_ReflectionDefaultDistanceFadeStart;
+    public f32 roughnessCutoff = s_ReflectionDefaultRoughnessCutoff;
+    public f32 environmentTopR = s_ReflectionDefaultEnvTopR;
+    public f32 environmentTopG = s_ReflectionDefaultEnvTopG;
+    public f32 environmentTopB = s_ReflectionDefaultEnvTopB;
+    public f32 environmentBottomR = s_ReflectionDefaultEnvBottomRgb;
+    public f32 environmentBottomG = s_ReflectionDefaultEnvBottomRgb;
+    public f32 environmentBottomB = s_ReflectionDefaultEnvBottomRgb;
+    public f32 screenThickness = s_ReflectionDefaultScreenThickness;
+    public f32 screenConfidenceThreshold = s_ReflectionDefaultScreenConfidenceThreshold;
+    public f32 screenEdgeFade = s_ReflectionDefaultScreenEdgeFade;
+}
+
+[serialize]
+class ReflectionTemporalPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 currentRadianceUavSlot = 0u;
+    public u32 previousRadianceSrvSlot = 0u;
+    public u32 opaqueSpecularSlot = 0u;
+    public u32 previousSampleCount = 0u;
+    public u32 maxSampleCount = 0u;
+    public u32 historyValid = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 samplingSeed = 0u;
+}
+
+[serialize]
+class ReflectionSpatialPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 sourceRadianceSrvSlot = 0u;
+    public u32 destinationRadianceUavSlot = 0u;
+    public u32 deferredResourcesSlot = 0u;
+    public u32 opaqueSpecularSlot = 0u;
+    public u32 viewSlot = 0u;
+    public u32 radius = 0u;
+}
+
+[serialize]
+class ReflectionDepthReducePushConstants{
+    public u32 sourceSlot = 0u;
+    public u32 destinationSlot = 0u;
+    public u32 sourceWidth = 0u;
+    public u32 sourceHeight = 0u;
+    public u32 destinationWidth = 0u;
+    public u32 destinationHeight = 0u;
+}
+
+[serialize]
+class ReflectionCsgDispatchPushConstants{
+    public u32 frameParametersSlot = 0u;
+    public u32 rayOffset = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Precompute two Sobol dimensions per frame; scrambling stays in the shader.
+ReflectionSampleBase ComputeReflectionSampleBase(in u32 sampleIndex){
+    const u64 sample = computeSobol2U32(sampleIndex);
+    ReflectionSampleBase base;
+    base.x = cast<u32>(sample);
+    base.y = cast<u32>(sample >> 32u);
+    return base;
+}
+
+void CopyReflectionDiagnosticCounters(in Span<u32> completedCounters, in ReflectionStatistics metadata, mut ReflectionStatistics latest){
+    latest.candidates = completedCounters[0u];
+    latest.hardwareRays = completedCounters[1u];
+    latest.exteriorEligibleRays = completedCounters[23u];
+    latest.hardwareHits = completedCounters[2u];
+    latest.opaquePixels = completedCounters[3u];
+    latest.glassPixels = completedCounters[4u];
+    latest.fallbackPixels = completedCounters[5u];
+    latest.screenAttempts = completedCounters[6u];
+    latest.screenHits = completedCounters[7u];
+    latest.queryBudgetUnits = completedCounters[8u];
+    if(metadata.csgHardwareEnabled)
+        latest.physicalQueries = completedCounters[24u];
+    else
+        latest.physicalQueries = latest.queryBudgetUnits;
+    latest.bootstrapEvents = completedCounters[9u];
+    latest.transparentPaths = completedCounters[10u];
+    latest.unsupportedPaths = completedCounters[11u];
+    latest.limitedPaths = completedCounters[12u];
+    latest.ambiguousPaths = completedCounters[13u];
+    latest.tirEvents = completedCounters[14u];
+    latest.mediumOverflowPaths = completedCounters[15u];
+    latest.potentialReceivers = completedCounters[16u];
+    latest.screenReturns = completedCounters[17u];
+    latest.feedbackBypassedPixels = completedCounters[18u];
+    latest.feedbackProbeTiles = completedCounters[19u];
+    const u64 screenIterationsLow = cast<u64>(completedCounters[20u]);
+    const u64 screenIterationsHigh = cast<u64>(completedCounters[21u]);
+    latest.screenIterations = screenIterationsLow | (screenIterationsHigh << s_ReflectionCounterHighWordShiftBits);
+    latest.screenLimitMisses = completedCounters[22u];
+}
+
+Expected<ReflectionFeedbackExtent> TryComputeReflectionFeedbackExtent(in u32 width, in u32 height){
+    if(width == 0u || height == 0u)
+        return makeUnexpected(Failure());
+    const u32 tilesX = divideUp(width, s_ReflectionFeedbackGroupSize);
+    const u32 tilesY = divideUp(height, s_ReflectionFeedbackGroupSize);
+    const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
+    const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
+    if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount)
+        return makeUnexpected(Failure());
+    return ReflectionFeedbackExtent(width, height, tilesX, tilesY, cast<u32>(entryCount), cast<u32>(byteCount));
+}
+
+Expected<u32> TryResolveReflectionQueueCapacity(in u32 width, in u32 height, in u32 maxHardwareRaysPerFrame){
+    u64 pixelCount = cast<u64>(width) * cast<u64>(height);
+    if(width == 0u || height == 0u || pixelCount > cast<u64>(0xFFFFFFFFu) / 2u)
+        return makeUnexpected(Failure());
+    u64 boundedCapacity = max(cast<u64>(1u), min(pixelCount * 2u, cast<u64>(maxHardwareRaysPerFrame)));
+    if(boundedCapacity > cast<u64>(0xFFFFFFFFu) / 4u)
+        return makeUnexpected(Failure());
+    return cast<u32>(boundedCapacity);
+}
+
+u32 ResolveReflectionIndirectArgumentCount(in u32 capacity, in b8 sliced){
+    if(sliced)
+        return divideUp(capacity, s_ReflectionTraceSliceRays);
+    return 1u;
+}
+
+StringView ResolveReflectionSpatialVariant(in u32 radiusIndex){
+    switch(radiusIndex){
+    case 0u:
+        return s_ReflectionSpatialRadius1Variant;
+    case 1u:
+        return s_ReflectionSpatialRadius2Variant;
+    case 2u:
+        return s_ReflectionSpatialRadius3Variant;
+    default:
+        return s_ReflectionSpatialRadius1Variant;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

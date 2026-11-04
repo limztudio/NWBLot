@@ -313,7 +313,8 @@ b8 TryHitEditCaretLineAndStop(in Span<EditCaretLine> lines, in Span<EditBoxCaret
     return true;
 }
 
-Expected<usize> TryHitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
+// Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
+Expected<usize> HitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
     u32 lineIndex = 0u;
     usize committedByte = 0u;
     if(!TryHitEditCaretLineAndStop(lines, stops, localPoint, lineIndex, committedByte))
@@ -352,11 +353,6 @@ void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect 
         segment.y += verticalOffset;
         segment.height = thickness;
     }
-}
-
-// Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
-Expected<usize> HitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
-    return TryHitEditCaretGeometry(lines, stops, localPoint);
 }
 
 Expected<EditBoxCaretStop> TryFindEditCaretStopByCommittedByte(in Span<EditBoxCaretStop> stops, in usize committedByte){
@@ -898,10 +894,6 @@ b8 TryResolveEditBoxSnapshotSizes(
     return true;
 }
 
-b8 ValidateEditBoxDisplayText(in StringView candidateText, in EditTextMode textMode){
-    return ValidateEditTextForMode(candidateText, textMode);
-}
-
 EditCaretMapping MakeEditCaretMapping(in usize committedByte, in usize displayByte){
     EditCaretMapping item;
     item.committedByte = committedByte;
@@ -933,7 +925,7 @@ b8 BuildEditBoxSnapshotInto(
     }
     else if(!committed.empty())
         outDisplay.assign(committed);
-    if(!ValidateEditBoxDisplayText(outDisplay, textMode))
+    if(!ValidateEditTextForMode(outDisplay, textMode))
         return false;
     outStops.clear();
     outStops.reserve(graphemeBoundaries.size() + 1u);

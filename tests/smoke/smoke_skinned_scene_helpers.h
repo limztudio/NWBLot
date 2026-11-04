@@ -12,7 +12,6 @@
 #include <impl/ecs_mesh/skinning/system.h>
 #include <impl/ecs_model/system.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
-#include <impl/ecs_skeleton/runtime_helpers.h>
 
 #include <core/assets/manager.h>
 #include <core/ecs/entity.h>

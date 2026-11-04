@@ -120,7 +120,7 @@ template<typename JointPaletteVector>
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const SIMDMatrix inverseBindMatrix = hasInverseBindMatrices ? LoadFloat(instance.inverseBindMatrices[jointIndex]) : SIMDMatrix{};
 
-        const auto jointMatrix = SkeletonRuntime::ResolveSkinningJointMatrix(LoadFloat(sourceJoints[jointIndex]), hasInverseBindMatrices, inverseBindMatrix, s_SkinValidationEpsilon);
+        const auto jointMatrix = TryResolveSkinningJointMatrix(LoadFloat(sourceJoints[jointIndex]), hasInverseBindMatrices, inverseBindMatrix, s_SkinValidationEpsilon);
         if(!jointMatrix){
             outJointPalette.clear();
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"), instance.handle.value, jointIndex);

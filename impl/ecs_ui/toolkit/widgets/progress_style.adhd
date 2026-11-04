@@ -69,7 +69,8 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
         && cast<f64>(metrics.contentSize.y) >= cast<f64>(cast<f32>(height));
 }
 
-Expected<ProgressMetrics> TryMeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
+// Finite fractions clamp visually to the unit interval.
+Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
     if(
         !IsValidLayoutSize(options.width)
         || !isFinite(options.height)
@@ -102,7 +103,8 @@ Expected<ProgressMetrics> TryMeasureProgress(in ProgressOptions options, in Prog
     return candidate;
 }
 
-Expected<ProgressPlacement> TryPlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
+// Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
+Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !isFinite(fraction))
         return makeUnexpected(Failure());
     ProgressPlacement candidate;
@@ -141,16 +143,6 @@ Expected<ProgressPlacement> TryPlaceProgress(in Rect bounds, in Rect clip, in Pr
         candidate.fillCanvas = fillCanvas.value();
     }
     return candidate;
-}
-
-// Finite fractions clamp visually to the unit interval.
-Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density){
-    return TryMeasureProgress(options, style, track, fill, density);
-}
-
-// Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
-Expected<ProgressPlacement> PlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction){
-    return TryPlaceProgress(bounds, clip, metrics, fraction);
 }
 
 

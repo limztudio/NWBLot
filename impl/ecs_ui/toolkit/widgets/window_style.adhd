@@ -104,7 +104,7 @@ void ResolveWindowResizeGripBars(in Rect corner, mut Rect outHorizontal, mut Rec
     outVertical = Rect(origins.z, origins.w, thickness, scaledSize.w);
 }
 
-Expected<WindowMetrics> TryMeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in f32 collapseExtent, in f32 resizeExtent, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
+Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in UiSkinRegion collapse, in UiSkinRegion resize, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
     if(
         !isFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
         || !isFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
@@ -116,8 +116,9 @@ Expected<WindowMetrics> TryMeasureWindow(in UiSkinRegion frame, in UiSkinRegion 
     WindowMetrics metrics;
     metrics.contentPadding = Insets(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
     metrics.titlePadding = Insets(title.padding.left, title.padding.top, title.padding.right, title.padding.bottom);
-    metrics.collapseExtent = collapseExtent;
-    metrics.resizeExtent = resizeExtent;
+    if(options.collapsible)
+        metrics.collapseExtent = ResolveUiSkinSquareExtent(style.windowCollapseExtent, collapse, density);
+    metrics.resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
     const f32 titleContentX = titleSize.x;
     const f32 titleContentY = max(titleSize.y, metrics.collapseExtent);
     const f32 titlePaddedX = (titleContentX + metrics.titlePadding.left) + metrics.titlePadding.right;
@@ -239,29 +240,12 @@ b8 TryConstrainWindow(in DisplayMetrics display, in f32 titleHeight, mut WindowS
     return true;
 }
 
-Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in UiSkinRegion collapse, in UiSkinRegion resize, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
-    if(
-        !isFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
-        || !isFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
-        || !isFinite(style.gap) || style.gap < 0.0f
-        || !isFinite(density) || density <= 0.0f
-        || !IsValidUiExtent(options.minimumSize)
-    )
-        return makeUnexpected(Failure());
-    f32 collapseExtent = 0.0f;
-    if(options.collapsible)
-        collapseExtent = ResolveUiSkinSquareExtent(style.windowCollapseExtent, collapse, density);
-    const f32 resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
-    return TryMeasureWindow(frame, title, collapseExtent, resizeExtent, style, options, titleSize, density);
-}
-
 Rect ResolveWindowTitleContentBounds(in Rect header, in WindowMetrics metrics, in b8 collapsible, in f32 gap){
     f32 collapseReservation = 0.0f;
     if(collapsible)
         collapseReservation = metrics.collapseExtent + gap;
     const Insets padding(metrics.titlePadding.left + collapseReservation, metrics.titlePadding.top, metrics.titlePadding.right, metrics.titlePadding.bottom);
     return InsetUiRectBounds(header, padding);
-
 }
 
 LayoutNodeDesc BuildWindowRootLayoutNodeDesc(

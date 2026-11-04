@@ -17,7 +17,6 @@
 #include <impl/ecs_model/system.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
 #include <impl/ecs_render/module.h>
-#include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/system.h>
 
 #include <core/alloc/scratch.h>

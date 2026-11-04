@@ -5,7 +5,6 @@
 #include "system.h"
 
 #include <impl/ecs_scene/view.h>
-#include <impl/ecs_skeleton/runtime_helpers.h>
 
 #include <global/algorithm.h>
 
@@ -129,7 +128,7 @@ void ModelSystem::updateStaticMeshAttachments(){
                 const SkeletonPoseComponent* const pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
                 if(!pose)
                     return;
-                const auto resolvedJointMatrix = SkeletonRuntime::EvaluateSkeletonPoseJointMatrix(*pose, attachment.parentJointIndex);
+                const auto resolvedJointMatrix = TryEvaluateSkeletonPoseJointMatrix(*pose, attachment.parentJointIndex);
                 if(!resolvedJointMatrix)
                     return;
                 jointMatrix = *resolvedJointMatrix;

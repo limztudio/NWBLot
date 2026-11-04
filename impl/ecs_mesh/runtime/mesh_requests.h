@@ -81,7 +81,7 @@ public:
             markIndexedLive(meshKey, version);
             return;
         }
-        MarkInlineRuntimeMeshRequestLive(m_inlineEntries, m_inlineCount, m_remainingCount, meshKey.identityHash(), version);
+        MarkInlineRuntimeMeshRequestLive(m_inlineEntries, m_remainingCount, m_inlineCount, meshKey.identityHash(), version);
     }
 
     [[nodiscard]] b8 containsLive(const Name& meshKey, const u64 version)const noexcept{

@@ -171,7 +171,7 @@ b8 IsValidSliderMetrics(in SliderMetrics metrics){
         && cast<f64>(metrics.contentSize.y) >= cast<f64>(cast<f32>(height));
 }
 
-Expected<SliderMetrics> TryMeasureSlider(in SliderOptions options, in SliderStyle style){
+Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle style){
     if(
         !IsValidSliderOptions(options)
         || !IsValidUiPadding(style.padding)
@@ -198,7 +198,7 @@ Expected<SliderMetrics> TryMeasureSlider(in SliderOptions options, in SliderStyl
     return candidate;
 }
 
-Expected<SliderPlacement> TryPlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized){
+Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized){
     if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !IsValidSliderMetrics(metrics) || !isFinite(normalized) || normalized < 0.0 || normalized > 1.0)
         return makeUnexpected(Failure());
     SliderPlacement candidate;
@@ -327,16 +327,6 @@ b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOpti
     outMoved = true;
     return true;
 }
-
-Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle style){
-    return TryMeasureSlider(options, style);
-}
-
-Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized){
-    return TryPlaceSlider(bounds, clip, metrics, normalized);
-}
-
-
 
 b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateStep, in b8 stateEnabled, in SliderOptions options){
     return bit_cast<u64>(stateMin) == bit_cast<u64>(options.minimum)

@@ -143,7 +143,9 @@ Expected<f64> TryClampScrollOffset(in f64 currentOffset, in f64 contentHeight, i
     return min(currentOffset, max(0.0, contentHeight - viewportHeight));
 }
 
-Expected<ScrollPlacement> TryCalculateScrollPlacement(in Rect bounds, in Rect inheritedClip, in Insets padding, in f32 scrollbarWidth, in f32 minimumThumb, in u64 rowCount, in f32 rowHeight, in f64 offset){
+// Extents and offsets are logical doubles; only the clipped visible row interval reaches float paint geometry.
+// Reject viewports that cannot be represented within the double content extent.
+Expected<ScrollPlacement> CalculateScrollPlacement(in Rect bounds, in Rect inheritedClip, in Insets padding, in f32 scrollbarWidth, in f32 minimumThumb, in u64 rowCount, in f32 rowHeight, in f64 offset){
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(inheritedClip) || !IsValidUiPadding(padding)
         || !isFinite(scrollbarWidth) || scrollbarWidth < 0.0f
@@ -219,7 +221,7 @@ Expected<ScrollPlacement> TryCalculateScrollPlacement(in Rect bounds, in Rect in
     return candidate;
 }
 
-Expected<Rect> TryCalculateScrollRowBounds(in u64 index, in ScrollPlacement placement, in f32 rowHeight){
+Expected<Rect> CalculateScrollRowBounds(in u64 index, in ScrollPlacement placement, in f32 rowHeight){
     if(
         index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount
         || !IsValidUiRect(placement.viewport)
@@ -361,7 +363,8 @@ Expected<ScrollbarPlacement> TryBuildScrollbarPlacement(in f64 contentExtent, in
     return candidate;
 }
 
-Expected<ScrollViewportPlacement> TryCalculateScrollViewportPlacement(in Rect bounds, in Rect clip, in Insets padding, in Point contentMeasure, in f32 caretWidth, in Point previousScroll, in f32 thickness, in f32 minThumb){
+// Resolve coupled bar visibility in logical coordinates.
+Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bounds, in Rect clip, in Insets padding, in Point contentMeasure, in f32 caretWidth, in Point previousScroll, in f32 thickness, in f32 minThumb){
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)
         || !IsValidUiExtent(contentMeasure) || !IsValidUiExtent(previousScroll)
@@ -528,39 +531,6 @@ Expected<f32> TryDragScrollbarOffset(in PointerGesture gesture, in b8 horizontal
     if(!isFinite(next) || next > s_UiMaxFloatF64)
         return makeUnexpected(Failure());
     return cast<f32>(next);
-}
-
-// Extents and offsets are logical doubles; only the clipped visible row interval reaches float paint geometry.
-// Reject viewports that cannot be represented within the double content extent.
-Expected<ScrollPlacement> CalculateScrollPlacement(
-    in Rect bounds,
-    in Rect inheritedClip,
-    in Insets padding,
-    in f32 scrollbarWidth,
-    in f32 minimumThumb,
-    in u64 rowCount,
-    in f32 rowHeight,
-    in f64 offset
-){
-    return TryCalculateScrollPlacement(bounds, inheritedClip, padding, scrollbarWidth, minimumThumb, rowCount, rowHeight, offset);
-}
-
-Expected<Rect> CalculateScrollRowBounds(in u64 index, in ScrollPlacement placement, in f32 rowHeight){
-    return TryCalculateScrollRowBounds(index, placement, rowHeight);
-}
-
-// Resolve coupled bar visibility in logical coordinates.
-Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(
-    in Rect bounds,
-    in Rect clip,
-    in Insets padding,
-    in Point contentMeasure,
-    in f32 caretWidth,
-    in Point previousScroll,
-    in f32 thickness,
-    in f32 minThumb
-){
-    return TryCalculateScrollViewportPlacement(bounds, clip, padding, contentMeasure, caretWidth, previousScroll, thickness, minThumb);
 }
 
 Name ResolveScrollbarThumbRegionName(in ScrollbarStyle style, in b8 enabled, in b8 pressed, in b8 hovered){

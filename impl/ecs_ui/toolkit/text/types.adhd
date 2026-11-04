@@ -733,10 +733,6 @@ Expected<Rect> TryResolveGlyphCoverageRectangle(
     return TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints);
 }
 
-b8 FitsTextCoordinateXY(in VectorDouble value){
-    return FitsTextCoordinate(value.x) && FitsTextCoordinate(value.y);
-}
-
 Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
     const f64 originX = cast<f64>(position.x) + cast<f64>(ink.x);
     const f64 originY = cast<f64>(position.y) + cast<f64>(ink.y);

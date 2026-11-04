@@ -30,7 +30,6 @@ using namespace GpuTaskGraphCompilerDetail;
 
 
 inline constexpr usize s_InvalidAccess = Limit<usize>::s_Max;
-inline constexpr u64 s_EdgePairProducerShift = 32u;
 inline constexpr usize s_IndexedInferredEdges = Limit<usize>::s_Max - 1u;
 inline constexpr usize s_InlineInferredReasonCount = 8u;
 
@@ -92,7 +91,7 @@ struct InferredDependencyHasher{
 public:
     [[nodiscard]] usize operator()(const usize index)const noexcept{
         const GpuTaskDependencyEdge& edge = (*edges)[index];
-        const u64 taskPair = (static_cast<u64>(edge.producer.index) << s_EdgePairProducerShift) | edge.consumer.index;
+        const u64 taskPair = PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index);
         usize hash = GpuTaskDependencyPairHasher{}(taskPair);
         HashCombine(hash, edge.resource.index);
         HashCombine(hash, edge.resourceVersion.index);
@@ -332,7 +331,7 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
     outAnalysis.m_inferredEdges.reserve(expectedEdgeCount);
 
     const auto appendRawEdge = [&](const GpuTaskDependencyEdge& edge) -> DependencyPairIndices&{
-        const u64 pairKey = (static_cast<u64>(edge.producer.index) << s_EdgePairProducerShift) | edge.consumer.index;
+        const u64 pairKey = PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index);
         auto [pair, inserted] = dependencyPairs.try_emplace(pairKey, DependencyPairIndices{ outAnalysis.m_edges.size() });
         if(inserted){
             outAnalysis.m_edges.push_back(edge);

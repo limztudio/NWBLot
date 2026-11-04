@@ -67,8 +67,8 @@ public:
             inputs.resourceSlotsBuffer != nullptr,
             joints,
             joints.data() != nullptr,
-            m_candidateSerial,
             m_acceptedRevision,
+            m_candidateSerial,
             m_pendingJoints
         );
         if(!candidate)

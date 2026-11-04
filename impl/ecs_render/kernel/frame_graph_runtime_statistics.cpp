@@ -22,11 +22,6 @@ namespace __hidden_frame_graph_runtime_statistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Core::Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const Core::CommandQueue::Enum queueClass)noexcept{
-    return Core::GpuTaskTelemetryDetail::TranslateQueueClass(queueClass);
-}
-
-
 template<typename Result, typename Statistics>
 [[nodiscard]] static Result TranslateSubmissionStatistics(const Statistics& submissionStatistics)noexcept{
     return {
@@ -153,7 +148,7 @@ Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord ECSRenderDetail::Bui
     if(!statistics.valid() || ownerNodeIndex == Limit<u32>::s_Max)
         return {};
 
-    const auto queueClass = __hidden_frame_graph_runtime_statistics::TranslateQueueClass(statistics.queueClass);
+    const auto queueClass = Core::GpuTaskTelemetryDetail::TranslateQueueClass(statistics.queueClass);
     if(!queueClass)
         return {};
 
@@ -202,7 +197,7 @@ Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics ECSRenderDetail::Build
     )
         return {};
 
-    const auto queueClass = __hidden_frame_graph_runtime_statistics::TranslateQueueClass(compileStatistics.queueClass);
+    const auto queueClass = Core::GpuTaskTelemetryDetail::TranslateQueueClass(compileStatistics.queueClass);
     if(!queueClass)
         return {};
 

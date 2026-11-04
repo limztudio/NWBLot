@@ -309,8 +309,8 @@ Expected<u64> TryStageMeshSkinningDeformationCandidate(
     in b8 hasResourceSlotsBuffer,
     in Span<SkeletonJointMatrix> joints,
     in b8 hasJointData,
-    mut u64 inoutCandidateSerial,
     in u64 acceptedRevision,
+    mut u64 inoutCandidateSerial,
     mut Vector<SkeletonJointMatrix> outPendingJoints
 ){
     if(!CanStageMeshSkinningDeformationCandidate(hasResourceSlotsBuffer, joints.size(), hasJointData, inoutCandidateSerial, acceptedRevision)){

@@ -5,6 +5,7 @@
 #include "commands.adhd"
 #include "pointer.adhd"
 #include <impl/ecs_ui/toolkit/id.adhd>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd>
 #include "popup.adhd"
 #include "control.adhd"
 
@@ -2184,10 +2185,6 @@ void CancelRouterPointerPress(
     outCaptureControl = ControlToken();
 }
 
-b8 RouterRectContainsPoint(in Rect rectangle, in Point position){
-    return position.x >= rectangle.x && position.y >= rectangle.y && position.x < rectangle.x + rectangle.width && position.y < rectangle.y + rectangle.height;
-}
-
 Expected<usize> FindRouterHitTargetIndex(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,
@@ -2201,7 +2198,7 @@ Expected<usize> FindRouterHitTargetIndex(
     HitTarget foundTarget;
     for(usize index = 0u; index < targets.size(); ++index){
         const HitTarget target = targets[index];
-        if(!RouterRectContainsPoint(target.rectangle, position) || !RouterRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
+        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
             continue;
         if(!hasFound || target.layer > foundTarget.layer || (target.layer == foundTarget.layer && target.paintOrder >= foundTarget.paintOrder)){
             hasFound = true;
@@ -2448,28 +2445,6 @@ void TerminateRouterPointerSource(
     outUnfinishedHoverSource = unfinished && hoverPointerSource == source;
 }
 
-b8 IsValidRouterTargetRect(in Rect rectangle){
-    if(
-        !isFinite(rectangle.x)
-        || !isFinite(rectangle.y)
-        || !isFinite(rectangle.width) || rectangle.width < 0.0f
-        || !isFinite(rectangle.height) || rectangle.height < 0.0f
-    )
-        return false;
-    const f32 right = rectangle.x + rectangle.width;
-    const f32 bottom = rectangle.y + rectangle.height;
-    return isFinite(right) && isFinite(bottom);
-}
-
-b8 HasValidRouterHitTargetGeometry(in Rect rectangle, in Rect clip, in Rect gestureReference){
-    return
-        IsValidRouterTargetRect(rectangle)
-        && IsValidRouterTargetRect(clip)
-        && IsValidRouterTargetRect(gestureReference)
-        && ((gestureReference.width == 0.0f) == (gestureReference.height == 0.0f))
-    ;
-}
-
 b8 StageRouterHitTargets(
     in Span<HitTarget> targets,
     in Span<PopupRecord> stagedPopups,
@@ -2482,7 +2457,7 @@ b8 StageRouterHitTargets(
         const HitTarget target = targets[index];
         if(
             !target.id.valid() || target.declarationGeneration == 0u
-            || !HasValidRouterHitTargetGeometry(target.rectangle, target.clip, target.gestureReference)
+            || !HasValidHitTargetGeometry(target.rectangle, target.clip, target.gestureReference)
             || !ValidStagedPopupTarget(target, stagedPopups)
         )
             return false;

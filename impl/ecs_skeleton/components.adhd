@@ -76,14 +76,40 @@ void InitializeSkeletonPoseFromJoints(in Span<SkeletonJoint> joints, mut Skeleto
     }
 }
 
+b8 IsAffineSkeletonJointRow3(in VectorSingle row3){
+    return IsFiniteSkeletonJointRow(row3)
+        && abs(row3.x) <= s_SkeletonAffineEpsilon
+        && abs(row3.y) <= s_SkeletonAffineEpsilon
+        && abs(row3.z) <= s_SkeletonAffineEpsilon
+        && abs(row3.w - 1.0f) <= s_SkeletonAffineEpsilon;
+}
+
 b8 IsInvertibleSkeletonJointMatrix(in MatrixSingle matrix, in f32 determinantEpsilon){
-    if(!IsFiniteSkeletonJointMatrix(matrix))
+    if(!IsFiniteSkeletonJointMatrix(matrix) || !IsAffineSkeletonJointRow3(matrix[3u]))
         return false;
     const VectorSingle row0 = matrix[0u];
     const VectorSingle row1 = matrix[1u];
     const VectorSingle row2 = matrix[2u];
     const f32 determinant = dot(row0.xyz, cross(row1.xyz, row2.xyz));
     return isFinite(determinant) && abs(determinant) > determinantEpsilon;
+}
+
+Expected<MatrixSingle> TryResolveSkinningJointMatrix(
+    in MatrixSingle poseJoint,
+    in b8 hasInverseBind,
+    in MatrixSingle inverseBind,
+    in f32 inverseBindDeterminantEpsilon
+){
+    if(!IsInvertibleSkeletonJointMatrix(poseJoint, s_SkeletonJointDeterminantEpsilon))
+        return makeUnexpected(Failure());
+    if(!hasInverseBind)
+        return poseJoint;
+    if(!IsInvertibleSkeletonJointMatrix(inverseBind, inverseBindDeterminantEpsilon))
+        return makeUnexpected(Failure());
+    const MatrixSingle combined = mul(poseJoint, inverseBind);
+    if(!IsInvertibleSkeletonJointMatrix(combined, s_SkeletonJointDeterminantEpsilon))
+        return makeUnexpected(Failure());
+    return combined;
 }
 
 Expected<MatrixSingle> TryResolveSkeletonPoseJointMatrix(

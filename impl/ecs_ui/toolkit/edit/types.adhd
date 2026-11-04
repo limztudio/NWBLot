@@ -669,23 +669,6 @@ EditWordRange ResolveEditEraseForwardRange(in Span<usize> boundaries, in usize t
     return range;
 }
 
-usize LowerBoundEditBoundaryIndex(in Span<usize> boundaries, in usize position){
-    usize first = 0u;
-    usize count = boundaries.size();
-    while(count > 0u){
-        const usize step = count / 2u;
-        const usize mid = first + step;
-        if(boundaries[mid] < position){
-            first = mid + 1u;
-            count -= step + 1u;
-        }
-        else{
-            count = step;
-        }
-    }
-    return first;
-}
-
 b8 IsEditBoundary(in Span<usize> boundaries, in usize position){
     const usize index = lowerBoundIndex(boundaries, position);
     return index < boundaries.size() && boundaries[index] == position;

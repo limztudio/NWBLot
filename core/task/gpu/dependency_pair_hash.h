@@ -7,6 +7,7 @@
 
 #include <core/global.h>
 
+#include <global/bit.h>
 #include <global/hash_utils.h>
 
 
@@ -18,6 +19,10 @@ NWB_CORE_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] constexpr u64 PackGpuTaskDependencyPairKey(const u32 producerIndex, const u32 consumerIndex)noexcept{
+    return PackU32Words(consumerIndex, producerIndex);
+}
 
 // Packed producer/consumer indices need full-byte mixing before power-of-two hash-table bucket selection.
 struct GpuTaskDependencyPairHasher{

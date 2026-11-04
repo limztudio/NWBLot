@@ -26,16 +26,6 @@ namespace __hidden_gpu_task_graph_telemetry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_DependencyPairProducerShift = 32u;
-
-[[nodiscard]] static u64 DependencyPairKey(const GpuTaskDependencyEdge& edge)noexcept{
-    return (static_cast<u64>(edge.producer.index) << s_DependencyPairProducerShift) | edge.consumer.index;
-}
-
-[[nodiscard]] static Expected<Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(const CommandQueue::Enum queueClass)noexcept{
-    return GpuTaskTelemetryDetail::TranslateQueueClass(queueClass);
-}
-
 [[nodiscard]] static Expected<Telemetry::FrameGraphQueueAssignmentReason::Enum> TranslateReason(const GpuTaskQueueAssignmentReason::Enum reason)noexcept{
     switch(reason){
     case GpuTaskQueueAssignmentReason::RequiredGraphics:
@@ -131,7 +121,7 @@ inline constexpr u32 s_DependencyPairProducerShift = 32u;
     };
     result.dedicated = assignment.dedicated;
     result.present = true;
-    const auto queueClass = TranslateQueueClass(assignment.queueClass);
+    const auto queueClass = GpuTaskTelemetryDetail::TranslateQueueClass(assignment.queueClass);
     if(!queueClass)
         return MakeUnexpected(Failure{});
     const auto reason = TranslateReason(assignment.reason);
@@ -285,14 +275,14 @@ b8 GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(const GpuTaskGraph
             flags |= GpuTaskGraphTelemetryEdgeFlag::VersionDependency;
         else if(edge.hazard == GpuTaskHazardType::VersionLifetime)
             flags |= GpuTaskGraphTelemetryEdgeFlag::VersionLifetime;
-        auto [annotation, inserted] = inferredFlags.try_emplace(__hidden_gpu_task_graph_telemetry::DependencyPairKey(edge), flags);
+        auto [annotation, inserted] = inferredFlags.try_emplace(PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index), flags);
         if(!inserted)
             annotation.value() |= flags;
     }
     for(const GpuTaskDependencyEdge& edge : analysis.edges()){
         // Analysis keeps one raw edge per pair and gives explicit dependencies precedence over inferred hazards.
         u8 flags = edge.hazard == GpuTaskHazardType::Explicit ? GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency : GpuTaskGraphTelemetryEdgeFlag::None;
-        const auto annotation = inferredFlags.find(__hidden_gpu_task_graph_telemetry::DependencyPairKey(edge));
+        const auto annotation = inferredFlags.find(PackGpuTaskDependencyPairKey(edge.producer.index, edge.consumer.index));
         if(annotation != inferredFlags.end())
             flags |= annotation->second;
         builder.addEdge(taskNodes[edge.producer.index], taskNodes[edge.consumer.index], Telemetry::FrameGraphEdgeKind::DependsOn, flags);

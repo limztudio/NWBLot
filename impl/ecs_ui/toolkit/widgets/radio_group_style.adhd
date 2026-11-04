@@ -264,7 +264,7 @@ b8 IsValidRadioGroupMetrics(in RadioGroupMetrics metrics){
         && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(minimumWidth));
 }
 
-Expected<RadioGroupMetrics> TryMeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
+Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
     if(
         count > s_RadioGroupMaxChoices
         || !IsValidUiExtent(maximumLabel)
@@ -304,7 +304,7 @@ Expected<RadioGroupMetrics> TryMeasureRadioGroup(in u32 count, in Point maximumL
     return candidate;
 }
 
-Expected<RadioGroupPlacement> TryPlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
+Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)
         return makeUnexpected(Failure());
     RadioGroupPlacement candidate;
@@ -369,14 +369,6 @@ Expected<RadioGroupPlacement> TryPlaceRadioGroup(in Rect bounds, in Rect clip, i
         candidate.rows[index] = row;
     }
     return candidate;
-}
-
-Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
-    return TryMeasureRadioGroup(count, maximumLabel, options, style);
-}
-
-Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
-    return TryPlaceRadioGroup(bounds, clip, choices, metrics);
 }
 
 void ReconcileRadioGroupSelectionAndCursor(

@@ -103,7 +103,8 @@ void ApplySkinPaletteToPopupStyle(in UiSkinPalette palette, mut PopupStyle style
     style.backdrop = ResolveUiSkinColor(palette, UiSkinColorRole::PopupBackdrop);
 }
 
-Expected<PopupPlacement> TryPlacePopup(in PopupOptions options, in DisplayMetrics display){
+// Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
+Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics display){
     PopupPlacement outPlacement;
     if(!IsValidPopupOptions(options, display))
         return makeUnexpected(Failure());
@@ -169,11 +170,6 @@ Expected<PopupPlacement> TryPlacePopup(in PopupOptions options, in DisplayMetric
     outPlacement.viewport = Rect(0.0f, 0.0f, display.logicalWidth, display.logicalHeight);
     outPlacement.side = side;
     return outPlacement;
-}
-
-// Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
-Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics display){
-    return TryPlacePopup(options, display);
 }
 
 b8 IsValidContextMenuDeclarationOptions(in ContextMenuOptions options, in usize currentMenuCount, in usize maxPopups){

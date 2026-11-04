@@ -42,7 +42,8 @@ class ImageFrameRecord<TImage>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ImageMetrics> TryMeasureRegionImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
+// Natural atlas extent uses reference density and logical minima; region padding does not inset images.
+Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
     ImageMetrics outMetrics;
     if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !isFinite(density) || density <= 0.0f)
         return makeUnexpected(Failure());
@@ -59,23 +60,6 @@ Expected<ImageMetrics> TryMeasureRegionImage(in ImageOptions options, in UiSkinR
     return outMetrics;
 }
 
-Expected<ImagePlacement> TryPlaceImage(in Rect bounds, in Rect clip){
-    ImagePlacement outPlacement;
-    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
-        return makeUnexpected(Failure());
-    const Expected<Rect> intersection = TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint);
-    if(!intersection.has_value())
-        return makeUnexpected(Failure());
-    outPlacement.bounds = bounds;
-    outPlacement.clip = intersection.value();
-    return outPlacement;
-}
-
-// Natural atlas extent uses reference density and logical minima; region padding does not inset images.
-Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
-    return TryMeasureRegionImage(options, region, density);
-}
-
 // Engine images use one logical unit per texel without atlas density, slices or control padding.
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in ImageSource source){
     if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint))
@@ -88,7 +72,15 @@ Expected<ImageMetrics> MeasureImage(in ImageOptions options, in ImageSource sour
 
 // Empty visibility remains a valid placement.
 Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip){
-    return TryPlaceImage(bounds, clip);
+    ImagePlacement outPlacement;
+    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
+        return makeUnexpected(Failure());
+    const Expected<Rect> intersection = TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint);
+    if(!intersection.has_value())
+        return makeUnexpected(Failure());
+    outPlacement.bounds = bounds;
+    outPlacement.clip = intersection.value();
+    return outPlacement;
 }
 
 

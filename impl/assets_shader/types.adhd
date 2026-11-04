@@ -106,9 +106,6 @@ const StringView s_MeshComputeArchiveStageText = "mesh_compute";
 const StringView s_MeshComputeImplicitDefineText = "NWB_MESH_SHADER_EMULATION_COMPUTE";
 const Name s_MeshComputeArchiveStageName = "mesh_compute";
 
-const u64 s_ShaderFnv64OffsetBasis = 14695981039346656037ull;
-const u64 s_ShaderFnv64Prime = 1099511628211ull;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -400,35 +397,6 @@ b8 TryParseVariantSignatureSegment(
     outDefineValue = defineValue;
     outError = VariantSignatureSegmentError::None;
     return true;
-}
-
-u64 UpdateShaderFnv64Byte(in u64 hash, in u8 byteValue){
-    return (hash ^ cast<u64>(byteValue)) * s_ShaderFnv64Prime;
-}
-
-u64 UpdateShaderFnv64U32(in u64 hash, in u32 value){
-    u64 result = hash;
-    for(u32 byteIndex = 0u; byteIndex < 4u; ++byteIndex){
-        const u8 byteValue = cast<u8>((value >> (byteIndex * 8u)) & 0xffu);
-        result = UpdateShaderFnv64Byte(result, byteValue);
-    }
-    return result;
-}
-
-u64 UpdateShaderFnv64U64(in u64 hash, in u64 value){
-    u64 result = hash;
-    for(u32 byteIndex = 0u; byteIndex < 8u; ++byteIndex){
-        const u8 byteValue = cast<u8>((value >> (byteIndex * 8u)) & 0xffull);
-        result = UpdateShaderFnv64Byte(result, byteValue);
-    }
-    return result;
-}
-
-u64 UpdateShaderFnv64NameHash(in u64 hash, in NameHash nameHash){
-    u64 result = hash;
-    for(usize lane = 0u; lane < nameHash.qwords.size(); ++lane)
-        result = UpdateShaderFnv64U64(result, nameHash.qwords[lane]);
-    return result;
 }
 
 void ReportShaderAssetPayloadDecodeFailure(in AssetPayloadDecodeFailure failure){

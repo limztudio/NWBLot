@@ -186,8 +186,8 @@ b8 TryAddInlineRuntimeMeshRequest(
 
 void MarkInlineRuntimeMeshRequestLive(
     mut Array<RuntimeMeshRequestEntry, s_RuntimeMeshRequestInlineCapacity> entries,
-    in usize inlineCount,
     mut usize inoutRemainingCount,
+    in usize inlineCount,
     in NameHash name,
     in u64 version
 ){

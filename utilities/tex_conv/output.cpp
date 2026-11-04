@@ -24,28 +24,8 @@ namespace __hidden_output{
 
 
 template<typename ArenaT>
-[[nodiscard]] const ::Path<ArenaT>& FailedValidationPath(const StagedFilePairPaths<ArenaT>& paths, const StagedFilePairResult& result)noexcept{
-    if(
-        result.failureStage == StagedFilePairFailureStage::QueryWorkPath
-        || result.failureStage == StagedFilePairFailureStage::WorkPathAlreadyExists
-    ){
-        switch(result.failedIndex){
-        case 0u:
-            return paths.primaryTemporary;
-        case 1u:
-            return paths.secondaryTemporary;
-        case 2u:
-            return paths.primaryBackup;
-        default:
-            return paths.secondaryBackup;
-        }
-    }
-    return result.failedIndex == 0u ? paths.primary : paths.secondary;
-}
-
-template<typename ArenaT>
 void LogValidationFailure(const StagedFilePairPaths<ArenaT>& paths, const StagedFilePairResult& result){
-    const ::Path<ArenaT>& path = FailedValidationPath(paths, result);
+    const ::Path<ArenaT>& path = FailedStagedFilePairPath(paths, result);
     switch(result.failureStage){
     case StagedFilePairFailureStage::QueryOutput:
     case StagedFilePairFailureStage::QueryWorkPath:

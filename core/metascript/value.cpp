@@ -568,7 +568,7 @@ NotNull<Value::ListType*> Value::allocList()const{
 }
 
 NotNull<Value::MapType*> Value::allocMap()const{
-    MapType* const created = NewArenaObject<MapType>(m_arena, 0, MStringHash(), MStringEqual(), m_arena);
+    MapType* const created = NewArenaObject<MapType>(m_arena, 0, TransparentStringHash<MString>(), TransparentStringEqual<MString>(), m_arena);
     if(!created)
         throw AllocationException{};
     return MakeNotNull(created);

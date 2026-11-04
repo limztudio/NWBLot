@@ -7,7 +7,54 @@
 
 #include "operations.h"
 #include "../atomic.h"
+#include "../diagnostics.h"
 #include "../numeric_text.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SizedFileCreateFailure{
+    ErrorCode code;
+    b8 created;
+};
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<void, SizedFileCreateFailure> CreateSizedFileExclusive(const Path<ArenaT>& path, const u64 size)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(size > static_cast<u64>(Limit<LONGLONG>::s_Max))
+        return MakeUnexpected(SizedFileCreateFailure{ MakeErrorCode(ErrorCondition::value_too_large), false });
+    const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if(handle == INVALID_HANDLE_VALUE)
+        return MakeUnexpected(SizedFileCreateFailure{ LastSystemError(), false });
+    ErrorCode error;
+    LARGE_INTEGER end{};
+    end.QuadPart = static_cast<LONGLONG>(size);
+    if(!SetFilePointerEx(handle, end, nullptr, FILE_BEGIN) || !SetEndOfFile(handle))
+        error = LastSystemError();
+    if(!CloseHandle(handle) && !error)
+        error = LastSystemError();
+#else
+    if(size > static_cast<u64>(Limit<off_t>::s_Max))
+        return MakeUnexpected(SizedFileCreateFailure{ MakeErrorCode(ErrorCondition::value_too_large), false });
+    constexpr u32 s_NewSegmentMode = 0666u;
+    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewSegmentMode);
+    if(descriptor < 0)
+        return MakeUnexpected(SizedFileCreateFailure{ LastSystemError(), false });
+    ErrorCode error;
+    while(ftruncate(descriptor, static_cast<off_t>(size)) != 0){
+        if(errno != EINTR){
+            error = LastSystemError();
+            break;
+        }
+    }
+    if(close(descriptor) != 0 && !error)
+        error = LastSystemError();
+#endif
+    if(error)
+        return MakeUnexpected(SizedFileCreateFailure{ error, true });
+    return {};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,17 +79,46 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GlobalFilesystemDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ArenaT>
-[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsolutePath(ArenaT& arena, const Path<ArenaT>& baseDirectory, const AStringView relativeOrAbsolute){
-    if(relativeOrAbsolute.empty())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    Path<ArenaT> candidate(arena, relativeOrAbsolute);
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsoluteCandidate(const Path<ArenaT>& baseDirectory, Path<ArenaT>& candidate){
     if(!candidate.isAbsolute())
         candidate = baseDirectory / candidate;
     const auto absolutePath = AbsolutePath(candidate);
     if(!absolutePath)
         return MakeUnexpected(absolutePath.error());
     return LexicallyNormal(*absolutePath);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsolutePath(ArenaT& arena, const Path<ArenaT>& baseDirectory, const Path<ArenaT>& relativeOrAbsolute){
+    if(relativeOrAbsolute.empty())
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    Path<ArenaT> candidate(arena, relativeOrAbsolute);
+    return GlobalFilesystemDetail::ResolveAbsoluteCandidate(baseDirectory, candidate);
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsolutePath(ArenaT& arena, const Path<ArenaT>& baseDirectory, const AStringView relativeOrAbsolute){
+    if(relativeOrAbsolute.empty())
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    Path<ArenaT> candidate(arena, relativeOrAbsolute);
+    return GlobalFilesystemDetail::ResolveAbsoluteCandidate(baseDirectory, candidate);
 }
 
 
@@ -341,18 +417,23 @@ template<typename ArenaT>
     const usize count,
     const TStringView suffixTag = NWB_TEXT("stage")
 ){
+    static_assert(IsNothrowMoveConstructible_V<Path<ArenaT>>);
+    static_assert(noexcept(Expected<Path<ArenaT>, ErrorCode>(DeclVal<Path<ArenaT>&&>())));
     for(u32 attempt = 0u; attempt < GlobalFilesystemDetail::s_MaxUniqueStageAttempts; ++attempt){
-        const auto stagedPath = GlobalFilesystemDetail::BuildUniqueSiblingStagePath(targetPath, suffixTag);
+        auto stagedPath = GlobalFilesystemDetail::BuildUniqueSiblingStagePath(targetPath, suffixTag);
         if(!stagedPath)
             return MakeUnexpected(stagedPath.error());
         b8 created = false;
         const auto staged = StageNewBinaryFileDurable(*stagedPath, data, count, created);
         if(staged)
-            return *stagedPath;
+            return Move(*stagedPath);
         if(created){
             const auto removed = RemoveFile(*stagedPath);
-            if(!removed)
-                return MakeUnexpected(staged.error() ? staged.error() : removed.error());
+            if(!removed || !*removed){
+                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = "staged_file_cleanup", .message = "failed to remove staged file", });
+                if(!removed)
+                    return MakeUnexpected(staged.error() ? staged.error() : removed.error());
+            }
             return MakeUnexpected(staged.error());
         }
         if(GlobalFilesystemDetail::IsFileExistsError(staged.error()))

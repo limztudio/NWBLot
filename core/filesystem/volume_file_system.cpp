@@ -6,6 +6,7 @@
 #include "volume_storage_detail.h"
 #include "arena_names.h"
 
+#include <global/overflow.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -284,22 +285,10 @@ b8 VolumeFileSystem::seekFile(FileCursor& cursor, const i64 offset, const FileSe
     default: return false;
     }
 
-    u64 destination = 0;
-    if(offset < 0){
-        const u64 distance = static_cast<u64>(-(offset + 1)) + 1u;
-        if(distance > base)
-            return false;
-        destination = base - distance;
-    }
-    else{
-        const u64 distance = static_cast<u64>(offset);
-        if(distance > Limit<u64>::s_Max - base)
-            return false;
-        destination = base + distance;
-    }
-    if(destination > record->size)
+    const auto destination = AddSignedOffset(base, offset);
+    if(!destination || *destination > record->size)
         return false;
-    cursor.offset = destination;
+    cursor.offset = *destination;
     return true;
 }
 

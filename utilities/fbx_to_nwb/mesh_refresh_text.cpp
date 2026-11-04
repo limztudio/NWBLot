@@ -9,8 +9,6 @@
 #include <core/common/log.h>
 #include <core/metascript/lexer.h>
 
-#include <global/allocation_size.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -193,22 +191,7 @@ template<typename Value, typename WriteValue>
     return true;
 }
 
-void ApplyTextReplacements(const Span<TextReplacement> inOutReplacements, ScratchString& inOutSource){
-    Sort(inOutReplacements.begin(), inOutReplacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
-        return lhs.begin > rhs.begin;
-    });
 
-    usize capacity = inOutSource.size();
-    for(const TextReplacement& replacement : inOutReplacements){
-        NWB_ASSERT(replacement.begin <= replacement.end && replacement.end <= inOutSource.size());
-        const usize oldSize = replacement.end - replacement.begin;
-        if(replacement.text.size() > oldSize)
-            capacity = AddSize(capacity, replacement.text.size() - oldSize);
-    }
-    inOutSource.reserve(capacity);
-    for(const TextReplacement& replacement : inOutReplacements)
-        inOutSource.replace(replacement.begin, replacement.end - replacement.begin, replacement.text);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

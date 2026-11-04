@@ -5,6 +5,8 @@
 #include "pipe_io.h"
 
 #include <global/termination.h>
+#include <global/posix/descriptor.h>
+#include <global/posix/pipe_io.h>
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -35,34 +37,6 @@ static constexpr usize s_ReadChunkBytes = 4096u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcept{
-    sigset_t blocked;
-    sigset_t previous;
-    sigset_t pending;
-    if(sigemptyset(&blocked) != 0 || sigaddset(&blocked, SIGPIPE) != 0 || pthread_sigmask(SIG_BLOCK, &blocked, &previous) != 0 || sigpending(&pending) != 0)
-        TerminateInvariant();
-    const b8 alreadyPending = sigismember(&pending, SIGPIPE) == 1;
-    const ssize_t count = write(fd, bytes.data(), bytes.size());
-    const int writeError = errno;
-    if(count < 0 && writeError == EPIPE && !alreadyPending){
-        const timespec timeout{};
-        int signal = -1;
-        do{
-            signal = sigtimedwait(&blocked, nullptr, &timeout);
-        } while(signal < 0 && errno == EINTR);
-        if(signal < 0 && errno != EAGAIN)
-            TerminateInvariant();
-    }
-    if(pthread_sigmask(SIG_SETMASK, &previous, nullptr) != 0)
-        TerminateInvariant();
-    errno = writeError;
-    return count;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -76,17 +50,11 @@ Expected<ClipboardPipe> OpenClipboardPipe()noexcept{
     int readFd = descriptors[0];
     int writeFd = descriptors[1];
     const int writeFlags = fcntl(writeFd, F_GETFD);
-    if(ConfigureClipboardPipe(readFd) && writeFlags >= 0 && fcntl(writeFd, F_SETFD, writeFlags | FD_CLOEXEC) == 0)
+    if(ConfigureNonblockingCloseOnExec(readFd) && writeFlags >= 0 && fcntl(writeFd, F_SETFD, writeFlags | FD_CLOEXEC) == 0)
         return ClipboardPipe{ .readFd = readFd, .writeFd = writeFd };
     CloseClipboardPipe(readFd);
     CloseClipboardPipe(writeFd);
     return MakeUnexpected(Failure{});
-}
-
-b8 ConfigureClipboardPipe(const int fd)noexcept{
-    const int flags = fcntl(fd, F_GETFL);
-    const int descriptorFlags = fcntl(fd, F_GETFD);
-    return flags >= 0 && descriptorFlags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0 && fcntl(fd, F_SETFD, descriptorFlags | FD_CLOEXEC) == 0;
 }
 
 void CloseClipboardPipe(int& fd)noexcept{
@@ -142,7 +110,7 @@ b8 ClipboardPipeWriter::begin(const int fd, const AStringView text){
     m_text.clear();
     m_offset = 0u;
     m_fd = fd;
-    if(fd < 0 || !ConfigureClipboardPipe(fd) || ValidateClipboardUtf8Text(text) != ClipboardStatus::Success){
+    if(fd < 0 || !ConfigureNonblockingCloseOnExec(fd) || ValidateClipboardUtf8Text(text) != ClipboardStatus::Success){
         CloseClipboardPipe(m_fd);
         return false;
     }
@@ -164,7 +132,7 @@ ClipboardStatus::Enum ClipboardPipeWriter::advance()noexcept{
     while(m_offset < m_text.size() && consumed < __hidden_pipe_io::s_PumpByteBudget && calls < __hidden_pipe_io::s_PumpCallBudget){
         ++calls;
         const usize size = Min(m_text.size() - m_offset, __hidden_pipe_io::s_PumpByteBudget - consumed);
-        const ssize_t count = __hidden_pipe_io::WriteWithoutSigpipe(m_fd, AStringView(m_text).substr(m_offset, size));
+        const ssize_t count = WriteWithoutSigpipe(m_fd, AStringView(m_text).substr(m_offset, size));
         if(count > 0){
             m_offset += static_cast<usize>(count);
             consumed += static_cast<usize>(count);

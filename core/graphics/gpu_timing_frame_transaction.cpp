@@ -5,6 +5,7 @@
 #include "gpu_timing.h"
 #include "backend_selection.h"
 
+#include <global/scope_exit.h>
 #include <global/exception.h>
 #include <global/termination.h>
 
@@ -13,64 +14,6 @@
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_gpu_timing_frame_transaction{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuTimingMeasureConstructionUnwindScope final : NoCopy{
-public:
-    explicit GpuTimingMeasureConstructionUnwindScope(GpuTimingMeasure& measure)noexcept
-        : m_measure(measure)
-    {}
-    ~GpuTimingMeasureConstructionUnwindScope()noexcept{
-        if(!m_active)
-            return;
-        m_measure.abandonTimingWithoutCallbacks();
-        m_measure.abandonMarker();
-    }
-
-
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    GpuTimingMeasure& m_measure;
-    b8 m_active = true;
-};
-
-class GpuTimingMeasureFinishTimingUnwindScope final : NoCopy{
-public:
-    explicit GpuTimingMeasureFinishTimingUnwindScope(GpuTimingMeasure& measure)noexcept
-        : m_measure(measure)
-    {}
-    ~GpuTimingMeasureFinishTimingUnwindScope()noexcept{
-        if(m_active)
-            m_measure.abandonTimingWithoutCallbacks();
-    }
-
-
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    GpuTimingMeasure& m_measure;
-    b8 m_active = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +181,10 @@ GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingS
         return;
     }
 
-    __hidden_gpu_timing_frame_transaction::GpuTimingMeasureConstructionUnwindScope constructionUnwind(*this);
+    ScopeExit constructionUnwind([this]()noexcept{
+        abandonTimingWithoutCallbacks();
+        abandonMarker();
+    });
     m_marker = m_commandList.beginMarkerLease(scopeDefinition.markerLabel);
     const auto scope = m_recorder.beginScope(scopeDefinition.identity, attribution, false, device, commandList);
     m_scope = scope ? *scope : GpuTimingScope{};
@@ -274,7 +220,7 @@ void GpuTimingMeasure::abandonMarker()noexcept{
 }
 
 void GpuTimingMeasure::finishTiming(CommandList& commandList){
-    __hidden_gpu_timing_frame_transaction::GpuTimingMeasureFinishTimingUnwindScope finishUnwind(*this);
+    ScopeExit finishUnwind([this]()noexcept{ abandonTimingWithoutCallbacks(); });
 
     m_recorder.endScope(commandList, m_scope);
     finishUnwind.release();

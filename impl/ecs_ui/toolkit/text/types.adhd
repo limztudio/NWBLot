@@ -60,8 +60,6 @@ const usize s_TextCarriageReturnLineFeedBytes = 2u;
 const f64 s_TextRasterMarginPixels = 2.0;
 const f32 s_TextFixedPointRoundBiasF32 = 0.5f;
 const f64 s_TextHalfPixel = 0.5;
-const u32 s_TextSmallestPositiveSubnormalBits = 1u;
-const u32 s_TextSmallestNegativeSubnormalBits = 0x80000001u;
 const f64 s_TextSdfMinimumFilterWidth = 0.001;
 const f64 s_TextSdfEncodedHalfRange = 128.0;
 const StringView s_TextFontLifecycleCategory = "ui_font_lifecycle";
@@ -107,12 +105,8 @@ class FontMetrics{
     public f32 lineGap = 0.0f;
 }
 
-b8 IsTextAsciiAlpha(in u32 codePoint){
-    return (codePoint >= 0x41u && codePoint <= 0x5au) || (codePoint >= 0x61u && codePoint <= 0x7au);
-}
-
 b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
-    return IsTextAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
+    return isAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
 }
 
 // This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
@@ -130,7 +124,7 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         return TextLayoutStatus::InvalidParameters;
     for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
         const u32 letter = (request.scriptTag >> (byte * s_ScriptTagBitsPerByte)) & s_ScriptTagLetterMask;
-        if(!IsTextAsciiAlpha(letter))
+        if(!isAsciiAlpha(letter))
             return TextLayoutStatus::InvalidParameters;
     }
     for(usize i = 0u; i < request.language.size(); ++i){
@@ -158,14 +152,6 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         }
     }
     return TextLayoutStatus::Success;
-}
-
-native{
-namespace NWB::Impl::Ui{
-[[nodiscard]] constexpr u32 TextScriptTag(char a, char b, char c, char d)noexcept{
-    return (static_cast<u32>(a) << 24u) | (static_cast<u32>(b) << 16u) | (static_cast<u32>(c) << 8u) | static_cast<u32>(d);
-}
-};
 }
 
 enum<u8> TextGlyphIntersection{
@@ -320,26 +306,6 @@ b8 IsValidTextFontSize(in f32 fontSize){
     return isFinite(fontSize) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
 }
 
-f32 RoundMeasuredTextBound(in f64 value, in b8 upper){
-    const f32 rounded = cast<f32>(value);
-    if(upper){
-        if(cast<f64>(rounded) >= value)
-            return rounded;
-    }
-    else{
-        if(cast<f64>(rounded) <= value)
-            return rounded;
-    }
-    if(rounded == 0.0f){
-        if(upper)
-            return bit_cast<f32>(s_TextSmallestPositiveSubnormalBits);
-        return bit_cast<f32>(s_TextSmallestNegativeSubnormalBits);
-    }
-    const u32 bits = bit_cast<u32>(rounded);
-    if(upper == (rounded > 0.0f))
-        return bit_cast<f32>(bits + 1u);
-    return bit_cast<f32>(bits - 1u);
-}
 
 class TextRasterMetrics{
     public f32 physicalSize = 0.0f;
@@ -371,14 +337,14 @@ Expected<Rect> TryMakeMeasuredTextRect(in f64 left, in f64 top, in f64 right, in
         || right < left || bottom < top
     )
         return makeUnexpected(Failure());
-    const f32 x = RoundMeasuredTextBound(left, false);
-    const f32 y = RoundMeasuredTextBound(top, false);
-    const f64 width = cast<f64>(RoundMeasuredTextBound(right, true)) - cast<f64>(x);
-    const f64 height = cast<f64>(RoundMeasuredTextBound(bottom, true)) - cast<f64>(y);
+    const f32 x = roundF64ToF32Bound(left, false);
+    const f32 y = roundF64ToF32Bound(top, false);
+    const f64 width = cast<f64>(roundF64ToF32Bound(right, true)) - cast<f64>(x);
+    const f64 height = cast<f64>(roundF64ToF32Bound(bottom, true)) - cast<f64>(y);
     if(width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64)
         return makeUnexpected(Failure());
-    const f32 roundedWidth = RoundMeasuredTextBound(width, true);
-    const f32 roundedHeight = RoundMeasuredTextBound(height, true);
+    const f32 roundedWidth = roundF64ToF32Bound(width, true);
+    const f32 roundedHeight = roundF64ToF32Bound(height, true);
     if(
         !isFinite(roundedWidth) || roundedWidth < 0.0f
         || !isFinite(roundedHeight) || roundedHeight < 0.0f

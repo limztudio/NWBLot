@@ -7,6 +7,8 @@
 
 #include "backend.h"
 
+#include <global/bit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -163,7 +165,7 @@ struct RayTracingCapabilityInputs{
 
 [[nodiscard]] inline constexpr b8 IsRayTracingShaderTypeAllowed(const ShaderType::Mask shaderType, const ShaderType::Mask allowedShaderTypes)noexcept{
     const u16 shaderTypeBits = static_cast<u16>(shaderType);
-    return shaderTypeBits != 0u && (shaderTypeBits & (shaderTypeBits - 1u)) == 0u && (shaderTypeBits & static_cast<u16>(allowedShaderTypes)) == shaderTypeBits;
+    return HasSingleSetBit(shaderTypeBits) && (shaderTypeBits & static_cast<u16>(allowedShaderTypes)) == shaderTypeBits;
 }
 
 

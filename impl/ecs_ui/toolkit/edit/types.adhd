@@ -25,21 +25,6 @@ const u32 s_EditUnicodeTab = 0x09u;
 const u32 s_EditUnicodeLineFeed = 0x0Au;
 const u32 s_EditUnicodeCarriageReturn = 0x0Du;
 const u32 s_EditUnicodeNextLine = 0x85u;
-const u32 s_EditUnicodeNoBreakSpace = 0xA0u;
-const u32 s_EditUnicodeOghamSpaceMark = 0x1680u;
-const u32 s_EditUnicodeEnQuad = 0x2000u;
-const u32 s_EditUnicodeHairSpace = 0x200Au;
-const u32 s_EditUnicodeNarrowNoBreakSpace = 0x202Fu;
-const u32 s_EditUnicodeMediumMathematicalSpace = 0x205Fu;
-const u32 s_EditUnicodeIdeographicSpace = 0x3000u;
-const u32 s_EditAsciiExclamation = 0x21u;
-const u32 s_EditAsciiSlash = 0x2Fu;
-const u32 s_EditAsciiColon = 0x3Au;
-const u32 s_EditAsciiAt = 0x40u;
-const u32 s_EditAsciiLeftBracket = 0x5Bu;
-const u32 s_EditAsciiGrave = 0x60u;
-const u32 s_EditAsciiLeftBrace = 0x7Bu;
-const u32 s_EditAsciiTilde = 0x7Eu;
 
 const usize s_NumericEditMaxBytes = 128u;
 const usize s_NumericEditMaxHistoryRecords = 64u;
@@ -354,65 +339,20 @@ b8 ValidateFloatBounds(in FloatBounds bounds){
     return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
 }
 
-usize SkipNumericSign(in StringView text){
-    if(!text.empty() && (text[0u] == '+' || text[0u] == '-'))
-        return 1u;
-    return 0u;
-}
-
-NumericParseStatus ValidateIntegerGrammar(in StringView text){
-    const usize begin = SkipNumericSign(text);
-    if(begin == text.size())
-        return NumericParseStatus::Incomplete;
-    for(usize index = begin; index < text.size(); ++index){
-        const u8 ch = cast<u8>(text[index]);
-        if(ch < '0' || ch > '9')
-            return NumericParseStatus::Invalid;
-    }
-    return NumericParseStatus::Complete;
-}
-
-NumericParseStatus ValidateFloatGrammar(in StringView text){
-    usize index = SkipNumericSign(text);
-    b8 digits = false;
-    while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
-        digits = true;
-        ++index;
-    }
-    if(index < text.size() && text[index] == '.'){
-        ++index;
-        while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
-            digits = true;
-            ++index;
-        }
-    }
-    if(!digits){
-        if(index == text.size())
-            return NumericParseStatus::Incomplete;
-        return NumericParseStatus::Invalid;
-    }
-    if(index < text.size() && (text[index] == 'e' || text[index] == 'E')){
-        ++index;
-        if(index < text.size() && (text[index] == '+' || text[index] == '-'))
-            ++index;
-        const usize exponent = index;
-        while(index < text.size() && text[index] >= '0' && text[index] <= '9')
-            ++index;
-        if(exponent == index){
-            if(index == text.size())
-                return NumericParseStatus::Incomplete;
-            return NumericParseStatus::Invalid;
-        }
-    }
-    if(index == text.size())
+NumericParseStatus ToNumericParseStatus(in u8 status){
+    if(status == s_NumericGrammarComplete)
         return NumericParseStatus::Complete;
+    if(status == s_NumericGrammarIncomplete)
+        return NumericParseStatus::Incomplete;
     return NumericParseStatus::Invalid;
 }
+
+
 
 // ASCII edge whitespace is ignored; incomplete and malformed drafts retain their classification.
 Expected<i64, NumericParseStatus> ParseIntegerDraft(in StringView text){
     const StringView trimmed = trimView(text);
-    const NumericParseStatus status = ValidateIntegerGrammar(trimmed);
+    const NumericParseStatus status = ToNumericParseStatus(classifyIntegerGrammar(trimmed));
     if(status != NumericParseStatus::Complete)
         return makeUnexpected(status);
     StringView number = trimmed;
@@ -426,7 +366,7 @@ Expected<i64, NumericParseStatus> ParseIntegerDraft(in StringView text){
 
 Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
     const StringView trimmed = trimView(text);
-    const NumericParseStatus status = ValidateFloatGrammar(trimmed);
+    const NumericParseStatus status = ToNumericParseStatus(classifyFloatGrammar(trimmed));
     if(status != NumericParseStatus::Complete)
         return makeUnexpected(status);
     StringView number = trimmed;
@@ -509,27 +449,10 @@ b8 IsCanonicalMultilineScalar(in u32 scalar){
     return scalar == s_EditUnicodeLineFeed || (scalar >= s_TextUnicodeSpace && (scalar < s_TextUnicodeDelete || scalar > s_TextUnicodeC1Last) && scalar != s_TextUnicodeLineSeparator && scalar != s_TextUnicodeParagraphSeparator);
 }
 
-b8 IsEditWhitespaceScalar(in u32 scalar){
-    return
-        (scalar >= s_EditUnicodeTab && scalar <= s_EditUnicodeCarriageReturn) || scalar == s_TextUnicodeSpace || scalar == s_EditUnicodeNextLine || scalar == s_EditUnicodeNoBreakSpace
-        || scalar == s_EditUnicodeOghamSpaceMark || (scalar >= s_EditUnicodeEnQuad && scalar <= s_EditUnicodeHairSpace) || scalar == s_TextUnicodeLineSeparator
-        || scalar == s_TextUnicodeParagraphSeparator || scalar == s_EditUnicodeNarrowNoBreakSpace || scalar == s_EditUnicodeMediumMathematicalSpace || scalar == s_EditUnicodeIdeographicSpace
-    ;
-}
-
-b8 IsEditAsciiPunctuationScalar(in u32 scalar){
-    return
-        (scalar >= s_EditAsciiExclamation && scalar <= s_EditAsciiSlash)
-        || (scalar >= s_EditAsciiColon && scalar <= s_EditAsciiAt)
-        || (scalar >= s_EditAsciiLeftBracket && scalar <= s_EditAsciiGrave)
-        || (scalar >= s_EditAsciiLeftBrace && scalar <= s_EditAsciiTilde)
-    ;
-}
-
 EditNavigationRunClass ClassifyEditNavigationScalar(in u32 scalar){
-    if(IsEditWhitespaceScalar(scalar))
+    if(isUnicodeWhitespace(scalar))
         return EditNavigationRunClass::Whitespace;
-    if(IsEditAsciiPunctuationScalar(scalar))
+    if(isAsciiPunctuation(scalar))
         return EditNavigationRunClass::Punctuation;
     return EditNavigationRunClass::Text;
 }
@@ -770,19 +693,19 @@ usize LowerBoundEditBoundaryIndex(in Span<usize> boundaries, in usize position){
 }
 
 b8 IsEditBoundary(in Span<usize> boundaries, in usize position){
-    const usize index = LowerBoundEditBoundaryIndex(boundaries, position);
+    const usize index = lowerBoundIndex(boundaries, position);
     return index < boundaries.size() && boundaries[index] == position;
 }
 
 usize PreviousEditBoundary(in Span<usize> boundaries, in usize position){
-    const usize index = LowerBoundEditBoundaryIndex(boundaries, position);
+    const usize index = lowerBoundIndex(boundaries, position);
     if(index == 0u)
         return 0u;
     return boundaries[index - 1u];
 }
 
 usize NextEditBoundary(in Span<usize> boundaries, in usize textSize, in usize position){
-    usize index = LowerBoundEditBoundaryIndex(boundaries, position);
+    usize index = lowerBoundIndex(boundaries, position);
     if(index < boundaries.size() && boundaries[index] == position)
         ++index;
     if(index >= boundaries.size())
@@ -807,7 +730,7 @@ EditNavigationRunClass ClassifyEditWordRangeOffset(in StringView text, in usize 
 usize ResolveEditWordBoundary(in StringView text, in Span<usize> boundaries, in usize position, in b8 forward){
     if((forward && position == text.size()) || (!forward && position == 0u) || boundaries.empty())
         return position;
-    usize cursor = LowerBoundEditBoundaryIndex(boundaries, position);
+    usize cursor = lowerBoundIndex(boundaries, position);
     const usize lastBoundaryIndex = boundaries.size() - 1u;
     if(forward){
         const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, position);
@@ -828,7 +751,7 @@ usize ResolveEditWordBoundary(in StringView text, in Span<usize> boundaries, in 
 }
 
 Expected<EditWordRange> ResolveEditWordRangeAt(in StringView text, in Span<usize> boundaries, in usize position){
-    const usize requested = LowerBoundEditBoundaryIndex(boundaries, position);
+    const usize requested = lowerBoundIndex(boundaries, position);
     if(requested >= boundaries.size() || boundaries[requested] != position)
         return makeUnexpected(Failure());
     if(text.empty())
@@ -977,10 +900,6 @@ NumericParseStatus EvaluateFloatDraftStatus(in StringView text, in FloatBounds b
     if(value < bounds.minimum || value > bounds.maximum)
         return NumericParseStatus::OutOfRange;
     return NumericParseStatus::Complete;
-}
-
-b8 DifferentFloatEditValues(in f64 lhs, in f64 rhs){
-    return bit_cast<u64>(lhs) != bit_cast<u64>(rhs);
 }
 
 Expected<EditMove> TryMapEditCommandToMove(in EditCommand command){

@@ -336,7 +336,7 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
     ASSERT_TRUE(installKoreanFallback());
     ASSERT_TRUE(m_model.setText("\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB\naaa"));
     ASSERT_TRUE(m_model.setSelection(9u, 9u));
-    const ShapeRequest request{ {}, s_KoreanLanguage, 14.0f, TextScriptTag('H', 'a', 'n', 'g'), TextDirection::LeftToRight };
+    const ShapeRequest request{ {}, s_KoreanLanguage, 14.0f, PackFourCharTag('H', 'a', 'n', 'g'), TextDirection::LeftToRight };
     EditBoxView visual(m_arena);
     ASSERT_TRUE(visual.snapshot(m_model));
     ASSERT_EQ(visual.shape(m_text, request), TextLayoutStatus::Success);
@@ -347,7 +347,7 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
 
     const auto preferred = m_state.navigation().snapshot();
     AString<Core::Alloc::GlobalArena> language(s_KoreanLanguage, m_arena);
-    TextAreaNavigationResolver configured(m_arena, m_text, m_context, m_state, 14.0f, TextScriptTag('H', 'a', 'n', 'g'), StringView(language.data(), language.size()));
+    TextAreaNavigationResolver configured(m_arena, m_text, m_context, m_state, 14.0f, PackFourCharTag('H', 'a', 'n', 'g'), StringView(language.data(), language.size()));
     language.assign("!!", 2u);
     const auto matching = configured.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(matching);

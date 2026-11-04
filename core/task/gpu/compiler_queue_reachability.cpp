@@ -4,6 +4,8 @@
 
 #include "compiler_internal.h"
 
+#include <global/bit_matrix.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,159 +28,6 @@ namespace __hidden_gpu_task_graph_compiler_queue_reachability{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u64 s_LowHalfWordMask = 0x00000000FFFFFFFFull;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void TransposeTaskRelationTile(Array<u64, s_BitsPerWord>& tile)noexcept{
-    u64 mask = s_LowHalfWordMask;
-    for(usize shift = s_BitsPerWord / 2u; shift != 0u; shift /= 2u){
-        // Exchange each row-address bit with the corresponding column-address bit, starting with the high bit.
-        for(usize block = 0u; block < s_BitsPerWord; block += shift * 2u){
-            for(usize offset = 0u; offset < shift; ++offset){
-                u64& low = tile[block + offset];
-                u64& high = tile[block + offset + shift];
-                const u64 exchanged = ((low >> shift) ^ high) & mask;
-                low ^= exchanged << shift;
-                high ^= exchanged;
-            }
-        }
-        if(shift > 1u)
-            mask ^= mask << (shift / 2u);
-    }
-}
-
-static void SymmetrizeTaskRelations(const Span<u64> words, const usize taskCount, const usize wordsPerRow)noexcept{
-    for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
-        const usize rowBase = rowBlock * s_BitsPerWord;
-        const usize rowCount = Min(s_BitsPerWord, taskCount - rowBase);
-        for(usize columnBlock = rowBlock; columnBlock < wordsPerRow; ++columnBlock){
-            const usize columnBase = columnBlock * s_BitsPerWord;
-            const usize columnCount = Min(s_BitsPerWord, taskCount - columnBase);
-            Array<u64, s_BitsPerWord> forward = {};
-            u64 forwardBits = 0u;
-            for(usize row = 0u; row < rowCount; ++row){
-                forward[row] = words[(rowBase + row) * wordsPerRow + columnBlock];
-                forwardBits |= forward[row];
-            }
-            if(rowBlock == columnBlock){
-                if(forwardBits != 0u){
-                    TransposeTaskRelationTile(forward);
-                    for(usize row = 0u; row < rowCount; ++row)
-                        words[(rowBase + row) * wordsPerRow + columnBlock] |= forward[row];
-                }
-                continue;
-            }
-            Array<u64, s_BitsPerWord> backward = {};
-            u64 backwardBits = 0u;
-            for(usize row = 0u; row < columnCount; ++row){
-                backward[row] = words[(columnBase + row) * wordsPerRow + rowBlock];
-                backwardBits |= backward[row];
-            }
-            if(forwardBits != 0u){
-                TransposeTaskRelationTile(forward);
-                for(usize row = 0u; row < columnCount; ++row)
-                    words[(columnBase + row) * wordsPerRow + rowBlock] |= forward[row];
-            }
-            if(backwardBits != 0u){
-                TransposeTaskRelationTile(backward);
-                for(usize row = 0u; row < rowCount; ++row)
-                    words[(rowBase + row) * wordsPerRow + columnBlock] |= backward[row];
-            }
-        }
-    }
-}
-
-
-template<typename RowRanges>
-static void SymmetrizeCompactTaskRelations(const Span<u64> words, const Span<const usize> offsets, const RowRanges& ranges, const usize taskCount, const usize wordsPerRow)noexcept(
-    []()constexpr noexcept{
-        using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
-        return
-            noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
-            && noexcept(static_cast<b8>(DeclVal<const usize&>() < DeclVal<Range>().begin || DeclVal<const usize&>() >= DeclVal<Range>().end))
-            && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().begin])
-            && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().begin && DeclVal<const usize&>() < DeclVal<Range>().end))
-            && noexcept(DeclVal<usize&>() = Max(DeclVal<usize&>(), DeclVal<const RowRanges&>()[DeclVal<usize>()].end))
-        ;
-    }()
-){
-    const auto readWord = [&](const usize task, const usize word)noexcept(
-        []()constexpr noexcept{
-            using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
-            return
-                noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
-                && noexcept(
-                    DeclVal<const usize&>() < DeclVal<Range>().begin || DeclVal<const usize&>() >= DeclVal<Range>().end
-                    ? static_cast<u64>(0u)
-                    : DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().begin]
-                )
-            ;
-        }()
-    ){
-        const auto& range = ranges[task];
-        return word < range.begin || word >= range.end ? static_cast<u64>(0u) : words[offsets[task] + word - range.begin];
-    };
-    const auto appendWord = [&](const usize task, const usize word, const u64 bits)noexcept(
-        []()constexpr noexcept{
-            using Range = const RemoveReference_T<decltype(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])>&;
-            return
-                noexcept(DeclVal<const RowRanges&>()[DeclVal<const usize&>()])
-                && noexcept(static_cast<b8>(DeclVal<const usize&>() >= DeclVal<Range>().begin && DeclVal<const usize&>() < DeclVal<Range>().end))
-                && noexcept(DeclVal<const Span<u64>&>()[DeclVal<const Span<const usize>&>()[DeclVal<const usize&>()] + DeclVal<const usize&>() - DeclVal<Range>().begin] |= DeclVal<const u64&>())
-            ;
-        }()
-    ){
-        if(bits == 0u)
-            return;
-        const auto& range = ranges[task];
-        NWB_ASSERT(word >= range.begin && word < range.end);
-        words[offsets[task] + word - range.begin] |= bits;
-    };
-    for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
-        const usize rowBase = rowBlock * s_BitsPerWord;
-        const usize rowCount = Min(s_BitsPerWord, taskCount - rowBase);
-        usize columnEnd = rowBlock + 1u;
-        for(usize row = 0u; row < rowCount; ++row)
-            columnEnd = Max(columnEnd, ranges[rowBase + row].end);
-        for(usize columnBlock = rowBlock; columnBlock < columnEnd; ++columnBlock){
-            const usize columnBase = columnBlock * s_BitsPerWord;
-            const usize columnCount = Min(s_BitsPerWord, taskCount - columnBase);
-            Array<u64, s_BitsPerWord> forward = {};
-            u64 forwardBits = 0u;
-            for(usize row = 0u; row < rowCount; ++row){
-                forward[row] = readWord(rowBase + row, columnBlock);
-                forwardBits |= forward[row];
-            }
-            if(rowBlock == columnBlock){
-                if(forwardBits != 0u){
-                    TransposeTaskRelationTile(forward);
-                    for(usize row = 0u; row < rowCount; ++row)
-                        appendWord(rowBase + row, columnBlock, forward[row]);
-                }
-                continue;
-            }
-            Array<u64, s_BitsPerWord> backward = {};
-            u64 backwardBits = 0u;
-            for(usize row = 0u; row < columnCount; ++row){
-                backward[row] = readWord(columnBase + row, rowBlock);
-                backwardBits |= backward[row];
-            }
-            if(forwardBits != 0u){
-                TransposeTaskRelationTile(forward);
-                for(usize row = 0u; row < columnCount; ++row)
-                    appendWord(columnBase + row, rowBlock, forward[row]);
-            }
-            if(backwardBits != 0u){
-                TransposeTaskRelationTile(backward);
-                for(usize row = 0u; row < rowCount; ++row)
-                    appendWord(rowBase + row, columnBlock, backward[row]);
-            }
-        }
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -382,10 +231,10 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
                 }
             }
             if(compactRows){
-                __hidden_gpu_task_graph_compiler_queue_reachability::SymmetrizeCompactTaskRelations(outReachability.m_words, outReachability.m_rowOffsets, outReachability.m_relatedWordRanges, taskCount, wordsPerRow);
+                SymmetrizeCompactBitMatrix(outReachability.m_words, outReachability.m_rowOffsets, outReachability.m_relatedWordRanges, taskCount, wordsPerRow);
             }
             else
-                __hidden_gpu_task_graph_compiler_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
+                SymmetrizeDenseBitMatrix(outReachability.m_words, taskCount, wordsPerRow);
             outReachability.m_valid = true;
             return true;
         }
@@ -418,7 +267,7 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         }
     }
     // Symmetrize the completed directed closure with bounded tile storage; ranks preserve strict direction.
-    __hidden_gpu_task_graph_compiler_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
+    SymmetrizeDenseBitMatrix(outReachability.m_words, taskCount, wordsPerRow);
     outReachability.m_topologicalRanks.resize(taskCount);
     for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)
         outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);

@@ -147,10 +147,18 @@ b8 TypeChecker::checkCallableArguments(
         if(!checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
         if(builtinArgRule && !builtinArgRule->errorMessage.empty()){
-            const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
-            const b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && actualArgType != builtinArgRule->requiredExactType)
+            const TypeRef* actualRef = nullptr;
+            const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope, &actualRef);
+            b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && actualArgType != builtinArgRule->requiredExactType)
                 || (builtinArgRule->requiresStringLike && !actualArgType.empty() && !IsStringLikeType(actualArgType))
                 || (builtinArgRule->requiresIntegerScalar && !actualArgType.empty() && !IsIntegerScalarType(actualArgType));
+            if(!typeMismatch && (builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan || builtinArgRule->rule == BuiltinFunctionArgRule::ByteSpan || builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector)){
+                const TypeRef* containerType = actualRef ? m_symbols.unwrapTypeAlias(actualRef) : nullptr;
+                const usize expectedArguments = builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector ? 2u : 1u;
+                const TypeRef* elementType = containerType && containerType->templateArgs.size() == expectedArguments && containerType->templateArgs[0].type ? m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
+                const MStringView requiredElement = builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan ? MStringView("usize") : MStringView("u8");
+                typeMismatch = !elementType || m_symbols.resolveBaseTypeName(elementType->name) != requiredElement;
+            }
             if(typeMismatch){
                 reportError(errors, arg->span, builtinArgRule->errorMessage);
                 ok = false;
@@ -524,7 +532,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         const b8 isCtorOrTypeConstruction = (targetCallable && targetCallable->isConstructor)
             || (!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier
                 && isConstructibleTypeName(expr.lhs->text, m_symbols.resolveBaseTypeName(expr.lhs->text)));
-        if(isCtorOrTypeConstruction){
+        if(isCtorOrTypeConstruction || expr.isBuiltinCall){
             reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
             ok = false;
         }

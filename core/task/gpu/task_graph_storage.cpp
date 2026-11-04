@@ -8,6 +8,7 @@
 #include <core/graphics/rhi/command.h>
 
 #include <global/allocation_size.h>
+#include <global/append_rollback.h>
 #include <global/scope_exit.h>
 
 
@@ -45,33 +46,10 @@ private:
     GpuTaskPayloadDestroyThunk m_destroyPayload = nullptr;
 };
 
-template<typename ContainerT>
-class AppendedContainerRollbackScope final : NoCopy{
-public:
-    explicit AppendedContainerRollbackScope(ContainerT& container)noexcept
-        : m_container(container)
-        , m_initialSize(container.size())
-    {}
-    ~AppendedContainerRollbackScope()noexcept{
-        static_assert(noexcept(m_container.size()));
-        static_assert(noexcept(m_container.pop_back()));
-        if(m_committed)
-            return;
-        if(m_container.size() < m_initialSize)
-            NWB_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
-        while(m_container.size() > m_initialSize)
-            m_container.pop_back();
+struct GpuAppendRollbackFailure final{
+    void operator()()const noexcept{
+        NWB_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
     }
-
-
-public:
-    void commit()noexcept{ m_committed = true; }
-
-
-private:
-    ContainerT& m_container;
-    usize m_initialSize = 0u;
-    b8 m_committed = false;
 };
 
 
@@ -188,14 +166,14 @@ Expected<GpuTaskId> GpuTaskGraph::appendTaskWithinMutation(
     ContainerDetail::ReserveGrowingCapacity(m_resourceVersionUses, m_resourceVersionUses.size() + desc.resourceVersionUseCount);
     ContainerDetail::ReserveGrowingCapacity(m_tasks, m_tasks.size() + 1u);
 
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope dependencyRollback(m_dependencies);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope externalDependencyRollback(m_externalDependencies);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope externalStateSourceRollback(m_externalStateSources);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope externalStateSnapshotRollback(m_externalStateSnapshots);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceUseRollback(m_resourceUses);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceVersionUseRollback(m_resourceVersionUses);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope taskRollback(m_tasks);
+    AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope dependencyRollback(m_dependencies, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope externalDependencyRollback(m_externalDependencies, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope externalStateSourceRollback(m_externalStateSources, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope externalStateSnapshotRollback(m_externalStateSnapshots, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope resourceUseRollback(m_resourceUses, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope resourceVersionUseRollback(m_resourceVersionUses, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope taskRollback(m_tasks, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
@@ -389,11 +367,11 @@ Expected<GpuGraphResourceId> GpuTaskGraph::appendResourceWithinMutation(const Gp
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
 
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSourceRollback(m_initialOwnerHandoffSources);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSnapshotRollback(m_initialOwnerHandoffStateSnapshots);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope queueFamilyRollback(m_queueFamilyIndices);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceRollback(m_resources);
+    AppendedContainerRollbackScope initialOwnerSourceRollback(m_initialOwnerHandoffSources, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope initialOwnerSnapshotRollback(m_initialOwnerHandoffStateSnapshots, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope queueFamilyRollback(m_queueFamilyIndices, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope resourceRollback(m_resources, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
@@ -544,9 +522,9 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
     ContainerDetail::ReserveGrowingCapacity(m_resourceSets, m_resourceSets.size() + 1u);
     prepareResourceSetIndex();
 
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope memberRollback(m_resourceSetMembers);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope setRollback(m_resourceSets);
+    AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope memberRollback(m_resourceSetMembers, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope setRollback(m_resourceSets, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 
@@ -592,8 +570,8 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::appendExternalCompletion(const G
     ContainerDetail::ReserveGrowingCapacity(m_externalCompletions, m_externalCompletions.size() + 1u);
     prepareExternalCompletionIndex();
 
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
-    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope completionRollback(m_externalCompletions);
+    AppendedContainerRollbackScope markerRollback(m_markerText, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
+    AppendedContainerRollbackScope completionRollback(m_externalCompletions, __hidden_gpu_task_graph_storage::GpuAppendRollbackFailure{});
 
     const MarkerLabelRange markerLabelRange = appendMarkerLabel(desc.markerLabel);
 

@@ -10,6 +10,8 @@
 #include <core/graphics/rhi/queue_sharing.h>
 #include <core/graphics/backend_selection/resource_validation.h>
 
+#include <global/interval.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -327,18 +329,12 @@ b8 GpuNativePacketRecorder::preflightPacketResources(
         if((*permanentState) != ResourceStates::Unknown)
             return true;
         const BufferRange range = barrier.range.bufferRange.resolve(buffer->getCreationDescription());
-        u64 coveredEnd = range.byteOffset;
-        while(coveredEnd < range.end()){
-            u64 nextEnd = coveredEnd;
-            for(const CommandListResourceStateHandoff::BufferState& state : initialStates->m_bufferStates){
-                if(state.buffer == buffer && state.state != ResourceStates::Unknown && state.range.byteOffset <= coveredEnd && state.range.end() > nextEnd)
-                    nextEnd = state.range.end();
-            }
-            if(nextEnd == coveredEnd)
-                return false;
-            coveredEnd = nextEnd;
-        }
-        return range.hasExtent();
+        return CoversHalfOpenRange(
+            range.byteOffset, range.end(), Span<const CommandListResourceStateHandoff::BufferState>(initialStates->m_bufferStates),
+            [buffer](const auto& state)noexcept{ return state.buffer == buffer && state.state != ResourceStates::Unknown; },
+            [](const auto& state)noexcept{ return state.range.byteOffset; },
+            [](const auto& state)noexcept{ return state.range.end(); }
+        ) && range.hasExtent();
     };
 
     const auto validateBarrierList = [&](const Span<const GpuCompiledBarrier> barriers)noexcept{

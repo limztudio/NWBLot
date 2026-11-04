@@ -7,6 +7,7 @@
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
 
+#include <global/bit.h>
 #include <global/termination.h>
 
 
@@ -265,7 +266,7 @@ b8 CommandList::recordAndValidateAnyCommandCapability(const GpuQueueCapability::
     if(selectableBits == 0u)
         selectableBits = alternativeBits;
 
-    const u8 selectedBit = selectableBits & static_cast<u8>(0u - selectableBits);
+    const u8 selectedBit = LowestSetBit(selectableBits);
     return recordAndValidateCommandCapability(static_cast<GpuQueueCapability::Mask>(selectedBit), operationName);
 }
 

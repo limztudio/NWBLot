@@ -115,7 +115,7 @@ template<typename Value, typename Formatter>
 [[nodiscard]] inline b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
     if(!inOutDraft.setText(text))
         return false;
-    AdvanceRevision(inOutRevision);
+    AdvanceNonWrappingRevision(inOutRevision);
     return true;
 }
 
@@ -123,7 +123,7 @@ template<typename Canonicalize>
 [[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
     NumericEditResult result = RestoreDraft(Move(canonicalize), cancelled);
     if(result.valid)
-        AdvanceRevision(inOutRevision);
+        AdvanceNonWrappingRevision(inOutRevision);
     return result;
 }
 
@@ -185,7 +185,7 @@ protected:
         if(!static_cast<TDerived*>(this)->canonicalize(value))
             return false;
         m_value = value;
-        AdvanceRevision(m_revision);
+        AdvanceNonWrappingRevision(m_revision);
         return true;
     }
 
@@ -210,7 +210,7 @@ protected:
             m_value
         );
         if(result.valid)
-            AdvanceRevision(m_revision);
+            AdvanceNonWrappingRevision(m_revision);
         return result;
     }
 

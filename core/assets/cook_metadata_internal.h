@@ -43,7 +43,6 @@ namespace NwbCacheLoadResult{
     };
 };
 
-[[nodiscard]] AStringView ExtractFirstIdentifierToken(AStringView text)noexcept;
 void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRules);
 void PrepareNwbFileAssetCacheRecord(
     const Path& repoRoot,

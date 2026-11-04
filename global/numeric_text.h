@@ -87,8 +87,10 @@ namespace TextDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline constexpr AStringView FormatDecimalBuffer(const usize value, char* const buffer)noexcept{
-    usize remaining = value;
+template<typename UInt>
+    requires(IsIntegral_V<UInt> && !IsSigned_V<UInt> && !IsSame_V<UInt, b8>)
+[[nodiscard]] inline constexpr AStringView FormatDecimalBuffer(const UInt value, char* const buffer)noexcept{
+    UInt remaining = value;
     usize length = 0u;
     do{
         buffer[length] = static_cast<char>('0' + remaining % 10u);
@@ -109,6 +111,64 @@ namespace TextDetail{
 
 };
 
+[[nodiscard]] inline constexpr usize SkipNumericSign(const AStringView text)noexcept{
+    return !text.empty() && (text[0u] == '+' || text[0u] == '-') ? 1u : 0u;
+}
+
+inline constexpr u8 s_NumericGrammarComplete = 0u;
+inline constexpr u8 s_NumericGrammarIncomplete = 1u;
+inline constexpr u8 s_NumericGrammarInvalid = 2u;
+
+[[nodiscard]] inline u8 ClassifyIntegerGrammar(const AStringView text)noexcept{
+    const usize begin = SkipNumericSign(text);
+    if(begin == text.size())
+        return s_NumericGrammarIncomplete;
+    for(usize index = begin; index < text.size(); ++index){
+        const u8 ch = static_cast<u8>(text[index]);
+        if(ch < '0' || ch > '9')
+            return s_NumericGrammarInvalid;
+    }
+    return s_NumericGrammarComplete;
+}
+
+[[nodiscard]] inline u8 ClassifyFloatGrammar(const AStringView text)noexcept{
+    usize index = SkipNumericSign(text);
+    b8 digits = false;
+    while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
+        digits = true;
+        ++index;
+    }
+    if(index < text.size() && text[index] == '.'){
+        ++index;
+        while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
+            digits = true;
+            ++index;
+        }
+    }
+    if(!digits){
+        if(index == text.size())
+            return s_NumericGrammarIncomplete;
+        return s_NumericGrammarInvalid;
+    }
+    if(index < text.size() && (text[index] == 'e' || text[index] == 'E')){
+        ++index;
+        if(index < text.size() && (text[index] == '+' || text[index] == '-'))
+            ++index;
+        const usize exponent = index;
+        while(index < text.size() && text[index] >= '0' && text[index] <= '9')
+            ++index;
+        if(exponent == index){
+            if(index == text.size())
+                return s_NumericGrammarIncomplete;
+            return s_NumericGrammarInvalid;
+        }
+    }
+    if(index == text.size())
+        return s_NumericGrammarComplete;
+    return s_NumericGrammarInvalid;
+}
+
+
 template<usize N>
     requires (N >= s_UsizeDecimalDigitCount)
 [[nodiscard]] inline constexpr AStringView FormatDecimal(const usize value, char (&buffer)[N])noexcept{
@@ -123,6 +183,15 @@ template<usize N>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename StringT>
+inline void AppendUnsignedDecimal(StringT& out, const usize value)noexcept(noexcept(out.push_back(char{}))){
+    Array<char, s_UsizeDecimalDigitCount> buffer;
+    const AStringView digits = FormatDecimal(value, buffer);
+    for(const char digit : digits)
+        out.push_back(digit);
+}
 
 
 inline std::ios_base& StreamHex(std::ios_base& stream)noexcept(noexcept(stream.setf(std::ios_base::hex, std::ios_base::basefield))){ return std::hex(stream); }
@@ -176,6 +245,19 @@ template<typename CharT>
 
 [[nodiscard]] inline Expected<f64> ParseF64FromChars(const AStringView text)noexcept{
     return TextParseDetail::ParseNumber<f64>(text);
+}
+
+[[nodiscard]] inline Expected<f32> TryFiniteF32FromF64(const f64 value)noexcept{
+    if(!IsFinite(value) || value < static_cast<f64>(Limit<f32>::s_Min) || value > static_cast<f64>(Limit<f32>::s_Max))
+        return MakeUnexpected(Failure{});
+    return static_cast<f32>(value);
+}
+
+[[nodiscard]] inline Expected<f32> ParseFiniteF32ViaF64(const AStringView text)noexcept{
+    const auto parsed = ParseF64FromChars(text);
+    if(!parsed)
+        return MakeUnexpected(Failure{});
+    return TryFiniteF32FromF64(*parsed);
 }
 
 [[nodiscard]] inline Expected<f32> ParseF32FromChars(const AStringView text)noexcept{
@@ -276,6 +358,12 @@ inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<typename StringT>
+inline void AppendHexByte(const u8 byte, StringT& outText)noexcept(noexcept(outText += char{})){
+    outText += NumericTextDetail::HexDigit<char>(static_cast<usize>(byte >> s_HexNibbleBits));
+    outText += NumericTextDetail::HexDigit<char>(static_cast<usize>(byte & s_HexNibbleMask));
+}
 
 template<typename StringT>
     requires requires(StringT& text){

@@ -94,6 +94,7 @@ namespace StagedFilePairFailureStage{
 struct StagedFilePairResult{
     StagedFilePairFailureStage::Enum failureStage = StagedFilePairFailureStage::None;
     u32 failedIndex = 0u;
+    b8 failedWorkPath = false;
     ErrorCode error;
     Array<b8, s_StagedFilePairCount> backedUp = {};
     Array<ErrorCode, s_StagedFilePairCount> removalErrors = {};
@@ -116,7 +117,35 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename ArenaT>
+[[nodiscard]] const Path<ArenaT>& FailedStagedFilePairPath(const StagedFilePairPaths<ArenaT>& paths, const StagedFilePairResult& result)noexcept{
+    if(result.failedWorkPath || result.failureStage == StagedFilePairFailureStage::QueryWorkPath || result.failureStage == StagedFilePairFailureStage::WorkPathAlreadyExists){
+        switch(result.failedIndex){
+        case 0u: return paths.primaryTemporary;
+        case 1u: return paths.secondaryTemporary;
+        case 2u: return paths.primaryBackup;
+        default: return paths.secondaryBackup;
+        }
+    }
+    return result.failedIndex == 0u ? paths.primary : paths.secondary;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace GlobalFilesystemStagingDetail{
+
+
+[[nodiscard]] inline b8 AcceptPreCommitValidation(const StagedFilePairResult& check, StagedFilePairResult& result)noexcept{
+    if(check || check.failureStage == StagedFilePairFailureStage::WorkPathAlreadyExists)
+        return true;
+    result.failureStage = check.failureStage;
+    result.failedIndex = check.failedIndex;
+    result.failedWorkPath = check.failedWorkPath;
+    result.error = check.error;
+    return false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -217,12 +246,14 @@ template<typename ArenaT>
             if(!regular){
                 result.failureStage = StagedFilePairFailureStage::InspectOutput;
                 result.failedIndex = index;
+                result.failedWorkPath = true;
                 result.error = regular.error();
                 return result;
             }
             if(!*regular){
                 result.failureStage = StagedFilePairFailureStage::NonRegularOutput;
                 result.failedIndex = index;
+                result.failedWorkPath = true;
                 result.error = MakeErrorCode(ErrorCondition::invalid_argument);
                 return result;
             }
@@ -346,15 +377,8 @@ template<typename ArenaT>
         }
 
         const StagedFilePairResult preCommitCheck = ValidateStagedFilePairPaths(paths, allowOverwrite, requireCompleteExistingPair);
-        if(
-            !preCommitCheck
-            && preCommitCheck.failureStage != StagedFilePairFailureStage::WorkPathAlreadyExists
-        ){
-            result.failureStage = preCommitCheck.failureStage;
-            result.failedIndex = preCommitCheck.failedIndex;
-            result.error = preCommitCheck.error;
+        if(!GlobalFilesystemStagingDetail::AcceptPreCommitValidation(preCommitCheck, result))
             return false;
-        }
 
         for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
             const auto present = FileExistsNoFollow(*outputs[index]);

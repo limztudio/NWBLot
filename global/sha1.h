@@ -139,9 +139,7 @@ inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, ShaBe3
 template<typename StringT>
 inline void AppendSha1Hex(const Sha1Digest& digest, StringT& outText){
     for(u32 index = 0u; index < Sha1Digest::s_ByteCount; ++index){
-        const u8 byte = digest.bytes[index];
-        outText += NumericTextDetail::HexDigit<char>(static_cast<usize>(byte >> s_HexNibbleBits));
-        outText += NumericTextDetail::HexDigit<char>(static_cast<usize>(byte & s_HexNibbleMask));
+        AppendHexByte(digest.bytes[index], outText);
     }
 }
 

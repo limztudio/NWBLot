@@ -33,7 +33,6 @@ const StringView s_MeshTangentsFieldNameView = "tangents";
 const StringView s_MeshUv0FieldNameView = "uv0";
 const StringView s_MeshColorsFieldNameView = "colors";
 
-const u32 s_EdgeKeyVertexShift = 32u;
 const usize s_ManifoldEdgeTriangleCount = 2u;
 
 const usize s_VertexRefComponentCount = 5u;
@@ -463,7 +462,7 @@ b8 IsBetterMeshletCandidate(in f32 score, in u32 triangleIndex, in b8 hasExistin
 
 TriangleEdge MakeTriangleEdge(in u32 first, in u32 second, in u32 triangle){
     TriangleEdge edge;
-    edge.positions = (cast<u64>(min(first, second)) << s_EdgeKeyVertexShift) | cast<u64>(max(first, second));
+    edge.positions = packUnorderedU32Pair(first, second);
     edge.triangle = triangle;
     edge.forward = first < second;
     return edge;

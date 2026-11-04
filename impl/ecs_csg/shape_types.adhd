@@ -132,22 +132,8 @@ Expected<CsgShapeLocalBounds> MakeCsgSymmetricLocalBounds(in f32x4 halfExtents){
     return MakeCsgLocalBounds(localMin, localMax);
 }
 
-u32 ReadLittleEndianWordBytes(in Span<u8> bytes, in usize byteOffset){
-    u32 word = 0u;
-    const usize size = bytes.size();
-    if(byteOffset < size)
-        word = word | cast<u32>(bytes[byteOffset]);
-    if(byteOffset + 1u < size)
-        word = word | (cast<u32>(bytes[byteOffset + 1u]) << 8u);
-    if(byteOffset + 2u < size)
-        word = word | (cast<u32>(bytes[byteOffset + 2u]) << 16u);
-    if(byteOffset + 3u < size)
-        word = word | (cast<u32>(bytes[byteOffset + 3u]) << 24u);
-    return word;
-}
-
 f32 ReadCsgShapeParameterFloatLane(in Span<u8> parameterBytes, in usize byteOffset){
-    return bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, byteOffset));
+    return bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, byteOffset));
 }
 
 f32x4 ReadCsgShapeParameter0(in Span<u8> parameterBytes){
@@ -178,17 +164,6 @@ CsgShapeInlineParameters ReadCsgShapeInlineParameters(in Span<u8> parameterBytes
     return MakeCsgShapeInlineParameters(ReadCsgShapeParameter0(parameterBytes), ReadCsgShapeParameter1(parameterBytes));
 }
 
-void WriteCsgShapeParameterFloatLane(in f32 value, in usize byteOffset, mut FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> outBytes){
-    if(byteOffset + 4u > outBytes.size())
-        return;
-
-    const u32 word = bit_cast<u32>(value);
-    outBytes[byteOffset] = cast<u8>(word & 0xffu);
-    outBytes[byteOffset + 1u] = cast<u8>((word >> 8u) & 0xffu);
-    outBytes[byteOffset + 2u] = cast<u8>((word >> 16u) & 0xffu);
-    outBytes[byteOffset + 3u] = cast<u8>((word >> 24u) & 0xffu);
-}
-
 Expected<FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>> PackCsgShapeDefaultParameterBytes(in u32 parameterByteSize, in CsgShapeInlineParameters parameters){
     const usize byteCount = cast<usize>(parameterByteSize);
     if(byteCount > s_CsgShapeInlineParameterMaxBytes)
@@ -202,17 +177,17 @@ Expected<FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>> PackCsgShapeDefault
     if(byteCount == 0u)
         return outBytes;
 
-    WriteCsgShapeParameterFloatLane(parameters.parameter0.x, 0u, outBytes);
-    WriteCsgShapeParameterFloatLane(parameters.parameter0.y, 4u, outBytes);
-    WriteCsgShapeParameterFloatLane(parameters.parameter0.z, 8u, outBytes);
-    WriteCsgShapeParameterFloatLane(parameters.parameter0.w, 12u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter0.x, 0u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter0.y, 4u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter0.z, 8u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter0.w, 12u, outBytes);
     if(byteCount <= 16u)
         return outBytes;
 
-    WriteCsgShapeParameterFloatLane(parameters.parameter1.x, 16u, outBytes);
-    WriteCsgShapeParameterFloatLane(parameters.parameter1.y, 20u, outBytes);
-    WriteCsgShapeParameterFloatLane(parameters.parameter1.z, 24u, outBytes);
-    WriteCsgShapeParameterFloatLane(parameters.parameter1.w, 28u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter1.x, 16u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter1.y, 20u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter1.z, 24u, outBytes);
+    writeF32LittleEndianAt(parameters.parameter1.w, 28u, outBytes);
     return outBytes;
 }
 

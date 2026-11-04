@@ -254,11 +254,7 @@ ArenaMemoryStats ArenaMemoryTracker::snapshot()const noexcept{
 }
 
 void ArenaMemoryTracker::recordPeakUsedBytes(const u64 usedBytes)noexcept{
-    u64 peakBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
-    while(usedBytes > peakBytes){
-        if(m_peakUsedBytes.compare_exchange_weak(peakBytes, usedBytes, MemoryOrder::relaxed))
-            return;
-    }
+    UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
 }
 
 

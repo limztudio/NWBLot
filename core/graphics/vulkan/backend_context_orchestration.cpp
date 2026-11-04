@@ -5,6 +5,8 @@
 #include "backend_context.h"
 #include "backend_context_detail.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -356,9 +358,7 @@ Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(c
             return MakeUnexpected(Failure{});
         }
 
-        ++m_swapChainLifecycleEpoch;
-        if(m_swapChainLifecycleEpoch == 0u)
-            ++m_swapChainLifecycleEpoch;
+        AdvanceWrappingNonzero(m_swapChainLifecycleEpoch);
         m_swapChainLifecycleState = SwapChainLifecycleState::PreparedDestroy;
         ticket.owner = this;
         ticket.epoch = m_swapChainLifecycleEpoch;
@@ -440,9 +440,7 @@ Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(c
         }
     }
 
-    ++m_swapChainLifecycleEpoch;
-    if(m_swapChainLifecycleEpoch == 0u)
-        ++m_swapChainLifecycleEpoch;
+    AdvanceWrappingNonzero(m_swapChainLifecycleEpoch);
     m_swapChainLifecycleState = kind == SwapChainTransitionKind::Resize ? SwapChainLifecycleState::PreparedResize : SwapChainLifecycleState::PreparedDestroy;
     ticket.epoch = m_swapChainLifecycleEpoch;
     ticket.owner = this;

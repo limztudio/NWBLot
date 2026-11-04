@@ -59,9 +59,9 @@ TEST_F(UiBuilderTextShapingTests, InvalidPolicyPreservesPreviousShapingAndOpenSc
     ASSERT_TRUE(installKoreanFallback());
     addEditRegion();
     ASSERT_TRUE(m_skin.validatePayload());
-    ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('H', 'a', 'n', 'g'), "ko"));
+    ASSERT_TRUE(m_builder.setTextShaping(PackFourCharTag('H', 'a', 'n', 'g'), "ko"));
     EXPECT_FALSE(m_builder.setTextShaping(0u, "ko"));
-    EXPECT_FALSE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "ko!"));
+    EXPECT_FALSE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko!"));
     ASSERT_FALSE(m_builder.failed());
     EditModel model(m_arena);
     ASSERT_TRUE(model.setText(s_Jamo));
@@ -78,7 +78,7 @@ TEST_F(UiBuilderTextShapingTests, InvalidPolicyPreservesPreviousShapingAndOpenSc
 
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 0.0f, 0.0f, 400.0f, 100.0f }));
-    EXPECT_FALSE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "en"));
+    EXPECT_FALSE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
     EXPECT_TRUE(m_builder.failed());
     EXPECT_FALSE(m_builder.endPanel());
 }

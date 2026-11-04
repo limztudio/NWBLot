@@ -6,6 +6,8 @@
 
 #include <core/graphics/backend_selection/backend.h>
 
+#include <global/integer_rect.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -111,29 +113,22 @@ namespace GpuTaskGraphCompilerDetail{
 
 // Textures use mip/array rectangles; buffers use byte intervals with a single fixed secondary row.
 // The shared partition preserves every independently produced fragment, including symbolic tails in metadata-only graphs.
-struct ResourceRangeBounds{
-    u64 xBegin = 0u;
-    u64 xEnd = 0u;
-    u64 yBegin = 0u;
-    u64 yEnd = 0u;
-};
-
-[[nodiscard]] static Expected<ResourceRangeBounds> ResourceRangeBoundsFrom(const GpuGraphResourceType::Enum resourceType, const GpuTaskResourceRange& range)noexcept{
+[[nodiscard]] static Expected<IntegerRectBounds> IntegerRectBoundsFrom(const GpuGraphResourceType::Enum resourceType, const GpuTaskResourceRange& range)noexcept{
     if(resourceType == GpuGraphResourceType::Buffer){
         if(!range.bufferRange.hasExtent())
             return MakeUnexpected(Failure{});
-        return ResourceRangeBounds{ .xBegin = range.bufferRange.byteOffset, .xEnd = range.bufferRange.end(), .yBegin = 0u, .yEnd = 1u, };
+        return IntegerRectBounds{ .xBegin = range.bufferRange.byteOffset, .xEnd = range.bufferRange.end(), .yBegin = 0u, .yEnd = 1u, };
     }
     if(resourceType != GpuGraphResourceType::Texture)
         return MakeUnexpected(Failure{});
     const TextureSubresourceSet& texture = range.textureSubresources;
-    const ResourceRangeBounds result{ .xBegin = texture.baseMipLevel, .xEnd = texture.mipEnd(), .yBegin = texture.baseArraySlice, .yEnd = texture.arrayEnd(), };
+    const IntegerRectBounds result{ .xBegin = texture.baseMipLevel, .xEnd = texture.mipEnd(), .yBegin = texture.baseArraySlice, .yEnd = texture.arrayEnd(), };
     if(result.xBegin >= result.xEnd || result.yBegin >= result.yEnd)
         return MakeUnexpected(Failure{});
     return result;
 }
 
-[[nodiscard]] static Expected<GpuTaskResourceRange> ResourceRangeBoundsTo(const GpuGraphResourceType::Enum resourceType, const ResourceRangeBounds& bounds)noexcept{
+[[nodiscard]] static Expected<GpuTaskResourceRange> IntegerRectBoundsTo(const GpuGraphResourceType::Enum resourceType, const IntegerRectBounds& bounds)noexcept{
     if(resourceType == GpuGraphResourceType::Buffer){
         if(bounds.xBegin >= bounds.xEnd || bounds.yBegin != 0u || bounds.yEnd != 1u)
             return MakeUnexpected(Failure{});
@@ -159,39 +154,6 @@ struct ResourceRangeBounds{
     return GpuTaskResourceRange{ .textureSubresources = TextureSubresourceSet{ static_cast<MipLevel>(bounds.xBegin), static_cast<MipLevel>(mipCount), static_cast<ArraySlice>(bounds.yBegin), static_cast<ArraySlice>(arrayCount), }, };
 }
 
-[[nodiscard]] static Expected<ResourceRangeBounds> IntersectResourceRangeBounds(const ResourceRangeBounds& lhs, const ResourceRangeBounds& rhs)noexcept{
-    const ResourceRangeBounds result{
-        .xBegin = lhs.xBegin > rhs.xBegin ? lhs.xBegin : rhs.xBegin,
-        .xEnd = lhs.xEnd < rhs.xEnd ? lhs.xEnd : rhs.xEnd,
-        .yBegin = lhs.yBegin > rhs.yBegin ? lhs.yBegin : rhs.yBegin,
-        .yEnd = lhs.yEnd < rhs.yEnd ? lhs.yEnd : rhs.yEnd,
-    };
-    if(result.xBegin >= result.xEnd || result.yBegin >= result.yEnd)
-        return MakeUnexpected(Failure{});
-    return result;
-}
-
-static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const ResourceRangeBounds& cut, Vector<ResourceRangeBounds, Alloc::ScratchArena>& outRanges){
-    const auto intersection = IntersectResourceRangeBounds(outer, cut);
-    if(!intersection){
-        outRanges.push_back(outer);
-        return;
-    }
-
-    if(outer.xBegin < intersection->xBegin){
-        outRanges.push_back(ResourceRangeBounds{ .xBegin = outer.xBegin, .xEnd = intersection->xBegin, .yBegin = outer.yBegin, .yEnd = outer.yEnd, });
-    }
-    if(intersection->xEnd < outer.xEnd){
-        outRanges.push_back(ResourceRangeBounds{ .xBegin = intersection->xEnd, .xEnd = outer.xEnd, .yBegin = outer.yBegin, .yEnd = outer.yEnd, });
-    }
-    if(outer.yBegin < intersection->yBegin){
-        outRanges.push_back(ResourceRangeBounds{ .xBegin = intersection->xBegin, .xEnd = intersection->xEnd, .yBegin = outer.yBegin, .yEnd = intersection->yBegin, });
-    }
-    if(intersection->yEnd < outer.yEnd){
-        outRanges.push_back(ResourceRangeBounds{ .xBegin = intersection->xBegin, .xEnd = intersection->xEnd, .yBegin = intersection->yEnd, .yEnd = outer.yEnd, });
-    }
-}
-
 // One task owns transitions between its own declared subresources. Later ranges may add untouched cells needing a boundary source or initial state.
 [[nodiscard]] b8 CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -207,13 +169,13 @@ static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const
     if(!useHistory.validFor(task) || useIndex >= task.resourceUseCount || !useHistory.validResource(resource.id) || task.resourceUses[useIndex].resource != resource.id)
         return false;
 
-    const auto requestedBounds = ResourceRangeBoundsFrom(resource.type, range);
+    const auto requestedBounds = IntegerRectBoundsFrom(resource.type, range);
     if(!requestedBounds)
         return false;
 
     const usize firstUse = useHistory.first(resource.id);
     if(firstUse >= useIndex){
-        const auto firstUseRange = ResourceRangeBoundsTo(resource.type, (*requestedBounds));
+        const auto firstUseRange = IntegerRectBoundsTo(resource.type, (*requestedBounds));
         if(!firstUseRange)
             return false;
         outRanges.push_back((*firstUseRange));
@@ -223,13 +185,13 @@ static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const
     const auto firstPreviousRange = ResolveResourceRangeForPlanning(graph, resource, task.resourceUses[firstUse].range);
     if(!firstPreviousRange)
         return false;
-    const auto firstPreviousBounds = ResourceRangeBoundsFrom(resource.type, (*firstPreviousRange));
+    const auto firstPreviousBounds = IntegerRectBoundsFrom(resource.type, (*firstPreviousRange));
     if(!firstPreviousBounds)
         return false;
 
-    Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
-    Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
-    AppendResourceRangeRemainder((*requestedBounds), (*firstPreviousBounds), uncovered);
+    Vector<IntegerRectBounds, Alloc::ScratchArena> uncovered(scratchArena);
+    Vector<IntegerRectBounds, Alloc::ScratchArena> remainders(scratchArena);
+    AppendIntegerRectRemainder((*requestedBounds), (*firstPreviousBounds), uncovered);
 
     for(usize previousUseIndex = useHistory.next(firstUse); previousUseIndex < useIndex && !uncovered.empty(); previousUseIndex = useHistory.next(previousUseIndex)){
         const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
@@ -238,23 +200,23 @@ static void AppendResourceRangeRemainder(const ResourceRangeBounds& outer, const
         if(!previousRange)
             return false;
 
-        const auto previousBounds = ResourceRangeBoundsFrom(resource.type, (*previousRange));
+        const auto previousBounds = IntegerRectBoundsFrom(resource.type, (*previousRange));
         if(!previousBounds)
             return false;
 
         remainders.clear();
-        for(const ResourceRangeBounds& uncoveredRange : uncovered)
-            AppendResourceRangeRemainder(uncoveredRange, (*previousBounds), remainders);
+        for(const IntegerRectBounds& uncoveredRange : uncovered)
+            AppendIntegerRectRemainder(uncoveredRange, (*previousBounds), remainders);
 
         uncovered.clear();
         uncovered.reserve(remainders.size());
-        for(const ResourceRangeBounds& remainder : remainders)
+        for(const IntegerRectBounds& remainder : remainders)
             uncovered.push_back(remainder);
     }
 
     outRanges.reserve(uncovered.size());
-    for(const ResourceRangeBounds& uncoveredRange : uncovered){
-        const auto firstUseRange = ResourceRangeBoundsTo(resource.type, uncoveredRange);
+    for(const IntegerRectBounds& uncoveredRange : uncovered){
+        const auto firstUseRange = IntegerRectBoundsTo(resource.type, uncoveredRange);
         if(!firstUseRange)
             return false;
         outRanges.push_back((*firstUseRange));
@@ -304,11 +266,11 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
 
     const usize newestStateIndex = history.last(resource.id);
     if(requestedRanges.size() == 1u && newestStateIndex != Limit<usize>::s_Max && RangeContains(resource, trackedStates[newestStateIndex].range, requestedRanges.front())){
-        Expected<ResourceRangeBounds> requestedBounds = ResourceRangeBounds{};
-        Expected<ResourceRangeBounds> stateBounds = ResourceRangeBounds{};
-        if(!(requestedBounds = ResourceRangeBoundsFrom(resource.type, requestedRanges.front())) || !(stateBounds = ResourceRangeBoundsFrom(resource.type, trackedStates[newestStateIndex].range)))
+        Expected<IntegerRectBounds> requestedBounds = IntegerRectBounds{};
+        Expected<IntegerRectBounds> stateBounds = IntegerRectBounds{};
+        if(!(requestedBounds = IntegerRectBoundsFrom(resource.type, requestedRanges.front())) || !(stateBounds = IntegerRectBoundsFrom(resource.type, trackedStates[newestStateIndex].range)))
             return false;
-        const auto fragmentRange = ResourceRangeBoundsTo(resource.type, (*requestedBounds));
+        const auto fragmentRange = IntegerRectBoundsTo(resource.type, (*requestedBounds));
         if(!fragmentRange)
             return false;
         outFragments.clear();
@@ -317,11 +279,11 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
         return true;
     }
 
-    Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
-    Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    Vector<IntegerRectBounds, Alloc::ScratchArena> uncovered(scratchArena);
+    Vector<IntegerRectBounds, Alloc::ScratchArena> remainders(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> discovered(scratchArena);
     for(const GpuTaskResourceRange& requestedRange : requestedRanges){
-        const auto requestedBounds = ResourceRangeBoundsFrom(resource.type, requestedRange);
+        const auto requestedBounds = IntegerRectBoundsFrom(resource.type, requestedRange);
         if(!requestedBounds)
             return false;
         uncovered.push_back((*requestedBounds));
@@ -330,32 +292,32 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
     for(usize stateIndex = history.last(resource.id); stateIndex != Limit<usize>::s_Max && !uncovered.empty(); stateIndex = history.previous(stateIndex)){
         const TrackedCompiledResourceState& state = trackedStates[stateIndex];
 
-        const auto stateBounds = ResourceRangeBoundsFrom(resource.type, state.range);
+        const auto stateBounds = IntegerRectBoundsFrom(resource.type, state.range);
         if(!stateBounds)
             return false;
 
         remainders.clear();
-        for(const ResourceRangeBounds& uncoveredRange : uncovered){
-            const auto intersection = IntersectResourceRangeBounds(uncoveredRange, (*stateBounds));
+        for(const IntegerRectBounds& uncoveredRange : uncovered){
+            const auto intersection = IntersectIntegerRectBounds(uncoveredRange, (*stateBounds));
             if(!intersection){
                 remainders.push_back(uncoveredRange);
                 continue;
             }
 
-            const auto fragmentRange = ResourceRangeBoundsTo(resource.type, (*intersection));
+            const auto fragmentRange = IntegerRectBoundsTo(resource.type, (*intersection));
             if(!fragmentRange)
                 return false;
             discovered.push_back(TrackedResourceStateFragment{ .range = (*fragmentRange), .state = &state, .stateIndex = stateIndex, });
-            AppendResourceRangeRemainder(uncoveredRange, (*intersection), remainders);
+            AppendIntegerRectRemainder(uncoveredRange, (*intersection), remainders);
         }
         uncovered.clear();
         uncovered.reserve(remainders.size());
-        for(const ResourceRangeBounds& remainder : remainders)
+        for(const IntegerRectBounds& remainder : remainders)
             uncovered.push_back(remainder);
     }
 
-    for(const ResourceRangeBounds& uncoveredRange : uncovered){
-        const auto fragmentRange = ResourceRangeBoundsTo(resource.type, uncoveredRange);
+    for(const IntegerRectBounds& uncoveredRange : uncovered){
+        const auto fragmentRange = IntegerRectBoundsTo(resource.type, uncoveredRange);
         if(!fragmentRange)
             return false;
         discovered.push_back(TrackedResourceStateFragment{ .range = (*fragmentRange), });
@@ -377,34 +339,34 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
     if(!history.validFor(trackedStates) || !history.validResource(resource.id))
         return false;
 
-    Vector<ResourceRangeBounds, Alloc::ScratchArena> covered(scratchArena);
-    Vector<ResourceRangeBounds, Alloc::ScratchArena> remaining(scratchArena);
-    Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    Vector<IntegerRectBounds, Alloc::ScratchArena> covered(scratchArena);
+    Vector<IntegerRectBounds, Alloc::ScratchArena> remaining(scratchArena);
+    Vector<IntegerRectBounds, Alloc::ScratchArena> remainders(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> discovered(scratchArena);
 
     for(usize stateIndex = history.last(resource.id); stateIndex != Limit<usize>::s_Max; stateIndex = history.previous(stateIndex)){
         const TrackedCompiledResourceState& state = trackedStates[stateIndex];
 
-        const auto stateBounds = ResourceRangeBoundsFrom(resource.type, state.range);
+        const auto stateBounds = IntegerRectBoundsFrom(resource.type, state.range);
         if(!stateBounds)
             return false;
 
         remaining.clear();
         remaining.push_back((*stateBounds));
-        for(const ResourceRangeBounds& coveredRange : covered){
+        for(const IntegerRectBounds& coveredRange : covered){
             remainders.clear();
-            for(const ResourceRangeBounds& remainingRange : remaining)
-                AppendResourceRangeRemainder(remainingRange, coveredRange, remainders);
+            for(const IntegerRectBounds& remainingRange : remaining)
+                AppendIntegerRectRemainder(remainingRange, coveredRange, remainders);
             remaining.clear();
             remaining.reserve(remainders.size());
-            for(const ResourceRangeBounds& remainder : remainders)
+            for(const IntegerRectBounds& remainder : remainders)
                 remaining.push_back(remainder);
             if(remaining.empty())
                 break;
         }
 
-        for(const ResourceRangeBounds& terminalRange : remaining){
-            const auto fragmentRange = ResourceRangeBoundsTo(resource.type, terminalRange);
+        for(const IntegerRectBounds& terminalRange : remaining){
+            const auto fragmentRange = IntegerRectBoundsTo(resource.type, terminalRange);
             if(!fragmentRange)
                 return false;
             discovered.push_back(TrackedResourceStateFragment{ .range = (*fragmentRange), .state = &state, .stateIndex = stateIndex, });

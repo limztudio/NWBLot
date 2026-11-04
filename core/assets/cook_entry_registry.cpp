@@ -13,6 +13,7 @@
 
 #include <global/assert.h>
 #include <global/auto_registration.h>
+#include <global/overflow.h>
 #include <global/scope_exit.h>
 
 
@@ -119,9 +120,10 @@ u64 CookEntryRegistry::entryCount()const noexcept{
     u64 count = 0;
     for(const BucketPtr& bucket : m_buckets){
         const u64 bucketSize = static_cast<u64>(bucket->size());
-        if(count > Limit<u64>::s_Max - bucketSize)
+        const auto total = AddNoOverflow(count, bucketSize);
+        if(!total)
             return Limit<u64>::s_Max;
-        count += bucketSize;
+        count = *total;
     }
     return count;
 }

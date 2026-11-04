@@ -133,9 +133,7 @@ class LightSpaceCaptureHistory{
             && identity.lighting == this.m_acceptedIdentity.lighting
             && identity.layout == this.m_acceptedIdentity.layout
         ;
-        ++this.m_sequence;
-        if(this.m_sequence == 0u)
-            ++this.m_sequence;
+        advanceWrappingNonzeroU64(this.m_sequence);
         this.m_pendingIdentity = identity;
         this.m_pendingTicket.sequence = this.m_sequence;
         this.m_pendingTicket.reuse = reuse;
@@ -393,10 +391,7 @@ const usize s_LightSpaceDescriptorCount = 5u;
 u32 LightSpaceCasterDrawCount(in u32 meshletCount){
     if(meshletCount == 0u)
         return 1u;
-    u32 extra = 0u;
-    if((meshletCount % s_LightSpaceMeshletsPerDraw) != 0u)
-        extra = 1u;
-    return meshletCount / s_LightSpaceMeshletsPerDraw + extra;
+    return divideUp(meshletCount, s_LightSpaceMeshletsPerDraw);
 }
 
 b8 LightSpaceCasterEligibleForCapturePass(in b8 casterTransparent, in b8 casterCsg, in b8 passTransparent, in u32 indexCount, in u32 csgFlags){

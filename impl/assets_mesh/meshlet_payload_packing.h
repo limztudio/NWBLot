@@ -17,7 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVectorSingle FoldMeshletConeOctAxis(SIMDVectorSingle axis)noexcept;
 [[nodiscard]] u32 PackMeshletConeOct16(SIMDVectorSingle axis)noexcept;
 [[nodiscard]] SIMDVectorSingle UnpackMeshletConeOct16Axis(u32 conePacked)noexcept;
 [[nodiscard]] f32 ConservativePackedMeshletConeCutoff(SIMDVectorSingle axis, f32 cutoff, SIMDVectorSingle unpackedAxis)noexcept;

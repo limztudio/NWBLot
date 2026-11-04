@@ -7,6 +7,9 @@
 
 #include "properties.h"
 
+#include "../containers.h"
+#include "../text_trim_parse.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,6 +81,35 @@ public:
         first = false;
     }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+[[nodiscard]] inline Expected<Vector<usize, ArenaT>> BuildGraphemeBoundaries(ArenaT& arena, const AStringView text){
+    if(text.size() == Limit<usize>::s_Max)
+        return MakeUnexpected(Failure{});
+    Vector<usize, ArenaT> candidate(arena);
+    candidate.reserve(text.size() + 1u);
+    GraphemeBoundaryState state;
+    usize offset = 0u;
+    while(offset < text.size()){
+        const auto decoded = DecodeUtf8Scalar(text.substr(offset, s_Utf8MaxSequenceBytes));
+        if(!decoded)
+            return MakeUnexpected(Failure{});
+        const u32 scalar = decoded->codePoint;
+        const GraphemeBreak::Enum current = LookupGraphemeBreak(scalar);
+        const IndicConjunct::Enum indic = LookupIndicConjunct(scalar);
+        const b8 pictograph = IsExtendedPictographic(scalar);
+        if(state.breaksBefore(current, indic, pictograph))
+            candidate.push_back(offset);
+        state.advance(current, indic, pictograph);
+        offset += static_cast<usize>(decoded->byteCount);
+    }
+    candidate.push_back(text.size());
+    return candidate;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

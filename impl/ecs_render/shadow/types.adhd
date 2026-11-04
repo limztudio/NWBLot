@@ -488,12 +488,7 @@ const StringView s_ShadowResolveWaveletVariant = "NWB_SHADOW_RESOLVE_COMPILED_ST
 const StringView s_ShadowResolveUpsampleVariant = "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2";
 
 u32 ResolveSoftShadowLightSlotRangeCount(in u32 softShadowSlotMask){
-    u32 slotRangeCount = 0u;
-    for(u32 slot = 0u; slot < s_SceneShadowSlotCount; ++slot){
-        if((softShadowSlotMask & (1u << slot)) != 0u)
-            slotRangeCount = slot + 1u;
-    }
-    return slotRangeCount;
+    return bitWidthLowU32(softShadowSlotMask, s_SceneShadowSlotCount);
 }
 
 b8 SoftShadowTemporalHistoryUsable(in b8 softShadowTemporalReady, in b8 prevWorldToClipValid, in b8 softShadowTemporalSeeded){

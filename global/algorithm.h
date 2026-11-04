@@ -8,6 +8,7 @@
 #include "limit.h"
 #include "expected.h"
 #include "overflow.h"
+#include "span.h"
 #include "type_properties.h"
 
 #include <algorithm>
@@ -20,6 +21,64 @@
 template<typename InputIt, typename Predicate>
 constexpr InputIt FindIf(InputIt first, InputIt last, Predicate&& pred){
     return std::find_if(first, last, Forward<Predicate>(pred));
+}
+
+template<typename TContainer, typename TPredicate>
+[[nodiscard]] inline auto FindIfPointer(TContainer& sources, TPredicate&& predicate)noexcept(noexcept(FindIf(sources.begin(), sources.end(), Forward<TPredicate>(predicate))) && noexcept(sources.end()) && noexcept(&*sources.begin())) -> decltype(&*sources.begin()){
+    const auto found = FindIf(sources.begin(), sources.end(), Forward<TPredicate>(predicate));
+    return found == sources.end() ? nullptr : &*found;
+}
+
+
+namespace AlgorithmDetail{
+
+
+template<typename T, typename Predicate, typename State, typename Output>
+void VisitPointerDependency(const usize index, const Span<const T* const> items, const Predicate& dependsOn, State& state, Output& outSorted){
+    if(state[index] != 0u)
+        return;
+    state[index] = 1u;
+    const T* current = items[index];
+    if(current){
+        for(usize j = 0u; j < items.size(); ++j){
+            if(j != index && state[j] == 0u && items[j] && dependsOn(*current, *items[j]))
+                VisitPointerDependency(j, items, dependsOn, state, outSorted);
+        }
+    }
+    state[index] = 2u;
+    outSorted.push_back(current);
+}
+
+
+};
+
+
+// State must contain at least one zero for each item.
+template<typename T, typename Predicate, typename State, typename Output>
+void TopologicallySortPointers(const Span<const T* const> items, const Predicate& dependsOn, State& state, Output& outSorted){
+    outSorted.clear();
+    if(items.empty())
+        return;
+    outSorted.reserve(items.size());
+    for(usize i = 0u; i < items.size(); ++i)
+        AlgorithmDetail::VisitPointerDependency(i, items, dependsOn, state, outSorted);
+}
+
+
+// The mask must contain one entry for each element.
+template<typename Container>
+void CompactByMask(const Span<const u8> selected, Container& values)noexcept(
+    noexcept(values.size()) && noexcept(values[usize{}] = Move(values[usize{}])) && noexcept(values.erase(values.begin() + usize{}, values.end()))
+){
+    usize next = 0u;
+    for(usize i = 0u; i < values.size(); ++i){
+        if(!selected[i])
+            continue;
+        if(next != i)
+            values[next] = Move(values[i]);
+        ++next;
+    }
+    values.erase(values.begin() + next, values.end());
 }
 
 template<typename RandomIt>
@@ -65,6 +124,27 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value){
 template<typename ForwardIt, typename T, typename Compare>
 constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, Compare&& compare){
     return std::lower_bound(first, last, value, Forward<Compare>(compare));
+}
+
+template<typename ForwardIt, typename T, typename Compare>
+constexpr ForwardIt UpperBound(ForwardIt first, ForwardIt last, const T& value, Compare&& compare){
+    return std::upper_bound(first, last, value, Forward<Compare>(compare));
+}
+
+[[nodiscard]] inline constexpr usize LowerBoundIndex(const Span<const usize> values, const usize value)noexcept{
+    usize first = 0u;
+    usize count = values.size();
+    while(count > 0u){
+        const usize step = count / 2u;
+        const usize mid = first + step;
+        if(values[mid] < value){
+            first = mid + 1u;
+            count -= step + 1u;
+        }
+        else
+            count = step;
+    }
+    return first;
 }
 
 template<typename Sequence, typename Predicate>
@@ -148,6 +228,13 @@ constexpr T AlignUp(const T value, const T alignment)noexcept(IsArithmetic_V<T>)
     return value + (alignment - (value % alignment)) % alignment;
 }
 
+// Uses wrapping numerator arithmetic and requires a nonzero divisor.
+template<typename ValueT, typename DivisorT>
+    requires(IsIntegral_V<ValueT> && IsIntegral_V<DivisorT>)
+[[nodiscard]] constexpr auto DivideUpWrapping(const ValueT value, const DivisorT divisor)noexcept -> decltype((value + divisor - 1u) / divisor){
+    return (value + divisor - 1u) / divisor;
+}
+
 template<typename T>
 constexpr T DivideUp(const T value, const T divisor)noexcept(IsArithmetic_V<T>){
     if(value == 0 || divisor == 0)
@@ -177,6 +264,17 @@ template<typename T>
         return MakeUnexpected(Failure{});
 
     return value + addend;
+}
+
+
+[[nodiscard]] inline constexpr Expected<u32> AlignU32PowerOfTwoChecked(const u32 value, const u32 alignment)noexcept{
+    if(alignment == 0u || (alignment & (alignment - 1u)) != 0u)
+        return MakeUnexpected(Failure{});
+    return AlignUpChecked(value, alignment);
+}
+
+[[nodiscard]] inline constexpr Expected<usize> AlignUpCheckedSize(const usize value, const usize alignment)noexcept{
+    return AlignUpChecked(value, alignment);
 }
 
 

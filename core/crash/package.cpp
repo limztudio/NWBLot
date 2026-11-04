@@ -6,6 +6,7 @@
 
 #include <global/diagnostics.h>
 #include <global/error_code.h>
+#include <global/fixed_buffer.h>
 #include <global/json_text.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -29,7 +30,6 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_UnsignedTextBufferCapacity = 32u;
 inline constexpr usize s_ManifestReserveBytes = 2048u;
 inline constexpr usize s_LinuxProcPathTextCapacity = 128u;
 inline constexpr usize s_LinuxCopyBufferBytes = 4096u;
@@ -40,13 +40,6 @@ inline constexpr StringView s_FramePointerFieldPrefix = "\nframe_pointer=";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename ArenaT>
-static void AppendUnsignedText(CrashStringT<ArenaT>& out, const u64 value){
-    Array<char, s_UnsignedTextBufferCapacity> buffer = {};
-    AppendUnsignedToFixedBuffer(buffer, value);
-    out += FixedBufferView(buffer);
-}
 
 template<typename ArenaT>
 static void AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const StringView key, const b8 isFirst){
@@ -94,11 +87,11 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonKindKey, false);
     AppendJsonQuotedText(manifest, ReasonKindName(request.reasonKind));
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonCodeKey, false);
-    AppendUnsignedText(manifest, request.reasonCode);
+    AppendUnsignedU64Text(manifest, request.reasonCode);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestProcessIdKey, false);
-    AppendUnsignedText(manifest, request.processId);
+    AppendUnsignedU64Text(manifest, request.processId);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestThreadIdKey, false);
-    AppendUnsignedText(manifest, request.threadId);
+    AppendUnsignedU64Text(manifest, request.threadId);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
 #if defined(NWB_PLATFORM_WINDOWS)
     const b8 hasExceptionContext = request.manualContextSize != 0u || request.exceptionPointers != 0u;
@@ -107,13 +100,13 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
 #endif
     manifest += hasExceptionContext ? s_TrueText : s_FalseText;
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
-    AppendUnsignedText(manifest, request.faultAddress);
+    AppendUnsignedU64Text(manifest, request.faultAddress);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestInstructionPointerKey, false);
-    AppendUnsignedText(manifest, request.instructionPointer);
+    AppendUnsignedU64Text(manifest, request.instructionPointer);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestStackPointerKey, false);
-    AppendUnsignedText(manifest, request.stackPointer);
+    AppendUnsignedU64Text(manifest, request.stackPointer);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFramePointerKey, false);
-    AppendUnsignedText(manifest, request.framePointer);
+    AppendUnsignedU64Text(manifest, request.framePointer);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestEventKey, false);
     AppendJsonQuotedText(manifest, request.event.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerCategoryKey, false);
@@ -125,7 +118,7 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerFileKey, false);
     AppendJsonQuotedText(manifest, request.triggerFile.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerLineKey, false);
-    AppendUnsignedText(manifest, request.triggerLine);
+    AppendUnsignedU64Text(manifest, request.triggerLine);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestDumpDetailModeKey, false);
     AppendJsonQuotedText(manifest, request.dumpDetailMode == DumpDetailMode::Full ? PackageNames::s_ManifestDumpDetailModeFullValue : PackageNames::s_ManifestDumpDetailModeSmallValue);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestArtifactStrategyKey, false);
@@ -152,7 +145,7 @@ template<typename ArenaT>
 static CrashStringT<ArenaT> BuildBreadcrumbText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     for(u32 i = 0u; i < request.breadcrumbCount; ++i){
-        AppendUnsignedText(text, request.breadcrumbs[i].order);
+        AppendUnsignedU64Text(text, request.breadcrumbs[i].order);
         text += " [";
         text += request.breadcrumbs[i].category.data();
         text += "] ";
@@ -168,21 +161,21 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     text += "reason=";
     text += ReasonKindName(request.reasonKind);
     text += "\ncode=";
-    AppendUnsignedText(text, request.reasonCode);
+    AppendUnsignedU64Text(text, request.reasonCode);
     text += "\npid=";
-    AppendUnsignedText(text, request.processId);
+    AppendUnsignedU64Text(text, request.processId);
     text += "\ntid=";
-    AppendUnsignedText(text, request.threadId);
+    AppendUnsignedU64Text(text, request.threadId);
     text += "\nexception_context=";
-    AppendUnsignedText(text, request.exceptionPointers);
+    AppendUnsignedU64Text(text, request.exceptionPointers);
     text += "\nfault_address=";
-    AppendUnsignedText(text, request.faultAddress);
+    AppendUnsignedU64Text(text, request.faultAddress);
     text += s_InstructionPointerFieldPrefix;
-    AppendUnsignedText(text, request.instructionPointer);
+    AppendUnsignedU64Text(text, request.instructionPointer);
     text += s_StackPointerFieldPrefix;
-    AppendUnsignedText(text, request.stackPointer);
+    AppendUnsignedU64Text(text, request.stackPointer);
     text += s_FramePointerFieldPrefix;
-    AppendUnsignedText(text, request.framePointer);
+    AppendUnsignedU64Text(text, request.framePointer);
     text += "\nevent=";
     text += request.event.data();
     text += "\ntrigger_category=";
@@ -194,7 +187,7 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     text += "\ntrigger_file=";
     text += request.triggerFile.data();
     text += "\ntrigger_line=";
-    AppendUnsignedText(text, request.triggerLine);
+    AppendUnsignedU64Text(text, request.triggerLine);
     text += "\n";
     return text;
 }
@@ -211,13 +204,13 @@ template<typename ArenaT>
 static CrashStringT<ArenaT> BuildCpuContextText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     text += "fault_address=";
-    AppendUnsignedText(text, request.faultAddress);
+    AppendUnsignedU64Text(text, request.faultAddress);
     text += s_InstructionPointerFieldPrefix;
-    AppendUnsignedText(text, request.instructionPointer);
+    AppendUnsignedU64Text(text, request.instructionPointer);
     text += s_StackPointerFieldPrefix;
-    AppendUnsignedText(text, request.stackPointer);
+    AppendUnsignedU64Text(text, request.stackPointer);
     text += s_FramePointerFieldPrefix;
-    AppendUnsignedText(text, request.framePointer);
+    AppendUnsignedU64Text(text, request.framePointer);
     text += "\n";
     return text;
 }
@@ -228,7 +221,7 @@ static CrashStringT<ArenaT> BuildCallstackText(ArenaT& arena, const CrashRequest
     const u32 frameCount = request.callstackFrameCount > s_MaxCallstackFrames ? static_cast<u32>(s_MaxCallstackFrames) : request.callstackFrameCount;
     for(u32 i = 0u; i < frameCount; ++i){
         text += '#';
-        AppendUnsignedText(text, i);
+        AppendUnsignedU64Text(text, i);
         text += " 0x";
         AppendHexU64(request.callstackFrames[i], text);
         text += '\n';
@@ -461,13 +454,6 @@ static void AppendArchiveText(CrashBytesT<ArenaT>& out, const AStringView text){
     out.insert(out.end(), text.begin(), text.end());
 }
 
-template<typename ArenaT>
-static void AppendArchiveUnsigned(CrashBytesT<ArenaT>& out, const u64 value){
-    Array<char, s_UnsignedTextBufferCapacity> buffer = {};
-    AppendUnsignedToFixedBuffer(buffer, value);
-    AppendArchiveText(out, FixedBufferView(buffer));
-}
-
 template<typename ArenaT, typename PathArenaT>
 Expected<CrashBytesT<ArenaT>, ErrorCode> BuildPackageArchive(ArenaT& arena, Alloc::ScratchArena& scratchArena, const ::Path<PathArenaT>& packageDirectory){
     CrashBytesT<ArenaT> archive(arena);
@@ -496,7 +482,7 @@ Expected<CrashBytesT<ArenaT>, ErrorCode> BuildPackageArchive(ArenaT& arena, Allo
         AppendArchiveText(archive, PackageNames::s_ArchiveFileHeaderPrefix);
         AppendArchiveText(archive, AStringView(pathText.data(), pathText.size()));
         AppendArchiveText(archive, " ");
-        AppendArchiveUnsigned(archive, fileBytes.size());
+        AppendUnsignedU64Bytes(archive, fileBytes.size());
         AppendArchiveText(archive, "\n");
         archive.insert(archive.end(), fileBytes.begin(), fileBytes.end());
         AppendArchiveText(archive, PackageNames::s_ArchiveEntryEndText);

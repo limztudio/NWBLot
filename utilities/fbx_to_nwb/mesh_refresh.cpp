@@ -12,6 +12,7 @@
 
 #include <global/overflow.h>
 #include <global/span.h>
+#include <global/text_replacements.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -337,7 +338,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         return MakeUnexpected(Failure{});
     }
 
-    MeshRefreshTextDetail::ApplyTextReplacements(replacements, source);
+    ApplyTextReplacements(Span<MeshRefreshTextDetail::TextReplacement>(replacements), source);
     NormalizeLineEndingsInPlace(source, useCrlf);
 
     const auto written = WriteTextFile(outputPath, source);

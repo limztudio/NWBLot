@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "termination.h"
 #include "type.h"
 
 #include <atomic>
@@ -20,6 +21,25 @@ using Atomic = std::atomic<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+inline void UpdateAtomicMaxRelaxed(Atomic<T>& maximum, const T value)noexcept{
+    T observed = maximum.load(MemoryOrder::relaxed);
+    while(observed < value){
+        if(maximum.compare_exchange_weak(observed, value, MemoryOrder::relaxed))
+            return;
+    }
+}
+
+inline u64 DecrementAtomicOrTerminate(Atomic<u64>& value)noexcept{
+    u64 previous = value.load(MemoryOrder::relaxed);
+    do{
+        if(previous == 0u)
+            TerminateInvariant();
+    }while(!value.compare_exchange_weak(previous, previous - 1u, MemoryOrder::relaxed));
+    return previous;
+}
 
 
 inline void AtomicThreadFence(const MemoryOrder order)noexcept{ std::atomic_thread_fence(order); }

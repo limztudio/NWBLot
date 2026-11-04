@@ -5,6 +5,7 @@
 #include "gpu_timing.h"
 #include "backend_selection.h"
 
+#include <global/scope_exit.h>
 #include <global/exception.h>
 
 
@@ -46,30 +47,6 @@ GpuTimingSubmissionTicket::RecordingScope::RecordingScope(GpuTimingSubmissionTic
 GpuTimingSubmissionTicket::RecordingScope::~RecordingScope()noexcept{
     m_ticket.deactivateOnCurrentThread(m_previousTicket, m_activated);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuTimingSubmissionTicket::PreparedSubmissionUnwindScope final : NoCopy{
-public:
-    explicit PreparedSubmissionUnwindScope(GpuTimingSubmissionTicket& ticket)noexcept
-        : m_ticket(ticket)
-    {}
-    ~PreparedSubmissionUnwindScope()noexcept{
-        if(m_active)
-            m_ticket.abandonWithoutCallbacks();
-    }
-
-
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    GpuTimingSubmissionTicket& m_ticket;
-    b8 m_active = true;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,7 +101,7 @@ NWB_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQue
         discardPreparedSubmission();
         return MakeUnexpected(Failure{});
     }
-    PreparedSubmissionUnwindScope submissionUnwind(*this);
+    ScopeExit submissionUnwind([this]()noexcept{ abandonWithoutCallbacks(); });
     waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
     for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
         waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);

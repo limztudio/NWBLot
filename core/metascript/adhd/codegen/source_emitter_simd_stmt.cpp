@@ -235,7 +235,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 for(u32 i = 0u; i < 4u; ++i){
                     if(i > 0u)
                         out.append(", ");
-                    AppendAdhdUnsigned(out, permIdx[i]);
+                    AppendUnsignedDecimal(out, permIdx[i]);
                     out.push_back('u');
                 }
                 out.append(">(");
@@ -247,7 +247,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             for(u32 i = 0u; i < 4u; ++i){
                 if(i > 0u)
                     out.append(", ");
-                AppendAdhdUnsigned(out, permIdx[i]);
+                AppendUnsignedDecimal(out, permIdx[i]);
                 out.push_back('u');
             }
             out.append(">(");

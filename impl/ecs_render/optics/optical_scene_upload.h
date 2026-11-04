@@ -6,12 +6,12 @@
 
 
 #include "optical_scene.h"
-#include <impl/ecs_render/shared/plan_reservation_base.h>
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/command.h>
 #include <core/graphics/rhi/resource.h>
 
+#include <global/plan_reservation.h>
 #include <global/arena_object.h>
 #include <global/refcount_ptr.h>
 #include <global/sync.h>

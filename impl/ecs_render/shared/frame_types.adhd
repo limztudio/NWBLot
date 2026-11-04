@@ -192,24 +192,17 @@ class SceneLightGpuData{
     public f32x4 params2(0.00465f, 0.05f, 0.0f, 0.0f);
 }
 
-void HashCombineF32x4(in f32x4 value, mut usize seed){
-    seed = hashCombineValue(seed, bit_cast<u32>(value.x));
-    seed = hashCombineValue(seed, bit_cast<u32>(value.y));
-    seed = hashCombineValue(seed, bit_cast<u32>(value.z));
-    seed = hashCombineValue(seed, bit_cast<u32>(value.w));
-}
-
 // Hashes the immutable upload payload, including edits and light order.
 u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
     const u32 lightCount = cast<u32>(lights.size());
     usize seed = hashValue(lightCount);
-    HashCombineF32x4(shading.cameraPositionLightCount, seed);
+    hashCombineF32x4(shading.cameraPositionLightCount, seed);
     for(usize i = 0u; i < lights.size(); ++i){
-        HashCombineF32x4(lights[i].position, seed);
-        HashCombineF32x4(lights[i].direction, seed);
-        HashCombineF32x4(lights[i].colorIntensity, seed);
-        HashCombineF32x4(lights[i].params, seed);
-        HashCombineF32x4(lights[i].params2, seed);
+        hashCombineF32x4(lights[i].position, seed);
+        hashCombineF32x4(lights[i].direction, seed);
+        hashCombineF32x4(lights[i].colorIntensity, seed);
+        hashCombineF32x4(lights[i].params, seed);
+        hashCombineF32x4(lights[i].params2, seed);
     }
     return cast<u64>(seed);
 }

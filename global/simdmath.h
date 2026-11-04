@@ -9,10 +9,12 @@
 #include "simd/constant.h"
 #include "simd/convert.h"
 #include "simd/vector.h"
+#include "simd/rect.h"
 #include "simd/quaternion.h"
 #include "simd/matrix.h"
 #include "simd/collision.h"
 #include "simd/frame.h"
+#include "simd/hash.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

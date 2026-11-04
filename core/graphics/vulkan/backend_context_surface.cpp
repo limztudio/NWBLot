@@ -478,8 +478,8 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
            << " (" << static_cast<i32>(selectedPresentMode) << ")"
            << "\n    requested images: " << m_deviceParams.swapChainBufferCount
            << "\n    created images: " << imageCount
-           << "\n    mutable format: " << VulkanDetail::BoolToYesNoText(m_swapChainMutableFormatSupported)
-           << "\n    readback: " << VulkanDetail::BoolToYesNoText(m_swapChainState.swapChainReadbackAvailable)
+           << "\n    mutable format: " << BoolToYesNoText(m_swapChainMutableFormatSupported)
+           << "\n    readback: " << BoolToYesNoText(m_swapChainState.swapChainReadbackAvailable)
            << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive")
         ;
         NWB_LOGGER_ESSENTIAL_INFO(ConvertString(ss.str()));

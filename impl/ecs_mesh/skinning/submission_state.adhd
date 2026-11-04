@@ -257,15 +257,6 @@ Expected<MeshSkinningRestToSkinnedCopyByteCounts> TryResolveMeshSkinningRestToSk
 
 const usize s_MaxSkeletonJointMatrixSpanCount = usize.max / 48u;
 
-b8 EqualSkeletonJointMatrixRowBits(in f32x4 lhs, in f32x4 rhs){
-    return
-        bit_cast<u32>(lhs.x) == bit_cast<u32>(rhs.x)
-        && bit_cast<u32>(lhs.y) == bit_cast<u32>(rhs.y)
-        && bit_cast<u32>(lhs.z) == bit_cast<u32>(rhs.z)
-        && bit_cast<u32>(lhs.w) == bit_cast<u32>(rhs.w)
-    ;
-}
-
 b8 EqualSkeletonJointMatrixSpan(in Span<SkeletonJointMatrix> lhs, in Span<SkeletonJointMatrix> rhs){
     if(lhs.size() != rhs.size())
         return false;
@@ -273,7 +264,7 @@ b8 EqualSkeletonJointMatrixSpan(in Span<SkeletonJointMatrix> lhs, in Span<Skelet
         const f32x3x4 a = lhs[i];
         const f32x3x4 b = rhs[i];
         for(u32 row = 0u; row < s_SkeletonJointMatrixRowCount; ++row){
-            if(!EqualSkeletonJointMatrixRowBits(a[row], b[row]))
+            if(!equalF32x4Bits(a[row], b[row]))
                 return false;
         }
     }

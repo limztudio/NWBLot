@@ -275,7 +275,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         emitIndent(out, indent);
         if(m_activeSwitchBreakLabelLine != 0u){
             out.append("goto __adhd_switch_break_");
-            AppendAdhdUnsigned(out, m_activeSwitchBreakLabelLine);
+            AppendUnsignedDecimal(out, m_activeSwitchBreakLabelLine);
             out.append(";\r\n");
         }
         else{
@@ -415,7 +415,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             if(needsBreakLabel){
                 emitIndent(out, bodyIndent);
                 out.append("__adhd_switch_break_");
-                AppendAdhdUnsigned(out, stmt.span.line != 0u ? stmt.span.line : 1u);
+                AppendUnsignedDecimal(out, stmt.span.line != 0u ? stmt.span.line : 1u);
                 out.append(":;\r\n");
             }
             if(needsDoWhileWrap){

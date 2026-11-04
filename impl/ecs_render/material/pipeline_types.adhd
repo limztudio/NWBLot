@@ -317,10 +317,10 @@ u32x4u PackMaterialInstanceBytes(in Span<u8> bytes){
         return u32x4u(0u, 0u, 0u, 0u);
 
     return u32x4u(
-        ReadLittleEndianWordBytes(bytes, 0u),
-        ReadLittleEndianWordBytes(bytes, 4u),
-        ReadLittleEndianWordBytes(bytes, 8u),
-        ReadLittleEndianWordBytes(bytes, 12u)
+        readPartialU32LittleEndian(bytes, 0u),
+        readPartialU32LittleEndian(bytes, 4u),
+        readPartialU32LittleEndian(bytes, 8u),
+        readPartialU32LittleEndian(bytes, 12u)
     );
 }
 

@@ -10,8 +10,6 @@
 
 // The default key step is one hundredth of the range.
 const f64 s_SliderDefaultKeyStepDivisor = 100.0;
-// Halving each bound keeps the span finite when maximum - minimum overflows.
-const f64 s_SliderOverflowGuardScale = 0.5;
 const u32 s_SliderPageStepCount = 10u;
 
 class SliderStyle{
@@ -260,19 +258,6 @@ f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
     return (maximum / s_SliderDefaultKeyStepDivisor) - (minimum / s_SliderDefaultKeyStepDivisor);
 }
 
-f64 StepSliderValueOnce(in f64 value, in f64 minimum, in f64 maximum, in f64 step, in b8 increasing){
-    const f64 current = clamp(value, minimum, maximum);
-    if(increasing){
-        const f64 distance = maximum - current;
-        if(step >= distance)
-            return maximum;
-        return clamp(current + step, minimum, maximum);
-    }
-    const f64 distance = current - minimum;
-    if(step >= distance)
-        return minimum;
-    return clamp(current - step, minimum, maximum);
-}
 
 Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, in ControlActionKind kind){
     f64 step = 0.0;
@@ -281,18 +266,18 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
     case ControlActionKind::Left:
     case ControlActionKind::Down:
         step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
-        value = StepSliderValueOnce(value, options.minimum, options.maximum, step, false);
+        value = stepF64Bounded(value, options.minimum, options.maximum, step, false);
         break;
     case ControlActionKind::Right:
     case ControlActionKind::Up:
         step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
-        value = StepSliderValueOnce(value, options.minimum, options.maximum, step, true);
+        value = stepF64Bounded(value, options.minimum, options.maximum, step, true);
         break;
     case ControlActionKind::PageDown:
     case ControlActionKind::PageUp:
         step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
         for(u32 index = 0u; index < s_SliderPageStepCount; ++index)
-            value = StepSliderValueOnce(value, options.minimum, options.maximum, step, kind == ControlActionKind::PageUp);
+            value = stepF64Bounded(value, options.minimum, options.maximum, step, kind == ControlActionKind::PageUp);
         break;
     case ControlActionKind::Home:
         value = options.minimum;
@@ -308,60 +293,14 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
     return value;
 }
 
-Expected<f64> TryNormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value){
-    if(!IsValidSliderRange(minimum, maximum) || !isFinite(value))
-        return makeUnexpected(Failure());
-    f64 normalizedValue = 0.0;
-    if(minimum != maximum && value > minimum){
-        if(value >= maximum)
-            normalizedValue = 1.0;
-        else{
-            const f64 span = maximum - minimum;
-            if(isFinite(span))
-                normalizedValue = (value - minimum) / span;
-            else{
-                const f64 scaledValue = value * s_SliderOverflowGuardScale;
-                const f64 scaledMin = minimum * s_SliderOverflowGuardScale;
-                const f64 scaledMax = maximum * s_SliderOverflowGuardScale;
-                normalizedValue = (scaledValue - scaledMin) / (scaledMax - scaledMin);
-            }
-        }
-    }
-    if(!isFinite(normalizedValue))
-        return makeUnexpected(Failure());
-    if(normalizedValue > 0.0)
-        return min(1.0, normalizedValue);
-    return 0.0;
-}
 
-Expected<f64> TryInterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized){
-    if(!IsValidSliderRange(minimum, maximum) || !isFinite(normalized) || normalized < 0.0 || normalized > 1.0)
-        return makeUnexpected(Failure());
-    f64 value = minimum;
-    if(normalized == 1.0)
-        value = maximum;
-    else if(normalized > 0.0 && minimum != maximum){
-        if(minimum < 0.0 && maximum > 0.0){
-            const f64 lowerWeight = 1.0 - normalized;
-            value = minimum * lowerWeight + maximum * normalized;
-        }
-        else{
-            const f64 span = maximum - minimum;
-            value = minimum + span * normalized;
-        }
-        value = clamp(value, minimum, maximum);
-    }
-    if(!isFinite(value))
-        return makeUnexpected(Failure());
-    return value;
-}
 
 Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGesture gesture){
     const f64 normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
     f64 normalized = 0.0;
     if(normalizedValue > 0.0)
         normalized = min(1.0, normalizedValue);
-    return TryInterpolateSliderValue(options.minimum, options.maximum, normalized);
+    return interpolateFiniteRange(options.minimum, options.maximum, normalized);
 }
 
 b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOptions options, in PointerGesture gesture, in b8 previouslyMoved, mut f64 outValue, mut b8 outMoved){
@@ -374,14 +313,14 @@ b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOpti
             outValue = baseline;
         return true;
     }
-    const Expected<f64> normalized = TryNormalizeSliderValue(options.minimum, options.maximum, baseline);
+    const Expected<f64> normalized = normalizeFiniteRange(options.minimum, options.maximum, baseline);
     if(!normalized.has_value())
         return false;
     const f64 normalizedValue = normalized.value() + delta / travel;
     f64 dragged = 0.0;
     if(normalizedValue > 0.0)
         dragged = min(1.0, normalizedValue);
-    const Expected<f64> interpolated = TryInterpolateSliderValue(options.minimum, options.maximum, dragged);
+    const Expected<f64> interpolated = interpolateFiniteRange(options.minimum, options.maximum, dragged);
     if(!interpolated.has_value())
         return false;
     outValue = interpolated.value();
@@ -397,13 +336,7 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
     return TryPlaceSlider(bounds, clip, metrics, normalized);
 }
 
-Expected<f64> NormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value){
-    return TryNormalizeSliderValue(minimum, maximum, value);
-}
 
-Expected<f64> InterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized){
-    return TryInterpolateSliderValue(minimum, maximum, normalized);
-}
 
 b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateStep, in b8 stateEnabled, in SliderOptions options){
     return bit_cast<u64>(stateMin) == bit_cast<u64>(options.minimum)

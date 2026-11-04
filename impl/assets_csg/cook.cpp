@@ -72,7 +72,7 @@ using Core::Assets::ScratchString;
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a relative include path"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return false;
     }
-    if(!IsValidCsgRelativeIncludePathText(includePath)){
+    if(!IsRelativeSlashPathWithoutDotSegments(includePath)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' has invalid include path '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(includePath));
         return false;
     }

@@ -49,13 +49,7 @@ inline void AppendBuffer(char* const dst, const usize capacity, const AStringVie
 
 inline void AppendUnsignedBuffer(char* const dst, const usize capacity, u64 value)noexcept{
     Array<char, s_DecimalTextBufferBytes> text;
-    usize begin = text.size();
-    do{
-        text[--begin] = static_cast<char>('0' + (value % TextDetail::s_DefaultNumericTextBase));
-        value /= TextDetail::s_DefaultNumericTextBase;
-    }while(value && begin != 0u);
-
-    AppendBuffer(dst, capacity, AStringView(text.data() + begin, text.size() - begin));
+    AppendBuffer(dst, capacity, TextDetail::FormatDecimalBuffer(value, text.data()));
 }
 
 
@@ -114,6 +108,21 @@ inline void AppendUnsignedToFixedBuffer(Array<char, N>& dst, const u64 value)noe
 template<usize N>
 inline void AppendUnsignedToFixedBuffer(char (&dst)[N], const u64 value)noexcept{
     FixedBufferDetail::AppendUnsignedBuffer(dst, N, value);
+}
+
+template<typename StringT>
+inline void AppendUnsignedU64Text(StringT& out, const u64 value)noexcept(noexcept(out += AStringView{})){
+    Array<char, s_DecimalTextBufferBytes> buffer = {};
+    AppendUnsignedToFixedBuffer(buffer, value);
+    out += FixedBufferView(buffer);
+}
+
+template<typename ByteContainer>
+inline void AppendUnsignedU64Bytes(ByteContainer& out, const u64 value)noexcept(noexcept(out.insert(out.end(), DeclVal<const char*>(), DeclVal<const char*>()))){
+    Array<char, s_DecimalTextBufferBytes> buffer = {};
+    AppendUnsignedToFixedBuffer(buffer, value);
+    const AStringView text = FixedBufferView(buffer);
+    out.insert(out.end(), text.begin(), text.end());
 }
 
 

@@ -32,7 +32,6 @@ inline constexpr u32 s_RGB565RedBitShift = 11u;
 inline constexpr u32 s_RGB565GreenBitShift = 5u;
 inline constexpr u32 s_BC1TransparentColorIndices = Limit<u32>::s_Max;
 inline constexpr u32 s_D24ClearValueMask = 0x00ffffffu;
-inline constexpr f32 s_ClearFloatRoundingBias = 0.5f;
 inline constexpr u32 s_ClearChannelBits4444 = 4u;
 inline constexpr u32 s_ClearChannelBits565R = 5u;
 inline constexpr u32 s_ClearChannelBits565G = 6u;
@@ -51,11 +50,6 @@ inline constexpr u32 s_ClearShift22 = 22u;
 inline constexpr u32 s_UFloat111110GreenMantissaBits = 6u;
 inline constexpr u32 s_UFloat111110BlueMantissaBits = 5u;
 inline constexpr u32 s_ClearShift30 = 30u;
-inline constexpr f32 s_SRGBClearLinearThreshold = 0.0031308f;
-inline constexpr f32 s_SRGBClearLinearScale = 12.92f;
-inline constexpr f32 s_SRGBClearNonlinearScale = 1.055f;
-inline constexpr f32 s_SRGBClearNonlinearExponent = 2.4f;
-inline constexpr f32 s_SRGBClearNonlinearOffset = 0.055f;
 inline constexpr u32 s_BC2AlphaNibbleSplat = 0x11111111u;
 inline constexpr u32 s_ClearHighWordShift = 32u;
 
@@ -91,11 +85,6 @@ public:
     return (aspectMask & VK_IMAGE_ASPECT_COLOR_BIT) == 0u && (!clearDepth || (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0u) && (!clearStencil || (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0u);
 }
 
-[[nodiscard]] f32 QuantizeUNormClearScalar(f32 value, f32 maxValue)noexcept;
-[[nodiscard]] SIMDVectorSingle QuantizeUNormClearVector(SIMDVectorSingle value, SIMDVectorSingle maxValue)noexcept;
-[[nodiscard]] f32 QuantizeSNormClearScalar(f32 value, f32 maxValue)noexcept;
-[[nodiscard]] SIMDVectorSingle QuantizeSNormClearVector(SIMDVectorSingle value, SIMDVectorSingle maxValue)noexcept;
-[[nodiscard]] SIMDVectorSingle LinearToSRGBClearVector(SIMDVectorSingle linear)noexcept;
 void WriteBC1ColorClearBlock(SIMDVectorSingle sourceRgba, b8 srgb, NotNull<u8*> outPattern)noexcept;
 void WriteBC4ClearBlockEndpoint(u8 endpoint, NotNull<u8*> outPattern)noexcept;
 void WriteBC4UNormClearBlock(f32 value, NotNull<u8*> outPattern)noexcept;
@@ -105,7 +94,6 @@ void WriteBC4SNormClearBlock(f32 value, NotNull<u8*> outPattern)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearMaxPatternBytes>> BuildTextureIntClearPattern(Format::Enum format, const VkClearColorValue& clearValue)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearDepthPatternBytes>> BuildTextureDepthClearPattern(Format::Enum format, f32 depth)noexcept;
 [[nodiscard]] Expected<TextureClearPattern<s_TextureClearStencilPatternBytes>> BuildTextureStencilClearPattern(Format::Enum format, u8 stencil)noexcept;
-void FillTextureClearBytes(usize byteCount, Span<const u8> pattern, void* outBytes)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

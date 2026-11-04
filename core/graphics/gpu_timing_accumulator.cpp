@@ -5,6 +5,8 @@
 #include "gpu_timing.h"
 #include "backend_selection.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,9 +26,7 @@ b8 GpuTimingAccumulator::setCaptureEnabled(const b8 enabled, const u64 subscript
         return false;
 
     discardFrameReset();
-    ++m_publicationGeneration;
-    if(m_publicationGeneration == 0u)
-        ++m_publicationGeneration;
+    AdvanceWrappingNonzero(m_publicationGeneration);
     return markAttributionsForRetirement(subscriptionIdentityLimit);
 }
 
@@ -231,9 +231,7 @@ Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(Comm
     record.publicationGeneration = m_publicationGeneration;
     record.performanceCaptureEpoch = performanceCaptureEpoch;
     record.retirementNotificationPending = false;
-    ++m_nextReservation;
-    if(m_nextReservation == 0u)
-        ++m_nextReservation;
+    AdvanceWrappingNonzero(m_nextReservation);
     record.reservation = m_nextReservation;
     const QueryBegin result{ .scope = GpuTimingScope{ .scopeName = m_scopeName, .reservation = record.reservation, .timerQueryRecording = *timerQueryRecording, .index = index, .epoch = epoch, }, .resetSubmission = record.frameResetSubmission, };
     ++m_recordedScopeCount;

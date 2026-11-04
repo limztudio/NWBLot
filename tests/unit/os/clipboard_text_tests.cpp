@@ -78,6 +78,8 @@ TEST(ClipboardText, Latin1UpperByteBoundsAndUnsupportedUnicodeClearOutput){
     EXPECT_EQ(utf8, "\xC2\x80\xC3\xBF");
     ASSERT_EQ(EncodeClipboardLatin1(utf8, latin1), ClipboardStatus::Success);
     EXPECT_EQ(latin1, source);
+    EXPECT_EQ(EncodeClipboardLatin1(AStringView("\xC4\x80\xFF", 3u), latin1), ClipboardStatus::InvalidText);
+    EXPECT_TRUE(latin1.empty());
     EXPECT_EQ(EncodeClipboardLatin1("\xE2\x98\x83", latin1), ClipboardStatus::Unsupported);
     EXPECT_TRUE(latin1.empty());
     EXPECT_EQ(DecodeClipboardLatin1(AStringView("a\0b", 3u), utf8), ClipboardStatus::InvalidText);

@@ -101,7 +101,6 @@ private:
 
 
 private:
-    static void UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
 
 
 public:
@@ -128,7 +127,6 @@ public:
 
 
 private:
-    [[nodiscard]] u64 nextRecordingID()noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     [[nodiscard]] b8 validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const;
     void transitionCommandBufferState(TrackedCommandBuffer& commandBuffer, TrackedCommandBufferArenaState::Enum nextState);

@@ -36,15 +36,16 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         const MStringView storeFn = SimdStoreFunctionCpp(simdType);
         TypeRef tmpType(m_arena);
         tmpType.name = simdType;
-
-        out.append("([&]()noexcept{ ");
+        const b8 isRegisterCall = expr.kind == ExprKind::Call && expr.isBuiltinCall && expr.lhs
+            && expr.lhs->kind == ExprKind::Identifier && !MapSimdRegisterCall(expr.lhs->text).empty();
+        out.append(isRegisterCall ? "([&](){ " : "([&]()noexcept{ ");
         m_typeEmitter.emitTypeCpp(out, tmpType);
-        out.append(" __adhd_tmp{}; ");
-        out.append(storeFn.data(), storeFn.size());
-        out.push_back('(');
-        emitSimdRegExpr(out, expr, simdType);
-        out.append(", __adhd_tmp); return __adhd_tmp; }())");
-        return;
+            out.append(" __adhd_tmp{}; ");
+            out.append(storeFn.data(), storeFn.size());
+            out.push_back('(');
+            emitSimdRegExpr(out, expr, simdType);
+            out.append(", __adhd_tmp); return __adhd_tmp; }())");
+            return;
     }
 
     switch(expr.kind){
@@ -166,6 +167,23 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     case ExprKind::Call:{
         if(expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr.lhs->text;
+            const MStringView registerCall = MapSimdRegisterCall(callee);
+            if(!registerCall.empty()){
+                out.append(registerCall.data(), registerCall.size());
+                out.push_back('(');
+                for(usize i = 0u; i < expr.arguments.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    if(expr.arguments[i]){
+                        if(IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
+                            emitSimdRegExpr(out, *expr.arguments[i], expr.arguments[i]->resolvedSimdType);
+                        else
+                            emitExpr(out, *expr.arguments[i]);
+                    }
+                }
+                out.push_back(')');
+                break;
+            }
             MStringView scalarReductionSuffix;
 #define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION(adhdName, laneIntrinsicSuffix) \
             if(callee == adhdName) scalarReductionSuffix = laneIntrinsicSuffix;

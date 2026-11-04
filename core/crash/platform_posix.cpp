@@ -10,6 +10,11 @@
 #include <global/process_execution.h>
 #include <global/scope_exit.h>
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#include <global/posix/descriptor.h>
+#include <global/posix/socket_io.h>
+#endif
+
 #include <fcntl.h>
 #include <poll.h>
 #include <ucontext.h>
@@ -267,32 +272,6 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static b8 MoveFdAboveStdio(int& descriptor)noexcept{
-    if(descriptor > STDERR_FILENO)
-        return true;
-    const int duplicated = fcntl(descriptor, F_DUPFD, s_FirstNonStdioFileDescriptor);
-    if(duplicated < 0)
-        return false;
-    const auto released = ReleaseOwnedDescriptor(descriptor);
-    descriptor = duplicated;
-    if(!released){
-        errno = static_cast<int>(released.error().code);
-        return false;
-    }
-    return true;
-}
-
-[[nodiscard]] static b8 SetCloseOnExec(const int descriptor)noexcept{
-    const int flags = fcntl(descriptor, F_GETFD, 0);
-    return flags >= 0 && fcntl(descriptor, F_SETFD, flags | FD_CLOEXEC) == 0;
-}
-
-[[nodiscard]] static b8 SendAllSocketNoSigpipe(const int descriptor, const void* const data, const usize byteCount)noexcept{
-    return TransferAllPosix(static_cast<const u8*>(data), byteCount, [descriptor](const u8* const cursor, const usize remaining)noexcept{
-        return send(descriptor, cursor, remaining, MSG_NOSIGNAL);
-    });
-}
-
 [[noreturn]] static void FailChild(const int startupDescriptor, const int error)noexcept{
     if(!WriteAllFileDescriptor(startupDescriptor, &error, sizeof(error)))
         _exit(s_HandlerExecFailureExitCode);
@@ -300,7 +279,7 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 }
 
 [[nodiscard]] static b8 SilenceChildProcess(int& requestRead, int& ackWrite, int& startupWrite)noexcept{
-    if(!MoveFdAboveStdio(requestRead) || !MoveFdAboveStdio(ackWrite) || !MoveFdAboveStdio(startupWrite) || !SetCloseOnExec(startupWrite))
+    if(!MoveFdAboveStdio(requestRead, s_FirstNonStdioFileDescriptor) || !MoveFdAboveStdio(ackWrite, s_FirstNonStdioFileDescriptor) || !MoveFdAboveStdio(startupWrite, s_FirstNonStdioFileDescriptor) || !SetCloseOnExec(startupWrite))
         return false;
     if(setsid() < 0)
         return false;
@@ -482,7 +461,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 #elif defined(NWB_PLATFORM_LINUX)
     if(g_State.requestWriteFd >= 0){
         __hidden_crash_posix::DrainPendingAcks(g_State.ackReadFd);
-        if(!__hidden_crash_posix::SendAllSocketNoSigpipe(g_State.requestWriteFd, &request, sizeof(request)))
+        if(!SendAllSocketNoSigpipe(g_State.requestWriteFd, &request, sizeof(request)))
             status = CrashDumpTransportStatus::Failed;
         else
             status = __hidden_crash_posix::WaitForAck(g_State.ackReadFd, request, waitMilliseconds);

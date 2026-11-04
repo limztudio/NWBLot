@@ -9,6 +9,8 @@
 #include <global/scope_exit.h>
 #include <global/simd/vector.h>
 
+#include <global/bit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,7 +24,7 @@ NWB_IMPL_BEGIN
 Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance, CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits){
     if(vertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure{});
-    const u64 edge = CsgDeformEdgeKey(first, second);
+    const u64 edge = PackUnorderedU32Pair(first, second);
     const auto found = edgeSplits.find(edge);
     if(found != edgeSplits.end())
         return found.value();

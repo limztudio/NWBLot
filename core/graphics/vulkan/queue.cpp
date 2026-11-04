@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 
+#include <global/atomic_identity.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
@@ -20,38 +21,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan_queue{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 DecrementOrAbort(Atomic<u64>& value)noexcept{
-    u64 previous = value.load(MemoryOrder::relaxed);
-    do{
-        if(previous == 0u)
-            TerminateInvariant();
-    }while(!value.compare_exchange_weak(previous, previous - 1u, MemoryOrder::relaxed));
-    return previous;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void Queue::UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 currentCount)noexcept{
-    u64 highWater = highWaterCount.load(MemoryOrder::relaxed);
-    while(highWater < currentCount){
-        if(highWaterCount.compare_exchange_weak(highWater, currentCount, MemoryOrder::relaxed))
-            return;
-    }
-}
 
 Queue::Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, NativeQueueState& nativeQueue)
     : m_context(context)
@@ -182,12 +151,6 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(const u64 re
     };
 }
 
-u64 Queue::nextRecordingID()noexcept{
-    u64 recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
-    while(recordingID == 0u)
-        recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
-    return recordingID;
-}
 
 void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context || commandBuffer.m_arenaState != TrackedCommandBufferArenaState::Untracked)
@@ -200,7 +163,7 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
         const u64 directCurrentCount = m_directCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
         m_directLeasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         m_directCommandBufferGrowthEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        UpdateCommandBufferHighWater(m_directHighWaterCommandBufferCount, directCurrentCount);
+        UpdateAtomicMaxRelaxed(m_directHighWaterCommandBufferCount, directCurrentCount);
     }
     else{
         WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
@@ -209,9 +172,9 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
         const u64 workerCurrentCount = arena->currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
         arena->leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         arena->growthEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        UpdateCommandBufferHighWater(arena->highWaterCommandBufferCount, workerCurrentCount);
+        UpdateAtomicMaxRelaxed(arena->highWaterCommandBufferCount, workerCurrentCount);
     }
-    UpdateCommandBufferHighWater(m_highWaterCommandBufferCount, currentCount);
+    UpdateAtomicMaxRelaxed(m_highWaterCommandBufferCount, currentCount);
 }
 
 b8 Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const{
@@ -263,32 +226,32 @@ void Queue::commitCommandBufferStateTransition(TrackedCommandBuffer& commandBuff
 
     switch(previousState){
     case TrackedCommandBufferArenaState::Leased:{
-        __hidden_vulkan_queue::DecrementOrAbort(m_leasedCommandBufferCount);
+        DecrementAtomicOrTerminate(m_leasedCommandBufferCount);
         if(commandBuffer.m_recordingWorkerIndex == 0u){
-            __hidden_vulkan_queue::DecrementOrAbort(m_directLeasedCommandBufferCount);
+            DecrementAtomicOrTerminate(m_directLeasedCommandBufferCount);
         }
         else
-            __hidden_vulkan_queue::DecrementOrAbort(workerArena->leasedCommandBufferCount);
+            DecrementAtomicOrTerminate(workerArena->leasedCommandBufferCount);
         break;
     }
     case TrackedCommandBufferArenaState::Reusable:{
-        __hidden_vulkan_queue::DecrementOrAbort(m_reusableCommandBufferCount);
+        DecrementAtomicOrTerminate(m_reusableCommandBufferCount);
         if(commandBuffer.m_recordingWorkerIndex == 0u){
-            __hidden_vulkan_queue::DecrementOrAbort(m_directReusableCommandBufferCount);
+            DecrementAtomicOrTerminate(m_directReusableCommandBufferCount);
         }
         else
-            __hidden_vulkan_queue::DecrementOrAbort(workerArena->reusableCommandBufferCount);
+            DecrementAtomicOrTerminate(workerArena->reusableCommandBufferCount);
         break;
     }
     case TrackedCommandBufferArenaState::Pending:{
-        __hidden_vulkan_queue::DecrementOrAbort(m_pendingCommandBufferCount);
+        DecrementAtomicOrTerminate(m_pendingCommandBufferCount);
         if(commandBuffer.m_recordingWorkerIndex == 0u){
-            __hidden_vulkan_queue::DecrementOrAbort(m_pendingDirectCommandBufferCount);
+            DecrementAtomicOrTerminate(m_pendingDirectCommandBufferCount);
         }
         else{
-            const u64 previousPendingCount = __hidden_vulkan_queue::DecrementOrAbort(workerArena->pendingCommandBufferCount);
+            const u64 previousPendingCount = DecrementAtomicOrTerminate(workerArena->pendingCommandBufferCount);
             if(previousPendingCount == 1u)
-                __hidden_vulkan_queue::DecrementOrAbort(m_pendingWorkerEpochCount);
+                DecrementAtomicOrTerminate(m_pendingWorkerEpochCount);
         }
         break;
     }
@@ -331,15 +294,15 @@ void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept
     if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context)
         TerminateInvariant();
     commitCommandBufferStateTransition(commandBuffer, TrackedCommandBufferArenaState::Untracked);
-    __hidden_vulkan_queue::DecrementOrAbort(m_currentCommandBufferCount);
+    DecrementAtomicOrTerminate(m_currentCommandBufferCount);
     if(commandBuffer.m_recordingWorkerIndex == 0u){
-        __hidden_vulkan_queue::DecrementOrAbort(m_directCommandBufferCount);
+        DecrementAtomicOrTerminate(m_directCommandBufferCount);
     }
     else{
         WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerDomain, commandBuffer.m_recordingWorkerIndex);
         if(!arena)
             TerminateInvariant();
-        __hidden_vulkan_queue::DecrementOrAbort(arena->currentCommandBufferCount);
+        DecrementAtomicOrTerminate(arena->currentCommandBufferCount);
     }
 }
 
@@ -376,7 +339,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::createCommandBuffer(const VkC
         return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
 
     cmdBuf->m_sharedCommandPoolMutex = sharedCommandPoolMutex;
-    cmdBuf->m_recordingID = nextRecordingID();
+    cmdBuf->m_recordingID = NextAtomicWrappingNonzero(m_lastRecordingID);
     cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
     cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
     registerCommandBuffer(*cmdBuf);
@@ -474,7 +437,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateDirectCommandBuffe
         transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
         m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         m_directCommandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        cmdBuf->m_recordingID = nextRecordingID();
+        cmdBuf->m_recordingID = NextAtomicWrappingNonzero(m_lastRecordingID);
         cmdBuf->m_recordingWorkerDomain = 0u;
         cmdBuf->m_recordingWorkerIndex = 0u;
 
@@ -514,7 +477,7 @@ Expected<TrackedCommandBufferPtr, VkResult> Queue::getOrCreateWorkerCommandBuffe
         transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
         m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         arena->resetEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        cmdBuf->m_recordingID = nextRecordingID();
+        cmdBuf->m_recordingID = NextAtomicWrappingNonzero(m_lastRecordingID);
         cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
         cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
         cmdBuf->m_sharedCommandPoolMutex = &arena->mutex;

@@ -12,6 +12,7 @@
 #include <core/task/gpu/scheduler.h>
 #include <core/telemetry/session.h>
 
+#include <global/scope_exit.h>
 #include <global/simd/vector.h>
 
 
@@ -28,19 +29,6 @@ namespace __hidden_graphics_runtime_frame{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ScopedAcquiredPresentationFrameReset final : NoCopy{
-public:
-    explicit ScopedAcquiredPresentationFrameReset(AcquiredPresentationFrame& frame)noexcept
-        : m_frame(frame)
-    {}
-    ~ScopedAcquiredPresentationFrameReset()noexcept{ m_frame = {}; }
-
-
-private:
-    AcquiredPresentationFrame& m_frame;
-};
 
 
 inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
@@ -326,7 +314,7 @@ b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phas
             }
 
             m_acquiredPresentationFrame = { .backBuffer = Move(acquiredBackBuffer), .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex], };
-            const __hidden_graphics_runtime_frame::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
+            ScopeExit acquiredFrameReset([this]()noexcept{ m_acquiredPresentationFrame = {}; });
 
             Timer framePreambleBegin;
             if(phaseTiming)

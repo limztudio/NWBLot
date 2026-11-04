@@ -10,6 +10,8 @@
 #include <core/filesystem/volume_naming.h>
 #include <core/common/log.h>
 
+#include <global/binary_little_endian.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,9 +31,6 @@ namespace __hidden_vulkan_device_pipeline_cache{
 static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
 static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
-static constexpr u32 s_PipelineCacheByteShift1 = 8u;
-static constexpr u32 s_PipelineCacheByteShift2 = 16u;
-static constexpr u32 s_PipelineCacheByteShift3 = 24u;
 static constexpr usize s_PipelineCacheVersionOffset = 4u;
 static constexpr usize s_PipelineCacheVendorIdOffset = 8u;
 static constexpr usize s_PipelineCacheDeviceIdOffset = 12u;
@@ -40,15 +39,6 @@ static constexpr usize s_PipelineCacheUuidOffset = 16u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static u32 ReadPipelineCacheU32(const BinaryByteView cacheData, const usize offset)noexcept{
-    return
-        static_cast<u32>(cacheData[offset])
-        | (static_cast<u32>(cacheData[offset + 1u]) << s_PipelineCacheByteShift1)
-        | (static_cast<u32>(cacheData[offset + 2u]) << s_PipelineCacheByteShift2)
-        | (static_cast<u32>(cacheData[offset + 3u]) << s_PipelineCacheByteShift3)
-    ;
-}
 
 static Expected<UniquePtr<Filesystem::IFilesystem>> MountPipelineCacheVolume(const Path& directory, const AStringView volumeName, const b8 createIfMissing, Filesystem::VolumeUsage::Enum usage, const Filesystem::FilesystemFactory& factory){
     Filesystem::VolumeMountDesc mountDesc(directory.arena());
@@ -125,16 +115,16 @@ PipelineCacheDataValidation::Enum ValidatePipelineCacheData(const BinaryByteView
     if(cacheData.data() == nullptr || cacheData.size() < s_PipelineCacheHeaderVersionOneSize)
         return PipelineCacheDataValidation::Malformed;
 
-    const u32 headerSize = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, 0u);
+    const u32 headerSize = ReadU32LittleEndian(MakeNotNull(cacheData.data()));
     if(headerSize != s_PipelineCacheHeaderVersionOneSize)
         return PipelineCacheDataValidation::Malformed;
 
-    const u32 headerVersion = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, __hidden_vulkan_device_pipeline_cache::s_PipelineCacheVersionOffset);
+    const u32 headerVersion = ReadU32LittleEndian(MakeNotNull(cacheData.data() + __hidden_vulkan_device_pipeline_cache::s_PipelineCacheVersionOffset));
     if(headerVersion != static_cast<u32>(VK_PIPELINE_CACHE_HEADER_VERSION_ONE))
         return PipelineCacheDataValidation::Incompatible;
 
-    const u32 vendorId = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, __hidden_vulkan_device_pipeline_cache::s_PipelineCacheVendorIdOffset);
-    const u32 deviceId = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, __hidden_vulkan_device_pipeline_cache::s_PipelineCacheDeviceIdOffset);
+    const u32 vendorId = ReadU32LittleEndian(MakeNotNull(cacheData.data() + __hidden_vulkan_device_pipeline_cache::s_PipelineCacheVendorIdOffset));
+    const u32 deviceId = ReadU32LittleEndian(MakeNotNull(cacheData.data() + __hidden_vulkan_device_pipeline_cache::s_PipelineCacheDeviceIdOffset));
     if(vendorId != properties.vendorID || deviceId != properties.deviceID)
         return PipelineCacheDataValidation::Incompatible;
     if(NWB_MEMCMP(cacheData.data() + __hidden_vulkan_device_pipeline_cache::s_PipelineCacheUuidOffset, properties.pipelineCacheUUID, VK_UUID_SIZE) != 0)

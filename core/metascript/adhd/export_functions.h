@@ -12,6 +12,16 @@
 #define NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #endif
 
+#ifndef NWB_ADHD_EXPORT_FUNCTION5
+#define NWB_ADHD_EXPORT_FUNCTION5(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule)
+#define NWB_ADHD_EXPORT_FUNCTION5_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL
+#define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL(adhdName)
+#define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL_AUTO_UNDEF
+#endif
+
 #ifndef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC
 #define NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC(adhdName, floatIntrinsicPrefix, doubleIntrinsicPrefix)
 #define NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC_AUTO_UNDEF
@@ -59,9 +69,20 @@
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(Any,        "",           false, "",      false, false, "")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(StringView, "StringView", false, "",      false, false, "")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(TextView,   "StringView", false, "",      true,  false, "built-in function argument must be StringView, String, or CompactString")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutU64, "", true, "u64", false, false, "built-in function argument must be a mutable u64 variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutU32,     "",           true,  "u32",   false, false, "built-in function argument must be a mutable 'u32' variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutUsize,   "",           true,  "usize", false, false, "built-in function argument must be a mutable 'usize' variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(Integer,    "",           false, "",      false, true,  "built-in function argument must be an integer type")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(F32x4,     "",           false, "f32x4", false, false, "built-in function argument must be f32x4")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(NameHashValue, "",       false, "NameHash", false, false, "built-in function argument must be NameHash")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(F64Scalar, "", false, "f64", false, false, "built-in function argument must be f64")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BoolScalar, "", false, "b8", false, false, "built-in function argument must be b8")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(U64Scalar, "", false, "u64", false, false, "built-in function argument must be u64")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(U32Scalar, "", false, "u32", false, false, "built-in function argument must be u32")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(F32Scalar, "", false, "f32", false, false, "built-in function argument must be f32")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutByteFixedVector, "", true, "FixedVector", false, false, "built-in function argument must be a mutable FixedVector<u8, N>")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ByteSpan,   "",           false, "Span",  false, false, "built-in function argument must be Span<u8>")
+NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(UsizeSpan,  "",           false, "Span",  false, false, "built-in function argument must be Span<usize>")
 
 NWB_ADHD_EXPORT_FUNCTION("min",                    "::Min",                    2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("max",                    "::Max",                    2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
@@ -91,6 +112,46 @@ NWB_ADHD_EXPORT_FUNCTION("alignUp",                "::AlignUp",                2
 NWB_ADHD_EXPORT_FUNCTION("hashValue",              "::HashValue",              1u, FixedType,      "usize",      "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("hashCombineValue",       "::HashCombineValue",       2u, FixedType,      "usize",      "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("makeUnexpected",         "::MakeUnexpected",         1u, Unexpected,     "",           "",    Any,        Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("isUnicodeWhitespace", "::IsUnicodeWhitespace", 1u, FixedType, "b8", "", Integer, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("isAsciiPunctuation", "::IsAsciiPunctuation", 1u, FixedType, "b8", "", Integer, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("computeFnv64AsciiLowerText", "::ComputeFnv64AsciiLowerText", 1u, FixedType, "u64", "", TextView, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("isAsciiSpace",           "::IsAsciiSpace",           1u, FixedType,      "b8",         "",    Integer,    Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("isAsciiAlpha",           "::IsAsciiAlpha",           1u, FixedType,      "b8",         "",    Integer,    Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("isAsciiIdentifierChar",  "::IsAsciiIdentifierChar",  1u, FixedType,      "b8",         "",    Integer,    Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("hasEmbeddedNull",       "::HasEmbeddedNull",        1u, FixedType,      "b8",         "",    TextView,   Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("writeF32LittleEndianAt", "::WriteF32LittleEndianAt", 3u, FixedType, "void", "", F32Scalar, Integer, MutByteFixedVector)
+NWB_ADHD_EXPORT_FUNCTION("alignU32PowerOfTwoChecked", "::AlignU32PowerOfTwoChecked", 2u, FixedType, "Expected", "u32", Integer, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("stripMatchingTrailingByte", "::StripMatchingTrailingByte", 3u, FixedType, "StringView", "", TextView, Integer, Integer)
+NWB_ADHD_EXPORT_FUNCTION("readCommaOrSpaceDelimitedToken", "::ReadCommaOrSpaceDelimitedToken", 2u, FixedType, "Expected", "StringView", TextView, MutUsize, Any)
+NWB_ADHD_EXPORT_FUNCTION("readAdmittedU16BigEndian", "::ReadAdmittedU16BigEndian", 2u, FixedType, "u16", "", ByteSpan, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("readAdmittedU32BigEndian", "::ReadAdmittedU32BigEndian", 2u, FixedType, "u32", "", ByteSpan, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("readPartialU32LittleEndian", "::ReadPartialU32LittleEndian", 2u, FixedType, "u32", "", ByteSpan, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("alignUpChecked", "::AlignUpCheckedSize", 2u, FixedType, "Expected", "usize", Integer, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("lowerBoundIndex",       "::LowerBoundIndex",        2u, FixedType,      "usize",      "",    UsizeSpan,  Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION5("stepF64Bounded", "::StepF64Bounded", 5u, FixedType, "f64", "", F64Scalar, F64Scalar, F64Scalar, F64Scalar, BoolScalar)
+NWB_ADHD_EXPORT_FUNCTION("normalizeFiniteRange", "::NormalizeFiniteRange", 3u, FixedType, "Expected", "f64", F64Scalar, F64Scalar, F64Scalar)
+NWB_ADHD_EXPORT_FUNCTION("interpolateFiniteRange", "::InterpolateFiniteRange", 3u, FixedType, "Expected", "f64", F64Scalar, F64Scalar, F64Scalar)
+NWB_ADHD_EXPORT_FUNCTION("advanceWrappingNonzeroU64", "::AdvanceWrappingNonzero", 1u, FixedType, "void", "", MutU64, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("divideUpWrappingU32", "::DivideUpWrapping", 2u, FixedType, "u32", "", U32Scalar, U32Scalar, Any)
+NWB_ADHD_EXPORT_FUNCTION("divideUpWrappingU64", "::DivideUpWrapping", 2u, FixedType, "u64", "", U64Scalar, U64Scalar, Any)
+NWB_ADHD_EXPORT_FUNCTION("bitWidthLowU32", "::BitWidthLowU32", 2u, FixedType, "u32", "", U32Scalar, U32Scalar, Any)
+NWB_ADHD_EXPORT_FUNCTION("computeSobol2U32", "::ComputeSobol2U32", 1u, FixedType, "u64", "", U32Scalar, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("roundF64ToF32Bound", "::RoundF64ToF32Bound", 2u, FixedType, "f32", "", F64Scalar, BoolScalar, Any)
+NWB_ADHD_EXPORT_FUNCTION("classifyIntegerGrammar", "::ClassifyIntegerGrammar", 1u, FixedType, "u8", "", TextView, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("classifyFloatGrammar", "::ClassifyFloatGrammar", 1u, FixedType, "u8", "", TextView, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("skipNumericSign",        "::SkipNumericSign",        1u, FixedType,      "usize",      "",    TextView,   Any,     Any)
+NWB_ADHD_EXPORT_FUNCTION("IntersectRectBoundsVec",           "::IntersectRectBoundsValue",            2u, FixedType, "f32x4", "", F32x4, F32x4, Any)
+NWB_ADHD_EXPORT_FUNCTION("HasVisibleRectIntersectionVec",    "::HasVisibleRectIntersection",          2u, FixedType, "b8",    "", F32x4, F32x4, Any)
+NWB_ADHD_EXPORT_FUNCTION("IntersectRectVec",                 "::IntersectRectValuePreservingExtent",  2u, FixedType, "f32x4", "", F32x4, F32x4, Any)
+NWB_ADHD_EXPORT_FUNCTION("InsetRectVec",                     "::InsetRectValuePreservingExtent",      2u, FixedType, "f32x4", "", F32x4, F32x4, Any)
+NWB_ADHD_EXPORT_FUNCTION("updateFnv64Byte",     "::UpdateFnv64Byte",            2u, FixedType, "u64", "", Integer, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("updateFnv64U32",      "::UpdateFnv64U32LittleEndian", 2u, FixedType, "u64", "", Integer, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("updateFnv64U64",      "::UpdateFnv64U64LittleEndian", 2u, FixedType, "u64", "", Integer, Integer, Any)
+NWB_ADHD_EXPORT_FUNCTION("foldNameHash64", "::FoldNameHash64", 1u, FixedType, "u64", "", NameHashValue, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION("updateFnv64NameHash", "::UpdateFnv64NameHash",        2u, FixedType, "u64", "", Integer, NameHashValue, Any)
+NWB_ADHD_EXPORT_FUNCTION("equalF32x4Bits", "::Vector4EqualInt", 2u, FixedType, "b8", "", F32x4, F32x4, Any)
+NWB_ADHD_EXPORT_FUNCTION("hashCombineF32x4", "::HashCombineF32x4", 2u, FixedType, "void", "", F32x4, MutUsize, Any)
+NWB_ADHD_EXPORT_FUNCTION("packUnorderedU32Pair", "::PackUnorderedU32Pair", 2u, FixedType, "u64", "", Integer, Integer, Any)
 NWB_ADHD_EXPORT_FUNCTION("trimView",               "::TrimView",               1u, FixedType,      "StringView", "",    StringView, Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("trimLeftView",           "::TrimLeftView",           1u, FixedType,      "StringView", "",    StringView, Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("parseI64",               "::ParseI64",               1u, FixedType,      "Expected",   "i64", StringView, Any,     Any)
@@ -100,6 +161,13 @@ NWB_ADHD_EXPORT_FUNCTION("parseF64",               "::ParseF64FromChars",      1
 NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8CodePoint", "::TryDecodeUtf8CodePoint", 3u, FixedType,      "b8",         "",    TextView,   MutU32,  MutUsize)
 NWB_ADHD_EXPORT_FUNCTION("tryDecodeUtf8Scalar",    "::TryDecodeUtf8Scalar",    3u, FixedType,      "b8",         "",    TextView,   MutU32,  MutUsize)
 NWB_ADHD_EXPORT_FUNCTION("isUtf8ScalarBoundary",   "::IsUtf8ScalarBoundary",   2u, FixedType,      "b8",         "",    TextView,   Integer, Any)
+
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("equalF32x4Bits")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("hashCombineF32x4")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("IntersectRectBoundsVec")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("HasVisibleRectIntersectionVec")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("IntersectRectVec")
+NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("InsetRectVec")
 
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("min",     "::VectorMin(",                  "::VectorDoubleMin(")
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("max",     "::VectorMax(",                  "::VectorDoubleMax(")
@@ -208,6 +276,9 @@ NWB_ADHD_EXPORT_BUILTIN_FIELD("EntityID", "id",          "u32",   "",    "")
 NWB_ADHD_EXPORT_BUILTIN_FIELD("NameHash", "qwords",      "Array", "u64", "8u")
 
 NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_InvalidEntityId", "::NWB::Core::ECS::s_InvalidEntityId", "EntityID")
+NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NumericGrammarComplete", "::s_NumericGrammarComplete", "u8")
+NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NumericGrammarIncomplete", "::s_NumericGrammarIncomplete", "u8")
+NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_Fnv64OffsetBasis", "::s_Fnv64OffsetBasis", "u64")
 NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NameNone",        "s_NameNone",                          "Name")
 
 
@@ -249,9 +320,19 @@ NWB_ADHD_EXPORT_GLOBAL_CONSTANT("s_NameNone",        "s_NameNone",              
 #undef NWB_ADHD_EXPORT_SIMD_LANE_VECTOR_INTRINSIC
 #endif
 
+#ifdef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL
+#endif
+
 #ifdef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC
+#endif
+
+#ifdef NWB_ADHD_EXPORT_FUNCTION5_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION5_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_FUNCTION5
 #endif
 
 #ifdef NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF

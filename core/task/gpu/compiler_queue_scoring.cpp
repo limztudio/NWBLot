@@ -4,6 +4,8 @@
 
 #include "compiler_internal.h"
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,14 +17,6 @@ NWB_CORE_BEGIN
 
 
 namespace GpuTaskGraphCompilerDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static i32 SaturateQueueScoreTerm(const u64 value)noexcept{
-    return value > static_cast<u64>(Limit<i32>::s_Max) ? Limit<i32>::s_Max : static_cast<i32>(value);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,9 +126,9 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         }
     }
     const u64 externalQueueLoad = scoringData.externalQueueLoad(candidate.id);
-    queueLoad = queueLoad > Limit<u64>::s_Max - externalQueueLoad ? Limit<u64>::s_Max : queueLoad + externalQueueLoad;
-    score.overlap = SaturateQueueScoreTerm(overlap);
-    score.queueLoad = SaturateQueueScoreTerm(queueLoad);
+    queueLoad = AddSaturating<u64>(queueLoad, externalQueueLoad);
+    score.overlap = SaturateU64ToI32(overlap);
+    score.queueLoad = SaturateU64ToI32(queueLoad);
 
     u64 incomingCrossings = 0u;
     u64 outgoingCrossings = 0u;
@@ -158,8 +152,8 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         if(consumer && consumer->queue != candidate.id)
             ++outgoingCrossings;
     }
-    score.incomingCrossings = SaturateQueueScoreTerm(incomingCrossings);
-    score.outgoingCrossings = SaturateQueueScoreTerm(outgoingCrossings);
+    score.incomingCrossings = SaturateU64ToI32(incomingCrossings);
+    score.outgoingCrossings = SaturateU64ToI32(outgoingCrossings);
 
     u64 ownershipTransfers = 0u;
     for(usize edgeIndex = scoringData.ownershipEdgeOffsets[task.id.index]; edgeIndex < scoringData.ownershipEdgeOffsets[task.id.index + 1u]; ++edgeIndex){
@@ -188,7 +182,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         if(!concurrentQueuePair)
             ++ownershipTransfers;
     }
-    score.ownershipTransfers = SaturateQueueScoreTerm(ownershipTransfers);
+    score.ownershipTransfers = SaturateU64ToI32(ownershipTransfers);
     return score;
 }
 

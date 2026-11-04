@@ -8,6 +8,7 @@
 #include "packet_runtime_internal.h"
 #include "task_graph.h"
 
+#include <global/interval.h>
 #include <global/simd/vector.h>
 
 
@@ -184,15 +185,12 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     }
     Sort(intervalEntries.begin(), intervalEntries.end(), __hidden_gpu_packet_runtime_recorded_graph_statistics::LessPacketRecordingIntervalEntry);
 
-    u64 maximumPreviousEndNanoseconds = 0u;
-    for(usize intervalIndex = 0u; intervalIndex < intervalEntries.size(); ++intervalIndex){
-        const IntervalEntry& interval = intervalEntries[intervalIndex];
-        const b8 overlapsPrevious = intervalIndex != 0u && interval.beginNanoseconds < maximumPreviousEndNanoseconds;
-        const b8 overlapsNext = intervalIndex + 1u < intervalEntries.size() && intervalEntries[intervalIndex + 1u].beginNanoseconds < interval.endNanoseconds;
-        if(overlapsPrevious || overlapsNext)
-            storage.packetRecordingOverlaps[interval.packetIndex] = 1u;
-        maximumPreviousEndNanoseconds = Max(maximumPreviousEndNanoseconds, interval.endNanoseconds);
-    }
+    VisitOverlappingSortedIntervals(
+        Span<const IntervalEntry>(intervalEntries),
+        [](const IntervalEntry& interval)noexcept{ return interval.beginNanoseconds; },
+        [](const IntervalEntry& interval)noexcept{ return interval.endNanoseconds; },
+        [&storage](const IntervalEntry& interval)noexcept{ storage.packetRecordingOverlaps[interval.packetIndex] = 1u; }
+    );
 }
 
 

@@ -4,8 +4,10 @@
 
 #include "timing_feedback.h"
 
+#include <global/limit.h>
 #include <global/scope_exit.h>
 #include <global/simd/vector.h>
+#include <global/statistics.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,11 +75,7 @@ template<typename NameT>
 
 i32 GpuQueueAssignmentScore::total()const noexcept{
     const i64 score = static_cast<i64>(overlap) - static_cast<i64>(queueLoad) - static_cast<i64>(incomingCrossings) - static_cast<i64>(outgoingCrossings) - static_cast<i64>(ownershipTransfers);
-    if(score < static_cast<i64>(Limit<i32>::s_Min))
-        return Limit<i32>::s_Min;
-    if(score > static_cast<i64>(Limit<i32>::s_Max))
-        return Limit<i32>::s_Max;
-    return static_cast<i32>(score);
+    return SaturateI64ToI32(score);
 }
 
 
@@ -456,20 +454,11 @@ const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentSta
 void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
     NWB_ASSERT(!record.samples.empty());
 
-    f64 averageSeconds = 0.0;
-    f64 minimumSeconds = record.samples.front();
-    f64 maximumSeconds = minimumSeconds;
-    u32 sampleCount = 0u;
-    for(const f64 sampleSeconds : record.samples){
-        ++sampleCount;
-        averageSeconds += (sampleSeconds - averageSeconds) / static_cast<f64>(sampleCount);
-        minimumSeconds = Min(minimumSeconds, sampleSeconds);
-        maximumSeconds = Max(maximumSeconds, sampleSeconds);
-    }
-    record.entry.history.averageSeconds = averageSeconds;
-    record.entry.history.minimumSeconds = minimumSeconds;
-    record.entry.history.maximumSeconds = maximumSeconds;
-    record.entry.history.sampleCount = sampleCount;
+    const OnlineF64Statistics statistics = ComputeOnlineF64Statistics(Span<const f64>(record.samples.data(), record.samples.size()));
+    record.entry.history.averageSeconds = statistics.average;
+    record.entry.history.minimumSeconds = statistics.minimum;
+    record.entry.history.maximumSeconds = statistics.maximum;
+    record.entry.history.sampleCount = statistics.count;
 }
 
 

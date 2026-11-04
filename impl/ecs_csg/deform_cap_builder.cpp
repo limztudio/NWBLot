@@ -4,6 +4,8 @@
 
 #include "deform_cap_builder.h"
 
+#include <global/bit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,9 +24,9 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(Core::Alloc::ScratchArena& scratc
     edgeUses.reserve(triangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
     for(const CsgDeformTriangle& triangle : triangles){
         const Array<u64, s_TriangleCornerCount> edges = {{
-            CsgDeformEdgeKey(triangle.indices[0u], triangle.indices[1u]),
-            CsgDeformEdgeKey(triangle.indices[1u], triangle.indices[2u]),
-            CsgDeformEdgeKey(triangle.indices[2u], triangle.indices[0u]),
+            PackUnorderedU32Pair(triangle.indices[0u], triangle.indices[1u]),
+            PackUnorderedU32Pair(triangle.indices[1u], triangle.indices[2u]),
+            PackUnorderedU32Pair(triangle.indices[2u], triangle.indices[0u]),
         }};
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             const auto edgeUse = edgeUses.try_emplace(edges[corner], 0u);
@@ -39,7 +41,7 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(Core::Alloc::ScratchArena& scratc
             {{ triangle.indices[2u], triangle.indices[0u] }},
         }};
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
-            const auto found = edgeUses.find(CsgDeformEdgeKey(corners[corner][0u], corners[corner][1u]));
+            const auto found = edgeUses.find(PackUnorderedU32Pair(corners[corner][0u], corners[corner][1u]));
             if(found != edgeUses.end() && found.value() == 1u)
                 outEdges.push_back(MakeCsgDeformCutLoopEdge(corners[corner][0u], corners[corner][1u]));
         }

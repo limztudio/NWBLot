@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,17 +85,6 @@ VkRayTracingLssPrimitiveEndCapsModeNV ConvertRayTracingLssEndcapMode(RayTracingG
     default:
         return VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV;
     }
-}
-
-Expected<u64> ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize)noexcept{
-    if(elementCount == 0)
-        return u64{0u};
-
-    const u64 spanCount = static_cast<u64>(elementCount - 1);
-    if(stride != 0 && spanCount > (UINT64_MAX - elementSize) / stride)
-        return MakeUnexpected(Failure{});
-
-    return spanCount * stride + elementSize;
 }
 
 u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo)noexcept{

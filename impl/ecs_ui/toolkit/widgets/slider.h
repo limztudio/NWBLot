@@ -8,6 +8,7 @@
 #include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
+#include <global/numeric_range.h>
 #include <global/atomic_identity.h>
 #include <global/bit.h>
 #include <global/simplemath.h>
@@ -98,8 +99,8 @@ public:
 
 
 private:
-    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
-    void advanceAdmission()noexcept{ AdvanceRevision(m_admissionGeneration); }
+    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
+    void advanceAdmission()noexcept{ AdvanceNonWrappingRevision(m_admissionGeneration); }
 
 
 private:
@@ -123,10 +124,10 @@ private:
 class SliderBehavior final{
 public:
     [[nodiscard]] static Expected<f64> Normalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
-        return NormalizeSliderValue(minimum, maximum, value);
+        return NormalizeFiniteRange(minimum, maximum, value);
     }
     [[nodiscard]] static Expected<f64> Interpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
-        return InterpolateSliderValue(minimum, maximum, normalized);
+        return InterpolateFiniteRange(minimum, maximum, normalized);
     }
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
     [[nodiscard]] static b8 Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{

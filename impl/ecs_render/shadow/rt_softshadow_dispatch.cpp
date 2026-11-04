@@ -5,6 +5,8 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -82,8 +84,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     )
         return;
 
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
+    const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
 
     if(dispatchOpaqueGeometry){
         // Graph declares downsample inputs; later soft-shadow transitions stay local.

@@ -5,6 +5,8 @@
 #include "gpu_timing.h"
 #include "backend_selection.h"
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,73 +18,6 @@ NWB_CORE_BEGIN
 
 
 thread_local GpuTimingSubmissionTicket* GpuTimingRecorder::s_ActiveSubmissionTicket = nullptr;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuTimingRecorder::BeginQueryPublicationUnwindScope final : NoCopy{
-public:
-    BeginQueryPublicationUnwindScope(GpuTimingRecorder& recorder, GpuTimingSubmissionTicket& ticket, GpuTimingAccumulator& accumulator, GpuTimingScope& scope, const usize publicationIndex)noexcept
-        : m_recorder(recorder)
-        , m_ticket(ticket)
-        , m_accumulator(accumulator)
-        , m_scope(scope)
-        , m_publicationIndex(publicationIndex)
-    {}
-    ~BeginQueryPublicationUnwindScope()noexcept{
-        if(!m_active)
-            return;
-
-        m_ticket.cancelScopePublication(m_publicationIndex);
-        if(m_scope.valid()){
-            if(m_accumulator.abandonQuery(m_scope, m_recorder.m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
-                m_recorder.m_pendingAttributionRetirements = true;
-            m_scope = {};
-        }
-        ++m_recorder.m_statistics.beginFailureCount;
-    }
-
-
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    GpuTimingRecorder& m_recorder;
-    GpuTimingSubmissionTicket& m_ticket;
-    GpuTimingAccumulator& m_accumulator;
-    GpuTimingScope& m_scope;
-    usize m_publicationIndex = Limit<usize>::s_Max;
-    b8 m_active = true;
-};
-
-
-class GpuTimingRecorder::PrerequisiteTrackingUnwindScope final : NoCopy{
-public:
-    PrerequisiteTrackingUnwindScope(GpuTimingRecorder& recorder, GpuTimingScope& scope)noexcept
-        : m_recorder(recorder)
-        , m_scope(scope)
-    {}
-    ~PrerequisiteTrackingUnwindScope()noexcept{
-        if(!m_active)
-            return;
-
-        m_recorder.abandonScopeWithoutCallbacks(m_scope);
-        NothrowScopedLock lock(m_recorder.m_mutex);
-        ++m_recorder.m_statistics.beginFailureCount;
-    }
-
-
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    GpuTimingRecorder& m_recorder;
-    GpuTimingScope& m_scope;
-    b8 m_active = true;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,7 +78,15 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, co
 
         const usize publicationIndex = *publicationIndexResult;
         GpuTimingAccumulator& accumulator = *found.value();
-        BeginQueryPublicationUnwindScope publicationUnwind(*this, *ticket, accumulator, scope, publicationIndex);
+        ScopeExit publicationUnwind([this, ticket, &accumulator, &scope, publicationIndex]()noexcept{
+            ticket->cancelScopePublication(publicationIndex);
+            if(scope.valid()){
+                if(accumulator.abandonQuery(scope, m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)))
+                    m_pendingAttributionRetirements = true;
+                scope = {};
+            }
+            ++m_statistics.beginFailureCount;
+        });
         const auto began = accumulator.beginQuery(commandList, m_currentFrameIndex, m_epoch, m_performanceCaptureEpoch, attribution);
         if(!began)
             return MakeUnexpected(Failure{});
@@ -163,7 +106,11 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, co
     }
 
     if(scope.valid() && resetSubmission.valid()){
-        PrerequisiteTrackingUnwindScope prerequisiteUnwind(*this, scope);
+        ScopeExit prerequisiteUnwind([this, &scope]()noexcept{
+            abandonScopeWithoutCallbacks(scope);
+            NothrowScopedLock lock(m_mutex);
+            ++m_statistics.beginFailureCount;
+        });
         const b8 prerequisiteTracked = ticket->trackSubmissionPrerequisite(resetSubmission);
         prerequisiteUnwind.release();
         if(!prerequisiteTracked){

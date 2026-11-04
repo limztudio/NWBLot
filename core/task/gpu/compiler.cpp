@@ -6,6 +6,7 @@
 #include "compiler_internal.h"
 
 #include <global/simd/vector_arithmetic.h>
+#include <global/scope_exit.h>
 #include <global/simplemath.h>
 #include <global/timer.h>
 
@@ -23,32 +24,6 @@ namespace __hidden_gpu_task_graph_compiler{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename RollbackT>
-class CompilePublicationScope final : NoCopy{
-    static_assert(IsNothrowMoveConstructible_V<RollbackT>);
-
-
-public:
-    explicit CompilePublicationScope(RollbackT rollback)noexcept
-        : m_rollback(Move(rollback))
-    {}
-    ~CompilePublicationScope()noexcept{
-        static_assert(noexcept(m_rollback()));
-        if(!m_published)
-            m_rollback();
-    }
-
-
-public:
-    void publish()noexcept{ m_published = true; }
-
-
-private:
-    RollbackT m_rollback;
-    b8 m_published = false;
-};
 
 
 struct InitialOwnershipCompletionRequirement{
@@ -94,7 +69,7 @@ b8 GpuTaskGraphCompiler::compile(
     }
 
     outAssignments.reset();
-    CompilePublicationScope assignmentPublication([&outAssignments]()noexcept{
+    ScopeExit assignmentPublication([&outAssignments]()noexcept{
         const GpuTaskQueueAssignmentDiagnostic diagnostic = outAssignments.m_diagnostic;
         outAssignments.reset();
         outAssignments.m_diagnostic = diagnostic;
@@ -461,7 +436,7 @@ b8 GpuTaskGraphCompiler::compile(
 
     outAssignments.m_compiledPlanGeneration = outCompiledGraph.m_planGeneration;
     compilation.publish();
-    assignmentPublication.publish();
+    assignmentPublication.release();
     return true;
 }
 

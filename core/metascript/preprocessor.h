@@ -9,6 +9,7 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/source_text.h>
 #include <global/span.h>
 
 
@@ -79,8 +80,6 @@ public:
 
 
 public:
-    [[nodiscard]] static usize SkipQuotedLiteral(MStringView text, usize index)noexcept;
-    [[nodiscard]] static usize AppendQuotedLiteral(MStringView text, usize index, MString& out);
     [[nodiscard]] static usize AppendPreprocessorNumber(MStringView text, usize index, b8 allowSignedExponent, MString& out);
 
 

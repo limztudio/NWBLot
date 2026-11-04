@@ -7,9 +7,6 @@ type CsgShapeTypeId = u32;
 
 const CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
 const u32 s_CsgShapeHashFoldShiftBits = 32u;
-const u64 s_CsgShapeHashGoldenRatio64 = 0x9e3779b97f4a7c15ul;
-const u32 s_CsgShapeHashLeftShift = 6u;
-const u32 s_CsgShapeHashRightShift = 2u;
 
 // Built-in cutter names shared by cooker, registry, and CPU rebuild; one copy, no drift.
 const Name s_CsgPlaneShapeName = "engine/csg/plane";
@@ -46,37 +43,13 @@ b8 IsAllowedCsgShapeAssetField(in StringView fieldName){
     return fieldName == s_CsgShapeField || fieldName == s_CsgModuleField || fieldName == s_CsgModuleIncludeField || fieldName == s_CsgEvalField;
 }
 
-b8 IsValidCsgRelativeIncludePathText(in StringView includePath){
-    if(includePath.empty() || includePath[0u] == '/' || includePath[includePath.size() - 1u] == '/')
-        return false;
-
-    usize segmentStart = 0u;
-    for(usize i = 0u; i <= includePath.size(); ++i){
-        if(i < includePath.size() && includePath[i] == '\\')
-            return false;
-        if(i == includePath.size() || includePath[i] == '/'){
-            const usize segmentLength = i - segmentStart;
-            if(segmentLength == 0u)
-                return false;
-            const StringView segment = includePath.substr(segmentStart, segmentLength);
-            if(segment == "." || segment == "..")
-                return false;
-            segmentStart = i + 1u;
-        }
-    }
-    return true;
-}
-
 // Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
 Expected<CsgShapeTypeId> TryResolveCsgShapeTypeIdFromName(in Name shapeName){
     if(shapeName == s_NameNone)
         return makeUnexpected(Failure());
 
     // HashValue returns usize and would make the cooked ID host-dependent.
-    const NameHash shapeHash = shapeName.hash();
-    u64 foldedHash = shapeHash.qwords[0u];
-    for(usize lane = 1u; lane < shapeHash.qwords.size(); ++lane)
-        foldedHash ^= shapeHash.qwords[lane] + s_CsgShapeHashGoldenRatio64 + (foldedHash << s_CsgShapeHashLeftShift) + (foldedHash >> s_CsgShapeHashRightShift);
+    const u64 foldedHash = foldNameHash64(shapeName.hash());
 
     const CsgShapeTypeId typeId = cast<CsgShapeTypeId>(foldedHash ^ (foldedHash >> s_CsgShapeHashFoldShiftBits));
     if(typeId != s_InvalidCsgShapeTypeId)

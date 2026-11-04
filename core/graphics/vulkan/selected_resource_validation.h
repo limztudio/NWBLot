@@ -32,7 +32,6 @@ using VulkanBufferDetail::IsBufferResourceStateMaskValid;
 using VulkanTextureDetail::IsTextureResourceStateMaskValid;
 using VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates;
 using VulkanDetail::IsBufferRangeInBounds;
-using VulkanDetail::BufferRangesOverlap;
 
 // These read-only image states share native residency; callers still synchronize data and queue ownership.
 [[nodiscard]] constexpr b8 AreTextureReadStatesCompatible(const ResourceStates::Mask lhs, const ResourceStates::Mask rhs)noexcept{

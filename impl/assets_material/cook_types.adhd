@@ -8,6 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <global/name_hash.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_MaterialMetaDiagnosticPrefix = "Material meta";
 const StringView s_MaterialMetaInterfaceField = "interface";
 const StringView s_MaterialMetaSurfaceField = "surface";
@@ -569,9 +577,9 @@ u8 CanonicalizeMaterialAsciiChar(in i8 ch){
 }
 
 u64 ComputeMaterialBindParameterKeyHash(in StringView parameterKey){
-    u64 hash = s_ShaderFnv64OffsetBasis;
+    u64 hash = s_Fnv64OffsetBasis;
     for(usize i = 0u; i < parameterKey.size(); ++i)
-        hash = UpdateShaderFnv64Byte(hash, CanonicalizeMaterialAsciiChar(parameterKey[i]));
+        hash = updateFnv64Byte(hash, CanonicalizeMaterialAsciiChar(parameterKey[i]));
     return hash;
 }
 

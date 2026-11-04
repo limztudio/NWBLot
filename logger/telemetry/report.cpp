@@ -11,6 +11,7 @@
 #include <core/telemetry/text_log.h>
 
 #include <global/bit.h>
+#include <global/csv_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,31 +89,6 @@ void RecordFrameRange(const u64 frameIndex, TelemetryReportSummary& summary)noex
     default:
         return s_UnknownReportField;
     }
-}
-
-template<typename StringT>
-void AppendCsvCell(const AStringView text, StringT& out)noexcept(noexcept(out.append(text.data(), text.size())) && noexcept(out += '"') && noexcept(out += "\"\"")){
-    b8 quote = false;
-    for(const char ch : text){
-        if(ch == ',' || ch == '"' || ch == '\n' || ch == '\r'){
-            quote = true;
-            break;
-        }
-    }
-
-    if(!quote){
-        out.append(text.data(), text.size());
-        return;
-    }
-
-    out += '"';
-    for(const char ch : text){
-        if(ch == '"')
-            out += "\"\"";
-        else
-            out += ch;
-    }
-    out += '"';
 }
 
 void AppendPerfCsvRow(const Core::Telemetry::PerfTimingSource::Enum source, const Core::Telemetry::PerfTimingPayload& payload, AString<Core::Telemetry::TelemetryArena>& out){

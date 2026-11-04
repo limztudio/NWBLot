@@ -11,6 +11,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline SIMDVectorSingle VectorWeightedSum(const SIMDVectorSingle first, const SIMDVectorSingle second, const SIMDVectorSingle firstWeight, const SIMDVectorSingle secondWeight)noexcept{
+    return VectorAdd(VectorMultiply(first, firstWeight), VectorMultiply(second, secondWeight));
+}
+
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLerp(SIMDVectorSingle v0, SIMDVectorSingle v1, f32 t)noexcept{
     return VectorMultiplyAdd(VectorSubtract(v1, v0), VectorReplicate(t), v0);
 }

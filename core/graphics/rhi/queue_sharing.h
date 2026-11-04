@@ -7,6 +7,8 @@
 
 #include "command.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,11 +46,9 @@ namespace ResourceQueueSharing{
 [[nodiscard]] constexpr b8 QueueFamilyIndexListContains(const Span<const u32> familyIndices, const u32 expectedFamilyIndex)noexcept{
     if(!familyIndices.data())
         return false;
-    for(const u32 familyIndex : familyIndices){
-        if(familyIndex == expectedFamilyIndex)
-            return true;
-    }
-    return false;
+    return FindIf(familyIndices.begin(), familyIndices.end(), [expectedFamilyIndex](const u32 familyIndex)noexcept{
+        return familyIndex == expectedFamilyIndex;
+    }) != familyIndices.end();
 }
 
 

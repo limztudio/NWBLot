@@ -4,6 +4,8 @@
 
 #include "layout_optimizer.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -120,30 +122,13 @@ inline constexpr usize s_BareExpectedFallbackBytes = 24u;
 }
 
 template<typename DeclT, typename DependsOnPred>
-void VisitDeclTopo(const usize idx, const Span<const DeclT* const> items, const DependsOnPred& dependsOn, MVector<u8>& state, MVector<const DeclT*>& outSorted){
-    if(state[idx] != 0u)
-        return;
-    state[idx] = 1u;
-    const DeclT* cur = items[idx];
-    if(cur){
-        for(usize j = 0u; j < items.size(); ++j){
-            if(j != idx && state[j] == 0u && items[j] && dependsOn(*cur, *items[j]))
-                VisitDeclTopo(j, items, dependsOn, state, outSorted);
-        }
-    }
-    state[idx] = 2u;
-    outSorted.push_back(cur);
-}
-
-template<typename DeclT, typename DependsOnPred>
 void SortDeclsTopologically(const Span<const DeclT* const> items, const DependsOnPred& dependsOn, MetaArena& arena, MVector<const DeclT*>& outSorted){
-    outSorted.clear();
-    if(items.empty())
+    if(items.empty()){
+        outSorted.clear();
         return;
+    }
     MVector<u8> state(items.size(), 0u, arena);
-    outSorted.reserve(items.size());
-    for(usize i = 0u; i < items.size(); ++i)
-        VisitDeclTopo(i, items, dependsOn, state, outSorted);
+    TopologicallySortPointers(items, dependsOn, state, outSorted);
 }
 
 

@@ -66,7 +66,7 @@ static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
 
 static ScratchString BuildMaterialBindIncludeGuard(const AStringView includePath, ScratchArena& arena){
     ScratchString guard(s_MaterialBindIncludeGuardPrefix, arena);
-    AppendMaterialBindGeneratedUpperIdentifier(AStringView(includePath), guard);
+    AppendAsciiUpperIdentifier(AStringView(includePath), s_MaterialBindFallbackUpperIdentifier.data(), guard);
     return guard;
 }
 
@@ -237,7 +237,7 @@ static b8 AppendMaterialBindFieldConstants(
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': failed to build key for '{}.{}'"), ConvertString(includePath), ConvertString(instance.name), ConvertString(field.name));
         return false;
     }
-    const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText->view());
+    const u64 keyHash = ComputeFnv64AsciiLowerText(keyText->view());
 
     if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, scratchArena, inOutSymbols, inOutSource))
         return false;

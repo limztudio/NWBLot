@@ -8,6 +8,8 @@
 
 #include <global/atomic.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,13 +42,10 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept{
-    u64 nextGeneration = s_NextCompiledPlanGeneration.load(MemoryOrder::relaxed);
-    for(;;){
-        if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max)
-            NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
-        if(s_NextCompiledPlanGeneration.compare_exchange_weak(nextGeneration, nextGeneration + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return nextGeneration;
-    }
+    const u64 identity = TryNextAtomicIdentity(s_NextCompiledPlanGeneration);
+    if(identity == 0u)
+        NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
+    return identity;
 }
 
 [[nodiscard]] b8 HasCapabilities(const GpuQueueCapability::Mask available, const GpuQueueCapability::Mask required)noexcept{

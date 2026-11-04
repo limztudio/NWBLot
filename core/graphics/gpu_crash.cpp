@@ -3,6 +3,7 @@
 
 
 #include "rhi/device.h"
+#include <global/atomic_identity.h>
 
 #include <global/termination.h>
 
@@ -94,9 +95,7 @@ usize GpuCrashTracker::internEvent(const AStringView eventString){
                 return markerHash;
         }
 
-        ++markerHash;
-        if(markerHash == 0u)
-            ++markerHash;
+        AdvanceWrappingNonzero(markerHash);
     }
 }
 

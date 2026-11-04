@@ -129,7 +129,6 @@ const StringView s_AssetBunchDisplayName = "asset bunch";
 const StringView s_WriteNwbMeshContext = "Failed to write NWB mesh";
 const StringView s_WriteNwbModelContext = "Failed to write NWB model";
 const usize s_EscapedTextReserveFactor = 2u;
-const StringView s_LineBreakText = "\r\n";
 const StringView s_EntrySuffixText = ",\n";
 const StringView s_FormatListCloseText = "];\n";
 const StringView s_ListCloseSectionText = "];\n\n";

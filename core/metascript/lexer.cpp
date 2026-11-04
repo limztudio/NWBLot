@@ -552,7 +552,7 @@ Token Lexer::readString()noexcept{
                     const MChar hc = advance();
                     codePoint = (codePoint << 4u) | HexDigitValue(hc);
                 }
-                if(!IsValidUnicodeScalarCodePoint(codePoint))
+                if(!IsUnicodeScalarValue(codePoint))
                     return makeErrorToken(MStringView("invalid unicode code point in string literal"), startLine, startColumn);
             }
             continue;
@@ -618,7 +618,7 @@ Token Lexer::readCharLiteral()noexcept{
                 const MChar hc = advance();
                 codePoint = (codePoint << 4u) | HexDigitValue(hc);
             }
-            if(!IsValidUnicodeScalarCodePoint(codePoint))
+            if(!IsUnicodeScalarValue(codePoint))
                 return makeErrorToken(MStringView("invalid unicode code point in character literal"), startLine, startColumn);
         }
         else if(IsOctalDigit(esc)){

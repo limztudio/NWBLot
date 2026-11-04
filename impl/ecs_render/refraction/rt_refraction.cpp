@@ -7,6 +7,8 @@
 
 #include <impl/assets/graphics/refraction/push_constants.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -171,7 +173,7 @@ b8 RendererRayTracingSystem::recordRefractionTileClassification(Core::CommandLis
     commandList.setPushConstants(&push, sizeof(push));
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionClassifyTiles, m_graphics.getDevice(), commandList);
 
-    commandList.dispatch((targets.width + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, (targets.height + NWB_REFRACTION_GROUP_SIZE - 1u) / NWB_REFRACTION_GROUP_SIZE, 1u);
+    commandList.dispatch(DivideUpWrapping(targets.width, NWB_REFRACTION_GROUP_SIZE), DivideUpWrapping(targets.height, NWB_REFRACTION_GROUP_SIZE), 1u);
     // Finalization consumes the completed counter and replaces both mutually exclusive argument records.
     commandList.setBufferState(targets.avboit.refractionTileArguments.get(), Core::ResourceStates::UnorderedAccess, true);
     commandList.commitBarriers();

@@ -7,6 +7,8 @@
 
 #include "vector.h"
 
+#include "../expected.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,6 +62,47 @@ static constexpr f32 s_FrameFallbackTangentZAxisAlignmentThreshold = 0.999f;
         return safeFallbackTangent;
 
     return FrameNormalizeDirection(projectedTangent, safeFallbackTangent);
+}
+
+
+[[nodiscard]] inline SIMDVectorSingle FrameResolveTangentHandedness(const SIMDVectorSingle tangentWithHandedness, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle bitangent)noexcept{
+    const SIMDVectorSingle value = VectorSplatW(tangentWithHandedness);
+    SIMDVectorSingle handedness = s_SIMDOne;
+    if(VectorIsFinite(value, VectorComponentMask::s_XYZW)){
+        const SIMDVectorSingle sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(value, VectorZero()));
+        handedness = VectorSelect(s_SIMDOne, sign, VectorGreater(VectorAbs(value), VectorReplicate(s_FrameHandednessEpsilon)));
+    }
+    if(FrameValidDirection(bitangent)){
+        const SIMDVectorSingle bitangentSign = Vector3Dot(Vector3Cross(normal, tangent), bitangent);
+        if(VectorIsFinite(bitangentSign, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(bitangentSign), VectorReplicate(s_FrameHandednessEpsilon)))
+            handedness = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(bitangentSign, VectorZero()));
+    }
+    return VectorSelect(tangent, handedness, s_SIMDMaskW);
+}
+
+struct alignas(SIMDVectorSingle) TangentFrameDirections{
+    SIMDVectorSingle tangent;
+    SIMDVectorSingle bitangent;
+};
+static_assert(alignof(Expected<TangentFrameDirections>) >= alignof(TangentFrameDirections));
+
+[[nodiscard]] inline Expected<TangentFrameDirections> FrameTriangleTangentDirections(const SIMDVectorSingle uv0, const SIMDVectorSingle uv1, const SIMDVectorSingle uv2, SIMDVectorSingle edge01, SIMDVectorSingle edge02)noexcept{
+    const SIMDVectorSingle uvDelta1 = VectorSubtract(uv1, uv0);
+    const SIMDVectorSingle uvDelta2 = VectorSubtract(uv2, uv0);
+    const SIMDVectorSingle determinantVector = Vector2Cross(uvDelta1, uvDelta2);
+    if(!VectorIsFinite(determinantVector, VectorComponentMask::s_XYZW) || Vector4LessOrEqual(VectorAbs(determinantVector), VectorReplicate(s_FrameHandednessEpsilon)))
+        return MakeUnexpected(Failure{});
+
+    const SIMDVectorSingle du1 = VectorSplatX(uvDelta1);
+    const SIMDVectorSingle dv1 = VectorSplatY(uvDelta1);
+    const SIMDVectorSingle du2 = VectorSplatX(uvDelta2);
+    const SIMDVectorSingle dv2 = VectorSplatY(uvDelta2);
+    const SIMDVectorSingle inverseDeterminant = VectorReciprocal(determinantVector);
+    const SIMDVectorSingle tangent = VectorMultiply(VectorSubtract(VectorMultiply(edge01, dv2), VectorMultiply(edge02, dv1)), inverseDeterminant);
+    const SIMDVectorSingle bitangent = VectorMultiply(VectorSubtract(VectorMultiply(edge02, du1), VectorMultiply(edge01, du2)), inverseDeterminant);
+    if(!FrameValidDirection(tangent) || !FrameValidDirection(bitangent))
+        return MakeUnexpected(Failure{});
+    return TangentFrameDirections{ tangent, bitangent };
 }
 
 

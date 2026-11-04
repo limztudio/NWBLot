@@ -36,5 +36,15 @@
 }
 
 
+// The caller has admitted the requested bytes.
+[[nodiscard]] inline u16 ReadAdmittedU16BigEndian(const Span<const u8> bytes, const usize offset)noexcept{
+    return ReadU16BigEndian(NotNull<const u8*>(bytes.data() + offset));
+}
+
+[[nodiscard]] inline u32 ReadAdmittedU32BigEndian(const Span<const u8> bytes, const usize offset)noexcept{
+    return ReadU32BigEndian(NotNull<const u8*>(bytes.data() + offset));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

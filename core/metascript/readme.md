@@ -93,7 +93,7 @@ namespace Meta = NWB::Core::Metascript;
 
 bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
     Meta::Document document(arena);
-    if(!document.parse(Meta::LiteralView(R"(
+    if(!document.parse(LiteralView(R"(
         example settings;
         settings.width = 256 * 2;
     )"))){
@@ -101,11 +101,11 @@ bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
         return false;
     }
 
-    const Meta::Value* settings = document.findVariable(Meta::LiteralView("settings"));
+    const Meta::Value* settings = document.findVariable(LiteralView("settings"));
     if(!settings || !settings->isMap())
         return false;
 
-    const Meta::Value* width = settings->findField(Meta::LiteralView("width"));
+    const Meta::Value* width = settings->findField(LiteralView("width"));
     if(!width || !width->isInteger())
         return false;
 

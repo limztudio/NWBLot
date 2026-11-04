@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/text_utils.h>
+
 #include <windows.h>
 
 
@@ -170,14 +172,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::Globa
         NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: Unicode conversion failed ({})"), GetLastError());
         return ClipboardStatus::NativeFailure;
     }
-    usize destination = 0u;
-    for(usize source = 0u; source < text.size(); ++source){
-        if(text[source] == '\r' && source + 1u < text.size() && text[source + 1u] == '\n')
-            continue;
-        text[destination] = text[source];
-        ++destination;
-    }
-    text.resize(destination);
+    CollapseCrLfInPlace(text);
     if(text.size() > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
     return ClipboardStatus::Success;
@@ -201,11 +196,7 @@ ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView t
     }
 
     // Allocate and validate before replacing the current clipboard. SetClipboardData transfers this allocation.
-    usize extraCarriageReturns = 0u;
-    for(usize index = 0u; index < m_wideText.size(); ++index){
-        if(m_wideText[index] == L'\n' && (index == 0u || m_wideText[index - 1u] != L'\r'))
-            ++extraCarriageReturns;
-    }
+    const usize extraCarriageReturns = CountBareLineFeeds(WStringView(m_wideText.data(), m_wideText.size()));
     const usize bytes = (m_wideText.size() + extraCarriageReturns + 1u) * sizeof(wchar);
     const HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
     if(!memory){
@@ -221,15 +212,7 @@ ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView t
     {
         GlobalUnlockGuard unlockGuard(memory);
 
-        usize output = 0u;
-        for(usize index = 0u; index < m_wideText.size(); ++index){
-            if(m_wideText[index] == L'\n' && (index == 0u || m_wideText[index - 1u] != L'\r')){
-                destination[output] = L'\r';
-                ++output;
-            }
-            destination[output] = m_wideText[index];
-            ++output;
-        }
+        const usize output = CopyWithCrBeforeBareLf(WStringView(m_wideText.data(), m_wideText.size()), destination);
         destination[output] = L'\0';
     }
     if(!OpenClipboard(static_cast<HWND>(m_nativeWindowHandle.get()))){

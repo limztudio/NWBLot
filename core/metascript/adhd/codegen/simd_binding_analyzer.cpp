@@ -280,7 +280,7 @@ void AnalyzeSimdExprReads(const Expr* expr, const SymbolTable& symbols, const b8
             const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
             if(IsRegisterPromotableSimdType(expr->resolvedSimdType) && (SymbolTable::IsSimdType(baseCallee) || expr->isBuiltinCall))
                 isSimdIntrinsicOrCtor = true;
-            else if(expr->isBuiltinCall && IsSimdScalarReductionFunction(callee))
+            else if(expr->isBuiltinCall && (IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty()))
                 isSimdIntrinsicOrCtor = true;
         }
         if(!isSimdIntrinsicOrCtor)

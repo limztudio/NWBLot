@@ -20,48 +20,6 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_compiler{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void AppendPascalCaseSegment(const MStringView segment, MString& out){
-    b8 capitalizeNext = true;
-    b8 emittedAny = false;
-    for(usize i = 0u; i < segment.size(); ++i){
-        const MChar c = segment[i];
-        const b8 isLower = IsAsciiLower(c);
-        const b8 isUpper = IsAsciiUpper(c);
-        const b8 isDigit = IsAsciiDigit(c);
-        if(!isLower && !isUpper && !isDigit){
-            capitalizeNext = true;
-            continue;
-        }
-        if(!emittedAny && isDigit)
-            out.push_back('_');
-        if(capitalizeNext && isLower){
-            out.push_back(static_cast<MChar>(c - ('a' - 'A')));
-            capitalizeNext = false;
-        }
-        else{
-            out.push_back(c);
-            capitalizeNext = false;
-        }
-        emittedAny = true;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions, MetaArena& arena, CompileResult& outResult){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
@@ -146,7 +104,7 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
                 const MStringView seg = dirPart.substr(segStart, i - segStart);
                 if(seg != "." && seg != ".."){
                     MString segPascal(arena);
-                    __hidden_adhd_compiler::AppendPascalCaseSegment(seg, segPascal);
+                    AppendPascalCaseIdentifierSegment(seg, segPascal);
                     if(!segPascal.empty()){
                         ns.append("::");
                         ns.append(segPascal.data(), segPascal.size());

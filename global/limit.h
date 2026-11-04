@@ -43,6 +43,18 @@ inline constexpr usize s_BitsPerU64 = 64u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline constexpr i32 SaturateI64ToI32(const i64 value)noexcept{
+    if(value < static_cast<i64>(Limit<i32>::s_Min))
+        return Limit<i32>::s_Min;
+    if(value > static_cast<i64>(Limit<i32>::s_Max))
+        return Limit<i32>::s_Max;
+    return static_cast<i32>(value);
+}
+
+[[nodiscard]] inline constexpr i32 SaturateU64ToI32(const u64 value)noexcept{
+    return value > static_cast<u64>(Limit<i32>::s_Max) ? Limit<i32>::s_Max : static_cast<i32>(value);
+}
+
 template<typename T>
 [[nodiscard]] inline constexpr b8 FitsU32(const T value)noexcept(IsArithmetic_V<T>){
     if constexpr(IsSigned_V<T>)

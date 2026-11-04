@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/bit.h>
+
 #include <X11/Xatom.h>
 
 
@@ -24,7 +26,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     b8 converted = false;
     Optional<X11PropertyFailure> propertyFailure;
     const b8 currentOwner = selection && selection->owned && XGetSelectionOwner(&m_display, event.selection) == m_ownerWindow;
-    const b8 validTime = selection && (event.time == CurrentTime || static_cast<i32>(static_cast<u32>(event.time) - static_cast<u32>(selection->timestamp)) >= 0);
+    const b8 validTime = selection && (event.time == CurrentTime || IsNotOlderSerialU32(static_cast<u32>(event.time), static_cast<u32>(selection->timestamp)));
     if(currentOwner && validTime && destination){
         if(event.target == m_multipleAtom && event.property){
             const auto property = ReadX11Property(m_display, event.requestor, event.property, false, s_MaxMultipleAtoms * s_X11WireUnitBytes);

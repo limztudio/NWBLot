@@ -3,13 +3,13 @@
 
 
 #include "ingest.h"
-#include "file_publication.h"
 
 #include <logger/common.h>
 
 #include <core/alloc/scratch.h>
 
 #include <global/binary.h>
+#include <global/filesystem/exclusive_publication.h>
 #include <global/process.h>
 
 
@@ -111,7 +111,7 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     result.graphPath = reportDirectory / uploadStem;
     result.graphPath.replaceExtension(__hidden_telemetry_ingest::s_GraphFileExtension);
 
-    const auto rawPublication = PublishNewTelemetryFile(result.rawPath, BinaryByteView{ static_cast<const u8*>(bytes), byteCount });
+    const auto rawPublication = PublishNewFileDurable(result.rawPath, BinaryByteView{ static_cast<const u8*>(bytes), byteCount });
     result.storedRaw = rawPublication.published;
     if(rawPublication.error && !rawPublication.published){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry raw publication failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), rawPublication.stagingRetained, rawPublication.error.value());
@@ -138,11 +138,11 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
     }
 
     result.summary = report->summary;
-    const auto jsonPublication = PublishNewTelemetryFile(result.jsonPath, BinaryByteView{ reinterpret_cast<const u8*>(report->json.data()), report->json.size() });
-    const auto csvPublication = PublishNewTelemetryFile(result.perfCsvPath, BinaryByteView{ reinterpret_cast<const u8*>(report->perfCsv.data()), report->perfCsv.size() });
-    TelemetryFilePublicationResult graphPublication;
+    const auto jsonPublication = PublishNewFileDurable(result.jsonPath, BinaryByteView{ reinterpret_cast<const u8*>(report->json.data()), report->json.size() });
+    const auto csvPublication = PublishNewFileDurable(result.perfCsvPath, BinaryByteView{ reinterpret_cast<const u8*>(report->perfCsv.data()), report->perfCsv.size() });
+    FilePublicationResult graphPublication;
     if(!report->graph.empty())
-        graphPublication = PublishNewTelemetryFile(result.graphPath, BinaryByteView{ reinterpret_cast<const u8*>(report->graph.data()), report->graph.size() });
+        graphPublication = PublishNewFileDurable(result.graphPath, BinaryByteView{ reinterpret_cast<const u8*>(report->graph.data()), report->graph.size() });
     result.wroteJson = jsonPublication.published;
     result.wrotePerfCsv = csvPublication.published;
     result.wroteGraph = graphPublication.published;

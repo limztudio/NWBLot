@@ -53,8 +53,8 @@ b8 RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& 
     targets.shadowCoarseTransmittanceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc coarseDesc;
     coarseDesc
-        .setWidth((targets.width + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR)
-        .setHeight((targets.height + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR)
+        .setWidth(DivideUpWrapping(targets.width, NWB_SW_SHADOW_COARSE_FACTOR))
+        .setHeight(DivideUpWrapping(targets.height, NWB_SW_SHADOW_COARSE_FACTOR))
         .setArraySize(NWB_SCENE_SHADOW_SLOT_COUNT)
         .setDimension(Core::TextureDimension::Texture2DArray)
         .setFormat(targets.shadowCoarseTransmittanceFormat)
@@ -67,8 +67,8 @@ b8 RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& 
     // Ping-pong half-resolution soft visibility and geometry cache.
     targets.shadowSoftFormat = Core::Format::RGBA16_FLOAT;
     targets.shadowSoftGeometryFormat = Core::Format::RGBA16_FLOAT;
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
+    const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
 
     Core::TextureDesc softHalfDesc;
     softHalfDesc
@@ -211,8 +211,8 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
 
     // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_shadowSoftPipeline && m_rayTracingState.m_softShadowSlotMask != 0u){
-        const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-        const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+        const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
+        const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
         const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
         const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
 

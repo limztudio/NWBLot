@@ -39,7 +39,7 @@ else()
 endif()
 list(APPEND _nwb_ui_smoke_capture_args "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>")
 
-file(GLOB_RECURSE _nwb_ui_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
+file(GLOB_RECURSE _nwb_ui_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
 set(_nwb_ui_smoke_asset_stamp "${_nwb_ui_smoke_runtime_root}/res/.nwb_ui_layer_assets_$<CONFIG>.stamp")
 add_custom_command(OUTPUT "${_nwb_ui_smoke_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_ui_smoke_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
         --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/ui_layer/assets" --output-directory "${_nwb_ui_smoke_runtime_root}/res"

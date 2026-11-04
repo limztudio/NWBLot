@@ -69,7 +69,7 @@ public:
 
 
 private:
-    void advanceGeneration()noexcept{ AdvanceRevision(m_generation); }
+    void advanceGeneration()noexcept{ AdvanceNonWrappingRevision(m_generation); }
 
 
 private:

@@ -405,23 +405,6 @@ Expected<usize> ResolveEditCaretPageTarget(
     return result.value();
 }
 
-usize LowerBoundEditBoundaryRange(in Span<usize> boundaries, in usize beginIndex, in usize endIndex, in usize offset){
-    usize first = beginIndex;
-    usize count = endIndex - beginIndex;
-    while(count > 0u){
-        const usize step = count / 2u;
-        const usize mid = first + step;
-        if(boundaries[mid] < offset){
-            first = mid + 1u;
-            count -= step + 1u;
-        }
-        else{
-            count = step;
-        }
-    }
-    return first;
-}
-
 usize LowerBoundEditClusterByEnd(in Span<TextCluster> clusters, in usize beginIndex, in usize endIndex, in usize byte){
     usize first = beginIndex;
     usize count = endIndex - beginIndex;
@@ -606,11 +589,11 @@ Expected<Rect> ResolveEditCaretRect(
                 x = cluster.trailingX;
         }
         else{
-            usize first = LowerBoundEditBoundaryRange(boundaries, 0u, boundaries.size(), clusterBegin);
+            usize first = lowerBoundIndex(boundaries, clusterBegin);
             if(first != boundaries.size() && boundaries[first] == clusterBegin)
                 ++first;
-            const usize last = LowerBoundEditBoundaryRange(boundaries, first, boundaries.size(), clusterEnd);
-            const usize next = LowerBoundEditBoundaryRange(boundaries, first, last, byte);
+            const usize last = first + lowerBoundIndex(boundaries.subspan(first, boundaries.size() - first), clusterEnd);
+            const usize next = first + lowerBoundIndex(boundaries.subspan(first, last - first), byte);
             const usize intervals = (last - first) + 1u;
             f32 ordinal = cast<f32>(next - first);
             if(next != last && boundaries[next] == byte)

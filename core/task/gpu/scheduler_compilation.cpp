@@ -10,6 +10,7 @@
 #include <core/graphics/backend_selection/backend.h>
 
 #include <global/limit.h>
+#include <global/overflow.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -154,7 +155,7 @@ b8 GpuTaskScheduler::compileGraph(
             if(!timeline.valid())
                 return false;
             const u64 pendingSubmissionCount = timeline.pendingSubmissionCount();
-            const u64 estimatedCost = pendingSubmissionCount > Limit<u64>::s_Max / __hidden_gpu_task_scheduler_compilation::s_PendingSubmissionCost ? Limit<u64>::s_Max : pendingSubmissionCount * __hidden_gpu_task_scheduler_compilation::s_PendingSubmissionCost;
+            const u64 estimatedCost = MultiplySaturatingU64(pendingSubmissionCount, __hidden_gpu_task_scheduler_compilation::s_PendingSubmissionCost);
             queueLoads.push_back(GpuTaskQueueLoad{ .queue = timeline.queue, .estimatedCost = estimatedCost, });
         }
         resolvedOptions.queueAssignmentOptions.queueLoads = queueLoads.data();

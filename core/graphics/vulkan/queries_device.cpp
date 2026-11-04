@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 
+#include <global/atomic_identity.h>
 #include <global/simd/vector.h>
 
 
@@ -41,13 +42,12 @@ b8 TimerQuery::completedCycleMatchesWithinLock(const u64 generation, const Queue
 
 
 Expected<TimerQueryHandle> Device::createTimerQuery(){
-    u64 priorIncarnation = m_nextTimerQueryIncarnation.load(MemoryOrder::relaxed);
-    while(priorIncarnation != Limit<u64>::s_Max && !m_nextTimerQueryIncarnation.compare_exchange_weak(priorIncarnation, priorIncarnation + 1u, MemoryOrder::relaxed)){}
-    if(priorIncarnation == Limit<u64>::s_Max){
+    const auto priorIncarnation = TryNextAtomicIdentityAllowZero(m_nextTimerQueryIncarnation);
+    if(!priorIncarnation){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Timer-query identity space is exhausted"));
         return MakeUnexpected(Failure{});
     }
-    const u64 incarnation = priorIncarnation + 1u;
+    const u64 incarnation = *priorIncarnation + 1u;
     auto* query = NewArenaObject<TimerQuery>(m_context.objectArena, m_context, incarnation);
     if(!query || !query->m_queryPool){
         DestroyArenaObject(m_context.objectArena, query);

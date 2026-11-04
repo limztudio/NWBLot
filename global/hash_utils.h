@@ -29,6 +29,15 @@ inline constexpr usize s_HashCombineRightShift = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline constexpr u64 MixMurmur64Finalizer(u64 value)noexcept{
+    value ^= value >> 33u;
+    value *= 0xff51afd7ed558ccdull;
+    value ^= value >> 33u;
+    value *= 0xc4ceb9fe1a85ec53ull;
+    value ^= value >> 33u;
+    return value;
+}
+
 [[nodiscard]] inline constexpr u32 UpdateFnv32Byte(const u32 hash, const u8 byte)noexcept{
     return (hash ^ byte) * s_Fnv32Prime;
 }
@@ -44,9 +53,22 @@ inline constexpr usize s_HashCombineRightShift = 2u;
     return (hash ^ byte) * s_Fnv64Prime;
 }
 
+[[nodiscard]] inline constexpr u64 UpdateFnv64U32LittleEndian(u64 hash, const u32 value)noexcept{
+    for(usize index = 0u; index < sizeof(value); ++index)
+        hash = UpdateFnv64Byte(hash, static_cast<u8>(value >> (index * s_BitsPerByte)));
+    return hash;
+}
+
 [[nodiscard]] inline constexpr u64 UpdateFnv64U64LittleEndian(u64 hash, const u64 value)noexcept{
     for(usize index = 0u; index < sizeof(value); ++index)
         hash = UpdateFnv64Byte(hash, static_cast<u8>(value >> (index * s_BitsPerByte)));
+    return hash;
+}
+
+[[nodiscard]] inline constexpr u64 ComputeFnv64AsciiLowerText(const AStringView text)noexcept{
+    u64 hash = s_Fnv64OffsetBasis;
+    for(const char ch : text)
+        hash = UpdateFnv64Byte(hash, ToAsciiLowerByte(static_cast<u8>(ch)));
     return hash;
 }
 

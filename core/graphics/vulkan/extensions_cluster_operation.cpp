@@ -7,6 +7,8 @@
 
 #include <core/common/log.h>
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -143,12 +145,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     const auto computeStridedRangeSize = [s_OperationName](const u64 stride, const u64 elementSize, const u32 count, const TStringView rangeName) -> Expected<u64>{
-        const u64 spanCount = static_cast<u64>(count - 1u);
-        if(stride != 0u && spanCount > (Limit<u64>::s_Max - elementSize) / stride){
+        const auto size = ComputeStridedRangeByteSize(count, stride, elementSize);
+        if(!size){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} range overflows"), s_OperationName, rangeName);
             return MakeUnexpected(Failure{});
         }
-        return spanCount * stride + elementSize;
+        return *size;
     };
     const auto getCheckedAddress = [s_OperationName](Buffer& buffer, const u64 offset, const u64 size, const u64 alignment, const TStringView rangeName) -> Expected<VkDeviceAddress>{
         const VkDeviceAddress baseAddress = buffer.getGpuVirtualAddress();

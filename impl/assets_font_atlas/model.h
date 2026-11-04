@@ -27,11 +27,11 @@ NWB_IMPL_BEGIN
 inline constexpr TStringView s_FontAtlasValidatePayloadContext = NWB_TEXT("FontAtlas::validatePayload");
 
 struct FontAtlasGroup{
+    Sha256Digest sha256;
+    Core::Assets::AssetBytes pixels;
     u32 width = 0u;
     u32 height = 0u;
     u32 channelCount = s_FontAtlasMaxChannelCount;
-    Sha256Digest sha256;
-    Core::Assets::AssetBytes pixels;
 
 
 public:
@@ -42,9 +42,9 @@ public:
 
 // Exact source positioning tables preserve GPOS classes, script/language selection and lookup order without expansion.
 struct FontAtlasPositioningTable{
-    u32 tag = 0u;
     Sha256Digest sha256;
     Core::Assets::AssetBytes bytes;
+    u32 tag = 0u;
 
 
 public:

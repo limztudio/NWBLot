@@ -333,11 +333,11 @@ private:
     usize m_pendingHandlerRemovalCount = 0;
     u64 m_keyboardTextPolicyEpoch = 0u;
     Array<b8, s_KeyboardScancodeCount> m_keyboardTextPolicies{};
+    f32 m_mousePositionScaleX = 1.f;
+    f32 m_mousePositionScaleY = 1.f;
     u32 m_dispatchDepth = 0;
     b8 m_keyboardTextBlocked = false;
     b8 m_windowFocused = true;
-    f32 m_mousePositionScaleX = 1.f;
-    f32 m_mousePositionScaleY = 1.f;
 };
 
 

@@ -25,11 +25,11 @@ NWB_IMPL_BEGIN
 
 
 struct PreparedFontImageGroup{
+    Sha256Digest sha256;
+    Core::Assets::AssetBytes pixels;
     u32 width = 0u;
     u32 height = 0u;
     u32 channelCount = 0u;
-    Sha256Digest sha256;
-    Core::Assets::AssetBytes pixels;
 
 
 public:

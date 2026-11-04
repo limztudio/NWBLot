@@ -86,10 +86,10 @@ namespace GpuTaskTimingHistoryDetail{
 
 struct RouteKey{
     NameHash task;
+    GpuPhysicalQueueId physicalQueue;
     u32 variant;
     u32 resolutionClass;
     CommandQueue::Enum queue;
-    GpuPhysicalQueueId physicalQueue;
 
 
 public:

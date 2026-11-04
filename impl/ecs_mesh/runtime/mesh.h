@@ -86,23 +86,23 @@ static_assert(IsTriviallyCopyable_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBo
 
 struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     RuntimeMeshLocalBounds localBounds;
+    u64 version = 0u;
+    // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
+    u64 geometryContentRevision = 0u;
+    Name meshKey = s_NameNone;
+    Span<const u32> solidTriangleWords;
     // Optional 32-byte runtime_bounds_constants.h GPU record for this accepted geometryContentRevision; null while pending.
     Core::BufferHandle localBoundsBuffer;
     // Optional meshletCount records with the same accepted bounds ABI; each record carries its own VALID proof.
     Core::BufferHandle meshletLocalBoundsBuffer;
     Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
+    Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
+    Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     u32 meshletCount = 0u;
     // Logical corner count; backing buffer is word-padded, never use its byte size.
     u32 meshletPrimitiveIndexCount = 0u;
     b8 dynamicMeshletBoundsFresh = false;
     b8 dynamicMeshletConesFresh = false;
-    u64 version = 0u;
-    // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
-    u64 geometryContentRevision = 0u;
-    Name meshKey = s_NameNone;
-    Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
-    Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
-    Span<const u32> solidTriangleWords;
 
 
 public:

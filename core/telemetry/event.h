@@ -127,8 +127,8 @@ struct EventHeader{
     u64 payloadBytes = 0u;
     u32 magic = s_EventMagic;
     u32 streamId = 0u;
-    EventKind::Enum kind = EventKind::Unknown;
     u16 version = s_TelemetryFormatVersion;
+    EventKind::Enum kind = EventKind::Unknown;
     u8 reserved = 0u;
 
 

@@ -94,8 +94,6 @@ inline b8 operator!=(const VariableRateShadingState& lhs, const VariableRateShad
 typedef FixedVector<BindingLayoutHandle, s_MaxBindingLayouts> BindingLayoutVector;
 
 struct GraphicsPipelineDesc{
-    PrimitiveType::Enum primType = PrimitiveType::TriangleList;
-    u32 patchControlPoints = 0;
     InputLayoutHandle inputLayout;
 
     ShaderHandle vertexShader;
@@ -105,9 +103,11 @@ struct GraphicsPipelineDesc{
     ShaderHandle pixelShader;
 
     RenderState renderState;
+    BindingLayoutVector bindingLayouts;
     VariableRateShadingState shadingRateState;
 
-    BindingLayoutVector bindingLayouts;
+    PrimitiveType::Enum primType = PrimitiveType::TriangleList;
+    u32 patchControlPoints = 0;
 
 
 public:

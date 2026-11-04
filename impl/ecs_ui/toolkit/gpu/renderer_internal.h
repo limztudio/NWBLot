@@ -69,7 +69,6 @@ using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_PaintMaxIm
 using GpuSampledGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
 
 struct GpuSampledTextureImportDesc{
-    usize index = 0u;
     Name readyPrefix;
     AStringView readyMarkerLabel;
     TStringView completionLabel;
@@ -77,6 +76,7 @@ struct GpuSampledTextureImportDesc{
     Name texturePrefix;
     AStringView textureMarkerLabel;
     Core::TextureHandle texture;
+    usize index = 0u;
 };
 
 template<typename T>
@@ -92,12 +92,12 @@ template<typename T, typename... Args>
 
 struct GpuPageTextureUploadDesc{
     Name name;
-    u32 width = 0u;
-    u32 height = 0u;
-    Core::Format::Enum format = Core::Format::UNKNOWN;
     const void* data = nullptr;
     usize dataSize = 0u;
     usize rowPitch = 0u;
+    u32 width = 0u;
+    u32 height = 0u;
+    Core::Format::Enum format = Core::Format::UNKNOWN;
 };
 
 void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept;
@@ -260,9 +260,9 @@ struct GpuFrameSlot{
     GpuVersion<GpuTargetVersion> target;
     Core::BufferHandle vertices;
     Core::BufferHandle indices;
+    GpuFrame inFlight;
     usize vertexCapacity = 0u;
     usize indexCapacity = 0u;
-    GpuFrame inFlight;
 };
 
 

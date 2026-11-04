@@ -22,13 +22,13 @@ NWB_COMMON_BEGIN
 
 
 struct FrameParam{
-    u16 width = 0u;
-    u16 height = 0u;
-    b8 active = false;
 #if defined(NWB_PLATFORM_WINDOWS)
     HINSTANCE instance = nullptr;
     HWND window = nullptr;
+    u16 width = 0u;
+    u16 height = 0u;
     ATOM windowClass = 0u;
+    b8 active = false;
 #elif defined(NWB_PLATFORM_LINUX)
     u8 backend = 0u;
     void* nativeDisplay = nullptr;

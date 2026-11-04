@@ -152,7 +152,6 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareTextureImages(Core::
             return MakeUnexpected(Failure{});
         const auto texture = ImportGpuSampledTexture(
             GpuSampledTextureImportDesc{
-                .index = index,
                 .readyPrefix = s_GpuTextureImageReadyPrefix,
                 .readyMarkerLabel = s_GpuTextureImageReadyMarkerLabel,
                 .completionLabel = NWB_TEXT("texture"),
@@ -160,6 +159,7 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareTextureImages(Core::
                 .texturePrefix = s_GpuTextureImagePrefix,
                 .textureMarkerLabel = s_GpuTextureImageMarkerLabel,
                 .texture = image->m_texture.texture,
+                .index = index,
             },
             graph,
             uses

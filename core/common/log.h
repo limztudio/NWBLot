@@ -73,12 +73,12 @@ using LoggerRegistrationCallback = void(*)(void* context, ILogger* previousLogge
 
 struct LoggerRegistration{
     NotNull<ILogger*> logger;
-    LoggerBreakPolicy::Enum breakPolicy = LoggerBreakPolicy::BreakOnErrorAndFatal;
     ILogger* previousLogger = nullptr;
     LoggerRegistration* previous = nullptr;
     LoggerRegistration* next = nullptr;
     u64 registerEpoch = 0u;
     u64 unregisterEpoch = 0u;
+    LoggerBreakPolicy::Enum breakPolicy = LoggerBreakPolicy::BreakOnErrorAndFatal;
     b8 registered = false;
 };
 
@@ -306,7 +306,7 @@ public:
         LoggerDetail::RegisterLogger(m_registration, logger);
     }
     LoggerRegistrationGuard(ILogger& logger, const LoggerBreakPolicy::Enum breakPolicy)noexcept
-        : m_registration{ NotNull(&logger), breakPolicy }
+        : m_registration{ NotNull(&logger), nullptr, nullptr, nullptr, 0u, 0u, breakPolicy }
     {
         LoggerDetail::RegisterLogger(m_registration, logger, &breakPolicy);
     }

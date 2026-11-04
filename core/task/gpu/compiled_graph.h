@@ -570,11 +570,10 @@ private:
 struct GpuTaskRecordContext{
     const GpuTaskGraphDeclarationReadView& declarations;
     const GpuCompiledGraph::ReadView& compiledPlan;
+    u64 recordingAttemptGeneration = 0u;
     GpuTaskId task;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
-    // Recording attempts isolate retryable native captures sharing one immutable compiler plan.
-    u64 recordingAttemptGeneration = 0u;
     // Optional capture sink; null keeps direct native task recording.
     GpuCommandIrCapture* commandIrCapture = nullptr;
 };

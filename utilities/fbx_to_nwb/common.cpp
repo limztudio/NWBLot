@@ -124,13 +124,7 @@ Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena&
     if(in >> trailing)
         return MakeUnexpected(Failure{});
 
-    const SIMDVectorSingle color = VectorSet(red, green, blue, alpha);
-    if(!VectorIsFinite(color, VectorComponentMask::s_XYZW))
-        return MakeUnexpected(Failure{});
-
-    Vec4 result;
-    StoreFloat(color, result);
-    return result;
+    return TryMakeFiniteColorVec4(red, green, blue, alpha);
 }
 
 ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena){

@@ -66,6 +66,7 @@ const f32 s_TargetUnitMeters = 1.0f;
 
 const StringView s_NullNodeLabel = "<null>";
 const StringView s_UnnamedNodeLabel = "<unnamed node>";
+const StringView s_UnnamedMeshLabel = "<unnamed mesh>";
 
 const usize s_MaxMeshReplacementCount = 8u;
 
@@ -167,6 +168,26 @@ Expected<usize> TryParseMeshIndexSelector(in StringView text){
     if(parsed.value() > cast<u64>(usize.max))
         return makeUnexpected(Failure());
     return cast<usize>(parsed.value());
+}
+
+StringView ResolveFbxNodeDisplayName(in b8 hasNode, in StringView nodeName){
+    if(!hasNode)
+        return s_NullNodeLabel;
+    if(!nodeName.empty())
+        return nodeName;
+    return s_UnnamedNodeLabel;
+}
+
+StringView ResolveFbxMeshDisplayName(in StringView meshName){
+    if(!meshName.empty())
+        return meshName;
+    return s_UnnamedMeshLabel;
+}
+
+Expected<Vec4> TryMakeFiniteColorVec4(in f32 red, in f32 green, in f32 blue, in f32 alpha){
+    if(!isFinite(red) || !isFinite(green) || !isFinite(blue) || !isFinite(alpha))
+        return makeUnexpected(Failure());
+    return Vec4(red, green, blue, alpha);
 }
 
 

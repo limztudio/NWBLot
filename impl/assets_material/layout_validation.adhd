@@ -1,0 +1,332 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MaterialTypedLayoutBlock UnpackMaterialTypedLayoutBlockBinary(in MaterialTypedLayoutBlockBinary blockBinary){
+    MaterialTypedLayoutBlock block;
+    block.blockName = Name(blockBinary.blockNameHash);
+    block.blockClass = cast<MaterialBlockClass>(blockBinary.blockClass);
+    block.fieldBegin = blockBinary.fieldBegin;
+    block.fieldCount = blockBinary.fieldCount;
+    block.byteSize = blockBinary.byteSize;
+    return block;
+}
+
+MaterialTypedLayoutField UnpackMaterialTypedLayoutFieldBinary(in MaterialTypedLayoutFieldBinary fieldBinary){
+    MaterialTypedLayoutField field;
+    field.fieldName = Name(fieldBinary.fieldNameHash);
+    field.fieldType = cast<MaterialLayoutFieldType>(fieldBinary.fieldType);
+    field.offset = fieldBinary.offset;
+    field.defaultValue = fieldBinary.defaultValue;
+    return field;
+}
+
+b8 TryAssignMaterialResourceReferenceAsset(in MaterialResourceKind resourceKind, in Name resourceName, mut MaterialResourceReference reference){
+    switch(resourceKind){
+        case MaterialResourceKind::SampledImage2D:
+            reference.textureAsset.virtualPath = resourceName;
+            return true;
+        case MaterialResourceKind::Sampler:
+            reference.samplerAsset.virtualPath = resourceName;
+            return true;
+        default:
+            return false;
+    }
+}
+
+Expected<MaterialResourceReference> TryUnpackMaterialResourceReferenceBinary(in MaterialResourceReferenceBinary resourceReferenceBinary){
+    const MaterialResourceKind resourceKind = cast<MaterialResourceKind>(resourceReferenceBinary.resourceKind);
+    const Name resourceName = Name(resourceReferenceBinary.resourceNameHash);
+    if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceName))
+        return makeUnexpected(Failure());
+
+    MaterialResourceReference outReference;
+    outReference.blockName = Name(resourceReferenceBinary.blockNameHash);
+    outReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
+    outReference.resourceKind = resourceKind;
+    outReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
+    if(!TryAssignMaterialResourceReferenceAsset(resourceKind, resourceName, outReference))
+        return makeUnexpected(Failure());
+    return outReference;
+}
+
+b8 TryUnpackMaterialFlags(in u32 materialFlags, mut b8 outTransparent, mut b8 outTwoSided, mut b8 outRefractive){
+    if((materialFlags & ~cast<u32>(MaterialFlag::All)) != 0u)
+        return false;
+    outTransparent = (materialFlags & cast<u32>(MaterialFlag::Transparent)) != 0u;
+    outTwoSided = (materialFlags & cast<u32>(MaterialFlag::TwoSided)) != 0u;
+    outRefractive = (materialFlags & cast<u32>(MaterialFlag::Refractive)) != 0u;
+    return true;
+}
+
+Expected<usize> ComputeMaterialTypedBlockByteSize(in Span<MaterialTypedLayoutBlock> blocks){
+    usize byteSize = 0u;
+    for(usize b = 0u; b < blocks.size(); ++b){
+        const usize blockBytes = cast<usize>(blocks[b].byteSize);
+        if(blockBytes > 0xFFFFFFFFFFFFFFFFul - byteSize)
+            return makeUnexpected(Failure());
+        byteSize += blockBytes;
+    }
+    return byteSize;
+}
+
+b8 ValidateMaterialResourceReferences(in Span<MaterialTypedLayoutBlock> blocks, in Span<MaterialTypedLayoutField> fields, in Span<MaterialResourceReference> resourceReferences){
+    usize resourceFieldCount = 0u;
+    u32 constantByteBegin = 0u;
+    for(usize b = 0u; b < blocks.size(); ++b){
+        const MaterialTypedLayoutBlock block = blocks[b];
+        if(!IsValidMaterialBlockClass(block.blockClass))
+            return false;
+        if(cast<usize>(block.fieldBegin) > fields.size() || cast<usize>(block.fieldCount) > fields.size() - cast<usize>(block.fieldBegin))
+            return false;
+
+        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+            const MaterialTypedLayoutField field = fields[cast<usize>(block.fieldBegin) + cast<usize>(fieldOffset)];
+            if(!IsMaterialLayoutResourceFieldType(field.fieldType))
+                continue;
+
+            // Descriptor slots are resolved during material preparation; instance overrides cannot replace them.
+            if(block.blockClass != MaterialBlockClass::MaterialConstant)
+                return false;
+            if(field.offset > 0xFFFFFFFFu - constantByteBegin)
+                return false;
+
+            ++resourceFieldCount;
+            const MaterialResourceKind expectedKind = MaterialLayoutFieldResourceKind(field.fieldType);
+            const u32 expectedByteOffset = constantByteBegin + field.offset;
+            b8 foundReference = false;
+            for(usize r = 0u; r < resourceReferences.size(); ++r){
+                const MaterialResourceReference resourceReference = resourceReferences[r];
+                if(resourceReference.blockName != block.blockName || resourceReference.fieldName != field.fieldName)
+                    continue;
+                if(foundReference)
+                    return false;
+                if(resourceReference.resourceKind != expectedKind || resourceReference.constantByteOffset != expectedByteOffset)
+                    return false;
+
+                switch(expectedKind){
+                    case MaterialResourceKind::SampledImage2D:
+                        if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid())
+                            return false;
+                        break;
+                    case MaterialResourceKind::Sampler:
+                        if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid())
+                            return false;
+                        break;
+                    default:
+                        return false;
+                }
+
+                foundReference = true;
+            }
+            if(!foundReference)
+                return false;
+        }
+
+        if(block.blockClass == MaterialBlockClass::MaterialConstant){
+            if(block.byteSize > 0xFFFFFFFFu - constantByteBegin)
+                return false;
+            constantByteBegin += block.byteSize;
+        }
+    }
+
+    // Each record maps to one resource field. Dup rejects above also block stray numeric/mutable refs.
+    return resourceFieldCount == resourceReferences.size();
+}
+
+// Transparent materials need all three pass shaders; opaque materials carry none.
+b8 HasValidMaterialAvboitPixelShaderContract(
+    in b8 transparent,
+    in AssetRef<PixelShader> accumulatePixelShader,
+    in AssetRef<PixelShader> occupancyPixelShader,
+    in AssetRef<PixelShader> extinctionPixelShader
+){
+    if(transparent)
+        return accumulatePixelShader.valid() && occupancyPixelShader.valid() && extinctionPixelShader.valid();
+
+    return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
+}
+
+u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in Span<MaterialTypedLayoutField> fields){
+    if(blocks.empty() && fields.empty())
+        return 0u;
+
+    u64 hash = s_Fnv64OffsetBasis;
+    for(usize i = 0u; i < s_MaterialTypedLayoutHashHeader.size(); ++i)
+        hash = updateFnv64Byte(hash, cast<u8>(s_MaterialTypedLayoutHashHeader[i]));
+    hash = updateFnv64U32(hash, cast<u32>(blocks.size()));
+    hash = updateFnv64U32(hash, cast<u32>(fields.size()));
+    for(usize i = 0u; i < blocks.size(); ++i){
+        const MaterialTypedLayoutBlock block = blocks[i];
+        hash = updateFnv64NameHash(hash, block.blockName.hash());
+        hash = updateFnv64U32(hash, cast<u32>(block.blockClass));
+        hash = updateFnv64U32(hash, block.fieldBegin);
+        hash = updateFnv64U32(hash, block.fieldCount);
+        hash = updateFnv64U32(hash, block.byteSize);
+    }
+    for(usize i = 0u; i < fields.size(); ++i){
+        const MaterialTypedLayoutField field = fields[i];
+        hash = updateFnv64NameHash(hash, field.fieldName.hash());
+        hash = updateFnv64U32(hash, cast<u32>(field.fieldType));
+        hash = updateFnv64U32(hash, field.offset);
+        hash = updateFnv64U32(hash, field.defaultValue.x);
+        hash = updateFnv64U32(hash, field.defaultValue.y);
+        hash = updateFnv64U32(hash, field.defaultValue.z);
+        hash = updateFnv64U32(hash, field.defaultValue.w);
+    }
+    return hash;
+}
+
+MaterialTypedLayoutValidationStatus ValidateMaterialTypedLayout(
+    in u64 layoutHash,
+    in Span<MaterialTypedLayoutBlock> blocks,
+    in Span<MaterialTypedLayoutField> fields,
+    in usize blockByteCount,
+    mut usize outFailureIndex
+){
+    outFailureIndex = 0u;
+    if(blocks.empty() && fields.empty())
+        return MaterialTypedLayoutValidationStatus::EmptyLayout;
+    if(layoutHash == 0u)
+        return MaterialTypedLayoutValidationStatus::ZeroHash;
+    if(blocks.empty() || fields.empty())
+        return MaterialTypedLayoutValidationStatus::MissingBlocksOrFields;
+
+    u32 nextFieldBegin = 0u;
+    for(usize blockIndex = 0u; blockIndex < blocks.size(); ++blockIndex){
+        const MaterialTypedLayoutBlock block = blocks[blockIndex];
+        if(block.blockName == s_NameNone){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::EmptyBlockName;
+        }
+        if(!IsValidMaterialBlockClass(block.blockClass)){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::InvalidBlockClass;
+        }
+        if(block.fieldBegin != nextFieldBegin){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::NonContiguousFieldRange;
+        }
+        if(block.fieldCount == 0u || cast<usize>(block.fieldCount) > fields.size() - cast<usize>(block.fieldBegin)){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::FieldRangeExceedsCount;
+        }
+
+        u32 expectedOffset = 0u;
+        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+            const usize fieldIndex = cast<usize>(block.fieldBegin) + cast<usize>(fieldOffset);
+            const MaterialTypedLayoutField field = fields[fieldIndex];
+            if(field.fieldName == s_NameNone){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::EmptyFieldName;
+            }
+            if(!IsValidMaterialLayoutFieldType(field.fieldType)){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::InvalidFieldType;
+            }
+
+            const Expected<u32> expectedFieldOffset = TryAlignMaterialLayoutFieldOffset(expectedOffset, field.fieldType);
+            if(!expectedFieldOffset.has_value()){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::FieldAlignmentOverflow;
+            }
+            if(field.offset != expectedFieldOffset.value()){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::MisalignedFieldOffset;
+            }
+
+            const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
+            if(fieldByteSize == 0u || expectedFieldOffset.value() > 0xFFFFFFFFu - fieldByteSize){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::FieldByteSizeOverflow;
+            }
+            expectedOffset = expectedFieldOffset.value() + fieldByteSize;
+        }
+
+        const Expected<u32> expectedBlockByteSize = TryAlignMaterialLayoutBlockByteSize(expectedOffset);
+        if(!expectedBlockByteSize.has_value()){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::BlockByteSizeOverflow;
+        }
+        if(expectedBlockByteSize.value() != block.byteSize){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::BlockByteSizeMismatch;
+        }
+
+        nextFieldBegin += block.fieldCount;
+    }
+
+    if(cast<usize>(nextFieldBegin) != fields.size())
+        return MaterialTypedLayoutValidationStatus::UnownedFields;
+
+    const u64 computedHash = ComputeMaterialTypedLayoutHash(blocks, fields);
+    if(computedHash != layoutHash)
+        return MaterialTypedLayoutValidationStatus::LayoutHashMismatch;
+
+    const Expected<usize> expectedBlockByteSize = ComputeMaterialTypedBlockByteSize(blocks);
+    if(!expectedBlockByteSize.has_value())
+        return MaterialTypedLayoutValidationStatus::TotalBlockByteSizeOverflow;
+    if(blockByteCount != expectedBlockByteSize.value())
+        return MaterialTypedLayoutValidationStatus::TotalBlockByteCountMismatch;
+
+    return MaterialTypedLayoutValidationStatus::Valid;
+}
+
+b8 ValidateMaterialBinaryShaderCount(
+    in u32 shaderCount,
+    in u32 maxShaderTypeCount,
+    in usize remainingBytes,
+    in usize shaderEntryBytes
+){
+    if(shaderCount == 0u){
+        error("Material::loadBinary failed: material has no shader stages");
+        return false;
+    }
+    if(shaderCount > maxShaderTypeCount){
+        error("Material::loadBinary failed: shader count exceeds supported shader stage count");
+        return false;
+    }
+    if(cast<usize>(shaderCount) > remainingBytes / shaderEntryBytes){
+        error("Material::loadBinary failed: shader count exceeds available data");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateMaterialBinaryFlags(
+    in u32 materialFlags,
+    mut b8 outTransparent,
+    mut b8 outTwoSided,
+    mut b8 outRefractive
+){
+    if(TryUnpackMaterialFlags(materialFlags, outTransparent, outTwoSided, outRefractive))
+        return true;
+
+    error("Material::loadBinary failed: material flags contain unsupported bits {}", materialFlags);
+    return false;
+}
+
+b8 ValidateMaterialBinaryAvboitPresenceFlag(in StringView passLabel, in u32 hasShader){
+    if(hasShader <= 1u)
+        return true;
+
+    error("Material::loadBinary failed: invalid AVBOIT {} pixel shader presence flag {}", passLabel, hasShader);
+    return false;
+}
+
+b8 ValidateMaterialBinaryAvboitShaderRef(in StringView passLabel, in b8 isValidRef){
+    if(isValidRef)
+        return true;
+
+    error("Material::loadBinary failed: AVBOIT {} pixel shader name is empty", passLabel);
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

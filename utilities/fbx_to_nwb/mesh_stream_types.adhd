@@ -13,6 +13,7 @@ native{
 namespace NWB::FbxToNwb{
 using NWB::Impl::SkinInfluence4;
 using NWB::Impl::ValidateSourceStreamIndexWithContext;
+using NWB::Impl::s_MeshletTriangleIndexCount;
 using NWB::Impl::s_MeshMissingStreamIndex;
 using NWB::Impl::s_SkinInfluenceJointCount;
 using NWB::Impl::s_VertexRefPositionName;
@@ -344,20 +345,85 @@ b8 SameEmittedStreamValue(in Vec4 lhs, in Vec4 rhs){
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
 }
 
-b8 ValidateSkinnedModelSourceMeshRefs(in Span<SourceVertexRef> vertexRefs, in usize skinCount){
-    if(skinCount == 0u){
+b8 ValidateSourceMeshGeometryStreams(
+    in SourceMeshStreamCounts counts,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices,
+    in StringView context
+){
+    if(
+        counts.positions == 0u
+        || counts.normals == 0u
+        || counts.uv0 == 0u
+        || counts.colors == 0u
+        || vertexRefs.empty()
+        || indices.empty()
+    ){
+        error("{}: mesh payload is incomplete", context);
+        return false;
+    }
+    if(counts.tangents == 0u){
+        error("{}: mesh tangent stream is required", context);
+        return false;
+    }
+    if((indices.size() % cast<usize>(s_MeshletTriangleIndexCount)) != 0u){
+        error("{}: mesh index stream must contain whole triangles", context);
+        return false;
+    }
+
+    for(in SourceVertexRef ref : vertexRefs){
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefPositionName, ref.position, counts.positions))
+            return false;
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefNormalName, ref.normal, counts.normals))
+            return false;
+        if(ref.tangent == s_MeshMissingStreamIndex){
+            error("{}: mesh vertex_ref tangent is missing", context);
+            return false;
+        }
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefTangentName, ref.tangent, counts.tangents))
+            return false;
+        if(!ValidateSourceStreamIndexWithContext(context, s_MeshUv0FieldNameView, ref.uv0, counts.uv0))
+            return false;
+        if(!ValidateSourceStreamIndexWithContext(context, s_VertexRefColorName, ref.color, counts.colors))
+            return false;
+    }
+
+    for(in u32 index : indices){
+        if(cast<usize>(index) >= vertexRefs.size()){
+            error("{}: mesh triangle index references an out-of-range vertex_ref", context);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+b8 ValidateSkinnedModelSourceMeshRefs(
+    in SourceMeshStreamCounts counts,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices
+){
+    if(!ValidateSourceMeshGeometryStreams(counts, vertexRefs, indices, s_WriteNwbModelContext))
+        return false;
+    if(counts.skin == 0u){
         error("Failed to write NWB model: skinned model source mesh requires skin influences");
         return false;
     }
     for(in SourceVertexRef ref : vertexRefs){
-        if(!ValidateSourceStreamIndexWithContext(s_WriteNwbModelContext, s_SkinStreamLabel, ref.skin, skinCount))
+        if(!ValidateSourceStreamIndexWithContext(s_WriteNwbModelContext, s_SkinStreamLabel, ref.skin, counts.skin))
             return false;
     }
     return true;
 }
 
-b8 ValidatePlainMeshSourceSkin(in usize skinCount, in Span<SourceVertexRef> vertexRefs){
-    if(skinCount != 0u){
+b8 ValidatePlainMeshSourceSkin(
+    in SourceMeshStreamCounts counts,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices
+){
+    if(!ValidateSourceMeshGeometryStreams(counts, vertexRefs, indices, s_WriteNwbMeshContext))
+        return false;
+    if(counts.skin != 0u){
         error("Failed to write NWB mesh: mesh asset cannot contain a source skin stream");
         return false;
     }

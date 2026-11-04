@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_csg/frame_state.h>
-#include <impl/ecs_render/csg/types.adhd.h>
+#include <impl/ecs_render/csg/work_region.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/pipeline.h>

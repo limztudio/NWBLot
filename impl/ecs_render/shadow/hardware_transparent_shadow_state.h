@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
+#include <impl/ecs_render/shadow/push_constants.adhd.h>
 
 #include <core/graphics/rhi/device.h>
 

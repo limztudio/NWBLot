@@ -62,7 +62,6 @@ void ReserveSourceMeshBuildContext(usize estimatedTriangleCorners, b8 wantsSkinn
 [[nodiscard]] b8 EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices);
 [[nodiscard]] Expected<SourceTangentReport> GenerateSourceMeshTangents(b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
 [[nodiscard]] Expected<u32> InternSourceCorner(const SourceTriangleCorner& corner, b8 wantsSkinning, SourceMeshBuildContext& inOutContext);
-[[nodiscard]] b8 ValidateMeshGeometry(const SourceMeshStreams& mesh, AStringView context);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

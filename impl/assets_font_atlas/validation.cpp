@@ -20,39 +20,18 @@ namespace __hidden_font_atlas_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 CheckGuardedOverlap(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
-    Vector<u64, Core::Alloc::ScratchArena> occupied(scratchArena);
-    usize maxWords = 0u;
-    for(const FontAtlasGroup& group : payload.groups){
-        const Expected<usize> groupWords = TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount);
-        if(!groupWords)
-            return false;
-        maxWords = Max(maxWords, *groupWords);
-    }
-    occupied.reserve(maxWords);
+[[nodiscard]] static b8 CheckGuardedOverlap(const FontAtlasPayload& payload){
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         const FontAtlasGroup& group = payload.groups[groupIndex];
-        const usize planePixels = static_cast<usize>(group.width) * group.height;
-        const Expected<usize> groupWords = TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount);
-        if(!groupWords)
+        if(!ValidateFontAtlasGroupGuardedOverlap(
+            payload.glyphs,
+            static_cast<u32>(groupIndex),
+            group.width,
+            group.height,
+            group.channelCount,
+            payload.guardTexels
+        ))
             return false;
-        occupied.assign(*groupWords, 0u);
-        for(const FontAtlasGlyph& glyph : payload.glyphs){
-            if(glyph.drawable == 0u || glyph.group != groupIndex)
-                continue;
-            const u32 firstX = glyph.x - payload.guardTexels;
-            const u32 endX = glyph.x + glyph.width + payload.guardTexels;
-            const u32 firstY = glyph.y - payload.guardTexels;
-            const u32 endY = glyph.y + glyph.height + payload.guardTexels;
-            for(u32 row = firstY; row < endY; ++row){
-                const usize begin = planePixels * glyph.channel + static_cast<usize>(row) * group.width + firstX;
-                const usize last = begin + endX - firstX - 1u;
-                for(usize word = begin / s_BitsPerU64; word <= last / s_BitsPerU64; ++word){
-                    if(!TryMarkFontAtlasGuardedWordOccupied(glyph.glyphId, begin, last, word, occupied[word]))
-                        return false;
-                }
-            }
-        }
     }
     return true;
 }
@@ -67,7 +46,7 @@ namespace __hidden_font_atlas_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
+b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena&){
     if(!payload.font || payload.fontSha256 == Sha256Digest{} || payload.faceIndex != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;
@@ -116,7 +95,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
             return false;
         }
     }
-    if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload, scratchArena))
+    if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload))
         return false;
     if(payload.positioningTables.size() > s_FontAtlasMaxPositioningTableCount){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF"));

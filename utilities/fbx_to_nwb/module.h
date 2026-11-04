@@ -154,7 +154,18 @@ Expected<MeshBuildResult> BuildMesh(
     Core::Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept;
+[[nodiscard]] inline SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept{
+    return MakeSourceMeshStreamCounts(
+        mesh.positions.size(),
+        mesh.normals.size(),
+        mesh.tangents.size(),
+        mesh.uv0.size(),
+        mesh.colors.size(),
+        mesh.skin.size(),
+        mesh.vertexRefs.size(),
+        mesh.indices.size()
+    );
+}
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 

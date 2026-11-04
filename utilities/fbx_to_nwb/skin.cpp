@@ -25,19 +25,11 @@ namespace FbxSkinDetail{
 
 
 SIMDMatrixDouble LoadUfbxMatrix(const ufbx_matrix& matrix)noexcept{
-    SIMDMatrixDouble result{};
-    result.v[0u] = VectorDoubleSet(static_cast<f64>(matrix.m00), static_cast<f64>(matrix.m01), static_cast<f64>(matrix.m02), static_cast<f64>(matrix.m03));
-    result.v[1u] = VectorDoubleSet(static_cast<f64>(matrix.m10), static_cast<f64>(matrix.m11), static_cast<f64>(matrix.m12), static_cast<f64>(matrix.m13));
-    result.v[2u] = VectorDoubleSet(static_cast<f64>(matrix.m20), static_cast<f64>(matrix.m21), static_cast<f64>(matrix.m22), static_cast<f64>(matrix.m23));
-    result.v[3u] = VectorDoubleSet(0.0, 0.0, 0.0, 1.0);
-    return result;
-}
-
-AStringView NodeDisplayName(const ufbx_node* node)noexcept{
-    if(!node)
-        return s_NullNodeLabel;
-    const AStringView name = UfbxStringView(node->name);
-    return !name.empty() ? name : s_UnnamedNodeLabel;
+    return MakeUfbxMatrixDouble(
+        static_cast<f64>(matrix.m00), static_cast<f64>(matrix.m01), static_cast<f64>(matrix.m02), static_cast<f64>(matrix.m03),
+        static_cast<f64>(matrix.m10), static_cast<f64>(matrix.m11), static_cast<f64>(matrix.m12), static_cast<f64>(matrix.m13),
+        static_cast<f64>(matrix.m20), static_cast<f64>(matrix.m21), static_cast<f64>(matrix.m22), static_cast<f64>(matrix.m23)
+    );
 }
 
 Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, const ufbx_skin_deformer& skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& inOutContext){
@@ -72,29 +64,17 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             return MakeUnexpected(Failure{});
         }
         const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
-        const SIMDMatrixDouble inverseBindDouble = LoadUfbxMatrix(inverseBind);
-        const f64 determinant = static_cast<f64>(ufbx_matrix_determinant(&inverseBind));
-        if(!FiniteUfbxMatrix(inverseBindDouble) || !IsFinite(determinant) || Abs(determinant) <= s_InvertibleMatrixDeterminantEpsilon){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
+        const Expected<SIMDMatrix> inverseBindValueResult = TryConvertFbxInverseBindMatrix(LoadUfbxMatrix(inverseBind), static_cast<f64>(ufbx_matrix_determinant(&inverseBind)));
+        if(!inverseBindValueResult)
             return MakeUnexpected(Failure{});
-        }
+        const SIMDMatrix inverseBindValue = *inverseBindValueResult;
 
-        const SIMDMatrix inverseBindValue = ConvertJointMatrix(inverseBindDouble);
-        if(!IsFiniteSkeletonJointMatrix(inverseBindValue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is outside float range"));
-            return MakeUnexpected(Failure{});
-        }
         const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
-        const SIMDMatrixDouble bindPoseDouble = LoadUfbxMatrix(bindPose);
-        if(!FiniteUfbxMatrix(bindPoseDouble)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
+        const Expected<SIMDMatrix> bindPoseValueResult = TryConvertFbxBindPoseMatrix(LoadUfbxMatrix(bindPose));
+        if(!bindPoseValueResult)
             return MakeUnexpected(Failure{});
-        }
-        const SIMDMatrix bindPoseValue = ConvertJointMatrix(bindPoseDouble);
-        if(!IsFiniteSkeletonJointMatrix(bindPoseValue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is outside float range"));
-            return MakeUnexpected(Failure{});
-        }
+        const SIMDMatrix bindPoseValue = *bindPoseValueResult;
+
         auto foundJoint = inOutContext.jointLookup.find(MakeNotNull(cluster->bone_node));
         if(foundJoint != inOutContext.jointLookup.end()){
             const usize jointIndex = static_cast<usize>(foundJoint.value());
@@ -102,7 +82,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             NWB_ASSERT(jointIndex < inOutContext.bindPoseMatrices.size());
             const SIMDMatrix existingInverseBind = LoadFloat(inOutContext.inverseBindMatrices[jointIndex]);
             if(!NearlyEqualFbxJointMatrices(existingInverseBind, inverseBindValue)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), ConvertString(NodeDisplayName(cluster->bone_node)));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), ConvertString(ResolveFbxNodeDisplayName(cluster->bone_node != nullptr, UfbxStringView(cluster->bone_node->name))));
                 return MakeUnexpected(Failure{});
             }
             outClusterJoints.push_back(foundJoint.value());
@@ -151,22 +131,8 @@ Expected<MeshSkinInfluence> LoadInfluence(const ufbx_skin_deformer& skin, const 
             break;
 
         const ufbx_skin_weight& weight = skin.weights.data[skinVertex.weight_begin + weightOffset];
-        const f64 value = static_cast<f64>(weight.weight);
-        if(!IsFinite(value)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin contains a non-finite weight"));
+        if(!TryAccumulateFbxSkinWeight(static_cast<f64>(weight.weight), weight.cluster_index, clusterJoints, writtenInfluenceCount, weightSum, result))
             return MakeUnexpected(Failure{});
-        }
-        if(value <= 0.0)
-            continue;
-        if(weight.cluster_index >= clusterJoints.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin weight references an out-of-range cluster"));
-            return MakeUnexpected(Failure{});
-        }
-
-        result.joint[writtenInfluenceCount] = clusterJoints[weight.cluster_index];
-        result.weight.raw[writtenInfluenceCount] = static_cast<f32>(value);
-        weightSum += value;
-        ++writtenInfluenceCount;
     }
 
     if(!TryNormalizeFbxSkinInfluenceWeights(weightSum, result))

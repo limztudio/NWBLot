@@ -118,31 +118,19 @@ template<typename JointPaletteVector>
     outJointPalette.reserve(jointCount);
 
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const SIMDMatrix inverseBindMatrix = hasInverseBindMatrices ? LoadFloat(instance.inverseBindMatrices[jointIndex]) : SIMDMatrix{};
-
-        const auto jointMatrix = TryResolveSkinningJointMatrix(LoadFloat(sourceJoints[jointIndex]), hasInverseBindMatrices, inverseBindMatrix, s_SkinValidationEpsilon);
-        if(!jointMatrix){
+        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
+            instance.handle.value,
+            jointIndex,
+            sourceJoints,
+            hasInverseBindMatrices,
+            instance.inverseBindMatrices,
+            useDualQuaternionPayload
+        );
+        if(!storedJointMatrix){
             outJointPalette.clear();
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"), instance.handle.value, jointIndex);
             return false;
         }
-
-        SkeletonJointMatrix storedJointMatrix{};
-        if(!useDualQuaternionPayload)
-            StoreFloat(*jointMatrix, storedJointMatrix);
-        else{
-            const auto dualQuaternion = MatrixTryBuildRigidDualQuaternion(*jointMatrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
-            if(dualQuaternion){
-                StoreFloat(dualQuaternion->real, storedJointMatrix.rows[0]);
-                StoreFloat(dualQuaternion->dual, storedJointMatrix.rows[1]);
-            }
-            else{
-                outJointPalette.clear();
-                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build"), instance.handle.value, jointIndex);
-                return false;
-            }
-        }
-        outJointPalette.push_back(storedJointMatrix);
+        outJointPalette.push_back(*storedJointMatrix);
     }
 
     return true;

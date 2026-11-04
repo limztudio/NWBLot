@@ -259,46 +259,6 @@ Expected<u32> FbxSourceMeshStreams::InternSourceCorner(const SourceTriangleCorne
     return InternSourceValue(ref, s_SourceVertexRefLabel, inOutContext.mesh.vertexRefs, inOutContext.vertexRefs);
 }
 
-b8 FbxSourceMeshStreams::ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context){
-    if(mesh.positions.empty() || mesh.normals.empty() || mesh.uv0.empty() || mesh.colors.empty() || mesh.vertexRefs.empty() || mesh.indices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh payload is incomplete"), ConvertString(context));
-        return false;
-    }
-    if(mesh.tangents.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh tangent stream is required"), ConvertString(context));
-        return false;
-    }
-    if((mesh.indices.size() % Impl::s_MeshletTriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh index stream must contain whole triangles"), ConvertString(context));
-        return false;
-    }
-
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefPositionName, ref.position, mesh.positions.size()))
-            return false;
-        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefNormalName, ref.normal, mesh.normals.size()))
-            return false;
-        if(ref.tangent == Impl::s_MeshMissingStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh vertex_ref tangent is missing"), ConvertString(context));
-            return false;
-        }
-        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefTangentName, ref.tangent, mesh.tangents.size()))
-            return false;
-        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_MeshUv0FieldNameView, ref.uv0, mesh.uv0.size()))
-            return false;
-        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefColorName, ref.color, mesh.colors.size()))
-            return false;
-    }
-
-    for(const u32 index : mesh.indices){
-        if(index >= mesh.vertexRefs.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh triangle index references an out-of-range vertex_ref"), ConvertString(context));
-            return false;
-        }
-    }
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

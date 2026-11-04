@@ -4,7 +4,7 @@
 
 #include "widget_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd.h>
 
 #include <global/simdmath.h>
 

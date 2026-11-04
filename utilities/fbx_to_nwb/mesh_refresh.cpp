@@ -184,19 +184,6 @@ template<typename Value>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept{
-    return MakeSourceMeshStreamCounts(
-        mesh.positions.size(),
-        mesh.normals.size(),
-        mesh.tangents.size(),
-        mesh.uv0.size(),
-        mesh.colors.size(),
-        mesh.skin.size(),
-        mesh.vertexRefs.size(),
-        mesh.indices.size()
-    );
-}
-
 Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     SourceMeshCanonicalizeReport report;
     report.before = CountSourceMeshStreams(inOutMesh);

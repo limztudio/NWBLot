@@ -78,12 +78,6 @@ void WriteJointMatrix(const JointMatrix& matrix, const AStringView indent, Strea
     out << indent << "]";
 }
 
-b8 ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
-    if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_WriteNwbMeshContext))
-        return false;
-    return ValidatePlainMeshSourceSkin(mesh.skin.size(), Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()));
-}
-
 template<typename Stream>
 void WriteVertexRef(const SourceVertexRef& ref, Stream& out)noexcept(noexcept(out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]")){
     out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]";
@@ -371,7 +365,7 @@ namespace AssetWriterFormatDetail{
 b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
     using namespace __hidden_asset_writer_format;
 
-    if(!ValidatePlainMeshAsset(mesh))
+    if(!ValidatePlainMeshSourceSkin(CountSourceMeshStreams(mesh), mesh.vertexRefs, mesh.indices))
         return false;
 
     return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{

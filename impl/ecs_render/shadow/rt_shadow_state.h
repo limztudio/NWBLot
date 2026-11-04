@@ -11,7 +11,7 @@
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
 #include <impl/ecs_render/shadow/soft_shadow_resolve_state.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
+#include <impl/ecs_render/shadow/push_constants.adhd.h>
 
 #include <core/graphics/api.h>
 #include <core/graphics/rhi/device.h>

@@ -25,16 +25,6 @@ namespace AssetWriterSkeletonDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
-    if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_WriteNwbModelContext))
-        return false;
-    return ValidateSkinnedModelSourceMeshRefs(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()), mesh.skin.size());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
     const AStringView nodeName = node ? UfbxStringView(node->name) : AStringView{};
     if(!nodeName.empty())
@@ -134,7 +124,7 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
     SourceMeshStreams& outMesh = result.mesh;
     UtilityVector<MeshSkinInfluence>& outPositionSkin = result.skin;
 
-    if(!ValidateSkinnedModelSourceMesh(sourceMesh))
+    if(!ValidateSkinnedModelSourceMeshRefs(CountSourceMeshStreams(sourceMesh), sourceMesh.vertexRefs, sourceMesh.indices))
         return MakeUnexpected(Failure{});
 
     outMesh.normals = sourceMesh.normals;

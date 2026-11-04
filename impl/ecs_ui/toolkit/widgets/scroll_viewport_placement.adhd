@@ -1,0 +1,320 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scrollbar_style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Resolve coupled bar visibility in logical coordinates.
+Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bounds, in Rect clip, in Insets padding, in Point contentMeasure, in f32 caretWidth, in Point previousScroll, in f32 thickness, in f32 minThumb){
+    if(
+        !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)
+        || !IsValidUiExtent(contentMeasure) || !IsValidUiExtent(previousScroll)
+        || !isFinite(caretWidth) || caretWidth <= 0.0f
+        || !isFinite(thickness) || thickness < 0.0f || !isFinite(minThumb) || minThumb < 0.0f
+    )
+        return makeUnexpected(Failure());
+    const Expected<Rect> paddedOpt = TryInsetUiRect(bounds, padding, UiRectPrecision::RoundedEndpoints);
+    if(!paddedOpt.has_value())
+        return makeUnexpected(Failure());
+    const Rect padded = paddedOpt.value();
+    const f64 availableWidth = cast<f64>(padded.width);
+    const f64 availableHeight = cast<f64>(padded.height);
+    const f64 thicknessF64 = cast<f64>(thickness);
+    f64 verticalWidth = availableWidth;
+    if(thicknessF64 < availableWidth)
+        verticalWidth = thicknessF64;
+    f64 horizontalHeight = availableHeight;
+    if(thicknessF64 < availableHeight)
+        horizontalHeight = thicknessF64;
+    const f64 contentWidth = cast<f64>(contentMeasure.x) + cast<f64>(caretWidth);
+    const f64 contentHeight = cast<f64>(contentMeasure.y);
+    if(!isFinite(contentWidth))
+        return makeUnexpected(Failure());
+    b8 horizontal = false;
+    b8 vertical = false;
+    for(u32 iteration = 0u; iteration < s_ScrollbarReservationPassLimit; ++iteration){
+        f64 reservedWidth = 0.0;
+        if(vertical)
+            reservedWidth = verticalWidth;
+        f64 reservedHeight = 0.0;
+        if(horizontal)
+            reservedHeight = horizontalHeight;
+        const f64 viewportWidth = cast<f64>(cast<f32>(availableWidth - reservedWidth));
+        const f64 viewportHeight = cast<f64>(cast<f32>(availableHeight - reservedHeight));
+        const b8 nextHorizontal = horizontal || (horizontalHeight > 0.0 && availableWidth > 0.0 && contentWidth > viewportWidth);
+        const b8 nextVertical = vertical || (verticalWidth > 0.0 && availableHeight > 0.0 && contentHeight > viewportHeight);
+        if(nextHorizontal == horizontal && nextVertical == vertical)
+            break;
+        horizontal = nextHorizontal;
+        vertical = nextVertical;
+    }
+    f64 barWidth = 0.0;
+    if(vertical)
+        barWidth = verticalWidth;
+    f64 barHeight = 0.0;
+    if(horizontal)
+        barHeight = horizontalHeight;
+    ScrollViewportPlacement candidate;
+    const f64 paddedX = cast<f64>(padded.x);
+    const f64 paddedY = cast<f64>(padded.y);
+    const Expected<Rect> viewportRect = TryMakeUiRect(paddedX, paddedY, availableWidth - barWidth, availableHeight - barHeight, UiRectPrecision::RoundedEndpoints);
+    if(!viewportRect.has_value())
+        return makeUnexpected(Failure());
+    candidate.viewport = viewportRect.value();
+    if((barWidth > 0.0 && candidate.viewport.width >= padded.width) || (barHeight > 0.0 && candidate.viewport.height >= padded.height))
+        return makeUnexpected(Failure());
+    const Expected<Rect> contentClip = TryIntersectUiRects(candidate.viewport, clip, UiRectPrecision::RoundedEndpoints);
+    if(!contentClip.has_value())
+        return makeUnexpected(Failure());
+    candidate.contentClip = contentClip.value();
+    const f64 viewportWidth = cast<f64>(candidate.viewport.width);
+    const f64 viewportHeight = cast<f64>(candidate.viewport.height);
+    const f64 cornerX = paddedX + viewportWidth;
+    const f64 cornerY = paddedY + viewportHeight;
+    Rect horizontalTrack;
+    Rect verticalTrack;
+    if(horizontal && viewportWidth > 0.0 && barHeight > 0.0){
+        const Expected<Rect> hTrack = TryMakeUiRect(paddedX, cornerY, viewportWidth, barHeight, UiRectPrecision::RoundedEndpoints);
+        if(!hTrack.has_value())
+            return makeUnexpected(Failure());
+        horizontalTrack = hTrack.value();
+    }
+    if(vertical && viewportHeight > 0.0 && barWidth > 0.0){
+        const Expected<Rect> vTrack = TryMakeUiRect(cornerX, paddedY, barWidth, viewportHeight, UiRectPrecision::RoundedEndpoints);
+        if(!vTrack.has_value())
+            return makeUnexpected(Failure());
+        verticalTrack = vTrack.value();
+    }
+    if(barWidth > 0.0 && barHeight > 0.0){
+        const Expected<Rect> corner = TryMakeUiRect(cornerX, cornerY, barWidth, barHeight, UiRectPrecision::RoundedEndpoints);
+        if(!corner.has_value())
+            return makeUnexpected(Failure());
+        candidate.corner = corner.value();
+    }
+    const Expected<ScrollbarPlacement> hPlacement = TryBuildScrollbarPlacement(contentWidth, viewportWidth, horizontalTrack, minThumb, cast<f64>(previousScroll.x), ScrollAxis::Horizontal);
+    if(!hPlacement.has_value())
+        return makeUnexpected(Failure());
+    candidate.horizontal = hPlacement.value();
+    const Expected<ScrollbarPlacement> vPlacement = TryBuildScrollbarPlacement(contentHeight, viewportHeight, verticalTrack, minThumb, cast<f64>(previousScroll.y), ScrollAxis::Vertical);
+    if(!vPlacement.has_value())
+        return makeUnexpected(Failure());
+    candidate.vertical = vPlacement.value();
+    return candidate;
+}
+
+b8 TryUpdateScrollViewportOffsets(in Point scroll, mut ScrollViewportPlacement placement){
+    if(
+        !IsValidUiExtent(scroll) || !IsValidUiRect(placement.viewport) || !IsValidUiRect(placement.contentClip) || !IsValidUiRect(placement.corner)
+        || placement.horizontal.viewportExtent != cast<f64>(placement.viewport.width)
+        || placement.vertical.viewportExtent != cast<f64>(placement.viewport.height)
+        || !IsValidScrollbarPlacement(placement.horizontal, ScrollAxis::Horizontal)
+        || !IsValidScrollbarPlacement(placement.vertical, ScrollAxis::Vertical)
+    )
+        return false;
+    ScrollViewportPlacement candidate = placement;
+    if(!TryStoreScrollbarOffset(cast<f64>(scroll.x), ScrollAxis::Horizontal, candidate.horizontal) || !TryStoreScrollbarOffset(cast<f64>(scroll.y), ScrollAxis::Vertical, candidate.vertical))
+        return false;
+    placement = candidate;
+    return true;
+}
+
+Expected<f32> TryStepScrollbarOffset(in f64 offset, in f64 delta, in f64 step, in f64 maximum){
+    if(!isFinite(offset) || !isFinite(delta) || !isFinite(step) || step < 0.0 || !isFinite(maximum) || maximum < 0.0)
+        return makeUnexpected(Failure());
+    f64 next = 0.0;
+    if(offset > 0.0)
+        next = min(maximum, offset);
+    if(step > 0.0 && delta > 0.0){
+        const f64 distanceInSteps = (maximum - next) / step;
+        if(delta >= distanceInSteps)
+            next = maximum;
+        else
+            next = next + (delta * step);
+    }
+    else if(step > 0.0 && delta < 0.0){
+        const f64 distanceInSteps = next / step;
+        if((-delta) >= distanceInSteps)
+            next = 0.0;
+        else
+            next = next + (delta * step);
+    }
+    if(!isFinite(next) || next > s_UiMaxFloatF64)
+        return makeUnexpected(Failure());
+    return cast<f32>(next);
+}
+
+Expected<f32> TryDragScrollbarOffset(in PointerGesture gesture, in b8 horizontal){
+    f64 currentTarget = cast<f64>(gesture.targetRectangle.y);
+    f64 currentPointer = cast<f64>(gesture.position.y);
+    f64 referenceTarget = cast<f64>(gesture.referenceRectangle.y);
+    f64 referencePointer = cast<f64>(gesture.origin.y);
+    f64 referenceExtent = cast<f64>(gesture.referenceRectangle.height);
+    f64 targetExtent = cast<f64>(gesture.targetRectangle.height);
+    if(horizontal){
+        currentTarget = cast<f64>(gesture.targetRectangle.x);
+        currentPointer = cast<f64>(gesture.position.x);
+        referenceTarget = cast<f64>(gesture.referenceRectangle.x);
+        referencePointer = cast<f64>(gesture.origin.x);
+        referenceExtent = cast<f64>(gesture.referenceRectangle.width);
+        targetExtent = cast<f64>(gesture.targetRectangle.width);
+    }
+    const f64 startDelta = currentTarget - referenceTarget;
+    const f64 pointerDelta = currentPointer - referencePointer;
+    const f64 travel = referenceExtent - targetExtent;
+    const f64 maximum = gesture.maximum;
+    if(!isFinite(travel) || travel <= 0.0 || !isFinite(startDelta) || !isFinite(pointerDelta) || !isFinite(maximum) || maximum < 0.0)
+        return makeUnexpected(Failure());
+    const f64 normalized = (startDelta + pointerDelta) / travel;
+    f64 clamped = 0.0;
+    if(normalized > 0.0)
+        clamped = min(1.0, normalized);
+    const f64 next = clamped * maximum;
+    if(!isFinite(next) || next > s_UiMaxFloatF64)
+        return makeUnexpected(Failure());
+    return cast<f32>(next);
+}
+
+Name ResolveScrollbarThumbRegionName(in ScrollbarStyle style, in b8 enabled, in b8 pressed, in b8 hovered){
+    if(!enabled)
+        return style.thumbDisabled;
+    if(pressed)
+        return style.thumbPressed;
+    if(hovered)
+        return style.thumbHover;
+    return style.thumb;
+}
+
+void ResolveScrollbarBeforeAfterRects(
+    in ScrollbarPlacement bar,
+    in b8 horizontal,
+    mut Rect outBeforeRect,
+    mut Rect outAfterRect
+){
+    f32 start = bar.track.y;
+    f32 thumbStart = bar.thumb.y;
+    f32 trackExtent = bar.track.height;
+    f32 thumbExtent = bar.thumb.height;
+    if(horizontal){
+        start = bar.track.x;
+        thumbStart = bar.thumb.x;
+        trackExtent = bar.track.width;
+        thumbExtent = bar.thumb.width;
+    }
+    const f32 before = max(0.0f, thumbStart - start);
+    const f32 after = max(0.0f, ((start + trackExtent) - thumbStart) - thumbExtent);
+    outBeforeRect = bar.track;
+    outAfterRect = bar.track;
+    if(horizontal){
+        outBeforeRect.width = before;
+        outAfterRect.x = thumbStart + thumbExtent;
+        outAfterRect.width = after;
+    }
+    else{
+        outBeforeRect.height = before;
+        outAfterRect.y = thumbStart + thumbExtent;
+        outAfterRect.height = after;
+    }
+}
+
+b8 TryApplyTextAreaScrollControlAction(
+    in ControlAction action,
+    in ScrollViewportPlacement accepted,
+    mut Point inOutScroll,
+    mut b8 inOutManual
+){
+    Point next = inOutScroll;
+    if(action.kind == ControlActionKind::Wheel){
+        const Expected<f32> nextX = TryStepScrollbarOffset(cast<f64>(inOutScroll.x), action.deltaX, action.stepX, action.maximumX);
+        const Expected<f32> nextY = TryStepScrollbarOffset(cast<f64>(inOutScroll.y), -action.delta, action.step, action.maximum);
+        if(!nextX.has_value() || !nextY.has_value())
+            return false;
+        next.x = nextX.value();
+        next.y = nextY.value();
+        inOutManual = true;
+    }
+    else if(
+        action.kind == ControlActionKind::Activate
+        && action.value >= cast<u64>(s_TextAreaScrollHorizontalBefore)
+        && action.value <= cast<u64>(s_TextAreaScrollVerticalAfter)
+    ){
+        const b8 x = action.value <= cast<u64>(s_TextAreaScrollHorizontalAfter);
+        f64 direction = 1.0;
+        if(action.value == cast<u64>(s_TextAreaScrollHorizontalBefore) || action.value == cast<u64>(s_TextAreaScrollVerticalBefore))
+            direction = -1.0;
+        ScrollbarPlacement bar = accepted.vertical;
+        f64 currentOffset = cast<f64>(inOutScroll.y);
+        if(x){
+            bar = accepted.horizontal;
+            currentOffset = cast<f64>(inOutScroll.x);
+        }
+        const Expected<f32> stepped = TryStepScrollbarOffset(currentOffset, direction, bar.viewportExtent, bar.maximum);
+        if(!stepped.has_value())
+            return false;
+        if(x)
+            next.x = stepped.value();
+        else
+            next.y = stepped.value();
+        inOutManual = true;
+    }
+    inOutScroll = next;
+    return true;
+}
+
+Expected<Point> TryResolveTextAreaScrollStep(in f32 fontSize, in f32 lineHeight, in f32 wheelLines){
+    const Point step(fontSize * wheelLines, lineHeight * wheelLines);
+    if(!isFinite(step.x) || !isFinite(step.y) || step.x <= 0.0f || step.y <= 0.0f)
+        return makeUnexpected(Failure());
+    return step;
+}
+
+void ReconcileTextAreaVisualScrollState(
+    in u64 modelGeneration,
+    in u64 modelRevision,
+    in u64 modelSelectionGeneration,
+    in u64 modelCompositionGeneration,
+    in usize modelAnchor,
+    in usize modelCaret,
+    in b8 resultFocused,
+    in WidgetId captureId,
+    in WidgetId widgetId,
+    in u64 stateCompositionGeneration,
+    in u64 visualModelGeneration,
+    in u64 visualRevision,
+    in u64 visualSelectionGeneration,
+    in usize visualAnchor,
+    in usize visualCaret,
+    in b8 visualFocused,
+    mut f32 inOutVisualScroll,
+    mut f32 inOutScrollY,
+    mut b8 inOutRevealCaret,
+    mut f64 inOutCaretElapsed,
+    mut b8 outFirstBinding
+){
+    outFirstBinding = visualModelGeneration == 0u;
+    const b8 rebound = !outFirstBinding && visualModelGeneration != modelGeneration;
+    if(rebound){
+        inOutVisualScroll = 0.0f;
+        inOutScrollY = 0.0f;
+        inOutRevealCaret = true;
+    }
+    else if(
+        !outFirstBinding && (
+            visualRevision != modelRevision
+            || visualSelectionGeneration != modelSelectionGeneration
+            || stateCompositionGeneration != modelCompositionGeneration
+            || visualAnchor != modelAnchor
+            || visualCaret != modelCaret
+            || (!visualFocused && resultFocused && (!captureId.valid() || captureId == widgetId))
+        )
+    )
+        inOutRevealCaret = true;
+    if(!outFirstBinding && stateCompositionGeneration != modelCompositionGeneration)
+        inOutCaretElapsed = 0.0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -25,12 +25,8 @@ namespace __hidden_fbx_scene{
 
 
 void AppendMeshDisplayName(const MeshInstance& instance, ScratchStringStream& inOutReport){
-    AStringView nodeName = UfbxStringView(instance.node->name);
-    AStringView meshName = UfbxStringView(instance.mesh->name);
-    if(nodeName.empty())
-        nodeName = s_UnnamedNodeLabel;
-    if(meshName.empty())
-        meshName = "<unnamed mesh>";
+    const AStringView nodeName = ResolveFbxNodeDisplayName(instance.node != nullptr, UfbxStringView(instance.node->name));
+    const AStringView meshName = ResolveFbxMeshDisplayName(UfbxStringView(instance.mesh->name));
 
     inOutReport << "[" << instance.index << "] node=\"" << nodeName << "\" mesh=\"" << meshName << "\" triangles=" << instance.mesh->num_triangles;
     if(!instance.node->visible)

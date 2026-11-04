@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_render/caustic/settings.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
+#include <impl/ecs_render/shadow/push_constants.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/assets/graphics/scene/binding_slots.h>

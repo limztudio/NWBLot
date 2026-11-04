@@ -378,5 +378,47 @@ b8 ValidateMeshSkinningRuntimeResourceCounts(in u64 handleValue, in usize skinSi
     return true;
 }
 
+Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
+    in u64 handleValue,
+    in usize jointIndex,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in b8 hasInverseBindMatrices,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in b8 useDualQuaternionPayload
+){
+    MatrixSingle inverseBindMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    if(hasInverseBindMatrices)
+        inverseBindMatrix = MatrixSingle(inverseBindMatrices[jointIndex]);
+    const Expected<MatrixSingle> jointMatrix = TryResolveSkinningJointMatrix(
+        MatrixSingle(sourceJoints[jointIndex]),
+        hasInverseBindMatrices,
+        inverseBindMatrix,
+        s_SkinValidationEpsilon
+    );
+    if(!jointMatrix.has_value()){
+        error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix", handleValue, jointIndex);
+        return makeUnexpected(Failure());
+    }
+    if(!useDualQuaternionPayload)
+        return SkeletonJointMatrix(jointMatrix.value());
+
+    const MatrixSingle resolvedMatrix = jointMatrix.value();
+    SkeletonJointMatrix storedJointMatrix(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    b8 builtDualQuaternion = false;
+    native(in resolvedMatrix, mut storedJointMatrix, mut builtDualQuaternion){
+        const auto dualQuaternion = ::MatrixTryBuildRigidDualQuaternion(resolvedMatrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
+        if(dualQuaternion){
+            ::StoreFloat(dualQuaternion->real, storedJointMatrix.rows[0]);
+            ::StoreFloat(dualQuaternion->dual, storedJointMatrix.rows[1]);
+            builtDualQuaternion = true;
+        }
+    }
+    if(!builtDualQuaternion){
+        error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build", handleValue, jointIndex);
+        return makeUnexpected(Failure());
+    }
+    return storedJointMatrix;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

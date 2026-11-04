@@ -143,6 +143,19 @@ b8 FiniteUfbxMatrix(in MatrixDouble matrix){
         && IsFiniteFbxMatrixDoubleRow(matrix[2u]);
 }
 
+MatrixDouble MakeUfbxMatrixDouble(
+    in f64 m00, in f64 m01, in f64 m02, in f64 m03,
+    in f64 m10, in f64 m11, in f64 m12, in f64 m13,
+    in f64 m20, in f64 m21, in f64 m22, in f64 m23
+){
+    return MatrixDouble(
+        VectorDouble(m00, m01, m02, m03),
+        VectorDouble(m10, m11, m12, m13),
+        VectorDouble(m20, m21, m22, m23),
+        VectorDouble(0.0, 0.0, 0.0, 1.0)
+    );
+}
+
 VectorSingle ConvertFbxJointRowDoubleToSingle(in VectorDouble row){
     return VectorSingle(cast<f32>(row.x), cast<f32>(row.y), cast<f32>(row.z), cast<f32>(row.w));
 }
@@ -154,6 +167,58 @@ MatrixSingle ConvertJointMatrix(in MatrixDouble matrix){
         ConvertFbxJointRowDoubleToSingle(matrix[2u]),
         VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
     );
+}
+
+Expected<MatrixSingle> TryConvertFbxInverseBindMatrix(in MatrixDouble inverseBindDouble, in f64 determinant){
+    if(!FiniteUfbxMatrix(inverseBindDouble) || !isFinite(determinant) || abs(determinant) <= s_InvertibleMatrixDeterminantEpsilon){
+        error("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible");
+        return makeUnexpected(Failure());
+    }
+    const MatrixSingle inverseBindValue = ConvertJointMatrix(inverseBindDouble);
+    if(!IsFiniteSkeletonJointMatrix(inverseBindValue)){
+        error("Failed to build mesh: skin cluster inverse bind matrix is outside float range");
+        return makeUnexpected(Failure());
+    }
+    return inverseBindValue;
+}
+
+Expected<MatrixSingle> TryConvertFbxBindPoseMatrix(in MatrixDouble bindPoseDouble){
+    if(!FiniteUfbxMatrix(bindPoseDouble)){
+        error("Failed to build mesh: skin cluster bind pose matrix is not finite");
+        return makeUnexpected(Failure());
+    }
+    const MatrixSingle bindPoseValue = ConvertJointMatrix(bindPoseDouble);
+    if(!IsFiniteSkeletonJointMatrix(bindPoseValue)){
+        error("Failed to build mesh: skin cluster bind pose matrix is outside float range");
+        return makeUnexpected(Failure());
+    }
+    return bindPoseValue;
+}
+
+b8 TryAccumulateFbxSkinWeight(
+    in f64 value,
+    in u32 clusterIndex,
+    in Span<u16> clusterJoints,
+    mut u32 inOutWrittenInfluenceCount,
+    mut f64 inOutWeightSum,
+    mut MeshSkinInfluence inOutResult
+){
+    if(!isFinite(value)){
+        error("Failed to build mesh: skin contains a non-finite weight");
+        return false;
+    }
+    if(value <= 0.0)
+        return true;
+    if(cast<usize>(clusterIndex) >= clusterJoints.size()){
+        error("Failed to build mesh: skin weight references an out-of-range cluster");
+        return false;
+    }
+    const usize slot = cast<usize>(inOutWrittenInfluenceCount);
+    inOutResult.joint[slot] = clusterJoints[cast<usize>(clusterIndex)];
+    inOutResult.weight[slot] = cast<f32>(value);
+    inOutWeightSum += value;
+    ++inOutWrittenInfluenceCount;
+    return true;
 }
 
 b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, mut MeshSkinInfluence inOutInfluence){

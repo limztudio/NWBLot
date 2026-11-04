@@ -12,6 +12,7 @@
 
 #include <core/common/log.h>
 
+#include <global/source_text.h>
 #include <global/filesystem/operations.h>
 
 
@@ -264,7 +265,7 @@ b8 ParseAssetMetadata(
 
         if(useAssetCache){
             NwbFileAssetCacheRecord& cacheRecord = outMetadata.fileCacheRecords[fileIndex];
-            const AStringView firstToken = CookMetadataDetail::ExtractFirstIdentifierToken(AStringView(metaText));
+            const AStringView firstToken = ReadFirstIdentifierAfterCComments(AStringView(metaText));
             CookMetadataDetail::PrepareNwbFileAssetCacheRecord(
                 repoRoot,
                 assetCacheDirectory,

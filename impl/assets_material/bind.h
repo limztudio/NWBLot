@@ -17,6 +17,7 @@
 #include <core/alloc/global.h>
 #include <core/alloc/scratch.h>
 
+#include <global/algorithm.h>
 #include <global/not_null.h>
 
 
@@ -50,11 +51,7 @@ namespace MaterialBindDetail{
 
 template<typename ItemT>
 [[nodiscard]] inline const ItemT* FindNamedBindItem(const Span<const ItemT> items, const AStringView itemName)noexcept{
-    for(const auto& item : items){
-        if(AStringView(item.name) == itemName)
-            return &item;
-    }
-    return nullptr;
+    return FindIfPointer(items, [itemName](const ItemT& item)noexcept{ return AStringView(item.name) == itemName; });
 }
 
 

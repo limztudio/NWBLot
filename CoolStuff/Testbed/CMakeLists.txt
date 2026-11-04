@@ -31,7 +31,7 @@ if(TARGET nwb_logserver)
 endif()
 
 if(TARGET nwb_asset_builder)
-    file(GLOB_RECURSE _nwb_testbed_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/assets/*")
+    file(GLOB_RECURSE _nwb_testbed_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/assets/*")
 
     set(_nwb_testbed_asset_stamp "${NWB_OUTPUT_ROOT}/res/.nwb_testbed_assets_$<CONFIG>.stamp")
     add_custom_command(OUTPUT "${_nwb_testbed_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${NWB_OUTPUT_ROOT}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build

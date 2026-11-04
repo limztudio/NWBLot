@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/shadow/rt_shadow_tasks.h>
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,8 +140,8 @@ b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
 ){
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u || (phase != SoftShadowOpaqueResolvePhase::TemporalAndWavelet && !m_rayTracingState.m_softShadowTemporalReady))
         return false;
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
+    const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
     const u32 groupSize = hardwareShadowSupported ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE) : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
     const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
     const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
@@ -173,8 +174,8 @@ b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
 b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(Core::CommandList& commandList, DeferredFrameTargets& targets, const DeferredLightingGraphResources& deferredLightingResources, const u32 frameIndex, const b8 hardwareShadowSupported){
     if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady || m_rayTracingState.m_softShadowSlotMask == 0u)
         return false;
-    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
+    const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
     const u32 groupSize = hardwareShadowSupported ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE) : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
     const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
     const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);

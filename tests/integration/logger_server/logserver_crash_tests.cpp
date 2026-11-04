@@ -28,7 +28,7 @@
 
 #include <logger/common.h>
 #include <logger/server/crash_auth.h>
-#include <logger/telemetry/file_publication.h>
+#include <global/filesystem/exclusive_publication.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <fcntl.h>
@@ -819,7 +819,7 @@ TEST_F(LoggerServerCrash, TelemetryPublicationDoesNotReplaceExistingFinalFile){
     constexpr Array<u8, 3u> s_New = { 4u, 5u, 6u };
     ASSERT_TRUE(WriteBinaryFile(destination, s_Existing));
 
-    const auto result = NWB::Log::PublishNewTelemetryFile(destination, BinaryByteView{ s_New.data(), s_New.size() });
+    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_New.data(), s_New.size() });
     EXPECT_FALSE(result.published);
     EXPECT_TRUE(result.stagingRetained);
     EXPECT_TRUE(result.error);
@@ -845,7 +845,7 @@ TEST_F(LoggerServerCrash, TelemetryPublicationDoesNotReplaceExistingStagingFile)
     constexpr Array<u8, 2u> s_New = { 9u, 10u };
     ASSERT_TRUE(WriteBinaryFile(staging, s_Existing));
 
-    const auto result = NWB::Log::PublishNewTelemetryFile(destination, BinaryByteView{ s_New.data(), s_New.size() });
+    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_New.data(), s_New.size() });
     EXPECT_FALSE(result.published);
     EXPECT_FALSE(result.stagingRetained);
     EXPECT_TRUE(result.error);
@@ -869,18 +869,18 @@ TEST_F(LoggerServerCrash, ConcurrentTelemetryPublishersCannotReplaceEachOther){
     const ::Path<NWB::Core::Alloc::GlobalArena> secondPath(secondArena.arena, destination);
     constexpr Array<u8, 2u> s_First = { 21u, 22u };
     constexpr Array<u8, 2u> s_Second = { 31u, 32u };
-    NWB::Log::TelemetryFilePublicationResult firstResult;
-    NWB::Log::TelemetryFilePublicationResult secondResult;
+    FilePublicationResult firstResult;
+    FilePublicationResult secondResult;
     Atomic<b8> start = false;
     Thread first([&](){
         while(!start.load(MemoryOrder::acquire))
             YieldThread();
-        firstResult = NWB::Log::PublishNewTelemetryFile(firstPath, BinaryByteView{ s_First.data(), s_First.size() });
+        firstResult = PublishNewFileDurable(firstPath, BinaryByteView{ s_First.data(), s_First.size() });
     });
     Thread second([&](){
         while(!start.load(MemoryOrder::acquire))
             YieldThread();
-        secondResult = NWB::Log::PublishNewTelemetryFile(secondPath, BinaryByteView{ s_Second.data(), s_Second.size() });
+        secondResult = PublishNewFileDurable(secondPath, BinaryByteView{ s_Second.data(), s_Second.size() });
     });
     start.store(true, MemoryOrder::release);
     first.join();
@@ -899,7 +899,7 @@ TEST_F(LoggerServerCrash, TelemetryPublicationMovesCompletedBytesToNewFinalFile)
     ASSERT_FALSE(root.empty());
     const auto destination = root / "payload.nwbs";
     constexpr Array<u8, 3u> s_Data = { 11u, 12u, 13u };
-    const auto result = NWB::Log::PublishNewTelemetryFile(destination, BinaryByteView{ s_Data.data(), s_Data.size() });
+    const auto result = PublishNewFileDurable(destination, BinaryByteView{ s_Data.data(), s_Data.size() });
     EXPECT_TRUE(result.published);
     EXPECT_FALSE(result.stagingRetained);
     EXPECT_FALSE(result.error);

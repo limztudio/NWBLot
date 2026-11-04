@@ -206,11 +206,7 @@ b8 ContainsInlineRuntimeMeshRequestLive(in Span<RuntimeMeshRequestEntry> entries
 Expected<usize> TryComputePaddedRawByteCount(in usize logicalByteCount){
     if(logicalByteCount == 0u)
         return makeUnexpected(Failure());
-    const usize trailingByteCount = (s_RawByteLoadAlignmentBytes - (logicalByteCount % s_RawByteLoadAlignmentBytes)) % s_RawByteLoadAlignmentBytes;
-    const usize paddedByteCount = logicalByteCount + trailingByteCount;
-    if(paddedByteCount < logicalByteCount)
-        return makeUnexpected(Failure());
-    return paddedByteCount;
+    return alignUpChecked(logicalByteCount, s_RawByteLoadAlignmentBytes);
 }
 
 usize ExpectedMeshletSolidTriangleWordCount(in u32 meshletPrimitiveIndexCount){

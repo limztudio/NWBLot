@@ -4,6 +4,8 @@
 
 #include "compiler_internal.h"
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -296,7 +298,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
             for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
                 const GpuTaskId task = outAssignments.m_assignments[group.assignmentOffset + taskOffset].task;
                 const u64 cost = scoringData.taskCosts[task.index];
-                prefixQueueCost = prefixQueueCost > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : prefixQueueCost + cost;
+                prefixQueueCost = AddSaturating<u64>(prefixQueueCost, cost);
             }
         }
     }

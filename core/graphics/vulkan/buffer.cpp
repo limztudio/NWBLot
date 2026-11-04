@@ -8,6 +8,8 @@
 
 #include <core/common/log.h>
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,16 +30,6 @@ b8 IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)
     return offsetBytes <= desc.byteSize && sizeBytes <= desc.byteSize - offsetBytes;
 }
 
-b8 BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept{
-    if(firstSizeBytes == 0 || secondSizeBytes == 0)
-        return false;
-    if(firstSizeBytes > Limit<u64>::s_Max - firstOffsetBytes || secondSizeBytes > Limit<u64>::s_Max - secondOffsetBytes)
-        return true;
-
-    const u64 firstEnd = firstOffsetBytes + firstSizeBytes;
-    const u64 secondEnd = secondOffsetBytes + secondSizeBytes;
-    return firstOffsetBytes < secondEnd && secondOffsetBytes < firstEnd;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -363,7 +355,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
         return;
     }
 
-    if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
+    if(dest.m_buffer == src.m_buffer && UnsignedRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
         rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("source and destination ranges overlap in the same buffer"));
         return;
     }

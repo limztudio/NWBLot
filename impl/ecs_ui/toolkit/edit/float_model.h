@@ -7,6 +7,7 @@
 
 #include "numeric_model_operations.h"
 
+#include <global/bit.h>
 #include <global/numeric_text.h>
 
 
@@ -49,7 +50,7 @@ private:
             canonical,
             ValidateFloatBounds,
             ParseFloatDraft,
-            DifferentFloatEditValues
+            DifferentF64Bits
         );
     }
     [[nodiscard]] Expected<b8, ErrorCode> canonicalize(const f64 value){

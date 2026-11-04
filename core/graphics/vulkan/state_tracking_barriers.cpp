@@ -8,6 +8,7 @@
 #include <core/common/log.h>
 
 #include <global/containers.h>
+#include <global/overflow.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,14 +209,8 @@ b8 ImageBarrierOverlapsTextureSubresources(const VkImageMemoryBarrier2& barrier,
     if(barrier.subresourceRange.levelCount == 0u || barrier.subresourceRange.layerCount == 0u || subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
         return false;
 
-    const u64 barrierMipEnd = static_cast<u64>(barrier.subresourceRange.baseMipLevel) + barrier.subresourceRange.levelCount;
-    const u64 attachmentMipEnd = static_cast<u64>(subresources.baseMipLevel) + subresources.numMipLevels;
-    if(static_cast<u64>(barrier.subresourceRange.baseMipLevel) >= attachmentMipEnd || static_cast<u64>(subresources.baseMipLevel) >= barrierMipEnd)
-        return false;
-
-    const u64 barrierLayerEnd = static_cast<u64>(barrier.subresourceRange.baseArrayLayer) + barrier.subresourceRange.layerCount;
-    const u64 attachmentLayerEnd = static_cast<u64>(subresources.baseArraySlice) + subresources.numArraySlices;
-    return static_cast<u64>(barrier.subresourceRange.baseArrayLayer) < attachmentLayerEnd && static_cast<u64>(subresources.baseArraySlice) < barrierLayerEnd;
+    return UnsignedRangesOverlap(barrier.subresourceRange.baseMipLevel, barrier.subresourceRange.levelCount, subresources.baseMipLevel, subresources.numMipLevels)
+        && UnsignedRangesOverlap(barrier.subresourceRange.baseArrayLayer, barrier.subresourceRange.layerCount, subresources.baseArraySlice, subresources.numArraySlices);
 }
 
 void AppendTextureStateBarrier(

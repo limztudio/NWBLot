@@ -5,10 +5,13 @@
 #pragma once
 
 
+#include "algorithm.h"
 #include "basic_string.h"
 #include "compact_string.h"
 #include "expected.h"
 #include "limit.h"
+#include "not_null.h"
+#include "span.h"
 #include "type.h"
 
 
@@ -42,6 +45,37 @@ inline void RequireByteContainer()noexcept{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline u32 ReadPartialU32LittleEndian(const Span<const u8> bytes, const usize offset)noexcept{
+    u32 word = 0u;
+    if(offset < bytes.size())
+        word |= static_cast<u32>(bytes[offset]);
+    if(offset + 1u < bytes.size())
+        word |= static_cast<u32>(bytes[offset + 1u]) << 8u;
+    if(offset + 2u < bytes.size())
+        word |= static_cast<u32>(bytes[offset + 2u]) << 16u;
+    if(offset + 3u < bytes.size())
+        word |= static_cast<u32>(bytes[offset + 3u]) << 24u;
+    return word;
+}
+
+[[nodiscard]] inline b8 BytesMatch(const Span<const u8> lhs, const Span<const u8> rhs)noexcept{
+    return lhs.size() == rhs.size() && (rhs.empty() || NWB_MEMCMP(lhs.data(), rhs.data(), rhs.size()) == 0);
+}
+
+// The pattern must fit the output and must not overlap it.
+inline void FillRepeatingBytes(const usize byteCount, const Span<const u8> pattern, void* bytes)noexcept{
+    if(byteCount == 0u || pattern.empty())
+        return;
+    const auto outBytes = MakeNotNull(static_cast<u8*>(bytes));
+    NWB_MEMCPY(outBytes.get(), byteCount, pattern.data(), pattern.size());
+    for(usize filled = pattern.size(); filled < byteCount; ){
+        const usize copySize = Min(filled, byteCount - filled);
+        NWB_MEMCPY(outBytes.get() + filled, byteCount - filled, outBytes.get(), copySize);
+        filled += copySize;
+    }
+}
 
 
 template<typename Container>
@@ -157,6 +191,17 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] inline Expected<AStringView> ReadBinaryText(const BinaryByteView& payload, const usize byteCount, usize& inOutCursor)noexcept{
+    if(!CanReadBytes(payload, inOutCursor, byteCount))
+        return MakeUnexpected(Failure{});
+    if(payload.data() == nullptr && inOutCursor == 0u && byteCount == 0u)
+        return AStringView{};
+
+    const AStringView text(reinterpret_cast<const char*>(payload.data() + inOutCursor), byteCount);
+    inOutCursor += byteCount;
+    return text;
+}
 
 template<typename Container, typename PodType>
 inline void AppendPOD(Container& outBinary, const PodType& value){

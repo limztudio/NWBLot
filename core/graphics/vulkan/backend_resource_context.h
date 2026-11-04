@@ -219,11 +219,6 @@ Expected<StagingTextureRange> BuildStagingTextureRange(
 )noexcept;
 b8 IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept;
 
-template<typename... Pointers>
-[[nodiscard]] constexpr b8 AreAllPointersValid(Pointers... pointers)noexcept{
-    return (... && (pointers != nullptr));
-}
-
 [[nodiscard]] constexpr b8 IsTextureSubresourceRangeValid(const TextureSubresourceSet& subresources)noexcept{
     return subresources.numMipLevels != 0u && subresources.numArraySlices != 0u;
 }
@@ -236,7 +231,6 @@ template<typename... Pointers>
     return groupsX <= maximumGroupCounts[0u] && groupsY <= maximumGroupCounts[1u] && groupsZ <= maximumGroupCounts[2u];
 }
 
-b8 BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
 [[nodiscard]] Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, TStringView operationName);
 struct ClusterOperationInput{
     VkClusterAccelerationStructureInputInfoNV info = {};

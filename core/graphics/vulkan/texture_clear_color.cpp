@@ -5,6 +5,8 @@
 #include "backend.h"
 #include "texture_clear_pattern.h"
 
+#include <global/binary.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -310,7 +312,7 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
             rejectCommandRecording(s_ClearTextureBoxOperation, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
             return;
         }
-        VulkanTextureDetail::FillTextureClearBytes(mipPlan.uploadLayout.clearByteCount, clearPattern->span(), stagingBytes);
+        FillRepeatingBytes(mipPlan.uploadLayout.clearByteCount, clearPattern->span(), stagingBytes);
 
         if(desc.dimension == TextureDimension::Texture3D){
             VkBufferImageCopy region{};

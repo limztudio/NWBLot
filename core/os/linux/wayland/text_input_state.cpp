@@ -5,6 +5,8 @@
 #include "text_input_state.h"
 
 #include <core/os/text_input_text.h>
+#include <global/bit.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,7 +25,6 @@ namespace __hidden_wayland_text_input_state{
 
 
 static constexpr usize s_MaxSurroundingBytes = 4000u;
-static constexpr u32 s_SerialHalfRange = 0x80000000u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,12 +112,12 @@ TextInputRect WaylandTextInputRectForPixels(const TextInputRect pixels, const i3
     const i64 scale = Max(bufferScale, 1);
     const i64 x = pixels.x;
     const i64 y = pixels.y;
-    const i64 firstX = x >= 0 ? x / scale : -((-x + scale - 1) / scale);
-    const i64 firstY = y >= 0 ? y / scale : -((-y + scale - 1) / scale);
+    const i64 firstX = DivideFloorI64(x, scale);
+    const i64 firstY = DivideFloorI64(y, scale);
     const i64 edgeX = x + pixels.width;
     const i64 edgeY = y + pixels.height;
-    const i64 lastX = edgeX >= 0 ? (edgeX + scale - 1) / scale : -((-edgeX) / scale);
-    const i64 lastY = edgeY >= 0 ? (edgeY + scale - 1) / scale : -((-edgeY) / scale);
+    const i64 lastX = DivideCeilI64(edgeX, scale);
+    const i64 lastY = DivideCeilI64(edgeY, scale);
     return { static_cast<i32>(firstX), static_cast<i32>(firstY), static_cast<i32>(Max(lastX - firstX, i64(1))), static_cast<i32>(Max(lastY - firstY, i64(1))) };
 }
 
@@ -166,9 +167,7 @@ WaylandTextInputProvenance WaylandTextInputSerialTracker::resolve(const u32 seri
     using namespace __hidden_wayland_text_input_state;
     if(!current.valid() || m_token != current)
         return {};
-    const u32 distance = serial - m_firstSerial;
-    const u32 lastDistance = m_lastSerial - m_firstSerial;
-    if(distance >= s_SerialHalfRange || lastDistance >= s_SerialHalfRange || distance > lastDistance)
+    if(!IsSerialU32InWindow(serial, m_firstSerial, m_lastSerial))
         return {};
     for(usize index = 0u; index < m_recordCount; ++index){
         const Record& record = m_records[index];

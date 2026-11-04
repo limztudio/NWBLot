@@ -8,6 +8,7 @@
 #include "binary.h"
 #include "bit.h"
 #include "not_null.h"
+#include "termination.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,6 +24,27 @@ inline void AppendU32LittleEndian(Container& bytes, const u32 value)noexcept(noe
 template<typename Container>
 inline void AppendF32LittleEndian(Container& bytes, const f32 value)noexcept(noexcept(AppendU32LittleEndian(bytes, BitCast<u32>(value)))){
     AppendU32LittleEndian(bytes, BitCast<u32>(value));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Container>
+inline void WriteF32LittleEndianAt(const f32 value, const usize offset, Container& outBytes)noexcept(
+    noexcept(static_cast<b8>(offset + 4u > outBytes.size()))
+    && noexcept(outBytes[offset] = u8{})
+    && noexcept(outBytes[offset + 1u] = u8{})
+){
+    if(offset + 4u > outBytes.size())
+        return;
+    if(offset > Limit<usize>::s_Max - 4u)
+        TerminateInvariant();
+    const u32 word = BitCast<u32>(value);
+    outBytes[offset] = static_cast<u8>(word & 0xffu);
+    outBytes[offset + 1u] = static_cast<u8>((word >> 8u) & 0xffu);
+    outBytes[offset + 2u] = static_cast<u8>((word >> 16u) & 0xffu);
+    outBytes[offset + 3u] = static_cast<u8>((word >> 24u) & 0xffu);
 }
 
 

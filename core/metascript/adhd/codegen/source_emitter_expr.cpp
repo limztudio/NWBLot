@@ -159,6 +159,23 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     case ExprKind::Call:{
         if(expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr.lhs->text;
+            const MStringView registerCall = MapSimdRegisterCall(callee);
+            if(!registerCall.empty()){
+                out.append(registerCall.data(), registerCall.size());
+                out.push_back('(');
+                for(usize i = 0u; i < expr.arguments.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    if(expr.arguments[i]){
+                        if(IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
+                            emitSimdRegExpr(out, *expr.arguments[i], expr.arguments[i]->resolvedSimdType);
+                        else
+                            emitExpr(out, *expr.arguments[i]);
+                    }
+                }
+                out.push_back(')');
+                break;
+            }
             MStringView scalarReductionSuffix;
 #define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION(adhdName, laneIntrinsicSuffix) \
             if(callee == adhdName) scalarReductionSuffix = laneIntrinsicSuffix;

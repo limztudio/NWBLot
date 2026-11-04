@@ -12,6 +12,8 @@
 #include <core/graphics/backend_selection/texture_clear_contract.h>
 #include <core/graphics/backend_selection/texture_copy_contract.h>
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -199,7 +201,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         record.dataSizeBytes == 0u
         || !declaresRange(record.source, source->getCreationDescription(), ResourceStates::CopySource, GpuTaskResourceAccess::Read, record.sourceOffsetBytes)
         || !declaresRange(record.destination, destination->getCreationDescription(), ResourceStates::CopyDest, GpuTaskResourceAccess::Write, record.destinationOffsetBytes)
-        || (source == destination && GraphicsBackend::BufferRangesOverlap(record.sourceOffsetBytes, record.dataSizeBytes, record.destinationOffsetBytes, record.dataSizeBytes))
+        || (source == destination && UnsignedRangesOverlap(record.sourceOffsetBytes, record.dataSizeBytes, record.destinationOffsetBytes, record.dataSizeBytes))
     )
         return GpuCommandIrReplayError::InvalidBufferCopy;
     return GpuCommandIrReplayError::None;

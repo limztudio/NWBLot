@@ -29,34 +29,6 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook_paths{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<Path, ErrorCode> ResolveBuildPath(Assets::AssetArena& arena, const Path& baseDirectory, const Path& relativeOrAbsolute){
-    if(relativeOrAbsolute.empty())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    Path candidate(arena, relativeOrAbsolute);
-    if(!candidate.isAbsolute())
-        candidate = baseDirectory / candidate;
-    const auto absolutePath = AbsolutePath(candidate);
-    if(!absolutePath)
-        return MakeUnexpected(absolutePath.error());
-    return absolutePath->lexicallyNormal();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Assets::AssetArena& arena){
     if(options.assetRoots.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: no asset roots specified"));
@@ -79,7 +51,7 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'"), PathToString<tchar>(assetRoot.path), ConvertString(assetRoot.virtualRoot.view()));
             return MakeUnexpected(Failure{});
         }
-        auto resolvedAssetRoot = __hidden_cook_paths::ResolveBuildPath(arena, paths.repoRoot, assetRoot.path);
+        auto resolvedAssetRoot = ResolveAbsolutePath(arena, paths.repoRoot, assetRoot.path);
         if(!resolvedAssetRoot){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root '{}': {}"), PathToString<tchar>(assetRoot.path), ConvertString(resolvedAssetRoot.error().message()));
             return MakeUnexpected(Failure{});
@@ -87,7 +59,7 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
         paths.assetRoots.emplace_back(Move(*resolvedAssetRoot), assetRoot.virtualRoot);
     }
 
-    auto outputDirectory = __hidden_cook_paths::ResolveBuildPath(arena, paths.repoRoot, options.outputDirectory);
+    auto outputDirectory = ResolveAbsolutePath(arena, paths.repoRoot, options.outputDirectory);
     if(!outputDirectory){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve output directory '{}': {}"), PathToString<tchar>(options.outputDirectory), ConvertString(outputDirectory.error().message()));
         return MakeUnexpected(Failure{});

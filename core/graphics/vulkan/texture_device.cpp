@@ -9,6 +9,7 @@
 
 #include <core/graphics/rhi/queue_sharing.h>
 
+#include <global/bit.h>
 #include <global/simd/vector_arithmetic.h>
 
 
@@ -48,13 +49,8 @@ VkImageUsageFlags RequiredImageUsageForResourceStates(const ResourceStates::Mask
 
 u32 GetMaxMipLevels(const TextureDesc& desc)noexcept{
     const u32 depth = desc.dimension == TextureDimension::Texture3D ? desc.depth : 1u;
-    u32 maxExtent = Max(Max(desc.width, desc.height), depth);
-    u32 levels = 1;
-    while(maxExtent > 1){
-        maxExtent >>= 1;
-        ++levels;
-    }
-    return levels;
+    const u32 maxExtent = Max(Max(desc.width, desc.height), depth);
+    return maxExtent > 1u ? FloorLog2(maxExtent) + 1u : 1u;
 }
 
 b8 IsTextureDescShapeValid(const TextureDesc& desc)noexcept{

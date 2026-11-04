@@ -43,7 +43,7 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
     out.append(".isList() || ");
     out.append(elemAccessor.data(), elemAccessor.size());
     out.append(".asList().size() != ");
-    AppendAdhdUnsigned(out, expectedCount);
+    AppendUnsignedDecimal(out, expectedCount);
     out.append("u) continue; ");
 }
 
@@ -121,7 +121,7 @@ void EmitNwbSimdVectorCtorExpr(MString& out, const MStringView vecTypeName, cons
             out.append("::ConvertFloatToHalf(static_cast<f32>(");
             out.append(listAccessor.data(), listAccessor.size());
             out.push_back('[');
-            AppendAdhdUnsigned(out, lane);
+            AppendUnsignedDecimal(out, lane);
             out.append("].toDouble()))");
             continue;
         }
@@ -132,7 +132,7 @@ void EmitNwbSimdVectorCtorExpr(MString& out, const MStringView vecTypeName, cons
         out.append(">(");
         out.append(listAccessor.data(), listAccessor.size());
         out.push_back('[');
-        AppendAdhdUnsigned(out, lane);
+        AppendUnsignedDecimal(out, lane);
         out.append(laneIsInt ? "].asInteger())" : "].toDouble())");
     }
     out.push_back(')');
@@ -187,7 +187,7 @@ void EmitNwbSimdMatrixElementLoop(MString& out, const MStringView targetPrefix, 
     out.append(" = 0u; ");
     out.append(loopVar.data(), loopVar.size());
     out.append(" < ");
-    AppendAdhdUnsigned(out, elemCount);
+    AppendUnsignedDecimal(out, elemCount);
     out.append("u; ++");
     out.append(loopVar.data(), loopVar.size());
     out.append(") ");
@@ -249,7 +249,7 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
     if((SymbolTable::IsSimdStorageVectorType(typeName, simdLanes) || SymbolTable::IsUnalignedVectorType(typeName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isList() && __f->asList().size() == ");
-        AppendAdhdUnsigned(out, simdLanes);
+        AppendUnsignedDecimal(out, simdLanes);
         out.append("u) this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(" = ");
@@ -386,7 +386,7 @@ void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, 
         const u32 elemCount = SimdMatrixElementCount(innerName);
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isList() && __f->asList().size() == ");
-        AppendAdhdUnsigned(out, elemCount);
+        AppendUnsignedDecimal(out, elemCount);
         out.append("u){ ");
         EmitNwbSimdMatrixLocalInit(out, innerName, "__f->asList()", "__i");
         out.append("this->");
@@ -564,7 +564,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const 
             const u32 elemCount = SimdMatrixElementCount(tname);
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isList() && __f->asList().size() == ");
-            AppendAdhdUnsigned(out, elemCount);
+            AppendUnsignedDecimal(out, elemCount);
             out.append("u){ ");
             EmitNwbSimdMatrixElementLoop(out, "this->", field->name, tname, "__f->asList()", "__i", elemCount);
             out.append(" }\r\n");

@@ -24,7 +24,6 @@ const f32 s_NegativeOne = -1.0f;
 const u32 s_DeformCapacityShift = 20u;
 const usize s_MaxDeformVertices = 1u << s_DeformCapacityShift;
 const usize s_MaxDeformTriangles = 1u << s_DeformCapacityShift;
-const u32 s_EdgeKeyHalfBits = 32u;
 const u32 s_EdgeHashShift = 33u;
 const u32 s_TriangleCornerCount = 3u;
 const u32 s_MinLoopVertices = 3u;
@@ -119,12 +118,6 @@ class CsgDeformTriangleClipPlan{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-u64 CsgDeformEdgeKey(in u32 first, in u32 second){
-    const u32 lo = min(first, second);
-    const u32 hi = max(first, second);
-    return (cast<u64>(lo) << s_EdgeKeyHalfBits) | cast<u64>(hi);
-}
 
 usize CsgDeformEdgeKeyHash(in u64 key){
     return cast<usize>(key ^ (key >> s_EdgeHashShift));

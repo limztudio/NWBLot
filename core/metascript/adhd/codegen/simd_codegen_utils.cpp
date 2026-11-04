@@ -119,6 +119,14 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     return fnInfo ? fnInfo->cppExportName : MStringView{};
 }
 
+[[nodiscard]] MStringView MapSimdRegisterCall(const MStringView callee)noexcept{
+#define NWB_ADHD_EXPORT_SIMD_REGISTER_CALL(adhdName) \
+    if(callee == adhdName) return MapBuiltinMathFunction(callee);
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL
+    return {};
+}
+
 [[nodiscard]] b8 IsSimdScalarReductionFunction(const MStringView callee)noexcept{
 #define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION(adhdName, laneIntrinsicSuffix) \
     if(callee == adhdName) return true;
@@ -329,7 +337,7 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
         if(expr->isBuiltinCall){
             if(IsRegisterPromotableSimdType(expr->resolvedSimdType))
                 return true;
-            if(IsSimdScalarReductionFunction(callee)){
+            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty()){
                 for(const Expr* arg : expr->arguments){
                     if(arg && IsRegisterPromotableSimdType(arg->resolvedSimdType))
                         return true;

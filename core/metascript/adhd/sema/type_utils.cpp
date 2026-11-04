@@ -107,7 +107,10 @@ inline constexpr Array s_BuiltinFunctionArgRules = {
 inline constexpr Array s_BuiltinFunctions = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
     BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, arity, BuiltinFunctionReturnRule::returnRule, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule } },
+#define NWB_ADHD_EXPORT_FUNCTION5(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule) \
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, arity, BuiltinFunctionReturnRule::returnRule, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule } },
 #include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_FUNCTION5
 #undef NWB_ADHD_EXPORT_FUNCTION
 };
 

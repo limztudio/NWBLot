@@ -296,8 +296,10 @@ class FontAtlasTableValidator{
         }
         if(minor >= s_FontAtlasGdefMarkGlyphSetsMinorVersion && this.u16At(s_FontAtlasGdefMarkGlyphSetsOffset) != 0u){
             const u64 sets = cast<u64>(this.u16At(s_FontAtlasGdefMarkGlyphSetsOffset));
+            if(!this.range(sets, s_FontAtlasMarkGlyphSetsHeaderBytes))
+                return false;
             const u32 setCount = cast<u32>(this.u16At(sets + s_FontAtlasMarkGlyphSetsCountOffset));
-            if(!this.range(sets, s_FontAtlasMarkGlyphSetsHeaderBytes) || this.u16At(sets) != 1u || !this.range(sets + s_FontAtlasMarkGlyphSetsHeaderBytes, cast<u64>(setCount) * s_FontAtlasOtU32Bytes))
+            if(this.u16At(sets) != 1u || !this.range(sets + s_FontAtlasMarkGlyphSetsHeaderBytes, cast<u64>(setCount) * s_FontAtlasOtU32Bytes))
                 return false;
             for(u32 index = 0u; index < setCount; ++index){
                 const u32 offset = this.u32At(sets + s_FontAtlasMarkGlyphSetsHeaderBytes + cast<u64>(index) * s_FontAtlasOtU32Bytes);

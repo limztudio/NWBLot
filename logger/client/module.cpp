@@ -5,6 +5,7 @@
 #include "module.h"
 
 #include <global/diagnostics.h>
+#include <global/text_utils.h>
 
 #include <curl/curl.h>
 
@@ -41,22 +42,6 @@ static constexpr long s_HttpSuccessRangeMax = 300L;
 static void CaptureInitializationFailure(const AStringView operation, const CURLcode code)noexcept{
     const DiagnosticEventText detail = MakeDiagnosticEventText("{}: native_category=curl native_code={} detail={}", operation, code, curl_easy_strerror(code));
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = "logger_client_initialization", .message = detail.view(), .file = __FILE__, .line = __LINE__, });
-}
-
-[[nodiscard]] static AString<LogArena> UrlWithEndpoint(LogArena& arena, const AStringView baseUrl, const AStringView endpoint){
-    AString<LogArena> output(AStringView(baseUrl.data(), baseUrl.size()), arena);
-    if(output.empty() || endpoint.empty())
-        return output;
-
-    const b8 baseHasSlash = output.back() == static_cast<char>('/');
-    const b8 endpointHasSlash = endpoint.front() == static_cast<char>('/');
-    if(baseHasSlash && endpointHasSlash)
-        output.pop_back();
-    else if(!baseHasSlash && !endpointHasSlash)
-        output += static_cast<char>('/');
-
-    output.append(endpoint.data(), endpoint.size());
-    return output;
 }
 
 
@@ -125,7 +110,7 @@ b8 Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
 
 b8 Client::internalInit(const AStringView url){
     m_messageUrl = url;
-    m_telemetryUrl = __hidden_logger_client::UrlWithEndpoint(BaseType::arena(), url, s_TelemetryUploadEndpoint);
+    m_telemetryUrl = JoinWithSingleSlash(BaseType::arena(), url, s_TelemetryUploadEndpoint);
 
     m_curl = curl_easy_init();
     if(!m_curl){

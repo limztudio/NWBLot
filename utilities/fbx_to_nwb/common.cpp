@@ -45,16 +45,6 @@ template<typename EnumT, typename TextFunction>
     return text;
 }
 
-template<typename EnumT, typename TextFunction>
-[[nodiscard]] Expected<EnumT> ParseOptionText(const AStringView value, const Span<const EnumT> values, TextFunction textFunction)noexcept{
-    const AStringView trimmed = TrimView(value);
-    for(usize i = 0u; i < values.size(); ++i){
-        if(EqualsAsciiIgnoreCase(trimmed, textFunction(values[i])))
-            return values[i];
-    }
-    return MakeUnexpected(Failure{});
-}
-
 template<typename TextFunction, typename ParseFunction>
 b8 ValidateOptionText(TextFunction textFunction, ParseFunction parseValue, AString& inOutValue){
     const auto parsed = parseValue(AStringView(inOutValue));
@@ -95,7 +85,7 @@ ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexcept{
-    return __hidden_common::ParseOptionText(value, Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), OutputAssetTypeText);
+    return ParseOptionText(value, Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), OutputAssetTypeText);
 }
 
 b8 ValidateAssetTypeText(AString& inOutValue){
@@ -111,7 +101,7 @@ ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{
-    return __hidden_common::ParseOptionText(value, Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), NormalModeText);
+    return ParseOptionText(value, Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), NormalModeText);
 }
 
 b8 ValidateNormalModeText(AString& inOutValue){

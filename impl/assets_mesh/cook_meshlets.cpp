@@ -9,6 +9,7 @@
 
 
 #include "cook_meshlets.h"
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -151,7 +152,7 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
     entry.meshletAttributeStreamRefs.clear();
     entry.meshletLocalVertexRefs.clear();
     entry.meshletPrimitiveIndices.clear();
-    entry.meshlets.reserve((indices.size() / s_MeshletTriangleIndexCount + s_MeshMaxMeshletTriangles - 1u) / s_MeshMaxMeshletTriangles);
+    entry.meshlets.reserve(DivideUpWrapping(indices.size() / s_MeshletTriangleIndexCount, s_MeshMaxMeshletTriangles));
     entry.meshletBounds.reserve(entry.meshlets.capacity());
     entry.meshletPositionStreamRefs.reserve(indices.size());
     entry.meshletAttributeStreamRefs.reserve(indices.size());

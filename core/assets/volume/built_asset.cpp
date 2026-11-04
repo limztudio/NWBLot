@@ -47,14 +47,6 @@ Atomic<u64> g_TemporarySequence{0u};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 BytesMatch(const Span<const u8> existing, const Span<const u8> bytes)noexcept{
-    return existing.size() == bytes.size() && (bytes.empty() || NWB_MEMCMP(existing.data(), bytes.data(), bytes.size()) == 0);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -69,7 +61,7 @@ namespace BuiltAssetDetail{
 
 b8 WriteBinaryFileIfChanged(const __hidden_built_asset::ScratchPath& path, const Span<const u8> bytes, const b8 replaceDifferent, __hidden_built_asset::ScratchBytes& existing){
     const auto read = ReadBinaryFile(path, existing);
-    if(read && __hidden_built_asset::BytesMatch(existing, bytes))
+    if(read && BytesMatch(existing, bytes))
         return true;
     if((!read && !IsMissingPathError(read.error())) || (!replaceDifferent && read)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: cannot publish built asset without replacing existing data '{}'"), PathToString<tchar>(path));
@@ -105,7 +97,7 @@ b8 WriteBinaryFileIfChanged(const __hidden_built_asset::ScratchPath& path, const
         if(ownsTemporary || !collision)
             break;
     }
-    if(!staged || !ReadBinaryFile(temporary, existing) || !__hidden_built_asset::BytesMatch(existing, bytes)){
+    if(!staged || !ReadBinaryFile(temporary, existing) || !BytesMatch(existing, bytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));
         return false;
     }
@@ -127,7 +119,7 @@ b8 WriteBinaryFileIfChanged(const __hidden_built_asset::ScratchPath& path, const
                 return true;
 #endif
         }
-        if(ReadBinaryFile(path, existing) && __hidden_built_asset::BytesMatch(existing, bytes))
+        if(ReadBinaryFile(path, existing) && BytesMatch(existing, bytes))
             return true;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to publish built asset '{}'"), PathToString<tchar>(path));

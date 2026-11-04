@@ -9,6 +9,7 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 
+#include <global/algorithm.h>
 #include <global/hash_utils.h>
 
 
@@ -168,7 +169,7 @@ b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgStat
         if((state.snapshot.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
             continue;
         const Span<const u32> words = state.solidTriangleMasks[index];
-        const usize requiredWords = (static_cast<usize>(state.instances[index].primitiveCount) + NWB_CSG_RAY_MEMBERSHIP_WORD_BITS - 1u) / NWB_CSG_RAY_MEMBERSHIP_WORD_BITS;
+        const usize requiredWords = DivideUpWrapping(static_cast<usize>(state.instances[index].primitiveCount), NWB_CSG_RAY_MEMBERSHIP_WORD_BITS);
         if(words.size() != requiredWords || words.empty() || words.size_bytes() > Limit<u32>::s_Max - totalBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG receiver has no valid cooked solid topology or exceeds ray context capacity"));
             return false;

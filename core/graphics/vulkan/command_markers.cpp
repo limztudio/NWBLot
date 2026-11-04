@@ -6,49 +6,13 @@
 
 #include <core/common/log.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_VULKAN_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_command_markers{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CrashMarkerRollback final : NoCopy{
-public:
-    explicit CrashMarkerRollback(GpuCrashMarkerTracker& tracker)noexcept
-        : m_tracker(tracker)
-    {}
-    ~CrashMarkerRollback()noexcept{
-        if(m_armed)
-            m_tracker.popEvent();
-    }
-
-
-public:
-    void arm()noexcept{ m_armed = true; }
-
-    void disarm()noexcept{ m_armed = false; }
-
-
-private:
-    GpuCrashMarkerTracker& m_tracker;
-    b8 m_armed = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,10 +68,14 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
     const GraphicsString markerName(useDebugUtils ? name : AStringView{}, m_context.objectArena);
     usize gpuCrashMarker = 0u;
     Device::AmdBreadcrumbWrite breadcrumb;
-    __hidden_command_markers::CrashMarkerRollback crashMarkerRollback(m_gpuCrashMarkerTracker);
+    b8 crashMarkerArmed = false;
+    ScopeExit crashMarkerRollback([this, &crashMarkerArmed]()noexcept{
+        if(crashMarkerArmed)
+            m_gpuCrashMarkerTracker.popEvent();
+    });
     if(useGpuMarkers){
         gpuCrashMarker = m_gpuCrashMarkerTracker.pushEvent(name);
-        crashMarkerRollback.arm();
+        crashMarkerArmed = true;
         if(useAmdBreadcrumb){
             breadcrumb = m_device.reserveAmdBreadcrumb(m_creationDesc.physicalQueue, gpuCrashMarker);
             if(breadcrumb.valid)
@@ -115,7 +83,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
         }
     }
     m_markerStack.push_back(MarkerStackEntry{ .token = token, .usesDebugUtils = useDebugUtils, .usesGpuMarkers = useGpuMarkers, });
-    crashMarkerRollback.disarm();
+    crashMarkerRollback.release();
 
     if(useDebugUtils){
         auto label = VulkanDetail::MakeVkStruct<VkDebugUtilsLabelEXT>(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT);

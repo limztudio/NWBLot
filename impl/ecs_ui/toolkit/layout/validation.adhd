@@ -284,7 +284,7 @@ b8 TryBeginArrangeLayoutTreeNode(
     const VectorSingle rectangleVec = LoadRect(inoutBox.rectangle);
     const VectorSingle inheritedClipVec = LoadRect(inheritedClip);
     const VectorSingle contentVec = VectorSingle(ComputeInsetUiRectBounds(inoutBox.rectangle, description.padding));
-    const VectorSingle clipVec = IntersectRectValue(rectangleVec, inheritedClipVec);
+    const VectorSingle clipVec = IntersectRectVec(rectangleVec, inheritedClipVec);
     inoutBox.content = StoreRect(contentVec);
     inoutBox.clip = StoreRect(clipVec);
     inoutBox.hit = inoutBox.clip;
@@ -292,7 +292,7 @@ b8 TryBeginArrangeLayoutTreeNode(
         return false;
     VectorSingle childClipVec = inheritedClipVec;
     if(description.clipChildren)
-        childClipVec = IntersectRectValue(inheritedClipVec, contentVec);
+        childClipVec = IntersectRectVec(inheritedClipVec, contentVec);
     outChildClip = StoreRect(childClipVec);
     const b8 row = description.direction == LayoutDirection::Row;
     const b8 column = description.direction == LayoutDirection::Column;

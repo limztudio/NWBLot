@@ -273,6 +273,21 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
+[[nodiscard]] inline Path<ArenaT> ResolveDefaultStorageDirectory(ArenaT& arena, const AStringView defaultDirectoryName){
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / defaultDirectoryName;
+    return Path<ArenaT>(arena, defaultDirectoryName);
+}
+
+template<typename ArenaT, typename SourceArenaT>
+[[nodiscard]] inline Path<ArenaT> ResolveStorageDirectory(ArenaT& arena, const Path<SourceArenaT>& configuredStorageDirectory, const AStringView defaultDirectoryName){
+    if(!configuredStorageDirectory.empty())
+        return Path<ArenaT>(arena, configuredStorageDirectory);
+    return ResolveDefaultStorageDirectory(arena, defaultDirectoryName);
+}
+
+template<typename ArenaT>
 [[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> GetExecutableName(ArenaT& arena){
     const auto executablePath = GetExecutablePath(arena);
     if(!executablePath)

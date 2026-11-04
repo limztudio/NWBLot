@@ -12,6 +12,8 @@
 
 #include <core/common/log.h>
 
+#include <global/text_utils.h>
+
 #ifdef NWB_PLATFORM_WINDOWS
 #include <windows.h>
 #endif
@@ -105,10 +107,6 @@ struct OptionalDeviceFeatureSet{
     return requested != VK_TRUE || supported == VK_TRUE;
 }
 
-[[nodiscard]] inline constexpr StringView BoolToYesNoText(const b8 value)noexcept{
-    return value ? StringView("yes") : StringView("no");
-}
-
 [[nodiscard]] ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 version);
 
 [[nodiscard]] AStringView PhysicalDeviceTypeToString(VkPhysicalDeviceType type)noexcept;
@@ -118,10 +116,6 @@ struct OptionalDeviceFeatureSet{
 void SetHdr10Metadata(const VolkDeviceTable& deviceDispatch, VkDevice device, VkSwapchainKHR swapChain);
 [[nodiscard]] u64 GetDeviceLocalMemoryBytes(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice);
 void PopulateAdapterInfo(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice, AdapterInfo& outAdapter);
-
-[[nodiscard]] inline constexpr u64 BytesToMiB(u64 bytes)noexcept{
-    return bytes / s_BytesPerMiB;
-}
 
 [[nodiscard]] b8 SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature)noexcept;
 void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported)noexcept;

@@ -4,6 +4,8 @@
 
 #include "compiler_internal.h"
 
+#include <global/limit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -293,7 +295,7 @@ namespace GpuTaskGraphCompilerDetail{
     else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){
         overlap = scoringData.independentQueueCost(schedulingReachability, candidate.id, assignments.subspan(group.assignmentOffset, group.assignmentCount));
     }
-    score.overlap = overlap > static_cast<u64>(Limit<i32>::s_Max) ? Limit<i32>::s_Max : static_cast<i32>(overlap);
+    score.overlap = SaturateU64ToI32(overlap);
     return score;
 }
 

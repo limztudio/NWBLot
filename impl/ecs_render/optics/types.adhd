@@ -9,6 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <global/name_hash.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const u32 s_RtOpticalSceneFlagBoundsValid = 1u;
 const u32 s_RtOpticalBoundaryUnspecified = 0u;
 const f64 s_OpticalUnitRoundoff = 1.0 / 16777216.0;
@@ -22,8 +30,6 @@ const usize s_OpticalBoundsUseCapacity = 8u;
 const usize s_MinCoincidentCandidateCount = 2u;
 const u32 s_RtOpticalInstanceFlagTransparent = 1u;
 const u32 s_RtOpticalInstanceFlagBoundsValid = 2u;
-const u64 s_OpticalFnv64OffsetBasis = 14695981039346656037u;
-const u64 s_OpticalFnv64Prime = 1099511628211u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,9 +173,9 @@ u32 OpticalFloatingHashBits(in f32 value){
 }
 
 u64 ComputeOpticalFnv64Bytes(in Span<u8> bytes){
-    u64 hash = s_OpticalFnv64OffsetBasis;
+    u64 hash = s_Fnv64OffsetBasis;
     for(in u8 byte : bytes)
-        hash = (hash ^ cast<u64>(byte)) * s_OpticalFnv64Prime;
+        hash = updateFnv64Byte(hash, byte);
     return hash;
 }
 

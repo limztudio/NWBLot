@@ -4,6 +4,8 @@
 
 #include "command_ir_internal.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -90,12 +92,10 @@ namespace __hidden_gpu_command_ir_capture{
 
 [[nodiscard]] static u64 AllocateCaptureIdentity()noexcept{
     static Atomic<u64> s_NextIdentity{ 1u };
-    u64 identity = s_NextIdentity.load(MemoryOrder::relaxed);
-    while(identity != 0u && identity != Limit<u64>::s_Max){
-        if(s_NextIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return identity;
-    }
-    NWB_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
+    const u64 identity = TryNextAtomicIdentity(s_NextIdentity);
+    if(identity == 0u)
+        NWB_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
+    return identity;
 }
 
 

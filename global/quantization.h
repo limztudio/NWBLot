@@ -1,0 +1,28 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "simplemath.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline f32 QuantizeUNormScalar(const f32 value, const f32 maxValue)noexcept{
+    const f32 scaled = Saturate(value) * maxValue;
+    return Min(Floor(scaled + 0.5f), maxValue);
+}
+
+[[nodiscard]] inline f32 QuantizeSNormScalar(const f32 value, const f32 maxValue)noexcept{
+    const f32 clamped = Clamp(value, -1.0f, 1.0f);
+    const f32 scaled = clamped * maxValue;
+    const f32 magnitude = Floor(Abs(scaled) + 0.5f);
+    return scaled >= 0.0f ? magnitude : -magnitude;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

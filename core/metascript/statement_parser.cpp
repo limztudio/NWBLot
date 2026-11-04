@@ -4,6 +4,8 @@
 
 #include "statement_parser.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,14 +34,6 @@ constexpr MStringView s_DuplicateVariableDeclarationMessage = "duplicate variabl
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] b8 IsNameInList(const Span<const MStringView> names, const MStringView name)noexcept{
-    for(const MStringView currentName : names){
-        if(currentName == name)
-            return true;
-    }
-    return false;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -330,7 +324,7 @@ Value StatementParser::parseStructField(Value&& attributes, ScratchNameList& fie
     const u32 fieldColumn = m_cursor.m_current.column;
     m_cursor.advance();
 
-    if(__hidden_metascript_statement_parser::IsNameInList(fieldNames, fieldName)){
+    if(FindIf(fieldNames.begin(), fieldNames.end(), [fieldName](const MStringView name)noexcept{ return name == fieldName; }) != fieldNames.end()){
         m_cursor.error(fieldLine, fieldColumn, "duplicate struct field declaration");
         return Value(m_arena);
     }

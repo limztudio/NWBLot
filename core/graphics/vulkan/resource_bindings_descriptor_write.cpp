@@ -7,6 +7,8 @@
 
 #include <core/common/log.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -75,19 +77,13 @@ b8 DescriptorBufferManager::writeDescriptor(const DescriptorWriteItem& item, con
         return false;
     }
     // Validate full live-allocation identity to reject stale recycled ranges.
-    usize first = 0u;
-    usize last = storage.liveAllocations.size();
-    while(first < last){
-        const usize middle = first + (last - first) / 2u;
-        if(storage.liveAllocations[middle].offsetBytes <= dstOffsetBytes)
-            first = middle + 1u;
-        else
-            last = middle;
-    }
+    const auto firstAfter = UpperBound(storage.liveAllocations.begin(), storage.liveAllocations.end(), dstOffsetBytes, [](const u32 value, const DescriptorBufferSegment& item)noexcept{
+        return value < item.offsetBytes;
+    });
 
     b8 ownsLiveAllocation = false;
-    if(first > 0u){
-        const DescriptorBufferSegment& liveAllocation = storage.liveAllocations[first - 1u];
+    if(firstAfter != storage.liveAllocations.begin()){
+        const DescriptorBufferSegment& liveAllocation = *(firstAfter - 1u);
         ownsLiveAllocation = liveAllocation.kind == allocation.kind
             && liveAllocation.offsetBytes == allocation.offsetBytes
             && liveAllocation.sizeBytes == allocation.sizeBytes

@@ -48,7 +48,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             out.append(" = (static_cast<::");
             out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
             out.append(">(1) << ");
-            AppendAdhdUnsigned(out, flagBitIndex++);
+            AppendUnsignedDecimal(out, flagBitIndex++);
             out.append("u)");
         }
         out.append(",\r\n");
@@ -82,7 +82,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             ++reflectedEntryCount;
     }
     out.append("    [[nodiscard]] constexpr usize reflectedEnumeratorCount()noexcept{ return ");
-    AppendAdhdUnsigned(out, reflectedEntryCount);
+    AppendUnsignedDecimal(out, reflectedEntryCount);
     out.append("u; }\r\n");
     out.append("    [[nodiscard]] constexpr AStringView reflectedEnumeratorName([[maybe_unused]] const usize index)noexcept{\r\n");
     usize reflectedIndex = 0u;
@@ -90,7 +90,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         if(!IsEnumEntryReflected(entry))
             continue;
         out.append("        if(index == ");
-        AppendAdhdUnsigned(out, reflectedIndex++);
+        AppendUnsignedDecimal(out, reflectedIndex++);
         out.append("u) return \"");
         out.append(entry.name.data(), entry.name.size());
         out.append("\";\r\n");
@@ -109,7 +109,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         out.append("    inline constexpr Array<::NamedEnumCase<");
         out.append(innerEnumName.data(), innerEnumName.size());
         out.append(">, ");
-        AppendAdhdUnsigned(out, namedEnumCaseCount);
+        AppendUnsignedDecimal(out, namedEnumCaseCount);
         out.append("u> s_NamedEnumCases = {{\r\n");
         for(const EnumEntry& entry : decl.entries){
             if(!IsEnumEntryReflected(entry))

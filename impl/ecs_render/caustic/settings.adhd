@@ -290,8 +290,8 @@ CausticResolvePushConstants ResolveCausticResolvePushConstants(
     CausticResolvePushConstants resolvePush;
     resolvePush.width = width;
     resolvePush.height = height;
-    resolvePush.halfWidth = (width + 1u) / 2u;
-    resolvePush.halfHeight = (height + 1u) / 2u;
+    resolvePush.halfWidth = divideUpWrappingU32(width, 2u);
+    resolvePush.halfHeight = divideUpWrappingU32(height, 2u);
     resolvePush.causticIntensity = causticIntensity;
     resolvePush.stepWidth = stepWidth;
     resolvePush.stage = cast<u32>(stage);

@@ -235,20 +235,6 @@ Insets MaxUiPadding(in Insets lhs, in UiSkinInsets rhs){
     return MaxUiPadding(lhs, converted);
 }
 
-// Rectangle lanes are x, y, width, height; comparisons preserve scalar Min/Max ties and NaNs on every backend.
-VectorSingle IntersectRectBoundsValue(in VectorSingle lhs, in VectorSingle rhs){
-    const VectorSingle lhsEnd = lhs.xyxy + lhs.zwzw;
-    const VectorSingle rhsEnd = rhs.xyxy + rhs.zwzw;
-    const VectorSingle origin = max(lhs, rhs);
-    const VectorSingle end = min(lhsEnd, rhsEnd);
-    return VectorSingle(origin.x, origin.y, end.x, end.y);
-}
-
-b8 HasVisibleRectIntersection(in VectorSingle rectangle, in VectorSingle clip){
-    const VectorSingle visibleBounds = IntersectRectBoundsValue(rectangle, clip);
-    return visibleBounds.z > visibleBounds.x && visibleBounds.w > visibleBounds.y;
-}
-
 VectorSingle LoadRect(in Rect rectangle){
     return VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
 }
@@ -258,28 +244,12 @@ Rect StoreRect(in VectorSingle rectangle){
 }
 
 b8 HasVisibleUiRectIntersection(in Rect rectangle, in Rect clip){
-    return HasVisibleRectIntersection(LoadRect(rectangle), LoadRect(clip));
+    return HasVisibleRectIntersectionVec(LoadRect(rectangle), LoadRect(clip));
 }
 
 b8 UiRectIntersectionContainsPoint(in Rect rectangle, in Rect clip, in Point pointer){
-    const VectorSingle visibleBounds = IntersectRectBoundsValue(LoadRect(rectangle), LoadRect(clip));
+    const VectorSingle visibleBounds = IntersectRectBoundsVec(LoadRect(rectangle), LoadRect(clip));
     return pointer.x >= visibleBounds.x && pointer.y >= visibleBounds.y && pointer.x < visibleBounds.z && pointer.y < visibleBounds.w;
-}
-
-VectorSingle IntersectRectValue(in VectorSingle lhs, in VectorSingle rhs){
-    const VectorSingle bounds = IntersectRectBoundsValue(lhs, rhs);
-    const VectorSingle extent = bounds.zwzw - bounds.xyxy;
-    const VectorSingle size = max(extent, VectorSingle(0.0f));
-    return VectorSingle(bounds.x, bounds.y, size.x, size.y);
-}
-
-// Padding lanes are left, top, right, bottom; retain the two separately rounded size subtractions.
-VectorSingle InsetRectValue(in VectorSingle rectangle, in VectorSingle padding){
-    const VectorSingle origin = rectangle.xyxy + padding.xyxy;
-    const VectorSingle extentX = (rectangle.zzzz - padding.xxxx) - padding.zzzz;
-    const VectorSingle extentY = (rectangle.wwww - padding.yyyy) - padding.wwww;
-    const VectorSingle size = max(VectorSingle(extentX.x, extentY.x, extentX.y, extentY.y), VectorSingle(0.0f));
-    return VectorSingle(origin.x, origin.y, size.x, size.y);
 }
 
 Rect ResolveSkinRegionUv(in UiSkinRect pixels, in u32 atlasWidth, in u32 atlasHeight){

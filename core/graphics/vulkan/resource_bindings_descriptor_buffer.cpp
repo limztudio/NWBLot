@@ -7,6 +7,8 @@
 
 #include <core/common/log.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -499,19 +501,13 @@ b8 DescriptorBufferManager::isLiveSegmentLocked(const SegmentStorage& storage, c
     )
         return false;
 
-    usize first = 0u;
-    usize last = storage.liveAllocations.size();
-    while(first < last){
-        const usize middle = first + (last - first) / 2u;
-        if(storage.liveAllocations[middle].offsetBytes < segment.offsetBytes)
-            first = middle + 1u;
-        else
-            last = middle;
-    }
-    if(first == storage.liveAllocations.size())
+    const auto found = LowerBound(storage.liveAllocations.begin(), storage.liveAllocations.end(), segment.offsetBytes, [](const DescriptorBufferSegment& item, const u32 value)noexcept{
+        return item.offsetBytes < value;
+    });
+    if(found == storage.liveAllocations.end())
         return false;
 
-    const DescriptorBufferSegment& liveSegment = storage.liveAllocations[first];
+    const DescriptorBufferSegment& liveSegment = *found;
     return liveSegment.kind == segment.kind && liveSegment.offsetBytes == segment.offsetBytes && liveSegment.sizeBytes == segment.sizeBytes && liveSegment.storageIdentity == segment.storageIdentity && liveSegment.allocationSerial == segment.allocationSerial;
 }
 

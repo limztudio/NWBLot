@@ -86,13 +86,8 @@ b8 X11PreeditBuffer::moveCaret(const usize caretCharacter)noexcept{
 }
 
 usize X11PreeditBuffer::moveCaretToEnd()noexcept{
-    usize characters = 0u;
-    for(const char byte : m_text){
-        if(!IsUtf8Continuation(static_cast<u8>(byte)))
-            ++characters;
-    }
     m_caretByte = m_text.size();
-    return characters;
+    return CountUtf8ScalarsAssumingValid(AStringView(m_text));
 }
 
 

@@ -10,6 +10,7 @@
 
 #include <impl/ecs_ui/toolkit/widgets/search_combo.h>
 
+#include <global/range_algorithms.h>
 #include <global/text_utils.h>
 
 
@@ -24,15 +25,7 @@ TESTBED_BEGIN
 
 template<typename Source>
 [[nodiscard]] inline Expected<u64> FindEnabledListSourceRow(const Source& source, const u64 start, const b8 reverse)noexcept{
-    if(start >= source.rowCount())
-        return MakeUnexpected(Failure{});
-    for(u64 candidate = start; candidate < source.rowCount(); reverse ? --candidate : ++candidate){
-        if(source.enabled(candidate))
-            return candidate;
-        if(reverse && candidate == 0u)
-            break;
-    }
-    return MakeUnexpected(Failure{});
+    return FindDirectionalIndex(start, reverse, [&source]()noexcept{ return source.rowCount(); }, [&source](const u64 candidate)noexcept{ return source.enabled(candidate); });
 }
 
 // Immutable demo rows share key navigation without adding per-source row or label storage.

@@ -49,7 +49,7 @@ public:
     void open()noexcept{
         if(m_open)
             return;
-        AdvanceRevision(m_openGeneration);
+        AdvanceNonWrappingRevision(m_openGeneration);
         m_open = true;
     }
     void close()noexcept{ m_open = false; }

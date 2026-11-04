@@ -4,6 +4,8 @@
 
 #include "backend.h"
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,10 +70,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
         NWB_ASSERT(retiredChunk);
         NWB_ASSERT(retiredChunk->physicalQueue == queue && (retiredChunk->owner == nullptr) == (retiredChunk->nativeRecordingID == 0u));
         if(!retiredChunk->owner && retiredChunk->size >= size && retiredChunk->version <= completedVersion){
-            if(m_retiredChunkBytes >= retiredChunk->size)
-                m_retiredChunkBytes -= retiredChunk->size;
-            else
-                m_retiredChunkBytes = 0u;
+            m_retiredChunkBytes = SubtractSaturating(m_retiredChunkBytes, retiredChunk->size);
             retiredChunk->owner = owner;
             retiredChunk->nativeRecordingID = nativeRecordingID;
             retiredChunk->allocated = 0u;
@@ -178,10 +177,7 @@ void UploadManager::trimRetiredChunksLocked(const GpuPhysicalQueueId queue, cons
             continue;
         }
 
-        if(m_retiredChunkBytes >= chunk->size)
-            m_retiredChunkBytes -= chunk->size;
-        else
-            m_retiredChunkBytes = 0u;
+        m_retiredChunkBytes = SubtractSaturating(m_retiredChunkBytes, chunk->size);
         it = ledger->chunks.erase(it);
     }
 }
@@ -228,10 +224,7 @@ void UploadManager::retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chu
     if(resetAllocated)
         chunk.allocated = 0u;
     chunk.version = version;
-    if(m_retiredChunkBytes > UINT64_MAX - chunk.size)
-        m_retiredChunkBytes = UINT64_MAX;
-    else
-        m_retiredChunkBytes += chunk.size;
+    m_retiredChunkBytes = AddSaturating<u64>(m_retiredChunkBytes, chunk.size);
 }
 
 void UploadManager::retireSubmittedChunksLocked(

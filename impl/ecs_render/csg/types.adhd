@@ -379,19 +379,19 @@ void CopyCsgCutterInlineParameters(in Span<u8> parameterBytes, mut CsgCutterGpuD
         return;
 
     inOutCutter.parameter0 = f32x4(
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 0u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 4u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 8u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 12u))
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 0u)),
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 4u)),
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 8u)),
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 12u))
     );
     if(parameterBytes.size() <= 16u)
         return;
 
     inOutCutter.parameter1 = f32x4(
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 16u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 20u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 24u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 28u))
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 16u)),
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 20u)),
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 24u)),
+        bit_cast<f32>(readPartialU32LittleEndian(parameterBytes, 28u))
     );
 }
 

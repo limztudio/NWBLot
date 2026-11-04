@@ -63,46 +63,6 @@ using MaterialBindInterfaceLookup = HashMap<Name, NotNull<const MaterialBindEntr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename StringT>
-void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT& inOutText)noexcept(
-    noexcept(DeclVal<void(*)(usize)noexcept>()(inOutText.size()))
-    && noexcept(static_cast<b8>(inOutText.size() == DeclVal<const usize&>()))
-    && noexcept(inOutText += char{})
-    && noexcept(inOutText += s_MaterialBindFallbackUpperIdentifier.data())
-){
-    const usize beginSize = inOutText.size();
-    for(const char ch : text)
-        inOutText += IsAsciiAlphaNumeric(ch) ? ToAsciiUpper(ch) : '_';
-    if(inOutText.size() == beginSize)
-        inOutText += s_MaterialBindFallbackUpperIdentifier.data();
-}
-
-template<typename StringT>
-void AppendMaterialBindGeneratedPascalIdentifier(const AStringView text, StringT& inOutText)noexcept(
-    noexcept(DeclVal<void(*)(usize)noexcept>()(inOutText.size()))
-    && noexcept(static_cast<b8>(inOutText.size() == DeclVal<const usize&>()))
-    && noexcept(inOutText += char{})
-    && noexcept(inOutText += DeclVal<const char&>())
-    && noexcept(inOutText += s_MaterialBindFallbackPascalIdentifier.data())
-){
-    const usize beginSize = inOutText.size();
-    b8 upperNext = true;
-    for(const char ch : text){
-        if(ch == '_'){
-            upperNext = true;
-            continue;
-        }
-
-        if(upperNext)
-            inOutText += ToAsciiUpper(ch);
-        else
-            inOutText += ch;
-        upperNext = false;
-    }
-    if(inOutText.size() == beginSize)
-        inOutText += s_MaterialBindFallbackPascalIdentifier.data();
-}
-
 template<typename ArenaT>
 [[nodiscard]] AString<ArenaT> BuildMaterialBindGeneratedSymbol(const InitializerList<AStringView> nameSegments, const AStringView suffix, ArenaT& arena){
     AString<ArenaT> symbol(s_MaterialBindGeneratedSymbolPrefix, arena);
@@ -110,7 +70,7 @@ template<typename ArenaT>
     for(const AStringView nameSegment : nameSegments){
         if(!firstSegment)
             symbol += '_';
-        AppendMaterialBindGeneratedUpperIdentifier(nameSegment, symbol);
+        AppendAsciiUpperIdentifier(nameSegment, s_MaterialBindFallbackUpperIdentifier.data(), symbol);
         firstSegment = false;
     }
     symbol += suffix;
@@ -121,7 +81,7 @@ template<typename ArenaT>
 [[nodiscard]] AString<ArenaT> BuildMaterialBindAccessorName(const InitializerList<AStringView> nameSegments, ArenaT& arena){
     AString<ArenaT> functionName(s_MaterialBindAccessorNamePrefix, arena);
     for(const AStringView nameSegment : nameSegments)
-        AppendMaterialBindGeneratedPascalIdentifier(nameSegment, functionName);
+        AppendUnderscoreSeparatedPascalIdentifier(nameSegment, s_MaterialBindFallbackPascalIdentifier.data(), functionName);
     return functionName;
 }
 

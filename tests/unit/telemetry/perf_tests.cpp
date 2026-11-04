@@ -4,7 +4,7 @@
 
 #include "telemetry_test_helpers.h"
 
-#include <core/perf/named_registry.h>
+#include <global/named_registry.h>
 
 #include <global/binary.h>
 
@@ -363,8 +363,6 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
 }
 
 TEST(Telemetry, GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicitNameFailures){
-    using NWB::Core::Perf::FindNamedScope;
-    using NWB::Core::Perf::ScopeNameAt;
     using NWB::Core::Perf::TimingScopeId;
     GenericScopeRecord record{ Name("perf/generic/scope"), 3u };
     const Array<BorrowedScopePointer, 1u> ownerStorage{ BorrowedScopePointer{ &record } };

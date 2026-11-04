@@ -8,6 +8,7 @@
 
 #include <global/diagnostics.h>
 #include <global/scope_exit.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,10 +28,6 @@ namespace __hidden_crash_module{
 
 inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = 5u;
 inline constexpr usize s_LifecycleFailureTextCapacity = 192u;
-
-[[nodiscard]] static b8 FitsFixedText(const AStringView text, const usize capacity)noexcept{
-    return text.size() < capacity && text.find('\0') == AStringView::npos;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -273,12 +270,12 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
         return false;
 
     if(
-        !__hidden_crash_module::FitsFixedText(config.applicationName, CrashDetail::s_MaxShortText)
-        || !__hidden_crash_module::FitsFixedText(config.version, CrashDetail::s_MaxShortText)
-        || !__hidden_crash_module::FitsFixedText(config.buildId, CrashDetail::s_MaxMediumText)
-        || !__hidden_crash_module::FitsFixedText(config.logServerUrl, CrashDetail::s_MaxUrlText)
-        || !__hidden_crash_module::FitsFixedText(config.crashUploadToken, CrashDetail::s_MaxMediumText)
-        || !__hidden_crash_module::FitsFixedText(config.handlerExecutablePath, CrashDetail::s_MaxPathText)
+        !FitsFixedText(config.applicationName, CrashDetail::s_MaxShortText)
+        || !FitsFixedText(config.version, CrashDetail::s_MaxShortText)
+        || !FitsFixedText(config.buildId, CrashDetail::s_MaxMediumText)
+        || !FitsFixedText(config.logServerUrl, CrashDetail::s_MaxUrlText)
+        || !FitsFixedText(config.crashUploadToken, CrashDetail::s_MaxMediumText)
+        || !FitsFixedText(config.handlerExecutablePath, CrashDetail::s_MaxPathText)
     )
         return false;
 
@@ -287,7 +284,7 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     const ::Path<Alloc::ScratchArena> handlerExecutablePath = config.handlerExecutablePath.empty() ? DefaultCrashHandlerExecutablePath(scratchArena) : ::Path<Alloc::ScratchArena>(scratchArena, config.handlerExecutablePath);
     const AString<Alloc::ScratchArena> spoolDirectoryText = PathToString<char>(scratchArena, spoolDirectory);
     const AString<Alloc::ScratchArena> handlerExecutablePathText = PathToString<char>(scratchArena, handlerExecutablePath);
-    if(!__hidden_crash_module::FitsFixedText(spoolDirectoryText, CrashDetail::s_MaxPathText) || !__hidden_crash_module::FitsFixedText(handlerExecutablePathText, CrashDetail::s_MaxPathText))
+    if(!FitsFixedText(spoolDirectoryText, CrashDetail::s_MaxPathText) || !FitsFixedText(handlerExecutablePathText, CrashDetail::s_MaxPathText))
         return false;
 
     CopyFixedBuffer(CrashDetail::g_State.applicationName, config.applicationName);
@@ -346,7 +343,7 @@ void UninstallCrashHandler()noexcept{
 }
 
 b8 SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
-    if(key.empty() || !__hidden_crash_module::FitsFixedText(key, CrashDetail::s_MaxShortText) || !__hidden_crash_module::FitsFixedText(value, CrashDetail::s_MaxMediumText))
+    if(key.empty() || !FitsFixedText(key, CrashDetail::s_MaxShortText) || !FitsFixedText(value, CrashDetail::s_MaxMediumText))
         return false;
 
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
@@ -375,7 +372,7 @@ b8 SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
 }
 
 b8 SetCrashUploadDestination(const AStringView logServerUrl, const AStringView crashUploadToken)noexcept{
-    if(!__hidden_crash_module::FitsFixedText(logServerUrl, CrashDetail::s_MaxUrlText) || !__hidden_crash_module::FitsFixedText(crashUploadToken, CrashDetail::s_MaxMediumText))
+    if(!FitsFixedText(logServerUrl, CrashDetail::s_MaxUrlText) || !FitsFixedText(crashUploadToken, CrashDetail::s_MaxMediumText))
         return false;
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
     if(!CrashDetail::g_State.installed)

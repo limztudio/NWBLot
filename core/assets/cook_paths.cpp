@@ -10,6 +10,8 @@
 
 #include "cook_paths.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -247,15 +249,7 @@ Expected<void, CookInputSelectionError> SelectDiscoveredNwbInputs(
 
 void CompactSelectedDiscoveredNwbFiles(const Span<const u8> selected, DiscoveredNwbFileVector& inOutFiles)noexcept{
     NWB_ASSERT(selected.size() == inOutFiles.size());
-    usize next = 0u;
-    for(usize i = 0u; i < inOutFiles.size(); ++i){
-        if(!selected[i])
-            continue;
-        if(next != i)
-            inOutFiles[next] = Move(inOutFiles[i]);
-        ++next;
-    }
-    inOutFiles.erase(inOutFiles.begin() + next, inOutFiles.end());
+    CompactByMask(selected, inOutFiles);
 }
 
 b8 PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){

@@ -30,6 +30,19 @@ using NWB::Tests::NearlyEqual3;
 using NWB::Tests::NearlyEqual4;
 
 
+TEST(Math, RawFloatLaneHashKeepsSignedZeroAndNanPayloads){
+    const Float4 values{ BitCast<f32>(0x80000000u), BitCast<f32>(0x7fc01234u), BitCast<f32>(0x00000000u), BitCast<f32>(0xffc05678u) };
+    usize actual = 17u;
+    usize expected = actual;
+    expected = HashCombineValue(expected, 0x80000000u);
+    expected = HashCombineValue(expected, 0x7fc01234u);
+    expected = HashCombineValue(expected, 0x00000000u);
+    expected = HashCombineValue(expected, 0xffc05678u);
+    HashCombineF32x4(LoadFloat(values), actual);
+    EXPECT_EQ(actual, expected);
+}
+
+
 TEST(Math, DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering){
     const SIMDVectorDouble lhs{ 0x1.0000000000001p+0, -0.0, Limit<f64>::s_QuietNaN, 0x1p+40 };
     const SIMDVectorDouble rhs{ 1.0, 0.0, Limit<f64>::s_QuietNaN, 0x1p+40 + 1.0 };
@@ -613,6 +626,29 @@ TEST(Math, AffineQueriesRejectNonrigidSingularOverflowAndProjectiveMatrices){
     SIMDMatrix nonAffine = MatrixIdentity();
     nonAffine.v[3] = VectorZero();
     EXPECT_FALSE(MatrixIsAffine(nonAffine, s_AffineEpsilon));
+}
+
+
+TEST(Math, RectangleExtentPoliciesPreserveNanSignedZeroAndInsetRounding){
+    const f32 negativeZero = BitCast<f32>(u32(0x80000000u));
+    const SIMDVectorSingle rectangle = VectorSet(0.0f, 0.0f, Limit<f32>::s_QuietNaN, negativeZero);
+    const SIMDVectorSingle preserved = InsetRectValuePreservingExtent(rectangle, VectorZero());
+    const SIMDVectorSingle ordinary = InsetRectValue(rectangle, VectorZero());
+    EXPECT_TRUE(IsNaN(VectorGetZ(preserved)));
+    EXPECT_TRUE(SignBit(VectorGetW(preserved)));
+    EXPECT_EQ(BitCast<u32>(VectorGetZ(ordinary)), 0u);
+    EXPECT_EQ(BitCast<u32>(VectorGetW(ordinary)), 0u);
+
+    const SIMDVectorSingle finite = VectorSet(0.0f, 0.0f, 1.0f, 1.0f);
+    const SIMDVectorSingle nanWidth = VectorSet(0.0f, 0.0f, Limit<f32>::s_QuietNaN, 1.0f);
+    EXPECT_TRUE(IsNaN(VectorGetZ(IntersectRectValuePreservingExtent(finite, nanWidth))));
+    EXPECT_EQ(BitCast<u32>(VectorGetZ(IntersectRectValue(finite, nanWidth))), 0u);
+
+    const SIMDVectorSingle rounded = InsetRectValuePreservingExtent(VectorSet(0.0f, 0.0f, 16777216.0f, 1.0f), VectorSet(-1.0f, 0.0f, 16777216.0f, 0.0f));
+    EXPECT_EQ(VectorGetZ(rounded), 0.0f);
+    const SIMDVectorSingle bounds = IntersectRectBoundsValue(VectorSet(0.0f, 0.0f, 1.0f, 1.0f), VectorSet(negativeZero, 0.0f, 1.0f, 1.0f));
+    EXPECT_TRUE(SignBit(VectorGetX(bounds)));
+    EXPECT_FALSE(HasVisibleRectIntersection(VectorSet(0.0f, 0.0f, 1.0f, 1.0f), VectorSet(Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f)));
 }
 
 

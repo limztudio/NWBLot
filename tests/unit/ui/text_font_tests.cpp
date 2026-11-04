@@ -150,7 +150,7 @@ TEST(TextFontConstruction, ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemo
 
 TEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClusters){
     ShapeRequest request{ "\xed\x95\x9c\xea\xb8\x80" };
-    request.scriptTag = TextScriptTag('H', 'a', 'n', 'g');
+    request.scriptTag = PackFourCharTag('H', 'a', 'n', 'g');
     request.language = s_KoreanLanguage;
     {
         auto layoutResult = m_service.layout(request);
@@ -364,7 +364,7 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
 
 TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
     Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
-    constexpr u32 s_HangulScriptTag = TextScriptTag('H', 'a', 'n', 'g');
+    constexpr u32 s_HangulScriptTag = PackFourCharTag('H', 'a', 'n', 'g');
     ShapeRequest request{ "\xed\x95\x9c" };
     request.scriptTag = s_HangulScriptTag;
     request.language = s_KoreanLanguage;
@@ -391,7 +391,7 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
 TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
     const Array<f32, 3> sizes{ 32.0078125f, 64.21875f, 320.0078125f };
     for(const f32 fontSize : sizes){
-        constexpr u32 s_HangulScriptTag = TextScriptTag('H', 'a', 'n', 'g');
+        constexpr u32 s_HangulScriptTag = PackFourCharTag('H', 'a', 'n', 'g');
         ShapeRequest request{ "\xed\x95\x9c" };
         request.scriptTag = s_HangulScriptTag;
         request.language = s_KoreanLanguage;

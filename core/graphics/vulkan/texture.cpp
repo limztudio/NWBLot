@@ -6,6 +6,7 @@
 #include "texture_resource_detail.h"
 
 #include <global/algorithm.h>
+#include <global/overflow.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
@@ -191,12 +192,13 @@ Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     }
 
     if(requiredSizeMode == BufferImageCopyRequiredSize::PaddedSlices){
-        if(extent.depth > 1 && static_cast<u64>(extent.depth - 1) > (UINT64_MAX - packedSlicePitch) / effectiveDepthPitch){
+        const auto requiredSize = ComputeStridedRangeByteSize(Max<u32>(extent.depth, 1u), effectiveDepthPitch, packedSlicePitch);
+        if(!requiredSize){
             if(!operationName.empty())
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
             return MakeUnexpected(Failure{});
         }
-        outLayout.requiredSize = extent.depth > 1 ? static_cast<u64>(effectiveDepthPitch) * (extent.depth - 1) + packedSlicePitch : packedSlicePitch;
+        outLayout.requiredSize = *requiredSize;
     }
     else{
         const u64 depthOffset = static_cast<u64>(extent.depth - 1);

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "bit.h"
 #include "compile.h"
 #include "type.h"
 
@@ -14,6 +15,39 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// Divisor must be positive.
+[[nodiscard]] inline constexpr i64 DivideFloorI64(const i64 value, const i64 divisor)noexcept{
+    const i64 quotient = value / divisor;
+    return quotient - (value % divisor < 0 ? 1 : 0);
+}
+
+[[nodiscard]] inline constexpr i64 DivideCeilI64(const i64 value, const i64 divisor)noexcept{
+    const i64 quotient = value / divisor;
+    return quotient + (value % divisor > 0 ? 1 : 0);
+}
+
+// Value must be finite and within the finite f32 range.
+[[nodiscard]] inline f32 RoundF64ToF32Bound(const f64 value, const b8 upper)noexcept{
+    const f32 rounded = static_cast<f32>(value);
+    if(upper){
+        if(static_cast<f64>(rounded) >= value)
+            return rounded;
+    }
+    else{
+        if(static_cast<f64>(rounded) <= value)
+            return rounded;
+    }
+    if(rounded == 0.0f){
+        if(upper)
+            return BitCast<f32>(1u);
+        return BitCast<f32>(0x80000001u);
+    }
+    const u32 bits = BitCast<u32>(rounded);
+    if(upper == (rounded > 0.0f))
+        return BitCast<f32>(bits + 1u);
+    return BitCast<f32>(bits - 1u);
+}
 
 template<typename T>
 [[nodiscard]] constexpr const T& Min(const T& a, const T& b)noexcept(IsArithmetic_V<T>){ return (a < b) ? a : b; }

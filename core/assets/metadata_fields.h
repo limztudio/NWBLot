@@ -7,6 +7,7 @@
 
 #include "paths.h"
 
+#include <global/numeric_text.h>
 #include <global/text_utils.h>
 
 
@@ -82,11 +83,7 @@ template<typename MetadataValue>
     if(!value.isNumeric())
         return MakeUnexpected(Failure{});
 
-    const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max))
-        return MakeUnexpected(Failure{});
-
-    return static_cast<f32>(numericValue);
+    return TryFiniteF32FromF64(value.toDouble());
 }
 
 template<typename MetadataValue>

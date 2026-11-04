@@ -11,6 +11,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <global/name_hash.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_CsgClipImplicitDefineName = "NWB_CSG_ENABLED";
 const StringView s_CsgIntervalSampleEnabledImplicitDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
 const StringView s_EnabledImplicitDefineValue = "1";
@@ -386,11 +394,11 @@ b8 IsAllowedRendererComponentMetadataField(in StringView field){
 }
 
 u64 BuildShaderVariantCookKeyHash(in NameHash virtualPathHash, in u64 sourceChecksum, in u64 bytecodeChecksum){
-    u64 hash = s_ShaderFnv64OffsetBasis;
-    hash = UpdateShaderFnv64U32(hash, s_ShaderVariantCookKeyVersion);
-    hash = UpdateShaderFnv64NameHash(hash, virtualPathHash);
-    hash = UpdateShaderFnv64U64(hash, sourceChecksum);
-    hash = UpdateShaderFnv64U64(hash, bytecodeChecksum);
+    u64 hash = s_Fnv64OffsetBasis;
+    hash = updateFnv64U32(hash, s_ShaderVariantCookKeyVersion);
+    hash = updateFnv64NameHash(hash, virtualPathHash);
+    hash = updateFnv64U64(hash, sourceChecksum);
+    hash = updateFnv64U64(hash, bytecodeChecksum);
     return hash;
 }
 

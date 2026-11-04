@@ -7,6 +7,8 @@
 
 #include <core/metascript/attribute_parser.h>
 
+#include <global/numeric_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,22 +107,6 @@ template<typename T>
 [[nodiscard]] T* AllocateAstNode(MetaArena& arena){
     void* mem = arena.allocate(alignof(T), sizeof(T));
     return ::new(mem) T(arena);
-}
-
-inline void AppendAdhdUnsigned(MString& out, usize value){
-    constexpr usize s_MaxUnsignedDecimalDigits = 32u;
-    Array<char, s_MaxUnsignedDecimalDigits> buf;
-    usize idx = 0u;
-    if(value == 0u){
-        out.push_back('0');
-        return;
-    }
-    while(value > 0u && idx < buf.size()){
-        buf[idx++] = static_cast<char>('0' + (value % 10u));
-        value /= 10u;
-    }
-    while(idx > 0u)
-        out.push_back(buf[--idx]);
 }
 
 [[nodiscard]] constexpr b8 HasAdhdExtension(const MStringView path)noexcept{
@@ -256,13 +242,14 @@ struct BuiltinScalarTypeInfo{
     b8 isFloat;
 };
 
-[[nodiscard]] constexpr const BuiltinScalarTypeInfo* FindBuiltinScalarType(const MStringView name)noexcept{
-    constexpr Array s_BuiltinScalarTypes = {
+inline constexpr Array s_BuiltinScalarTypes = {
 #define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, cppType, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat) \
-        BuiltinScalarTypeInfo{ adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat },
+    BuiltinScalarTypeInfo{ adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SCALAR_TYPE
-    };
+};
+
+[[nodiscard]] constexpr const BuiltinScalarTypeInfo* FindBuiltinScalarType(const MStringView name)noexcept{
     for(const BuiltinScalarTypeInfo& info : s_BuiltinScalarTypes){
         if(info.adhdName == name)
             return &info;

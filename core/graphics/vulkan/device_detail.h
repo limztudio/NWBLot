@@ -7,7 +7,7 @@
 
 #include "backend.h"
 
-#include <global/atomic.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,12 +75,7 @@ struct CompressedTextureFeatureState{
 class DeviceGenerationAllocator final : NoCopy{
 public:
     [[nodiscard]] Expected<u16> allocate()noexcept{
-        u32 generation = m_nextGeneration.load(MemoryOrder::relaxed);
-        while(generation != 0u && generation <= static_cast<u32>(Limit<u16>::s_Max)){
-            if(m_nextGeneration.compare_exchange_weak(generation, generation + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-                return static_cast<u16>(generation);
-        }
-        return MakeUnexpected(Failure{});
+        return TryNextAtomicBoundedIdentity<u16>(m_nextGeneration);
     }
 
 

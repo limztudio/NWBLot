@@ -63,7 +63,7 @@ public:
 
 
 private:
-    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
+    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
 
 
 private:

@@ -9,6 +9,8 @@
 #include <core/alloc/general.h>
 
 #include <global/arena_object.h>
+#include <global/string_hash.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,38 +35,11 @@ using MChar = char;
 using MString = AString<MetaArena>;
 using MStringView = BasicStringView<MChar>;
 
-struct MStringHash{
-    using is_transparent = void;
-
-
-public:
-    [[nodiscard]] usize operator()(const MString& s)const noexcept{ return static_cast<usize>(ComputeFnv64Bytes(s.data(), s.size())); }
-
-    [[nodiscard]] usize operator()(MStringView sv)const noexcept{ return static_cast<usize>(ComputeFnv64Bytes(sv.data(), sv.size())); }
-};
-
-struct MStringEqual{
-    using is_transparent = void;
-
-
-public:
-    [[nodiscard]] b8 operator()(const MString& a, const MString& b)const noexcept{ return MStringView(a) == MStringView(b); }
-
-    [[nodiscard]] b8 operator()(const MString& a, MStringView b)const noexcept{ return MStringView(a) == b; }
-
-    [[nodiscard]] b8 operator()(MStringView a, const MString& b)const noexcept{ return a == MStringView(b); }
-};
-
-template<usize N>
-[[nodiscard]] constexpr MStringView LiteralView(const MChar (&text)[N])noexcept{
-    return MStringView(text, N > 0u ? N - 1u : 0u);
-}
-
 template<typename T>
 using MVector = Vector<T, MetaArena>;
 
 template<typename V>
-using MStringMap = HashMap<MString, V, MetaArena, MStringHash, MStringEqual>;
+using MStringMap = HashMap<MString, V, MetaArena, TransparentStringHash<MString>, TransparentStringEqual<MString>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -55,7 +55,7 @@ void EmitReflectedCountMethod(MString& out, const MStringView methodName, const 
     out.append("    [[nodiscard]] static constexpr usize ");
     out.append(methodName.data(), methodName.size());
     out.append("()noexcept{ return ");
-    AppendAdhdUnsigned(out, count);
+    AppendUnsignedDecimal(out, count);
     out.append("u; }\r\n");
 }
 
@@ -365,7 +365,7 @@ void EmitFieldNameLookupBody(MString& out, const Span<const FieldDecl* const> fi
             continue;
         out.append(indent.data(), indent.size());
         out.append("if(index == ");
-        AppendAdhdUnsigned(out, idx++);
+        AppendUnsignedDecimal(out, idx++);
         out.append("u) return \"");
         out.append(field->name.data(), field->name.size());
         out.append("\";\r\n");
@@ -381,7 +381,7 @@ void EmitMethodNameLookupBody(MString& out, const Span<const MethodDecl* const> 
             continue;
         out.append(indent.data(), indent.size());
         out.append("if(index == ");
-        AppendAdhdUnsigned(out, idx++);
+        AppendUnsignedDecimal(out, idx++);
         out.append("u) return \"");
         out.append(method->name.data(), method->name.size());
         out.append("\";\r\n");

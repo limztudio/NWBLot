@@ -25,6 +25,10 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#pragma once\r\n\r\n\r\n");
     out.append("#include <global/global.h>\r\n");
+    out.append("#include <global/atomic_identity.h>\r\n");
+    out.append("#include <global/binary_big_endian.h>\r\n");
+    out.append("#include <global/binary_little_endian.h>\r\n");
+    out.append("#include <global/numeric_range.h>\r\n");
     out.append("#include <global/simdmath.h>\r\n");
     out.append("#include <global/inplace_function.h>\r\n");
     out.append("#include <global/not_null.h>\r\n");
@@ -84,7 +88,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     if(!unit.topLevelNativeBlocks.empty()){
         out.append("\r\n");
         for(const MStringView& rawBlock : unit.topLevelNativeBlocks){
-            AppendAdhdTextCrlf(out, rawBlock);
+            AppendTextDiscardCrAndExpandLf(out, rawBlock);
             out.append("\r\n");
         }
     }

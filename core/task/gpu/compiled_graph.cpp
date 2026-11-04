@@ -6,6 +6,8 @@
 
 #include "task_graph.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,13 +26,10 @@ namespace __hidden_gpu_compiled_graph{
 
 [[nodiscard]] u64 AllocateObjectIdentity()noexcept{
     static Atomic<u64> s_NextObjectIdentity{ 1u };
-
-    u64 identity = s_NextObjectIdentity.load(MemoryOrder::relaxed);
-    while(identity != 0u && identity != Limit<u64>::s_Max){
-        if(s_NextObjectIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return identity;
-    }
-    NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph object identity space is exhausted");
+    const u64 identity = TryNextAtomicIdentity(s_NextObjectIdentity);
+    if(identity == 0u)
+        NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph object identity space is exhausted");
+    return identity;
 }
 
 

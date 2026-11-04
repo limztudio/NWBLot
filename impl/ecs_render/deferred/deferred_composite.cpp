@@ -20,6 +20,8 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -186,8 +188,8 @@ b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandLis
         reflectionInputs
     );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    const u32 groupCountX = (targets.width + NWB_DEFERRED_COMPOSITE_GROUP_SIZE - 1u) / NWB_DEFERRED_COMPOSITE_GROUP_SIZE;
-    const u32 groupCountY = (targets.height + NWB_DEFERRED_COMPOSITE_GROUP_SIZE - 1u) / NWB_DEFERRED_COMPOSITE_GROUP_SIZE;
+    const u32 groupCountX = DivideUpWrapping(targets.width, NWB_DEFERRED_COMPOSITE_GROUP_SIZE);
+    const u32 groupCountY = DivideUpWrapping(targets.height, NWB_DEFERRED_COMPOSITE_GROUP_SIZE);
     commandList.dispatch(groupCountX, groupCountY, 1u);
     return true;
 }

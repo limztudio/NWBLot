@@ -16,6 +16,7 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/capture/command_ir.h>
 
+#include <global/algorithm.h>
 #include <global/numeric_text.h>
 
 
@@ -132,7 +133,7 @@ public:
         else if(payload.stage == DispatchStage::BuildArgs)
             commandList.dispatch(1u, 1u, 1u);
         else
-            commandList.dispatch((resources.parameters.width + NWB_REFLECTION_CLASSIFY_GROUP_SIZE - 1u) / NWB_REFLECTION_CLASSIFY_GROUP_SIZE, (resources.parameters.height + NWB_REFLECTION_CLASSIFY_GROUP_SIZE - 1u) / NWB_REFLECTION_CLASSIFY_GROUP_SIZE, 1u);
+            commandList.dispatch(DivideUpWrapping(resources.parameters.width, NWB_REFLECTION_CLASSIFY_GROUP_SIZE), DivideUpWrapping(resources.parameters.height, NWB_REFLECTION_CLASSIFY_GROUP_SIZE), 1u);
         return true;
     }
 

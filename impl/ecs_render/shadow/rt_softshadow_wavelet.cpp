@@ -6,6 +6,8 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
+#include <global/range_algorithms.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,14 +20,7 @@ NWB_IMPL_BEGIN
 
 b8 SoftShadowCombinedWaveletInputs::valid()const noexcept{
     const Array<const Core::Texture*, 7> textures = { opaqueHistory, opaqueMoments, transparentHistory, transparentMoments, geometry, opaqueOutput, transparentOutput };
-    for(usize index = 0u; index < LengthOf(textures); ++index){
-        if(!textures[index])
-            return false;
-        for(usize previous = 0u; previous < index; ++previous)
-            if(textures[index] == textures[previous])
-                return false;
-    }
-    return true;
+    return AllValidAndDistinct(Span<const Core::Texture* const>(textures.data(), textures.size()), [](const Core::Texture* texture)noexcept{ return texture != nullptr; }, [](const Core::Texture* current, const Core::Texture* previous)noexcept{ return current == previous; });
 }
 
 

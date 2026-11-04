@@ -3,12 +3,15 @@
 
 
 #include "task_graph.h"
+
 #include "compiled_graph.h"
 #include "task_graph_builtin_internal.h"
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/command.h>
+
+#include <global/bit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,7 +142,7 @@ Expected<GpuUploadBlobId> GpuTaskGraph::copyUploadData(const void* const data, c
     const u8* const sourceBytes = static_cast<const u8*>(data);
     blob.bytes.resize(allocationSize);
     const usize address = reinterpret_cast<usize>(blob.bytes.data());
-    blob.dataOffset = (alignment - (address & (alignment - 1u))) & (alignment - 1u);
+    blob.dataOffset = AlignmentOffsetPowerOfTwo(address, alignment);
     blob.dataSize = byteSize;
     NWB_MEMCPY(blob.bytes.data() + blob.dataOffset, byteSize, sourceBytes, byteSize);
 

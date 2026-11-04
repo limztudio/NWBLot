@@ -4,6 +4,7 @@
 
 #include "x11_checked.h"
 
+#include <global/algorithm.h>
 #include <global/termination.h>
 
 
@@ -88,7 +89,7 @@ b8 X11CheckedOperation::succeeded(){
 Expected<X11Property, X11PropertyFailure> ReadX11Property(Display& display, const Window window, const Atom property, const b8 remove, const usize maxBytes){
     X11Property result;
     X11CheckedOperation operation(display);
-    const long longLength = static_cast<long>((maxBytes + (s_X11WireUnitBytes - 1u)) / s_X11WireUnitBytes);
+    const long longLength = static_cast<long>(DivideUpWrapping(maxBytes, s_X11WireUnitBytes));
     const int status = XGetWindowProperty(&display, window, property, 0, longLength, remove ? True : False, AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes);
     if(!operation.succeeded() || status != 0)
         return MakeUnexpected(X11PropertyFailure{ .nativeStatus = status, .errorCode = operation.m_error, });

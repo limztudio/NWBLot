@@ -73,8 +73,8 @@ b8 RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets)
     // Fresh accumulators reseed the temporal EMA.
     m_rayTracingState.m_causticAccumulatorInitialized = false;
 
-    const u32 halfWidth = (targets.width + 1u) / 2u;
-    const u32 halfHeight = (targets.height + 1u) / 2u;
+    const u32 halfWidth = DivideUpWrapping(targets.width, 2u);
+    const u32 halfHeight = DivideUpWrapping(targets.height, 2u);
 
     Core::TextureDesc irradianceDesc;
     irradianceDesc

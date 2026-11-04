@@ -22,23 +22,6 @@ namespace __hidden_metascript_preprocessor{
 
 constexpr u32 s_MaxIncludeDepth = 64u;
 
-[[nodiscard]] constexpr MStringView ExtractLeadingIdentifier(const MStringView text)noexcept{
-    usize nameEnd = 0u;
-    while(nameEnd < text.size() && IsAsciiIdentifierChar(text[nameEnd]))
-        ++nameEnd;
-    return text.substr(0u, nameEnd);
-}
-
-[[nodiscard]] constexpr b8 IsEscapedQuoteAt(const MStringView text, const usize quoteIdx)noexcept{
-    usize backslashes = 0u;
-    usize pos = quoteIdx;
-    while(pos > 0u && text[pos - 1u] == '\\'){
-        ++backslashes;
-        --pos;
-    }
-    return (backslashes & 1u) != 0u;
-}
-
 [[nodiscard]] MStringView StripLineComment(const MStringView line, MString& outRewritten)noexcept{
     b8 inString = false;
     b8 inChar = false;
@@ -70,7 +53,7 @@ constexpr u32 s_MaxIncludeDepth = 64u;
     usize i = 0u;
     while(i < text.size()){
         if(text[i] == '"' || text[i] == '\''){
-            i = Preprocessor::SkipQuotedLiteral(text, i);
+            i = SkipQuotedLiteral(text, i);
             continue;
         }
         if(i + 1u < text.size() && text[i] == '/' && text[i + 1u] == '/')
@@ -106,7 +89,7 @@ constexpr u32 s_MaxIncludeDepth = 64u;
                     continue;
                 }
                 if(ch == '"' || ch == '\''){
-                    scan = Preprocessor::SkipQuotedLiteral(text, scan);
+                    scan = SkipQuotedLiteral(text, scan);
                     continue;
                 }
                 if(scan + 1u < text.size() && ch == '/' && text[scan + 1u] == '/')
@@ -144,31 +127,6 @@ constexpr u32 s_MaxIncludeDepth = 64u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize Preprocessor::SkipQuotedLiteral(const MStringView text, usize index)noexcept{
-    const MChar quote = text[index++];
-    while(index < text.size() && text[index] != quote){
-        if(text[index] == '\\' && index + 1u < text.size())
-            ++index;
-        ++index;
-    }
-    if(index < text.size())
-        ++index;
-    return index;
-}
-
-usize Preprocessor::AppendQuotedLiteral(const MStringView text, usize index, MString& out){
-    const MChar quote = text[index];
-    out.push_back(text[index++]);
-    while(index < text.size() && text[index] != quote){
-        if(text[index] == '\\' && index + 1u < text.size())
-            out.push_back(text[index++]);
-        out.push_back(text[index++]);
-    }
-    if(index < text.size())
-        out.push_back(text[index++]);
-    return index;
-}
-
 usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index, const b8 allowSignedExponent, MString& out){
     while(index < text.size()){
         const MChar c = text[index];
@@ -200,8 +158,8 @@ Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, 
     , m_scratchArena(scratchArena)
     , m_errors(errors)
     , m_includeResolver(includeResolver)
-    , m_macros(0, MStringHash(), MStringEqual(), arena)
-    , m_includedSet(0, MStringHash(), MStringEqual(), arena)
+    , m_macros(0, TransparentStringHash<MString>(), TransparentStringEqual<MString>(), arena)
+    , m_includedSet(0, TransparentStringHash<MString>(), TransparentStringEqual<MString>(), arena)
     , m_includedFiles(arena)
     , m_resolvedIncludedFiles(arena)
     , m_includedByteRanges(arena)
@@ -705,7 +663,7 @@ b8 Preprocessor::handleUndef(const MStringView rest, const u32 line){
         m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #undef", m_arena)});
         return false;
     }
-    const MStringView name = __hidden_metascript_preprocessor::ExtractLeadingIdentifier(rest);
+    const MStringView name = ExtractLeadingIdentifier(rest);
     if(name == "defined"){
         m_errors.push_back(ParseError{line, 1u, MString("'defined' cannot be undefined", m_arena)});
         return false;

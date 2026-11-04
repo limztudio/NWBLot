@@ -7,6 +7,8 @@
 
 #include <core/common/log.h>
 
+#include <global/overflow.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -458,12 +460,12 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         }
 
         for(const DeviceAddressRange& existingRange : accessedRanges){
-            if(VulkanDetail::BufferRangesOverlap(existingRange.address, existingRange.byteSize, srcRange->address, srcRange->byteSize) || VulkanDetail::BufferRangesOverlap(existingRange.address, existingRange.byteSize, dstRange->address, dstRange->byteSize)){
+            if(UnsignedRangesOverlap(existingRange.address, existingRange.byteSize, srcRange->address, srcRange->byteSize) || UnsignedRangesOverlap(existingRange.address, existingRange.byteSize, dstRange->address, dstRange->byteSize)){
                 rejectCommandRecording(s_OperationName, s_ConversionRangesOverlapReason);
                 return;
             }
         }
-        if(VulkanDetail::BufferRangesOverlap(srcRange->address, srcRange->byteSize, dstRange->address, dstRange->byteSize)){
+        if(UnsignedRangesOverlap(srcRange->address, srcRange->byteSize, dstRange->address, dstRange->byteSize)){
             rejectCommandRecording(s_OperationName, s_ConversionRangesOverlapReason);
             return;
         }

@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,18 +46,8 @@ private:
 private:
     static constexpr usize s_LinearSearchThreshold = 8u;
     static constexpr usize s_MinimumTableCapacity = 16u;
-    static constexpr u64 s_OwnerHashMixFirst = 0xff51afd7ed558ccdull;
-    static constexpr u64 s_OwnerHashMixSecond = 0xc4ceb9fe1a85ec53ull;
-    static constexpr u64 s_OwnerHashFinalShift = 33u;
-
     [[nodiscard]] static usize HashOwner(const TrackedCommandBuffer& owner)noexcept{
-        u64 value = static_cast<u64>(reinterpret_cast<usize>(&owner));
-        value ^= value >> s_OwnerHashFinalShift;
-        value *= s_OwnerHashMixFirst;
-        value ^= value >> s_OwnerHashFinalShift;
-        value *= s_OwnerHashMixSecond;
-        value ^= value >> s_OwnerHashFinalShift;
-        return static_cast<usize>(value);
+        return static_cast<usize>(MixMurmur64Finalizer(static_cast<u64>(reinterpret_cast<usize>(&owner))));
     }
 
     [[nodiscard]] static usize ResolveTableCapacity(const usize ownerCount)noexcept{

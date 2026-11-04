@@ -9,8 +9,10 @@
 
 #include <core/common/log.h>
 
+#include <global/algorithm.h>
 #include <global/allocation_size.h>
 #include <global/json_text.h>
+#include <global/filesystem/crlf_output_stream.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,69 +39,6 @@ using TextWrite::WriteVec4;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Normalize streamed metadata to CRLF without buffering another full copy of large mesh payloads.
-class NwbTextOutputStream final : NoCopy{
-public:
-    explicit NwbTextOutputStream(BasicOutputFileStream<char>& stream)noexcept
-        : m_stream(stream)
-    {}
-
-
-public:
-    template<usize Length>
-    NwbTextOutputStream& operator<<(const char (&text)[Length]){
-        writeText(AStringView(text, Length - 1u));
-        return *this;
-    }
-
-    NwbTextOutputStream& operator<<(const AStringView text){
-        writeText(text);
-        return *this;
-    }
-
-    template<typename T>
-        requires(!IsConvertible_V<const T&, AStringView>)
-    NwbTextOutputStream& operator<<(const T& value){
-        m_stream << value;
-        return *this;
-    }
-
-
-public:
-    [[nodiscard]] explicit operator b8()const noexcept{ return static_cast<b8>(m_stream); }
-
-    [[nodiscard]] b8 operator!()const noexcept{ return !m_stream; }
-
-
-public:
-    void precision(const StreamSize precision)noexcept{ m_stream.precision(precision); }
-
-
-private:
-    void writeText(const AStringView text){
-        usize chunkBegin = 0u;
-        for(usize i = 0u; i < text.size(); ++i){
-            const char character = text[i];
-            if(character != '\r' && character != '\n')
-                continue;
-
-            if(i > chunkBegin)
-                m_stream.write(text.data() + chunkBegin, static_cast<StreamSize>(i - chunkBegin));
-
-            if(character == '\r' && i + 1u < text.size() && text[i + 1u] == '\n')
-                ++i;
-            m_stream.write(s_LineBreakText.data(), static_cast<StreamSize>(s_LineBreakText.size()));
-            chunkBegin = i + 1u;
-        }
-
-        if(chunkBegin < text.size())
-            m_stream.write(text.data() + chunkBegin, static_cast<StreamSize>(text.size() - chunkBegin));
-    }
-
-
-private:
-    BasicOutputFileStream<char>& m_stream;
-};
 
 template<typename Stream>
 void WriteSkinJoints(const MeshSkinInfluence& skin, Stream& out)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(out << skin.joint[DeclVal<usize>()]) && noexcept(out << "]")){
@@ -237,21 +176,13 @@ void WriteMeshAssetBody(const SourceMeshStreams& mesh, const AStringView variabl
     file << indent << s_FormatListCloseText;
 }
 
-b8 NameUsed(const Span<const ScratchString> names, const AStringView name)noexcept{
-    for(const ScratchString& usedName : names){
-        if(usedName == name)
-            return true;
-    }
-    return false;
-}
-
 ScratchString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const Span<const ScratchString> usedNames, Core::Alloc::ScratchArena& scratchArena){
     const ScratchString baseName = AssetWriterSkeletonDetail::NodeName(node, fallbackIndex, scratchArena);
     ScratchString name(baseName, scratchArena);
     name.reserve(AddSize(baseName.size(), s_UniqueNameSuffixReserve));
 
     u32 suffix = 1u;
-    while(NameUsed(usedNames, name)){
+    while(FindIf(usedNames.begin(), usedNames.end(), [&name](const ScratchString& usedName)noexcept{ return usedName == AStringView(name); }) != usedNames.end()){
         name.clear();
         StringAppendFormat(name, "{}_{}", baseName, suffix);
         ++suffix;
@@ -409,7 +340,7 @@ template<typename WriteBodyFn>
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to open output file '{}'"), ConvertString(assetKind), PathToString<tchar>(outputPath));
         return false;
     }
-    NwbTextOutputStream file(rawFile);
+    CrlfOutputFileStream file(rawFile);
     file.precision(s_OutputFloatPrecision);
     if(!writeBody(file))
         return false;
@@ -444,7 +375,7 @@ b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
     if(!ValidatePlainMeshAsset(mesh))
         return false;
 
-    return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+    return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "mesh asset;\n\n";
         WriteMeshAssetBody(mesh, s_AssetVariableName, "", file);
         return true;
@@ -454,7 +385,7 @@ b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
 b8 WriteSkeletonAsset(const ScratchPath& outputPath, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_asset_writer_format;
 
-    return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+    return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "skeleton asset;\n\n";
         return WriteSkeletonAssetBody(s_AssetVariableName, joints, bindPoseMatrices, scratchArena, file);
     });
@@ -468,7 +399,7 @@ b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, con
         return false;
     }
 
-    return WriteNwbTextFile(outputPath, s_SkinAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+    return WriteNwbTextFile(outputPath, s_SkinAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "skin asset;\n\n";
         WriteSkinAssetBody(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, scratchArena, file);
         return true;
@@ -478,7 +409,7 @@ b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, con
 b8 WriteModelAsset(const ScratchPath& outputPath, const AStringView meshName, const Optional<AStringView> skinName, const Optional<AStringView> skeletonName, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_asset_writer_format;
 
-    return WriteNwbTextFile(outputPath, s_ModelAssetTypeText, [&](NwbTextOutputStream& file) -> b8{
+    return WriteNwbTextFile(outputPath, s_ModelAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "model asset;\n\n";
         WriteModelAssetBody(s_AssetVariableName, meshName, skinName, skeletonName, s_SkeletonAssetTypeText, true, true, scratchArena, file);
         return true;
@@ -498,7 +429,7 @@ b8 WriteAssetBunch(
 ){
     using namespace __hidden_asset_writer_format;
 
-    return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, [&](NwbTextOutputStream& file) -> b8{
+    return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, [&](CrlfOutputFileStream& file) -> b8{
         file << "mesh mesh;\n\n";
         WriteMeshAssetBody(mesh, s_MeshAssetTypeText, "", file);
 

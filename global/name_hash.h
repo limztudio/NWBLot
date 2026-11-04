@@ -28,6 +28,19 @@ struct NameHash{
     Array<u64, s_NameHashLaneCount> qwords;
 };
 
+[[nodiscard]] inline constexpr u64 FoldNameHash64(const NameHash& nameHash)noexcept{
+    u64 folded = nameHash.qwords[0u];
+    for(usize lane = 1u; lane < nameHash.qwords.size(); ++lane)
+        folded ^= nameHash.qwords[lane] + s_HashCombineGoldenRatio64 + (folded << s_HashCombineLeftShift) + (folded >> s_HashCombineRightShift);
+    return folded;
+}
+
+[[nodiscard]] inline constexpr u64 UpdateFnv64NameHash(u64 hash, const NameHash& nameHash)noexcept{
+    for(const u64 lane : nameHash.qwords)
+        hash = UpdateFnv64U64LittleEndian(hash, lane);
+    return hash;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

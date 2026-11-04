@@ -68,7 +68,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         return;
     if(byteSize == 0)
         return;
-    if(!VulkanDetail::AreAllPointersValid(data)){
+    if(data == nullptr){
         rejectCommandRecording(s_SetPushConstantsOperation, s_DataIsNullReason);
         return;
     }

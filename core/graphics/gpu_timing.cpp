@@ -6,6 +6,8 @@
 
 #include "backend_selection.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,15 +30,6 @@ inline constexpr Name s_GpuTimingScratchArena("graphics.gpu_timing.scratch");
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static Expected<u64> AllocateMonotonicIdentity(Atomic<u64>& nextIdentity)noexcept{
-    u64 identity = nextIdentity.load(MemoryOrder::relaxed);
-    while(identity != Limit<u64>::s_Max){
-        if(nextIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return identity;
-    }
-    return MakeUnexpected(Failure{});
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +75,7 @@ void GpuTimingRecorder::setQueryCollectionEnabled(const b8 enabled){
 }
 
 Expected<GpuTimingSampleAttribution> GpuTimingRecorder::allocateSampleAttribution()noexcept{
-    const auto identity = __hidden_gpu_timing::AllocateMonotonicIdentity(__hidden_gpu_timing::s_NextSampleAttributionIdentity);
+    const auto identity = TryNextAtomicIdentityAllowZero(__hidden_gpu_timing::s_NextSampleAttributionIdentity);
     if(!identity)
         return MakeUnexpected(identity.error());
     return GpuTimingSampleAttribution(*identity);
@@ -545,15 +538,11 @@ void GpuTimingRecorder::syncActiveState()noexcept{
 }
 
 void GpuTimingRecorder::advancePerformanceCaptureEpoch()noexcept{
-    ++m_performanceCaptureEpoch;
-    if(m_performanceCaptureEpoch == 0u)
-        ++m_performanceCaptureEpoch;
+    AdvanceWrappingNonzero(m_performanceCaptureEpoch);
 }
 
 void GpuTimingRecorder::advanceEpoch()noexcept{
-    ++m_epoch;
-    if(m_epoch == 0u)
-        m_epoch = 1u;
+    AdvanceWrappingNonzero(m_epoch);
 }
 
 

@@ -90,10 +90,15 @@ TEST(UiWidgetIdTests, EmbeddedNulAndScopeConcatenationDoNotAliasAndInvalidKeysAr
     const WidgetRoot root{ 7u, 3u };
     const auto rootId = TryMakeRootId(root);
     ASSERT_TRUE(rootId.has_value());
+    EXPECT_EQ(rootId->value, 0x7c2b17581cd0d181ull);
+    const auto partId = TryMakeWidgetPartId(*rootId, 0x123456789abcdef0ull);
+    ASSERT_TRUE(partId);
+    EXPECT_EQ(partId->value, 0xb6d51fb9629e37ddull);
     const auto embedded = TryMakeWidgetId(*rootId, AStringView("a\0b", 3u));
     const auto simple = TryMakeWidgetId(*rootId, "a");
     const auto combined = TryMakeWidgetId(*rootId, "ab");
     ASSERT_TRUE(embedded.has_value());
+    EXPECT_EQ(embedded->value, 0xa9602ae44adeb3dfull);
     ASSERT_TRUE(simple.has_value());
     ASSERT_TRUE(combined.has_value());
     EXPECT_NE(*embedded, *simple);

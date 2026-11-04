@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/range_algorithms.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,14 +42,8 @@ b8 GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     if(!ValidSnapshotImageCount(snapshot))
         return false;
     const auto& pages = snapshot.sdfPages();
-    for(usize index = 0u; index < pages.size(); ++index){
-        if(!__hidden_ui_gpu_sdf_resources::ValidPage(pages[index]))
-            return false;
-        for(usize previous = 0u; previous < index; ++previous){
-            if(SameSdfAtlasPageKey(pages[index]->binding(), pages[previous]->binding()))
-                return false;
-        }
-    }
+    if(!AllValidAndDistinct(Span<const SharedSdfAtlasPage>(pages.data(), pages.size()), [](const SharedSdfAtlasPage& current)noexcept{ return __hidden_ui_gpu_sdf_resources::ValidPage(current); }, [](const SharedSdfAtlasPage& current, const SharedSdfAtlasPage& previous)noexcept{ return SameSdfAtlasPageKey(current->binding(), previous->binding()); }))
+        return false;
     for(const DrawCommand& command : snapshot.commands()){
         const u32 channelCount = command.sdfPageIndex < pages.size() ? pages[command.sdfPageIndex]->binding().channelCount : 0u;
         if(!ValidDrawCommandSdfBinding(command, pages.size(), channelCount))

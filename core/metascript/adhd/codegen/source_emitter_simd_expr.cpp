@@ -268,7 +268,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
             for(u32 i = 0u; i < 4u; ++i){
                 if(i > 0u)
                     out.append(", ");
-                AppendAdhdUnsigned(out, laneIdx);
+                AppendUnsignedDecimal(out, laneIdx);
                 out.push_back('u');
             }
             out.append(">(");
@@ -318,13 +318,13 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 return;
             }
             out.append(isDouble ? "::VectorDoubleSwizzle<" : "::VectorSwizzle<");
-            AppendAdhdUnsigned(out, e0);
+            AppendUnsignedDecimal(out, e0);
             out.append("u, ");
-            AppendAdhdUnsigned(out, e1);
+            AppendUnsignedDecimal(out, e1);
             out.append("u, ");
-            AppendAdhdUnsigned(out, e2);
+            AppendUnsignedDecimal(out, e2);
             out.append("u, ");
-            AppendAdhdUnsigned(out, e3);
+            AppendUnsignedDecimal(out, e3);
             out.append("u>(");
             emitSimdRegExpr(out, *expr.lhs, expr.lhs->resolvedSimdType);
             out.push_back(')');
@@ -396,7 +396,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                     out.append("const ");
                     out.append(regType.data(), regType.size());
                     out.append(" __a");
-                    AppendAdhdUnsigned(out, i);
+                    AppendUnsignedDecimal(out, i);
                     out.append(" = ");
                     if(expr.arguments[i])
                         emitSimdRegExpr(out, *expr.arguments[i], simdType);
@@ -417,7 +417,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                             out.append(", ");
                         MString argVarName(m_arena);
                         argVarName.append("__a");
-                        AppendAdhdUnsigned(argVarName, i);
+                        AppendUnsignedDecimal(argVarName, i);
                         AppendIntSimdLaneExtract(out, MStringView(argVarName.data(), argVarName.size()), lane, isDouble, laneType);
                     }
                     out.append("))");
@@ -436,6 +436,13 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 out.push_back(')');
             };
 
+            const MStringView registerCall = MapSimdRegisterCall(callee);
+            if(!registerCall.empty()){
+                out.append(registerCall.data(), registerCall.size());
+                out.push_back('(');
+                emitSimdCallRegArgsAndClose(expr.arguments);
+                return;
+            }
             const MStringView unaryIntrinsic = MapSimdUnaryFloatIntrinsic(callee, isDouble);
             if(!unaryIntrinsic.empty()){
                 out.append(unaryIntrinsic.data(), unaryIntrinsic.size());

@@ -5,13 +5,7 @@
 #include <impl/assets_shader/types.adhd>
 
 native{
-namespace NWB::Impl{
-using ShaderBinaryPayload::s_ShaderFnv64OffsetBasis;
-using ShaderBinaryPayload::UpdateShaderFnv64Byte;
-using ShaderBinaryPayload::UpdateShaderFnv64U32;
-using ShaderBinaryPayload::UpdateShaderFnv64U64;
-using ShaderBinaryPayload::UpdateShaderFnv64NameHash;
-}
+#include <global/name_hash.h>
 }
 
 
@@ -288,19 +282,11 @@ u32 MaterialLayoutFieldAlignment(in MaterialLayoutFieldType fieldType){
 
 Expected<u32> TryAlignMaterialLayoutFieldOffset(in u32 byteOffset, in MaterialLayoutFieldType fieldType){
     const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
-    if(alignment == 0u || (alignment & (alignment - 1u)) != 0u)
-        return makeUnexpected(Failure());
-    const u32 mask = alignment - 1u;
-    if(byteOffset > 0xFFFFFFFFu - mask)
-        return makeUnexpected(Failure());
-    return (byteOffset + mask) & ~mask;
+    return alignU32PowerOfTwoChecked(byteOffset, alignment);
 }
 
 Expected<u32> TryAlignMaterialLayoutBlockByteSize(in u32 byteSize){
-    const u32 mask = s_MaterialTypedWordBytes - 1u;
-    if(byteSize > 0xFFFFFFFFu - mask)
-        return makeUnexpected(Failure());
-    return (byteSize + mask) & ~mask;
+    return alignU32PowerOfTwoChecked(byteSize, s_MaterialTypedWordBytes);
 }
 
 MaterialTypedLayoutBlock UnpackMaterialTypedLayoutBlockBinary(in MaterialTypedLayoutBlockBinary blockBinary){
@@ -452,28 +438,28 @@ u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in 
     if(blocks.empty() && fields.empty())
         return 0u;
 
-    u64 hash = s_ShaderFnv64OffsetBasis;
+    u64 hash = s_Fnv64OffsetBasis;
     for(usize i = 0u; i < s_MaterialTypedLayoutHashHeader.size(); ++i)
-        hash = UpdateShaderFnv64Byte(hash, cast<u8>(s_MaterialTypedLayoutHashHeader[i]));
-    hash = UpdateShaderFnv64U32(hash, cast<u32>(blocks.size()));
-    hash = UpdateShaderFnv64U32(hash, cast<u32>(fields.size()));
+        hash = updateFnv64Byte(hash, cast<u8>(s_MaterialTypedLayoutHashHeader[i]));
+    hash = updateFnv64U32(hash, cast<u32>(blocks.size()));
+    hash = updateFnv64U32(hash, cast<u32>(fields.size()));
     for(usize i = 0u; i < blocks.size(); ++i){
         const MaterialTypedLayoutBlock block = blocks[i];
-        hash = UpdateShaderFnv64NameHash(hash, block.blockName.hash());
-        hash = UpdateShaderFnv64U32(hash, cast<u32>(block.blockClass));
-        hash = UpdateShaderFnv64U32(hash, block.fieldBegin);
-        hash = UpdateShaderFnv64U32(hash, block.fieldCount);
-        hash = UpdateShaderFnv64U32(hash, block.byteSize);
+        hash = updateFnv64NameHash(hash, block.blockName.hash());
+        hash = updateFnv64U32(hash, cast<u32>(block.blockClass));
+        hash = updateFnv64U32(hash, block.fieldBegin);
+        hash = updateFnv64U32(hash, block.fieldCount);
+        hash = updateFnv64U32(hash, block.byteSize);
     }
     for(usize i = 0u; i < fields.size(); ++i){
         const MaterialTypedLayoutField field = fields[i];
-        hash = UpdateShaderFnv64NameHash(hash, field.fieldName.hash());
-        hash = UpdateShaderFnv64U32(hash, cast<u32>(field.fieldType));
-        hash = UpdateShaderFnv64U32(hash, field.offset);
-        hash = UpdateShaderFnv64U32(hash, field.defaultValue.x);
-        hash = UpdateShaderFnv64U32(hash, field.defaultValue.y);
-        hash = UpdateShaderFnv64U32(hash, field.defaultValue.z);
-        hash = UpdateShaderFnv64U32(hash, field.defaultValue.w);
+        hash = updateFnv64NameHash(hash, field.fieldName.hash());
+        hash = updateFnv64U32(hash, cast<u32>(field.fieldType));
+        hash = updateFnv64U32(hash, field.offset);
+        hash = updateFnv64U32(hash, field.defaultValue.x);
+        hash = updateFnv64U32(hash, field.defaultValue.y);
+        hash = updateFnv64U32(hash, field.defaultValue.z);
+        hash = updateFnv64U32(hash, field.defaultValue.w);
     }
     return hash;
 }

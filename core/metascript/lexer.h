@@ -21,33 +21,10 @@ NWB_METASCRIPT_BEGIN
 
 inline constexpr MStringView s_IncludePushMarker = "/*__adhd_inc_push__*/";
 inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
-inline constexpr u64 s_MaxUnicodeScalarCodePoint = 0x10FFFFu;
-inline constexpr u64 s_UnicodeSurrogateRangeMin = 0xD800u;
-inline constexpr u64 s_UnicodeSurrogateRangeMax = 0xDFFFu;
 inline constexpr usize s_MaxSavedIncludeDepth = 64u;
-
-[[nodiscard]] constexpr b8 IsHexDigit(const MChar c)noexcept{
-    return IsAsciiDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-}
-
-[[nodiscard]] constexpr u32 HexDigitValue(const MChar c)noexcept{
-    return IsAsciiDigit(c) ? static_cast<u32>(c - '0') : static_cast<u32>((c >= 'a' && c <= 'f') ? (c - 'a' + 10) : (c - 'A' + 10));
-}
-
-[[nodiscard]] constexpr b8 IsBinaryDigit(const MChar c)noexcept{
-    return c == '0' || c == '1';
-}
-
-[[nodiscard]] constexpr b8 IsOctalDigit(const MChar c)noexcept{
-    return c >= '0' && c <= '7';
-}
 
 [[nodiscard]] constexpr b8 IsIntegerLiteralSuffixChar(const MChar c)noexcept{
     return c == 'u' || c == 'U' || c == 'l' || c == 'L';
-}
-
-[[nodiscard]] constexpr b8 IsValidUnicodeScalarCodePoint(const u64 val)noexcept{
-    return val <= s_MaxUnicodeScalarCodePoint && (val < s_UnicodeSurrogateRangeMin || val > s_UnicodeSurrogateRangeMax);
 }
 
 [[nodiscard]] constexpr b8 TryDecodeSimpleEscapeChar(const MChar esc, MChar* outDecoded = nullptr)noexcept{
@@ -112,7 +89,7 @@ inline constexpr usize s_MaxSavedIncludeDepth = 64u;
                 return false;
             val = (val << 4u) | static_cast<u64>(HexDigitValue(ch));
         }
-        if((text[2] == 'u' || text[2] == 'U') && !IsValidUnicodeScalarCodePoint(val))
+        if((text[2] == 'u' || text[2] == 'U') && !(val <= s_UnicodeMaxCodePoint && IsUnicodeScalarValue(static_cast<u32>(val))))
             return false;
         outValue = static_cast<i64>(val);
         return true;

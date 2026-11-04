@@ -63,9 +63,9 @@ public:
 public:
     explicit Document(MetaArena& arena)
         : m_arena(arena)
-        , m_variables(0, MStringHash(), MStringEqual(), arena)
+        , m_variables(0, TransparentStringHash<MString>(), TransparentStringEqual<MString>(), arena)
         , m_declarations(arena)
-        , m_structs(0, MStringHash(), MStringEqual(), arena)
+        , m_structs(0, TransparentStringHash<MString>(), TransparentStringEqual<MString>(), arena)
         , m_errors(arena)
     {}
 

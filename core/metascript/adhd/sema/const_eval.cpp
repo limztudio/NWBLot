@@ -4,6 +4,8 @@
 
 #include "const_eval.h"
 
+#include <global/source_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,24 +49,6 @@ constexpr i64 s_I64ShiftOperandMax = 64;
     return IsIntegralOrBoolScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
 }
 
-[[nodiscard]] b8 HasMatchingOuterParens(const MStringView text)noexcept{
-    if(text.size() < 2u || text.front() != '(' || text.back() != ')')
-        return false;
-    u32 depth = 0u;
-    for(usize i = 0u; i < text.size(); ++i){
-        if(text[i] == '('){
-            ++depth;
-        }
-        else if(text[i] == ')'){
-            if(depth == 0u)
-                return false;
-            --depth;
-            if(depth == 0u && i + 1u < text.size())
-                return false;
-        }
-    }
-    return depth == 0u;
-}
 
 [[nodiscard]] constexpr b8 TryApplyUnaryConstantOp(const TokenType::Enum op, const i64 inner, i64& outVal)noexcept{
     switch(op){
@@ -254,7 +238,7 @@ b8 TryEvaluateTextConstant(MStringView text, const SymbolTable& symbols, const u
     if(depth > 16u)
         return false;
     text = TrimView(text);
-    while(__hidden_adhd_const_eval::HasMatchingOuterParens(text))
+    while(HasMatchingOuterParens(text))
         text = TrimView(text.substr(1u, text.size() - 2u));
     if(text.empty())
         return false;

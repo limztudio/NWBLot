@@ -168,6 +168,25 @@ TEST(FontAtlasPositioning, GposClassZeroAndExplicitClassMatrixPreserved){
     EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
 }
 
+TEST(FontAtlasPositioning, TruncatedGdefMarkGlyphSetsAreRejected){
+    using namespace __hidden_packing_tests;
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gdef_truncated"));
+    FontAtlasPositioningTable table(arena);
+    table.tag = s_FontAtlasGdefTag;
+    for(const u16 minor : { u16(2), u16(3) }){
+        table.bytes.clear();
+        Append16(1u, table.bytes); Append16(minor, table.bytes);
+        for(u32 field = 0u; field < 4u; ++field)
+            Append16(0u, table.bytes);
+        Append16(0xffffu, table.bytes);
+        if(minor == 3u)
+            Append32(0u, table.bytes);
+        EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
+    }
+}
+
 TEST(FontAtlasPositioning, MalformedTopOffsetsAndExtensionTypeRejected){
     using namespace __hidden_packing_tests;
     Tests::CapturingLogger logger;

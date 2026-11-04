@@ -11,6 +11,8 @@
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -175,9 +177,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     }
 
     static u64 s_NextLaggedLightingHistoryGeneration = 0u;
-    ++s_NextLaggedLightingHistoryGeneration;
-    if(s_NextLaggedLightingHistoryGeneration == 0u)
-        ++s_NextLaggedLightingHistoryGeneration;
+    AdvanceWrappingNonzero(s_NextLaggedLightingHistoryGeneration);
     history.generation = s_NextLaggedLightingHistoryGeneration;
     return true;
 }

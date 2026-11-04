@@ -5,6 +5,8 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -154,8 +156,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
 ){
     NWB_ASSERT(dispatch.waveletPipeline && dispatch.upsamplePipeline);
     NWB_ASSERT(dispatch.visibilityTexture);
-    const u32 halfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-    const u32 halfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 halfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
+    const u32 halfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
     const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
     const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));

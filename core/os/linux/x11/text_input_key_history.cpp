@@ -4,6 +4,8 @@
 
 #include "text_input_key_history.h"
 
+#include <global/bit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,8 +17,7 @@ NWB_CORE_BEGIN
 
 
 b8 X11FilteredKeyHistory::Newer(const u32 timestamp, const u32 serial, const Stamp& previous)noexcept{
-    const u32 difference = timestamp == previous.timestamp ? serial - previous.serial : timestamp - previous.timestamp;
-    return difference != 0u && difference < s_HalfRange;
+    return timestamp == previous.timestamp ? IsNewerSerialU32(serial, previous.serial) : IsNewerSerialU32(timestamp, previous.timestamp);
 }
 
 b8 X11FilteredKeyHistory::Current(const Stamp& stamp, const u64 receivedAtMs)noexcept{

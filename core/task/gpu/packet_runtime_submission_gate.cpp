@@ -13,6 +13,8 @@
 #include <global/exception.h>
 #include <global/termination.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,13 +52,10 @@ namespace GpuPacketRuntimeDetail{
 
 
 u64 AllocateAcceptanceRevision()noexcept{
-    u64 nextRevision = __hidden_gpu_packet_runtime_submission_gate::s_NextAcceptanceRevision.load(MemoryOrder::relaxed);
-    for(;;){
-        if(nextRevision == 0u || nextRevision == Limit<u64>::s_Max)
-            NWB_FATAL_ASSERT_MSG(false, "GPU task graph acceptance revision identity exhausted");
-        if(__hidden_gpu_packet_runtime_submission_gate::s_NextAcceptanceRevision.compare_exchange_weak(nextRevision, nextRevision + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return nextRevision;
-    }
+    const u64 identity = TryNextAtomicIdentity(__hidden_gpu_packet_runtime_submission_gate::s_NextAcceptanceRevision);
+    if(identity == 0u)
+        NWB_FATAL_ASSERT_MSG(false, "GPU task graph acceptance revision identity exhausted");
+    return identity;
 }
 
 

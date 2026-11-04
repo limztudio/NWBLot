@@ -11,6 +11,7 @@
 #include <core/common/log.h>
 
 #include <global/allocation_size.h>
+#include <global/counting_output.h>
 #include <global/expected.h>
 #include <global/span.h>
 
@@ -59,21 +60,6 @@ namespace AssetPathsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ConvertedPathByteCounter{
-    usize byteCount = 0u;
-
-
-public:
-    constexpr ConvertedPathByteCounter& operator*()noexcept{ return *this; }
-
-    constexpr ConvertedPathByteCounter& operator++(int)noexcept{ return *this; }
-
-    constexpr ConvertedPathByteCounter& operator=(const char){
-        byteCount = AddSize(byteCount, 1u);
-        return *this;
-    }
-};
-
 template<typename PathArenaT>
 struct RelativeAssetPathLayout{
     typename ::Path<PathArenaT>::const_iterator acceptedEnd;
@@ -88,7 +74,7 @@ template<typename PathArenaT>
     constexpr NativeStringView s_PathSeparatorChars{ NWB_TEXT("/\\") };
 
     RelativeAssetPathLayout<PathArenaT> layout{ relativePath.end() };
-    ConvertedPathByteCounter counter;
+    CountingByteOutput counter;
     for(auto componentIt = relativePath.begin(); componentIt != relativePath.end(); ++componentIt){
         const auto component = componentIt.nativeComponent();
         if(component.empty() || IsDot(component))

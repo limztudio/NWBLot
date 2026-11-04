@@ -207,12 +207,12 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             if(!stmt.name.empty())
                 out.append(stmt.name.data(), stmt.name.size());
             else
-                AppendAdhdUnsigned(out, stmt.span.line);
+                AppendUnsignedDecimal(out, stmt.span.line);
         };
         if(!stmt.parallelDependencies.empty()){
             emitIndent(out, indent);
             out.append("const ::NWB::Array<::NWB::Core::CpuTaskHandle, ");
-            AppendAdhdUnsigned(out, stmt.parallelDependencies.size());
+            AppendUnsignedDecimal(out, stmt.parallelDependencies.size());
             out.append("u> __adhd_deps_");
             appendBlockSuffix();
             out.append(" = { ");
@@ -241,7 +241,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             out.append(", __adhd_deps_");
             appendBlockSuffix();
             out.append(".data(), ");
-            AppendAdhdUnsigned(out, stmt.parallelDependencies.size());
+            AppendUnsignedDecimal(out, stmt.parallelDependencies.size());
             out.push_back('u');
         }
         out.append(");\r\n");
@@ -267,7 +267,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                     continue;
                 emitIndent(out, indent + 1u);
                 out.append("const auto __adhd_arg_");
-                AppendAdhdUnsigned(out, i);
+                AppendUnsignedDecimal(out, i);
                 out.append(" = (");
                 if(arg)
                     emitExpr(out, *arg);
@@ -279,7 +279,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                 const Expr* arg = stmt.expr->arguments[i];
                 if(!arg || !arg->isMutArg){
                     out.append(", __adhd_arg_");
-                    AppendAdhdUnsigned(out, i);
+                    AppendUnsignedDecimal(out, i);
                 }
             }
             out.append("]()noexcept{ ");
@@ -300,7 +300,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                     emitExpr(out, *arg);
                 else{
                     out.append("__adhd_arg_");
-                    AppendAdhdUnsigned(out, i);
+                    AppendUnsignedDecimal(out, i);
                 }
             }
             if(stmt.expr->injectClassArena)
@@ -347,7 +347,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             out.append(");\r\n");
         }
         emitIndent(out, indent + 1u);
-        AppendAdhdTextCrlf(out, stmt.nativeCode);
+        AppendTextDiscardCrAndExpandLf(out, stmt.nativeCode);
         out.append("\r\n");
         for(const NativeBinding& binding : stmt.nativeBindings){
             if(binding.mode != ParamPassingMode::Mut || !binding.sourceExpr)

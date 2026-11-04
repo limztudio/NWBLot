@@ -7,6 +7,8 @@
 #include <core/common/log.h>
 
 #include <global/filesystem.h>
+#include <global/filesystem/path_identity.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,119 +25,6 @@ namespace __hidden_compile{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static Expected<Path<Core::Metascript::MetaArena>, ErrorCode> ResolveComparisonPath(const Path<Core::Metascript::MetaArena>& path){
-#if defined(NWB_PLATFORM_WINDOWS)
-    Core::Metascript::MVector<tchar> buffer(path.arena());
-    buffer.reserve(GlobalFilesystemDetail::s_InitialPathBufferCapacity);
-    DWORD capacity = static_cast<DWORD>(GlobalFilesystemDetail::s_InitialPathBufferCapacity);
-    for(;;){
-        buffer.resize(static_cast<usize>(capacity));
-        const DWORD length = GetFullPathNameW(path.c_str(), capacity, buffer.data(), nullptr);
-        if(length == 0u)
-            return MakeUnexpected(LastSystemError());
-        if(length < capacity)
-            return Path<Core::Metascript::MetaArena>(path.arena(), TStringView(buffer.data(), static_cast<usize>(length))).lexicallyNormal();
-        if(length == Limit<DWORD>::s_Max)
-            return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-        capacity = length + 1u;
-    }
-#else
-    return AbsolutePath(path);
-#endif
-}
-
-
-[[nodiscard]] static Expected<b8, ErrorCode> SamePathComponentText(const TStringView lhs, const TStringView rhs)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    const int comparison = CompareStringOrdinal(lhs.data(), static_cast<int>(lhs.size()), rhs.data(), static_cast<int>(rhs.size()), TRUE);
-    if(comparison == 0)
-        return MakeUnexpected(LastSystemError());
-    return comparison == CSTR_EQUAL;
-#else
-    return lhs == rhs;
-#endif
-}
-
-[[nodiscard]] static constexpr b8 SameGenericPrefixText(const Core::Metascript::MStringView lhs, const Core::Metascript::MStringView rhs)noexcept{
-    if(lhs.size() != rhs.size())
-        return false;
-#if defined(NWB_PLATFORM_WINDOWS)
-    for(usize i = 0u; i < lhs.size(); ++i){
-        if(Canonicalize(lhs[i]) != Canonicalize(rhs[i]))
-            return false;
-    }
-    return true;
-#else
-    return lhs == rhs;
-#endif
-}
-
-[[nodiscard]] static Expected<b8, ErrorCode> SameOutputPath(const Path<Core::Metascript::MetaArena>& lhs, const Path<Core::Metascript::MetaArena>& rhs){
-    const auto sameFullText = SamePathComponentText(lhs.native(), rhs.native());
-    if(!sameFullText)
-        return MakeUnexpected(sameFullText.error());
-    if(*sameFullText)
-        return true;
-
-    const auto sameExisting = AreSameExistingPath(lhs, rhs);
-    if(!sameExisting)
-        return MakeUnexpected(sameExisting.error());
-    if(*sameExisting)
-        return true;
-
-    Path<Core::Metascript::MetaArena> lhsCur = lhs;
-    Path<Core::Metascript::MetaArena> rhsCur = rhs;
-    for(;;){
-        const TStringView lhsLeaf = lhsCur.filenameView();
-        const TStringView rhsLeaf = rhsCur.filenameView();
-        if(lhsLeaf.empty() || rhsLeaf.empty())
-            break;
-        const auto sameLeaf = SamePathComponentText(lhsLeaf, rhsLeaf);
-        if(!sameLeaf)
-            return MakeUnexpected(sameLeaf.error());
-        if(!*sameLeaf)
-            break;
-
-        const TStringView lhsParentView = lhsCur.parentPathView();
-        const TStringView rhsParentView = rhsCur.parentPathView();
-        if(lhsParentView.empty() || rhsParentView.empty() || lhsParentView == lhsCur.native() || rhsParentView == rhsCur.native())
-            break;
-        lhsCur = Move(lhsCur).parentPath();
-        rhsCur = Move(rhsCur).parentPath();
-
-        const auto sameParentText = SamePathComponentText(lhsCur.native(), rhsCur.native());
-        if(!sameParentText)
-            return MakeUnexpected(sameParentText.error());
-        if(*sameParentText)
-            return true;
-
-        const auto sameParentExisting = AreSameExistingPath(lhsCur, rhsCur);
-        if(!sameParentExisting)
-            return MakeUnexpected(sameParentExisting.error());
-        if(*sameParentExisting)
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] static constexpr b8 IsSingleLineDepfilePath(const Core::Metascript::MStringView pathText)noexcept{
-    for(const Core::Metascript::MChar c : pathText){
-        if(c == '\n' || c == '\r')
-            return false;
-    }
-    return true;
-}
-
-static void AppendDepfileEscapedPath(const Core::Metascript::MStringView pathText, Core::Metascript::MString& out){
-    for(const Core::Metascript::MChar c : pathText){
-        if(c == ' ' || c == '\t' || c == '#' || c == ':' || c == '\\')
-            out.push_back('\\');
-        else if(c == '$')
-            out.push_back('$');
-        out.push_back(c);
-    }
-}
 
 [[nodiscard]] static Core::Metascript::MString DeriveVirtualCompilePath(
     const Path<Core::Metascript::MetaArena>& inputPath,
@@ -243,7 +132,7 @@ public:
 #else
             const b8 hasDrive = false;
 #endif
-            const auto candidate = __hidden_compile::ResolveComparisonPath(include.isAbsolute() || hasDrive ? include : baseDir / include);
+            const auto candidate = ResolveComparisonPath(include.isAbsolute() || hasDrive ? include : baseDir / include);
             if(!candidate){
                 NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve include '{}' from '{}': {}"), ConvertString(includePath), PathToString<tchar>(baseDir), ConvertString(candidate.error().message()));
                 return ResolveResult::Error;
@@ -309,9 +198,9 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
     inputPaths.reserve(options.inputs.size());
     outputPaths.reserve(options.inputs.size() * 2u + (options.depfilePath.empty() ? 0u : 1u));
     for(const MString& input : options.inputs){
-        auto absoluteInput = __hidden_compile::ResolveComparisonPath(Path<MetaArena>(arena, input));
-        auto absoluteHeader = __hidden_compile::ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveHeaderFilename(input, arena)));
-        auto absoluteSource = __hidden_compile::ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveSourceFilename(input, arena)));
+        auto absoluteInput = ResolveComparisonPath(Path<MetaArena>(arena, input));
+        auto absoluteHeader = ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveHeaderFilename(input, arena)));
+        auto absoluteSource = ResolveComparisonPath(outDir / Path<MetaArena>(arena, Adhd::Compiler::DeriveSourceFilename(input, arena)));
         if(!absoluteInput){
             NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve input path '{}': {}"), ConvertString(input), ConvertString(absoluteInput.error().message()));
             return false;
@@ -329,7 +218,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         outputPaths.push_back(Move(*absoluteSource));
     }
     const auto conflictingPaths = [](const Path<MetaArena>& lhs, const Path<MetaArena>& rhs) -> b8{
-        const auto same = __hidden_compile::SameOutputPath(lhs, rhs);
+        const auto same = SameOutputPath(lhs, rhs);
         if(!same){
             NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to compare '{}' and '{}': {}"), PathToString<tchar>(lhs), PathToString<tchar>(rhs), ConvertString(same.error().message()));
             return true;
@@ -351,7 +240,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         }
     }
     if(!options.depfilePath.empty()){
-        auto depfile = __hidden_compile::ResolveComparisonPath(Path<MetaArena>(arena, options.depfilePath));
+        auto depfile = ResolveComparisonPath(Path<MetaArena>(arena, options.depfilePath));
         if(!depfile){
             NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve depfile path '{}': {}"), ConvertString(options.depfilePath), ConvertString(depfile.error().message()));
             return false;
@@ -403,7 +292,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         const Path<MetaArena> sourceOutPath = outDir / Path<MetaArena>(arena, sourceRel);
 
         for(const MString& includePath : result.unit.resolvedIncludedFiles){
-            const auto include = __hidden_compile::ResolveComparisonPath(Path<MetaArena>(arena, includePath));
+            const auto include = ResolveComparisonPath(Path<MetaArena>(arena, includePath));
             if(!include){
                 NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to resolve included path '{}': {}"), ConvertString(includePath), ConvertString(include.error().message()));
                 return false;
@@ -419,28 +308,28 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
             const MString sourceGeneric = PathToGenericString<MChar>(arena, sourceOutPath);
             const MString inputGeneric = PathToGenericString<MChar>(arena, inputPath);
             if(
-                !__hidden_compile::IsSingleLineDepfilePath(headerGeneric)
-                || !__hidden_compile::IsSingleLineDepfilePath(sourceGeneric)
-                || !__hidden_compile::IsSingleLineDepfilePath(inputGeneric)
+                HasLineBreak(AStringView(headerGeneric))
+                || HasLineBreak(AStringView(sourceGeneric))
+                || HasLineBreak(AStringView(inputGeneric))
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: depfile path for '{}' contains a newline"), ConvertString(inputView));
                 return false;
             }
             for(const MString& depPath : result.unit.resolvedIncludedFiles){
-                if(!__hidden_compile::IsSingleLineDepfilePath(depPath)){
+                if(HasLineBreak(AStringView(depPath))){
                     NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: included dependency path for '{}' contains a newline"), ConvertString(inputView));
                     return false;
                 }
             }
 
-            __hidden_compile::AppendDepfileEscapedPath(headerGeneric, combinedDepContent);
+            AppendDepfileEscapedPath(headerGeneric, combinedDepContent);
             combinedDepContent.push_back(' ');
-            __hidden_compile::AppendDepfileEscapedPath(sourceGeneric, combinedDepContent);
+            AppendDepfileEscapedPath(sourceGeneric, combinedDepContent);
             combinedDepContent.append(": ");
-            __hidden_compile::AppendDepfileEscapedPath(inputGeneric, combinedDepContent);
+            AppendDepfileEscapedPath(inputGeneric, combinedDepContent);
             for(const MString& depPath : result.unit.resolvedIncludedFiles){
                 combinedDepContent.push_back(' ');
-                __hidden_compile::AppendDepfileEscapedPath(depPath, combinedDepContent);
+                AppendDepfileEscapedPath(depPath, combinedDepContent);
             }
             combinedDepContent.push_back('\n');
         }

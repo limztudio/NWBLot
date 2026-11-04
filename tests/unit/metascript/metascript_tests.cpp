@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/metascript/lexer.h>
 #include <core/metascript/parser.h>
 
 #include <global/text_utils.h>
@@ -31,7 +32,6 @@ constexpr AStringView s_NameField = "name";
 using Document = NWB::Core::Metascript::Document;
 using Value = NWB::Core::Metascript::Value;
 using MStringView = NWB::Core::Metascript::MStringView;
-using NWB::Core::Metascript::LiteralView;
 using AString = NWB::Tests::TestAString;
 
 
@@ -375,6 +375,24 @@ TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
         EXPECT_EQ(asset->asInteger(), testCase.retainedValue);
         EXPECT_EQ(document.findVariable("missing"), nullptr);
     }
+}
+
+
+TEST(Metascript, UnicodeCharLiteralRejectsWideValueBeforeNarrowing){
+    using NWB::Core::Metascript::TryDecodeCharLiteral;
+    constexpr b8 rejectsWide = []()noexcept{
+        i64 value = 7;
+        return !TryDecodeCharLiteral("'\\U100000000'", value) && value == 7;
+    }();
+    static_assert(rejectsWide);
+
+    i64 value = 7;
+    EXPECT_FALSE(TryDecodeCharLiteral("'\\UD800'", value));
+    EXPECT_EQ(value, 7);
+    EXPECT_FALSE(TryDecodeCharLiteral("'\\U110000'", value));
+    EXPECT_EQ(value, 7);
+    EXPECT_TRUE(TryDecodeCharLiteral("'\\U10FFFF'", value));
+    EXPECT_EQ(value, 0x10FFFF);
 }
 
 

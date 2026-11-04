@@ -133,8 +133,8 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
     const u32 fullGroupsX = DivideUp(targets.width, groupSize);
     const u32 fullGroupsY = DivideUp(targets.height, groupSize);
-    const u32 coarseWidth = (targets.width + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR;
-    const u32 coarseHeight = (targets.height + NWB_SW_SHADOW_COARSE_FACTOR - 1u) / NWB_SW_SHADOW_COARSE_FACTOR;
+    const u32 coarseWidth = DivideUpWrapping(targets.width, NWB_SW_SHADOW_COARSE_FACTOR);
+    const u32 coarseHeight = DivideUpWrapping(targets.height, NWB_SW_SHADOW_COARSE_FACTOR);
     const u32 coarseGroupsX = DivideUp(coarseWidth, groupSize);
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 
@@ -161,8 +161,8 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
     // Soft opaque resolve replaces the full-resolution mask.
     if(softWillRun){
-        const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
-        const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+        const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
+        const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
         const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
         const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
 

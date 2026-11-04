@@ -15,6 +15,8 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/capture/command_ir.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,7 +67,7 @@ public:
         commandList.setPushConstants(&payload.parameters, sizeof(payload.parameters));
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_DepthPyramid, payload.graphics.getDevice(), commandList);
 
-        commandList.dispatch((payload.parameters.destinationWidth + NWB_REFLECTION_DEPTH_GROUP_SIZE - 1u) / NWB_REFLECTION_DEPTH_GROUP_SIZE, (payload.parameters.destinationHeight + NWB_REFLECTION_DEPTH_GROUP_SIZE - 1u) / NWB_REFLECTION_DEPTH_GROUP_SIZE, 1u);
+        commandList.dispatch(DivideUpWrapping(payload.parameters.destinationWidth, NWB_REFLECTION_DEPTH_GROUP_SIZE), DivideUpWrapping(payload.parameters.destinationHeight, NWB_REFLECTION_DEPTH_GROUP_SIZE), 1u);
         return true;
     }
 };
@@ -114,7 +116,7 @@ public:
         commandList.setPushConstants(&parameters, sizeof(parameters));
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_Temporal, payload.graphics.getDevice(), commandList);
 
-        commandList.dispatch((payload.width + NWB_REFLECTION_TEMPORAL_GROUP_SIZE - 1u) / NWB_REFLECTION_TEMPORAL_GROUP_SIZE, (payload.height + NWB_REFLECTION_TEMPORAL_GROUP_SIZE - 1u) / NWB_REFLECTION_TEMPORAL_GROUP_SIZE, 1u);
+        commandList.dispatch(DivideUpWrapping(payload.width, NWB_REFLECTION_TEMPORAL_GROUP_SIZE), DivideUpWrapping(payload.height, NWB_REFLECTION_TEMPORAL_GROUP_SIZE), 1u);
         return !commandList.commandRecordingFailed();
     }
 
@@ -149,7 +151,7 @@ public:
         commandList.setPushConstants(&payload.parameters, sizeof(payload.parameters));
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), ReflectionGpuTimingScope::s_Spatial, payload.graphics.getDevice(), commandList);
 
-        commandList.dispatch((payload.parameters.width + NWB_REFLECTION_SPATIAL_GROUP_SIZE - 1u) / NWB_REFLECTION_SPATIAL_GROUP_SIZE, (payload.parameters.height + NWB_REFLECTION_SPATIAL_GROUP_SIZE - 1u) / NWB_REFLECTION_SPATIAL_GROUP_SIZE, 1u);
+        commandList.dispatch(DivideUpWrapping(payload.parameters.width, NWB_REFLECTION_SPATIAL_GROUP_SIZE), DivideUpWrapping(payload.parameters.height, NWB_REFLECTION_SPATIAL_GROUP_SIZE), 1u);
         return !commandList.commandRecordingFailed();
     }
 };

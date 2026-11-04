@@ -5,6 +5,7 @@
 #include "assets_graphics_fixture.h"
 
 #include <impl/assets_material/cook_private.h>
+#include <impl/assets_material/cook_types.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -29,6 +30,19 @@ namespace __hidden_assets_graphics_material_bind_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(AssetsGraphics, MaterialKeyHashPreservesHighBytesAndPathSeparators){
+    EXPECT_EQ(ComputeFnv64AsciiLowerText(AStringView("Ab\\C/\xC3\xA9", 7u)), 0xff4be59fee952354ull);
+    EXPECT_EQ(ComputeFnv64AsciiLowerText(AStringView("Ab/C/\xC3\xA9", 7u)), 0x6c9a1f221edbde7dull);
+    NWB::Impl::MaterialParameterType type{};
+    type.valueType = NWB::Impl::MaterialParameterValueType::f32;
+    type.componentCount = 3u;
+    const auto packed = NWB::Impl::PackMaterialTypedValueMeta(AStringView("Ab\\C/\xC3\xA9", 7u), type);
+    EXPECT_EQ(packed.x, 0xee952354u);
+    EXPECT_EQ(packed.y, 0xff4be59fu);
+    EXPECT_EQ(packed.z, static_cast<u32>(type.valueType));
+    EXPECT_EQ(packed.w, 3u);
+}
 
 constexpr AStringView s_MaterialPixelShaderPath = "project/shaders/material_ps";
 
@@ -77,10 +91,10 @@ public:
     [[nodiscard]] ThrowingImplicitIdentifierSize size()const noexcept;
 };
 
-static_assert(noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedUpperIdentifier({}, DeclVal<ThrowingConstIdentifierAppend&>())));
-static_assert(!noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedPascalIdentifier({}, DeclVal<ThrowingConstIdentifierAppend&>())));
-static_assert(!noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedUpperIdentifier({}, DeclVal<ThrowingIdentifierSizeAppend&>())));
-static_assert(!noexcept(Impl::MaterialCookDetail::AppendMaterialBindGeneratedPascalIdentifier({}, DeclVal<ThrowingIdentifierSizeAppend&>())));
+static_assert(noexcept(AppendAsciiUpperIdentifier({}, "VALUE", DeclVal<ThrowingConstIdentifierAppend&>())));
+static_assert(!noexcept(AppendUnderscoreSeparatedPascalIdentifier({}, "Value", DeclVal<ThrowingConstIdentifierAppend&>())));
+static_assert(!noexcept(AppendAsciiUpperIdentifier({}, "VALUE", DeclVal<ThrowingIdentifierSizeAppend&>())));
+static_assert(!noexcept(AppendUnderscoreSeparatedPascalIdentifier({}, "Value", DeclVal<ThrowingIdentifierSizeAppend&>())));
 
 
 using TestArena = AssetsGraphicsFixture::TestArena;

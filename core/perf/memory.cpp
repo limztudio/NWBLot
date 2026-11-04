@@ -3,7 +3,9 @@
 
 
 #include "memory.h"
-#include "named_registry.h"
+
+#include <global/named_registry.h>
+#include <global/overflow.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,27 +35,12 @@ MemoryDelta Difference(const MemorySnapshot& current, const MemorySnapshot& prev
     if(!current.valid() || !previous.valid() || current.scopeName != previous.scopeName || current.source != previous.source)
         return {};
 
-    const auto signedDifference = [](const u64 value, const u64 prior)noexcept -> Expected<i64>{
-        constexpr u64 s_MaxPositive = static_cast<u64>(Limit<i64>::s_Max);
-        if(value >= prior){
-            const u64 magnitude = value - prior;
-            if(magnitude > s_MaxPositive)
-                return MakeUnexpected(Failure{});
-            return static_cast<i64>(magnitude);
-        }
-
-        const u64 magnitude = prior - value;
-        constexpr u64 s_MaxNegative = s_MaxPositive + 1u;
-        if(magnitude > s_MaxNegative)
-            return MakeUnexpected(Failure{});
-        return magnitude == s_MaxNegative ? Limit<i64>::s_Min : -static_cast<i64>(magnitude);
-    };
-    const auto reservedBytes = signedDifference(current.reservedBytes, previous.reservedBytes);
-    const auto usedBytes = signedDifference(current.usedBytes, previous.usedBytes);
-    const auto peakUsedBytes = signedDifference(current.peakUsedBytes, previous.peakUsedBytes);
-    const auto allocationCount = signedDifference(current.allocationCount, previous.allocationCount);
-    const auto reallocationCount = signedDifference(current.reallocationCount, previous.reallocationCount);
-    const auto deallocationCount = signedDifference(current.deallocationCount, previous.deallocationCount);
+    const auto reservedBytes = SignedDifference(current.reservedBytes, previous.reservedBytes);
+    const auto usedBytes = SignedDifference(current.usedBytes, previous.usedBytes);
+    const auto peakUsedBytes = SignedDifference(current.peakUsedBytes, previous.peakUsedBytes);
+    const auto allocationCount = SignedDifference(current.allocationCount, previous.allocationCount);
+    const auto reallocationCount = SignedDifference(current.reallocationCount, previous.reallocationCount);
+    const auto deallocationCount = SignedDifference(current.deallocationCount, previous.deallocationCount);
     if(!reservedBytes || !usedBytes || !peakUsedBytes || !allocationCount || !reallocationCount || !deallocationCount)
         return {};
 

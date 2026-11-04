@@ -95,7 +95,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         SCOPED_TRACE(testing::Message() << "change=" << change);
         m_builder.style().fontSize = 16.0f;
         m_builder.listStyle().row = originalStyle;
-        ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "en"));
+        ASSERT_TRUE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
         ListState state;
         ArithmeticSource source;
         source.specialIndex = 50000u;
@@ -119,7 +119,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         case 0u: ASSERT_TRUE(UiWidgetTests::InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text)); break;
         case 1u: m_builder.style().fontSize = 12.0f; break;
         case 2u: display.pixelScaleX = 1.25f; display.pixelScaleY = 1.5f; break;
-        case 3u: ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "ko")); break;
+        case 3u: ASSERT_TRUE(m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko")); break;
         case 4u: m_builder.listStyle().row.padding.bottom = m_builder.listStyle().row.padding.bottom + 2.0f; break;
         case 5u: ++source.generation; break;
         case 6u: --source.count; break;

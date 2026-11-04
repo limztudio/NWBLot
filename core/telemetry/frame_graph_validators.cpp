@@ -22,11 +22,7 @@ namespace __hidden_frame_graph_validators{
 
 [[nodiscard]] static i32 QueueAssignmentScoreTotal(const FrameGraphQueueAssignmentScore& score)noexcept{
     const i64 total = static_cast<i64>(score.overlap) - static_cast<i64>(score.queueLoad) - static_cast<i64>(score.incomingCrossings) - static_cast<i64>(score.outgoingCrossings) - static_cast<i64>(score.ownershipTransfers);
-    if(total < static_cast<i64>(Limit<i32>::s_Min))
-        return Limit<i32>::s_Min;
-    if(total > static_cast<i64>(Limit<i32>::s_Max))
-        return Limit<i32>::s_Max;
-    return static_cast<i32>(total);
+    return SaturateI64ToI32(total);
 }
 
 [[nodiscard]] static b8 IsCanonicalQueue(const FrameGraphPhysicalQueueId& queue)noexcept{

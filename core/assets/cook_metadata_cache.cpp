@@ -141,45 +141,6 @@ namespace CookMetadataDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView ExtractFirstIdentifierToken(const AStringView text)noexcept{
-    usize index = 0u;
-    while(index < text.size()){
-        const char ch = text[index];
-        if(ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'){
-            ++index;
-            continue;
-        }
-        if(ch == '/' && index + 1u < text.size()){
-            if(text[index + 1u] == '/'){
-                index += 2u;
-                while(index < text.size() && text[index] != '\n')
-                    ++index;
-                continue;
-            }
-            if(text[index + 1u] == '*'){
-                index += 2u;
-                while(index + 1u < text.size() && !(text[index] == '*' && text[index + 1u] == '/'))
-                    ++index;
-                if(index + 1u < text.size())
-                    index += 2u;
-                else
-                    return {};
-                continue;
-            }
-        }
-        break;
-    }
-
-    const usize start = index;
-    while(index < text.size()){
-        const char ch = text[index];
-        const b8 isIdent = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
-        if(!isIdent)
-            break;
-        ++index;
-    }
-    return text.substr(start, index - start);
-}
 
 void PrepareNwbFileAssetCacheRecord(
     const Path& repoRoot,

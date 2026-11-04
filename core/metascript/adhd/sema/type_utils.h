@@ -234,7 +234,7 @@ struct BuiltinFunctionInfo{
     MStringView returnTypeArgName;
     usize arity;
     BuiltinFunctionReturnRule::Enum returnRule;
-    Array<BuiltinFunctionArgRule::Enum, 3> argRules;
+    Array<BuiltinFunctionArgRule::Enum, 5> argRules;
 };
 
 struct BuiltinGlobalConstantInfo{

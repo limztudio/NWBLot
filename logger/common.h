@@ -8,6 +8,7 @@
 #include "global.h"
 
 #include <global/binary.h>
+#include <global/filesystem/operations.h>
 #include <global/process.h>
 #include <global/thread.h>
 
@@ -62,23 +63,6 @@ inline auto ArgAddOption(CLI& cli, T& arg){
 
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena)noexcept{
     return MakeTuple(Timer{}, Core::Common::LogType::Info, LogString(arena));
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline ::Path<ArenaT> ResolveDefaultStorageDirectory(ArenaT& arena, const StringView defaultDirectoryName){
-    const auto executableDirectory = GetExecutableDirectory(arena);
-    if(executableDirectory)
-        return *executableDirectory / defaultDirectoryName;
-
-    return ::Path<ArenaT>(arena, defaultDirectoryName);
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline ::Path<ArenaT> ResolveStorageDirectory(ArenaT& arena, const Path& configuredStorageDirectory, const StringView defaultDirectoryName){
-    if(!configuredStorageDirectory.empty())
-        return ::Path<ArenaT>(arena, configuredStorageDirectory);
-
-    return ResolveDefaultStorageDirectory(arena, defaultDirectoryName);
 }
 
 

@@ -4,6 +4,7 @@
 
 #include "gpu_timing.h"
 
+#include <global/atomic_identity.h>
 #include <global/exception.h>
 
 
@@ -28,15 +29,6 @@ inline constexpr Name s_GpuTimingListenerScratchArena("graphics.gpu_timing.liste
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static Expected<u64> AllocateSampleSubscriptionIdentity()noexcept{
-    u64 identity = s_NextSampleSubscriptionIdentity.load(MemoryOrder::relaxed);
-    while(identity != Limit<u64>::s_Max){
-        if(s_NextSampleSubscriptionIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return identity;
-    }
-    return MakeUnexpected(Failure{});
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,7 +86,7 @@ Expected<GpuTimingSampleSubscription> GpuTimingRecorder::subscribeSampleListener
     SampleListenerRecordPtr record(listenerRecord, SampleListenerRecordPtr::deleter_type(&m_arena), s_AdoptRef);
 
     ScopedLock lock(m_sampleListenerMutex);
-    const auto identity = __hidden_gpu_timing_listener::AllocateSampleSubscriptionIdentity();
+    const auto identity = TryNextAtomicIdentityAllowZero(__hidden_gpu_timing_listener::s_NextSampleSubscriptionIdentity);
     if(!identity)
         return MakeUnexpected(identity.error());
 

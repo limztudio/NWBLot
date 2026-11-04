@@ -7,6 +7,8 @@
 #include <global/atomic.h>
 #include <global/exception.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,14 +21,10 @@ NWB_CORE_BEGIN
 
 u64 GpuTaskGraph::AllocateGeneration()noexcept{
     static Atomic<u64> s_NextGeneration{ 1u };
-
-    u64 nextGeneration = s_NextGeneration.load(MemoryOrder::relaxed);
-    for(;;){
-        if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max)
-            NWB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
-        if(s_NextGeneration.compare_exchange_weak(nextGeneration, nextGeneration + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
-            return nextGeneration;
-    }
+    const u64 identity = TryNextAtomicIdentity(s_NextGeneration);
+    if(identity == 0u)
+        NWB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
+    return identity;
 }
 
 GpuTaskGraph::~GpuTaskGraph()noexcept(false){

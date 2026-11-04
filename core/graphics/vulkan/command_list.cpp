@@ -8,6 +8,8 @@
 #include <core/common/log.h>
 #include <core/graphics/rhi/queue_sharing.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,9 +70,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
-    ++m_recordingLeaseSerial;
-    if(m_recordingLeaseSerial == 0u)
-        ++m_recordingLeaseSerial;
+    AdvanceWrappingNonzero(m_recordingLeaseSerial);
 
     NWB_ASSERT_MSG(m_markerStack.empty(), NWB_TEXT("Vulkan: Command list reopened with unterminated marker scopes"));
     m_stateTracker.rollbackRecordingAttempt();

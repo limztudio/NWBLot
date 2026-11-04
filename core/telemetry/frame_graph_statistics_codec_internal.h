@@ -10,6 +10,7 @@
 #include <core/alloc/scratch.h>
 
 #include <global/binary.h>
+#include <global/overflow.h>
 #include <global/simd/vector.h>
 #include <global/span.h>
 
@@ -82,13 +83,6 @@ template<typename OutputT, typename InputT>
     converted.submissionSeconds = statistics.submissionSeconds;
     converted.recoverySubmissionCount = statistics.recoverySubmissionCount;
     return converted;
-}
-
-[[nodiscard]] inline b8 AccumulateBoundedCount(const u64 value, const u64 maximum, u64& total)noexcept{
-    if(total > maximum || value > maximum - total)
-        return false;
-    total += value;
-    return true;
 }
 
 template<typename OutputT, typename InputT>

@@ -6,6 +6,7 @@
 #include "volume_storage_detail.h"
 #include "arena_names.h"
 
+#include <global/filesystem/operations_file_io.h>
 #include <global/simplemath.h>
 #include <global/span.h>
 
@@ -28,47 +29,6 @@ namespace FilesystemVolumeDetail{
 static constexpr StringView s_NoMountLabel = "none";
 static constexpr StringView s_UnknownMountLabel = "unknown";
 constexpr usize s_ErrnoMessageBufferBytes = 256u;
-
-struct SegmentCreateFailure{
-    ErrorCode code;
-    b8 created;
-};
-
-static Expected<void, SegmentCreateFailure> CreateNewSegment(const Path& path, const u64 size)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    if(size > static_cast<u64>(Limit<LONGLONG>::s_Max))
-        return MakeUnexpected(SegmentCreateFailure{ MakeErrorCode(ErrorCondition::value_too_large), false });
-    const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if(handle == INVALID_HANDLE_VALUE)
-        return MakeUnexpected(SegmentCreateFailure{ LastSystemError(), false });
-    ErrorCode error;
-    LARGE_INTEGER end{};
-    end.QuadPart = static_cast<LONGLONG>(size);
-    if(!SetFilePointerEx(handle, end, nullptr, FILE_BEGIN) || !SetEndOfFile(handle))
-        error = LastSystemError();
-    if(!CloseHandle(handle) && !error)
-        error = LastSystemError();
-#else
-    if(size > static_cast<u64>(Limit<off_t>::s_Max))
-        return MakeUnexpected(SegmentCreateFailure{ MakeErrorCode(ErrorCondition::value_too_large), false });
-    constexpr u32 s_NewSegmentMode = 0666u;
-    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, s_NewSegmentMode);
-    if(descriptor < 0)
-        return MakeUnexpected(SegmentCreateFailure{ LastSystemError(), false });
-    ErrorCode error;
-    while(ftruncate(descriptor, static_cast<off_t>(size)) != 0){
-        if(errno != EINTR){
-            error = LastSystemError();
-            break;
-        }
-    }
-    if(close(descriptor) != 0 && !error)
-        error = LastSystemError();
-#endif
-    if(error)
-        return MakeUnexpected(SegmentCreateFailure{ error, true });
-    return {};
-}
 
 static Expected<void, ErrorCode> GrowLastSegment(const Path& path, const u64 size, const u64 minimumBytes)noexcept{
     if(minimumBytes > size)
@@ -422,7 +382,7 @@ b8 VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     }
     m_segmentPaths.reserve(segmentIndex + 1u);
     Path path = segmentPath(segmentIndex);
-    const auto created = FilesystemVolumeDetail::CreateNewSegment(path, m_segmentSize);
+    const auto created = CreateSizedFileExclusive(path, m_segmentSize);
     if(!created){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem('{}'): failed to create segment '{}': {}{}"), ConvertString(m_volumeName), PathToString<tchar>(path), ConvertString(created.error().code.message()), created.error().created ? NWB_TEXT("; partial segment retained") : NWB_TEXT(""));
         return false;

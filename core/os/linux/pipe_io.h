@@ -30,7 +30,6 @@ struct ClipboardPipeReadFailure{
 };
 
 [[nodiscard]] Expected<ClipboardPipe> OpenClipboardPipe()noexcept;
-[[nodiscard]] b8 ConfigureClipboardPipe(int fd)noexcept;
 void CloseClipboardPipe(int& fd)noexcept;
 [[nodiscard]] Expected<b8, ClipboardPipeReadFailure> ReadClipboardPipe(int fd, ClipboardTextAccumulator& text);
 

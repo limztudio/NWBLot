@@ -4,6 +4,8 @@
 
 #include "scheduler.h"
 
+#include <global/range_partition.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,8 +61,9 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelRange(cons
             TaskNode& node = reserved->node;
             if(node.latestCanceledGeneration != 0u)
                 ContainerDetail::ReserveGrowingCapacity(node.olderCanceledGenerations, AddSize(node.olderCanceledGenerations.size(), 1u));
-            const usize first = begin + chunk * chunkSize + Min(chunk, remainder);
-            const usize last = first + chunkSize + (chunk < remainder ? 1u : 0u);
+            const BalancedPartitionRange range = ComputeBalancedPartitionRange(begin, chunk, chunkSize, remainder);
+            const usize first = range.first;
+            const usize last = range.last;
             // Internal captures are trivial; no user callable runs under the lock.
             node.function = [context, invoke, first, last](){ invoke.get()(context, first, last); };
         }

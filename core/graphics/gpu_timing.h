@@ -184,8 +184,6 @@ class GpuTimingRecorder final : NoCopy{
 
 
 private:
-    class BeginQueryPublicationUnwindScope;
-    class PrerequisiteTrackingUnwindScope;
     class SampleCallbackCompletionScope;
 
     struct QueueCompletion{
@@ -387,7 +385,6 @@ public:
 
 
 private:
-    class PreparedSubmissionUnwindScope;
 
     struct ScopePublicationState{
         enum Enum : u8{

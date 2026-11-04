@@ -171,8 +171,8 @@ Expected<AvboitTargetLayout> TryResolveAvboitTargetLayout(
     if(width == 0u || height == 0u || refractionTileSize == 0u)
         return makeUnexpected(Failure());
 
-    const u64 lowWidth64 = max(cast<u64>(1u), (cast<u64>(width) + cast<u64>(s_AvboitDownsample) - 1u) / cast<u64>(s_AvboitDownsample));
-    const u64 lowHeight64 = max(cast<u64>(1u), (cast<u64>(height) + cast<u64>(s_AvboitDownsample) - 1u) / cast<u64>(s_AvboitDownsample));
+    const u64 lowWidth64 = max(cast<u64>(1u), divideUpWrappingU64(cast<u64>(width), cast<u64>(s_AvboitDownsample)));
+    const u64 lowHeight64 = max(cast<u64>(1u), divideUpWrappingU64(cast<u64>(height), cast<u64>(s_AvboitDownsample)));
     if(lowWidth64 > cast<u64>(4294967295u) || lowHeight64 > cast<u64>(4294967295u))
         return makeUnexpected(Failure());
 
@@ -180,16 +180,16 @@ Expected<AvboitTargetLayout> TryResolveAvboitTargetLayout(
     const u32 lowHeight = cast<u32>(lowHeight64);
     const u32 virtualSliceCount = s_AvboitVirtualSlices;
     const u32 physicalSliceCount = s_AvboitPhysicalSlices;
-    const u64 coverageWordCount = cast<u64>((virtualSliceCount + s_AvboitCoverageSlicesPerWord - 1u) / s_AvboitCoverageSlicesPerWord);
+    const u64 coverageWordCount = cast<u64>(divideUpWrappingU32(virtualSliceCount, s_AvboitCoverageSlicesPerWord));
     const u64 depthWarpWordCount = cast<u64>(virtualSliceCount);
     const u64 pixelCount = cast<u64>(lowWidth) * cast<u64>(lowHeight);
     if(pixelCount > cast<u64>(4294967295u))
         return makeUnexpected(Failure());
-    const u32 physicalExtinctionWordCount = (physicalSliceCount + s_AvboitExtinctionSlicesPerWord - 1u) / s_AvboitExtinctionSlicesPerWord;
+    const u32 physicalExtinctionWordCount = divideUpWrappingU32(physicalSliceCount, s_AvboitExtinctionSlicesPerWord);
     if(physicalExtinctionWordCount == 0u || pixelCount > cast<u64>(4294967295u) / cast<u64>(physicalExtinctionWordCount))
         return makeUnexpected(Failure());
     const u64 extinctionWordCount = pixelCount * cast<u64>(physicalExtinctionWordCount);
-    const u64 refractionTileCount = ((cast<u64>(width) + cast<u64>(refractionTileSize) - 1u) / cast<u64>(refractionTileSize)) * ((cast<u64>(height) + cast<u64>(refractionTileSize) - 1u) / cast<u64>(refractionTileSize));
+    const u64 refractionTileCount = (divideUpWrappingU64(cast<u64>(width), cast<u64>(refractionTileSize))) * (divideUpWrappingU64(cast<u64>(height), cast<u64>(refractionTileSize)));
     if(refractionTileCount == 0u || refractionTileCount > cast<u64>(4294967295u) / 4u)
         return makeUnexpected(Failure());
 
@@ -224,9 +224,9 @@ RendererAvboitPushConstants ResolveRendererAvboitPushConstants(
     pushConstants.frame[3u] = lowHeight;
     pushConstants.volume[0u] = virtualSliceCount;
     pushConstants.volume[1u] = physicalSliceCount;
-    const u32 physicalExtinctionWordCount = (physicalSliceCount + s_AvboitExtinctionSlicesPerWord - 1u) / s_AvboitExtinctionSlicesPerWord;
+    const u32 physicalExtinctionWordCount = divideUpWrappingU32(physicalSliceCount, s_AvboitExtinctionSlicesPerWord);
     pushConstants.volume[2u] = cast<u32>(cast<u64>(lowWidth) * cast<u64>(lowHeight) * cast<u64>(physicalExtinctionWordCount));
-    pushConstants.volume[3u] = (virtualSliceCount + s_AvboitCoverageSlicesPerWord - 1u) / s_AvboitCoverageSlicesPerWord;
+    pushConstants.volume[3u] = divideUpWrappingU32(virtualSliceCount, s_AvboitCoverageSlicesPerWord);
     f32 presentationMode = s_AvboitPresentationSdr;
     if(hdr10OutputActive)
         presentationMode = s_AvboitPresentationHdr10;

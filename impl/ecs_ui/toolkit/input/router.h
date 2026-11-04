@@ -318,7 +318,7 @@ public:
         return WantsRouterCommands(m_popups, m_focus, m_commandSources);
     }
     [[nodiscard]] b8 ownsKey(const i32 key)const noexcept{
-        return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
+        return IsValidInputKeyCode(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
     }
     [[nodiscard]] b8 ownsSource(const InputSource& source)const noexcept{
         return OwnsRouterCommandSource(m_commandSources, source);
@@ -987,4 +987,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

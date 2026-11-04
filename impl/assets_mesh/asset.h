@@ -6,7 +6,7 @@
 
 
 #include "../global.h"
-#include <impl/assets_mesh/payload_types.adhd.h>
+#include <impl/assets_mesh/payload_validation.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/module.h>
@@ -137,4 +137,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

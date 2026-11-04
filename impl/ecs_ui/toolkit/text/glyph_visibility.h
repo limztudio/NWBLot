@@ -49,48 +49,24 @@ namespace TextGlyphVisibility{
     const auto rectangle = LoadAtlasRectangle(glyph, atlas, fontSize, topLeft);
     if(!rectangle)
         return MakeUnexpected(rectangle.error());
-    return Rect{
-        static_cast<f32>(VectorDoubleGetX(rectangle->value)),
-        static_cast<f32>(VectorDoubleGetY(rectangle->value)),
-        static_cast<f32>(VectorDoubleGetZ(rectangle->value)),
-        static_cast<f32>(VectorDoubleGetW(rectangle->value))
-    };
+    return ToTextGlyphAtlasRect(rectangle->value);
 }
 
 // Coverage needs explicit bounds or a valid native face; untrusted native bounds retain conservative preparation.
 [[nodiscard]] inline TextGlyphIntersection::Enum Candidate(const PlacedGlyph& glyph, const BakedFontAtlas* const selectedAtlas, const f32 fontSize, const f32 physicalSize, const Point& topLeft, const Rect& clip, const Point pixelScale = { 1.0f, 1.0f })noexcept{
-    if(
-        !IsValidTextGlyphLocation(glyph.position, topLeft) || !IsValidTextFontSize(fontSize) || !IsFinite(physicalSize)
-        || physicalSize < 1.0f || physicalSize > s_TextMaxRasterPpemF32 || !IsValidUiRect(clip)
-        || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
-    )
-        return TextGlyphIntersection::Invalid;
-    if(clip.width <= 0.0f || clip.height <= 0.0f)
-        return TextGlyphIntersection::Invisible;
+    const TextGlyphIntersection::Enum inputStatus = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, fontSize, physicalSize, clip, pixelScale);
+    if(inputStatus != TextGlyphIntersection::Visible)
+        return inputStatus;
     if(selectedAtlas){
         const auto rectangle = LoadAtlasRectangle(glyph, *selectedAtlas, fontSize, topLeft);
         if(!rectangle)
             return TextGlyphIntersection::Invalid;
-        const f64 minX = VectorDoubleGetX(rectangle->value);
-        const f64 minY = VectorDoubleGetY(rectangle->value);
-        const f64 maxX = minX + VectorDoubleGetZ(rectangle->value);
-        const f64 maxY = minY + VectorDoubleGetW(rectangle->value);
-        return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
+        return IntersectGlyphAtlasRectangle(rectangle->value, clip);
     }
-    if(!IsValidUiRect(glyph.ink) || (glyph.coverage.known && !IsValidUiRect(glyph.coverage.ink)))
-        return TextGlyphIntersection::Invalid;
-    const Rect& ink = glyph.coverage.known ? glyph.coverage.ink : glyph.ink;
-    if(glyph.coverage.known && (ink.width <= 0.0f || ink.height <= 0.0f))
-        return TextGlyphIntersection::Invisible;
-    u32 unitsPerEm = 1u;
-    if(!glyph.coverage.known){
-        if(!glyph.face || !glyph.face->valid())
-            return TextGlyphIntersection::Invalid;
-        if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
-            return TextGlyphIntersection::Visible;
-        unitsPerEm = glyph.face->unitsPerEm();
-    }
-    return IntersectTextCoverageInk(glyph.position, topLeft, ink, glyph.coverage.known, unitsPerEm, fontSize, physicalSize, clip, pixelScale);
+    const b8 hasValidFace = glyph.face && glyph.face->valid();
+    const b8 coverageInkReliable = hasValidFace && glyph.face->coverageInkReliable();
+    const u32 faceUnitsPerEm = hasValidFace ? glyph.face->unitsPerEm() : 1u;
+    return EvaluateUnselectedAtlasGlyphCandidate(glyph.position, topLeft, glyph.ink, glyph.coverage, hasValidFace, coverageInkReliable, faceUnitsPerEm, fontSize, physicalSize, clip, pixelScale);
 }
 
 [[nodiscard]] inline Expected<Rect> CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale = { 1.0f, 1.0f })noexcept{
@@ -111,4 +87,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

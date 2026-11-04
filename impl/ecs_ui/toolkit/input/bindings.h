@@ -27,12 +27,6 @@ public:
 
 
 public:
-    [[nodiscard]] static b8 ValidKey(const i32 key)noexcept{
-        return IsValidInputKeyCode(key);
-    }
-
-
-public:
     explicit InputBindings(Core::Alloc::GlobalArena& arena)
         : m_bindings(arena)
     {
@@ -57,7 +51,7 @@ public:
         m_bindings.swap(candidate);
     }
     [[nodiscard]] InputCommandIntent resolve(const i32 key, const i32 modifiers)const noexcept{
-        return ResolveInputKeyBinding(m_bindings, key, modifiers, ValidKey(key), s_InputBindingModifierMask, s_InputLockModifierMask, s_InputModifierShift);
+        return ResolveInputKeyBinding(m_bindings, key, modifiers, IsValidInputKeyCode(key), s_InputBindingModifierMask, s_InputLockModifierMask, s_InputModifierShift);
     }
     // Borrowed observations remain valid until a successful profile replacement or default restoration.
     [[nodiscard]] const BindingVector& bindings()const noexcept{ return m_bindings; }
@@ -75,4 +69,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

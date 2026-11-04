@@ -78,18 +78,6 @@ b8 ValidateSourceVertexRefStreams(
     usize uv0Count,
     usize colorCount
 );
-inline b8 ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams){
-    return ValidateSourceVertexRefStreams(
-        nwbFilePath,
-        metaKind,
-        Span<const MeshVertexRef>(streams.vertexRefs.data(), streams.vertexRefs.size()),
-        streams.positions.size(),
-        streams.normals.size(),
-        streams.tangents.size(),
-        streams.uv0.size(),
-        streams.colors.size()
-    );
-}
 template<typename SkinInfluenceVectorT, typename PathArenaT>
 b8 ParseSourceSkinInfluencesInto(
     const ::Path<PathArenaT>& nwbFilePath,
@@ -150,7 +138,16 @@ inline Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
         return MakeUnexpected(Failure{});
     if(!ValidateSourceIndexStream(nwbFilePath, metaKind, streams.indices, streams.vertexRefs.size()))
         return MakeUnexpected(Failure{});
-    if(!ValidateSourceVertexRefs(nwbFilePath, metaKind, streams))
+    if(!ValidateSourceVertexRefStreams(
+        nwbFilePath,
+        metaKind,
+        Span<const MeshVertexRef>(streams.vertexRefs.data(), streams.vertexRefs.size()),
+        streams.positions.size(),
+        streams.normals.size(),
+        streams.tangents.size(),
+        streams.uv0.size(),
+        streams.colors.size()
+    ))
         return MakeUnexpected(Failure{});
     return streams;
 }
@@ -241,18 +238,17 @@ b8 MeshCookSourceStreams::ValidateSourceStreamIndex(const ::Path<PathArenaT>& nw
 
 template<typename PathArenaT>
 b8 MeshCookSourceStreams::ValidateSourceIndexStream(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const usize vertexRefCount){
-    if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
+    switch(ValidateSourceIndexStreamValues(indices, vertexRefCount)){
+    case SourceIndexStreamFailure::EmptyOrNotMultipleOfThree:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
-    }
-    for(const u32 index : indices){
-        if(index < vertexRefCount)
-            continue;
-
+    case SourceIndexStreamFailure::IndexOutOfRange:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
+    case SourceIndexStreamFailure::None:
+    default:
+        return true;
     }
-    return true;
 }
 
 template<typename VertexRefT, typename PathArenaT>
@@ -345,22 +341,15 @@ b8 MeshCookSourceStreams::ParseSourceSkinInfluencesInto(
         }
 
         if(normalizeWeights){
-            const SIMDVectorSingle rawWeights = LoadFloat(parsedWeights);
-            if(!VectorIsFinite(rawWeights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(rawWeights, VectorZero())){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': influences[{}].weights must be finite and non-negative"), metaKind, PathToString<tchar>(nwbFilePath), influenceIndex);
+            const auto normalizedWeights = TryNormalizeSkinInfluenceWeights(parsedWeights);
+            if(!normalizedWeights){
+                if(normalizedWeights.error() == SkinInfluenceWeightFailure::NegativeWeight)
+                    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': influences[{}].weights must be finite and non-negative"), metaKind, PathToString<tchar>(nwbFilePath), influenceIndex);
+                else if(normalizedWeights.error() == SkinInfluenceWeightFailure::ZeroTotalWeight)
+                    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': influences[{}].weights must contain a positive total"), metaKind, PathToString<tchar>(nwbFilePath), influenceIndex);
                 return false;
             }
-
-            const SIMDVectorSingle weightSum = Vector4Dot(rawWeights, s_SIMDOne);
-            if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(s_SkinValidationEpsilon))){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': influences[{}].weights must contain a positive total"), metaKind, PathToString<tchar>(nwbFilePath), influenceIndex);
-                return false;
-            }
-
-            const SIMDVectorSingle normalizedWeights = VectorDivide(rawWeights, weightSum);
-            if(!ValidSkinInfluenceWeights(normalizedWeights))
-                return false;
-            StoreFloat(normalizedWeights, influence.weight);
+            influence.weight = *normalizedWeights;
         }
         else
             influence.weight = parsedWeights;
@@ -383,4 +372,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

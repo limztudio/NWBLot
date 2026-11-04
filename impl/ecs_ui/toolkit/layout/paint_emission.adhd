@@ -1,0 +1,314 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "validation.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ReservePaintSnapshot(
+    in usize quadCount,
+    in usize clipDepth,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut Vector<Rect> clips
+){
+    if(quadCount > cast<usize>(u32.max / s_PaintQuadIndexCount) || clipDepth == usize.max){
+        assert(false);
+        return;
+    }
+    vertices.reserve(quadCount * cast<usize>(s_PaintQuadVertexCount));
+    indices.reserve(quadCount * cast<usize>(s_PaintQuadIndexCount));
+    commands.reserve(quadCount);
+    clips.reserve(clipDepth + 1u);
+}
+
+void PushPaintClip(in b8 recording, in Rect clip, mut Vector<Rect> clips){
+    assert(recording);
+    const Rect parent = clips.back();
+    Rect next;
+    if(HasUiRectArea(parent) && HasUiRectArea(clip))
+        next = IntersectUiRectsBounds(parent, clip);
+    clips.push_back(next);
+}
+
+b8 PopPaintClip(
+    in b8 recording,
+    in usize overlayDepth,
+    in Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> overlays,
+    mut Vector<Rect> clips
+){
+    assert(recording);
+    if(clips.size() <= 1u || (overlayDepth != 0u && clips.size() <= overlays[overlayDepth - 1u].clipDepth + 1u))
+        return false;
+    clips.pop_back();
+    return true;
+}
+
+b8 BeginPaintOverlay(
+    in b8 recording,
+    in u32 layer,
+    in DisplayMetrics display,
+    mut Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> overlays,
+    mut usize inOutOverlayDepth,
+    mut u32 inOutLayer,
+    mut Vector<Rect> clips
+){
+    if(!recording || layer == 0u || inOutOverlayDepth == s_PaintMaxOverlayDepth)
+        return false;
+    PaintOverlayFrame frame;
+    frame.clipDepth = clips.size();
+    frame.layer = inOutLayer;
+    overlays[inOutOverlayDepth] = frame;
+    ++inOutOverlayDepth;
+    clips.push_back(Rect(0.0f, 0.0f, display.logicalWidth, display.logicalHeight));
+    inOutLayer = layer;
+    return true;
+}
+
+b8 EndPaintOverlay(
+    in b8 recording,
+    in Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> overlays,
+    mut usize inOutOverlayDepth,
+    mut u32 outLayer,
+    mut Vector<Rect> clips
+){
+    if(!recording || inOutOverlayDepth == 0u || clips.size() != overlays[inOutOverlayDepth - 1u].clipDepth + 1u)
+        return false;
+    clips.pop_back();
+    --inOutOverlayDepth;
+    outLayer = overlays[inOutOverlayDepth].layer;
+    return true;
+}
+
+void EmitPaintQuad(
+    in b8 recording,
+    in Rect clip,
+    in Rect rectangle,
+    in Rect uv,
+    in Color color,
+    in PaintMaterial material,
+    in u32 layer,
+    in u32 glyphPageIndex,
+    in u32 sdfPageIndex,
+    in u32 sdfChannel,
+    in u32 textureImageIndex,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    assert(recording);
+    assert(IsValidPaintColor(color));
+    if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip))
+        return;
+    const Rect visible = IntersectUiRectsBounds(rectangle, clip);
+    if(!HasUiRectArea(visible) || color.a <= 0.0f)
+        return;
+    if(vertices.size() > cast<usize>(u32.max - s_PaintQuadVertexCount) || indices.size() > cast<usize>(u32.max - s_PaintQuadIndexCount)){
+        assert(false);
+        return;
+    }
+    const VectorSingle textureCoordinates = ResolveQuadTextureCoords(rectangle, visible, uv);
+    const f32 left = textureCoordinates.x;
+    const f32 top = textureCoordinates.y;
+    const f32 right = textureCoordinates.z;
+    const f32 bottom = textureCoordinates.w;
+    const Color premultiplied = PremultiplyPaintColor(color);
+    const u32 vertexBase = cast<u32>(vertices.size());
+    const u32 firstIndex = cast<u32>(indices.size());
+    const f32 visibleRight = visible.x + visible.width;
+    const f32 visibleBottom = visible.y + visible.height;
+    vertices.push_back(Vertex(Point(visible.x, visible.y), Point(left, top), premultiplied));
+    vertices.push_back(Vertex(Point(visibleRight, visible.y), Point(right, top), premultiplied));
+    vertices.push_back(Vertex(Point(visibleRight, visibleBottom), Point(right, bottom), premultiplied));
+    vertices.push_back(Vertex(Point(visible.x, visibleBottom), Point(left, bottom), premultiplied));
+    indices.push_back(vertexBase);
+    indices.push_back(vertexBase + 1u);
+    indices.push_back(vertexBase + 2u);
+    indices.push_back(vertexBase);
+    indices.push_back(vertexBase + 2u);
+    indices.push_back(vertexBase + 3u);
+    if(!commands.empty()){
+        const usize lastIndex = commands.size() - 1u;
+        const DrawCommand previous = commands[lastIndex];
+        if(
+            previous.layer == layer && previous.material == material && previous.glyphPageIndex == glyphPageIndex
+            && previous.sdfPageIndex == sdfPageIndex && previous.sdfChannel == sdfChannel
+            && previous.textureImageIndex == textureImageIndex
+            && EqualUiRect(previous.clip, clip)
+        ){
+            commands[lastIndex].indexCount += s_PaintQuadIndexCount;
+            return;
+        }
+        if(previous.layer > layer)
+            inOutCommandsOrdered = false;
+    }
+    DrawCommand command;
+    command.firstIndex = firstIndex;
+    command.indexCount = s_PaintQuadIndexCount;
+    command.clip = clip;
+    command.material = material;
+    command.glyphPageIndex = glyphPageIndex;
+    command.sdfPageIndex = sdfPageIndex;
+    command.sdfChannel = sdfChannel;
+    command.layer = layer;
+    command.textureImageIndex = textureImageIndex;
+    commands.push_back(command);
+}
+
+void EmitPaintNineSlice(
+    in b8 recording,
+    in Rect clip,
+    in UiSkinRegion region,
+    in Rect rectangle,
+    in Color tint,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    if(!HasUiRectArea(rectangle))
+        return;
+    VectorSingle xVec(0.0f);
+    VectorSingle yVec(0.0f);
+    VectorSingle uVec(0.0f);
+    VectorSingle vVec(0.0f);
+    ResolveNineSliceCoordinates(region.rectangle, region.sliceInsets, rectangle, referenceDensity, xVec, yVec, uVec, vVec);
+    Array<f32, 4u> x;
+    x[0u] = xVec.x;
+    x[1u] = xVec.y;
+    x[2u] = xVec.z;
+    x[3u] = xVec.w;
+    Array<f32, 4u> y;
+    y[0u] = yVec.x;
+    y[1u] = yVec.y;
+    y[2u] = yVec.z;
+    y[3u] = yVec.w;
+    Array<f32, 4u> u;
+    u[0u] = uVec.x;
+    u[1u] = uVec.y;
+    u[2u] = uVec.z;
+    u[3u] = uVec.w;
+    Array<f32, 4u> v;
+    v[0u] = vVec.x;
+    v[1u] = vVec.y;
+    v[2u] = vVec.z;
+    v[3u] = vVec.w;
+    const f32 width = cast<f32>(atlasWidth);
+    const f32 height = cast<f32>(atlasHeight);
+    for(u32 row = 0u; row < s_PaintNineSliceAxisCells; ++row){
+        for(u32 column = 0u; column < s_PaintNineSliceAxisCells; ++column){
+            const Rect target(x[cast<usize>(column)], y[cast<usize>(row)], x[cast<usize>(column + 1u)] - x[cast<usize>(column)], y[cast<usize>(row + 1u)] - y[cast<usize>(row)]);
+            const Rect uv(u[cast<usize>(column)] / width, v[cast<usize>(row)] / height, (u[cast<usize>(column + 1u)] - u[cast<usize>(column)]) / width, (v[cast<usize>(row + 1u)] - v[cast<usize>(row)]) / height);
+            EmitPaintQuad(
+                recording,
+                clip,
+                target,
+                uv,
+                tint,
+                PaintMaterial::Skin,
+                layer,
+                u32.max,
+                u32.max,
+                0u,
+                u32.max,
+                vertices,
+                indices,
+                commands,
+                inOutCommandsOrdered
+            );
+        }
+    }
+}
+
+b8 DrawPaintSkinRegion(
+    in b8 recording,
+    in Rect clip,
+    in Span<UiSkinRegion> regions,
+    in Name regionName,
+    in Rect rectangle,
+    in Color tint,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered
+){
+    assert(recording);
+    for(in UiSkinRegion region : regions){
+        if(region.name != regionName)
+            continue;
+        if(region.drawMode == UiSkinDrawMode::NineSlice){
+            EmitPaintNineSlice(
+                recording,
+                clip,
+                region,
+                rectangle,
+                tint,
+                atlasWidth,
+                atlasHeight,
+                referenceDensity,
+                layer,
+                vertices,
+                indices,
+                commands,
+                inOutCommandsOrdered
+            );
+        }
+        else{
+            const Rect uv = ResolveSkinRegionUv(region.rectangle, atlasWidth, atlasHeight);
+            EmitPaintQuad(
+                recording,
+                clip,
+                rectangle,
+                uv,
+                tint,
+                PaintMaterial::Skin,
+                layer,
+                u32.max,
+                u32.max,
+                0u,
+                u32.max,
+                vertices,
+                indices,
+                commands,
+                inOutCommandsOrdered
+            );
+        }
+        return true;
+    }
+    return false;
+}
+
+b8 IsPaintDrawCommandBefore(in DrawCommand lhs, in DrawCommand rhs){
+    if(lhs.layer != rhs.layer)
+        return lhs.layer < rhs.layer;
+    return lhs.firstIndex < rhs.firstIndex;
+}
+
+b8 IsValidPaintImageDrawRequest(in Rect rectangle, in Rect uv, in Color tint){
+    return IsValidUiRect(rectangle)
+        && IsValidPaintUvRect(uv)
+        && IsValidPaintColor(tint);
+}
+
+b8 IsPaintImageInvisible(in Rect rectangle, in Rect clip, in Color tint){
+    return !HasUiRectArea(rectangle)
+        || !HasUiRectArea(clip)
+        || tint.a == 0.0f
+        || !HasVisibleUiRectIntersection(rectangle, clip);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/cook_meshlets.adhd>
+#include <impl/assets_mesh/cook_meshlet_scoring.adhd>
 #include <impl/assets_mesh/cook_solid_topology.adhd>
 
 
@@ -48,6 +48,20 @@ enum<u8> MetadataU32ValueFailure{
     NotNumeric,
     NonIntegerOrNegative,
     OutOfRange
+}
+
+[reflect]
+enum<u8> SkinInfluenceWeightFailure{
+    NegativeWeight,
+    ZeroTotalWeight,
+    InvalidNormalized
+}
+
+[reflect]
+enum<u8> SourceIndexStreamFailure{
+    None,
+    EmptyOrNotMultipleOfThree,
+    IndexOutOfRange
 }
 
 
@@ -103,6 +117,36 @@ b8 IsAllowedMeshAssetField(in StringView fieldName){
     ;
 }
 
+b8 IsAllowedSkinInfluenceMetadataField(in StringView fieldName){
+    return fieldName == s_SkinJointsField || fieldName == s_SkinWeightsField;
+}
+
+Expected<f32x4u, SkinInfluenceWeightFailure> TryNormalizeSkinInfluenceWeights(in f32x4u weights){
+    const VectorSingle weightVec(weights);
+    if(!isFinite(weightVec.x) || !isFinite(weightVec.y) || !isFinite(weightVec.z) || !isFinite(weightVec.w) || weightVec.x < 0.0f || weightVec.y < 0.0f || weightVec.z < 0.0f || weightVec.w < 0.0f)
+        return makeUnexpected(SkinInfluenceWeightFailure::NegativeWeight);
+
+    const f32 totalWeight = dot(weightVec, VectorSingle(1.0f));
+    if(!isFinite(totalWeight) || !(totalWeight > s_SkinValidationEpsilon))
+        return makeUnexpected(SkinInfluenceWeightFailure::ZeroTotalWeight);
+
+    const VectorSingle normalizedWeights = weightVec / VectorSingle(totalWeight);
+    if(!ValidSkinInfluenceWeights(normalizedWeights))
+        return makeUnexpected(SkinInfluenceWeightFailure::InvalidNormalized);
+
+    return f32x4u(normalizedWeights);
+}
+
+SourceIndexStreamFailure ValidateSourceIndexStreamValues(in Span<u32> indices, in usize vertexRefCount){
+    if(indices.empty() || indices.size() % cast<usize>(s_MeshletTriangleIndexCount) != 0u)
+        return SourceIndexStreamFailure::EmptyOrNotMultipleOfThree;
+
+    for(in u32 index : indices){
+        if(cast<usize>(index) >= vertexRefCount)
+            return SourceIndexStreamFailure::IndexOutOfRange;
+    }
+    return SourceIndexStreamFailure::None;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

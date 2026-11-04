@@ -9,39 +9,12 @@
 
 
 const f32 s_MeshletBoundsRadiusInflation = 1.25f;
-const f32 s_MeshletScoreSharedVertexWeight = 20.0f;
-const f32 s_MeshletScoreNewVertexWeight = 8.0f;
-const f32 s_MeshletScoreRadiusWeight = 4.0f;
-const f32 s_MeshletScoreCentroidWeight = 1.0f;
-const f32 s_MeshletScoreNormalWeight = 10.0f;
-const f32 s_MeshletScoreConePenaltyWeight = 12.0f;
-const f32 s_MeshletScoreDisconnectedPenalty = 24.0f;
-const usize s_MeshletDisconnectedCandidateParallelThreshold = 4096u;
-const usize s_MeshletDisconnectedCandidateParallelOversubscription = 4u;
 const f32 s_TriangleVertexCount = 3.0f;
-const f64 s_MeshletPercentScale = 100.0;
 const f32 s_MeshletDirectionEpsilon = 0.00000001f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class MeshletCookMetrics{
-    public u64 primitiveCountSum = 0u;
-    public u64 vertexCountSum = 0u;
-    public u64 positionCountSum = 0u;
-    public u64 attributeCountSum = 0u;
-    public f64 radiusSum = 0.0;
-    public f64 coneCutoffSum = 0.0;
-    public u32 meshletCount = 0u;
-    public u32 minPrimitiveCount = 0xffffffffu;
-    public u32 maxPrimitiveCount = 0u;
-    public u32 minVertexCount = 0xffffffffu;
-    public u32 maxVertexCount = 0u;
-    public f32 worstConeCutoff = 1.0f;
-    public u32 coneDisabledCount = 0u;
-    public u32 coneEnabledCount = 0u;
-}
 
 class MeshletFrontierCandidate{
     public usize frontierOffset = 0u;
@@ -80,17 +53,6 @@ class MeshletScoreState{
     public f32 coneCutoff = -1.0f;
     public u32 primitiveCount = 0u;
     public b8 coneEnabled = false;
-}
-
-class MeshletCookSummary{
-    public f64 primitiveCountAverage = 0.0;
-    public f64 vertexCountAverage = 0.0;
-    public f64 positionCountAverage = 0.0;
-    public f64 attributeCountAverage = 0.0;
-    public f64 radiusAverage = 0.0;
-    public f64 coneDisabledPercentage = 0.0;
-    public f64 coneCutoffAverage = 0.0;
-    public f32 worstConeCutoff = 0.0f;
 }
 
 
@@ -141,17 +103,6 @@ Expected<MeshletVertexCounts> TryMeshletCanFitTriangle(in MeshletDesc meshlet, i
     return counts;
 }
 
-void UpdateBestMeshletCandidateFromResult(in MeshletCandidateSearchResult candidate, mut b8 found, mut MeshletFrontierCandidate outCandidate){
-    if(!candidate.found)
-        return;
-
-    if(found && (candidate.candidate.score < outCandidate.score || (candidate.candidate.score == outCandidate.score && candidate.candidate.triangleIndex > outCandidate.triangleIndex)))
-        return;
-
-    found = true;
-    outCandidate = candidate.candidate;
-}
-
 Expected<u32> TryFindNextUnvisitedMeshletTriangle(in Span<u8> visitedTriangles, in usize triangleCount, in usize searchOffset){
     for(usize triangleIndex = searchOffset; triangleIndex < triangleCount; ++triangleIndex){
         if(visitedTriangles[triangleIndex] != 0u)
@@ -161,121 +112,6 @@ Expected<u32> TryFindNextUnvisitedMeshletTriangle(in Span<u8> visitedTriangles, 
     }
 
     return makeUnexpected(Failure());
-}
-
-MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshlets, in Span<MeshletBounds> meshletBounds){
-    MeshletCookMetrics metrics;
-    metrics.meshletCount = cast<u32>(meshlets.size());
-    VectorDouble radiusAndCutoffSums(0.0, 0.0, 0.0, 0.0);
-    VectorSingle worstConeCutoff(metrics.worstConeCutoff);
-    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
-        const MeshletDesc meshlet = meshlets[meshletIndex];
-        const MeshletBounds bounds = meshletBounds[meshletIndex];
-        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
-        const u32 vertexCount = MeshletVertexCount(meshlet);
-        metrics.minPrimitiveCount = min(metrics.minPrimitiveCount, primitiveCount);
-        metrics.maxPrimitiveCount = max(metrics.maxPrimitiveCount, primitiveCount);
-        metrics.minVertexCount = min(metrics.minVertexCount, vertexCount);
-        metrics.maxVertexCount = max(metrics.maxVertexCount, vertexCount);
-        metrics.primitiveCountSum += cast<u64>(primitiveCount);
-        metrics.vertexCountSum += cast<u64>(vertexCount);
-        metrics.positionCountSum += cast<u64>(MeshletPositionCount(meshlet));
-        metrics.attributeCountSum += cast<u64>(MeshletAttributeCount(meshlet));
-        if(!MeshletConeEnabled(bounds)){
-            radiusAndCutoffSums = radiusAndCutoffSums + VectorDouble(cast<f64>(bounds.sphere.w), 0.0, 0.0, 0.0);
-            ++metrics.coneDisabledCount;
-            continue;
-        }
-
-        const VectorSingle coneCutoff = VectorSingle(cast<f32>(MeshletConePackedCutoff(bounds))) * (1.0f / s_MeshletUnorm8Max);
-        ++metrics.coneEnabledCount;
-        radiusAndCutoffSums = radiusAndCutoffSums + VectorDouble(cast<f64>(bounds.sphere.w), cast<f64>(coneCutoff.x), 0.0, 0.0);
-        worstConeCutoff = min(worstConeCutoff, coneCutoff);
-    }
-    metrics.worstConeCutoff = worstConeCutoff.x;
-    metrics.radiusSum = radiusAndCutoffSums.x;
-    metrics.coneCutoffSum = radiusAndCutoffSums.y;
-
-    if(metrics.meshletCount == 0u){
-        metrics.minPrimitiveCount = 0u;
-        metrics.minVertexCount = 0u;
-    }
-
-    return metrics;
-}
-
-MeshletCookSummary SummarizeMeshletCookMetrics(in MeshletCookMetrics metrics){
-    MeshletCookSummary summary;
-    if(metrics.meshletCount == 0u)
-        return summary;
-
-    const f64 invMeshletCount = 1.0 / cast<f64>(metrics.meshletCount);
-    summary.primitiveCountAverage = cast<f64>(metrics.primitiveCountSum) * invMeshletCount;
-    summary.vertexCountAverage = cast<f64>(metrics.vertexCountSum) * invMeshletCount;
-    summary.positionCountAverage = cast<f64>(metrics.positionCountSum) * invMeshletCount;
-    summary.attributeCountAverage = cast<f64>(metrics.attributeCountSum) * invMeshletCount;
-    summary.radiusAverage = metrics.radiusSum * invMeshletCount;
-    summary.coneDisabledPercentage = cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
-    if(metrics.coneEnabledCount != 0u){
-        summary.coneCutoffAverage = metrics.coneCutoffSum / cast<f64>(metrics.coneEnabledCount);
-        summary.worstConeCutoff = metrics.worstConeCutoff;
-    }
-    return summary;
-}
-
-f32 EvaluateMeshletCandidateScore(
-    in u32 sharedVertexCount,
-    in u32 missingVertexCount,
-    in f32 predictedRadiusGrowth,
-    in f32 centroidDistance,
-    in f32 normalCoherence,
-    in f32 coneWidening,
-    in b8 disconnected
-){
-    f32 disconnectedPenalty = 0.0f;
-    if(disconnected)
-        disconnectedPenalty = s_MeshletScoreDisconnectedPenalty;
-    return cast<f32>(sharedVertexCount) * s_MeshletScoreSharedVertexWeight
-        - cast<f32>(missingVertexCount) * s_MeshletScoreNewVertexWeight
-        - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
-        - s_MeshletScoreCentroidWeight * centroidDistance
-        + s_MeshletScoreNormalWeight * normalCoherence
-        - s_MeshletScoreConePenaltyWeight * coneWidening
-        - disconnectedPenalty;
-}
-
-b8 IsBetterMeshletCandidate(in f32 score, in u32 triangleIndex, in b8 hasExisting, in MeshletFrontierCandidate existing){
-    if(!hasExisting)
-        return true;
-    if(score > existing.score)
-        return true;
-    return score == existing.score && triangleIndex < existing.triangleIndex;
-}
-
-usize ResolveMeshletDisconnectedCandidateChunkCount(in usize searchCount, in u32 workerThreadCount){
-    const usize workerCount = cast<usize>(workerThreadCount) + 1u;
-    const usize maxChunkCount = workerCount * s_MeshletDisconnectedCandidateParallelOversubscription;
-    return min(searchCount, maxChunkCount);
-}
-
-void ResolveMeshletDisconnectedCandidateChunkRange(
-    in usize searchOffset,
-    in usize searchCount,
-    in usize chunkCount,
-    in usize chunkIndex,
-    mut usize outChunkBegin,
-    mut usize outChunkEnd
-){
-    const usize chunkSize = searchCount / chunkCount;
-    const usize remainder = searchCount % chunkCount;
-    usize extraOffset = remainder;
-    usize extraCount = 0u;
-    if(chunkIndex < remainder){
-        extraOffset = chunkIndex;
-        extraCount = 1u;
-    }
-    outChunkBegin = searchOffset + chunkIndex * chunkSize + extraOffset;
-    outChunkEnd = outChunkBegin + chunkSize + extraCount;
 }
 
 void BuildMeshletPositionTriangleOffsets(
@@ -320,6 +156,91 @@ void ComputeMeshletTriangleDataAndCalculation(
     outCalculation.positions[2u] = f32x4(p2);
     outCalculation.centroid = f32x4(centroid);
     outCalculation.areaNormal = f32x4(areaNormal);
+}
+
+void PrecomputeMeshletTriangleStreams(
+    in Span<u32> indices,
+    in Span<MeshVertexRef> vertexRefs,
+    in Span<f32x3u> positions,
+    in usize triangleCount,
+    mut Vector<MeshletTriangleData> outTriangles,
+    mut Vector<MeshletTriangleCalculation> outTriangleCalculations,
+    mut Vector<u32> outPositionTriangleOffsets,
+    mut Vector<u32> outPositionTriangles,
+    mut Vector<u8> outVisitedTriangles
+){
+    outTriangles.clear();
+    outTriangles.resize(triangleCount);
+    outTriangleCalculations.clear();
+    outTriangleCalculations.resize(triangleCount);
+    BuildMeshletPositionTriangleOffsets(indices, vertexRefs, positions.size(), outPositionTriangleOffsets);
+    outPositionTriangles.clear();
+    outPositionTriangles.resize(indices.size(), 0u);
+    outVisitedTriangles.clear();
+    outVisitedTriangles.resize(triangleCount, 0u);
+    Vector<u32> positionTriangleCursors;
+    positionTriangleCursors.reserve(outPositionTriangleOffsets.size());
+    for(in u32 offset : outPositionTriangleOffsets)
+        positionTriangleCursors.push_back(offset);
+
+    for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
+        MeshletTriangleData triangle;
+        MeshletTriangleCalculation triangleCalculation;
+        ComputeMeshletTriangleDataAndCalculation(
+            indices,
+            vertexRefs,
+            positions,
+            triangleIndex,
+            triangle,
+            triangleCalculation
+        );
+        outTriangles[triangleIndex] = triangle;
+        outTriangleCalculations[triangleIndex] = triangleCalculation;
+        for(usize cornerIndex = 0u; cornerIndex < cast<usize>(s_MeshletTriangleIndexCount); ++cornerIndex){
+            const u32 positionIndex = triangle.positions[cornerIndex];
+            const u32 slot = positionTriangleCursors[cast<usize>(positionIndex)];
+            positionTriangleCursors[cast<usize>(positionIndex)] = slot + 1u;
+            outPositionTriangles[cast<usize>(slot)] = cast<u32>(triangleIndex);
+        }
+    }
+}
+
+void ClearMeshletFrontier(mut Vector<u32> inOutFrontier, mut Vector<u8> inOutInFrontier){
+    for(in u32 triangleIndex : inOutFrontier)
+        inOutInFrontier[cast<usize>(triangleIndex)] = 0u;
+    inOutFrontier.clear();
+}
+
+void RemoveMeshletFrontierCandidate(in usize frontierOffset, mut Vector<u32> inOutFrontier, mut Vector<u8> inOutInFrontier){
+    const u32 triangleIndex = inOutFrontier[frontierOffset];
+    inOutInFrontier[cast<usize>(triangleIndex)] = 0u;
+    inOutFrontier[frontierOffset] = inOutFrontier.back();
+    inOutFrontier.pop_back();
+}
+
+void AddMeshletTriangleNeighborsToFrontier(
+    in Span<MeshletTriangleData> triangles,
+    in Span<u32> positionTriangleOffsets,
+    in Span<u32> positionTriangles,
+    in Span<u8> visitedTriangles,
+    in u32 triangleIndex,
+    mut Vector<u32> inOutFrontier,
+    mut Vector<u8> inOutInFrontier
+){
+    const MeshletTriangleData triangle = triangles[cast<usize>(triangleIndex)];
+    for(usize cornerIndex = 0u; cornerIndex < cast<usize>(s_MeshletTriangleIndexCount); ++cornerIndex){
+        const u32 positionIndex = triangle.positions[cornerIndex];
+        const u32 neighborBegin = positionTriangleOffsets[cast<usize>(positionIndex)];
+        const u32 neighborEnd = positionTriangleOffsets[cast<usize>(positionIndex) + 1u];
+        for(u32 neighborOffset = neighborBegin; neighborOffset < neighborEnd; ++neighborOffset){
+            const u32 neighborTriangle = positionTriangles[cast<usize>(neighborOffset)];
+            if(neighborTriangle == triangleIndex || visitedTriangles[cast<usize>(neighborTriangle)] != 0u || inOutInFrontier[cast<usize>(neighborTriangle)] != 0u)
+                continue;
+
+            inOutInFrontier[cast<usize>(neighborTriangle)] = 1u;
+            inOutFrontier.push_back(neighborTriangle);
+        }
+    }
 }
 
 b8 IsValidMeshletDirection3(in VectorSingle value){
@@ -416,123 +337,6 @@ MeshletBounds BuildMeshletBounds(
     return bounds;
 }
 
-usize EstimateMeshletSourceBytes(
-    in usize indexCount,
-    in usize positionCount,
-    in usize normalCount,
-    in usize tangentCount,
-    in usize uv0Count,
-    in usize colorCount,
-    in usize vertexRefCount
-){
-    return
-        indexCount * 4u
-        + positionCount * 12u
-        + normalCount * 8u
-        + tangentCount * 8u
-        + uv0Count * 8u
-        + colorCount * 8u
-        + vertexRefCount * 20u
-    ;
-}
-
-usize EstimateMeshletRuntimeBytes(
-    in usize positionCount,
-    in usize normalCount,
-    in usize tangentCount,
-    in usize uv0Count,
-    in usize colorCount,
-    in usize meshletCount,
-    in usize meshletBoundsCount,
-    in usize positionRefCount,
-    in usize attributeRefCount,
-    in usize localVertexRefCount,
-    in usize primitiveIndexCount
-){
-    return
-        positionCount * 12u
-        + normalCount * 8u
-        + tangentCount * 8u
-        + uv0Count * 8u
-        + colorCount * 8u
-        + meshletCount * 32u
-        + meshletBoundsCount * 20u
-        + positionRefCount * 8u
-        + attributeRefCount * 16u
-        + localVertexRefCount * 4u
-        + primitiveIndexCount
-    ;
-}
-
-void LogMeshletCookMetrics(
-    in StringView metaKind,
-    in StringView filePathText,
-    in Span<u32> indices,
-    in Span<f32x3u> positions,
-    in Span<f16x4u> normals,
-    in Span<f16x4u> tangents,
-    in Span<f32x2u> uv0,
-    in Span<f16x4u> colors,
-    in Span<MeshVertexRef> vertexRefs,
-    in Span<MeshletDesc> meshlets,
-    in Span<MeshletBounds> meshletBounds,
-    in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
-    in Span<MeshletAttributeStreamRef> meshletAttributeStreamRefs,
-    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
-    in Span<u8> meshletPrimitiveIndices
-){
-    const MeshletCookMetrics metrics = BuildMeshletCookMetricsFromStreams(meshlets, meshletBounds);
-    if(metrics.meshletCount == 0u)
-        return;
-
-    const MeshletCookSummary summary = SummarizeMeshletCookMetrics(metrics);
-    const usize sourceBytes = EstimateMeshletSourceBytes(
-        indices.size(),
-        positions.size(),
-        normals.size(),
-        tangents.size(),
-        uv0.size(),
-        colors.size(),
-        vertexRefs.size()
-    );
-    const usize runtimeBytes = EstimateMeshletRuntimeBytes(
-        positions.size(),
-        normals.size(),
-        tangents.size(),
-        uv0.size(),
-        colors.size(),
-        meshlets.size(),
-        meshletBounds.size(),
-        meshletPositionStreamRefs.size(),
-        meshletAttributeStreamRefs.size(),
-        meshletLocalVertexRefs.size(),
-        meshletPrimitiveIndices.size()
-    );
-
-    [essential] info(
-        "{} meta '{}': meshlet cook metrics - meshlets {}, primitives avg {:.2f} min {} max {}, local vertices avg {:.2f} min {} max {}, deformed positions avg {:.2f}, attributes avg {:.2f}, sphere radius avg {:.4f}, cones disabled {:.2f}% ({}/{}), cone cutoff avg {:.4f} worst {:.4f}, bytes source {} runtime {}"
-        , metaKind
-        , filePathText
-        , metrics.meshletCount
-        , summary.primitiveCountAverage
-        , metrics.minPrimitiveCount
-        , metrics.maxPrimitiveCount
-        , summary.vertexCountAverage
-        , metrics.minVertexCount
-        , metrics.maxVertexCount
-        , summary.positionCountAverage
-        , summary.attributeCountAverage
-        , summary.radiusAverage
-        , summary.coneDisabledPercentage
-        , metrics.coneDisabledCount
-        , metrics.meshletCount
-        , summary.coneCutoffAverage
-        , summary.worstConeCutoff
-        , sourceBytes
-        , runtimeBytes
-    );
-}
-
 b8 FlushBuiltMeshlet(
     in StringView metaKind,
     in StringView filePathText,
@@ -571,252 +375,6 @@ b8 FlushBuiltMeshlet(
     inOutMeshlets.push_back(inOutCurrent);
     inOutMeshletBounds.push_back(BuildMeshletBounds(positions, inOutPositionRefs, inOutLocalVertexRefs, primitiveIndices, inOutCurrent));
     return true;
-}
-
-void ResetMeshletScoreState(mut MeshletScoreState state){
-    state.minBounds = f32x4(f32.max, f32.max, f32.max, 0.0f);
-    state.maxBounds = f32x4(-f32.max, -f32.max, -f32.max, 0.0f);
-    state.centroidSum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    state.normalSum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    state.normalAxis = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    state.primitiveCount = 0u;
-    state.radius = 0.0f;
-    state.coneCutoff = -1.0f;
-    state.coneEnabled = false;
-}
-
-f32 PredictMeshletScoreRadiusFromCalculation(in MeshletScoreState state, in MeshletTriangleCalculation triangleCalculation){
-    VectorSingle minBounds = min(VectorSingle(state.minBounds), VectorSingle(triangleCalculation.positions[0u]));
-    minBounds = min(minBounds, VectorSingle(triangleCalculation.positions[1u]));
-    minBounds = min(minBounds, VectorSingle(triangleCalculation.positions[2u]));
-    VectorSingle maxBounds = max(VectorSingle(state.maxBounds), VectorSingle(triangleCalculation.positions[0u]));
-    maxBounds = max(maxBounds, VectorSingle(triangleCalculation.positions[1u]));
-    maxBounds = max(maxBounds, VectorSingle(triangleCalculation.positions[2u]));
-    const VectorSingle extents = (maxBounds - minBounds) * 0.5f;
-    return length(extents.xyz);
-}
-
-f32 MeshletScoreCentroidDistance(in MeshletScoreState state, in VectorSingle triangleCentroid){
-    if(state.primitiveCount == 0u)
-        return 0.0f;
-    const VectorSingle meshletCentroid = VectorSingle(state.centroidSum) / VectorSingle(cast<f32>(state.primitiveCount));
-    return length((triangleCentroid - meshletCentroid).xyz);
-}
-
-f32 MeshletScoreNormalCoherence(in MeshletScoreState state, in VectorSingle triangleAreaNormal){
-    const VectorSingle stateAxis(state.normalAxis);
-    const VectorSingle candidateNormal = NormalizeMeshletDirection3OrZero(triangleAreaNormal);
-    if(!IsValidMeshletDirection3(stateAxis) || !IsValidMeshletDirection3(candidateNormal))
-        return 0.0f;
-    return dot(stateAxis.xyz, candidateNormal.xyz);
-}
-
-void UpdateMeshletScoreConeCutoff(in VectorSingle axis, in VectorSingle triangleAreaNormal, mut b8 hasNormal, mut f32 coneCutoff){
-    const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(triangleAreaNormal);
-    if(!IsValidMeshletDirection3(faceNormal))
-        return;
-    hasNormal = true;
-    coneCutoff = min(coneCutoff, dot(axis.xyz, faceNormal.xyz));
-}
-
-Expected<f32> TryComputeMeshletScoreConeCutoffFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in VectorSingle axis,
-    in u32 extraTriangleIndex,
-    in b8 hasExtraTriangle
-){
-    if(!IsValidMeshletDirection3(axis))
-        return makeUnexpected(Failure());
-
-    b8 hasNormal = false;
-    f32 coneCutoff = 1.0f;
-    for(in u32 triangleIndex : triangleIndices)
-        UpdateMeshletScoreConeCutoff(axis, VectorSingle(triangleCalculations[cast<usize>(triangleIndex)].areaNormal), hasNormal, coneCutoff);
-    if(hasExtraTriangle)
-        UpdateMeshletScoreConeCutoff(axis, VectorSingle(triangleCalculations[cast<usize>(extraTriangleIndex)].areaNormal), hasNormal, coneCutoff);
-
-    if(!hasNormal || !(coneCutoff > 0.0f))
-        return makeUnexpected(Failure());
-
-    return coneCutoff;
-}
-
-f32 PredictMeshletScoreConeWideningFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in MeshletScoreState state,
-    in u32 triangleIndex,
-    in VectorSingle triangleAreaNormal
-){
-    if(!state.coneEnabled)
-        return 0.0f;
-
-    const VectorSingle predictedAxis = NormalizeMeshletDirection3OrZero(VectorSingle(state.normalSum) + triangleAreaNormal);
-    const Expected<f32> predictedCutoff = TryComputeMeshletScoreConeCutoffFromCalculations(triangleCalculations, triangleIndices, predictedAxis, triangleIndex, true);
-    if(!predictedCutoff.has_value())
-        return 1.0f;
-
-    return max(state.coneCutoff - predictedCutoff.value(), 0.0f);
-}
-
-f32 ScoreMeshletCandidateFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in MeshletScoreState state,
-    in u32 triangleIndex,
-    in u32 sharedVertexCount,
-    in u32 missingVertexCount,
-    in b8 disconnected
-){
-    const MeshletTriangleCalculation triangleCalculation = triangleCalculations[cast<usize>(triangleIndex)];
-    const VectorSingle areaNormal(triangleCalculation.areaNormal);
-    const f32 predictedRadius = PredictMeshletScoreRadiusFromCalculation(state, triangleCalculation);
-    const f32 predictedRadiusGrowth = max(predictedRadius - state.radius, 0.0f);
-    const f32 centroidDistance = MeshletScoreCentroidDistance(state, VectorSingle(triangleCalculation.centroid));
-    const f32 normalCoherence = MeshletScoreNormalCoherence(state, areaNormal);
-    const f32 coneWidening = PredictMeshletScoreConeWideningFromCalculations(triangleCalculations, triangleIndices, state, triangleIndex, areaNormal);
-    return EvaluateMeshletCandidateScore(sharedVertexCount, missingVertexCount, predictedRadiusGrowth, centroidDistance, normalCoherence, coneWidening, disconnected);
-}
-
-void AddMeshletTriangleToScoreStateFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in u32 triangleIndex,
-    mut MeshletScoreState state
-){
-    const MeshletTriangleCalculation triangleCalculation = triangleCalculations[cast<usize>(triangleIndex)];
-    const VectorSingle p0(triangleCalculation.positions[0u]);
-    const VectorSingle p1(triangleCalculation.positions[1u]);
-    const VectorSingle p2(triangleCalculation.positions[2u]);
-    VectorSingle minBounds = min(VectorSingle(state.minBounds), p0);
-    minBounds = min(minBounds, p1);
-    minBounds = min(minBounds, p2);
-    VectorSingle maxBounds = max(VectorSingle(state.maxBounds), p0);
-    maxBounds = max(maxBounds, p1);
-    maxBounds = max(maxBounds, p2);
-    state.minBounds = f32x4(minBounds);
-    state.maxBounds = f32x4(maxBounds);
-    const VectorSingle extents = (maxBounds - minBounds) * 0.5f;
-    state.radius = length(extents.xyz);
-    state.centroidSum = f32x4(VectorSingle(state.centroidSum) + VectorSingle(triangleCalculation.centroid));
-    const VectorSingle normalSum = VectorSingle(state.normalSum) + VectorSingle(triangleCalculation.areaNormal);
-    state.normalSum = f32x4(normalSum);
-    const VectorSingle normalAxis = NormalizeMeshletDirection3OrZero(normalSum);
-    state.normalAxis = f32x4(normalAxis);
-    ++state.primitiveCount;
-    const Expected<f32> coneCutoff = TryComputeMeshletScoreConeCutoffFromCalculations(triangleCalculations, triangleIndices, normalAxis, 0u, false);
-    state.coneEnabled = coneCutoff.has_value();
-    if(coneCutoff.has_value())
-        state.coneCutoff = coneCutoff.value();
-    else
-        state.coneCutoff = -1.0f;
-}
-
-void UpdateBestMeshletCandidateFromPrecompute(
-    in Span<MeshletTriangleData> triangles,
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in MeshletScoreState scoreState,
-    in MeshletDesc meshlet,
-    in Span<u32> localVertexRefs,
-    in usize frontierOffset,
-    in u32 triangleIndex,
-    in b8 disconnected,
-    mut b8 found,
-    mut MeshletFrontierCandidate outCandidate
-){
-    const MeshletTriangleData triangle = triangles[cast<usize>(triangleIndex)];
-    const Expected<MeshletVertexCounts> vertexCounts = TryMeshletCanFitTriangle(meshlet, localVertexRefs, triangle);
-    if(!vertexCounts.has_value())
-        return;
-
-    const f32 score = ScoreMeshletCandidateFromCalculations(
-        triangleCalculations,
-        triangleIndices,
-        scoreState,
-        triangleIndex,
-        vertexCounts.value().shared,
-        vertexCounts.value().missing,
-        disconnected
-    );
-    if(!IsBetterMeshletCandidate(score, triangleIndex, found, outCandidate))
-        return;
-
-    found = true;
-    outCandidate.frontierOffset = frontierOffset;
-    outCandidate.triangleIndex = triangleIndex;
-    outCandidate.score = score;
-}
-
-Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidateFromPrecompute(
-    in Span<MeshletTriangleData> triangles,
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> frontier,
-    in Span<u32> triangleIndices,
-    in MeshletScoreState scoreState,
-    in MeshletDesc meshlet,
-    in Span<u32> localVertexRefs
-){
-    b8 found = false;
-    MeshletFrontierCandidate candidate;
-    for(usize frontierOffset = 0u; frontierOffset < frontier.size(); ++frontierOffset){
-        const u32 triangleIndex = frontier[frontierOffset];
-        UpdateBestMeshletCandidateFromPrecompute(
-            triangles,
-            triangleCalculations,
-            triangleIndices,
-            scoreState,
-            meshlet,
-            localVertexRefs,
-            frontierOffset,
-            triangleIndex,
-            false,
-            found,
-            candidate
-        );
-    }
-
-    if(!found)
-        return makeUnexpected(Failure());
-    return candidate;
-}
-
-Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidateRangeFromPrecompute(
-    in Span<MeshletTriangleData> triangles,
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u8> visitedTriangles,
-    in usize searchBegin,
-    in usize searchEnd,
-    in Span<u32> triangleIndices,
-    in MeshletScoreState scoreState,
-    in MeshletDesc meshlet,
-    in Span<u32> localVertexRefs
-){
-    b8 found = false;
-    MeshletFrontierCandidate candidate;
-    for(usize triangleIndex = searchBegin; triangleIndex < searchEnd; ++triangleIndex){
-        if(visitedTriangles[triangleIndex] != 0u)
-            continue;
-
-        UpdateBestMeshletCandidateFromPrecompute(
-            triangles,
-            triangleCalculations,
-            triangleIndices,
-            scoreState,
-            meshlet,
-            localVertexRefs,
-            0u,
-            cast<u32>(triangleIndex),
-            true,
-            found,
-            candidate
-        );
-    }
-
-    if(!found)
-        return makeUnexpected(Failure());
-    return candidate;
 }
 
 

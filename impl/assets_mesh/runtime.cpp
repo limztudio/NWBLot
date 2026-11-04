@@ -233,16 +233,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
     Vector<u32, Core::Alloc::ScratchArena> outIndices(primitiveIndexCount, scratchArena);
 
     if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> b8 {
-        const b8 skinRequired = meshlet.skinBase != s_MeshMissingStreamIndex;
-        const u32 localPositionIndex = static_cast<u32>(localVertexRef.localDeformedPosition);
-        const Expected<MeshletPositionStreamRef> positionRef = TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, skinRequired);
-        if(!positionRef)
-            return false;
-        if(static_cast<usize>(positionRef->position) >= positionCount)
-            return false;
-
-        outIndices[primitiveByte] = positionRef->position;
-        return true;
+        return TryDecodeMeshletTriangleCornerPosition(positionRefDeltas, meshlet, localVertexRef, positionCount, outIndices[primitiveByte]);
     }))
         return MakeUnexpected(Failure{});
     return outIndices;
@@ -258,23 +249,11 @@ Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttri
     Core::Alloc::ScratchArena& scratchArena
 ){
     const usize primitiveIndexCount = primitiveIndices.size();
-    const usize normalCount = normalStream.size();
-    const usize uv0Count = uv0Stream.size();
 
     Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndexCount, scratchArena);
 
     if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> b8 {
-            const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
-            const Expected<MeshletAttributeStreamRef> attributeRef = TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
-            if(!attributeRef)
-                return false;
-            if(static_cast<usize>(attributeRef->normal) >= normalCount || static_cast<usize>(attributeRef->uv0) >= uv0Count)
-                return false;
-
-            AttribGpu& attribute = outAttributes[primitiveByte];
-            attribute.normal = normalStream[attributeRef->normal];
-            attribute.uv0 = uv0Stream[attributeRef->uv0];
-            return true;
+            return TryDecodeMeshletTriangleCornerAttribute(attributeRefDeltas, meshlet, localVertexRef, normalStream, uv0Stream, outAttributes[primitiveByte]);
         }
     ))
         return MakeUnexpected(Failure{});
@@ -289,4 +268,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

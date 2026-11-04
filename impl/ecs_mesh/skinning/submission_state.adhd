@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/runtime/types.adhd>
-#include <impl/ecs_skeleton/components.adhd>
+#include <impl/ecs_mesh/skinning/runtime_cache_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,11 +21,6 @@ const usize s_SkinningLiveStateInlineBufferCount = 32u;
 const b8 s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
 const b8 s_RuntimeSkinningMeshletConeCullingEnabled = false;
 const u32 s_PerRuntimeMeshTimingQueries = 128u;
-const u32 s_SkinJointWordCount = 2u;
-const u32 s_SkinJointBits = 16u;
-const usize s_SkinRestPositionElementBytes = 12u;
-const usize s_SkinRestNormalElementBytes = 8u;
-const usize s_SkinRestTangentElementBytes = 8u;
 const Name s_PrepareRuntimeArena = "impl/ecs_mesh/skinning_prepare";
 const Name s_FrameUploadArena = "impl/ecs_mesh/skinning_frame_upload";
 const Name s_SerialMergeDomain = "mesh_skinning.serial";
@@ -78,7 +72,6 @@ const StringView s_BindlessSlotsBufferSuffix = "mesh_skinning_bindless_slots";
 const StringView s_BindlessSlotsUploadSuffix = "mesh_skinning_bindless_slots_upload";
 const StringView s_RestToSkinnedCopySuffix = "mesh_skinning_rest_to_skinned_copy";
 const StringView s_JointPaletteUploadSuffix = "mesh_skinning_joint_palette_upload";
-const StringView s_SkinnedDrawSuffix = "skinned_draw";
 const usize s_MaxSkeletonJointMatrixSpanCount = usize.max / 48u;
 
 
@@ -105,11 +98,6 @@ enum<u8> RuntimeStorageDescriptorSlot{
     JointPalette,
     AttributeBuffer,
     kCount
-}
-
-class SkinnedRuntimeMeshIdentity{
-    public Name meshKey = s_NameNone;
-    public u64 version = 0u;
 }
 
 // Captures CPU state true only when the producing command list was accepted.
@@ -186,18 +174,6 @@ class MeshletBoundsPushConstants{
     public u32 bindlessResourceSlots = 0u;
 }
 
-[serialize, reflect]
-class MeshSkinningRestToSkinnedCopyByteCounts{
-    public usize positionBytes = 0u;
-    public usize normalBytes = 0u;
-    public usize tangentBytes = 0u;
-}
-
-class MeshletRefTotalCounts{
-    public usize positionRefCount = 0u;
-    public usize attributeRefCount = 0u;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -226,34 +202,6 @@ MeshletBoundsPushConstants MakeMeshletBoundsPushConstants(in u32 meshletCount, i
     out.meshletCount = meshletCount;
     out.bindlessResourceSlots = bindlessResourceSlots;
     return out;
-}
-
-Array<u32, 2u> PackSkinInfluenceJoints(in SkinInfluence4 sourceSkin){
-    Array<u32, 2u> packed;
-    for(u32 wordIndex = 0u; wordIndex < s_SkinJointWordCount; ++wordIndex){
-        const u32 influenceIndex = wordIndex * 2u;
-        packed[wordIndex] = cast<u32>(sourceSkin.joint[influenceIndex]) | (cast<u32>(sourceSkin.joint[influenceIndex + 1u]) << s_SkinJointBits);
-    }
-    return packed;
-}
-
-Expected<MeshSkinningRestToSkinnedCopyByteCounts> TryResolveMeshSkinningRestToSkinnedCopyByteCounts(in usize positionCount, in usize normalCount, in usize tangentCount){
-    if(positionCount == 0u || normalCount == 0u || tangentCount == 0u)
-        return makeUnexpected(Failure());
-    const usize positionBytes = positionCount * s_SkinRestPositionElementBytes;
-    if(positionBytes / s_SkinRestPositionElementBytes != positionCount)
-        return makeUnexpected(Failure());
-    const usize normalBytes = normalCount * s_SkinRestNormalElementBytes;
-    if(normalBytes / s_SkinRestNormalElementBytes != normalCount)
-        return makeUnexpected(Failure());
-    const usize tangentBytes = tangentCount * s_SkinRestTangentElementBytes;
-    if(tangentBytes / s_SkinRestTangentElementBytes != tangentCount)
-        return makeUnexpected(Failure());
-    MeshSkinningRestToSkinnedCopyByteCounts outCounts;
-    outCounts.positionBytes = positionBytes;
-    outCounts.normalBytes = normalBytes;
-    outCounts.tangentBytes = tangentBytes;
-    return outCounts;
 }
 
 b8 EqualSkeletonJointMatrixSpan(in Span<SkeletonJointMatrix> lhs, in Span<SkeletonJointMatrix> rhs){
@@ -336,315 +284,6 @@ b8 TryAcceptMeshSkinningDeformationCandidate(in u64 candidate, mut u64 inoutPend
     return true;
 }
 
-Expected<SkinnedRuntimeMeshIdentity> TryResolveSkinnedRuntimeMeshIdentity(
-    in EntityID entity,
-    in RuntimeMeshHandle runtimeMesh,
-    in EntityID instanceEntity,
-    in RuntimeMeshDirtyFlag dirtyFlags,
-    in Name sourceName,
-    in u64 handleValue,
-    in u32 editRevision
-){
-    if(!runtimeMesh.valid() || instanceEntity != entity)
-        return makeUnexpected(Failure());
-    if((dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != RuntimeMeshDirtyFlag::None)
-        return makeUnexpected(Failure());
-    const Name meshKey = DeriveRuntimeResourceName(sourceName, handleValue, editRevision, s_SkinnedDrawSuffix);
-    if(meshKey == s_NameNone)
-        return makeUnexpected(Failure());
-    SkinnedRuntimeMeshIdentity outIdentity;
-    outIdentity.meshKey = meshKey;
-    outIdentity.version = cast<u64>(editRevision);
-    return outIdentity;
-}
-
-b8 CanBuildMeshSkinningInfluences(in u32 skeletonJointCount, in usize skinSize){
-    return skeletonJointCount > 0u && skeletonJointCount <= cast<u32>(u16.max) + 1u && skinSize <= cast<usize>(u32.max);
-}
-
-b8 CanResolveGpuJointPalette(in b8 hasActiveSkin, in usize payloadSkinInfluenceCount, in usize instanceSkinSize, in usize jointCount, in usize payloadJointMatrixCount){
-    return
-        hasActiveSkin
-        && payloadSkinInfluenceCount == instanceSkinSize
-        && jointCount > 0u
-        && jointCount <= cast<usize>(u16.max) + 1u
-        && payloadJointMatrixCount >= jointCount
-    ;
-}
-
-b8 HasCompleteSplitMeshSkinningPayload(
-    in usize restPositionCount,
-    in usize restNormalCount,
-    in usize restTangentCount,
-    in usize uv0Count,
-    in usize colorCount,
-    in usize skinCount,
-    in usize meshletCount,
-    in usize meshletBoundsCount,
-    in usize meshletPositionRefDeltaCount,
-    in usize meshletAttributeRefDeltaCount,
-    in usize meshletLocalVertexRefCount,
-    in usize meshletPrimitiveIndexCount,
-    in u32 meshletPositionRefCount,
-    in u32 meshletAttributeRefCount,
-    in usize attributeSkinCount
-){
-    return
-        restPositionCount != 0u
-        && restNormalCount != 0u
-        && restTangentCount == restNormalCount
-        && uv0Count != 0u
-        && colorCount != 0u
-        && skinCount != 0u
-        && meshletCount != 0u
-        && meshletBoundsCount == meshletCount
-        && meshletPositionRefDeltaCount != 0u
-        && meshletAttributeRefDeltaCount != 0u
-        && meshletLocalVertexRefCount != 0u
-        && meshletPrimitiveIndexCount != 0u
-        && meshletPositionRefCount > 0u
-        && meshletAttributeRefCount > 0u
-        && attributeSkinCount == cast<usize>(meshletAttributeRefCount)
-    ;
-}
-
-StringView RuntimeMeshSourceText(in Name sourceName){
-    if(sourceName != s_NameNone)
-        return sourceName.resolvedText();
-    return "<unnamed>";
-}
-
-b8 ValidateRuntimeMeshUploadPayloadStreams(
-    in Name sourceName,
-    in b8 hasCompleteSplitPayload,
-    in usize restPositionCount,
-    in usize restNormalCount,
-    in usize restTangentCount,
-    in usize uv0Count,
-    in usize colorCount,
-    in usize skinCount,
-    in Span<MeshletDesc> meshlets,
-    in Span<u8> meshletPositionRefDeltas,
-    in Span<u8> meshletAttributeRefDeltas,
-    in usize meshletLocalVertexRefCount,
-    in usize meshletPrimitiveIndexCount,
-    in Span<u32> attributeSkins
-){
-    if(!hasCompleteSplitPayload){
-        error("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload", RuntimeMeshSourceText(sourceName));
-        return false;
-    }
-    const usize maxU32 = cast<usize>(u32.max);
-    if(
-        restPositionCount > maxU32
-        || uv0Count > maxU32
-        || colorCount > maxU32
-        || skinCount > maxU32
-        || meshlets.size() > maxU32
-        || meshletPositionRefDeltas.size() > maxU32
-        || meshletAttributeRefDeltas.size() > maxU32
-        || meshletLocalVertexRefCount > maxU32
-        || meshletPrimitiveIndexCount > maxU32
-    ){
-        error("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits", RuntimeMeshSourceText(sourceName));
-        return false;
-    }
-
-    usize logicalAttributeRefIndex = 0u;
-    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
-        const MeshletDesc meshlet = meshlets[meshletIndex];
-        for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
-            const Expected<MeshletPositionStreamRef> ref = TryDecodeMeshletPositionRef(meshletPositionRefDeltas, meshlet, localPositionIndex, true);
-            if(ref.has_value() && MeshletPositionRefInRange(ref.value(), restPositionCount, skinCount, true))
-                continue;
-
-            error("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range", RuntimeMeshSourceText(sourceName), meshletIndex, localPositionIndex);
-            return false;
-        }
-        for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
-            const Expected<MeshletAttributeStreamRef> ref = TryDecodeMeshletAttributeRef(meshletAttributeRefDeltas, meshlet, localAttributeIndex);
-            if(
-                ref.has_value()
-                && MeshletAttributeRefInRange(ref.value(), restNormalCount, restTangentCount, uv0Count, colorCount)
-                && logicalAttributeRefIndex < attributeSkins.size()
-                && cast<usize>(attributeSkins[logicalAttributeRefIndex]) < skinCount
-            ){
-                ++logicalAttributeRefIndex;
-                continue;
-            }
-
-            error("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range", RuntimeMeshSourceText(sourceName), meshletIndex, localAttributeIndex);
-            return false;
-        }
-    }
-    if(logicalAttributeRefIndex != attributeSkins.size()){
-        error("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload", RuntimeMeshSourceText(sourceName));
-        return false;
-    }
-
-    return true;
-}
-
-b8 ValidateMeshSkinningInfluenceRecord(
-    in u64 handleValue,
-    in usize vertexIndex,
-    in u32 skeletonJointCount,
-    in SkinInfluence4 sourceSkin
-){
-    if(!ValidSkinInfluenceWeights(VectorSingle(sourceSkin.weight)) || !SkinInfluenceFitsSkeleton(sourceSkin, skeletonJointCount)){
-        error("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid", handleValue, vertexIndex);
-        return false;
-    }
-    return true;
-}
-
-b8 ValidateSkinJointPaletteInputs(
-    in u64 handleValue,
-    in u32 skeletonJointCount,
-    in usize skinCount,
-    in usize sourceJointCount,
-    in usize inverseBindMatrixCount,
-    in u32 skinningMode
-){
-    if(!ValidSkeletonSkinningMode(skinningMode)){
-        error("MeshSkinningSystem: runtime mesh '{}' skinning mode {} is invalid", handleValue, skinningMode);
-        return false;
-    }
-    assert(skeletonJointCount > 0u && skeletonJointCount <= cast<u32>(u16.max) + 1u && skinCount <= cast<usize>(u32.max));
-    if(sourceJointCount > cast<usize>(u32.max)){
-        error("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid", handleValue);
-        return false;
-    }
-    if(!ValidInverseBindMatrixCount(inverseBindMatrixCount, skeletonJointCount)){
-        error("MeshSkinningSystem: runtime mesh '{}' inverse bind matrix count is invalid", handleValue);
-        return false;
-    }
-    if(sourceJointCount < cast<usize>(skeletonJointCount)){
-        error(
-            "MeshSkinningSystem: runtime mesh '{}' joint palette count {} is smaller than skeleton joint count {}"
-            , handleValue
-            , sourceJointCount
-            , skeletonJointCount
-        );
-        return false;
-    }
-    if(inverseBindMatrixCount != 0u && sourceJointCount != inverseBindMatrixCount){
-        error(
-            "MeshSkinningSystem: runtime mesh '{}' joint palette count {} differs from inverse bind matrix count {}"
-            , handleValue
-            , sourceJointCount
-            , inverseBindMatrixCount
-        );
-        return false;
-    }
-    return true;
-}
-
-Expected<MeshletRefTotalCounts> TrySumRuntimeMeshletRefCounts(in Span<MeshletDesc> meshlets){
-    MeshletRefTotalCounts counts;
-    for(in MeshletDesc meshlet : meshlets){
-        counts.positionRefCount += cast<usize>(MeshletPositionCount(meshlet));
-        counts.attributeRefCount += cast<usize>(MeshletAttributeCount(meshlet));
-    }
-    if(counts.positionRefCount > cast<usize>(u32.max) || counts.attributeRefCount > cast<usize>(u32.max))
-        return makeUnexpected(Failure());
-    return counts;
-}
-
-Expected<MeshletPositionStreamRef> TryDecodeSourceMeshletPositionRef(
-    in Span<u8> positionRefDeltas,
-    in MeshletDesc sourceMeshlet,
-    in usize meshletIndex,
-    in u32 localPositionIndex,
-    in usize positionCount,
-    in usize skinCount
-){
-    const Expected<MeshletPositionStreamRef> sourceRef = TryDecodeMeshletPositionRef(positionRefDeltas, sourceMeshlet, localPositionIndex, false);
-    if(
-        !sourceRef.has_value()
-        || !MeshletPositionRefInRange(sourceRef.value(), positionCount, skinCount, false)
-        || cast<usize>(sourceRef.value().position) >= skinCount
-    ){
-        error("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid", meshletIndex, localPositionIndex);
-        return makeUnexpected(Failure());
-    }
-    return sourceRef.value();
-}
-
-Expected<MeshletAttributeStreamRef> TryDecodeSourceMeshletAttributeRef(
-    in Span<u8> attributeRefDeltas,
-    in MeshletDesc sourceMeshlet,
-    in usize meshletIndex,
-    in u32 localAttributeIndex,
-    in usize normalCount,
-    in usize tangentCount,
-    in usize uv0Count,
-    in usize colorCount
-){
-    const Expected<MeshletAttributeStreamRef> sourceRef = TryDecodeMeshletAttributeRef(attributeRefDeltas, sourceMeshlet, localAttributeIndex);
-    if(
-        !sourceRef.has_value()
-        || !MeshletAttributeRefInRange(sourceRef.value(), normalCount, tangentCount, uv0Count, colorCount)
-    ){
-        error("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid", meshletIndex, localAttributeIndex);
-        return makeUnexpected(Failure());
-    }
-    return sourceRef.value();
-}
-
-MeshletPositionStreamRef MakeRuntimeMeshletPositionStreamRef(in MeshletPositionStreamRef sourceRef, in usize runtimePositionIndex){
-    MeshletPositionStreamRef runtimeRef = sourceRef;
-    runtimeRef.position = cast<u32>(runtimePositionIndex);
-    runtimeRef.skin = sourceRef.position;
-    return runtimeRef;
-}
-
-MeshletAttributeStreamRef MakeRuntimeMeshletAttributeStreamRef(in MeshletAttributeStreamRef sourceRef, in usize runtimeAttributeIndex){
-    MeshletAttributeStreamRef runtimeRef = sourceRef;
-    runtimeRef.normal = cast<u32>(runtimeAttributeIndex);
-    runtimeRef.tangent = cast<u32>(runtimeAttributeIndex);
-    return runtimeRef;
-}
-
-Expected<RuntimeMeshLocalBounds> TryBuildRuntimeMeshLocalBounds(in Name sourceName, in Span<f32x3u> restPositions){
-    if(restPositions.empty()){
-        error("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds", sourceName.resolvedText());
-        return makeUnexpected(Failure());
-    }
-    VectorSingle minBounds(f32.max, f32.max, f32.max, 0.0f);
-    VectorSingle maxBounds(f32.min, f32.min, f32.min, 0.0f);
-    for(in f32x3u pos : restPositions){
-        if(!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z)){
-            error("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds", sourceName.resolvedText());
-            return makeUnexpected(Failure());
-        }
-        const VectorSingle p(pos);
-        minBounds = min(minBounds, p);
-        maxBounds = max(maxBounds, p);
-    }
-    if(
-        !isFinite(minBounds.x) || !isFinite(minBounds.y) || !isFinite(minBounds.z)
-        || !isFinite(maxBounds.x) || !isFinite(maxBounds.y) || !isFinite(maxBounds.z)
-        || minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z
-    ){
-        error("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds", sourceName.resolvedText());
-        return makeUnexpected(Failure());
-    }
-    RuntimeMeshLocalBounds bounds;
-    bounds.minBounds = f32x3_i32(minBounds, s_RuntimeMeshBoundsValidFlag);
-    bounds.maxBounds = f32x3_i32(maxBounds, 0);
-    return bounds;
-}
-
-b8 ValidateMeshSkinningRuntimeResourceCounts(in u64 handleValue, in usize skinSize, in u32 skeletonJointCount){
-    const b8 hasSkinPayload = skinSize != 0u;
-    if(skinSize > cast<usize>(u32.max) || (hasSkinPayload && (skeletonJointCount == 0u || skeletonJointCount > cast<u32>(u16.max) + 1u))){
-        error("MeshSkinningSystem: runtime mesh '{}' has invalid skin resource counts", handleValue);
-        return false;
-    }
-    return true;
-}
-
 b8 NeedsMeshSkinningRuntimeResourcesRebuild(
     in b8 inserted,
     in b8 sameBuffers,
@@ -697,4 +336,3 @@ RuntimeMeshDirtyFlag ResolveHandledSkinningDirtyFlags(in b8 skinningInputDirty, 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

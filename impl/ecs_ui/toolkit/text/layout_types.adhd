@@ -641,5 +641,72 @@ void ExpandMeasuredTextBoundsWithRaster(
     );
 }
 
+Rect ToTextGlyphAtlasRect(in VectorDouble rectangle){
+    return Rect(
+        cast<f32>(rectangle.x),
+        cast<f32>(rectangle.y),
+        cast<f32>(rectangle.z),
+        cast<f32>(rectangle.w)
+    );
+}
+
+TextGlyphIntersection IntersectGlyphAtlasRectangle(in VectorDouble rectangle, in Rect clip){
+    const f64 minX = rectangle.x;
+    const f64 minY = rectangle.y;
+    const f64 maxX = minX + rectangle.z;
+    const f64 maxY = minY + rectangle.w;
+    return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
+}
+
+TextGlyphIntersection ValidateTextGlyphCandidateInputs(
+    in Point glyphPosition,
+    in Point topLeft,
+    in f32 fontSize,
+    in f32 physicalSize,
+    in Rect clip,
+    in Point pixelScale
+){
+    if(
+        !IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || !isFinite(physicalSize)
+        || physicalSize < 1.0f || physicalSize > s_TextMaxRasterPpemF32 || !IsValidUiRect(clip)
+        || !isFinite(pixelScale.x) || !isFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
+    )
+        return TextGlyphIntersection::Invalid;
+    if(clip.width <= 0.0f || clip.height <= 0.0f)
+        return TextGlyphIntersection::Invisible;
+    return TextGlyphIntersection::Visible;
+}
+
+TextGlyphIntersection EvaluateUnselectedAtlasGlyphCandidate(
+    in Point glyphPosition,
+    in Point topLeft,
+    in Rect glyphInk,
+    in GlyphCoverageBounds coverage,
+    in b8 hasValidFace,
+    in b8 coverageInkReliable,
+    in u32 faceUnitsPerEm,
+    in f32 fontSize,
+    in f32 physicalSize,
+    in Rect clip,
+    in Point pixelScale
+){
+    if(!IsValidUiRect(glyphInk) || (coverage.known && !IsValidUiRect(coverage.ink)))
+        return TextGlyphIntersection::Invalid;
+    Rect ink = glyphInk;
+    if(coverage.known)
+        ink = coverage.ink;
+    if(coverage.known && (ink.width <= 0.0f || ink.height <= 0.0f))
+        return TextGlyphIntersection::Invisible;
+    u32 unitsPerEm = 1u;
+    if(!coverage.known){
+        if(!hasValidFace)
+            return TextGlyphIntersection::Invalid;
+        if(ink.width <= 0.0f || ink.height <= 0.0f || !coverageInkReliable)
+            return TextGlyphIntersection::Visible;
+        unitsPerEm = faceUnitsPerEm;
+    }
+    return IntersectTextCoverageInk(glyphPosition, topLeft, ink, coverage.known, unitsPerEm, fontSize, physicalSize, clip, pixelScale);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

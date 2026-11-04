@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 
 
 ::NWB::Core::KeyboardInputResult UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, const i32 mods){
-    if(!Ui::InputBindings::ValidKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
+    if(!Ui::IsValidInputKeyCode(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
         return false;
     synchronizeNativeInput();
     const usize slot = ResolveUiNativeKeySlot(key);
@@ -241,4 +241,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

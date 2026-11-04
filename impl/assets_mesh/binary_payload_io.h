@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/assets_mesh/payload_types.adhd.h>
+#include <impl/assets_mesh/payload_validation.adhd.h>
 
 #include <core/assets/binary_payload_io.h>
 
@@ -163,4 +163,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

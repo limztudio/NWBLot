@@ -168,18 +168,6 @@ using NWB::Impl::ResolveMaterialTypedUploadByteCount;
 
 using MaterialTypedInstanceRangeVector = Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena>;
 
-inline void AssertMaterialTypedUploadRange(const MaterialTypedByteRange& range, const usize uploadByteCount, const AStringView rangeName)noexcept{
-    ValidateMaterialTypedUploadRange(range, uploadByteCount, rangeName);
-}
-
-inline void AssertMaterialTypedInstanceRange(const MaterialTypedInstanceRanges& ranges, const usize uploadByteCount)noexcept{
-    ValidateMaterialTypedInstanceRange(ranges, uploadByteCount);
-}
-
-inline void AssertMaterialTypedUploadRanges(const Span<const MaterialTypedInstanceRanges> instanceRanges, const Span<const u8> materialTypedBytes)noexcept{
-    ValidateMaterialTypedUploadRanges(instanceRanges, materialTypedBytes);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -200,4 +188,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

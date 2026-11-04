@@ -21,35 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void MeshCookMeshlets::ClearMeshletFrontier(Vector<u32, Core::Alloc::ScratchArena>& frontier, const Span<u8> frontierFlags)noexcept{
-    for(const u32 triangleIndex : frontier)
-        frontierFlags[triangleIndex] = 0u;
-    frontier.clear();
-}
-
-void MeshCookMeshlets::RemoveMeshletFrontierCandidate(const usize frontierOffset, Vector<u32, Core::Alloc::ScratchArena>& frontier, const Span<u8> frontierFlags)noexcept{
-    const u32 triangleIndex = frontier[frontierOffset];
-    frontierFlags[triangleIndex] = 0u;
-    frontier[frontierOffset] = frontier.back();
-    frontier.pop_back();
-}
-
-void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, Vector<u32, Core::Alloc::ScratchArena>& frontier, const Span<u8> frontierFlags){
-    const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    for(const u32 positionIndex : triangle.positions){
-        const u32 triangleOffsetBegin = trianglePrecompute.positionTriangleOffsets[positionIndex];
-        const u32 triangleOffsetEnd = trianglePrecompute.positionTriangleOffsets[positionIndex + 1u];
-        for(u32 triangleOffset = triangleOffsetBegin; triangleOffset < triangleOffsetEnd; ++triangleOffset){
-            const u32 neighborTriangleIndex = trianglePrecompute.positionTriangleIndices[triangleOffset];
-            if(neighborTriangleIndex == triangleIndex || trianglePrecompute.visitedTriangles[neighborTriangleIndex] != 0u || frontierFlags[neighborTriangleIndex] != 0u)
-                continue;
-
-            frontierFlags[neighborTriangleIndex] = 1u;
-            frontier.push_back(neighborTriangleIndex);
-        }
-    }
-}
-
 b8 MeshCookMeshlets::AddMeshletTriangleToBuilder(
     const Path& nwbFilePath,
     const TStringView metaKind,
@@ -86,8 +57,8 @@ b8 MeshCookMeshlets::AddVisitedMeshletTriangle(
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
-    Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    const Span<u8> frontierFlags
+    Core::Assets::AssetVector<u32>& frontier,
+    Core::Assets::AssetVector<u8>& frontierFlags
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
     if(!AddMeshletTriangleToBuilder(nwbFilePath, metaKind, triangle, localSourceVertexRefs, meshlet, primitiveIndices))
@@ -101,7 +72,15 @@ b8 MeshCookMeshlets::AddVisitedMeshletTriangle(
         scoreState
     );
     trianglePrecompute.visitedTriangles[triangleIndex] = 1u;
-    AddMeshletTriangleNeighborsToFrontier(trianglePrecompute, triangleIndex, frontier, frontierFlags);
+    AddMeshletTriangleNeighborsToFrontier(
+        trianglePrecompute.triangles,
+        trianglePrecompute.positionTriangleOffsets,
+        trianglePrecompute.positionTriangleIndices,
+        trianglePrecompute.visitedTriangles,
+        triangleIndex,
+        frontier,
+        frontierFlags
+    );
     return true;
 }
 
@@ -118,8 +97,8 @@ b8 MeshCookMeshlets::GrowMeshletFromFrontier(
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
-    Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    const Span<u8> frontierFlags
+    Core::Assets::AssetVector<u32>& frontier,
+    Core::Assets::AssetVector<u8>& frontierFlags
 ){
     while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
         if(frontier.empty()){
@@ -132,7 +111,15 @@ b8 MeshCookMeshlets::GrowMeshletFromFrontier(
             continue;
         }
 
-        const auto bestCandidate = MeshletCandidateSearch::FindBestMeshletFrontierCandidate(trianglePrecompute, frontier, localTriangleIndices, scoreState, meshlet, localSourceVertexRefs);
+        const auto bestCandidate = FindBestMeshletFrontierCandidateFromPrecompute(
+            trianglePrecompute.triangles,
+            trianglePrecompute.triangleCalculations,
+            frontier,
+            localTriangleIndices,
+            scoreState,
+            meshlet,
+            localSourceVertexRefs
+        );
         if(!bestCandidate)
             break;
 
@@ -166,11 +153,12 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
 
     MeshletDesc current;
     const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
+    Core::Assets::AssetArena& assetArena = entry.positions.get_allocator().arena();
     Vector<u32, Core::Alloc::ScratchArena> localSourceVertexRefs(scratchArena);
     Vector<u32, Core::Alloc::ScratchArena> localTriangleIndices(scratchArena);
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena> parallelCandidates(scratchArena);
-    Vector<u32, Core::Alloc::ScratchArena> frontier(scratchArena);
-    Vector<u8, Core::Alloc::ScratchArena> frontierFlags(scratchArena);
+    Core::Assets::AssetVector<u32> frontier(assetArena);
+    Core::Assets::AssetVector<u8> frontierFlags(assetArena);
     localSourceVertexRefs.reserve(s_MeshMaxMeshletVertices);
     localTriangleIndices.reserve(s_MeshMaxMeshletTriangles);
     parallelCandidates.reserve((static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription);
@@ -264,4 +252,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

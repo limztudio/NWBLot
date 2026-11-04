@@ -162,7 +162,7 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
         return MakeUnexpected(Failure{});
     }
     NWB_ASSERT(instanceData.size() == materialTypedRanges.size());
-    ECSRenderDetail::AssertMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
+    ValidateMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
 #endif
 
     AvboitMaterialUploadBuilder materialUploadBuilder(m_graph, m_csgSystem);
@@ -241,4 +241,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

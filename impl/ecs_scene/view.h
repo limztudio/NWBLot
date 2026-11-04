@@ -45,10 +45,6 @@ static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0u, "Tr
     ;
 }
 
-inline void StoreDecomposedTransform(const MatrixDecomposition& decomposition, TransformComponent& transform)noexcept{
-    AssignDecomposedTransformComponent(decomposition.translation, decomposition.rotation, decomposition.scale, transform);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -57,4 +53,3 @@ NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

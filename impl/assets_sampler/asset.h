@@ -43,14 +43,6 @@ static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sample
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 IsValidSamplerAddressMode(const Core::SamplerAddressMode::Enum addressMode)noexcept{
-    return IsValidSamplerAddressModeValue(static_cast<u32>(addressMode));
-}
-
-[[nodiscard]] inline b8 IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionType)noexcept{
-    return IsValidSamplerReductionTypeValue(static_cast<u32>(reductionType));
-}
-
 [[nodiscard]] inline b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
     return IsValidSamplerDescriptionParameters(
         description.borderColor.r,
@@ -111,4 +103,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

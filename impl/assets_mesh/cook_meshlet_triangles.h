@@ -58,7 +58,7 @@ namespace MeshletTriangleGeometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] inline Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const MeshCookEntry& entry, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena){
     MeshletTrianglePrecompute data(entry.positions.get_allocator().arena());
 
     const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
@@ -67,26 +67,17 @@ namespace MeshletTriangleGeometry{
         return MakeUnexpected(Failure{});
     }
 
-    data.triangles.resize(triangleCount);
-    data.triangleCalculations.resize(triangleCount);
-    BuildMeshletPositionTriangleOffsets(indices, entry.vertexRefs, entry.positions.size(), data.positionTriangleOffsets);
-    data.positionTriangleIndices.resize(indices.size());
-    data.visitedTriangles.resize(triangleCount, 0u);
-
-    Vector<u32, Core::Alloc::ScratchArena> positionTriangleCursor(data.positionTriangleOffsets.begin(), data.positionTriangleOffsets.end(), scratchArena);
-
-    for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-        MeshletTriangleData& triangle = data.triangles[triangleIndex];
-        MeshletTriangleCalculation& calculation = data.triangleCalculations[triangleIndex];
-        ComputeMeshletTriangleDataAndCalculation(indices, entry.vertexRefs, entry.positions, triangleIndex, triangle, calculation);
-
-        const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
-        for(const u32 positionIndex : triangle.positions){
-            const u32 adjacencyOffset = positionTriangleCursor[positionIndex]++;
-            data.positionTriangleIndices[adjacencyOffset] = triangleIndexU32;
-        }
-    }
-
+    PrecomputeMeshletTriangleStreams(
+        indices,
+        entry.vertexRefs,
+        entry.positions,
+        triangleCount,
+        data.triangles,
+        data.triangleCalculations,
+        data.positionTriangleOffsets,
+        data.positionTriangleIndices,
+        data.visitedTriangles
+    );
     return data;
 }
 
@@ -110,4 +101,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

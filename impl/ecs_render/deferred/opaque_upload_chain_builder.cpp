@@ -53,7 +53,7 @@ Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const Opaque
         if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData))
             return MakeUnexpected(Failure{});
         NWB_ASSERT(instanceData.size() == inputs.materialTypedRanges.size());
-        ECSRenderDetail::AssertMaterialTypedUploadRanges(inputs.materialTypedRanges, materialTypedBytes);
+        ValidateMaterialTypedUploadRanges(inputs.materialTypedRanges, materialTypedBytes);
 #endif
 
         const auto instanceBlobResult = m_graph.copyUploadData(instanceData.data(), instanceData.size() * sizeof(InstanceGpuData), alignof(InstanceGpuData));
@@ -181,4 +181,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

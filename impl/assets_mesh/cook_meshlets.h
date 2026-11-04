@@ -31,9 +31,6 @@ namespace MeshCookMeshlets{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ClearMeshletFrontier(Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags)noexcept;
-void RemoveMeshletFrontierCandidate(usize frontierOffset, Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags)noexcept;
-void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, u32 triangleIndex, Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags);
 [[nodiscard]] b8 AddMeshletTriangleToBuilder(
     const Path& nwbFilePath,
     TStringView metaKind,
@@ -52,8 +49,8 @@ void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& tria
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
-    Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    Span<u8> frontierFlags
+    Core::Assets::AssetVector<u32>& frontier,
+    Core::Assets::AssetVector<u8>& frontierFlags
 );
 [[nodiscard]] b8 GrowMeshletFromFrontier(
     const Path& nwbFilePath,
@@ -67,8 +64,8 @@ void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& tria
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
-    Vector<u32, Core::Alloc::ScratchArena>& frontier,
-    Span<u8> frontierFlags
+    Core::Assets::AssetVector<u32>& frontier,
+    Core::Assets::AssetVector<u8>& frontierFlags
 );
 [[nodiscard]] b8 BuildMeshlets(const Path& nwbFilePath, TStringView metaKind, Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& entry);
 
@@ -92,4 +89,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

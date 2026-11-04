@@ -33,47 +33,6 @@ namespace MeshletCandidateSearch{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MeshletFrontierCandidate> FindBestMeshletFrontierCandidate(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const Span<const u32> frontier,
-    const Span<const u32> triangleIndices,
-    const MeshletScoreState& scoreState,
-    const MeshletDesc& meshlet,
-    const Span<const u32> localVertexRefs
-)noexcept{
-    return FindBestMeshletFrontierCandidateFromPrecompute(
-        trianglePrecompute.triangles,
-        trianglePrecompute.triangleCalculations,
-        frontier,
-        triangleIndices,
-        scoreState,
-        meshlet,
-        localVertexRefs
-    );
-}
-
-[[nodiscard]] inline Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidateRange(
-    const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchBegin,
-    const usize searchEnd,
-    const Span<const u32> triangleIndices,
-    const MeshletScoreState& scoreState,
-    const MeshletDesc& meshlet,
-    const Span<const u32> localVertexRefs
-)noexcept{
-    return FindBestDisconnectedMeshletCandidateRangeFromPrecompute(
-        trianglePrecompute.triangles,
-        trianglePrecompute.triangleCalculations,
-        trianglePrecompute.visitedTriangles,
-        searchBegin,
-        searchEnd,
-        triangleIndices,
-        scoreState,
-        meshlet,
-        localVertexRefs
-    );
-}
-
 [[nodiscard]] inline Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
     const MeshletTrianglePrecompute& trianglePrecompute,
     const usize searchOffset,
@@ -90,7 +49,17 @@ namespace MeshletCandidateSearch{
 
     const usize searchCount = triangleCount - searchOffset;
     if(!cpuScheduler.isParallelEnabled() || searchCount < s_MeshletDisconnectedCandidateParallelThreshold){
-        return FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, searchOffset, triangleCount, triangleIndices, scoreState, meshlet, localVertexRefs);
+        return FindBestDisconnectedMeshletCandidateRangeFromPrecompute(
+            trianglePrecompute.triangles,
+            trianglePrecompute.triangleCalculations,
+            trianglePrecompute.visitedTriangles,
+            searchOffset,
+            triangleCount,
+            triangleIndices,
+            scoreState,
+            meshlet,
+            localVertexRefs
+        );
     }
 
     const usize chunkCount = ResolveMeshletDisconnectedCandidateChunkCount(searchCount, cpuScheduler.workerThreadCount());
@@ -98,14 +67,24 @@ namespace MeshletCandidateSearch{
     parallelCandidates.clear();
     parallelCandidates.resize(chunkCount);
     const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](const usize chunkIndex)noexcept(
-        noexcept(FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, DeclVal<const usize&>(), DeclVal<const usize&>(), triangleIndices, scoreState, meshlet, localVertexRefs))
+        noexcept(FindBestDisconnectedMeshletCandidateRangeFromPrecompute(trianglePrecompute.triangles, trianglePrecompute.triangleCalculations, trianglePrecompute.visitedTriangles, DeclVal<const usize&>(), DeclVal<const usize&>(), triangleIndices, scoreState, meshlet, localVertexRefs))
     ){
         usize chunkBegin = 0u;
         usize chunkEnd = 0u;
         ResolveMeshletDisconnectedCandidateChunkRange(searchOffset, searchCount, chunkCount, chunkIndex, chunkBegin, chunkEnd);
 
         MeshletCandidateSearchResult result;
-        const auto foundCandidate = FindBestDisconnectedMeshletCandidateRange(trianglePrecompute, chunkBegin, chunkEnd, triangleIndices, scoreState, meshlet, localVertexRefs);
+        const auto foundCandidate = FindBestDisconnectedMeshletCandidateRangeFromPrecompute(
+            trianglePrecompute.triangles,
+            trianglePrecompute.triangleCalculations,
+            trianglePrecompute.visitedTriangles,
+            chunkBegin,
+            chunkEnd,
+            triangleIndices,
+            scoreState,
+            meshlet,
+            localVertexRefs
+        );
         result.found = foundCandidate.has_value();
         if(foundCandidate)
             result.candidate = *foundCandidate;
@@ -116,14 +95,7 @@ namespace MeshletCandidateSearch{
         return MakeUnexpected(Failure{});
     }
 
-    b8 found = false;
-    MeshletFrontierCandidate candidate;
-    for(const MeshletCandidateSearchResult& result : parallelCandidates)
-        UpdateBestMeshletCandidateFromResult(result, found, candidate);
-
-    if(!found)
-        return MakeUnexpected(Failure{});
-    return candidate;
+    return SelectBestMeshletCandidateFromResults(parallelCandidates);
 }
 
 
@@ -146,4 +118,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

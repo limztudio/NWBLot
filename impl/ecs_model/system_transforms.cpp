@@ -63,7 +63,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObject
                 return;
 
             if(const auto decomposition = MatrixDecompose(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, object.owner), LoadFloat(object.localTransform))))
-                Scene::StoreDecomposedTransform(*decomposition, transform);
+                Scene::AssignDecomposedTransformComponent(decomposition->translation, decomposition->rotation, decomposition->scale, transform);
         }
     );
 }
@@ -137,7 +137,7 @@ void ModelSystem::updateStaticMeshAttachments(){
         }
 
         if(const auto decomposition = MatrixDecompose(worldTransform))
-            Scene::StoreDecomposedTransform(*decomposition, transform);
+            Scene::AssignDecomposedTransformComponent(decomposition->translation, decomposition->rotation, decomposition->scale, transform);
     });
 }
 
@@ -149,4 +149,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

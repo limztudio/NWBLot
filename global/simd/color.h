@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 [[nodiscard]] inline SIMDVectorSingle VectorQuantizeUNorm(const SIMDVectorSingle value, const SIMDVectorSingle maxValue)noexcept{
     const SIMDVectorSingle scaled = VectorMultiply(VectorSaturate(value), maxValue);
     return VectorMin(VectorFloor(VectorAdd(scaled, VectorReplicate(0.5f))), maxValue);

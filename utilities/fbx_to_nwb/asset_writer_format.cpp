@@ -39,7 +39,6 @@ using TextWrite::WriteVec4;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 template<typename Stream>
 void WriteSkinJoints(const MeshSkinInfluence& skin, Stream& out)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(out << skin.joint[DeclVal<usize>()]) && noexcept(out << "]")){
     out << "[";

@@ -48,10 +48,10 @@ struct CookEntrySourceLocation{
 };
 
 struct CachedCookedBucketEntry{
-    usize nwbFileIndex = Limit<usize>::s_Max;
-    u32 nwbSubIndex = 0u;
     Name virtualPath = s_NameNone;
     AssetBytes payloadBytes;
+    usize nwbFileIndex = Limit<usize>::s_Max;
+    u32 nwbSubIndex = 0u;
 
 
 public:

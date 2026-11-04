@@ -294,10 +294,10 @@ b8 GpuNativePacketRecorder::recordPacket(
         const GpuTaskRecordContext context{
             .declarations = declarationAccess,
             .compiledPlan = planAccess,
+            .recordingAttemptGeneration = recordingAttemptGeneration,
             .task = task,
             .packet = packetID,
             .queue = packet.queue,
-            .recordingAttemptGeneration = recordingAttemptGeneration,
             .commandIrCapture = commandIrCapture,
         };
         const GpuCompiledBarrier* const prologueBarriers = compiledTaskView.prologueBarriers;

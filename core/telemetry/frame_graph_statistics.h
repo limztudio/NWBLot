@@ -220,18 +220,18 @@ struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 packetGeneration = 0u;
     u64 taskCount = 0u;
     u64 commandListCount = 0u;
-    u32 ownerNodeIndex = Limit<u32>::s_Max;
-    u32 packetIndex = Limit<u32>::s_Max;
-    FrameGraphPhysicalQueueId queue;
-    FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
-    b8 joinsAcceptedQueueFrontier = false;
-    b8 recoverySubmission = false;
     u64 plannedWaitTokenCount = 0u;
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;
     u64 mergedTimelineWaitCount = 0u;
     u64 inheritedTimelineWaitElisionCount = 0u;
     f64 submissionSeconds = 0.0;
+    FrameGraphPhysicalQueueId queue;
+    u32 ownerNodeIndex = Limit<u32>::s_Max;
+    u32 packetIndex = Limit<u32>::s_Max;
+    FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
+    b8 joinsAcceptedQueueFrontier = false;
+    b8 recoverySubmission = false;
 };
 
 

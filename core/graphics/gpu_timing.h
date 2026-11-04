@@ -195,8 +195,8 @@ private:
         Vector<Name, Alloc::GlobalArena> feedbackScopes;
         GpuTimingSampleSubscription subscription;
         GpuTimingSampleListener listener;
-        u32 activeCallbackCount = 0u;
         b8 removing = false;
+        u32 activeCallbackCount = 0u;
 
 
     public:
@@ -206,8 +206,8 @@ private:
     };
 
     struct FeedbackScopeDemand{
-        Name scopeName = s_NameNone;
         u64 ownerCount = 0u;
+        Name scopeName = s_NameNone;
     };
 
 

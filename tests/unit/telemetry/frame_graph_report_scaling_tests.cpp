@@ -89,10 +89,18 @@ public:
                 .packetGeneration = owner.planGeneration,
                 .taskCount = 1u,
                 .commandListCount = 1u,
+                .plannedWaitTokenCount = 0u,
+                .sameQueueWaitElisionCount = 0u,
+                .timelineWaitCount = 0u,
+                .mergedTimelineWaitCount = 0u,
+                .inheritedTimelineWaitElisionCount = 0u,
+                .submissionSeconds = 0.0,
+                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % 2u), .deviceGeneration = 17u },
                 .ownerNodeIndex = ownerIndex,
                 .packetIndex = packetIndex,
-                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % 2u), .deviceGeneration = 17u },
                 .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
+                .joinsAcceptedQueueFrontier = false,
+                .recoverySubmission = false,
             });
         }
     }

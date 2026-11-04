@@ -91,9 +91,9 @@ public:
 
 private:
     Vector<Slot, ArenaT> m_slots;
+    b8 m_valid = true;
     Hash m_hash;
     Equal m_equal;
-    b8 m_valid = true;
 };
 
 

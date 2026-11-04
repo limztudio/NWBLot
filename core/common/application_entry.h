@@ -191,8 +191,8 @@ public:
 
 
 private:
-    int m_argc = s_EmptyArgCount;
     LPWSTR* m_argv = nullptr;
+    int m_argc = s_EmptyArgCount;
 };
 
 template<typename EntryPoint>

@@ -65,12 +65,12 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
         m_graphics,
         GpuPageTextureUploadDesc{
             .name = s_GpuGlyphPageTextureName,
-            .width = binding.width,
-            .height = binding.height,
-            .format = Core::Format::R8_UNORM,
             .data = page->pixels().data(),
             .dataSize = page->pixels().size(),
             .rowPitch = binding.width,
+            .width = binding.width,
+            .height = binding.height,
+            .format = Core::Format::R8_UNORM,
         },
         version->m_texture,
         version->m_readinessToken
@@ -111,7 +111,6 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareGlyphPages(Core::Gpu
         const auto& page = frame->m_glyphPages[index];
         const auto texture = ImportGpuSampledTexture(
             GpuSampledTextureImportDesc{
-                .index = index,
                 .readyPrefix = s_GpuGlyphPageReadyPrefix,
                 .readyMarkerLabel = s_GpuGlyphPageReadyMarkerLabel,
                 .completionLabel = NWB_TEXT("glyph page"),
@@ -119,6 +118,7 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareGlyphPages(Core::Gpu
                 .texturePrefix = s_GpuGlyphPagePrefix,
                 .textureMarkerLabel = s_GpuGlyphPageMarkerLabel,
                 .texture = page->m_texture,
+                .index = index,
             },
             graph,
             uses

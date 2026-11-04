@@ -214,7 +214,6 @@ private:
 
 private:
     MetaArena& m_arena;
-    ValueType::Enum m_type = ValueType::Null;
 
     union{
         i64 m_integer;
@@ -223,6 +222,7 @@ private:
         ListType* m_list;
         MapType* m_map;
     } m_data{};
+    ValueType::Enum m_type = ValueType::Null;
 };
 
 

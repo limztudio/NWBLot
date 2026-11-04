@@ -91,7 +91,6 @@ struct GpuTaskGraphSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
-    u16 deviceGeneration = 0u;
     usize acceptedPacketCount = 0u;
     usize acceptedTaskCount = 0u;
     // Counts each packet when this transaction reaches terminal Rejected; repeat cleanup on an already terminal packet adds nothing.
@@ -112,6 +111,7 @@ struct GpuTaskGraphSubmissionStatistics{
     Array<usize, s_QueueClassCount> nativeCommandListCountByQueueClass{};
     Array<usize, s_QueueClassCount> timelineWaitCountByQueueClass{};
     f64 submissionSeconds = 0.0;
+    u16 deviceGeneration = 0u;
 
 
 public:
@@ -126,8 +126,6 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     u64 recordingAttemptGeneration = 0u;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
-    CommandQueue::Enum queueClass = CommandQueue::kCount;
-    u16 deviceGeneration = 0u;
     b8 joinsAcceptedQueueFrontier = false;
     b8 isRecoverySubmission = false;
     usize taskCount = 0u;
@@ -138,6 +136,8 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     usize mergedTimelineWaitCount = 0u;
     usize inheritedTimelineWaitElisionCount = 0u;
     f64 submissionSeconds = 0.0;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    u16 deviceGeneration = 0u;
 
 
 public:
@@ -164,8 +164,6 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
     GpuPhysicalQueueId queue;
-    CommandQueue::Enum queueClass = CommandQueue::kCount;
-    u16 deviceGeneration = 0u;
     usize acceptedPacketCount = 0u;
     usize acceptedTaskCount = 0u;
     usize rejectedPacketCount = 0u;
@@ -181,6 +179,8 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     usize acceptedFrontierSubmissionCount = 0u;
     usize recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    u16 deviceGeneration = 0u;
 
 
 public:

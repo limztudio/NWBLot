@@ -268,30 +268,30 @@ class CommandListResourceStateHandoff final : NoCopy{
 private:
     struct TextureState{
         Texture* texture = nullptr;
-        MipLevel mipLevel = 0;
-        ArraySlice arraySlice = 0;
-        ResourceStates::Mask state = ResourceStates::Unknown;
-        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         // Invalid ID means shared or unclaimed; otherwise the last owning queue. A valid release target needs a paired acquire.
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        MipLevel mipLevel = 0;
+        ArraySlice arraySlice = 0;
     };
 
     struct BufferState{
         Buffer* buffer = nullptr;
-        ResourceStates::Mask state = ResourceStates::Unknown;
-        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        BufferRange range = s_EntireBuffer;
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
-        BufferRange range = s_EntireBuffer;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     };
 
     struct PermanentTextureState{
         Texture* texture = nullptr;
-        ResourceStates::Mask state = ResourceStates::Unknown;
-        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     };
 
 

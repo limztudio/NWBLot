@@ -25,9 +25,9 @@ NWB_IMPL_BEGIN
 struct TextureGpuResource final : NoCopy{
     Core::TextureHandle texture;
     Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::Format::Enum format = Core::Format::UNKNOWN;
     // Authoritative completion of the static upload, imported by later graph consumers.
     Core::QueueSubmissionToken readinessToken;
+    Core::Format::Enum format = Core::Format::UNKNOWN;
 
 
 public:

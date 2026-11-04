@@ -222,7 +222,7 @@ void GpuTimingRecorder::addFeedbackScopeDemandsLocked(const Span<const Name> sco
             ++m_feedbackScopeDemands[demandIndex].ownerCount;
             continue;
         }
-        m_feedbackScopeDemands.push_back(FeedbackScopeDemand{ .scopeName = scopeName, .ownerCount = 1u, });
+        m_feedbackScopeDemands.push_back(FeedbackScopeDemand{ .ownerCount = 1u, .scopeName = scopeName, });
     }
 }
 

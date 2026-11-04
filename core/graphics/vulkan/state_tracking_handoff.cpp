@@ -378,7 +378,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         NWB_ASSERT(key.texture);
 
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
-        states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{ key.texture, key.mipLevel, key.arraySlice, it.value(), key.texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue });
+        states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{ key.texture, ownerQueue, releaseDestinationQueue, it.value(), key.texture->m_creationDesc.queueSharing, key.mipLevel, key.arraySlice });
     }
 
     states.m_bufferStates.reserve(m_stateTracker.m_bufferStates.size());
@@ -388,7 +388,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         const auto releases = m_bufferOwnershipReleaseDestinations.find(MakeNotNull(&buffer));
         const auto append = [&](const BufferRange range, const ResourceStates::Mask state, const GpuPhysicalQueueId destination){
             if(range.hasExtent()){
-                states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{ &buffer, state, buffer.m_creationDesc.queueSharing, ownerQueue, destination, range });
+                states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{ &buffer, range, ownerQueue, destination, state, buffer.m_creationDesc.queueSharing });
             }
         };
         for(const StateTracker::BufferRangeState& state : it.value()){
@@ -415,7 +415,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
         const TextureSubresourceStateKey key{ &texture, 0u, 0u };
         const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
-        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{ &texture, it.value().state, texture.m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue });
+        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{ &texture, ownerQueue, releaseDestinationQueue, it.value().state, texture.m_creationDesc.queueSharing });
     }
 
     states.m_permanentBufferStates.reserve(m_stateTracker.m_permanentBufferStates.size());
@@ -423,7 +423,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         auto& buffer = *MakeNotNull(it.value().buffer.get());
 
         const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
-        states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{ &buffer, it.value().state, buffer.m_creationDesc.queueSharing, ownerQueue, {} });
+        states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{ &buffer, s_EntireBuffer, ownerQueue, {}, it.value().state, buffer.m_creationDesc.queueSharing });
     }
 
     states.m_deviceGeneration = m_context.deviceGeneration;

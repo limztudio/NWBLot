@@ -76,12 +76,12 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
         m_graphics,
         GpuPageTextureUploadDesc{
             .name = s_GpuSdfPageTextureName,
-            .width = binding.width,
-            .height = binding.height,
-            .format = format,
             .data = uploadData.get(),
             .dataSize = uploadBytes,
             .rowPitch = static_cast<usize>(binding.width) * uploadChannels,
+            .width = binding.width,
+            .height = binding.height,
+            .format = format,
         },
         version->m_texture,
         version->m_readinessToken
@@ -121,7 +121,6 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareSdfPages(Core::GpuTa
         const auto& page = frame->m_sdfPages[index];
         const auto texture = ImportGpuSampledTexture(
             GpuSampledTextureImportDesc{
-                .index = index,
                 .readyPrefix = s_GpuSdfPageReadyPrefix,
                 .readyMarkerLabel = s_GpuSdfPageReadyMarkerLabel,
                 .completionLabel = NWB_TEXT("SDF page"),
@@ -129,6 +128,7 @@ Expected<GpuSampledGraphResources> GpuRendererState::declareSdfPages(Core::GpuTa
                 .texturePrefix = s_GpuSdfPagePrefix,
                 .textureMarkerLabel = s_GpuSdfPageMarkerLabel,
                 .texture = page->m_texture,
+                .index = index,
             },
             graph,
             uses

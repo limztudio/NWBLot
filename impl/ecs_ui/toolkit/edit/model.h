@@ -9,7 +9,7 @@
 
 #include <impl/ecs_ui/toolkit/global.h>
 
-#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 
 #include <global/atomic_identity.h>
 #include <global/termination.h>

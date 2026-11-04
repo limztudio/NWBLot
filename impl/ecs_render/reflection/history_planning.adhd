@@ -1,0 +1,386 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/reflection/settings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReflectionFeedbackPlan ResolveReflectionFeedbackPlan(
+    in ReflectionSceneContentStamp stamp,
+    in ReflectionSettings settings,
+    in b8 enabled,
+    in u64 graphicsFrameIndex,
+    in ReflectionSceneContentStamp previousStamp,
+    in ReflectionSettings previousSettings,
+    in u64 generation,
+    in u64 sequence,
+    in u64 acceptedSequence,
+    in u64 epoch,
+    in u64 startGraphicsFrame,
+    in u32 nextProbeIndex,
+    in u32 acceptedBank,
+    in b8 previousEnabled,
+    in b8 previousEligible,
+    in b8 previousHardwareReady,
+    in b8 resourcesChanged,
+    in b8 quarantined
+){
+    ReflectionFeedbackPlan result;
+    result.stamp = stamp;
+    result.settings = settings;
+    result.generation = generation;
+    result.sequence = sequence;
+    result.acceptedSequence = acceptedSequence;
+    result.graphicsFrameIndex = graphicsFrameIndex;
+    result.enabled = enabled;
+    result.previousHardwareReady = previousHardwareReady;
+    result.quarantined = quarantined;
+    if(quarantined)
+        result.resetReason = ReflectionFeedbackResetReason::InvalidAcceptance;
+    else if(acceptedSequence == 0u){
+        if(resourcesChanged)
+            result.resetReason = ReflectionFeedbackResetReason::ResourcesChanged;
+        else
+            result.resetReason = ReflectionFeedbackResetReason::FirstObservation;
+    }
+    else if(enabled != previousEnabled || !SameReflectionTraceSettings(settings, previousSettings))
+        result.resetReason = ReflectionFeedbackResetReason::SettingsChanged;
+    else if(!stamp.matchesScene(previousStamp))
+        result.resetReason = ReflectionFeedbackResetReason::SceneChanged;
+    else if(stamp.view != previousStamp.view)
+        result.resetReason = ReflectionFeedbackResetReason::ViewChanged;
+    result.reset = result.resetReason != ReflectionFeedbackResetReason::None;
+    if(result.reset)
+        result.epoch = epoch + 1u;
+    else
+        result.epoch = epoch;
+    if(result.reset)
+        result.startGraphicsFrame = graphicsFrameIndex;
+    else
+        result.startGraphicsFrame = startGraphicsFrame;
+    if(result.reset)
+        result.probeIndex = 0u;
+    else
+        result.probeIndex = nextProbeIndex;
+    result.eligible = !quarantined && enabled && stamp.trusted && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
+    result.reused = result.eligible && previousEligible && !result.reset;
+    result.previousBank = acceptedBank;
+    // Never overwrite the accepted bank.
+    if(acceptedSequence != 0u)
+        result.currentBank = 1u - acceptedBank;
+    else
+        result.currentBank = 0u;
+    if(!quarantined && result.reset && (!enabled || settings.traceMode != ReflectionTraceMode::Hybrid || settings.maxHardwareRaysPerFrame == 0u))
+        result.resetReason = ReflectionFeedbackResetReason::Disabled;
+    else if(!quarantined && result.reset && !stamp.trusted)
+        result.resetReason = ReflectionFeedbackResetReason::UntrustedScene;
+    return result;
+}
+
+ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedbackPlan plan, in b8 hardwareReady){
+    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
+    ReflectionFeedbackOutcome result;
+    if(hardwareChanged){
+        result.epoch = plan.epoch + 1u;
+        result.startGraphicsFrame = plan.graphicsFrameIndex;
+        result.probeIndex = 0u;
+    }
+    else{
+        result.epoch = plan.epoch;
+        result.startGraphicsFrame = plan.startGraphicsFrame;
+        result.probeIndex = plan.probeIndex;
+    }
+    result.eligible = plan.eligible && hardwareReady;
+    result.reused = result.eligible && plan.reused && !hardwareChanged;
+    result.reset = plan.reset || hardwareChanged;
+    if(hardwareChanged)
+        result.resetReason = ReflectionFeedbackResetReason::HardwareChanged;
+    else
+        result.resetReason = plan.resetReason;
+    return result;
+}
+
+ReflectionHistoryPlan ResolveReflectionHistoryPlan(
+    in ReflectionSceneContentStamp stamp,
+    in ReflectionSettings settings,
+    in u64 graphicsFrameIndex,
+    in ReflectionSceneContentStamp previousStamp,
+    in ReflectionSettings previousSettings,
+    in u64 generation,
+    in u64 sequence,
+    in u64 acceptedSequence,
+    in u64 epoch,
+    in u64 historyStartGraphicsFrame,
+    in u32 nextSampleIndex,
+    in u32 sampleCount,
+    in u32 acceptedBank,
+    in b8 previousEligible,
+    in b8 previousHardwareReady,
+    in b8 resourcesChanged
+){
+    ReflectionHistoryPlan result;
+    result.stamp = stamp;
+    result.graphicsFrameIndex = graphicsFrameIndex;
+    result.historyStartGraphicsFrame = historyStartGraphicsFrame;
+    result.settings = settings;
+    result.generation = generation;
+    result.sequence = sequence;
+    result.acceptedSequence = acceptedSequence;
+    result.previousHardwareReady = previousHardwareReady;
+    if(acceptedSequence == 0u){
+        if(resourcesChanged)
+            result.resetReason = ReflectionHistoryResetReason::ResourcesChanged;
+        else
+            result.resetReason = ReflectionHistoryResetReason::FirstSample;
+    }
+    else if(!SameReflectionEstimatorSettings(settings, previousSettings))
+        result.resetReason = ReflectionHistoryResetReason::SettingsChanged;
+    else if(!stamp.matchesScene(previousStamp))
+        result.resetReason = ReflectionHistoryResetReason::SceneChanged;
+    else if(stamp.view != previousStamp.view)
+        result.resetReason = ReflectionHistoryResetReason::ViewChanged;
+    result.reset = result.resetReason != ReflectionHistoryResetReason::None;
+    if(result.reset)
+        result.epoch = epoch + 1u;
+    else
+        result.epoch = epoch;
+    if(result.reset)
+        result.sampleIndex = 0u;
+    else
+        result.sampleIndex = nextSampleIndex;
+    result.eligible = settings.temporalEnabled && stamp.trusted && settings.traceMode != ReflectionTraceMode::Disabled;
+    result.reused = result.eligible && previousEligible && !result.reset && sampleCount > 0u;
+    if(result.reused)
+        result.previousSampleCount = sampleCount;
+    else
+        result.previousSampleCount = 0u;
+    result.previousBank = acceptedBank;
+    // Rejected transitions keep last accepted history.
+    if((result.eligible || previousEligible) && acceptedSequence != 0u)
+        result.currentBank = 1u - acceptedBank;
+    else
+        result.currentBank = 0u;
+    if(result.reset && (!settings.temporalEnabled || settings.traceMode == ReflectionTraceMode::Disabled))
+        result.resetReason = ReflectionHistoryResetReason::Disabled;
+    else if(result.reset && !stamp.trusted)
+        result.resetReason = ReflectionHistoryResetReason::UntrustedScene;
+    return result;
+}
+
+ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPlan plan, in b8 hardwareReady){
+    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
+    ReflectionHistoryOutcome result;
+    if(hardwareChanged){
+        result.epoch = plan.epoch + 1u;
+        result.sampleIndex = 0u;
+    }
+    else{
+        result.epoch = plan.epoch;
+        result.sampleIndex = plan.sampleIndex;
+    }
+    result.eligible = plan.eligible;
+    result.reused = plan.reused && !hardwareChanged;
+    if(result.eligible){
+        if(result.reused)
+            result.historyStartGraphicsFrame = plan.historyStartGraphicsFrame;
+        else
+            result.historyStartGraphicsFrame = plan.graphicsFrameIndex;
+    }
+    else
+        result.historyStartGraphicsFrame = 0u;
+    result.reset = plan.reset || hardwareChanged;
+    if(hardwareChanged)
+        result.resetReason = ReflectionHistoryResetReason::HardwareChanged;
+    else
+        result.resetReason = plan.resetReason;
+    if(result.eligible){
+        u32 nextSampleCount = 1u;
+        if(result.reused)
+            nextSampleCount = plan.previousSampleCount + 1u;
+        if(nextSampleCount < plan.settings.temporalMaxSamples)
+            result.sampleCount = nextSampleCount;
+        else
+            result.sampleCount = plan.settings.temporalMaxSamples;
+    }
+    else
+        result.sampleCount = 0u;
+    return result;
+}
+
+void PopulateReflectionFrameSettingsParameters(in ReflectionSettings settings, mut ReflectionFrameParameters outParameters){
+    outParameters.traceMode = cast<u32>(settings.traceMode);
+    outParameters.samplingSeed = settings.samplingSeed;
+    outParameters.maxOpticalQueries = settings.maxOpticalQueries;
+    outParameters.debugView = cast<u32>(settings.debugView);
+    outParameters.maxRayDistance = settings.maxRayDistance;
+    outParameters.distanceFadeStart = settings.distanceFadeStart;
+    outParameters.roughnessCutoff = settings.roughnessCutoff;
+    outParameters.environmentTopR = settings.environmentTop.x;
+    outParameters.environmentTopG = settings.environmentTop.y;
+    outParameters.environmentTopB = settings.environmentTop.z;
+    outParameters.environmentBottomR = settings.environmentBottom.x;
+    outParameters.environmentBottomG = settings.environmentBottom.y;
+    outParameters.environmentBottomB = settings.environmentBottom.z;
+    outParameters.screenMaxSteps = settings.screenMaxSteps;
+    outParameters.screenThickness = settings.screenThickness;
+    outParameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
+    outParameters.screenEdgeFade = settings.screenEdgeFade;
+    if(settings.diagnosticsEnabled)
+        outParameters.diagnosticsEnabled = 1u;
+    else
+        outParameters.diagnosticsEnabled = 0u;
+}
+
+ReflectionFrameParameters ResolveReflectionUploadFrameParameters(
+    in ReflectionFrameParameters baseParameters,
+    in ReflectionHistoryPlan historyPlan,
+    in ReflectionFeedbackPlan feedbackPlan,
+    in b8 feedbackReserved,
+    in b8 hardwarePreparationReady
+){
+    ReflectionFrameParameters parameters = baseParameters;
+    if(!hardwarePreparationReady)
+        parameters.hardwareEnabled = 0u;
+    b8 hardwareReady = parameters.hardwareEnabled != 0u;
+    ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(historyPlan, hardwareReady);
+    ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(feedbackPlan, hardwareReady);
+    parameters.feedbackFlags = 0u;
+    parameters.feedbackProbeIndex = feedback.probeIndex;
+    if(feedbackReserved && feedback.eligible){
+        parameters.feedbackFlags = s_ReflectionFeedbackWriteEnabled;
+        if(feedback.reused)
+            parameters.feedbackFlags |= s_ReflectionFeedbackPreviousValid;
+    }
+    parameters.sampleIndex = history.sampleIndex;
+    ReflectionSampleBase sampleBase = ComputeReflectionSampleBase(parameters.sampleIndex);
+    parameters.sampleBaseX = sampleBase.x;
+    parameters.sampleBaseY = sampleBase.y;
+    return parameters;
+}
+
+b8 CanReserveReflectionFeedbackPlan(
+    in b8 quarantined,
+    in u16 deviceGeneration,
+    in u64 reservedSequence,
+    in u64 currentGeneration,
+    in u64 currentAcceptedSequence,
+    in ReflectionFeedbackPlan plan
+){
+    return !quarantined
+        && deviceGeneration != 0u
+        && reservedSequence == 0u
+        && plan.generation == currentGeneration
+        && plan.sequence > currentAcceptedSequence
+        && plan.acceptedSequence == currentAcceptedSequence;
+}
+
+void ApplyAcceptedReflectionFeedbackPlan(
+    in ReflectionFeedbackPlan plan,
+    in b8 hardwareReady,
+    mut ReflectionSceneContentStamp outStamp,
+    mut ReflectionSettings outSettings,
+    mut u64 outAcceptedSequence,
+    mut u64 outEpoch,
+    mut u64 outStartGraphicsFrame,
+    mut u32 outNextProbeIndex,
+    mut u32 inOutAcceptedBank,
+    mut b8 outEnabled,
+    mut b8 outEligible,
+    mut b8 outHardwareReady,
+    mut b8 outResourcesChanged
+){
+    const ReflectionFeedbackOutcome outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
+    outStamp = plan.stamp;
+    outSettings = plan.settings;
+    outAcceptedSequence = plan.sequence;
+    outEpoch = outcome.epoch;
+    outStartGraphicsFrame = outcome.startGraphicsFrame;
+    if(outcome.eligible){
+        outNextProbeIndex = outcome.probeIndex + 1u;
+        inOutAcceptedBank = plan.currentBank;
+    }
+    else
+        outNextProbeIndex = 0u;
+    outEnabled = plan.enabled;
+    outEligible = outcome.eligible;
+    outHardwareReady = hardwareReady;
+    outResourcesChanged = false;
+}
+
+b8 CanReserveReflectionHistoryPlan(
+    in u16 deviceGeneration,
+    in u64 reservedSequence,
+    in u64 currentGeneration,
+    in u64 currentAcceptedSequence,
+    in ReflectionHistoryPlan plan
+){
+    return deviceGeneration != 0u
+        && reservedSequence == 0u
+        && plan.generation == currentGeneration
+        && plan.sequence != 0u
+        && plan.acceptedSequence == currentAcceptedSequence;
+}
+
+void ApplyAcceptedReflectionHistoryPlan(
+    in ReflectionHistoryPlan plan,
+    in b8 hardwareReady,
+    mut ReflectionSceneContentStamp outStamp,
+    mut ReflectionSettings outSettings,
+    mut u64 outAcceptedSequence,
+    mut u64 outReservedSequence,
+    mut u64 outEpoch,
+    mut u64 outHistoryStartGraphicsFrame,
+    mut u32 outNextSampleIndex,
+    mut u32 outSampleCount,
+    mut u32 outAcceptedBank,
+    mut b8 outEligible,
+    mut b8 outHardwareReady,
+    mut b8 outResourcesChanged
+){
+    const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(plan, hardwareReady);
+    outStamp = plan.stamp;
+    outSettings = plan.settings;
+    outAcceptedSequence = plan.sequence;
+    outReservedSequence = 0u;
+    outEpoch = outcome.epoch;
+    outHistoryStartGraphicsFrame = outcome.historyStartGraphicsFrame;
+    outNextSampleIndex = outcome.sampleIndex + 1u;
+    outSampleCount = outcome.sampleCount;
+    outAcceptedBank = plan.currentBank;
+    outEligible = outcome.eligible;
+    outHardwareReady = hardwareReady;
+    outResourcesChanged = false;
+}
+
+void ApplyReflectionStatisticsHistoryOutcome(
+    in ReflectionHistoryOutcome history,
+    mut ReflectionStatistics inOutMetadata
+){
+    inOutMetadata.historyEpoch = history.epoch;
+    inOutMetadata.historyStartGraphicsFrame = history.historyStartGraphicsFrame;
+    inOutMetadata.historySampleCount = history.sampleCount;
+    inOutMetadata.sampleIndex = history.sampleIndex;
+    inOutMetadata.historyEligible = history.eligible;
+    inOutMetadata.historyReused = history.reused;
+    inOutMetadata.historyReset = history.reset;
+    inOutMetadata.historyResetReason = history.resetReason;
+}
+
+void ApplyReflectionStatisticsFeedbackOutcome(
+    in ReflectionFeedbackOutcome feedback,
+    mut ReflectionStatistics inOutMetadata
+){
+    inOutMetadata.feedbackEpoch = feedback.epoch;
+    inOutMetadata.feedbackStartGraphicsFrame = feedback.startGraphicsFrame;
+    inOutMetadata.feedbackProbeIndex = feedback.probeIndex;
+    inOutMetadata.feedbackEnabled = feedback.eligible;
+    inOutMetadata.feedbackReused = feedback.reused;
+    inOutMetadata.feedbackReset = feedback.reset;
+    inOutMetadata.feedbackResetReason = feedback.resetReason;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

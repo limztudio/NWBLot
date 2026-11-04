@@ -211,6 +211,27 @@ VectorSingle ResolveFlyCameraPosition(
     return outPosition;
 }
 
+VectorSingle ResolveFlyCameraAnglesFromRotation(in VectorSingle rotation){
+    const VectorSingle forwardVector = ResolveFlyCameraForwardVector(rotation);
+    f32 yaw = 0.0f;
+    f32 pitch = 0.0f;
+    native(in forwardVector, mut yaw, mut pitch){
+        yaw = ::VectorGetX(::VectorATan2(::VectorSplatX(forwardVector), ::VectorSplatZ(forwardVector)));
+        pitch = ::VectorGetX(::VectorNegate(::VectorASin(::VectorSplatY(forwardVector))));
+    }
+    return SanitizeFlyCameraAngles(yaw, pitch);
+}
+
+VectorSingle ResolveFlyCameraStepRotation(in VectorSingle currentRotation, in VectorSingle mouseDelta){
+    const VectorSingle angles = ResolveFlyCameraAnglesFromRotation(currentRotation);
+    const VectorSingle rotationAngles = ResolveFlyCameraRotationAngles(angles, mouseDelta);
+    VectorSingle resolvedRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    native(in rotationAngles, mut resolvedRotation){
+        resolvedRotation = ::QuaternionRotationRollPitchYawFromVector(rotationAngles);
+    }
+    return resolvedRotation;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

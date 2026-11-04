@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
+#include <impl/ecs_render/reflection/history_planning.adhd.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/optics/task_graph_optical_scene_upload.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>

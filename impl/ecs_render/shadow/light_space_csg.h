@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
+#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/raytrace/types.adhd.h>

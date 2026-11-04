@@ -3,7 +3,7 @@
 
 
 #include "style.adhd"
-#include <impl/ecs_ui/toolkit/edit/types.adhd>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 #include <impl/ecs_ui/toolkit/text/types.adhd>
 

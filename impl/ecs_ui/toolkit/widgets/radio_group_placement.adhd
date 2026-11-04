@@ -1,0 +1,275 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "radio_group_style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidRadioGroupMetrics(in RadioGroupMetrics metrics){
+    if(
+        metrics.count > s_RadioGroupMaxChoices
+        || !IsValidUiPadding(metrics.padding)
+        || !isFinite(metrics.rowHeight) || metrics.rowHeight <= 0.0f
+        || !isFinite(metrics.indicatorExtent) || metrics.indicatorExtent <= 0.0f
+        || metrics.indicatorExtent > metrics.rowHeight
+        || !isFinite(metrics.gap) || metrics.gap < 0.0f
+        || !isFinite(metrics.rowGap) || metrics.rowGap < 0.0f
+        || !IsValidUiExtent(metrics.contentSize)
+        || !isFinite(metrics.markInset) || metrics.markInset < 0.0f || cast<f64>(metrics.markInset) > s_RadioGroupMaxMarkInsetF64
+    )
+        return false;
+    const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
+    const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
+    u32 gapCount = 0u;
+    if(metrics.count != 0u)
+        gapCount = metrics.count - 1u;
+    const f64 rowsH = cast<f64>(metrics.count) * cast<f64>(metrics.rowHeight) + cast<f64>(gapCount) * cast<f64>(metrics.rowGap);
+    f64 labelW = 0.0;
+    if(metrics.count != 0u)
+        labelW = cast<f64>(metrics.indicatorExtent) + cast<f64>(metrics.gap);
+    const f64 minimumWidth = padW + labelW;
+    const f64 height = padH + rowsH;
+    return height <= s_UiMaxFloatF64
+        && cast<f64>(metrics.contentSize.y) == cast<f64>(cast<f32>(height))
+        && minimumWidth <= s_UiMaxFloatF64
+        && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(minimumWidth));
+}
+
+Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
+    if(
+        count > s_RadioGroupMaxChoices
+        || !IsValidUiExtent(maximumLabel)
+        || !IsValidUiPadding(style.padding)
+        || !IsValidLayoutSize(options.width)
+        || !isFinite(style.indicatorExtent) || style.indicatorExtent <= 0.0f
+        || !isFinite(style.gap) || style.gap < 0.0f
+        || !isFinite(style.rowGap) || style.rowGap < 0.0f
+        || !isFinite(style.markInset) || style.markInset < 0.0f || style.markInset > s_RadioGroupMaxMarkInset
+        || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
+    )
+        return makeUnexpected(Failure());
+    RadioGroupMetrics candidate;
+    candidate.rowHeight = max(maximumLabel.y, style.indicatorExtent);
+    candidate.indicatorExtent = style.indicatorExtent;
+    candidate.gap = style.gap;
+    candidate.rowGap = style.rowGap;
+    candidate.markInset = style.markInset;
+    candidate.padding = style.padding;
+    candidate.count = count;
+    const f64 padW = cast<f64>(style.padding.left) + cast<f64>(style.padding.right);
+    const f64 padH = cast<f64>(style.padding.top) + cast<f64>(style.padding.bottom);
+    u32 gapCount = 0u;
+    if(count != 0u)
+        gapCount = count - 1u;
+    const f64 rowsH = cast<f64>(count) * cast<f64>(candidate.rowHeight) + cast<f64>(gapCount) * cast<f64>(style.rowGap);
+    f64 labelW = 0.0;
+    if(count != 0u)
+        labelW = (cast<f64>(style.indicatorExtent) + cast<f64>(style.gap)) + cast<f64>(maximumLabel.x);
+    const f64 width = padW + labelW;
+    const f64 height = padH + rowsH;
+    if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
+        return makeUnexpected(Failure());
+    candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
+    if(!IsValidRadioGroupMetrics(candidate))
+        return makeUnexpected(Failure());
+    return candidate;
+}
+
+Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
+    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)
+        return makeUnexpected(Failure());
+    RadioGroupPlacement candidate;
+    candidate.bounds = bounds;
+    candidate.count = choices.count;
+    const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents);
+    if(!clipped.has_value())
+        return makeUnexpected(Failure());
+    candidate.clip = clipped.value();
+    const VectorDouble insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
+    const Expected<Rect> content = TryMakeUiRect(insetRect.x, insetRect.y, insetRect.z, insetRect.w, UiRectPrecision::PreciseExtents);
+    if(!content.has_value())
+        return makeUnexpected(Failure());
+    candidate.content = content.value();
+    const f64 contentX = insetRect.x;
+    const f64 contentY = insetRect.y;
+    const f64 contentW = insetRect.z;
+    const f64 indicatorExtentScalar = min(cast<f64>(metrics.indicatorExtent), contentW);
+    const f64 labelOffset = min(contentW, indicatorExtentScalar + cast<f64>(metrics.gap));
+    const f64 markInsetScalar = indicatorExtentScalar * cast<f64>(metrics.markInset);
+    const f64 rowHeightScalar = cast<f64>(metrics.rowHeight);
+    for(u32 index = 0u; index < candidate.count; ++index){
+        if(choices.rows[index].key == 0u)
+            return makeUnexpected(Failure());
+        for(u32 previous = 0u; previous < index; ++previous){
+            if(choices.rows[previous].key == choices.rows[index].key)
+                return makeUnexpected(Failure());
+        }
+        RadioGroupChoicePlacement row;
+        row.key = choices.rows[index].key;
+        row.enabled = choices.rows[index].enabled;
+        const f64 rowOffset = cast<f64>(index) * (rowHeightScalar + cast<f64>(metrics.rowGap));
+        const f64 rowOriginScalar = contentY + rowOffset;
+        const f64 indicatorSpace = rowHeightScalar - indicatorExtentScalar;
+        const f64 indicatorYScalar = rowOriginScalar + (indicatorSpace * 0.5);
+        const Expected<Rect> rowRect = TryMakeUiRect(contentX, rowOriginScalar, contentW, rowHeightScalar, UiRectPrecision::PreciseExtents);
+        if(!rowRect.has_value())
+            return makeUnexpected(Failure());
+        row.rectangle = rowRect.value();
+        const Expected<Rect> rowClip = TryIntersectUiRects(row.rectangle, candidate.clip, UiRectPrecision::PreciseExtents);
+        if(!rowClip.has_value())
+            return makeUnexpected(Failure());
+        row.clip = rowClip.value();
+        const Expected<Rect> indicator = TryMakeUiRect(contentX, indicatorYScalar, indicatorExtentScalar, indicatorExtentScalar, UiRectPrecision::PreciseExtents);
+        if(!indicator.has_value())
+            return makeUnexpected(Failure());
+        row.indicator = indicator.value();
+        const f64 markX = contentX + markInsetScalar;
+        const f64 markY = indicatorYScalar + markInsetScalar;
+        const f64 markExtent = indicatorExtentScalar - cast<f64>(s_CheckmarkInsetSides) * markInsetScalar;
+        const Expected<Rect> mark = TryMakeUiRect(markX, markY, markExtent, markExtent, UiRectPrecision::PreciseExtents);
+        if(!mark.has_value())
+            return makeUnexpected(Failure());
+        row.mark = mark.value();
+        const Expected<Rect> labelRect = TryMakeUiRect(contentX + labelOffset, rowOriginScalar, contentW - labelOffset, rowHeightScalar, UiRectPrecision::PreciseExtents);
+        if(!labelRect.has_value())
+            return makeUnexpected(Failure());
+        const Expected<Rect> textClip = TryIntersectUiRects(labelRect.value(), row.clip, UiRectPrecision::PreciseExtents);
+        if(!textClip.has_value())
+            return makeUnexpected(Failure());
+        row.textClip = textClip.value();
+        candidate.rows[index] = row;
+    }
+    return candidate;
+}
+
+void ReconcileRadioGroupSelectionAndCursor(
+    in RadioGroupSnapshot snapshot,
+    in RadioGroupChoices candidate,
+    mut u64 outSelected,
+    mut u64 outCursor
+){
+    const b8 replacement = snapshot.sourceGeneration != 0u && snapshot.sourceGeneration != candidate.sourceGeneration;
+    u64 selected = snapshot.selectedKey;
+    u64 cursor = snapshot.cursorKey;
+    if(replacement){
+        selected = 0u;
+        cursor = 0u;
+    }
+    if(!TryFindRadioGroupChoice(candidate, selected).has_value())
+        selected = 0u;
+    const Expected<u32> cursorIndex = TryFindRadioGroupChoice(candidate, cursor);
+    if(!cursorIndex.has_value())
+        cursor = FindEnabledRadioGroupChoice(candidate, 0u, false);
+    else if(!candidate.rows[cursorIndex.value()].enabled){
+        u32 nextStart = cursorIndex.value() + 1u;
+        if(nextStart == candidate.count)
+            nextStart = 0u;
+        cursor = FindEnabledRadioGroupChoice(candidate, nextStart, false);
+    }
+    outSelected = selected;
+    outCursor = cursor;
+}
+
+b8 TryApplyRadioGroupControlAction(
+    in RadioGroupChoices choices,
+    in RadioGroupOptions options,
+    in ControlAction action,
+    in ControlToken stateToken,
+    in u64 currentSelected,
+    in u64 currentCursor,
+    mut u64 outSelected,
+    mut u64 outCursor,
+    mut RadioGroupResult inOutResult
+){
+    outSelected = currentSelected;
+    outCursor = currentCursor;
+    if(
+        !IsValidRadioGroupOptions(options) || !IsValidRadioGroupChoices(choices)
+        || !stateToken.valid() || stateToken != action.control
+        || choices.sourceGeneration != stateToken.contentGeneration || choices.sourceRevision != stateToken.contentRevision
+    )
+        return false;
+    u64 candidate = 0u;
+    b8 activate = false;
+    switch(action.kind){
+    case ControlActionKind::Up:
+    case ControlActionKind::Down:
+    case ControlActionKind::Left:
+    case ControlActionKind::Right:
+    case ControlActionKind::Home:
+    case ControlActionKind::End:
+        candidate = ResolveRadioGroupNavigationTarget(choices, currentCursor, action.kind);
+        break;
+    case ControlActionKind::Submit:
+    case ControlActionKind::Activate:{
+        candidate = currentCursor;
+        if(action.kind == ControlActionKind::Activate)
+            candidate = action.value;
+        const Expected<u32> index = TryFindRadioGroupChoice(choices, candidate);
+        if(!index.has_value() || !choices.rows[index.value()].enabled){
+            if(action.kind == ControlActionKind::Activate)
+                return false;
+            candidate = 0u;
+        }
+        activate = candidate != 0u;
+        break;
+    }
+    case ControlActionKind::Wheel:
+    case ControlActionKind::PageUp:
+    case ControlActionKind::PageDown:
+        break;
+    default:
+        return false;
+    }
+    RadioGroupResult candidateResult = inOutResult;
+    candidateResult.valid = true;
+    if(candidate != 0u){
+        candidateResult.selectionChanged = candidateResult.selectionChanged || currentSelected != candidate;
+        candidateResult.activated = candidateResult.activated || activate;
+        outSelected = candidate;
+        outCursor = candidate;
+    }
+    inOutResult = candidateResult;
+    return true;
+}
+
+void ResolveRadioGroupIndicatorNames(
+    in RadioGroupStyle style,
+    in b8 checked,
+    in b8 enabled,
+    in b8 pressed,
+    in b8 hover,
+    mut Name outPreferred,
+    mut Name outFallback
+){
+    if(checked)
+        outPreferred = style.checked;
+    else if(!enabled)
+        outPreferred = style.disabled;
+    else if(pressed)
+        outPreferred = style.pressed;
+    else if(hover)
+        outPreferred = style.hover;
+    else
+        outPreferred = style.normal;
+    if(checked)
+        outFallback = style.checkedFallback;
+    else
+        outFallback = style.normal;
+}
+
+Color ResolveRadioGroupChoiceTint(in RadioGroupStyle style, in b8 enabled, in b8 pressed, in b8 hover){
+    if(!enabled)
+        return style.disabledTint;
+    if(pressed)
+        return style.pressedTint;
+    if(hover)
+        return style.hoverTint;
+    return Color();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

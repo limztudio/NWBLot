@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
+#include <impl/ecs_render/shadow/light_space_plan.adhd.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>

@@ -44,20 +44,11 @@ static constexpr TStringView s_ShutdownText = NWB_TEXT("ProjectTestbed: shutdown
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static SIMDVectorSingle ResolveFlyCameraAnglesFromRotation(const SIMDVectorSingle rotation)noexcept{
-    const SIMDVectorSingle forwardVector = ResolveFlyCameraForwardVector(rotation);
-    const SIMDVectorSingle yawRadians = VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector));
-    const SIMDVectorSingle pitchRadians = VectorNegate(VectorASin(VectorSplatY(forwardVector)));
-    return SanitizeFlyCameraAngles(VectorGetX(yawRadians), VectorGetX(pitchRadians));
-}
-
 static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const f32 deltaSeconds)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
     NWB_ASSERT(cameraView.valid());
 
-    const SIMDVectorSingle angles = ResolveFlyCameraAnglesFromRotation(LoadFloat(cameraView.transform->rotation));
-    const SIMDVectorSingle rotationAngles = ResolveFlyCameraRotationAngles(angles, mouseDelta);
-    const SIMDVectorSingle resolvedRotation = QuaternionRotationRollPitchYawFromVector(rotationAngles);
+    const SIMDVectorSingle resolvedRotation = ResolveFlyCameraStepRotation(LoadFloat(cameraView.transform->rotation), mouseDelta);
     const SIMDVectorSingle resolvedPosition = ResolveFlyCameraPosition(LoadFloat(cameraView.transform->position), moveAxes, resolvedRotation, deltaSeconds, boosted);
     StoreFloat(resolvedRotation, cameraView.transform->rotation);
     StoreFloat(resolvedPosition, cameraView.transform->position);

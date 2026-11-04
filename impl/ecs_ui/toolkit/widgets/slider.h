@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/slider_interaction.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
 #include <global/numeric_range.h>

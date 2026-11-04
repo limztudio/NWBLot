@@ -10,7 +10,7 @@
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
+#include <impl/ecs_render/reflection/history_planning.adhd.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>

@@ -286,7 +286,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             ++result.tirCount;
             break;
         }
-        flux *= half(1.0 - interface.reflectedFraction);
+        flux *= half(1.0h) - half(interface.reflectedFraction);
         media = transmittedMedia;
         ++refractiveCrossings;
         physicalOrigin = hit.worldPos;
@@ -388,7 +388,7 @@ NwbCausticEmission nwbCausticEmitPhotonAtTarget(float3 lightDir, float3 aabbMin,
 }
 
 half3 nwbCausticLightColor(const float4 colorIntensity){
-    return half3(clamp(colorIntensity.xyz, float3(0.0), float3(NWB_CAUSTIC_LIGHT_COLOR_MAX))) * half(min(max(colorIntensity.w, 0.0), NWB_CAUSTIC_LIGHT_INTENSITY_MAX));
+    return half3(clamp(colorIntensity.xyz, half3(0.0h), half3(half(NWB_CAUSTIC_LIGHT_COLOR_MAX)))) * half(min(max(colorIntensity.w, 0.0h), half(NWB_CAUSTIC_LIGHT_INTENSITY_MAX)));
 }
 
 NwbCausticPhoton nwbCausticCreatePhoton(const NwbCausticEmission emission, const half3 lightColor, const uint emissionTargetCount, const uint photonCount, const bool finiteOrigin, const float3 sourcePosition){

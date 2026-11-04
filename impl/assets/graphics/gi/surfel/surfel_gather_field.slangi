@@ -75,7 +75,7 @@ bool nwbSurfelGatherField(const float3 worldPosition, const float3 normal, const
                     if(normalWeight > half(0.0h) && nwbSurfelSameCell(NWB_SURFEL_GATHER_FIELD_POOL[id].cell, cell)){
                         const float3 position = NWB_SURFEL_GATHER_FIELD_POOL[id].position;
                         const float dist = length(biasedPosition - position);
-                        const half distanceWeight = half(saturate(1.0 - dist / radius));
+                        const half distanceWeight = half(saturate(1.0h - dist / radius));
                         const half confidence = saturate(half(sampleCount) / half(NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
                         weight = normalWeight * distanceWeight * confidence;
                         // Keep SH loads and reconstruction conditional on an actual contribution.

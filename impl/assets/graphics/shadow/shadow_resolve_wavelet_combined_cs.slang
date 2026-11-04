@@ -177,7 +177,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const float deltaDistance = float(g_NwbCombinedShadowWaveletDist[index]) - centerDistance;
                         const half distanceWeight = half(exp(-deltaDistance * deltaDistance * invTwoSigmaDistanceSq));
                         const float3 tapNormal = nwbOctDecodeNormal(float2(g_NwbCombinedShadowWaveletNormal[index]));
-                        const half normalWeight = half(pow(max(dot(centerNormal, tapNormal), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
+                        const half normalWeight = half(pow(max(dot(centerNormal, tapNormal), 0.0h), NWB_SHADOW_RESOLVE_NORMAL_POWER));
                         const half opaqueValueWeight = half(exp(-abs(tap.x - center.x) / half(sigma.x)));
                         const half rgbValueWeight = half(exp(-abs(nwbLuminance(tap.yzw) - nwbLuminance(center.yzw)) / half(sigma.y)));
                         // Keep each half multiplication and accumulation in the original order, including separate denominators.

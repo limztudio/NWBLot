@@ -173,7 +173,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const float dist = length(worldPosition - neighbour.position);
                 // Seed weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
                 const half normalWeight = half(saturate(dot(worldNormal, neighbour.normal)));
-                const half distanceWeight = half(saturate(1.0 - dist / max(defaultRadius, NWB_SURFEL_RADIUS_MIN)));
+                const half distanceWeight = half(saturate(1.0h - dist / max(defaultRadius, NWB_SURFEL_RADIUS_MIN)));
                 const half weight = normalWeight * distanceWeight;
                 seedShR += half4(neighbour.shR) * weight;
                 seedShG += half4(neighbour.shG) * weight;

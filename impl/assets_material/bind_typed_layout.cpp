@@ -58,7 +58,7 @@ static Expected<UInt4U> BuildMaterialTypedLayoutDefaultValue(const Name& materia
         return MakeUnexpected(Failure{});
     }
 
-    const auto defaultParameter = MaterialTypedValueParser::Parse(*key, defaultText);
+    const auto defaultParameter = ParseMaterialTypedValue(*key, defaultText);
     if(!defaultParameter){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default '{}' for '{}.{}' in '{}' is invalid"), ConvertString(defaultArgument), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(materialName.resolvedText()));
         return MakeUnexpected(Failure{});
@@ -288,7 +288,7 @@ static b8 WriteMaterialTypedLayoutFieldBytes(const usize byteOffset, const Mater
 
 static Expected<UInt4U> ParseMaterialTypedLayoutParameterValue(const Name& materialName, const AStringView parameterName, const AStringView parameterValue, const MaterialTypedLayoutField& field){
 
-    const auto parameter = MaterialTypedValueParser::Parse(parameterName, parameterValue);
+    const auto parameter = ParseMaterialTypedValue(parameterName, parameterValue);
     if(!parameter){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'"), ConvertString(parameterName), ConvertString(materialName.resolvedText()), ConvertString(parameterValue));
         return MakeUnexpected(Failure{});
@@ -579,4 +579,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

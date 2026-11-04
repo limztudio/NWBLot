@@ -40,6 +40,23 @@ class MeshletAttributeRefEncodeRanges{
     public MeshletRefEncodeRange color;
 }
 
+enum<u8> EncodedMeshletRefDeltaStatus{
+    Valid,
+    InvalidWidth,
+    ByteCountMismatch,
+    PositionDecodeMismatch,
+    AttributeDecodeMismatch
+}
+
+class MeshletRefChannelWidths{
+    public MeshletRefDeltaWidth position = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth skin = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth normal = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth tangent = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth uv0 = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth color = MeshletRefDeltaWidth::U8;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,6 +117,92 @@ b8 MeshletDecodedPositionRefMatches(in MeshletPositionStreamRef decoded, in Mesh
 
 b8 MeshletDecodedAttributeRefMatches(in MeshletAttributeStreamRef decoded, in MeshletAttributeStreamRef source){
     return decoded.normal == source.normal && decoded.tangent == source.tangent && decoded.uv0 == source.uv0 && decoded.color == source.color;
+}
+
+EncodedMeshletRefDeltaStatus CheckEncodedMeshletRefDeltas(
+    in MeshletDesc meshlet,
+    in u32 sourcePositionRefOffset,
+    in u32 sourceAttributeRefOffset,
+    in Span<MeshletPositionStreamRef> positionRefs,
+    in Span<MeshletAttributeStreamRef> attributeRefs,
+    in Span<u8> positionDeltas,
+    in Span<u8> attributeDeltas,
+    in b8 skinRequired
+){
+    const Expected<usize> encodedPositionBytes = TryComputeMeshletEncodedPositionRefByteCount(meshlet, skinRequired);
+    const Expected<usize> encodedAttributeBytes = TryComputeMeshletEncodedAttributeRefByteCount(meshlet);
+    if(!encodedPositionBytes.has_value() || !encodedAttributeBytes.has_value())
+        return EncodedMeshletRefDeltaStatus::InvalidWidth;
+    if(
+        cast<usize>(meshlet.positionRefOffset) > positionDeltas.size()
+        || encodedPositionBytes.value() != positionDeltas.size() - cast<usize>(meshlet.positionRefOffset)
+        || cast<usize>(meshlet.attributeRefOffset) > attributeDeltas.size()
+        || encodedAttributeBytes.value() != attributeDeltas.size() - cast<usize>(meshlet.attributeRefOffset)
+    )
+        return EncodedMeshletRefDeltaStatus::ByteCountMismatch;
+
+    for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
+        const MeshletPositionStreamRef sourceRef = positionRefs[cast<usize>(sourcePositionRefOffset + localPositionIndex)];
+        const Expected<MeshletPositionStreamRef> decodedRef = TryDecodeMeshletPositionRef(positionDeltas, meshlet, localPositionIndex, skinRequired);
+        if(!decodedRef.has_value() || !MeshletDecodedPositionRefMatches(decodedRef.value(), sourceRef, skinRequired))
+            return EncodedMeshletRefDeltaStatus::PositionDecodeMismatch;
+    }
+
+    for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
+        const MeshletAttributeStreamRef sourceRef = attributeRefs[cast<usize>(sourceAttributeRefOffset + localAttributeIndex)];
+        const Expected<MeshletAttributeStreamRef> decodedRef = TryDecodeMeshletAttributeRef(attributeDeltas, meshlet, localAttributeIndex);
+        if(!decodedRef.has_value() || !MeshletDecodedAttributeRefMatches(decodedRef.value(), sourceRef))
+            return EncodedMeshletRefDeltaStatus::AttributeDecodeMismatch;
+    }
+
+    return EncodedMeshletRefDeltaStatus::Valid;
+}
+
+Expected<MeshletRefChannelWidths> TryPrepareMeshletRefEncoding(
+    in Span<MeshletPositionStreamRef> positionRefs,
+    in Span<MeshletAttributeStreamRef> attributeRefs,
+    in u32 sourcePositionRefOffset,
+    in u32 sourceAttributeRefOffset,
+    in b8 skinRequired,
+    mut MeshletDesc inOutMeshlet
+){
+    MeshletRefEncodeRange positionRange;
+    MeshletRefEncodeRange skinRange;
+    MeshletAttributeRefEncodeRanges attributeRanges;
+
+    for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(inOutMeshlet); ++localPositionIndex){
+        const MeshletPositionStreamRef ref = positionRefs[cast<usize>(sourcePositionRefOffset + localPositionIndex)];
+        AddMeshletRefEncodeIndex(ref.position, positionRange);
+        if(skinRequired){
+            AddMeshletRefEncodeIndex(ref.skin, skinRange);
+        }
+        else if(ref.skin != s_MeshMissingStreamIndex){
+            return makeUnexpected(Failure());
+        }
+    }
+
+    for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(inOutMeshlet); ++localAttributeIndex){
+        const MeshletAttributeStreamRef ref = attributeRefs[cast<usize>(sourceAttributeRefOffset + localAttributeIndex)];
+        AddMeshletAttributeRefEncodeRanges(ref, attributeRanges);
+    }
+
+    inOutMeshlet.positionBase = positionRange.minimum;
+    if(skinRequired)
+        inOutMeshlet.skinBase = skinRange.minimum;
+    else
+        inOutMeshlet.skinBase = s_MeshMissingStreamIndex;
+    StoreMeshletAttributeRefEncodeBases(attributeRanges, inOutMeshlet);
+
+    MeshletRefChannelWidths widths;
+    widths.position = MeshletRefEncodeRangeWidth(positionRange);
+    if(skinRequired)
+        widths.skin = MeshletRefEncodeRangeWidth(skinRange);
+    widths.normal = MeshletRefEncodeRangeWidth(attributeRanges.normal);
+    widths.tangent = MeshletRefEncodeRangeWidth(attributeRanges.tangent);
+    widths.uv0 = MeshletRefEncodeRangeWidth(attributeRanges.uv0);
+    widths.color = MeshletRefEncodeRangeWidth(attributeRanges.color);
+    inOutMeshlet.encoding = PackMeshletRefEncoding(widths.position, widths.skin, widths.normal, widths.tangent, widths.uv0, widths.color);
+    return widths;
 }
 
 Expected<u16> TryFindMeshletPositionRef(in Span<MeshletPositionStreamRef> refs, in MeshletPositionStreamRef targetRef){

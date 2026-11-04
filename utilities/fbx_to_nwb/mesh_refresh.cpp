@@ -40,39 +40,6 @@ struct StreamSortEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 LessValue(const Vec2& lhs, const Vec2& rhs)noexcept{
-    return LessEmittedVec2(lhs, rhs);
-}
-
-[[nodiscard]] b8 LessValue(const Vec3& lhs, const Vec3& rhs)noexcept{
-    return LessEmittedVec3(lhs, rhs);
-}
-
-[[nodiscard]] b8 LessValue(const Vec4& lhs, const Vec4& rhs)noexcept{
-    return LessEmittedVec4(lhs, rhs);
-}
-
-[[nodiscard]] b8 LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
-    return LessMeshSkinInfluence(lhs, rhs);
-}
-
-[[nodiscard]] b8 SameValue(const Vec2& lhs, const Vec2& rhs)noexcept{
-    return SameEmittedVec2(lhs, rhs);
-}
-
-[[nodiscard]] b8 SameValue(const Vec3& lhs, const Vec3& rhs)noexcept{
-    return SameEmittedVec3(lhs, rhs);
-}
-
-[[nodiscard]] b8 SameValue(const Vec4& lhs, const Vec4& rhs)noexcept{
-    return SameEmittedVec4(lhs, rhs);
-}
-
-
-[[nodiscard]] b8 SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
-    return EqualMeshSkinInfluence(lhs, rhs);
-}
-
 template<typename Value>
 [[nodiscard]] Expected<UtilityVector<u32>> DeduplicateStream(const AStringView streamName, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, UtilityVector<Value>& inOutStream){
     UtilityVector<u32> outRemap;
@@ -95,17 +62,17 @@ template<typename Value>
         return MakeUnexpected(Failure{});
     }
 
-    Sort(sortedEntries.begin(), sortedEntries.end(), [](const StreamSortEntry<Value>& lhs, const StreamSortEntry<Value>& rhs)noexcept(noexcept(LessValue(lhs.value, rhs.value))){
-        if(LessValue(lhs.value, rhs.value))
+    Sort(sortedEntries.begin(), sortedEntries.end(), [](const StreamSortEntry<Value>& lhs, const StreamSortEntry<Value>& rhs)noexcept(noexcept(LessEmittedStreamValue(lhs.value, rhs.value))){
+        if(LessEmittedStreamValue(lhs.value, rhs.value))
             return true;
-        if(LessValue(rhs.value, lhs.value))
+        if(LessEmittedStreamValue(rhs.value, lhs.value))
             return false;
         return lhs.sourceIndex < rhs.sourceIndex;
     });
 
     usize uniqueCount = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
-        if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value))
+        if(sortedIndex == 0u || !SameEmittedStreamValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value))
             ++uniqueCount;
     }
 
@@ -125,7 +92,7 @@ template<typename Value>
 
     u32 compactIndex = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
-        if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
+        if(sortedIndex == 0u || !SameEmittedStreamValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
             NWB_ASSERT(compact.size() < static_cast<usize>(Impl::s_MeshMissingStreamIndex));
             compactIndex = static_cast<u32>(compact.size());
             compact.push_back(sortedEntries[sortedIndex].value);
@@ -357,4 +324,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

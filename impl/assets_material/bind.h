@@ -12,7 +12,7 @@
 
 
 #include "asset.h"
-#include <impl/assets_material/bind_types.adhd.h>
+#include <impl/assets_material/bind_value_parser.adhd.h>
 
 #include <core/alloc/global.h>
 #include <core/alloc/scratch.h>
@@ -239,4 +239,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

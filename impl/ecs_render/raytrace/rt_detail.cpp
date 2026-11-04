@@ -93,11 +93,7 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
         // Partition the index slice by the winning axis/bin boundary, matching the binning that produced bestCost.
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const f32 c = primitiveBounds[instance].centroid.raw[split.axis];
-            u32 b = static_cast<u32>((c - split.loExtent) * split.invExtent);
-            if(b >= s_SceneBvhSahBinCount)
-                b = s_SceneBvhSahBinCount - 1u;
-            if(b < split.bin){
+            if(ComputeSceneBvhSahBinIndex(primitiveBounds[instance], split) < split.bin){
                 const u32 swap = indices[i];
                 indices[i] = indices[mid];
                 indices[mid] = swap;
@@ -106,8 +102,7 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
         }
     }
 
-    if(!split.valid || mid == lo || mid == hi)
-        mid = lo + (hi - lo) / 2u; // degenerate split (coincident centroids everywhere) -> count median; still correct
+    mid = ResolveSceneBvhSplitMidpoint(split, lo, hi, mid); // degenerate split (coincident centroids everywhere) -> count median; still correct
 
     const u32 leftChild = BuildSceneBvhNode(lo, mid, primitiveBounds, instanceLeafCost, indices, nodes);
     const u32 rightChild = BuildSceneBvhNode(mid, hi, primitiveBounds, instanceLeafCost, indices, nodes);
@@ -130,4 +125,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

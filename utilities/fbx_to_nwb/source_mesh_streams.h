@@ -24,25 +24,11 @@ public:
     usize operator()(const MeshSkinInfluence& value)const noexcept;
 };
 
-struct SourceVertexRefHasher{
-public:
-    usize operator()(const SourceVertexRef& value)const noexcept{
-        return HashSourceVertexRef(value);
-    }
-};
-
-struct SourceVertexRefEqual{
-public:
-    b8 operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
-        return EqualSourceVertexRef(lhs, rhs);
-    }
-};
-
 using Vec2IndexMap = UtilityScratchMap<Vec2, u32>;
 using Vec3IndexMap = UtilityScratchMap<Vec3, u32>;
 using Vec4IndexMap = UtilityScratchMap<Vec4, u32>;
 using MeshSkinInfluenceIndexMap = UtilityScratchMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
-using SourceVertexRefIndexMap = UtilityScratchMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
+using SourceVertexRefIndexMap = UtilityScratchMap<SourceVertexRef, u32>;
 
 struct SourceMeshBuildContext{
     SourceMeshStreams& mesh;
@@ -92,4 +78,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

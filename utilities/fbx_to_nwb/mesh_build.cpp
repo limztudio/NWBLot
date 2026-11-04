@@ -20,19 +20,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PositionKeyHasher{
-    usize operator()(const PositionKey& key)const noexcept{
-        return HashPositionKey(key);
-    }
-};
-
-struct PositionKeyEqual{
-    b8 operator()(const PositionKey& lhs, const PositionKey& rhs)const noexcept{
-        return EqualPositionKey(lhs, rhs);
-    }
-};
-
-using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalRecord, PositionKeyHasher, PositionKeyEqual>;
+using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalRecord>;
 
 template<typename VisitTriangle>
 [[nodiscard]] static b8 VisitTriangulatedMeshTriangles(const ufbx_mesh& mesh, const b8 flipWinding, VisitTriangle&& visitTriangle, UtilityScratchVector<u32>& inOutTriangleIndices){
@@ -357,4 +345,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

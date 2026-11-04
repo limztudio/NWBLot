@@ -1,0 +1,273 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_ui_skin/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsAllowedUiSkinMetadataField(in StringView field){
+    return
+        field == s_UiSkinTextureField
+        || field == s_UiSkinAtlasExtentField
+        || field == s_UiSkinReferenceDensityField
+        || field == s_UiSkinToolkitContractField
+        || field == s_UiSkinRegionsField
+        || field == s_UiSkinColorsField
+        || field == s_UiSkinTypographyField
+    ;
+}
+
+b8 IsAllowedUiSkinRegionField(in StringView field, in b8 hasSlice){
+    return
+        field == s_UiSkinNameField
+        || field == s_UiSkinRectField
+        || field == s_UiSkinDrawModeField
+        || field == s_UiSkinPaddingField
+        || field == s_UiSkinMinimumSizeField
+        || (hasSlice && field == s_UiSkinSliceField)
+    ;
+}
+
+b8 IsAllowedUiSkinPaletteRoleField(in StringView field){
+    return field == s_UiSkinNameField || field == s_UiSkinRgbaField;
+}
+
+b8 IsAllowedUiSkinTypographyField(in StringView field){
+    return field == s_UiSkinDefaultFontSizeField;
+}
+
+b8 IsValidUiSkinPaletteChannelValue(in f32 value, in u64 componentIndex){
+    if(value < s_UiSkinPaletteChannelMin)
+        return false;
+    if(componentIndex == s_UiSkinAlphaComponentIndex)
+        return value <= s_UiSkinPaletteAlphaMax;
+    return value <= s_UiSkinPaletteRgbMax;
+}
+
+b8 IsValidUiSkinDefaultFontSize(in f32 defaultFontSize){
+    return defaultFontSize >= s_UiSkinMinDefaultFontSize && defaultFontSize <= s_UiSkinMaxDefaultFontSize;
+}
+
+Expected<VectorDouble> TryLoadUiSkinSliceExtents(in UiSkinRegion region){
+    if(region.rectangle.width == 0u || region.rectangle.height == 0u)
+        return makeUnexpected(Failure());
+    const u64 horizontal = cast<u64>(region.sliceInsets.left) + cast<u64>(region.sliceInsets.right);
+    const u64 vertical = cast<u64>(region.sliceInsets.top) + cast<u64>(region.sliceInsets.bottom);
+    if(region.drawMode == UiSkinDrawMode::Sprite){
+        if(horizontal != 0u || vertical != 0u)
+            return makeUnexpected(Failure());
+    }
+    else if(region.drawMode == UiSkinDrawMode::NineSlice){
+        if(horizontal > cast<u64>(region.rectangle.width) || vertical > cast<u64>(region.rectangle.height))
+            return makeUnexpected(Failure());
+    }
+    else
+        return makeUnexpected(Failure());
+    return VectorDouble(cast<f64>(horizontal), cast<f64>(vertical), 0.0, 0.0);
+}
+
+b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHeight){
+    const UiSkinRect rectangle = region.rectangle;
+    if(rectangle.x > atlasWidth || rectangle.y > atlasHeight || rectangle.width > atlasWidth - rectangle.x || rectangle.height > atlasHeight - rectangle.y)
+        return false;
+
+    return TryLoadUiSkinSliceExtents(region).has_value();
+}
+
+b8 IsValidUiSkinPaletteColor(in UiSkinColor color){
+    return isFinite(color.r) && IsValidUiSkinPaletteChannelValue(color.r, 0u)
+        && isFinite(color.g) && IsValidUiSkinPaletteChannelValue(color.g, 1u)
+        && isFinite(color.b) && IsValidUiSkinPaletteChannelValue(color.b, 2u)
+        && isFinite(color.a) && IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
+    ;
+}
+
+b8 IsValidUiSkinHeaderFlags(in UiSkinHeaderBinary header){
+    return header.reserved0 == 0u && header.reserved1 == 0u;
+}
+
+b8 IsValidUiSkinRegionBinaryFlags(in UiSkinRegionBinary packed){
+    return packed.reserved == 0u && packed.drawMode <= cast<u32>(UiSkinDrawMode::NineSlice);
+}
+
+b8 IsValidUiSkinRegion(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHeight){
+    if(region.name == s_NameNone || region.name == Name(""))
+        return false;
+    if(!IsValidUiSkinRegionRectAndSlices(region, atlasWidth, atlasHeight))
+        return false;
+
+    const UiSkinInsets padding = region.padding;
+    if(
+        !isFinite(padding.left) || padding.left < 0.0f
+        || !isFinite(padding.top) || padding.top < 0.0f
+        || !isFinite(padding.right) || padding.right < 0.0f
+        || !isFinite(padding.bottom) || padding.bottom < 0.0f
+    )
+        return false;
+
+    const f32 paddingHorizontal = padding.left + padding.right;
+    const f32 paddingVertical = padding.top + padding.bottom;
+    return isFinite(paddingHorizontal)
+        && isFinite(paddingVertical)
+        && isFinite(region.minimumWidth) && region.minimumWidth >= 0.0f
+        && isFinite(region.minimumHeight) && region.minimumHeight >= 0.0f
+    ;
+}
+
+Expected<VectorSingle> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in VectorDouble sliceExtents, in VectorDouble density){
+    if(!isFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !isFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
+        return makeUnexpected(Failure());
+    const f64 maxFloatF64 = cast<f64>(f32.max);
+    const VectorDouble minimumSize(cast<f64>(region.minimumWidth), cast<f64>(region.minimumHeight), 0.0, 0.0);
+    const VectorDouble scaledSlices = VectorDouble(sliceExtents.x, sliceExtents.y, 0.0, 0.0) / VectorDouble(density.x, density.y, 1.0, 1.0);
+    const VectorDouble widthHeight = max(minimumSize, scaledSlices);
+    if(!isFinite(widthHeight.x) || widthHeight.x > maxFloatF64 || !isFinite(widthHeight.y) || widthHeight.y > maxFloatF64)
+        return makeUnexpected(Failure());
+    return VectorSingle(cast<f32>(widthHeight.x), cast<f32>(widthHeight.y), 0.0f, 0.0f);
+}
+
+Expected<VectorSingle> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density){
+    const Expected<VectorDouble> sliceExtents = TryLoadUiSkinSliceExtents(region);
+    if(!sliceExtents.has_value())
+        return makeUnexpected(Failure());
+    return TryLoadUiSkinMinimumSize(region, sliceExtents.value(), VectorDouble(density, density, 0.0, 0.0));
+}
+
+b8 ValidateUiSkinPayloadData(
+    in AssetRef<Texture> texture,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in f32 referenceDensity,
+    in Span<UiSkinRegion> regions,
+    in Span<u32> regionIndex,
+    in UiSkinPalette palette,
+    in UiSkinTypography typography
+){
+    if(regions.size() > cast<usize>(s_UiSkinMaxRegionCount)){
+        error("UiSkin::validatePayload failed: region count {} exceeds schema limit {}", regions.size(), s_UiSkinMaxRegionCount);
+        return false;
+    }
+    if(
+        !texture.valid() || texture.name() == Name("")
+        || atlasWidth == 0u || atlasHeight == 0u
+        || !isFinite(referenceDensity) || referenceDensity <= 0.0f
+        || !(isFinite(cast<f32>(atlasWidth) / referenceDensity) && isFinite(cast<f32>(atlasHeight) / referenceDensity))
+        || regions.empty()
+    ){
+        error("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid");
+        return false;
+    }
+    for(usize index = 0u; index < regions.size(); ++index){
+        const UiSkinRegion region = regions[index];
+        if(!IsValidUiSkinRegion(region, atlasWidth, atlasHeight)){
+            error(
+                "UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics"
+                , index
+                , region.name.resolvedText()
+            );
+            return false;
+        }
+    }
+    for(usize index = 1u; index < regionIndex.size(); ++index){
+        const Name name = regions[cast<usize>(regionIndex[index])].name;
+        if(name == regions[cast<usize>(regionIndex[index - 1u])].name){
+            error("UiSkin::validatePayload failed: duplicate region '{}'", name.resolvedText());
+            return false;
+        }
+    }
+    for(usize index = 0u; index < palette.colors.size(); ++index){
+        const UiSkinColor color = palette.colors[index];
+        if(!IsValidUiSkinPaletteColor(color)){
+            error("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]", index);
+            return false;
+        }
+    }
+    if(!isFinite(typography.defaultFontSize) || !IsValidUiSkinDefaultFontSize(typography.defaultFontSize)){
+        error("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateUiSkinToolkitRegions(in Span<UiSkinRegion> regions, in Span<u32> regionIndex){
+    for(usize index = 0u; index < s_UiSkinRequiredRegionCount; ++index){
+        const UiSkinRequiredRegion required = ResolveUiSkinRequiredRegion(index);
+        if(!TryFindUiSkinRegionIndex(regions, regionIndex, required.name).has_value()){
+            error("UI skin toolkit contract 'widgets' failed: missing required region '{}'", required.text);
+            return false;
+        }
+    }
+    if(
+        !TryFindUiSkinRegionIndex(regions, regionIndex, s_WindowResizeRegionName).has_value()
+        && !TryFindUiSkinRegionIndex(regions, regionIndex, s_WhiteRegionName).has_value()
+    ){
+        error("UI skin toolkit contract 'widgets' failed: window resizing requires 'window.resize' or 'white'");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateUiSkinHeaderBinary(in UiSkinHeaderBinary header, in usize remainingBytes, in usize regionBinaryBytes){
+    if(header.version != s_UiSkinBinaryVersion){
+        error("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required", header.version);
+        return false;
+    }
+    if(!IsValidUiSkinHeaderFlags(header)){
+        error("UiSkin::loadBinary failed: header contains unsupported flags");
+        return false;
+    }
+    if(header.regionCount > s_UiSkinMaxRegionCount){
+        error("UiSkin::loadBinary failed: region count {} exceeds schema limit {}", header.regionCount, s_UiSkinMaxRegionCount);
+        return false;
+    }
+    if(header.regionCount == 0u || cast<usize>(header.regionCount) > remainingBytes / regionBinaryBytes){
+        error("UiSkin::loadBinary failed: region count is empty or exceeds the payload");
+        return false;
+    }
+    return true;
+}
+
+Expected<UiSkinRegion> TryUnpackUiSkinRegionBinary(in UiSkinRegionBinary packed, in u32 index){
+    if(!IsValidUiSkinRegionBinaryFlags(packed)){
+        error("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags", index);
+        return makeUnexpected(Failure());
+    }
+    return UnpackUiSkinRegionBinary(packed);
+}
+
+b8 ValidateUiSkinAtlasTextureParameters(
+    in Name textureVirtualPath,
+    in Name expectedTextureName,
+    in b8 isTexture2D,
+    in u32 depth,
+    in u32 width,
+    in u32 height,
+    in u32 expectedWidth,
+    in u32 expectedHeight
+){
+    if(
+        textureVirtualPath != expectedTextureName
+        || !isTexture2D
+        || depth != 1u
+        || width != expectedWidth
+        || height != expectedHeight
+    ){
+        error("UiSkin::validateTexture failed: texture identity, 2D dimension, or extent does not match the atlas");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateUiSkinCookRegionCount(in usize regionCount){
+    if(regionCount <= s_UiSkinMaxRegionCount)
+        return true;
+
+    error("BuildUiSkinAsset failed: region count {} exceeds schema limit {}", regionCount, s_UiSkinMaxRegionCount);
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

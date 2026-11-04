@@ -69,6 +69,19 @@ enum<u8> SourceTangentMode{
 }
 
 class SourceVertexRef{
+    public b8 operator==(in SourceVertexRef rhs)const{
+        return this.position == rhs.position && this.normal == rhs.normal && this.tangent == rhs.tangent && this.uv0 == rhs.uv0 && this.color == rhs.color && this.skin == rhs.skin;
+    }
+
+    public usize hash()const{
+        usize seed = hashValue(this.position);
+        seed = hashCombineValue(seed, this.normal);
+        seed = hashCombineValue(seed, this.tangent);
+        seed = hashCombineValue(seed, this.uv0);
+        seed = hashCombineValue(seed, this.color);
+        return hashCombineValue(seed, this.skin);
+    }
+
     public u32 position = u32.max;
     public u32 normal = u32.max;
     public u32 tangent = u32.max;
@@ -110,6 +123,16 @@ class SourceTangentReport{
 }
 
 class PositionKey{
+    public b8 operator==(in PositionKey rhs)const{
+        return this.x == rhs.x && this.y == rhs.y && this.z == rhs.z;
+    }
+
+    public usize hash()const{
+        usize seed = hashValue(this.x);
+        seed = hashCombineValue(seed, this.y);
+        return hashCombineValue(seed, this.z);
+    }
+
     public u32 x = 0u;
     public u32 y = 0u;
     public u32 z = 0u;
@@ -144,29 +167,6 @@ StringView SourceTangentModeText(in SourceTangentMode mode){
         case SourceTangentMode::GeneratedFallback: return s_GeneratedFallbackTangentModeText;
     }
     return "";
-}
-
-usize HashSourceVertexRef(in SourceVertexRef value){
-    usize seed = hashValue(value.position);
-    seed = hashCombineValue(seed, value.normal);
-    seed = hashCombineValue(seed, value.tangent);
-    seed = hashCombineValue(seed, value.uv0);
-    seed = hashCombineValue(seed, value.color);
-    return hashCombineValue(seed, value.skin);
-}
-
-b8 EqualSourceVertexRef(in SourceVertexRef lhs, in SourceVertexRef rhs){
-    return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
-}
-
-usize HashPositionKey(in PositionKey key){
-    usize seed = hashValue(key.x);
-    seed = hashCombineValue(seed, key.y);
-    return hashCombineValue(seed, key.z);
-}
-
-b8 EqualPositionKey(in PositionKey lhs, in PositionKey rhs){
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
 }
 
 void AccumulateReport(in SourceMeshCanonicalizeReport item, mut SourceMeshCanonicalizeReport inOutTotal){
@@ -308,13 +308,13 @@ b8 SameEmittedF32(in f32 lhs, in f32 rhs){
     return FbxFloatingHashBits(CleanFloat(lhs)) == FbxFloatingHashBits(CleanFloat(rhs));
 }
 
-b8 LessEmittedVec2(in Vec2 lhs, in Vec2 rhs){
+b8 LessEmittedStreamValue(in Vec2 lhs, in Vec2 rhs){
     if(!SameEmittedF32(lhs.x, rhs.x))
         return LessEmittedF32(lhs.x, rhs.x);
     return LessEmittedF32(lhs.y, rhs.y);
 }
 
-b8 LessEmittedVec3(in Vec3 lhs, in Vec3 rhs){
+b8 LessEmittedStreamValue(in Vec3 lhs, in Vec3 rhs){
     if(!SameEmittedF32(lhs.x, rhs.x))
         return LessEmittedF32(lhs.x, rhs.x);
     if(!SameEmittedF32(lhs.y, rhs.y))
@@ -322,7 +322,7 @@ b8 LessEmittedVec3(in Vec3 lhs, in Vec3 rhs){
     return LessEmittedF32(lhs.z, rhs.z);
 }
 
-b8 LessEmittedVec4(in Vec4 lhs, in Vec4 rhs){
+b8 LessEmittedStreamValue(in Vec4 lhs, in Vec4 rhs){
     if(!SameEmittedF32(lhs.x, rhs.x))
         return LessEmittedF32(lhs.x, rhs.x);
     if(!SameEmittedF32(lhs.y, rhs.y))
@@ -332,15 +332,15 @@ b8 LessEmittedVec4(in Vec4 lhs, in Vec4 rhs){
     return LessEmittedF32(lhs.w, rhs.w);
 }
 
-b8 SameEmittedVec2(in Vec2 lhs, in Vec2 rhs){
+b8 SameEmittedStreamValue(in Vec2 lhs, in Vec2 rhs){
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y);
 }
 
-b8 SameEmittedVec3(in Vec3 lhs, in Vec3 rhs){
+b8 SameEmittedStreamValue(in Vec3 lhs, in Vec3 rhs){
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z);
 }
 
-b8 SameEmittedVec4(in Vec4 lhs, in Vec4 rhs){
+b8 SameEmittedStreamValue(in Vec4 lhs, in Vec4 rhs){
     return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
 }
 

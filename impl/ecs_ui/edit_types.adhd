@@ -3,7 +3,7 @@
 
 
 #include "clipboard_types.adhd"
-#include <impl/ecs_ui/toolkit/widgets/edit_box_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_layout.adhd>
 
 native{
 namespace NWB::Impl{
@@ -372,4 +372,3 @@ b8 CanAppendUiEditBoxEvent(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

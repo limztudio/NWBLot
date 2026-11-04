@@ -184,7 +184,11 @@ usize HashMeshSkinInfluence(in MeshSkinInfluence value){
     return seed;
 }
 
-b8 LessMeshSkinInfluence(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
+b8 SameEmittedStreamValue(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
+    return EqualMeshSkinInfluence(lhs, rhs);
+}
+
+b8 LessEmittedStreamValue(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
     for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
         if(lhs.joint[i] != rhs.joint[i])
             return lhs.joint[i] < rhs.joint[i];

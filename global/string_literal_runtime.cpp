@@ -9,6 +9,11 @@
 
 
 namespace __hidden_string_literal_runtime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr usize s_RecordHeaderBytes = 24;
 struct StringLiteralRecordHeader{
     u32 magic;
@@ -48,13 +53,11 @@ extern "C" __attribute__((visibility("hidden"))) u8 __stop_glb_literals[];
 #else
 #error Unsupported string literal pool object format
 #endif
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_string_literal_runtime{
 static void DecodeStringLiteralPool(const usize begin, const usize end)noexcept{
     if(end < begin || (begin & (s_RecordAlignment - 1)) != 0)
         __builtin_trap();
@@ -102,6 +105,11 @@ static void DecodeStringLiteralPool(const usize begin, const usize end)noexcept{
         cursor += recordStride;
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

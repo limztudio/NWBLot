@@ -286,7 +286,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             ++result.tirCount;
             break;
         }
-        flux *= half(1.0h) - interface.reflectedFraction;
+        flux *= half(1.0h) - half(interface.reflectedFraction);
         media = transmittedMedia;
         ++refractiveCrossings;
         physicalOrigin = hit.worldPos;

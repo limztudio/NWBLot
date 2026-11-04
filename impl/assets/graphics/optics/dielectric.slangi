@@ -51,7 +51,7 @@ NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float
     const float parallel = (float(transmittedIor) * cosineIncident - float(incidentIor) * cosineTransmitted) / (float(transmittedIor) * cosineIncident + float(incidentIor) * cosineTransmitted);
     result.reflectedFraction = saturate(0.5 * (perpendicular * perpendicular + parallel * parallel));
     result.direction = nwbSafeNormalize(eta * direction + (eta * cosineIncident - cosineTransmitted) * opposingNormal, direction);
-    result.radianceTransmission = half(min((1.0h - result.reflectedFraction) * (eta * eta), NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX));
+    result.radianceTransmission = half(min((1.0h - half(result.reflectedFraction)) * (eta * eta), NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX));
     return result;
 }
 

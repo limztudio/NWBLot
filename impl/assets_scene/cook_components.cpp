@@ -71,12 +71,14 @@ using namespace SceneAssetCook;
     if(!x || !y || !z || !w)
         return MakeUnexpected(Failure{});
 
-    const Expected<Float4> normalized = TryNormalizeTransformQuaternion(*x, *y, *z, *w);
+    const Expected<SIMDVectorSingleResult> normalized = TryNormalizeTransformQuaternion(*x, *y, *z, *w);
     if(!normalized){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-zero quaternion"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
-    return *normalized;
+    Float4 result{};
+    StoreFloat(normalized->value, result);
+    return result;
 }
 
 
@@ -308,7 +310,7 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(const Name vir
             const auto color = ParseFloat3Field(nwbFilePath, s_LightDiagnosticPrefix, *colorValue, s_LightColorField);
             if(!color)
                 return MakeUnexpected(Failure{});
-            entry.component.setColor(*color);
+            entry.component.setColor(LoadFloat(*color));
         }
 
         f32 intensity = entry.component.intensity();

@@ -6,7 +6,6 @@
 
 
 #include "builder_scope.h"
-#include "rect_math.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,11 +194,6 @@ private:
     [[nodiscard]] b8 applySliderInput(SliderFrame& frame, const SliderPlacement& placement, b8 interactive);
     [[nodiscard]] b8 sliderMatches(const SliderFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
     void publishSliderResults(b8 valid)noexcept;
-    enum class ListActionOutcome : u8{
-        Continue,
-        Stop,
-        Failed,
-    };
 
     [[nodiscard]] b8 applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
     template<typename MatchF, typename ApplyActionF>
@@ -236,7 +230,7 @@ private:
                 haveGesture = validGesture(gesture);
             }
             else{
-                const ListActionOutcome outcome = applyAction(*action);
+                const ListActionOutcome::Enum outcome = applyAction(*action);
                 if(outcome == ListActionOutcome::Failed)
                     return false;
                 if(outcome == ListActionOutcome::Stop)

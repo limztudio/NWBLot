@@ -211,8 +211,14 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
     }
     for(usize pIdx = 0u; pIdx < method.params.size(); ++pIdx){
         const ParamDecl& p = method.params[pIdx];
-        if(p.type && !checkTypeRef(*p.type, enclosingClass, &method, errors))
-            ok = false;
+        if(p.type){
+            if(!checkTypeRef(*p.type, enclosingClass, &method, errors))
+                ok = false;
+            if(!p.type->isFuncType && SymbolTable::IsSimdStorageType(m_symbols.resolveBaseTypeName(p.type->name))){
+                reportError(errors, p.span, "SIMD memory-layout type cannot be used as a parameter; use 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble' instead");
+                ok = false;
+            }
+        }
         if(!method.hasBody && !p.name.empty()){
             for(usize prevP = 0u; prevP < pIdx; ++prevP){
                 if(method.params[prevP].name == p.name){
@@ -427,8 +433,13 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         if(field->type){
             if(!checkTypeRef(*field->type, &classDecl, nullptr, errors))
                 ok = false;
-            if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(field->type->name))){
+            const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
+            if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && m_symbols.findInterface(baseFieldType)){
                 reportError(errors, field->span, "class member of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored by value");
+                ok = false;
+            }
+            if(TypeContainsSimdRegisterType(*field->type, m_symbols)){
+                reportError(errors, field->span, "class member cannot hold SIMD calculation type ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
                 ok = false;
             }
         }

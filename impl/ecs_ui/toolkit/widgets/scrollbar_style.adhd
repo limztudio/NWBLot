@@ -10,6 +10,23 @@
 
 const Color s_ScrollbarThumbColor = Color(0.35f, 0.40f, 0.48f, 1.0f);
 const Color s_ScrollbarDisabledColor = Color(0.25f, 0.28f, 0.32f, 1.0f);
+const u32 s_ScrollAxisCount = 2u;
+// Each axis can add a reservation once, then both axes are rechecked.
+const u32 s_ScrollbarReservationPassLimit = 3u;
+// Activation values of the track parts before and after each scrollbar thumb.
+const u32 s_TextAreaScrollHorizontalBefore = 1u;
+const u32 s_TextAreaScrollHorizontalAfter = 2u;
+const u32 s_TextAreaScrollVerticalBefore = 3u;
+const u32 s_TextAreaScrollVerticalAfter = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> ScrollAxis{
+    Horizontal,
+    Vertical,
+}
 
 class ScrollbarStyle{
     public Name track = Name("scroll.track");
@@ -25,21 +42,6 @@ class ScrollbarStyle{
     public f32 thickness = s_StyleScrollbarThickness;
     public f32 minimumThumb = s_StyleScrollbarMinimumThumb;
 }
-
-enum<u8> ScrollAxis{
-    Horizontal,
-    Vertical,
-}
-
-const u32 s_ScrollAxisCount = 2u;
-// Each axis can add a reservation once, then both axes are rechecked.
-const u32 s_ScrollbarReservationPassLimit = 3u;
-
-// Activation values of the track parts before and after each scrollbar thumb.
-const u32 s_TextAreaScrollHorizontalBefore = 1u;
-const u32 s_TextAreaScrollHorizontalAfter = 2u;
-const u32 s_TextAreaScrollVerticalBefore = 3u;
-const u32 s_TextAreaScrollVerticalAfter = 4u;
 
 class ScrollbarPlacement{
     public Rect track;
@@ -73,6 +75,15 @@ class ScrollPlacement{
     public u64 rowCount = 0u;
     public b8 scrollbarVisible = false;
 }
+
+class MovedScrollbarThumb{
+    public f64 offset = 0.0;
+    public f32 origin = 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 SameScrollbarPlacementGeometry(in ScrollbarPlacement first, in ScrollbarPlacement second){
     // Offset and thumb position change during an ordinary drag without changing its accepted press geometry.
@@ -140,7 +151,7 @@ Expected<ScrollPlacement> TryCalculateScrollPlacement(in Rect bounds, in Rect in
         || !isFinite(rowHeight) || rowHeight <= 0.0f || !isFinite(offset) || offset < 0.0
     )
         return makeUnexpected(Failure());
-    const f64x4 inset = ComputeInsetUiRectBounds(bounds, padding);
+    const VectorDouble inset = ComputeInsetUiRectBounds(bounds, padding);
     const f64 x = inset.x;
     const f64 y = inset.y;
     const f64 availableWidth = inset.z;
@@ -223,11 +234,6 @@ Expected<Rect> TryCalculateScrollRowBounds(in u64 index, in ScrollPlacement plac
     if(!IsValidUiRect(candidate))
         return makeUnexpected(Failure());
     return candidate;
-}
-
-class MovedScrollbarThumb{
-    public f64 offset = 0.0;
-    public f32 origin = 0.0f;
 }
 
 b8 IsValidScrollbarPlacement(in ScrollbarPlacement bar, in ScrollAxis axis){

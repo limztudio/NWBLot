@@ -8,6 +8,76 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const RuntimeMeshHandle s_InvalidRuntimeMeshHandle();
+const i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
+const i32 s_RuntimeMeshBoundsFiniteFlag = 1 << 1;
+// ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
+const usize s_RawByteLoadAlignmentBytes = 4u;
+const StringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
+const StringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
+const StringView s_RuntimePrefix = ":runtime_";
+const StringView s_RevisionSeparator = "_revision_";
+const StringView s_OwnerSeparator = "_";
+const StringView s_RestPositionsSuffix = "rest_positions";
+const StringView s_RestNormalsSuffix = "rest_normals";
+const StringView s_RestTangentsSuffix = "rest_tangents";
+const StringView s_SkinnedPositionsSuffix = "skinned_positions";
+const StringView s_SkinnedNormalsSuffix = "skinned_normals";
+const StringView s_SkinnedTangentsSuffix = "skinned_tangents";
+const StringView s_Uv0Suffix = "uv0";
+const StringView s_ColorsSuffix = "colors";
+const StringView s_MeshletsSuffix = "meshlets";
+const StringView s_MeshletBoundsSuffix = "meshlet_bounds";
+const StringView s_MeshletLocalBoundsSuffix = "meshlet_local_bounds";
+const StringView s_LocalBoundsSuffix = "local_bounds";
+const StringView s_MeshletPositionRefDeltasSuffix = "meshlet_position_ref_deltas";
+const StringView s_MeshletAttributeRefDeltasSuffix = "meshlet_attribute_ref_deltas";
+const StringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
+const StringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
+const StringView s_AttributeSkinsSuffix = "attribute_skins";
+const StringView s_RuntimeCacheRestPositionLabel = "rest position";
+const StringView s_RuntimeCacheRestNormalLabel = "rest normal";
+const StringView s_RuntimeCacheRestTangentLabel = "rest tangent";
+const StringView s_RuntimeCacheSkinnedPositionLabel = "skinned position";
+const StringView s_RuntimeCacheSkinnedNormalLabel = "skinned normal";
+const StringView s_RuntimeCacheSkinnedTangentLabel = "skinned tangent";
+const StringView s_RuntimeCacheUv0Label = "uv0";
+const StringView s_RuntimeCacheColorLabel = "color";
+const StringView s_RuntimeCacheMeshletDescriptorLabel = "meshlet descriptor";
+const StringView s_RuntimeCacheMeshletBoundsLabel = "meshlet bounds";
+const StringView s_RuntimeCacheMeshletPositionRefDeltaLabel = "meshlet position ref delta";
+const StringView s_RuntimeCacheMeshletAttributeRefDeltaLabel = "meshlet attribute ref delta";
+const StringView s_RuntimeCacheMeshletLocalVertexRefLabel = "meshlet local vertex ref";
+const StringView s_RuntimeCacheMeshletPrimitiveIndexLabel = "meshlet primitive index";
+const StringView s_RuntimeCacheAttributeSkinLabel = "attribute skin";
+const StringView s_RuntimeCacheRtTriangleIndexLabel = "rt triangle index";
+const StringView s_RuntimeCacheRtTriangleAttributeLabel = "rt triangle attribute";
+const usize s_RuntimeMeshRequestInlineCapacity = 32u;
+const usize s_RuntimeMeshIndexBucketsPerRequest = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+flag<u8> RuntimeMeshDirtyFlag{
+    None = 0u,
+    SkinningInputDirty,
+    GpuUploadDirty,
+    MeshletBoundsDirty,
+    All = SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
+}
+
+enum<u8> RenderableMeshResolution{
+    Absent,
+    Unavailable
+}
+
+enum<u8> BufferSetupFailure{
+    EmptyPayload,
+    ByteSizeOverflow,
+    CreateFailed
+}
+
 [reflect]
 class RuntimeMeshHandle{
     public b8 operator==(in RuntimeMeshHandle rhs)const{
@@ -29,27 +99,6 @@ class RuntimeMeshHandle{
     public u64 value = 0u;
 }
 
-const RuntimeMeshHandle s_InvalidRuntimeMeshHandle();
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-flag<u8> RuntimeMeshDirtyFlag{
-    None = 0u,
-    SkinningInputDirty,
-    GpuUploadDirty,
-    MeshletBoundsDirty,
-    All = SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
-const i32 s_RuntimeMeshBoundsFiniteFlag = 1 << 1;
-
 class RuntimeMeshLocalBounds{
     public b8 valid()const{
         return (this.minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0;
@@ -61,75 +110,6 @@ class RuntimeMeshLocalBounds{
 
     public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
     public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-enum<u8> RenderableMeshResolution{
-    Absent,
-    Unavailable
-}
-
-enum<u8> BufferSetupFailure{
-    EmptyPayload,
-    ByteSizeOverflow,
-    CreateFailed
-}
-
-// ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
-const usize s_RawByteLoadAlignmentBytes = 4u;
-
-const StringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
-const StringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
-
-const StringView s_RuntimePrefix = ":runtime_";
-const StringView s_RevisionSeparator = "_revision_";
-const StringView s_OwnerSeparator = "_";
-
-const StringView s_RestPositionsSuffix = "rest_positions";
-const StringView s_RestNormalsSuffix = "rest_normals";
-const StringView s_RestTangentsSuffix = "rest_tangents";
-const StringView s_SkinnedPositionsSuffix = "skinned_positions";
-const StringView s_SkinnedNormalsSuffix = "skinned_normals";
-const StringView s_SkinnedTangentsSuffix = "skinned_tangents";
-const StringView s_Uv0Suffix = "uv0";
-const StringView s_ColorsSuffix = "colors";
-const StringView s_MeshletsSuffix = "meshlets";
-const StringView s_MeshletBoundsSuffix = "meshlet_bounds";
-const StringView s_MeshletLocalBoundsSuffix = "meshlet_local_bounds";
-const StringView s_LocalBoundsSuffix = "local_bounds";
-const StringView s_MeshletPositionRefDeltasSuffix = "meshlet_position_ref_deltas";
-const StringView s_MeshletAttributeRefDeltasSuffix = "meshlet_attribute_ref_deltas";
-const StringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
-const StringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
-const StringView s_AttributeSkinsSuffix = "attribute_skins";
-
-const StringView s_RuntimeCacheRestPositionLabel = "rest position";
-const StringView s_RuntimeCacheRestNormalLabel = "rest normal";
-const StringView s_RuntimeCacheRestTangentLabel = "rest tangent";
-const StringView s_RuntimeCacheSkinnedPositionLabel = "skinned position";
-const StringView s_RuntimeCacheSkinnedNormalLabel = "skinned normal";
-const StringView s_RuntimeCacheSkinnedTangentLabel = "skinned tangent";
-const StringView s_RuntimeCacheUv0Label = "uv0";
-const StringView s_RuntimeCacheColorLabel = "color";
-const StringView s_RuntimeCacheMeshletDescriptorLabel = "meshlet descriptor";
-const StringView s_RuntimeCacheMeshletBoundsLabel = "meshlet bounds";
-const StringView s_RuntimeCacheMeshletPositionRefDeltaLabel = "meshlet position ref delta";
-const StringView s_RuntimeCacheMeshletAttributeRefDeltaLabel = "meshlet attribute ref delta";
-const StringView s_RuntimeCacheMeshletLocalVertexRefLabel = "meshlet local vertex ref";
-const StringView s_RuntimeCacheMeshletPrimitiveIndexLabel = "meshlet primitive index";
-const StringView s_RuntimeCacheAttributeSkinLabel = "attribute skin";
-const StringView s_RuntimeCacheRtTriangleIndexLabel = "rt triangle index";
-const StringView s_RuntimeCacheRtTriangleAttributeLabel = "rt triangle attribute";
-
-const usize s_RuntimeMeshRequestInlineCapacity = 32u;
-const usize s_RuntimeMeshIndexBucketsPerRequest = 2u;
-
-usize HashRuntimeMeshRequestKey(in NameHash name, in u64 version){
-    usize seed = hashValue(name);
-    return hashCombineValue(seed, version);
 }
 
 class RuntimeMeshRequestKey{
@@ -166,6 +146,15 @@ class RuntimeMeshRequestEntry{
 
     public RuntimeMeshRequestKey key;
     public b8 found;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize HashRuntimeMeshRequestKey(in NameHash name, in u64 version){
+    usize seed = hashValue(name);
+    return hashCombineValue(seed, version);
 }
 
 usize FindInlineRuntimeMeshRequest(in Span<RuntimeMeshRequestEntry> entries, in usize inlineCount, in NameHash name, in u64 version){

@@ -13,7 +13,6 @@
 const f32 s_ShadowSlotUnassigned = -1.0f;
 const f32 s_DirectionalShadowImportanceBoost = 4.0f;
 const f32 s_ShadowImportanceDistanceSquaredEpsilon = 0.0001f;
-
 const StringView s_ShadowSoftHalfAName = "render.shadow_visibility.soft_half_a";
 const StringView s_ShadowSoftHalfALabel = "Shadow Soft Half A";
 const StringView s_ShadowSoftHalfBName = "render.shadow_visibility.soft_half_b";
@@ -42,6 +41,95 @@ const StringView s_TransparentMomentsBName = "render.shadow_visibility.transpare
 const StringView s_TransparentMomentsBLabel = "Transparent Shadow Moments B";
 const StringView s_ShadowEdgeCounterName = "render.shadow_visibility.edge_counter";
 const StringView s_ShadowEdgeCounterLabel = "Shadow Edge Counter";
+const usize s_SoftwareTransparentSamplingPushPrevWorldToClipOffset = 48u;
+const usize s_ShadowRqSoftReceiverFactorOffset = 36u;
+const usize s_ShadowGeometryDownsampleReceiverFactorOffset = 36u;
+const usize s_ShadowCombinedTemporalReceiverFactorOffset = 64u;
+const usize s_SoftwareTransparentSamplingReceiverFactorOffset = 112u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 84u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 88u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 92u;
+const usize s_ShadowInstanceMaterialInitialCapacity = 128u;
+const StringView s_SwTransparentAdaptiveDisabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=0";
+const StringView s_SwTransparentAdaptiveEnabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=1";
+// Pipeline order matches the shader name table; the overflow args buffer is the third scratch buffer.
+const u32 s_HwTransparentGatherStage = 0u;
+const u32 s_HwTransparentEvaluateStage = 1u;
+const u32 s_HwTransparentOverflowStage = 2u;
+const u32 s_HwTransparentCrossingsBufferIndex = 0u;
+const u32 s_HwTransparentOverflowListBufferIndex = 1u;
+const u32 s_HwTransparentOverflowArgsBufferIndex = 2u;
+const usize s_HwTransparentReceiverFactorByteOffset = 48u;
+const usize s_HwTransparentStageCount = 3u;
+const u32 s_ShadowTracePositionMember = 0u;
+const u32 s_ShadowTraceIndexMember = 1u;
+const u32 s_ShadowTraceAttributeMember = 2u;
+const u32 s_ShadowTraceNodeMember = 3u;
+const usize s_ShadowTraceMemberCount = 4u;
+const usize s_ShadowTraceMissingIndex = usize.max;
+const u32 s_ShadowTraceInlineCapacity = cast<u32>(s_SmallInlineIndexCapacity);
+const usize s_MaxOpaqueFirstWaveletUses = 12u;
+const usize s_MaxOpaqueResolveUses = 8u;
+const usize s_MaxTransparentTemporalMergeUses = 13u;
+const usize s_MaxTransparentFirstWaveletUses = 7u;
+const usize s_MaxTransparentFoldUses = 9u;
+const StringView s_ShadowTraceHardwarePositionIdentitySuffix = ":shadow_trace_hw_position";
+const StringView s_ShadowTraceHardwareIndexIdentitySuffix = ":shadow_trace_hw_index";
+const StringView s_ShadowTraceHardwareAttributeIdentitySuffix = ":shadow_trace_hw_attribute";
+const StringView s_ShadowTraceSoftwareNodeIdentitySuffix = ":shadow_trace_sw_nodes";
+const StringView s_ShadowTraceSoftwarePositionIdentitySuffix = ":shadow_trace_sw_position";
+const StringView s_ShadowTraceSoftwareIndexIdentitySuffix = ":shadow_trace_sw_index";
+const StringView s_ShadowTraceSoftwareAttributeIdentitySuffix = ":shadow_trace_sw_attribute";
+const StringView s_ShadowResolveWaveletVariant = "NWB_SHADOW_RESOLVE_COMPILED_STAGE=1";
+const StringView s_ShadowResolveUpsampleVariant = "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2";
+const usize s_ShadowPrepareResourceSetUseCapacity = 3u;
+const usize s_ShadowPrepareResourceUseCapacity = 19u;
+const usize s_ShadowPrepareSingleDependencyCount = 1u;
+const usize s_ShadowVisibilityStateSourceCapacity = 2u;
+const usize s_ShadowVisibilityResourceUseCapacity = 40u;
+const u32 s_ShadowHistorySelectorCount = 2u;
+const usize s_SoftShadowOpaqueResourceUseCapacity = 18u;
+const usize s_SoftShadowTransparentTraceResourceUseCapacity = 16u;
+const usize s_SoftShadowLightSpaceReadCapacity = 9u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> SoftShadowOpaqueResolvePhase{
+    TemporalAndWavelet,
+    TemporalOnly,
+    WaveletOnly
+}
+
+// Soft resolve either overwrites visibility or multiplies transparent transmittance.
+enum<u32> SoftShadowUpsampleFold{
+    Overwrite = 0u,
+    Multiply
+}
+
+enum<u8> PreparedShadowMaterialContextRoute{
+    None = 0u,
+    Hardware = 1u,
+    Software = 2u
+}
+
+// Shader-mirrored shadow resolve stages.
+enum<u32> ShadowResolveStage{
+    Wavelet = 1u,
+    Upsample = 2u
+}
+
+flag<u8> PreparedShadowTraceGeometryRole{
+    None = 0u,
+    HardwarePosition,
+    HardwareIndex,
+    HardwareAttribute,
+    SoftwareNode,
+    SoftwarePosition,
+    SoftwareIndex,
+    SoftwareAttribute
+}
 
 class ShadowPreparePacketValidationResult{
     public b8 softwareBvhBuildsMerged = false;
@@ -59,50 +147,6 @@ class ShadowVisibilityMergeValidationResult{
     public b8 preparedTasksMerged = false;
     public b8 allLitClearMerged = false;
     public b8 adaptivePrimitivesMerged = false;
-}
-
-f32 ShadowSlotImportanceData(in f32x4 colorIntensity, in f32x4 params, in f32x4 lightPosition, in f32x4 cameraPosition){
-    const f32 radiantImportance = SceneLightRadiantImportance(colorIntensity);
-    if(params.y < s_LightTypeDirectionalMax)
-        return radiantImportance * s_DirectionalShadowImportanceBoost + 1.0f;
-
-    const f32x4 delta = f32x4(lightPosition.x - cameraPosition.x, lightPosition.y - cameraPosition.y, lightPosition.z - cameraPosition.z, 0.0f);
-    const f32 distanceSquared = dot(delta, delta);
-    const f32 range = max(params.x, 0.0f);
-    const f32 rangeSquared = range * range;
-    f32 coverageSquared = 1.0f;
-    if(distanceSquared > s_ShadowImportanceDistanceSquaredEpsilon)
-        coverageSquared = rangeSquared / distanceSquared;
-    return radiantImportance * min(coverageSquared, 1.0f);
-}
-
-u32 SelectNextShadowSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f32> shadowImportance){
-    const u32 lightCount = cast<u32>(lights.size());
-    f32 bestImportance = -1.0f;
-    u32 bestIndex = lightCount;
-    for(u32 i = 0u; i < lightCount && i < cast<u32>(shadowImportance.size()); ++i){
-        if(lights[i].params.z >= 0.0f)
-            continue;
-        const f32 importance = shadowImportance[i];
-        if(importance > bestImportance){
-            bestImportance = importance;
-            bestIndex = i;
-        }
-    }
-    return bestIndex;
-}
-
-u32 ResolveSoftShadowSlotMask(in Span<SceneLightGpuData> lights){
-    u32 mask = 0u;
-    for(usize i = 0u; i < lights.size(); ++i){
-        const f32 slot = lights[i].params.z;
-        if(slot >= 0.0f){
-            const u32 slotIndex = cast<u32>(slot);
-            if(slotIndex < s_SceneShadowSlotCount)
-                mask |= (1u << slotIndex);
-        }
-    }
-    return mask;
 }
 
 // Only accepted static scene/light identities can authorize a reduced per-pixel sampling budget.
@@ -148,10 +192,6 @@ class SoftwareTransparentSamplingHistory{
     private b8 m_accepted = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [serialize]
 class ShadowCombinedTemporalPushConstants{
     public f32x4x4 prevWorldToClip(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
@@ -173,26 +213,6 @@ class ShadowCombinedTemporalPushConstants{
     public u32 transparentMomentsOutSlot = 0u;
 }
 
-enum<u8> SoftShadowOpaqueResolvePhase{
-    TemporalAndWavelet,
-    TemporalOnly,
-    WaveletOnly
-}
-
-// Soft resolve either overwrites visibility or multiplies transparent transmittance.
-enum<u32> SoftShadowUpsampleFold{
-    Overwrite = 0u,
-    Multiply
-}
-
-b8 CanCombineSoftShadowWavelets(in b8 combinedUpsample, in b8 pipelineReady, in b8 opaqueTemporalReady, in b8 transparentTemporalReady, in u32 opaquePassCount, in u32 transparentPassCount){
-    return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GraphOwnedAdaptiveShadowPlan{
     public b8 enabled = false;
     public b8 compact = false;
@@ -202,18 +222,6 @@ class ShadowPreparationOutcome{
     public b8 resourcesValid = false;
     public b8 ready = false;
 }
-
-enum<u8> PreparedShadowMaterialContextRoute{
-    None = 0u,
-    Hardware = 1u,
-    Software = 2u
-}
-
-const usize s_SoftwareTransparentSamplingPushPrevWorldToClipOffset = 48u;
-const usize s_ShadowRqSoftReceiverFactorOffset = 36u;
-const usize s_ShadowGeometryDownsampleReceiverFactorOffset = 36u;
-const usize s_ShadowCombinedTemporalReceiverFactorOffset = 64u;
-const usize s_SoftwareTransparentSamplingReceiverFactorOffset = 112u;
 
 // Dedicated transparent trace ABI leaves all opaque, hardware and coarse software kernels unchanged.
 [serialize]
@@ -233,15 +241,6 @@ class SoftwareTransparentSamplingPush{
     public Array<f32, 16u> prevWorldToClip;
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 84u;
-const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 88u;
-const usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 92u;
-const usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 
 // CPU mirror of the heap-only software-shadow selector block.
 [serialize]
@@ -292,12 +291,6 @@ class ShadowRqSoftPushConstants{
     public u32 visibilityStorageSlot = 0u;
     public u32 softSampleCount = s_SwShadowTransparentSpp;
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
-}
-
-// Shader-mirrored shadow resolve stages.
-enum<u32> ShadowResolveStage{
-    Wavelet = 1u,
-    Upsample = 2u
 }
 
 // CPU mirror of NwbShadowResolvePushConstants.
@@ -372,19 +365,6 @@ class ShadowReprojectMergePushConstants{
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
 
-const StringView s_SwTransparentAdaptiveDisabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=0";
-const StringView s_SwTransparentAdaptiveEnabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=1";
-
-// Pipeline order matches the shader name table; the overflow args buffer is the third scratch buffer.
-const u32 s_HwTransparentGatherStage = 0u;
-const u32 s_HwTransparentEvaluateStage = 1u;
-const u32 s_HwTransparentOverflowStage = 2u;
-const u32 s_HwTransparentCrossingsBufferIndex = 0u;
-const u32 s_HwTransparentOverflowListBufferIndex = 1u;
-const u32 s_HwTransparentOverflowArgsBufferIndex = 2u;
-const usize s_HwTransparentReceiverFactorByteOffset = 48u;
-const usize s_HwTransparentStageCount = 3u;
-
 [serialize]
 class HardwareTransparentShadowPushConstants{
     public u32 width = 0u;
@@ -400,6 +380,73 @@ class HardwareTransparentShadowPushConstants{
     public u32 overflowArgsHeapSlot = 0u;
     public u32 outputStorageSlot = 0u;
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+class ShadowTraceBufferRecord{
+    public ShadowTraceBufferRecord(){
+        this.firstMesh[0u] = usize.max;
+        this.firstMesh[1u] = usize.max;
+        this.firstMesh[2u] = usize.max;
+        this.firstMesh[3u] = usize.max;
+        this.preparedIndex = usize.max;
+        this.accepted = false;
+    }
+
+    public Array<usize, 4u> firstMesh;
+    public usize preparedIndex;
+    public b8 accepted;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+f32 ShadowSlotImportance(in VectorSingle colorIntensity, in VectorSingle params, in VectorSingle lightPosition, in VectorSingle cameraPosition){
+    const f32 radiantImportance = SceneLightRadiantImportance(colorIntensity);
+    if(params.y < s_LightTypeDirectionalMax)
+        return radiantImportance * s_DirectionalShadowImportanceBoost + 1.0f;
+
+    const VectorSingle delta = lightPosition - cameraPosition;
+    const f32 distanceSquared = lengthSq(delta.xyz);
+    const f32 range = max(params.x, 0.0f);
+    const f32 rangeSquared = range * range;
+    f32 coverageSquared = 1.0f;
+    if(distanceSquared > s_ShadowImportanceDistanceSquaredEpsilon)
+        coverageSquared = rangeSquared / distanceSquared;
+    return radiantImportance * min(coverageSquared, 1.0f);
+}
+
+u32 SelectNextShadowSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f32> shadowImportance){
+    const u32 lightCount = cast<u32>(lights.size());
+    f32 bestImportance = -1.0f;
+    u32 bestIndex = lightCount;
+    for(u32 i = 0u; i < lightCount && i < cast<u32>(shadowImportance.size()); ++i){
+        if(lights[i].params.z >= 0.0f)
+            continue;
+        const f32 importance = shadowImportance[i];
+        if(importance > bestImportance){
+            bestImportance = importance;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
+
+u32 ResolveSoftShadowSlotMask(in Span<SceneLightGpuData> lights){
+    u32 mask = 0u;
+    for(usize i = 0u; i < lights.size(); ++i){
+        const f32 slot = lights[i].params.z;
+        if(slot >= 0.0f){
+            const u32 slotIndex = cast<u32>(slot);
+            if(slotIndex < s_SceneShadowSlotCount)
+                mask |= (1u << slotIndex);
+        }
+    }
+    return mask;
+}
+
+b8 CanCombineSoftShadowWavelets(in b8 combinedUpsample, in b8 pipelineReady, in b8 opaqueTemporalReady, in b8 transparentTemporalReady, in u32 opaquePassCount, in u32 transparentPassCount){
+    return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
 }
 
 HardwareTransparentShadowPushConstants ResolveHardwareTransparentShadowPushConstants(
@@ -431,61 +478,6 @@ HardwareTransparentShadowPushConstants ResolveHardwareTransparentShadowPushConst
     push.receiverFactor = receiverFactor;
     return push;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-flag<u8> PreparedShadowTraceGeometryRole{
-    None = 0u,
-    HardwarePosition,
-    HardwareIndex,
-    HardwareAttribute,
-    SoftwareNode,
-    SoftwarePosition,
-    SoftwareIndex,
-    SoftwareAttribute
-}
-
-const u32 s_ShadowTracePositionMember = 0u;
-const u32 s_ShadowTraceIndexMember = 1u;
-const u32 s_ShadowTraceAttributeMember = 2u;
-const u32 s_ShadowTraceNodeMember = 3u;
-const usize s_ShadowTraceMemberCount = 4u;
-const usize s_ShadowTraceMissingIndex = usize.max;
-const u32 s_ShadowTraceInlineCapacity = cast<u32>(s_SmallInlineIndexCapacity);
-
-class ShadowTraceBufferRecord{
-    public ShadowTraceBufferRecord(){
-        this.firstMesh[0u] = usize.max;
-        this.firstMesh[1u] = usize.max;
-        this.firstMesh[2u] = usize.max;
-        this.firstMesh[3u] = usize.max;
-        this.preparedIndex = usize.max;
-        this.accepted = false;
-    }
-
-    public Array<usize, 4u> firstMesh;
-    public usize preparedIndex;
-    public b8 accepted;
-}
-
-const usize s_MaxOpaqueFirstWaveletUses = 12u;
-const usize s_MaxOpaqueResolveUses = 8u;
-const usize s_MaxTransparentTemporalMergeUses = 13u;
-const usize s_MaxTransparentFirstWaveletUses = 7u;
-const usize s_MaxTransparentFoldUses = 9u;
-
-const StringView s_ShadowTraceHardwarePositionIdentitySuffix = ":shadow_trace_hw_position";
-const StringView s_ShadowTraceHardwareIndexIdentitySuffix = ":shadow_trace_hw_index";
-const StringView s_ShadowTraceHardwareAttributeIdentitySuffix = ":shadow_trace_hw_attribute";
-const StringView s_ShadowTraceSoftwareNodeIdentitySuffix = ":shadow_trace_sw_nodes";
-const StringView s_ShadowTraceSoftwarePositionIdentitySuffix = ":shadow_trace_sw_position";
-const StringView s_ShadowTraceSoftwareIndexIdentitySuffix = ":shadow_trace_sw_index";
-const StringView s_ShadowTraceSoftwareAttributeIdentitySuffix = ":shadow_trace_sw_attribute";
-
-const StringView s_ShadowResolveWaveletVariant = "NWB_SHADOW_RESOLVE_COMPILED_STAGE=1";
-const StringView s_ShadowResolveUpsampleVariant = "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2";
 
 u32 ResolveSoftShadowLightSlotRangeCount(in u32 softShadowSlotMask){
     u32 slotRangeCount = 0u;
@@ -626,16 +618,6 @@ ShadowCombinedWaveletPushConstants MakeShadowCombinedWaveletPushConstants(
     push.opaqueOutputStorageSlot = opaqueOutputStorageSlot;
     return push;
 }
-
-const usize s_ShadowPrepareResourceSetUseCapacity = 3u;
-const usize s_ShadowPrepareResourceUseCapacity = 19u;
-const usize s_ShadowPrepareSingleDependencyCount = 1u;
-const usize s_ShadowVisibilityStateSourceCapacity = 2u;
-const usize s_ShadowVisibilityResourceUseCapacity = 40u;
-const u32 s_ShadowHistorySelectorCount = 2u;
-const usize s_SoftShadowOpaqueResourceUseCapacity = 18u;
-const usize s_SoftShadowTransparentTraceResourceUseCapacity = 16u;
-const usize s_SoftShadowLightSpaceReadCapacity = 9u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

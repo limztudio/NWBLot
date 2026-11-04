@@ -54,7 +54,7 @@ namespace __hidden_runtime_cache_resources{
     for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices)
         NWB_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
     for(const SkinInfluence4& skin : instance.skin)
-        NWB_ASSERT(ValidSkinInfluenceWeights(skin.weight) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
+        NWB_ASSERT(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
 #endif
     return true;
 }

@@ -6,10 +6,6 @@
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 #include <impl/ecs_ui/toolkit/layout/validation.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #include <global/sha256.h>
 namespace NWB::Impl{
@@ -25,13 +21,22 @@ using SdfAtlasPageBinding = SdfAtlasPageBindingRecord<NWB::Impl::Font>;
 }
 }
 
+native{
+namespace NWB::Impl::Ui{
+[[nodiscard]] constexpr u32 TextScriptTag(char a, char b, char c, char d)noexcept{
+    return (static_cast<u32>(a) << 24u) | (static_cast<u32>(b) << 16u) | (static_cast<u32>(c) << 8u) | static_cast<u32>(d);
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 const u32 s_GlyphAtlasPageExtent = 512u;
 const u32 s_GlyphAtlasGlyphGutter = 2u;
 const usize s_GlyphAtlasMaxPages = 16u;
 const u32 s_SdfMaxChannelCount = 4u;
-
-
 const usize s_TextBytesPerKilobyte = 1024u;
 const usize s_TextMaxBytes = s_TextBytesPerKilobyte * s_TextBytesPerKilobyte;
 const usize s_TextMaxFontSources = 8u;
@@ -93,6 +98,12 @@ enum<u8> TextCaretEdge{
     Trailing,
 }
 
+enum<u8> TextGlyphIntersection{
+    Invalid,
+    Invisible,
+    Visible,
+}
+
 class ShapeRequest{
     public StringView text = "";
     public StringView language = s_TextDefaultLanguage;
@@ -105,73 +116,6 @@ class FontMetrics{
     public f32 ascender = 0.0f;
     public f32 descender = 0.0f;
     public f32 lineGap = 0.0f;
-}
-
-b8 IsTextAsciiAlpha(in u32 codePoint){
-    return (codePoint >= 0x41u && codePoint <= 0x5au) || (codePoint >= 0x61u && codePoint <= 0x7au);
-}
-
-b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
-    return IsTextAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
-}
-
-// This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
-TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
-    if(
-        request.text.size() > s_TextMaxBytes
-        || !isFinite(request.fontSize)
-        || request.fontSize < 1.0f / s_TextFixedPointScale
-        || request.fontSize > s_TextMaxFontSize
-        || request.scriptTag == 0u
-        || request.language.empty()
-        || request.language.size() > s_TextMaxLanguageBytes
-        || (request.direction != TextDirection::LeftToRight && request.direction != TextDirection::RightToLeft)
-    )
-        return TextLayoutStatus::InvalidParameters;
-    for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
-        const u32 letter = (request.scriptTag >> (byte * s_ScriptTagBitsPerByte)) & s_ScriptTagLetterMask;
-        if(!IsTextAsciiAlpha(letter))
-            return TextLayoutStatus::InvalidParameters;
-    }
-    for(usize i = 0u; i < request.language.size(); ++i){
-        if(!IsTextAsciiAlphaNumericOrHyphen(cast<u32>(cast<u8>(request.language[i]))))
-            return TextLayoutStatus::InvalidParameters;
-    }
-    const StringView text = request.text;
-    usize offset = 0u;
-    while(offset < text.size()){
-        u32 scalar = 0u;
-        usize byteCount = 0u;
-        if(!tryDecodeUtf8Scalar(text.substr(offset), scalar, byteCount) || scalar == 0u)
-            return TextLayoutStatus::InvalidUtf8;
-        offset += byteCount;
-        if(scalar == '\r'){
-            if(!allowLineBreaks || offset == text.size() || text[offset] != '\n')
-                return TextLayoutStatus::UnsupportedControl;
-        }
-        else if(scalar == '\n'){
-            if(!allowLineBreaks)
-                return TextLayoutStatus::UnsupportedControl;
-        }
-        else if(scalar < s_TextUnicodeSpace || (scalar >= s_TextUnicodeDelete && scalar <= s_TextUnicodeC1Last) || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator){
-            return TextLayoutStatus::UnsupportedControl;
-        }
-    }
-    return TextLayoutStatus::Success;
-}
-
-native{
-namespace NWB::Impl::Ui{
-[[nodiscard]] constexpr u32 TextScriptTag(char a, char b, char c, char d)noexcept{
-    return (static_cast<u32>(a) << 24u) | (static_cast<u32>(b) << 16u) | (static_cast<u32>(c) << 8u) | static_cast<u32>(d);
-}
-};
-}
-
-enum<u8> TextGlyphIntersection{
-    Invalid,
-    Invisible,
-    Visible,
 }
 
 class GlyphCoverageBounds{
@@ -284,6 +228,133 @@ class TextHit{
     public u32 byteOffset = 0u;
 }
 
+class TextRasterMetrics{
+    public f32 physicalSize = 0.0f;
+    public f32 rasterPpem = 0.0f;
+    public f32 rasterScale = 0.0f;
+    public u32 pixelSize = 0u;
+}
+
+class GlyphPageBindingRecord<TFont>{
+    public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height;
+    }
+
+    public b8 operator!=(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font || this.fontGeneration != rhs.fontGeneration || this.atlasIdentity != rhs.atlasIdentity || this.generation != rhs.generation || this.index != rhs.index || this.width != rhs.width || this.height != rhs.height;
+    }
+
+    public AssetRef<TFont> font;
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+class SdfAtlasPageBindingRecord<TFont>{
+    public b8 operator==(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font
+            && this.fontSha256 == rhs.fontSha256
+            && this.pixelsSha256 == rhs.pixelsSha256
+            && this.fontGeneration == rhs.fontGeneration
+            && this.atlasIdentity == rhs.atlasIdentity
+            && this.generation == rhs.generation
+            && this.index == rhs.index
+            && this.width == rhs.width
+            && this.height == rhs.height
+            && this.channelCount == rhs.channelCount
+            && this.spreadPixels == rhs.spreadPixels
+            && this.distanceEncoding == rhs.distanceEncoding;
+    }
+
+    public b8 operator!=(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font
+            || this.fontSha256 != rhs.fontSha256
+            || this.pixelsSha256 != rhs.pixelsSha256
+            || this.fontGeneration != rhs.fontGeneration
+            || this.atlasIdentity != rhs.atlasIdentity
+            || this.generation != rhs.generation
+            || this.index != rhs.index
+            || this.width != rhs.width
+            || this.height != rhs.height
+            || this.channelCount != rhs.channelCount
+            || this.spreadPixels != rhs.spreadPixels
+            || this.distanceEncoding != rhs.distanceEncoding;
+    }
+
+    public AssetRef<TFont> font;
+    public Sha256Digest fontSha256 = Sha256Digest();
+    public Sha256Digest pixelsSha256 = Sha256Digest();
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = s_SdfMaxChannelCount;
+    public u32 spreadPixels = 0u;
+    public u32 distanceEncoding = s_FontAtlasDistanceEncoding;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsTextAsciiAlpha(in u32 codePoint){
+    return (codePoint >= 0x41u && codePoint <= 0x5au) || (codePoint >= 0x61u && codePoint <= 0x7au);
+}
+
+b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
+    return IsTextAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
+}
+
+// This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
+TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
+    if(
+        request.text.size() > s_TextMaxBytes
+        || !isFinite(request.fontSize)
+        || request.fontSize < 1.0f / s_TextFixedPointScale
+        || request.fontSize > s_TextMaxFontSize
+        || request.scriptTag == 0u
+        || request.language.empty()
+        || request.language.size() > s_TextMaxLanguageBytes
+        || (request.direction != TextDirection::LeftToRight && request.direction != TextDirection::RightToLeft)
+    )
+        return TextLayoutStatus::InvalidParameters;
+    for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
+        const u32 letter = (request.scriptTag >> (byte * s_ScriptTagBitsPerByte)) & s_ScriptTagLetterMask;
+        if(!IsTextAsciiAlpha(letter))
+            return TextLayoutStatus::InvalidParameters;
+    }
+    for(usize i = 0u; i < request.language.size(); ++i){
+        if(!IsTextAsciiAlphaNumericOrHyphen(cast<u32>(cast<u8>(request.language[i]))))
+            return TextLayoutStatus::InvalidParameters;
+    }
+    const StringView text = request.text;
+    usize offset = 0u;
+    while(offset < text.size()){
+        u32 scalar = 0u;
+        usize byteCount = 0u;
+        if(!tryDecodeUtf8Scalar(text.substr(offset), scalar, byteCount) || scalar == 0u)
+            return TextLayoutStatus::InvalidUtf8;
+        offset += byteCount;
+        if(scalar == '\r'){
+            if(!allowLineBreaks || offset == text.size() || text[offset] != '\n')
+                return TextLayoutStatus::UnsupportedControl;
+        }
+        else if(scalar == '\n'){
+            if(!allowLineBreaks)
+                return TextLayoutStatus::UnsupportedControl;
+        }
+        else if(scalar < s_TextUnicodeSpace || (scalar >= s_TextUnicodeDelete && scalar <= s_TextUnicodeC1Last) || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator){
+            return TextLayoutStatus::UnsupportedControl;
+        }
+    }
+    return TextLayoutStatus::Success;
+}
+
 Expected<GlyphAtlasPlacement> TryPlaceGlyphInAtlasPage(in u32 cursorX, in u32 cursorY, in u32 rowHeight, in u32 width, in u32 height){
     GlyphAtlasPlacement outPlacement(cursorX, cursorY, rowHeight);
     if(outPlacement.x + width > s_GlyphAtlasPageExtent){
@@ -339,13 +410,6 @@ f32 RoundMeasuredTextBound(in f64 value, in b8 upper){
     if(upper == (rounded > 0.0f))
         return bit_cast<f32>(bits + 1u);
     return bit_cast<f32>(bits - 1u);
-}
-
-class TextRasterMetrics{
-    public f32 physicalSize = 0.0f;
-    public f32 rasterPpem = 0.0f;
-    public f32 rasterScale = 0.0f;
-    public u32 pixelSize = 0u;
 }
 
 Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in DisplayMetrics display){
@@ -496,69 +560,6 @@ TextGlyphIntersection TryIntersectTextRects(in Rect rectangle, in Rect clip){
     return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
 }
 
-class GlyphPageBindingRecord<TFont>{
-    public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
-        return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height;
-    }
-
-    public b8 operator!=(in GlyphPageBindingRecord<TFont> rhs)const{
-        return this.font != rhs.font || this.fontGeneration != rhs.fontGeneration || this.atlasIdentity != rhs.atlasIdentity || this.generation != rhs.generation || this.index != rhs.index || this.width != rhs.width || this.height != rhs.height;
-    }
-
-    public AssetRef<TFont> font;
-    public u64 fontGeneration = 0u;
-    public u64 atlasIdentity = 0u;
-    public u64 generation = 0u;
-    public u32 index = 0u;
-    public u32 width = 0u;
-    public u32 height = 0u;
-}
-
-class SdfAtlasPageBindingRecord<TFont>{
-    public b8 operator==(in SdfAtlasPageBindingRecord<TFont> rhs)const{
-        return this.font == rhs.font
-            && this.fontSha256 == rhs.fontSha256
-            && this.pixelsSha256 == rhs.pixelsSha256
-            && this.fontGeneration == rhs.fontGeneration
-            && this.atlasIdentity == rhs.atlasIdentity
-            && this.generation == rhs.generation
-            && this.index == rhs.index
-            && this.width == rhs.width
-            && this.height == rhs.height
-            && this.channelCount == rhs.channelCount
-            && this.spreadPixels == rhs.spreadPixels
-            && this.distanceEncoding == rhs.distanceEncoding;
-    }
-
-    public b8 operator!=(in SdfAtlasPageBindingRecord<TFont> rhs)const{
-        return this.font != rhs.font
-            || this.fontSha256 != rhs.fontSha256
-            || this.pixelsSha256 != rhs.pixelsSha256
-            || this.fontGeneration != rhs.fontGeneration
-            || this.atlasIdentity != rhs.atlasIdentity
-            || this.generation != rhs.generation
-            || this.index != rhs.index
-            || this.width != rhs.width
-            || this.height != rhs.height
-            || this.channelCount != rhs.channelCount
-            || this.spreadPixels != rhs.spreadPixels
-            || this.distanceEncoding != rhs.distanceEncoding;
-    }
-
-    public AssetRef<TFont> font;
-    public Sha256Digest fontSha256 = Sha256Digest();
-    public Sha256Digest pixelsSha256 = Sha256Digest();
-    public u64 fontGeneration = 0u;
-    public u64 atlasIdentity = 0u;
-    public u64 generation = 0u;
-    public u32 index = 0u;
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 channelCount = s_SdfMaxChannelCount;
-    public u32 spreadPixels = 0u;
-    public u32 distanceEncoding = s_FontAtlasDistanceEncoding;
-}
-
 b8 SameGlyphPageKey<TFont>(in GlyphPageBindingRecord<TFont> first, in GlyphPageBindingRecord<TFont> second){
     return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
 }
@@ -663,7 +664,7 @@ b8 IsValidTextGlyphLocation(in Point glyphPosition, in Point topLeft){
     return isFinite(glyphPosition.x) && isFinite(glyphPosition.y) && isFinite(topLeft.x) && isFinite(topLeft.y);
 }
 
-Expected<f64x4> TryLoadGlyphAtlasRectangle(
+Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
     in Point glyphPosition,
     in Point topLeft,
     in f32 fontSize,
@@ -673,7 +674,7 @@ Expected<f64x4> TryLoadGlyphAtlasRectangle(
     if(!IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || unitsPerEm == 0u)
         return makeUnexpected(Failure());
     if(record.drawable == 0u)
-        return f64x4(0.0, 0.0, 0.0, 0.0);
+        return VectorDouble(0.0, 0.0, 0.0, 0.0);
     if(
         !isFinite(record.planeLeft) || !isFinite(record.planeTop)
         || !isFinite(record.planeRight) || !isFinite(record.planeBottom)
@@ -692,10 +693,10 @@ Expected<f64x4> TryLoadGlyphAtlasRectangle(
         || !FitsTextCoordinate(x + width) || !FitsTextCoordinate(y + height)
     )
         return makeUnexpected(Failure());
-    const f32x4 rounded(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
+    const VectorSingle rounded(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
     if(!isFinite(rounded.x) || !isFinite(rounded.y) || !isFinite(rounded.z) || !isFinite(rounded.w) || !isFinite(rounded.x + rounded.z) || !isFinite(rounded.y + rounded.w))
         return makeUnexpected(Failure());
-    return f64x4(cast<f64>(rounded.x), cast<f64>(rounded.y), cast<f64>(rounded.z), cast<f64>(rounded.w));
+    return VectorDouble(rounded);
 }
 
 TextGlyphIntersection IntersectTextCoverageInk(
@@ -766,11 +767,11 @@ Expected<Rect> TryResolveGlyphCoverageRectangle(
     return TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints);
 }
 
-b8 FitsTextCoordinateXY(in f64x4 value){
+b8 FitsTextCoordinateXY(in VectorDouble value){
     return FitsTextCoordinate(value.x) && FitsTextCoordinate(value.y);
 }
 
-Expected<f64x4> TryTranslateTextInk(in Point position, in Rect ink){
+Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
     const f64 originX = cast<f64>(position.x) + cast<f64>(ink.x);
     const f64 originY = cast<f64>(position.y) + cast<f64>(ink.y);
     const f64 endX = originX + cast<f64>(ink.width);
@@ -783,7 +784,7 @@ Expected<f64x4> TryTranslateTextInk(in Point position, in Rect ink){
     const f32 rectH = ink.height;
     if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
         return makeUnexpected(Failure());
-    return f64x4(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+    return VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
 }
 
 b8 ValidateShapedRunMetrics(in FontMetrics metrics, in usize glyphCount){
@@ -835,7 +836,7 @@ b8 ValidateShapedGlyph(
     return true;
 }
 
-b8 TryIncludeTextInk(in f64x4 ink, mut f64x4 inoutBounds, mut b8 inoutHasInk){
+b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 inoutHasInk){
     if(ink.z <= 0.0 || ink.w <= 0.0)
         return true;
     if(!inoutHasInk){
@@ -869,7 +870,7 @@ b8 TryIncludeTextInk(in f64x4 ink, mut f64x4 inoutBounds, mut b8 inoutHasInk){
     const f32 rectH = cast<f32>(sizeY);
     if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
         return false;
-    inoutBounds = f64x4(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+    inoutBounds = VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
     return true;
 }
 
@@ -937,8 +938,8 @@ void ResolveHbGlyphPlacement(in i32 xOffset, in i32 yOffset, in i32 xAdvance, in
     outAdvance = Point(cast<f32>(xAdvance) * scale, (-cast<f32>(yAdvance)) * scale);
 }
 
-Expected<f64x4> TryLoadSdfGlyphSupport(
-    in f64x4 plane,
+Expected<VectorDouble> TryLoadSdfGlyphSupport(
+    in VectorDouble plane,
     in FontAtlasGlyph glyph,
     in u32 pageWidth,
     in u32 pageHeight,
@@ -1026,7 +1027,7 @@ Expected<f64x4> TryLoadSdfGlyphSupport(
         }
     }
     if(!visible)
-        return f64x4(0.0, 0.0, 0.0, 0.0);
+        return VectorDouble(0.0, 0.0, 0.0, 0.0);
     const f64 minX = supportMinX * texelSizeX + plane.x;
     const f64 minY = supportMinY * texelSizeY + plane.y;
     const f64 maxX = supportMaxX * texelSizeX + plane.x;
@@ -1034,7 +1035,7 @@ Expected<f64x4> TryLoadSdfGlyphSupport(
     const Expected<Rect> measured = TryMakeMeasuredTextRect(minX, minY, maxX, maxY);
     if(!measured.has_value())
         return makeUnexpected(Failure());
-    return f64x4(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
+    return VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
 }
 
 Rect ResolveSdfGlyphUv(in FontAtlasGlyph record, in u32 atlasWidth, in u32 atlasHeight){
@@ -1102,7 +1103,7 @@ Expected<Point> TryAdvanceTextGlyphPosition(
     in Rect ink,
     in GlyphCoverageBounds coverage,
     mut f32 inOutPen,
-    mut f64x4 inOutInkBounds,
+    mut VectorDouble inOutInkBounds,
     mut b8 inOutHasInk
 ){
     const f64 x = cast<f64>(inOutPen) + cast<f64>(offset.x);
@@ -1111,7 +1112,7 @@ Expected<Point> TryAdvanceTextGlyphPosition(
     if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
         return makeUnexpected(Failure());
     const Point position(cast<f32>(x), cast<f32>(y));
-    const Expected<f64x4> translatedInk = TryTranslateTextInk(position, ink);
+    const Expected<VectorDouble> translatedInk = TryTranslateTextInk(position, ink);
     if(!translatedInk.has_value() || !TryIncludeTextInk(translatedInk.value(), inOutInkBounds, inOutHasInk))
         return makeUnexpected(Failure());
     if(coverage.known && !TryTranslateTextInk(position, coverage.ink).has_value())

@@ -4,10 +4,6 @@
 
 #include <impl/ecs_render/shared/frame_types.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #include <core/graphics/rhi/command.h>
 #include <impl/assets/graphics/refraction/diagnostics_layout.h>
@@ -15,6 +11,41 @@ namespace NWB::Impl{
 using QueueSubmissionToken = Core::QueueSubmissionToken;
 }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_RefractionDiagnosticCsgVariantCount = 2u;
+const Name s_RefractionStatisticsReadback0Name = "engine/refraction/statistics_readback_0";
+const Name s_RefractionStatisticsReadback1Name = "engine/refraction/statistics_readback_1";
+const Name s_RefractionStatisticsReadback2Name = "engine/refraction/statistics_readback_2";
+const Name s_RefractionDiagnosticCountersName = "engine/refraction/diagnostic_counters";
+const usize s_RefractionDiagnosticDensityVariantCount = 2u;
+const StringView s_RefractionScreenSparseVariant = "NWB_REFRACTION_DENSE_GRID=0";
+const StringView s_RefractionScreenDenseVariant = "NWB_REFRACTION_DENSE_GRID=1";
+const StringView s_RefractionHardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=0";
+const StringView s_RefractionHardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=0";
+const StringView s_RefractionCsgHardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=1";
+const StringView s_RefractionCsgHardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=1";
+const StringView s_RefractionDiagnosticHwSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=0";
+const StringView s_RefractionDiagnosticHwDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=0";
+const StringView s_RefractionDiagnosticCsgHwSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1";
+const StringView s_RefractionDiagnosticCsgHwDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1";
+const f32 s_RefractionCertifiedBoundsMargin = 0.016f;
+const usize s_RefractionPushConstantsByteSize = 44u;
+const usize s_RefractionDenseArgumentOffset = 16u;
+const usize s_RefractionTileArgumentBytes = 32u;
+const usize s_RefractionFixedUseCapacity = 8u;
+const Name s_RefractionClassifyTilesDebugName = "ECSRender_RefractionClassifyTiles";
+const Name s_RefractionFinalizeTilesDebugName = "ECSRender_RefractionFinalizeTiles";
+const Name s_RefractionHwDenseDebugName = "ECSRender_RefractionHwDense";
+const Name s_RefractionHwDebugName = "ECSRender_RefractionHw";
+const Name s_RefractionScreenDenseDebugName = "ECSRender_RefractionScreenDense";
+const Name s_RefractionScreenDebugName = "ECSRender_RefractionScreen";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // A completed accepted diagnostic copy, regardless of later presentation outcome.
@@ -61,6 +92,25 @@ class RefractionStatistics{
     public b8 csgHardwareEnabled = false;
 }
 
+[serialize]
+class RefractionPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 viewHeapSlot = 0u;
+    public u32 opaqueReflectionSlot = s_RtInvalidSlot;
+    public u32 refractionEnabled = 1u;
+    public u32 tileListSlot = 0u;
+    public u32 tileArgumentsSlot = 0u;
+    public u32 diagnosticsSlot = s_RtInvalidSlot;
+    public u32 certifiedInstanceIndex = s_RtInvalidSlot;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void CopyRefractionDiagnosticCounters(in Span<u32> completedCounters, mut RefractionStatistics latest){
     latest.hardwarePixels = completedCounters[0u];
     latest.entryQueries = completedCounters[1u];
@@ -93,42 +143,6 @@ void CopyRefractionDiagnosticCounters(in Span<u32> completedCounters, mut Refrac
     latest.overflowFlags = completedCounters[28u];
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const usize s_RefractionDiagnosticCsgVariantCount = 2u;
-const Name s_RefractionStatisticsReadback0Name = "engine/refraction/statistics_readback_0";
-const Name s_RefractionStatisticsReadback1Name = "engine/refraction/statistics_readback_1";
-const Name s_RefractionStatisticsReadback2Name = "engine/refraction/statistics_readback_2";
-const Name s_RefractionDiagnosticCountersName = "engine/refraction/diagnostic_counters";
-const usize s_RefractionDiagnosticDensityVariantCount = 2u;
-const StringView s_RefractionScreenSparseVariant = "NWB_REFRACTION_DENSE_GRID=0";
-const StringView s_RefractionScreenDenseVariant = "NWB_REFRACTION_DENSE_GRID=1";
-const StringView s_RefractionHardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=0";
-const StringView s_RefractionHardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=0";
-const StringView s_RefractionCsgHardwareSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=1";
-const StringView s_RefractionCsgHardwareDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=0;NWB_RT_CSG_ENABLED=1";
-const StringView s_RefractionDiagnosticHwSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=0";
-const StringView s_RefractionDiagnosticHwDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=0";
-const StringView s_RefractionDiagnosticCsgHwSparseVariant = "NWB_REFRACTION_DENSE_GRID=0;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1";
-const StringView s_RefractionDiagnosticCsgHwDenseVariant = "NWB_REFRACTION_DENSE_GRID=1;NWB_REFRACTION_DIAGNOSTICS=1;NWB_RT_CSG_ENABLED=1";
-
-[serialize]
-class RefractionPushConstants{
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 deferredResourcesHeapSlot = 0u;
-    public u32 materialContextSlotsHeapSlot = 0u;
-    public u32 viewHeapSlot = 0u;
-    public u32 opaqueReflectionSlot = s_RtInvalidSlot;
-    public u32 refractionEnabled = 1u;
-    public u32 tileListSlot = 0u;
-    public u32 tileArgumentsSlot = 0u;
-    public u32 diagnosticsSlot = s_RtInvalidSlot;
-    public u32 certifiedInstanceIndex = s_RtInvalidSlot;
-}
-
 RefractionPushConstants ResolveRefractionPushConstants(
     in u32 width,
     in u32 height,
@@ -159,18 +173,6 @@ RefractionPushConstants ResolveRefractionPushConstants(
     push.certifiedInstanceIndex = certifiedInstanceIndex;
     return push;
 }
-
-const f32 s_RefractionCertifiedBoundsMargin = 0.016f;
-const usize s_RefractionPushConstantsByteSize = 44u;
-const usize s_RefractionDenseArgumentOffset = 16u;
-const usize s_RefractionTileArgumentBytes = 32u;
-const usize s_RefractionFixedUseCapacity = 8u;
-const Name s_RefractionClassifyTilesDebugName = "ECSRender_RefractionClassifyTiles";
-const Name s_RefractionFinalizeTilesDebugName = "ECSRender_RefractionFinalizeTiles";
-const Name s_RefractionHwDenseDebugName = "ECSRender_RefractionHwDense";
-const Name s_RefractionHwDebugName = "ECSRender_RefractionHw";
-const Name s_RefractionScreenDenseDebugName = "ECSRender_RefractionScreenDense";
-const Name s_RefractionScreenDebugName = "ECSRender_RefractionScreen";
 
 StringView ResolveRefractionVariant(in b8 hardware, in b8 diagnostics, in b8 csg, in b8 dense){
     if(!hardware){

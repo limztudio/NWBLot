@@ -53,7 +53,7 @@ b8 IsBoundedUiRect(in Rect rectangle){
     if(!HasValidUiRectDimensions(rectangle))
         return false;
     // Finite f32 inputs cannot overflow these f64 sums.
-    const f64x2 end = f64x2(cast<f64>(rectangle.x), cast<f64>(rectangle.y)) + f64x2(cast<f64>(rectangle.width), cast<f64>(rectangle.height));
+    const VectorDouble end = VectorDouble(cast<f64>(rectangle.x), cast<f64>(rectangle.y), 0.0, 0.0) + VectorDouble(cast<f64>(rectangle.width), cast<f64>(rectangle.height), 0.0, 0.0);
     return end.x <= s_UiMaxFloatF64 && end.y <= s_UiMaxFloatF64 && HasPreciseUiRectEndpoints(rectangle);
 }
 
@@ -73,7 +73,7 @@ b8 IsBoundedUiPadding(in Insets padding){
     if(!IsValidUiPadding(padding))
         return false;
     // Finite f32 inputs cannot overflow these f64 sums.
-    const f64x2 size = f64x2(cast<f64>(padding.left), cast<f64>(padding.top)) + f64x2(cast<f64>(padding.right), cast<f64>(padding.bottom));
+    const VectorDouble size = VectorDouble(cast<f64>(padding.left), cast<f64>(padding.top), 0.0, 0.0) + VectorDouble(cast<f64>(padding.right), cast<f64>(padding.bottom), 0.0, 0.0);
     return size.x <= s_UiMaxFloatF64 && size.y <= s_UiMaxFloatF64;
 }
 
@@ -145,7 +145,7 @@ Expected<Rect> TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in
     return candidate;
 }
 
-f64x4 ComputeInsetUiRectBounds(in Rect bounds, in Insets padding){
+VectorDouble ComputeInsetUiRectBounds(in Rect bounds, in Insets padding){
     const f64 boundsW = cast<f64>(bounds.width);
     const f64 boundsH = cast<f64>(bounds.height);
     const f64 firstW = min(cast<f64>(padding.left), boundsW);
@@ -154,11 +154,11 @@ f64x4 ComputeInsetUiRectBounds(in Rect bounds, in Insets padding){
     const f64 remH = boundsH - firstH;
     const f64 lastW = min(cast<f64>(padding.right), remW);
     const f64 lastH = min(cast<f64>(padding.bottom), remH);
-    return f64x4(cast<f64>(bounds.x) + firstW, cast<f64>(bounds.y) + firstH, remW - lastW, remH - lastH);
+    return VectorDouble(cast<f64>(bounds.x) + firstW, cast<f64>(bounds.y) + firstH, remW - lastW, remH - lastH);
 }
 
 Expected<Rect> TryInsetUiRect(in Rect bounds, in Insets padding, in UiRectPrecision precision){
-    const f64x4 r = ComputeInsetUiRectBounds(bounds, padding);
+    const VectorDouble r = ComputeInsetUiRectBounds(bounds, padding);
     return TryMakeUiRect(r.x, r.y, r.z, r.w, precision);
 }
 
@@ -177,20 +177,20 @@ Expected<Rect> TryIntersectUiRects(in Rect lhs, in Rect rhs, in UiRectPrecision 
 }
 
 Rect IntersectUiRectsBounds(in Rect lhs, in Rect rhs){
-    const f32x4 lhsOrigin(lhs.x, lhs.y, 0.0f, 0.0f);
-    const f32x4 rhsOrigin(rhs.x, rhs.y, 0.0f, 0.0f);
-    const f32x4 lhsEnd = lhsOrigin + f32x4(lhs.width, lhs.height, 0.0f, 0.0f);
-    const f32x4 rhsEnd = rhsOrigin + f32x4(rhs.width, rhs.height, 0.0f, 0.0f);
-    const f32x4 origin = max(lhsOrigin, rhsOrigin);
-    const f32x4 end = min(lhsEnd, rhsEnd);
-    const f32x4 size = max(f32x4(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
+    const VectorSingle lhsOrigin(lhs.x, lhs.y, 0.0f, 0.0f);
+    const VectorSingle rhsOrigin(rhs.x, rhs.y, 0.0f, 0.0f);
+    const VectorSingle lhsEnd = lhsOrigin + VectorSingle(lhs.width, lhs.height, 0.0f, 0.0f);
+    const VectorSingle rhsEnd = rhsOrigin + VectorSingle(rhs.width, rhs.height, 0.0f, 0.0f);
+    const VectorSingle origin = max(lhsOrigin, rhsOrigin);
+    const VectorSingle end = min(lhsEnd, rhsEnd);
+    const VectorSingle size = max(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
     return Rect(origin.x, origin.y, size.x, size.y);
 }
 
 Rect InsetUiRectBounds(in Rect rectangle, in Insets padding){
-    const f32x4 origin = f32x4(rectangle.x, rectangle.y, 0.0f, 0.0f) + f32x4(padding.left, padding.top, 0.0f, 0.0f);
-    const f32x4 extent = f32x4(rectangle.width, rectangle.height, 0.0f, 0.0f) - f32x4(padding.left, padding.top, 0.0f, 0.0f) - f32x4(padding.right, padding.bottom, 0.0f, 0.0f);
-    const f32x4 size = max(f32x4(0.0f, 0.0f, 0.0f, 0.0f), extent);
+    const VectorSingle origin = VectorSingle(rectangle.x, rectangle.y, 0.0f, 0.0f) + VectorSingle(padding.left, padding.top, 0.0f, 0.0f);
+    const VectorSingle extent = VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f) - VectorSingle(padding.left, padding.top, 0.0f, 0.0f) - VectorSingle(padding.right, padding.bottom, 0.0f, 0.0f);
+    const VectorSingle size = max(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), extent);
     return Rect(origin.x, origin.y, size.x, size.y);
 }
 
@@ -281,20 +281,19 @@ b8 TryBeginArrangeLayoutTreeNode(
     const LayoutTreeNode node = nodes[cast<usize>(index)];
     const LayoutNodeDesc description = node.description;
     const Rect inheritedClip = work[cast<usize>(index)].inheritedClip;
-    const f32x4 rectangleVec(inoutBox.rectangle.x, inoutBox.rectangle.y, inoutBox.rectangle.width, inoutBox.rectangle.height);
-    const f32x4 inheritedClipVec(inheritedClip.x, inheritedClip.y, inheritedClip.width, inheritedClip.height);
-    const f64x4 contentBounds = ComputeInsetUiRectBounds(inoutBox.rectangle, description.padding);
-    const f32x4 contentVec(cast<f32>(contentBounds.x), cast<f32>(contentBounds.y), cast<f32>(contentBounds.z), cast<f32>(contentBounds.w));
-    const f32x4 clipVec = IntersectRectVec(rectangleVec, inheritedClipVec);
-    inoutBox.content = Rect(contentVec.x, contentVec.y, contentVec.z, contentVec.w);
-    inoutBox.clip = Rect(clipVec.x, clipVec.y, clipVec.z, clipVec.w);
+    const VectorSingle rectangleVec = LoadRect(inoutBox.rectangle);
+    const VectorSingle inheritedClipVec = LoadRect(inheritedClip);
+    const VectorSingle contentVec = VectorSingle(ComputeInsetUiRectBounds(inoutBox.rectangle, description.padding));
+    const VectorSingle clipVec = IntersectRectValue(rectangleVec, inheritedClipVec);
+    inoutBox.content = StoreRect(contentVec);
+    inoutBox.clip = StoreRect(clipVec);
     inoutBox.hit = inoutBox.clip;
     if(!IsValidUiRect(inoutBox.content) || !IsValidUiRect(inoutBox.clip))
         return false;
-    f32x4 childClipVec = inheritedClipVec;
+    VectorSingle childClipVec = inheritedClipVec;
     if(description.clipChildren)
-        childClipVec = IntersectRectVec(inheritedClipVec, contentVec);
-    outChildClip = Rect(childClipVec.x, childClipVec.y, childClipVec.z, childClipVec.w);
+        childClipVec = IntersectRectValue(inheritedClipVec, contentVec);
+    outChildClip = StoreRect(childClipVec);
     const b8 row = description.direction == LayoutDirection::Row;
     const b8 column = description.direction == LayoutDirection::Column;
     f64 consumed = 0.0;
@@ -578,7 +577,7 @@ void EmitPaintQuad(
         assert(false);
         return;
     }
-    const f32x4 textureCoordinates = ResolveQuadTextureCoords(rectangle, visible, uv);
+    const VectorSingle textureCoordinates = ResolveQuadTextureCoords(rectangle, visible, uv);
     const f32 left = textureCoordinates.x;
     const f32 top = textureCoordinates.y;
     const f32 right = textureCoordinates.z;
@@ -643,10 +642,10 @@ void EmitPaintNineSlice(
 ){
     if(!HasUiRectArea(rectangle))
         return;
-    f32x4 xVec(0.0f);
-    f32x4 yVec(0.0f);
-    f32x4 uVec(0.0f);
-    f32x4 vVec(0.0f);
+    VectorSingle xVec(0.0f);
+    VectorSingle yVec(0.0f);
+    VectorSingle uVec(0.0f);
+    VectorSingle vVec(0.0f);
     ResolveNineSliceCoordinates(region.rectangle, region.sliceInsets, rectangle, referenceDensity, xVec, yVec, uVec, vVec);
     Array<f32, 4u> x;
     x[0u] = xVec.x;

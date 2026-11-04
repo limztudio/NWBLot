@@ -9,13 +9,11 @@
 
 
 const Color s_PopupBackdropColor = Color(0.0f, 0.0f, 0.0f, 0.4f);
+const Point s_PopupDefaultSize = Point(220.0f, 160.0f);
 
-class PopupStyle{
-    public Name background = Name("popup.normal");
-    public Name fallback = Name("panel.normal");
-    public Insets padding = Insets(s_StyleSpacingMedium, s_StyleSpacingMedium, s_StyleSpacingMedium, s_StyleSpacingMedium);
-    public Color backdrop = s_PopupBackdropColor;
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 enum<u8> PopupPlacementSide{
     Below,
@@ -25,7 +23,12 @@ enum<u8> PopupPlacementSide{
     Center,
 }
 
-const Point s_PopupDefaultSize = Point(220.0f, 160.0f);
+class PopupStyle{
+    public Name background = Name("popup.normal");
+    public Name fallback = Name("panel.normal");
+    public Insets padding = Insets(s_StyleSpacingMedium, s_StyleSpacingMedium, s_StyleSpacingMedium, s_StyleSpacingMedium);
+    public Color backdrop = s_PopupBackdropColor;
+}
 
 class PopupOptions{
     public Rect anchor;
@@ -57,6 +60,10 @@ class ContextMenuResult{
     public b8 activated = false;
     public u64 key = 0u;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 IsValidPopupOptions(in PopupOptions options, in DisplayMetrics display){
     return IsValidUiRect(options.anchor)

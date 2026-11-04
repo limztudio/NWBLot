@@ -83,8 +83,8 @@ Expected<ProgressMetrics> TryMeasureProgress(in ProgressOptions options, in Prog
         return makeUnexpected(Failure());
     if(!IsBoundedUiPadding(track.padding) || !IsBoundedUiPadding(fill.padding))
         return makeUnexpected(Failure());
-    const Expected<f32x4> trackMin = TryLoadUiSkinMinimumSize(track, cast<f64>(density));
-    const Expected<f32x4> fillMin = TryLoadUiSkinMinimumSize(fill, cast<f64>(density));
+    const Expected<VectorSingle> trackMin = TryLoadUiSkinMinimumSize(track, cast<f64>(density));
+    const Expected<VectorSingle> fillMin = TryLoadUiSkinMinimumSize(fill, cast<f64>(density));
     if(!trackMin.has_value() || !fillMin.has_value())
         return makeUnexpected(Failure());
     ProgressMetrics candidate;

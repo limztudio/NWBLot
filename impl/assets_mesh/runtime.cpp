@@ -4,7 +4,6 @@
 
 #include "asset.h"
 #include "binary_payload_io.h"
-#include "meshlet_payload_packing.h"
 #include "meshlet_triangle_indices.h"
 #include "meshlet_triangle_visit.h"
 #include "meshlet_vertex_attributes.h"
@@ -216,40 +215,6 @@ b8 ReadMeshletStreams(
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-SIMDVectorSingle FoldMeshletConeOctAxis(const SIMDVectorSingle axis)noexcept{
-    Float4 axisVec;
-    StoreFloat(axis, axisVec);
-    return LoadFloat(FoldMeshletConeOctAxisVec(axisVec));
-}
-
-u32 PackMeshletConeOct16(const SIMDVectorSingle axis)noexcept{
-    Float4 axisVec;
-    StoreFloat(axis, axisVec);
-    return PackMeshletConeOct16Vec(axisVec);
-}
-
-SIMDVectorSingle UnpackMeshletConeOct16Axis(const u32 conePacked)noexcept{
-    return LoadFloat(UnpackMeshletConeOct16AxisVec(conePacked));
-}
-
-f32 ConservativePackedMeshletConeCutoff(const SIMDVectorSingle axis, const f32 cutoff, const SIMDVectorSingle unpackedAxis)noexcept{
-    Float4 axisVec;
-    Float4 unpackedAxisVec;
-    StoreFloat(axis, axisVec);
-    StoreFloat(unpackedAxis, unpackedAxisVec);
-    return ConservativePackedMeshletConeCutoffVec(axisVec, cutoff, unpackedAxisVec);
-}
-
-u32 PackMeshletCone(const SIMDVectorSingle axis, const f32 cutoff)noexcept{
-    Float4 axisVec;
-    StoreFloat(axis, axisVec);
-    return PackMeshletConeVec(axisVec, cutoff);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

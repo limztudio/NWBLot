@@ -18,14 +18,6 @@ const f32 s_NormalizeLengthSquaredEpsilon = 0.0001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidLightCone(in f32 innerConeCos, in f32 outerConeCos){
-    return isFinite(innerConeCos) && isFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [reflect]
 enum<u8> LightType{
     Directional,
@@ -54,9 +46,13 @@ class SceneLight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneLight MakeDefaultSceneLight(in f32x4 direction){
+b8 IsValidLightCone(in f32 innerConeCos, in f32 outerConeCos){
+    return isFinite(innerConeCos) && isFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
+}
+
+SceneLight MakeDefaultSceneLight(in VectorSingle direction){
     SceneLight out;
-    out.direction = direction;
+    out.direction = f32x4(direction);
     out.colorIntensity = f32x4(1.0f, 1.0f, 1.0f, 1.0f);
     return out;
 }

@@ -4,10 +4,6 @@
 
 #include <impl/assets_shader/types.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 namespace NWB::Impl{
 using ShaderBinaryPayload::s_ShaderFnv64OffsetBasis;
@@ -18,18 +14,24 @@ using ShaderBinaryPayload::UpdateShaderFnv64NameHash;
 }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const u32 s_MaterialBinaryMagic = 0x4D544C41u; // MTLA
 const usize s_MaterialShaderEntryBytes = 65u;
 const usize s_MaterialTypedLayoutBlockBytes = 80u;
 const usize s_MaterialTypedLayoutFieldBytes = 88u;
 const usize s_MaterialResourceReferenceBytes = 200u;
-
 const u32 s_MaterialTypedWordBytes = 4u;
 const u32 s_MaterialTypedValueComponentCount = 4u;
-
 const StringView s_MaterialAvboitAccumulatePassLabel = "accumulate";
 const StringView s_MaterialAvboitOccupancyPassLabel = "occupancy";
 const StringView s_MaterialAvboitExtinctionPassLabel = "extinction";
+const u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
+const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::b8);
+const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::b8);
+const StringView s_MaterialTypedLayoutHashHeader = "NWB_MATERIAL_TYPED_LAYOUT_V1";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,23 +67,11 @@ enum<u32> MaterialBlockClass{
     MaterialMutable
 }
 
-b8 IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
-    return blockClass == MaterialBlockClass::MaterialConstant || blockClass == MaterialBlockClass::MaterialMutable;
-}
-
 [reflect]
 enum<u32> MaterialResourceKind{
     None = 0u,
     SampledImage2D,
     Sampler
-}
-
-b8 IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
-    return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
-}
-
-b8 IsValidSerializedMaterialResourceReference(in MaterialResourceKind resourceKind, in Name resourceName){
-    return resourceName != s_NameNone && IsValidMaterialResourceKind(resourceKind);
 }
 
 [reflect]
@@ -129,9 +119,101 @@ enum<u32> MaterialLayoutFieldType{
     Sampler
 }
 
-const u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
-const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::b8);
-const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::b8);
+[reflect]
+enum<u8> MaterialTypedLayoutValidationStatus{
+    Valid = 0u,
+    EmptyLayout,
+    ZeroHash,
+    MissingBlocksOrFields,
+    EmptyBlockName,
+    InvalidBlockClass,
+    NonContiguousFieldRange,
+    FieldRangeExceedsCount,
+    EmptyFieldName,
+    InvalidFieldType,
+    FieldAlignmentOverflow,
+    MisalignedFieldOffset,
+    FieldByteSizeOverflow,
+    BlockByteSizeOverflow,
+    BlockByteSizeMismatch,
+    UnownedFields,
+    LayoutHashMismatch,
+    TotalBlockByteSizeOverflow,
+    TotalBlockByteCountMismatch
+}
+
+[reflect]
+class MaterialTypedLayoutBlock{
+    public Name blockName = s_NameNone;
+    public MaterialBlockClass blockClass = MaterialBlockClass::None;
+    public u32 fieldBegin = 0u;
+    public u32 fieldCount = 0u;
+    public u32 byteSize = 0u;
+}
+
+[reflect]
+class MaterialTypedLayoutField{
+    public Name fieldName = s_NameNone;
+    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::None;
+    public u32 offset = 0u;
+    public u32x4u defaultValue;
+}
+
+// A cooked material separates resource identity from its numeric/default payload.
+// `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle.
+// Exactly one typed reference is valid.
+[reflect]
+class MaterialResourceReference{
+    public Name blockName = s_NameNone;
+    public Name fieldName = s_NameNone;
+    public AssetRef<Texture> textureAsset;
+    public AssetRef<Sampler> samplerAsset;
+    public MaterialResourceKind resourceKind = MaterialResourceKind::None;
+    public u32 constantByteOffset = 0u;
+}
+
+[serialize]
+class MaterialTypedLayoutBlockBinary{
+    public NameHash blockNameHash;
+    public u32 blockClass = 0u;
+    public u32 fieldBegin = 0u;
+    public u32 fieldCount = 0u;
+    public u32 byteSize = 0u;
+}
+
+[serialize]
+class MaterialTypedLayoutFieldBinary{
+    public NameHash fieldNameHash;
+    public u32 fieldType = 0u;
+    public u32 offset = 0u;
+    public u32x4u defaultValue;
+}
+
+// Deserialization initializes the typed asset reference; runtime patches its resolved heap slot at constantByteOffset.
+[serialize]
+class MaterialResourceReferenceBinary{
+    public NameHash blockNameHash;
+    public NameHash fieldNameHash;
+    public NameHash resourceNameHash;
+    public u32 resourceKind = 0u;
+    public u32 constantByteOffset = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
+    return blockClass == MaterialBlockClass::MaterialConstant || blockClass == MaterialBlockClass::MaterialMutable;
+}
+
+b8 IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
+    return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
+}
+
+b8 IsValidSerializedMaterialResourceReference(in MaterialResourceKind resourceKind, in Name resourceName){
+    return resourceName != s_NameNone && IsValidMaterialResourceKind(resourceKind);
+}
 
 b8 IsValidMaterialLayoutFieldType(in MaterialLayoutFieldType fieldType){
     return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Sampler);
@@ -219,67 +301,6 @@ Expected<u32> TryAlignMaterialLayoutBlockByteSize(in u32 byteSize){
     if(byteSize > 0xFFFFFFFFu - mask)
         return makeUnexpected(Failure());
     return (byteSize + mask) & ~mask;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[reflect]
-class MaterialTypedLayoutBlock{
-    public Name blockName = s_NameNone;
-    public MaterialBlockClass blockClass = MaterialBlockClass::None;
-    public u32 fieldBegin = 0u;
-    public u32 fieldCount = 0u;
-    public u32 byteSize = 0u;
-}
-
-[reflect]
-class MaterialTypedLayoutField{
-    public Name fieldName = s_NameNone;
-    public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::None;
-    public u32 offset = 0u;
-    public u32x4u defaultValue;
-}
-
-// A cooked material separates resource identity from its numeric/default payload.
-// `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle.
-// Exactly one typed reference is valid.
-[reflect]
-class MaterialResourceReference{
-    public Name blockName = s_NameNone;
-    public Name fieldName = s_NameNone;
-    public AssetRef<Texture> textureAsset;
-    public AssetRef<Sampler> samplerAsset;
-    public MaterialResourceKind resourceKind = MaterialResourceKind::None;
-    public u32 constantByteOffset = 0u;
-}
-
-[serialize]
-class MaterialTypedLayoutBlockBinary{
-    public NameHash blockNameHash;
-    public u32 blockClass = 0u;
-    public u32 fieldBegin = 0u;
-    public u32 fieldCount = 0u;
-    public u32 byteSize = 0u;
-}
-
-[serialize]
-class MaterialTypedLayoutFieldBinary{
-    public NameHash fieldNameHash;
-    public u32 fieldType = 0u;
-    public u32 offset = 0u;
-    public u32x4u defaultValue;
-}
-
-// Deserialization initializes the typed asset reference; runtime patches its resolved heap slot at constantByteOffset.
-[serialize]
-class MaterialResourceReferenceBinary{
-    public NameHash blockNameHash;
-    public NameHash fieldNameHash;
-    public NameHash resourceNameHash;
-    public u32 resourceKind = 0u;
-    public u32 constantByteOffset = 0u;
 }
 
 MaterialTypedLayoutBlock UnpackMaterialTypedLayoutBlockBinary(in MaterialTypedLayoutBlockBinary blockBinary){
@@ -427,8 +448,6 @@ b8 HasValidMaterialAvboitPixelShaderContract(
     return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
 }
 
-const StringView s_MaterialTypedLayoutHashHeader = "NWB_MATERIAL_TYPED_LAYOUT_V1";
-
 u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in Span<MaterialTypedLayoutField> fields){
     if(blocks.empty() && fields.empty())
         return 0u;
@@ -457,29 +476,6 @@ u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in 
         hash = UpdateShaderFnv64U32(hash, field.defaultValue.w);
     }
     return hash;
-}
-
-[reflect]
-enum<u8> MaterialTypedLayoutValidationStatus{
-    Valid = 0u,
-    EmptyLayout,
-    ZeroHash,
-    MissingBlocksOrFields,
-    EmptyBlockName,
-    InvalidBlockClass,
-    NonContiguousFieldRange,
-    FieldRangeExceedsCount,
-    EmptyFieldName,
-    InvalidFieldType,
-    FieldAlignmentOverflow,
-    MisalignedFieldOffset,
-    FieldByteSizeOverflow,
-    BlockByteSizeOverflow,
-    BlockByteSizeMismatch,
-    UnownedFields,
-    LayoutHashMismatch,
-    TotalBlockByteSizeOverflow,
-    TotalBlockByteCountMismatch
 }
 
 MaterialTypedLayoutValidationStatus ValidateMaterialTypedLayout(

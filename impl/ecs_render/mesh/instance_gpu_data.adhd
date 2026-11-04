@@ -13,7 +13,6 @@ const u64 s_MeshAddressableBytes = 4294967296ull;
 const Name s_MeshViewBufferName = "ecs_render/mesh_view_data";
 const StringView s_MeshViewName = "render.deferred.mesh_view";
 const StringView s_MeshViewLabel = "Mesh View";
-
 const StringView s_PositionsBufferName = ":positions";
 const StringView s_NormalsBufferName = ":normals";
 const StringView s_TangentsBufferName = ":tangents";
@@ -25,6 +24,7 @@ const StringView s_MeshletPositionRefDeltasBufferName = ":meshlet_position_ref_d
 const StringView s_MeshletAttributeRefDeltasBufferName = ":meshlet_attribute_ref_deltas";
 const StringView s_MeshletLocalVertexRefsBufferName = ":meshlet_local_vertex_refs";
 const StringView s_MeshletPrimitiveIndicesBufferName = ":meshlet_primitive_indices";
+const usize s_RetainedAccelerationBuffersPerMesh = 5u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,68 +38,16 @@ class InstanceGpuData{
     public Array<u32, s_MeshInstanceGeometrySlotCount> geometryHeapSlots;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ComputeEmulationLayout{
     public u64 bufferByteSize = 0u;
     public u32 indexByteOffset = 0u;
 }
-
-Expected<ComputeEmulationLayout> TryResolveComputeEmulationLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount){
-    if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
-        return makeUnexpected(Failure());
-    const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshEmulationFirstVertexIndex;
-    if(vertexCount >= s_MeshAddressableBytes / s_MeshEmulationVertexByteSize)
-        return makeUnexpected(Failure());
-    const u64 indexByteOffset = vertexCount * s_MeshEmulationVertexByteSize;
-    const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
-    // Every raw index store must fit its uint byte address, including the final four-byte element.
-    if(indexedByteSize > s_MeshAddressableBytes)
-        return makeUnexpected(Failure());
-    const u64 alignedIndexedByteSize = alignUp(indexedByteSize, s_MeshEmulationVertexByteSize);
-    const u64 expandedByteSize = cast<u64>(primitiveIndexCount) * s_MeshEmulationVertexByteSize;
-    ComputeEmulationLayout outLayout;
-    outLayout.bufferByteSize = max(expandedByteSize, alignedIndexedByteSize);
-    outLayout.indexByteOffset = cast<u32>(indexByteOffset);
-    return outLayout;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class ObjectGeometryCacheLayout{
     public u64 bufferByteSize = 0u;
     public u32 indexByteOffset = 0u;
     public u32 indexCount = 0u;
 }
-
-Expected<ObjectGeometryCacheLayout> TryResolveObjectGeometryCacheLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount){
-    if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
-        return makeUnexpected(Failure());
-    const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshObjectFirstVertexIndex;
-    if(vertexCount > s_MeshMaxU32Value / s_MeshObjectVertexByteSize)
-        return makeUnexpected(Failure());
-    const u64 indexByteOffset = vertexCount * s_MeshObjectVertexByteSize;
-    const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
-    if(indexedByteSize > s_MeshAddressableBytes)
-        return makeUnexpected(Failure());
-    // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
-    const u64 bufferByteSize = alignUp(indexedByteSize, s_MeshObjectVertexByteSize);
-    if(bufferByteSize > s_MeshAddressableBytes)
-        return makeUnexpected(Failure());
-    ObjectGeometryCacheLayout outLayout;
-    outLayout.bufferByteSize = bufferByteSize;
-    outLayout.indexByteOffset = cast<u32>(indexByteOffset);
-    outLayout.indexCount = primitiveIndexCount;
-    return outLayout;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [serialize]
 class MeshViewGpuData{
@@ -123,17 +71,61 @@ class MeshViewBufferUpload{
     public b8 uploadRequired = false;
 }
 
-f32x4x4 BuildWorldToClipMatrix(in f32x4 positionDepthBias, in f32x4 right, in f32x4 up, in f32x4 forward, in f32x4 projection){
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ComputeEmulationLayout> TryResolveComputeEmulationLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount){
+    if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
+        return makeUnexpected(Failure());
+    const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshEmulationFirstVertexIndex;
+    if(vertexCount >= s_MeshAddressableBytes / s_MeshEmulationVertexByteSize)
+        return makeUnexpected(Failure());
+    const u64 indexByteOffset = vertexCount * s_MeshEmulationVertexByteSize;
+    const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
+    // Every raw index store must fit its uint byte address, including the final four-byte element.
+    if(indexedByteSize > s_MeshAddressableBytes)
+        return makeUnexpected(Failure());
+    const u64 alignedIndexedByteSize = alignUp(indexedByteSize, s_MeshEmulationVertexByteSize);
+    const u64 expandedByteSize = cast<u64>(primitiveIndexCount) * s_MeshEmulationVertexByteSize;
+    ComputeEmulationLayout outLayout;
+    outLayout.bufferByteSize = max(expandedByteSize, alignedIndexedByteSize);
+    outLayout.indexByteOffset = cast<u32>(indexByteOffset);
+    return outLayout;
+}
+
+Expected<ObjectGeometryCacheLayout> TryResolveObjectGeometryCacheLayout(in u64 localVertexRefByteSize, in u32 primitiveIndexCount){
+    if(localVertexRefByteSize == 0u || localVertexRefByteSize % s_MeshletLocalVertexRefByteSize != 0u || primitiveIndexCount == 0u)
+        return makeUnexpected(Failure());
+    const u64 vertexCount = localVertexRefByteSize / s_MeshletLocalVertexRefByteSize + s_MeshObjectFirstVertexIndex;
+    if(vertexCount > s_MeshMaxU32Value / s_MeshObjectVertexByteSize)
+        return makeUnexpected(Failure());
+    const u64 indexByteOffset = vertexCount * s_MeshObjectVertexByteSize;
+    const u64 indexedByteSize = indexByteOffset + cast<u64>(primitiveIndexCount) * 4ull;
+    if(indexedByteSize > s_MeshAddressableBytes)
+        return makeUnexpected(Failure());
+    // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
+    const u64 bufferByteSize = alignUp(indexedByteSize, s_MeshObjectVertexByteSize);
+    if(bufferByteSize > s_MeshAddressableBytes)
+        return makeUnexpected(Failure());
+    ObjectGeometryCacheLayout outLayout;
+    outLayout.bufferByteSize = bufferByteSize;
+    outLayout.indexByteOffset = cast<u32>(indexByteOffset);
+    outLayout.indexCount = primitiveIndexCount;
+    return outLayout;
+}
+
+MatrixSingle BuildWorldToClipMatrix(in VectorSingle positionDepthBias, in VectorSingle right, in VectorSingle up, in VectorSingle forward, in VectorSingle projection){
     const f32 tx = -dot(positionDepthBias.xyz, right.xyz);
     const f32 ty = -dot(positionDepthBias.xyz, up.xyz);
     const f32 tz = -dot(positionDepthBias.xyz, forward.xyz) + positionDepthBias.w;
-    const f32x4x4 worldToView(
+    const MatrixSingle worldToView(
         right.x, right.y, right.z, tx,
         up.x, up.y, up.z, ty,
         forward.x, forward.y, forward.z, tz,
         0.0f, 0.0f, 0.0f, 1.0f
     );
-    const f32x4x4 viewToClip(
+    const MatrixSingle viewToClip(
         projection.x, 0.0f, 0.0f, 0.0f,
         0.0f, projection.y, 0.0f, 0.0f,
         0.0f, 0.0f, projection.z, projection.w,
@@ -142,127 +134,74 @@ f32x4x4 BuildWorldToClipMatrix(in f32x4 positionDepthBias, in f32x4 right, in f3
     return mul(viewToClip, worldToView);
 }
 
-f32x4 BuildMeshViewFrustumPlaneFromPointNormal(in f32x4 normal, in f32x4 point){
+VectorSingle BuildMeshViewFrustumPlaneFromPointNormal(in VectorSingle normal, in VectorSingle point){
     const f32 lengthSquared = lengthSq(normal.xyz);
-    f32x4 unitNormal(0.0f, 0.0f, 1.0f, 0.0f);
+    VectorSingle unitNormal(0.0f, 0.0f, 1.0f, 0.0f);
     if(isFinite(lengthSquared) && lengthSquared > 0.0f){
-        const f32x4 scaled = normal * rsqrt(f32x4(lengthSquared));
-        unitNormal = f32x4(scaled.x, scaled.y, scaled.z, 0.0f);
+        const VectorSingle scaled = normal * rsqrt(VectorSingle(lengthSquared));
+        unitNormal = VectorSingle(scaled, 0.0f);
     }
-    return f32x4(unitNormal.x, unitNormal.y, unitNormal.z, -dot(unitNormal.xyz, point.xyz));
+    return VectorSingle(unitNormal, -dot(unitNormal.xyz, point.xyz));
 }
 
-f32x4 BuildViewFrustumSidePlaneVector(in f32x4 forward, in f32x4 side, in f32x4 tanHalfAngle, in f32x4 cameraPosition){
-    const f32x4 rawNormal = forward * tanHalfAngle + side;
-    return BuildMeshViewFrustumPlaneFromPointNormal(f32x4(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);
-}
-
-void BuildMeshViewFrustumVectors(
-    mut f32x4 outCameraPosition,
-    mut f32x4 outLeftPlane,
-    mut f32x4 outRightPlane,
-    mut f32x4 outBottomPlane,
-    mut f32x4 outTopPlane,
-    mut f32x4 outNearPlane,
-    mut f32x4 outFarPlane,
-    in f32x4 positionDepthBias,
-    in f32x4 right,
-    in f32x4 up,
-    in f32x4 forward,
-    in f32x4 tanHalfVertical,
-    in f32x4 tanHalfHorizontal,
-    in f32x4 nearPlane,
-    in f32x4 farPlane
-){
-    const f32x4 negForward = -forward;
-    const f32x4 offsetPos = negForward * f32x4(positionDepthBias.w) + positionDepthBias;
-    const f32x4 cameraPosition(offsetPos.x, offsetPos.y, offsetPos.z, 1.0f);
-    outCameraPosition = cameraPosition;
-
-    outLeftPlane = BuildViewFrustumSidePlaneVector(forward, right, tanHalfHorizontal, cameraPosition);
-    outRightPlane = BuildViewFrustumSidePlaneVector(forward, -right, tanHalfHorizontal, cameraPosition);
-    outBottomPlane = BuildViewFrustumSidePlaneVector(forward, up, tanHalfVertical, cameraPosition);
-    outTopPlane = BuildViewFrustumSidePlaneVector(forward, -up, tanHalfVertical, cameraPosition);
-
-    const f32x4 nearRaw = forward * nearPlane + cameraPosition;
-    const f32x4 farRaw = forward * farPlane + cameraPosition;
-    const f32x4 nearPoint(nearRaw.x, nearRaw.y, nearRaw.z, 0.0f);
-    const f32x4 farPoint(farRaw.x, farRaw.y, farRaw.z, 0.0f);
-    outNearPlane = BuildMeshViewFrustumPlaneFromPointNormal(forward, nearPoint);
-    outFarPlane = BuildMeshViewFrustumPlaneFromPointNormal(negForward, farPoint);
+VectorSingle BuildViewFrustumSidePlaneVector(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition){
+    const VectorSingle rawNormal = forward * tanHalfAngle + side;
+    return BuildMeshViewFrustumPlaneFromPointNormal(VectorSingle(rawNormal, 0.0f), cameraPosition);
 }
 
 MeshViewGpuData BuildMeshViewGpuData(
-    in f32x4 rightRow,
-    in f32x4 upRow,
-    in f32x4 forwardRow,
-    in f32x4 positionDepthBias,
-    in f32x4 projectionParams,
+    in VectorSingle rightRow,
+    in VectorSingle upRow,
+    in VectorSingle forwardRow,
+    in VectorSingle positionDepthBias,
+    in VectorSingle projectionParams,
     in f32 tanHalfVerticalFov,
     in f32 aspectRatio,
     in f32 nearPlane,
     in f32 farPlane
 ){
     MeshViewGpuData state;
-    const f32x4 right(rightRow.x, rightRow.y, rightRow.z, 0.0f);
-    const f32x4 up(upRow.x, upRow.y, upRow.z, 0.0f);
-    const f32x4 forward(forwardRow.x, forwardRow.y, forwardRow.z, 0.0f);
-    const f32x4 tanHalfV(tanHalfVerticalFov);
-    const f32x4 tanHalfH(tanHalfVerticalFov * aspectRatio);
-    const f32x4 nearVec(nearPlane);
-    const f32x4 farVec(farPlane);
+    const VectorSingle right(rightRow, 0.0f);
+    const VectorSingle up(upRow, 0.0f);
+    const VectorSingle forward(forwardRow, 0.0f);
+    const VectorSingle tanHalfV(tanHalfVerticalFov);
+    const VectorSingle tanHalfH(tanHalfVerticalFov * aspectRatio);
+    const VectorSingle nearVec(nearPlane);
+    const VectorSingle farVec(farPlane);
 
-    const f32x4x4 worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projectionParams);
-    state.worldToClip = worldToClip;
-    state.clipToWorld = inverse(worldToClip);
+    const MatrixSingle worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projectionParams);
+    state.worldToClip = f32x4x4(worldToClip);
+    state.clipToWorld = f32x4x4(inverse(worldToClip));
 
-    f32x4 cameraPosition(0.0f);
-    f32x4 leftPlane(0.0f);
-    f32x4 rightPlane(0.0f);
-    f32x4 bottomPlane(0.0f);
-    f32x4 topPlane(0.0f);
-    f32x4 nearPlaneVec(0.0f);
-    f32x4 farPlaneVec(0.0f);
-    BuildMeshViewFrustumVectors(
-        cameraPosition,
-        leftPlane,
-        rightPlane,
-        bottomPlane,
-        topPlane,
-        nearPlaneVec,
-        farPlaneVec,
-        positionDepthBias,
-        right,
-        up,
-        forward,
-        tanHalfV,
-        tanHalfH,
-        nearVec,
-        farVec
-    );
-    state.cameraPosition = cameraPosition;
-    state.frustumPlanes[0] = leftPlane;
-    state.frustumPlanes[1] = rightPlane;
-    state.frustumPlanes[2] = bottomPlane;
-    state.frustumPlanes[3] = topPlane;
-    state.frustumPlanes[4] = nearPlaneVec;
-    state.frustumPlanes[5] = farPlaneVec;
+    const VectorSingle negForward = -forward;
+    const VectorSingle offsetPos = negForward * VectorSingle(positionDepthBias.w) + positionDepthBias;
+    const VectorSingle cameraPosition(offsetPos, 1.0f);
+    state.cameraPosition = f32x4(cameraPosition);
+    state.frustumPlanes[0] = f32x4(BuildViewFrustumSidePlaneVector(forward, right, tanHalfH, cameraPosition));
+    state.frustumPlanes[1] = f32x4(BuildViewFrustumSidePlaneVector(forward, -right, tanHalfH, cameraPosition));
+    state.frustumPlanes[2] = f32x4(BuildViewFrustumSidePlaneVector(forward, up, tanHalfV, cameraPosition));
+    state.frustumPlanes[3] = f32x4(BuildViewFrustumSidePlaneVector(forward, -up, tanHalfV, cameraPosition));
+
+    const VectorSingle nearRaw = forward * nearVec + cameraPosition;
+    const VectorSingle farRaw = forward * farVec + cameraPosition;
+    state.frustumPlanes[4] = f32x4(BuildMeshViewFrustumPlaneFromPointNormal(forward, VectorSingle(nearRaw, 0.0f)));
+    state.frustumPlanes[5] = f32x4(BuildMeshViewFrustumPlaneFromPointNormal(negForward, VectorSingle(farRaw, 0.0f)));
     return state;
 }
 
 InstanceGpuData BuildInstanceGpuData(
     in EntityID entity,
     in b8 hasTransform,
-    in f32x4 position,
-    in f32x4 rotation,
-    in f32x4 scale,
+    in VectorSingle position,
+    in VectorSingle rotation,
+    in VectorSingle scale,
     in u32 mutableByteOffset
 ){
     InstanceGpuData data;
     if(hasTransform){
-        data.rotation = rotation;
-        data.translation = f32x3_u32(position.x, position.y, position.z, mutableByteOffset);
-        data.scale = f32x3_u32(scale.x, scale.y, scale.z, entity.id);
+        data.rotation = f32x4(rotation);
+        data.translation = f32x3_u32(position, mutableByteOffset);
+        data.scale = f32x3_u32(scale, entity.id);
     }
     else{
         data.translation.w = mutableByteOffset;
@@ -270,8 +209,6 @@ InstanceGpuData BuildInstanceGpuData(
     }
     return data;
 }
-
-const usize s_RetainedAccelerationBuffersPerMesh = 5u;
 
 b8 RequiresMeshBlasUpdateState(
     in b8 blasBuildPending,

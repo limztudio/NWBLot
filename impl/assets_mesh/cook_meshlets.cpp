@@ -183,7 +183,7 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
         current.primitiveOffset = static_cast<u32>(entry.meshletPrimitiveIndices.size());
         localSourceVertexRefs.clear();
         localTriangleIndices.clear();
-        MeshletCandidateSearch::ResetMeshletScoreState(scoreState);
+        ResetMeshletScoreState(scoreState);
     };
 
     auto flushMeshlet = [&]() -> b8{

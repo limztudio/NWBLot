@@ -761,7 +761,7 @@ Expected<Rect> TryComputeEditBoxViewport(in Rect bounds, in Insets padding, in R
 b8 ValidateEditBoxViewportArrangeInputs(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll, in f32 caretWidth){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(viewport) || !IsValidUiRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y)
         return false;
-    const f32x4 end = f32x4(viewport.x, viewport.y, bounds.x, bounds.y) + f32x4(viewport.width, viewport.height, bounds.width, bounds.height);
+    const VectorSingle end = VectorSingle(viewport.x, viewport.y, bounds.x, bounds.y) + VectorSingle(viewport.width, viewport.height, bounds.width, bounds.height);
     return end.x <= end.z && end.y <= end.w && IsValidUiExtent(previousScroll) && isFinite(caretWidth) && caretWidth > 0.0f;
 }
 

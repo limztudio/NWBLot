@@ -14,7 +14,6 @@
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/assets_mesh/meshlet_ref_encode.h>
-#include <impl/assets_mesh/meshlet_payload_packing.h>
 
 #include <core/ecs/entity.h>
 
@@ -81,7 +80,7 @@ TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresent
 }
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending){
-    NWB::Impl::RuntimeMeshDirtyFlag::Enum dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty;
+    NWB::Impl::RuntimeMeshDirtyFlag::Flag dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty;
     b8 bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
@@ -100,7 +99,7 @@ TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending)
 }
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision){
-    NWB::Impl::RuntimeMeshDirtyFlag::Enum dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty;
+    NWB::Impl::RuntimeMeshDirtyFlag::Flag dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty;
     b8 bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 17u;
@@ -228,23 +227,21 @@ TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProj
     EXPECT_EQ(unknownRect.maxY, 701);
 
     NWB::Impl::CsgFrameWorkRegion crossing;
-    Float44 projMat{};
-    StoreFloat(MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f), projMat);
-    crossing.expandWorldBounds(projMat, Float4(-1.0f, -1.0f, -1.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), 1001u, 701u);
+    const SIMDMatrix projMat = MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f);
+    crossing.expandWorldBounds(projMat, VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(crossing.fullFrame);
     EXPECT_EQ(crossing.resolveRect(1001u, 701u).maxX, 1001);
 
     NWB::Impl::CsgFrameWorkRegion invalid;
-    Float44 identityMat{};
-    StoreFloat(MatrixIdentity(), identityMat);
-    invalid.expandWorldBounds(identityMat, Float4(1.0f, 1.0f, 1.0f, 0.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), 1001u, 701u);
+    const SIMDMatrix identityMat = MatrixIdentity();
+    invalid.expandWorldBounds(identityMat, VectorSet(1.0f, 1.0f, 1.0f, 0.0f), VectorSet(0.0f, 0.0f, 0.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(invalid.fullFrame);
     NWB::Impl::CsgFrameWorkRegion nonfinite;
-    nonfinite.expandWorldBounds(identityMat, Float4(-Limit<f32>::s_Infinity, -1.0f, 1.0f, 0.0f), Float4(1.0f, 1.0f, 2.0f, 0.0f), 1001u, 701u);
+    nonfinite.expandWorldBounds(identityMat, VectorSet(-Limit<f32>::s_Infinity, -1.0f, 1.0f, 0.0f), VectorSet(1.0f, 1.0f, 2.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(nonfinite.fullFrame);
 
     NWB::Impl::CsgFrameWorkRegion large;
-    large.expandWorldBounds(identityMat, Float4(-1e20f, -0.25f, 1.0f, 0.0f), Float4(0.0f, 0.25f, 2.0f, 0.0f), 1000u, 600u);
+    large.expandWorldBounds(identityMat, VectorSet(-1e20f, -0.25f, 1.0f, 0.0f), VectorSet(0.0f, 0.25f, 2.0f, 0.0f), 1000u, 600u);
     ASSERT_TRUE(large.bounded());
     EXPECT_EQ(large.minX, 0u);
     EXPECT_EQ(large.maxX, 502u);

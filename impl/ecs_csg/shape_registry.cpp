@@ -63,10 +63,8 @@ namespace __hidden_shape_registry{
     if(!resolvedBytes)
         return MakeUnexpected(Failure{});
 
-    Float4 shapePositionFloat4;
-    StoreFloat(shapePosition, shapePositionFloat4);
     const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(*resolvedBytes);
-    return shapeType.desc.signedDistanceCallback(shapePositionFloat4, parameters);
+    return shapeType.desc.signedDistanceCallback(shapePosition, parameters);
 }
 
 

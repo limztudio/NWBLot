@@ -9,6 +9,82 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const usize s_RuntimeRequiredStorageDescriptorCount = 15u;
+const usize s_RuntimeStorageDescriptorCount = 18u;
+const usize s_MeshSkinningResourceBufferCount = 19u;
+const usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
+const usize s_SkinningDeformationUseCapacity = 13u;
+const usize s_SkinningPostDispatchUseCapacity = 11u;
+const usize s_SkinningLocalBoundsUseCapacity = 3u;
+const usize s_SkinningFinalizerUseCapacity = 6u;
+const usize s_SkinningPromotedIndexCapacityFactor = 4u;
+const usize s_SkinningLiveStateInlineBufferCount = 32u;
+const b8 s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
+const b8 s_RuntimeSkinningMeshletConeCullingEnabled = false;
+const u32 s_PerRuntimeMeshTimingQueries = 128u;
+const u32 s_SkinJointWordCount = 2u;
+const u32 s_SkinJointBits = 16u;
+const usize s_SkinRestPositionElementBytes = 12u;
+const usize s_SkinRestNormalElementBytes = 8u;
+const usize s_SkinRestTangentElementBytes = 8u;
+const Name s_PrepareRuntimeArena = "impl/ecs_mesh/skinning_prepare";
+const Name s_FrameUploadArena = "impl/ecs_mesh/skinning_frame_upload";
+const Name s_SerialMergeDomain = "mesh_skinning.serial";
+const Name s_SkinningComputeShaderName = "ECSMeshSkinning_SkinningCS";
+const Name s_MeshletBoundsComputeShaderName = "ECSMeshSkinning_MeshletBoundsCS";
+const Name s_LocalBoundsComputeShaderName = "ECSMeshSkinning_LocalBoundsCS";
+const Name s_RepackNormalsComputeShaderName = "ECSMeshSkinning_RepackNormalsCS";
+const Name s_GraphBoundsPipelineName = "mesh_skinning.graph_bounds_pipeline";
+const Name s_GraphLocalBoundsPipelineName = "mesh_skinning.graph_local_bounds_pipeline";
+const Name s_GraphSkinningPipelineName = "mesh_skinning.graph_skinning_pipeline";
+const Name s_GraphRepackPipelineName = "mesh_skinning.graph_repack_pipeline";
+const Name s_FrameDeformationTaskName = "mesh_skinning.frame_deformation";
+const Name s_FrameBoundsRepackTaskName = "mesh_skinning.frame_bounds_repack";
+const Name s_FrameLocalBoundsTaskName = "mesh_skinning.frame_local_bounds";
+const Name s_FrameFinalizeStatesTaskName = "mesh_skinning.frame_finalize_states";
+const StringView s_FrameDeformationTaskLabel = "Runtime Skinning Deformation";
+const StringView s_FrameBoundsRepackTaskLabel = "Runtime Skinning Bounds and Repack";
+const StringView s_FrameLocalBoundsTaskLabel = "Runtime Skinning Local Bounds";
+const StringView s_FrameFinalizeStatesTaskLabel = "Runtime Skinning Finalize States";
+const StringView s_BindlessSlotsLabel = "Skinning Bindless Slots";
+const StringView s_RestPositionsLabel = "Runtime Rest Positions";
+const StringView s_RestNormalsLabel = "Runtime Rest Normals";
+const StringView s_RestTangentsLabel = "Runtime Rest Tangents";
+const StringView s_SkinnedPositionsLabel = "Runtime Skinned Positions";
+const StringView s_SkinnedNormalsLabel = "Runtime Skinned Normals";
+const StringView s_SkinnedTangentsLabel = "Runtime Skinned Tangents";
+const StringView s_MeshletDescriptorsLabel = "Runtime Meshlet Descriptors";
+const StringView s_MeshletPositionDeltasLabel = "Runtime Meshlet Position Deltas";
+const StringView s_MeshletLocalVertexRefsLabel = "Runtime Meshlet Local Vertex Refs";
+const StringView s_MeshletPrimitiveIndicesLabel = "Runtime Meshlet Primitive Indices";
+const StringView s_MeshletBoundsLabel = "Runtime Meshlet Bounds";
+const StringView s_MeshletLocalBoundsLabel = "Runtime Meshlet Local Bounds";
+const StringView s_LocalBoundsLabel = "Runtime Local Bounds";
+const StringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet Attribute Deltas";
+const StringView s_AttributeSkinsLabel = "Runtime Attribute Skins";
+const StringView s_SkinningInfluencesLabel = "Skinning Influences";
+const StringView s_SkinningJointPaletteLabel = "Skinning Joint Palette";
+const StringView s_RayTraceAttributesLabel = "Runtime Ray Trace Attributes";
+const StringView s_BoundsPipelineLabel = "Skinning Bounds Pipeline";
+const StringView s_LocalBoundsPipelineLabel = "Skinning Local Bounds Pipeline";
+const StringView s_SkinningPipelineLabel = "Skinning Compute Pipeline";
+const StringView s_RepackPipelineLabel = "Skinning Repack Pipeline";
+const StringView s_BindlessSlotsUploadLabel = "Skinning Bindless Slots Upload";
+const StringView s_RestToSkinnedCopyLabel = "Skinning Rest-to-Skinned Copy";
+const StringView s_JointPaletteUploadLabel = "Skinning Joint Palette Upload";
+const StringView s_SkinBufferSuffix = "mesh_skinning_skin";
+const StringView s_JointPaletteBufferSuffix = "mesh_skinning_joints";
+const StringView s_BindlessSlotsBufferSuffix = "mesh_skinning_bindless_slots";
+const StringView s_BindlessSlotsUploadSuffix = "mesh_skinning_bindless_slots_upload";
+const StringView s_RestToSkinnedCopySuffix = "mesh_skinning_rest_to_skinned_copy";
+const StringView s_JointPaletteUploadSuffix = "mesh_skinning_joint_palette_upload";
+const StringView s_SkinnedDrawSuffix = "skinned_draw";
+const usize s_MaxSkeletonJointMatrixSpanCount = usize.max / 48u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 enum<u8> RuntimeStorageDescriptorSlot{
     RestPosition = 0u,
     SkinnedPosition,
@@ -31,90 +107,6 @@ enum<u8> RuntimeStorageDescriptorSlot{
     kCount
 }
 
-const usize s_RuntimeRequiredStorageDescriptorCount = 15u;
-const usize s_RuntimeStorageDescriptorCount = 18u;
-
-const usize s_MeshSkinningResourceBufferCount = 19u;
-const usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
-
-const usize s_SkinningDeformationUseCapacity = 13u;
-const usize s_SkinningPostDispatchUseCapacity = 11u;
-const usize s_SkinningLocalBoundsUseCapacity = 3u;
-const usize s_SkinningFinalizerUseCapacity = 6u;
-const usize s_SkinningPromotedIndexCapacityFactor = 4u;
-const usize s_SkinningLiveStateInlineBufferCount = 32u;
-
-const b8 s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
-const b8 s_RuntimeSkinningMeshletConeCullingEnabled = false;
-const u32 s_PerRuntimeMeshTimingQueries = 128u;
-
-const u32 s_SkinJointWordCount = 2u;
-const u32 s_SkinJointBits = 16u;
-const usize s_SkinRestPositionElementBytes = 12u;
-const usize s_SkinRestNormalElementBytes = 8u;
-const usize s_SkinRestTangentElementBytes = 8u;
-
-const Name s_PrepareRuntimeArena = "impl/ecs_mesh/skinning_prepare";
-const Name s_FrameUploadArena = "impl/ecs_mesh/skinning_frame_upload";
-const Name s_SerialMergeDomain = "mesh_skinning.serial";
-
-const Name s_SkinningComputeShaderName = "ECSMeshSkinning_SkinningCS";
-const Name s_MeshletBoundsComputeShaderName = "ECSMeshSkinning_MeshletBoundsCS";
-const Name s_LocalBoundsComputeShaderName = "ECSMeshSkinning_LocalBoundsCS";
-const Name s_RepackNormalsComputeShaderName = "ECSMeshSkinning_RepackNormalsCS";
-
-const Name s_GraphBoundsPipelineName = "mesh_skinning.graph_bounds_pipeline";
-const Name s_GraphLocalBoundsPipelineName = "mesh_skinning.graph_local_bounds_pipeline";
-const Name s_GraphSkinningPipelineName = "mesh_skinning.graph_skinning_pipeline";
-const Name s_GraphRepackPipelineName = "mesh_skinning.graph_repack_pipeline";
-
-const Name s_FrameDeformationTaskName = "mesh_skinning.frame_deformation";
-const Name s_FrameBoundsRepackTaskName = "mesh_skinning.frame_bounds_repack";
-const Name s_FrameLocalBoundsTaskName = "mesh_skinning.frame_local_bounds";
-const Name s_FrameFinalizeStatesTaskName = "mesh_skinning.frame_finalize_states";
-
-const StringView s_FrameDeformationTaskLabel = "Runtime Skinning Deformation";
-const StringView s_FrameBoundsRepackTaskLabel = "Runtime Skinning Bounds and Repack";
-const StringView s_FrameLocalBoundsTaskLabel = "Runtime Skinning Local Bounds";
-const StringView s_FrameFinalizeStatesTaskLabel = "Runtime Skinning Finalize States";
-
-const StringView s_BindlessSlotsLabel = "Skinning Bindless Slots";
-const StringView s_RestPositionsLabel = "Runtime Rest Positions";
-const StringView s_RestNormalsLabel = "Runtime Rest Normals";
-const StringView s_RestTangentsLabel = "Runtime Rest Tangents";
-const StringView s_SkinnedPositionsLabel = "Runtime Skinned Positions";
-const StringView s_SkinnedNormalsLabel = "Runtime Skinned Normals";
-const StringView s_SkinnedTangentsLabel = "Runtime Skinned Tangents";
-const StringView s_MeshletDescriptorsLabel = "Runtime Meshlet Descriptors";
-const StringView s_MeshletPositionDeltasLabel = "Runtime Meshlet Position Deltas";
-const StringView s_MeshletLocalVertexRefsLabel = "Runtime Meshlet Local Vertex Refs";
-const StringView s_MeshletPrimitiveIndicesLabel = "Runtime Meshlet Primitive Indices";
-const StringView s_MeshletBoundsLabel = "Runtime Meshlet Bounds";
-const StringView s_MeshletLocalBoundsLabel = "Runtime Meshlet Local Bounds";
-const StringView s_LocalBoundsLabel = "Runtime Local Bounds";
-const StringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet Attribute Deltas";
-const StringView s_AttributeSkinsLabel = "Runtime Attribute Skins";
-const StringView s_SkinningInfluencesLabel = "Skinning Influences";
-const StringView s_SkinningJointPaletteLabel = "Skinning Joint Palette";
-const StringView s_RayTraceAttributesLabel = "Runtime Ray Trace Attributes";
-
-const StringView s_BoundsPipelineLabel = "Skinning Bounds Pipeline";
-const StringView s_LocalBoundsPipelineLabel = "Skinning Local Bounds Pipeline";
-const StringView s_SkinningPipelineLabel = "Skinning Compute Pipeline";
-const StringView s_RepackPipelineLabel = "Skinning Repack Pipeline";
-
-const StringView s_BindlessSlotsUploadLabel = "Skinning Bindless Slots Upload";
-const StringView s_RestToSkinnedCopyLabel = "Skinning Rest-to-Skinned Copy";
-const StringView s_JointPaletteUploadLabel = "Skinning Joint Palette Upload";
-
-const StringView s_SkinBufferSuffix = "mesh_skinning_skin";
-const StringView s_JointPaletteBufferSuffix = "mesh_skinning_joints";
-const StringView s_BindlessSlotsBufferSuffix = "mesh_skinning_bindless_slots";
-const StringView s_BindlessSlotsUploadSuffix = "mesh_skinning_bindless_slots_upload";
-const StringView s_RestToSkinnedCopySuffix = "mesh_skinning_rest_to_skinned_copy";
-const StringView s_JointPaletteUploadSuffix = "mesh_skinning_joint_palette_upload";
-const StringView s_SkinnedDrawSuffix = "skinned_draw";
-
 class SkinnedRuntimeMeshIdentity{
     public Name meshKey = s_NameNone;
     public u64 version = 0u;
@@ -126,15 +118,6 @@ class MeshSkinningSubmissionCommit{
     public u32 editRevision = 0u;
     public b8 bindlessResourceSlotsUploadRecorded = false;
     public RuntimeMeshDirtyFlag handledDirtyFlags = RuntimeMeshDirtyFlag::None;
-}
-
-void ApplyMeshSkinningSubmissionCommit(in b8 submissionAccepted, in u32 currentEditRevision, in MeshSkinningSubmissionCommit commit, mut RuntimeMeshDirtyFlag inOutDirtyFlags, mut b8 inOutBindlessResourceSlotsUploaded){
-    if(!submissionAccepted || currentEditRevision != commit.editRevision)
-        return;
-
-    inOutDirtyFlags &= ~commit.handledDirtyFlags;
-    if(commit.bindlessResourceSlotsUploadRecorded)
-        inOutBindlessResourceSlotsUploaded = true;
 }
 
 // Mirrors bindless resources: five uint4 lanes; handles are StorageBuffer registrations.
@@ -203,6 +186,31 @@ class MeshletBoundsPushConstants{
     public u32 bindlessResourceSlots = 0u;
 }
 
+[serialize, reflect]
+class MeshSkinningRestToSkinnedCopyByteCounts{
+    public usize positionBytes = 0u;
+    public usize normalBytes = 0u;
+    public usize tangentBytes = 0u;
+}
+
+class MeshletRefTotalCounts{
+    public usize positionRefCount = 0u;
+    public usize attributeRefCount = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ApplyMeshSkinningSubmissionCommit(in b8 submissionAccepted, in u32 currentEditRevision, in MeshSkinningSubmissionCommit commit, mut RuntimeMeshDirtyFlag inOutDirtyFlags, mut b8 inOutBindlessResourceSlotsUploaded){
+    if(!submissionAccepted || currentEditRevision != commit.editRevision)
+        return;
+
+    inOutDirtyFlags &= ~commit.handledDirtyFlags;
+    if(commit.bindlessResourceSlotsUploadRecorded)
+        inOutBindlessResourceSlotsUploaded = true;
+}
+
 MeshSkinningPushConstants MakeMeshSkinningPushConstants(in u32 meshletCount, in u32 skinCount, in u32 jointCount, in u32 skinningMode, in u32 bindlessResourceSlots){
     MeshSkinningPushConstants out;
     out.meshletCount = meshletCount;
@@ -218,13 +226,6 @@ MeshletBoundsPushConstants MakeMeshletBoundsPushConstants(in u32 meshletCount, i
     out.meshletCount = meshletCount;
     out.bindlessResourceSlots = bindlessResourceSlots;
     return out;
-}
-
-[serialize, reflect]
-class MeshSkinningRestToSkinnedCopyByteCounts{
-    public usize positionBytes = 0u;
-    public usize normalBytes = 0u;
-    public usize tangentBytes = 0u;
 }
 
 Array<u32, 2u> PackSkinInfluenceJoints(in SkinInfluence4 sourceSkin){
@@ -255,9 +256,7 @@ Expected<MeshSkinningRestToSkinnedCopyByteCounts> TryResolveMeshSkinningRestToSk
     return outCounts;
 }
 
-const usize s_MaxSkeletonJointMatrixSpanCount = usize.max / 48u;
-
-b8 EqualSkeletonJointMatrixRowBits(in f32x4 lhs, in f32x4 rhs){
+b8 EqualSkeletonJointMatrixRowBits(in VectorSingle lhs, in VectorSingle rhs){
     return
         bit_cast<u32>(lhs.x) == bit_cast<u32>(rhs.x)
         && bit_cast<u32>(lhs.y) == bit_cast<u32>(rhs.y)
@@ -270,8 +269,8 @@ b8 EqualSkeletonJointMatrixSpan(in Span<SkeletonJointMatrix> lhs, in Span<Skelet
     if(lhs.size() != rhs.size())
         return false;
     for(usize i = 0u; i < lhs.size(); ++i){
-        const f32x3x4 a = lhs[i];
-        const f32x3x4 b = rhs[i];
+        const MatrixSingle a(lhs[i]);
+        const MatrixSingle b(rhs[i]);
         for(u32 row = 0u; row < s_SkeletonJointMatrixRowCount; ++row){
             if(!EqualSkeletonJointMatrixRowBits(a[row], b[row]))
                 return false;
@@ -501,7 +500,7 @@ b8 ValidateMeshSkinningInfluenceRecord(
     in u32 skeletonJointCount,
     in SkinInfluence4 sourceSkin
 ){
-    if(!ValidSkinInfluenceWeights(sourceSkin.weight) || !SkinInfluenceFitsSkeleton(sourceSkin, skeletonJointCount)){
+    if(!ValidSkinInfluenceWeights(VectorSingle(sourceSkin.weight)) || !SkinInfluenceFitsSkeleton(sourceSkin, skeletonJointCount)){
         error("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid", handleValue, vertexIndex);
         return false;
     }
@@ -548,11 +547,6 @@ b8 ValidateSkinJointPaletteInputs(
         return false;
     }
     return true;
-}
-
-class MeshletRefTotalCounts{
-    public usize positionRefCount = 0u;
-    public usize attributeRefCount = 0u;
 }
 
 Expected<MeshletRefTotalCounts> TrySumRuntimeMeshletRefCounts(in Span<MeshletDesc> meshlets){
@@ -626,14 +620,14 @@ Expected<RuntimeMeshLocalBounds> TryBuildRuntimeMeshLocalBounds(in Name sourceNa
         error("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds", sourceName.resolvedText());
         return makeUnexpected(Failure());
     }
-    f32x4 minBounds(f32.max, f32.max, f32.max, 0.0f);
-    f32x4 maxBounds(f32.min, f32.min, f32.min, 0.0f);
+    VectorSingle minBounds(f32.max, f32.max, f32.max, 0.0f);
+    VectorSingle maxBounds(f32.min, f32.min, f32.min, 0.0f);
     for(in f32x3u pos : restPositions){
         if(!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z)){
             error("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds", sourceName.resolvedText());
             return makeUnexpected(Failure());
         }
-        const f32x4 p(pos.x, pos.y, pos.z, 0.0f);
+        const VectorSingle p(pos);
         minBounds = min(minBounds, p);
         maxBounds = max(maxBounds, p);
     }
@@ -646,8 +640,8 @@ Expected<RuntimeMeshLocalBounds> TryBuildRuntimeMeshLocalBounds(in Name sourceNa
         return makeUnexpected(Failure());
     }
     RuntimeMeshLocalBounds bounds;
-    bounds.minBounds = f32x3_i32(minBounds.x, minBounds.y, minBounds.z, s_RuntimeMeshBoundsValidFlag);
-    bounds.maxBounds = f32x3_i32(maxBounds.x, maxBounds.y, maxBounds.z, 0);
+    bounds.minBounds = f32x3_i32(minBounds, s_RuntimeMeshBoundsValidFlag);
+    bounds.maxBounds = f32x3_i32(maxBounds, 0);
     return bounds;
 }
 

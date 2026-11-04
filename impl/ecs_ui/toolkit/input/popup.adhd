@@ -16,6 +16,14 @@ const usize s_MaxNestedPopupFrames = s_InputMaxPopups - 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> PopupDismissReason{
+    None,
+    Cancel,
+    OutsideClick,
+    FocusTraversal,
+    FocusLost,
+}
+
 class PopupToken{
     public b8 operator==(in PopupToken rhs)const{
         return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.instanceGeneration == rhs.instanceGeneration && this.openGeneration == rhs.openGeneration;
@@ -37,14 +45,6 @@ class PopupToken{
     public u64 declarationGeneration = 0u;
     public u64 instanceGeneration = 0u;
     public u64 openGeneration = 0u;
-}
-
-enum<u8> PopupDismissReason{
-    None,
-    Cancel,
-    OutsideClick,
-    FocusTraversal,
-    FocusLost,
 }
 
 class PopupScope{
@@ -73,6 +73,10 @@ class PopupRecord{
     public PopupToken restorePopup;
     public b8 closing = false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 HasValidPopupScopeGeometry(in PopupScope scope){
     if(

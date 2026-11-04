@@ -201,8 +201,16 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                         reportError(errors, expr.span, "multi-lane SIMD swizzling is not supported on mixed float/integer vector types");
                         ok = false;
                     }
+                    else if(expr.text.size() > 1u && !SymbolTable::IsSimdRegisterVectorType(baseType)){
+                        reportError(errors, expr.span, "multi-lane SIMD swizzling requires 'VectorSingle' or 'VectorDouble'; memory-layout vector types only support single-lane access");
+                        ok = false;
+                    }
                     else if(expr.text.size() > 1u){
                         expr.isSwizzle = true;
+                    }
+                    else if(expr.isMutArg && SymbolTable::IsSimdRegisterVectorType(baseType)){
+                        reportError(errors, expr.span, "cannot pass a lane of 'VectorSingle' or 'VectorDouble' to a 'mut' parameter");
+                        ok = false;
                     }
                 }
             }
@@ -268,8 +276,12 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         }
         else if(SymbolTable::IsSimdMatrixType(lhsBaseType))
             expr.isMatrixRowIndex = true;
-        else if(SymbolTable::IsSimdVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::IsUnalignedVectorType(lhsBaseType, vecIdxLanes))
+        else if(SymbolTable::IsSimdStorageVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::IsUnalignedVectorType(lhsBaseType, vecIdxLanes))
             expr.isVectorRawIndex = true;
+        else if(SymbolTable::IsSimdRegisterVectorType(lhsBaseType) && expr.isMutArg){
+            reportError(errors, expr.span, "cannot pass an indexed lane of 'VectorSingle' or 'VectorDouble' to a 'mut' parameter");
+            ok = false;
+        }
         const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
         const ClassDecl* opDeclCls = nullptr;
         const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, "[]", 1u, recvIsConst, &opDeclCls);
@@ -362,11 +374,19 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     reportError(errors, expr.span, "unary operator is not defined on operand type");
                     ok = false;
                 }
-                else if(IsIncrementOrDecrementOperatorToken(expr.op) && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !IsNumericScalarType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
+                else if((expr.op == TokenType::Minus || expr.op == TokenType::Tilde) && (SymbolTable::IsSimdStorageType(lhsType) || SymbolTable::IsUnalignedVectorType(lhsType))){
+                    reportError(errors, expr.span, "SIMD unary operators require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");
+                    ok = false;
+                }
+                else if(expr.op == TokenType::Minus && !lhsType.empty() && !IsNumericScalarType(lhsType) && !SymbolTable::IsSimdRegisterType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
+                    reportError(errors, expr.span, "unary '-' requires a numeric scalar or SIMD operand");
+                    ok = false;
+                }
+                else if((expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus) && !lhsType.empty() && !IsNumericScalarType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
                     reportError(errors, expr.span, "increment and decrement operators require a numeric scalar operand");
                     ok = false;
                 }
-                else if(expr.op == TokenType::Tilde && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !IsIntegerScalarType(lhsType) && !SymbolTable::IsSimdType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
+                else if(expr.op == TokenType::Tilde && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !IsIntegerScalarType(lhsType) && !SymbolTable::IsSimdRegisterVectorType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
                     reportError(errors, expr.span, "bitwise '~' requires an integer, SIMD, or 'flag' operand");
                     ok = false;
                 }
@@ -679,6 +699,21 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, const Span<const ScopedVa
     if(expr.lhs && expr.rhs){
         const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
         const MStringView rhsType = inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
+        if(expr.op != TokenType::Equal && expr.op != TokenType::EqualEqual && expr.op != TokenType::BangEqual){
+            if(SymbolTable::IsSimdStorageType(lhsType) || SymbolTable::IsUnalignedVectorType(lhsType) || SymbolTable::IsSimdStorageType(rhsType) || SymbolTable::IsUnalignedVectorType(rhsType)){
+                reportError(errors, expr.span, "SIMD arithmetic and bitwise operators require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");
+                ok = false;
+            }
+        }
+        else if(expr.op == TokenType::Equal){
+            if(const TypeRef* lhsTargetTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope); lhsTargetTypeRef && !lhsTargetTypeRef->templateArgs.empty() && lhsTargetTypeRef->templateArgs[0].type){
+                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+                    const MStringView valBase = m_symbols.resolveBaseTypeName(lhsTargetTypeRef->templateArgs[0].type->name);
+                    if(SymbolTable::IsSimdRegisterVectorType(valBase) && expr.rhs->resolvedSimdType == valBase)
+                        expr.rhs->wrapInSimdResult = true;
+                }
+            }
+        }
         const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType);
         const EnumDecl* rhsEnum = m_symbols.findEnum(rhsType);
         if(IsBitwiseFlagOperatorToken(expr.op)){

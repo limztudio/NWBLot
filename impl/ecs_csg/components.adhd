@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type StaticCsgMeshComponent = CsgMeshReceiverComponent<0u>;
+type SkinnedCsgMeshComponent = CsgMeshReceiverComponent<1u>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [reflect]
 class CsgReceiverComponent{
     public Name receiverGroup = s_NameNone;
@@ -26,9 +33,6 @@ class CsgMeshReceiverComponent<const u8 Kind>{
     public b8 affectOpaquePass = true;
     public b8 affectTransparentPass = true;
 }
-
-type StaticCsgMeshComponent = CsgMeshReceiverComponent<0u>;
-type SkinnedCsgMeshComponent = CsgMeshReceiverComponent<1u>;
 
 [reflect]
 class CsgCutterComponent{

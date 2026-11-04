@@ -9,7 +9,6 @@
 
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
-#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <core/common/log.h>
 #include <core/alloc/general.h>

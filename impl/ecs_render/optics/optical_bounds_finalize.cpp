@@ -122,7 +122,7 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
             return MakeUnexpected(Failure{});
         }
         previousIndex = bounds.instanceIndex;
-        snapshot->inputs.push_back(MakeRayTracingOpticalRuntimeInputGpu(bounds.objectToWorld, bounds.descriptor.slot(), bounds.instanceIndex));
+        snapshot->inputs.push_back(MakeRayTracingOpticalRuntimeInputGpu(LoadFloat(bounds.objectToWorld), bounds.descriptor.slot(), bounds.instanceIndex));
         snapshot->boundsBuffers.push_back(bounds.buffer);
     }
     return snapshot;

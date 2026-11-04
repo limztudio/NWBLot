@@ -134,14 +134,15 @@ TEST(AdhdCompiler, RejectsOutOfBoundsSwizzleAndWrongBuiltinArity){
     AdhdTestArena arena;
 
     static constexpr MStringView s_MixedSwizzleSource =
-        "void badSwizzle(in f32x3_i32 v) {\r\n"
+        "void badSwizzle() {\r\n"
+        "    f32x3_i32 v(1.0f, 2.0f, 3.0f, 4);\r\n"
         "    f32x3_i32 s = v.xyzw;\r\n"
         "}\r\n";
     CompileResult badSwizzleRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_MixedSwizzleSource, "impl/sim/bad_mixed_swizzle.adhd", arena.arena, badSwizzleRes));
 
     static constexpr MStringView s_WrongBuiltinAritySource =
-        "f32 badDot(in f32x4 a) {\r\n"
+        "f32 badDot(in VectorSingle a) {\r\n"
         "    return dot(a);\r\n"
         "}\r\n";
     CompileResult badBuiltinArityRes(arena.arena);

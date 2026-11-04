@@ -9,6 +9,68 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_ShadowCaptureReuseLimitOneFrame = 1u;
+const u32 s_ShadowCaptureReuseLimitTwoFrames = 2u;
+const u32 s_ShadowDefaultDirectionalResolution = 512u;
+const u32 s_ShadowDefaultPointResolution = 256u;
+const u64 s_ShadowDefaultMemoryBudgetBytes = 268435456ull;
+const u32 s_ShadowMinResolution = 32u;
+const u32 s_ShadowMaxResolution = 2048u;
+const u64 s_ShadowMaxMemoryBudgetBytes = 4294967295ull;
+// A point light renders one view per cube face.
+const u32 s_SceneMaxLights = 64u;
+const u32 s_PointLightViewCount = 6u;
+const usize s_LightSpaceMaxViews = 48u;
+const u64 s_LightSpaceEventsPerTexel = 16u;
+const u64 s_LightSpaceEventBytes = 20u;
+const u64 s_LightSpacePixelWordBytes = 4u;
+const u64 s_LightSpaceViewBytes = 128u;
+const u64 s_LightSpaceDrawArgumentBytes = 20u;
+const u8 s_LightSpaceLightTypeDirectional = 0u;
+const u8 s_LightSpaceLightTypePoint = 1u;
+const u8 s_LightSpaceLightTypeSpot = 2u;
+const u8 s_LightSpaceLightTypeCount = 3u;
+const u32 s_LightSpaceInvalidGpuDescriptorSlot = 0xffffffffu;
+const u32 s_LightSpaceMeshletsPerDraw = 32u;
+const u32 s_LightSpaceTriangleCornerCount = 3u;
+const u32 s_LightSpaceCsgRayContextBytes = 32u;
+const u32 s_LightSpaceCsgShadowFlagHwCompose = 2u;
+const u32 s_LightSpaceDiagnosticInterval = 60u;
+const u32 s_LightSpaceMaxIndirectDraws = 65535u;
+const usize s_LightSpaceShaderCount = 14u;
+const StringView s_LightSpaceNoCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0";
+const StringView s_LightSpaceNoCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1";
+const StringView s_LightSpaceCsgShade0 = "NWB_LIGHT_SPACE_CSG_SHADE=0";
+const StringView s_LightSpaceCsgShade1 = "NWB_LIGHT_SPACE_CSG_SHADE=1";
+const StringView s_LightSpaceCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0";
+const StringView s_LightSpaceCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1";
+// Inclusive index ranges into the compute shader/pipeline tables of ensureLightSpaceShadowPipelines.
+const u32 s_LightSpaceFirstCsgOnlyPipelineIndex = 6u;
+const u32 s_LightSpaceLastCsgOnlyPipelineIndex = 10u;
+const u32 s_LightSpaceFirstCsgResolvePipelineIndex = 7u;
+const u32 s_LightSpaceLastCsgResolvePipelineIndex = 8u;
+const u32 s_LightSpaceFirstCsgFallbackPipelineIndex = 9u;
+const u32 s_LightSpaceLastCsgFallbackPipelineIndex = 10u;
+const u32 s_LightSpaceCaptureVertexShaderIndex = 12u;
+const u32 s_LightSpaceCapturePixelShaderIndex = 13u;
+const u32 s_LightSpaceCapturePipelineKindCount = 2u;
+const u32 s_LightSpaceCountsBufferIndex = 0u;
+const u32 s_LightSpaceEventsBufferIndex = 1u;
+const u32 s_LightSpaceViewsBufferIndex = 2u;
+const u32 s_LightSpaceDrawArgumentsBufferIndex = 3u;
+const u32 s_LightSpaceDepthDescriptorIndex = 4u;
+const usize s_LightSpaceBufferCount = 4u;
+const usize s_LightSpaceDescriptorCount = 5u;
+const Name s_LightSpaceDiagnosticsIdentity = "render.light_space_shadow.diagnostics";
+const StringView s_LightSpaceDiagnosticsLabel = "CSG Shadow Diagnostics";
+const Name s_LightSpaceViewUploadIdentity = "render.light_space_shadow.view_upload";
+const StringView s_LightSpaceViewUploadLabel = "Light-Space View Upload";
+const usize s_LightSpaceFixedResourceUseCount = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [reflect]
 enum<u8> SoftwareShadowBackend{
     Automatic,
@@ -36,14 +98,14 @@ enum<u8> SoftwareShadowCaptureCadence{
     ReuseTwoFrames
 }
 
-const u32 s_ShadowCaptureReuseLimitOneFrame = 1u;
-const u32 s_ShadowCaptureReuseLimitTwoFrames = 2u;
-const u32 s_ShadowDefaultDirectionalResolution = 512u;
-const u32 s_ShadowDefaultPointResolution = 256u;
-const u64 s_ShadowDefaultMemoryBudgetBytes = 268435456ull;
-const u32 s_ShadowMinResolution = 32u;
-const u32 s_ShadowMaxResolution = 2048u;
-const u64 s_ShadowMaxMemoryBudgetBytes = 4294967295ull;
+flag<u32> LightSpaceFlag{
+    None = 0u,
+    Point,
+    Eligible,
+    FittedCoverage,
+    CompactBlockers,
+    CenterBlocker
+}
 
 [reflect]
 class SoftwareShadowSettings{
@@ -55,40 +117,6 @@ class SoftwareShadowSettings{
     public u32 pointResolution = s_ShadowDefaultPointResolution;
     public u64 memoryBudgetBytes = s_ShadowDefaultMemoryBudgetBytes;
 }
-
-b8 ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
-    return
-        cast<u8>(settings.backend) <= cast<u8>(SoftwareShadowBackend::LightSpace)
-        && cast<u8>(settings.coverage) <= cast<u8>(SoftwareShadowCoverage::FittedVolume)
-        && cast<u8>(settings.blockerSearch) <= cast<u8>(SoftwareShadowBlockerSearch::Center1)
-        && cast<u8>(settings.captureCadence) <= cast<u8>(SoftwareShadowCaptureCadence::ReuseTwoFrames)
-        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
-        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
-        && settings.memoryBudgetBytes > 0ull && settings.memoryBudgetBytes <= s_ShadowMaxMemoryBudgetBytes
-    ;
-}
-
-b8 SameSoftwareShadowSettings(in SoftwareShadowSettings first, in SoftwareShadowSettings second){
-    return
-        first.backend == second.backend
-        && first.coverage == second.coverage
-        && first.blockerSearch == second.blockerSearch
-        && first.captureCadence == second.captureCadence
-        && first.directionalResolution == second.directionalResolution
-        && first.pointResolution == second.pointResolution
-        && first.memoryBudgetBytes == second.memoryBudgetBytes
-    ;
-}
-
-u32 ResolveSoftwareShadowRequiredReuses(in SoftwareShadowCaptureCadence cadence){
-    if(cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames)
-        return s_ShadowCaptureReuseLimitTwoFrames;
-    return s_ShadowCaptureReuseLimitOneFrame;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class LightSpaceCaptureIdentity{
     public u64 scene = 0u;
@@ -205,33 +233,6 @@ class LightSpaceCaptureHistory{
     private b8 m_frameAccepted = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// A point light renders one view per cube face.
-const u32 s_SceneMaxLights = 64u;
-const u32 s_PointLightViewCount = 6u;
-const usize s_LightSpaceMaxViews = 48u;
-const u64 s_LightSpaceEventsPerTexel = 16u;
-const u64 s_LightSpaceEventBytes = 20u;
-const u64 s_LightSpacePixelWordBytes = 4u;
-const u64 s_LightSpaceViewBytes = 128u;
-const u64 s_LightSpaceDrawArgumentBytes = 20u;
-const u8 s_LightSpaceLightTypeDirectional = 0u;
-const u8 s_LightSpaceLightTypePoint = 1u;
-const u8 s_LightSpaceLightTypeSpot = 2u;
-const u8 s_LightSpaceLightTypeCount = 3u;
-
-flag<u32> LightSpaceFlag{
-    None = 0u,
-    Point,
-    Eligible,
-    FittedCoverage,
-    CompactBlockers,
-    CenterBlocker
-}
-
 [serialize]
 class LightSpaceViewGpu{
     public Array<f32x4, 4u> worldToClipRows;
@@ -260,6 +261,115 @@ class LightSpacePlan{
     public u32 viewCount = 0u;
     public u32 textureResolution = 0u;
     public u32 totalPixels = 0u;
+}
+
+[serialize]
+class LightSpaceCsgInstanceGpu{
+    public f32x3x4 worldToObject(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public u32 runtimeBoundsSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    public u32 primitiveCount = 0u;
+    public u32 meshRootSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    public u32 padding = 0u;
+    public f32x4 localMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localMax(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class LightSpaceCsgContextHeader{
+    public u32 instanceCount = 0u;
+    public u32 rangeByteOffset = 0u;
+    public u32 cutterByteOffset = 0u;
+    public u32 cutterCount = 0u;
+    public u32 instanceByteOffset = 0u;
+    public u32 activeReceiverByteOffset = 0u;
+    public u32 activeReceiverCount = 0u;
+    public u32 rayFailureFlags = 0u;
+}
+
+[serialize]
+class LightSpaceShadowPush{
+    public u32 viewSlot = 0u;
+    public u32 viewIndex = 0u;
+    public u32 materialContextSlot = 0u;
+    public u32 countsSlot = 0u;
+    public u32 eventsSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 instanceIndex = 0u;
+    public u32 instanceCount = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 frameIndex = 0u;
+    public u32 sampleCount = 0u;
+    public u32 deferredResourcesSlot = 0u;
+    public u32 outputSlot = 0u;
+    public u32 sceneRootSlot = 0u;
+    public u32 viewCount = 0u;
+    public u32 csgContextSlot = 0u;
+    public u32 csgOpaqueDepthSlot = 0u;
+    public u32 csgFlags = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+    public u32 captureDrawCount = 0u;
+    public u32 casterDrawOffset = 0u;
+    public u32 meshletDescSlot = 0u;
+    public u32 meshletBoundsSlot = 0u;
+    public u32 meshletCount = 0u;
+    public u32 receiverViewSlot = 0u;
+    public u32 receiverCsgSampleStateSlot = 0u;
+}
+
+class LightSpaceShadowStorageCapacity{
+    public u64 countBytes = 0u;
+    public u64 eventBytes = 0u;
+    public u64 viewBytes = 0u;
+    public u64 drawArgumentBytes = 0u;
+    public u32 textureResolution = 0u;
+    public u32 arrayLayers = 0u;
+}
+
+// Frozen prepared soft-transparent route shared by the split resource declarations and the split task chain.
+class SoftShadowSplitRoute{
+    public b8 hardwareShadowSupported = false;
+    public b8 hardwareCsgShadow = false;
+    public b8 csgShadow = false;
+    public b8 traceGeometryStatesGraphOwned = false;
+    public b8 combinedSoftUpsample = false;
+    public b8 combinedSoftWavelet = false;
+    public b8 combinedSoftTemporal = false;
+    public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
+    return
+        cast<u8>(settings.backend) <= cast<u8>(SoftwareShadowBackend::LightSpace)
+        && cast<u8>(settings.coverage) <= cast<u8>(SoftwareShadowCoverage::FittedVolume)
+        && cast<u8>(settings.blockerSearch) <= cast<u8>(SoftwareShadowBlockerSearch::Center1)
+        && cast<u8>(settings.captureCadence) <= cast<u8>(SoftwareShadowCaptureCadence::ReuseTwoFrames)
+        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
+        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
+        && settings.memoryBudgetBytes > 0ull && settings.memoryBudgetBytes <= s_ShadowMaxMemoryBudgetBytes
+    ;
+}
+
+b8 SameSoftwareShadowSettings(in SoftwareShadowSettings first, in SoftwareShadowSettings second){
+    return
+        first.backend == second.backend
+        && first.coverage == second.coverage
+        && first.blockerSearch == second.blockerSearch
+        && first.captureCadence == second.captureCadence
+        && first.directionalResolution == second.directionalResolution
+        && first.pointResolution == second.pointResolution
+        && first.memoryBudgetBytes == second.memoryBudgetBytes
+    ;
+}
+
+u32 ResolveSoftwareShadowRequiredReuses(in SoftwareShadowCaptureCadence cadence){
+    if(cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames)
+        return s_ShadowCaptureReuseLimitTwoFrames;
+    return s_ShadowCaptureReuseLimitOneFrame;
 }
 
 Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpaceLightRequest> requests, in u64 maxStorageBufferRange, in u32 drawCount, in b8 csgIntervalDepth){
@@ -352,44 +462,6 @@ Expected<LightSpacePlan> TryBuildLightSpacePlan(in SoftwareShadowSettings settin
     return outPlan;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const u32 s_LightSpaceInvalidGpuDescriptorSlot = 0xffffffffu;
-const u32 s_LightSpaceMeshletsPerDraw = 32u;
-const u32 s_LightSpaceTriangleCornerCount = 3u;
-const u32 s_LightSpaceCsgRayContextBytes = 32u;
-const u32 s_LightSpaceCsgShadowFlagHwCompose = 2u;
-const u32 s_LightSpaceDiagnosticInterval = 60u;
-const u32 s_LightSpaceMaxIndirectDraws = 65535u;
-const usize s_LightSpaceShaderCount = 14u;
-
-const StringView s_LightSpaceNoCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0";
-const StringView s_LightSpaceNoCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1";
-const StringView s_LightSpaceCsgShade0 = "NWB_LIGHT_SPACE_CSG_SHADE=0";
-const StringView s_LightSpaceCsgShade1 = "NWB_LIGHT_SPACE_CSG_SHADE=1";
-const StringView s_LightSpaceCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0";
-const StringView s_LightSpaceCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1";
-
-// Inclusive index ranges into the compute shader/pipeline tables of ensureLightSpaceShadowPipelines.
-const u32 s_LightSpaceFirstCsgOnlyPipelineIndex = 6u;
-const u32 s_LightSpaceLastCsgOnlyPipelineIndex = 10u;
-const u32 s_LightSpaceFirstCsgResolvePipelineIndex = 7u;
-const u32 s_LightSpaceLastCsgResolvePipelineIndex = 8u;
-const u32 s_LightSpaceFirstCsgFallbackPipelineIndex = 9u;
-const u32 s_LightSpaceLastCsgFallbackPipelineIndex = 10u;
-const u32 s_LightSpaceCaptureVertexShaderIndex = 12u;
-const u32 s_LightSpaceCapturePixelShaderIndex = 13u;
-const u32 s_LightSpaceCapturePipelineKindCount = 2u;
-const u32 s_LightSpaceCountsBufferIndex = 0u;
-const u32 s_LightSpaceEventsBufferIndex = 1u;
-const u32 s_LightSpaceViewsBufferIndex = 2u;
-const u32 s_LightSpaceDrawArgumentsBufferIndex = 3u;
-const u32 s_LightSpaceDepthDescriptorIndex = 4u;
-const usize s_LightSpaceBufferCount = 4u;
-const usize s_LightSpaceDescriptorCount = 5u;
-
 u32 LightSpaceCasterDrawCount(in u32 meshletCount){
     if(meshletCount == 0u)
         return 1u;
@@ -415,17 +487,6 @@ u8 ResolveLightSpaceLightRequestType(in f32 lightTypeParam, in b8 hasCsg){
     return s_LightSpaceLightTypeSpot;
 }
 
-[serialize]
-class LightSpaceCsgInstanceGpu{
-    public f32x3x4 worldToObject(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-    public u32 runtimeBoundsSlot = s_LightSpaceInvalidGpuDescriptorSlot;
-    public u32 primitiveCount = 0u;
-    public u32 meshRootSlot = s_LightSpaceInvalidGpuDescriptorSlot;
-    public u32 padding = 0u;
-    public f32x4 localMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localMax(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
 LightSpaceCsgInstanceGpu BuildLightSpaceCsgInstanceGpu(
     in u32 meshletPrimitiveIndexCount,
     in b8 hasRuntimeBounds,
@@ -441,18 +502,6 @@ LightSpaceCsgInstanceGpu BuildLightSpaceCsgInstanceGpu(
     if(!hardware && hasSwBvhNode)
         instance.meshRootSlot = swBvhNodeSlot;
     return instance;
-}
-
-[serialize]
-class LightSpaceCsgContextHeader{
-    public u32 instanceCount = 0u;
-    public u32 rangeByteOffset = 0u;
-    public u32 cutterByteOffset = 0u;
-    public u32 cutterCount = 0u;
-    public u32 instanceByteOffset = 0u;
-    public u32 activeReceiverByteOffset = 0u;
-    public u32 activeReceiverCount = 0u;
-    public u32 rayFailureFlags = 0u;
 }
 
 LightSpaceCsgContextHeader BuildLightSpaceCsgContextHeader(
@@ -475,46 +524,6 @@ LightSpaceCsgContextHeader BuildLightSpaceCsgContextHeader(
     return header;
 }
 
-[serialize]
-class LightSpaceShadowPush{
-    public u32 viewSlot = 0u;
-    public u32 viewIndex = 0u;
-    public u32 materialContextSlot = 0u;
-    public u32 countsSlot = 0u;
-    public u32 eventsSlot = 0u;
-    public u32 depthSlot = 0u;
-    public u32 instanceIndex = 0u;
-    public u32 instanceCount = 0u;
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 frameIndex = 0u;
-    public u32 sampleCount = 0u;
-    public u32 deferredResourcesSlot = 0u;
-    public u32 outputSlot = 0u;
-    public u32 sceneRootSlot = 0u;
-    public u32 viewCount = 0u;
-    public u32 csgContextSlot = 0u;
-    public u32 csgOpaqueDepthSlot = 0u;
-    public u32 csgFlags = 0u;
-    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
-    public u32 captureDrawCount = 0u;
-    public u32 casterDrawOffset = 0u;
-    public u32 meshletDescSlot = 0u;
-    public u32 meshletBoundsSlot = 0u;
-    public u32 meshletCount = 0u;
-    public u32 receiverViewSlot = 0u;
-    public u32 receiverCsgSampleStateSlot = 0u;
-}
-
-class LightSpaceShadowStorageCapacity{
-    public u64 countBytes = 0u;
-    public u64 eventBytes = 0u;
-    public u64 viewBytes = 0u;
-    public u64 drawArgumentBytes = 0u;
-    public u32 textureResolution = 0u;
-    public u32 arrayLayers = 0u;
-}
-
 b8 LightSpaceShadowStorageFits(in LightSpacePlan plan, in LightSpaceShadowStorageCapacity capacity){
     return
         plan.viewCount != 0u && plan.textureResolution != 0u
@@ -525,24 +534,6 @@ b8 LightSpaceShadowStorageFits(in LightSpacePlan plan, in LightSpaceShadowStorag
         && plan.viewCount <= capacity.arrayLayers
     ;
 }
-
-// Frozen prepared soft-transparent route shared by the split resource declarations and the split task chain.
-class SoftShadowSplitRoute{
-    public b8 hardwareShadowSupported = false;
-    public b8 hardwareCsgShadow = false;
-    public b8 csgShadow = false;
-    public b8 traceGeometryStatesGraphOwned = false;
-    public b8 combinedSoftUpsample = false;
-    public b8 combinedSoftWavelet = false;
-    public b8 combinedSoftTemporal = false;
-    public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
-}
-
-const Name s_LightSpaceDiagnosticsIdentity = "render.light_space_shadow.diagnostics";
-const StringView s_LightSpaceDiagnosticsLabel = "CSG Shadow Diagnostics";
-const Name s_LightSpaceViewUploadIdentity = "render.light_space_shadow.view_upload";
-const StringView s_LightSpaceViewUploadLabel = "Light-Space View Upload";
-const usize s_LightSpaceFixedResourceUseCount = 5u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

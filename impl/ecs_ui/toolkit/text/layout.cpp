@@ -60,7 +60,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
     result.m_clusters.reserve(request.text.size());
     result.m_lines.reserve(1u);
     b8 hasInk = false;
-    Double4 inkBounds(0.0, 0.0, 0.0, 0.0);
+    SIMDVectorDouble inkBounds = VectorDoubleZero();
     usize byteBegin = 0u;
     while(true){
         usize byteEnd = byteBegin;
@@ -134,7 +134,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             break;
         byteBegin = breakEnd;
     }
-    result.m_inkBounds = { static_cast<f32>(inkBounds.x), static_cast<f32>(inkBounds.y), static_cast<f32>(inkBounds.z), static_cast<f32>(inkBounds.w) };
+    result.m_inkBounds = { static_cast<f32>(VectorDoubleGetX(inkBounds)), static_cast<f32>(VectorDoubleGetY(inkBounds)), static_cast<f32>(VectorDoubleGetZ(inkBounds)), static_cast<f32>(VectorDoubleGetW(inkBounds)) };
     return result;
 }
 

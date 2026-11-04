@@ -261,6 +261,21 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
     const b8 isMatrix = SymbolTable::IsSimdMatrixType(simdType);
 
     if(expr.resolvedSimdType.empty() && !expectedSimdType.empty()){
+        const Expr* laneBase = nullptr;
+        u32 laneIdx = 0u;
+        if(!isInt && TryMatchSingleLaneAccess(&expr, laneBase, laneIdx) && laneBase && laneBase->resolvedSimdType == expectedSimdType){
+            out.append(isDouble ? "::VectorDoubleSwizzle<" : "::VectorSwizzle<");
+            for(u32 i = 0u; i < 4u; ++i){
+                if(i > 0u)
+                    out.append(", ");
+                AppendAdhdUnsigned(out, laneIdx);
+                out.push_back('u');
+            }
+            out.append(">(");
+            emitSimdRegExpr(out, *laneBase, expectedSimdType);
+            out.push_back(')');
+            return;
+        }
         if(isInt){
             out.append(isDouble ? "::VectorDoubleReplicateInt(static_cast<u64>(" : "::VectorReplicateInt(static_cast<u32>(");
             emitExpr(out, expr);
@@ -504,6 +519,11 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
     }
     default:
         break;
+    }
+
+    if(SymbolTable::IsSimdRegisterType(expr.resolvedSimdType)){
+        emitExpr(out, expr);
+        return;
     }
 
     const MStringView loadFn = SimdLoadFunctionCpp(simdType);

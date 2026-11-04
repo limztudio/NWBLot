@@ -20,12 +20,12 @@ class ModelAttachmentJointQuery{
     public b8 resolved = false;
 }
 
-ModelObjectComponent MakeModelObjectComponent(in EntityID owner, in Name model, in Name object, in SkeletonJointMatrix localTransform, in ModelObjectKind kind){
+ModelObjectComponent MakeModelObjectComponent(in EntityID owner, in Name model, in Name object, in MatrixSingle localTransform, in ModelObjectKind kind){
     ModelObjectComponent out;
     out.owner = owner;
     out.model = model;
     out.object = object;
-    out.localTransform = localTransform;
+    out.localTransform = SkeletonJointMatrix(localTransform);
     out.kind = kind;
     return out;
 }

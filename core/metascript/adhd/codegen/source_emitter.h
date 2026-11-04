@@ -34,6 +34,7 @@ public:
     void emitMethodBodyBlock(MString& out, const MethodDecl& method, u32 indent)const;
     void emitConstructorNotNullInitializers(MString& out, Span<const FieldDecl* const> orderedFields, const MethodDecl& ctor)const;
     void emitCtorOrCallArgs(MString& out, MStringView baseTypeName, Span<const Expr* const> arguments, MStringView injectedArenaName = {}, b8 useBracesForList = false, b8 emptyUsesBraces = true)const;
+    void emitSimdVectorCtorReg(MString& out, MStringView simdType, Span<const Expr* const> arguments)const;
     void emitExpr(MString& out, const Expr& expr, b8 omitOuterBinaryParens = false)const;
 
 
@@ -48,7 +49,7 @@ private:
     void emitTaskScopePrologue(MString& out, u32 indent)const;
     [[nodiscard]] b8 tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitParallelStmt(MString& out, const Stmt& stmt, u32 indent)const;
-    void emitSimdVectorCtorReg(MString& out, MStringView simdType, Span<const Expr* const> arguments)const;
+    [[nodiscard]] b8 tryEmitStorageStoreFromSimdArgs(MString& out, MStringView storageTypeName, Span<const Expr* const> arguments, MStringView dstExprText)const;
     [[nodiscard]] b8 isDirectSimdRegExpr(const Expr& expr)const noexcept;
     [[nodiscard]] const SimdVarBinding* findSimdBinding(b8 isThisMember, MStringView name)const noexcept;
     [[nodiscard]] const SimdVarBinding* findSimdBindingForExpr(const Expr* expr)const noexcept;

@@ -104,6 +104,15 @@ b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, const TypeR
             reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
             ok = false;
         }
+        else if(arguments.size() == 2u && arguments[0] && !SymbolTable::IsSimdRegisterVectorType(baseTargetName)){
+            const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseTargetName);
+            const BuiltinUnalignedVectorInfo* unalignedInfo = simdVecInfo ? nullptr : FindBuiltinUnalignedVectorType(baseTargetName);
+            const b8 requiresSimdRegArg0 = (simdVecInfo && simdVecInfo->lanes == 4u && simdVecInfo->altCtorArity != 2u) || (unalignedInfo && unalignedInfo->lanes == 4u && unalignedInfo->altCtorArity != 2u);
+            if(requiresSimdRegArg0 && !SymbolTable::IsSimdRegisterVectorType(inferExprTypeName(ownerClass, &method, *arguments[0], scope))){
+                reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
+                ok = false;
+            }
+        }
         else if(
             arguments.size() > 1u
             && (
@@ -226,6 +235,15 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
             stmt.varType->isAuto = false;
             stmt.varType->name = stmt.expr->resolvedSimdType;
         }
+        if(stmt.varType && !stmt.varType->isAuto && varRefMode == ParamPassingMode::None){
+            if(const TypeRef* unwrappedVar = m_symbols.unwrapTypeAlias(stmt.varType); unwrappedVar && !unwrappedVar->templateArgs.empty() && unwrappedVar->templateArgs[0].type){
+                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedVar->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+                    const MStringView valBase = m_symbols.resolveBaseTypeName(unwrappedVar->templateArgs[0].type->name);
+                    if(SymbolTable::IsSimdRegisterVectorType(valBase) && stmt.expr->resolvedSimdType == valBase)
+                        stmt.expr->wrapInSimdResult = true;
+                }
+            }
+        }
     }
 
     if(!checkConstructorInitArguments(
@@ -238,6 +256,15 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
         errors
     )){
         ok = false;
+    }
+    if(stmt.isCtorInit && stmt.varType && varRefMode == ParamPassingMode::None && stmt.arguments.size() == 1u && stmt.arguments[0]){
+        if(const TypeRef* unwrappedVar = m_symbols.unwrapTypeAlias(stmt.varType); unwrappedVar && !unwrappedVar->templateArgs.empty() && unwrappedVar->templateArgs[0].type){
+            if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedVar->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+                const MStringView valBase = m_symbols.resolveBaseTypeName(unwrappedVar->templateArgs[0].type->name);
+                if(SymbolTable::IsSimdRegisterVectorType(valBase) && stmt.arguments[0]->resolvedSimdType == valBase)
+                    stmt.arguments[0]->wrapInSimdResult = true;
+            }
+        }
     }
 
     ScopedVarInfo info;
@@ -376,6 +403,13 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const Sco
     }
     if(stmt.expr && !checkExpr(ownerClass, scope, retRefMode == ParamPassingMode::Mut, method, *stmt.expr, errors))
         ok = false;
+    if(unwrappedRetType && stmt.expr && retRefMode == ParamPassingMode::None && !unwrappedRetType->templateArgs.empty() && unwrappedRetType->templateArgs[0].type){
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedRetType->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+            const MStringView valBase = m_symbols.resolveBaseTypeName(unwrappedRetType->templateArgs[0].type->name);
+            if(SymbolTable::IsSimdRegisterVectorType(valBase) && stmt.expr->resolvedSimdType == valBase)
+                stmt.expr->wrapInSimdResult = true;
+        }
+    }
     if(stmt.expr && retRefMode == ParamPassingMode::In && stmt.expr->isStringByteRead){
         stmt.expr->isStringByteRead = false;
         stmt.expr->isStringByteConstRef = true;

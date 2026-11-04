@@ -36,6 +36,15 @@ const Color s_StyleHoverTint = Color(1.08f, 1.08f, 1.08f, 1.0f);
 const Color s_StylePressedTint = Color(0.85f, 0.85f, 0.85f, 1.0f);
 const Color s_StyleDisabledTint = Color(0.55f, 0.55f, 0.55f, 0.6f);
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> SeparatorDirection{
+    Horizontal,
+    Vertical,
+}
+
 // Semantic atlas names let another skin replace imagery and control metrics without application changes.
 class WidgetStyle{
     public Name panel = Name("panel.normal");
@@ -77,11 +86,6 @@ class ContainerOptions{
     public f32 gap = s_StyleSpacingMedium;
 }
 
-enum<u8> SeparatorDirection{
-    Horizontal,
-    Vertical,
-}
-
 class SeparatorOptions{
     public LayoutSize length = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     // Zero uses the skin's minimum thickness, or one logical unit when no minimum is specified.
@@ -89,13 +93,17 @@ class SeparatorOptions{
     public SeparatorDirection direction = SeparatorDirection::Horizontal;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void ApplySkinPaletteToWidgetStyle(in UiSkinPalette palette, mut WidgetStyle style){
     style.text = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
     style.disabledText = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
 }
 
 Expected<Point> TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 density){
-    const Expected<f32x4> minimum = TryLoadUiSkinMinimumSize(region, cast<f64>(density));
+    const Expected<VectorSingle> minimum = TryLoadUiSkinMinimumSize(region, cast<f64>(density));
     if(!minimum.has_value())
         return makeUnexpected(Failure());
     return Point(minimum.value().x, minimum.value().y);

@@ -534,41 +534,10 @@ void MarkLambdaCapturedSimdBindingsInStmts(MVector<SimdVarBinding>& bindings, co
 
 
 void CollectScopedSimdBindings(const Span<const Stmt* const> statements, const SymbolTable& symbols, MetaArena& arena, MVector<SimdVarBinding>& bindings){
-    using namespace __hidden_adhd_simd_analyzer;
-
-    if(!StmtsContainSimdMath(statements, symbols))
-        return;
-
-    PreRegisterLocalSimdDecls(statements, symbols, arena, bindings);
-    b8 hasSeenPossibleReturn = false;
-    ScanStmtsForSimdBindings(statements, symbols, false, arena, bindings, hasSeenPossibleReturn);
-    MarkLambdaCapturedSimdBindingsInStmts(bindings, statements);
-
-    MVector<MStringView> seenNames(arena);
-    MVector<MStringView> seenSimdTypes(arena);
-    MVector<b8> seenIsLoop(arena);
-    MVector<MStringView> conflictedNames(arena);
-    CollectLocalDeclConflicts(statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
-    usize writeIdx = 0u;
-    for(usize readIdx = 0u; readIdx < bindings.size(); ++readIdx){
-        const SimdVarBinding& candidate = bindings[readIdx];
-        b8 shouldRemove = !candidate.isLocalDecl && !candidate.readAsRegister && !candidate.written;
-        if(!shouldRemove && !candidate.isThisMember){
-            for(const MStringView cname : conflictedNames){
-                if(candidate.name == cname){
-                    shouldRemove = true;
-                    break;
-                }
-            }
-        }
-        if(!shouldRemove){
-            if(writeIdx != readIdx)
-                bindings[writeIdx] = bindings[readIdx];
-            ++writeIdx;
-        }
-    }
-    while(bindings.size() > writeIdx)
-        bindings.pop_back();
+    (void)statements;
+    (void)symbols;
+    (void)arena;
+    bindings.clear();
 }
 
 

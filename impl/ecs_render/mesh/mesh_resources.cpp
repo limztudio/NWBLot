@@ -97,7 +97,7 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     mesh.runtimeGeometryContentRevision = desc.geometryContentRevision;
     mesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
     mesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
-    RefreshRuntimeMeshCsgBounds(desc.localBounds.minBounds, desc.localBounds.maxBounds, desc.localBounds.finite(), mesh.csgLocalBounds);
+    RefreshRuntimeMeshCsgBounds(LoadFloatInt(desc.localBounds.minBounds), LoadFloatInt(desc.localBounds.maxBounds), desc.localBounds.finite(), mesh.csgLocalBounds);
 }
 
 static void ReportMeshBufferSetupFailure(const BufferSetupFailure::Enum failure, const Name& meshName, const TStringView label){

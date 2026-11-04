@@ -42,10 +42,7 @@ namespace TextGlyphVisibility{
     const FontAtlasGlyph* record = atlas.glyph(glyph.glyphId);
     if(!record)
         return MakeUnexpected(Failure{});
-    const auto candidate = TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), *record);
-    if(!candidate)
-        return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ LoadDouble(*candidate) };
+    return TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), *record);
 }
 
 [[nodiscard]] inline Expected<Rect> AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
@@ -114,3 +111,4 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

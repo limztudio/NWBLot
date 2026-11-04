@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+type ImageFrame = ImageFrameRecord<SharedImageSource>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Content dimensions use atlas reference density for named regions and logical texel extent for engine sources.
 class ImageOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
@@ -32,17 +38,21 @@ class ImageFrameRecord<TImage>{
     public ImageMetrics metrics;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<ImageMetrics> TryMeasureRegionImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
     ImageMetrics outMetrics;
     if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !isFinite(density) || density <= 0.0f)
         return makeUnexpected(Failure());
-    const Expected<f64x4> sliceExtents = TryLoadUiSkinSliceExtents(region);
+    const Expected<VectorDouble> sliceExtents = TryLoadUiSkinSliceExtents(region);
     if(!sliceExtents.has_value())
         return makeUnexpected(Failure());
     const f64 pixelW = max(cast<f64>(region.rectangle.width), sliceExtents.value().x);
     const f64 pixelH = max(cast<f64>(region.rectangle.height), sliceExtents.value().y);
     const f64 densityF64 = cast<f64>(density);
-    const Expected<f32x4> minimum = TryLoadUiSkinMinimumSize(region, f64x4(pixelW, pixelH, 0.0, 0.0), f64x4(densityF64, densityF64, densityF64, densityF64));
+    const Expected<VectorSingle> minimum = TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64));
     if(!minimum.has_value())
         return makeUnexpected(Failure());
     outMetrics.contentSize = Point(minimum.value().x, minimum.value().y);
@@ -60,8 +70,6 @@ Expected<ImagePlacement> TryPlaceImage(in Rect bounds, in Rect clip){
     outPlacement.clip = intersection.value();
     return outPlacement;
 }
-
-type ImageFrame = ImageFrameRecord<SharedImageSource>;
 
 // Natural atlas extent uses reference density and logical minima; region padding does not inset images.
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){

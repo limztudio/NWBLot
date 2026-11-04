@@ -4,10 +4,6 @@
 
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 namespace Testbed{
 using NWB::Impl::Ui::Color;
@@ -18,15 +14,16 @@ using NWB::Impl::Ui::Rect;
 }
 
 
-const StringView s_WindowTitleText = "NWB Testbed";
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const StringView s_WindowTitleText = "NWB Testbed";
 // The gallery selector reserves this content area; the text area fills it at selector width.
 const f32 s_SelectorWidth = 400.0f;
 const f32 s_ContentHeight = 260.0f;
 const f32 s_OrdinaryGalleryWidth = 280.0f;
 const f32 s_GalleryFontSize = 14.0f;
 const f32 s_GalleryMargin = 18.0f;
-
 // Stable widget keys reused by several sample panels.
 const StringView s_TitleKey = "title";
 const StringView s_HintKey = "hint";
@@ -36,58 +33,16 @@ const StringView s_ReadOnlyKey = "read_only";
 const StringView s_EnabledKey = "enabled";
 const StringView s_AmountKey = "amount";
 const StringView s_CommandsKey = "commands";
-
 // Sample text format shared by the selection read-outs.
 const StringView s_SelectedTextFormat = "Selected: {}";
-
 // Default skin regions drawn by more than one sample.
 const Name s_ButtonNormal = "button.normal";
 const Name s_ComboArrow = "combo.arrow";
-
-[reflect]
-enum<u32> Section{
-    Controls,
-    Edit,
-    List,
-    Combo,
-    SearchCombo,
-    PopupTools,
-    NestedPopup,
-    NumericEdit,
-    TextArea,
-    RadioGroup,
-    Slider,
-    Progress,
-    Image,
-    kCount
-}
-
-StringView SectionName(in Section section){
-    switch(section){
-        case Section::Controls: return "Controls and menu";
-        case Section::Edit: return "Text editing";
-        case Section::List: return "Virtual list";
-        case Section::Combo: return "Keyed combo";
-        case Section::SearchCombo: return "Searchable combo";
-        case Section::PopupTools: return "Tooltips and context menu";
-        case Section::NestedPopup: return "Nested popups";
-        case Section::NumericEdit: return "Numeric editing";
-        case Section::TextArea: return "Multiline text";
-        case Section::RadioGroup: return "Radio choices";
-        case Section::Slider: return "Slider";
-        case Section::Progress: return "Progress";
-        case Section::Image: return "Images";
-        case Section::kCount: return "";
-    }
-    return "";
-}
-
 const f32 s_SelectorHeight = 88.0f;
 const f32 s_ContentGap = 12.0f;
 const Name s_SelectorArena = "testbed/ui/gallery_selector";
 const f32 s_NavigationButtonWidth = 100.0f;
 const f32 s_ControlsPanelHeight = 180.0f;
-
 const u64 s_FilteredInstanceGeneration = 2u;
 const u64 s_VirtualListRowCount = 100000u;
 const usize s_VirtualListLabelCapacity = 32u;
@@ -95,18 +50,15 @@ const usize s_VirtualListMaxDecimalDigits = 20u;
 const usize s_VirtualListRowPrefixLength = 4u;
 const f32 s_ListGalleryPanelHeight = 258.0f;
 const f32 s_ListGalleryListHeight = 180.0f;
-
 const f32 s_ComboGalleryPanelHeight = 130.0f;
 const f32 s_ComboGalleryPopupHeight = 220.0f;
 const f32 s_EditGalleryPanelHeight = 154.0f;
-
 const f32 s_ImageGalleryPanelHeight = 220.0f;
 const f32 s_ImageGallerySpriteSize = 64.0f;
 const f32 s_ImageGallerySliceWidth = 96.0f;
 const f32x4 s_ImageGallerySliceTint(0.8f, 0.9f, 1.0f, 0.8f);
 const f32 s_ImageGalleryTextureHeight = 48.0f;
 const Name s_RadioMarkRegion = "radio.mark";
-
 const usize s_NestedPopupLabelCount = 5u;
 const u64 s_NestedPopupDisabledKey = 3u;
 const f32 s_NestedPopupCompactGap = 4.0f;
@@ -132,12 +84,10 @@ const f32 s_NestedPopupChildAnchorWidth = 8.0f;
 const f32 s_NestedPopupChildAnchorHeight = 32.0f;
 const f32 s_NestedPopupChildWidth = 220.0f;
 const f32 s_NestedPopupChildHeight = 178.0f;
-
 const i64 s_NumericEditInitialInteger = 9007199254740993;
 const f64 s_NumericEditInitialDecimal = 1.25;
 const f32 s_NumericEditPanelHeight = 200.0f;
 const f64 s_NumericEditDecimalLimit = 10.0;
-
 const f32 s_PopupMenuButtonWidth = 60.0f;
 const u32 s_PopupFirstChoice = 1u;
 const u32 s_PopupSecondChoice = 2u;
@@ -146,35 +96,28 @@ const f32 s_PopupAnchorTop = 68.0f;
 const f32 s_PopupAnchorHeight = 36.0f;
 const f32 s_PopupGalleryWidth = 220.0f;
 const f32 s_PopupGalleryHeight = 180.0f;
-
 const usize s_PopupToolsLabelCount = 5u;
 const u64 s_PopupToolsDisabledKey = 3u;
 const f32 s_PopupToolsPanelHeight = 132.0f;
 const f32 s_PopupToolsMenuWidth = 220.0f;
 const f32 s_PopupToolsMenuHeight = 180.0f;
 const StringView s_PopupToolsAnchorKey = "anchor";
-
 const usize s_RadioGroupLabelCount = 3u;
 const u64 s_RadioGroupDisabledKey = 3u;
 const f32 s_RadioGroupPanelHeight = 208.0f;
-
 const usize s_SearchComboLabelCount = 12u;
 const u64 s_SearchComboDisabledKey = 5u;
 const f32 s_SearchComboPanelHeight = 130.0f;
 const f32 s_SearchComboPopupHeight = 240.0f;
-
 const f64 s_DefaultProgressFraction = 0.25;
 const f32 s_ProgressGalleryPanelHeight = 180.0f;
 const f64 s_ProgressPercentScale = 100.0;
-
 const f32 s_SliderGalleryPanelHeight = 180.0f;
 const f64 s_SliderKeyStep = 0.05;
-
 const f32 s_OverviewWidth = 360.0f;
 const f32 s_OverviewHeight = 160.0f;
 const StringView s_RendererLine = "Renderer: mesh / compute emulation";
 const StringView s_CharacterLine = "Character: female model";
-
 const f32 s_PanelBaseHeight = 170.0f;
 const f32 s_PanelBottomGap = 12.0f;
 const f32 s_CaptionPadding = 8.0f;
@@ -227,6 +170,52 @@ const Name s_ProgressFill = "progress.fill";
 const Color s_LabelTextColor = Color(0.92f, 0.96f, 1.0f, 1.0f);
 const Color s_DisabledLabelTextColor = Color(0.38f, 0.42f, 0.48f, 1.0f);
 const StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u32> Section{
+    Controls,
+    Edit,
+    List,
+    Combo,
+    SearchCombo,
+    PopupTools,
+    NestedPopup,
+    NumericEdit,
+    TextArea,
+    RadioGroup,
+    Slider,
+    Progress,
+    Image,
+    kCount
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SectionName(in Section section){
+    switch(section){
+        case Section::Controls: return "Controls and menu";
+        case Section::Edit: return "Text editing";
+        case Section::List: return "Virtual list";
+        case Section::Combo: return "Keyed combo";
+        case Section::SearchCombo: return "Searchable combo";
+        case Section::PopupTools: return "Tooltips and context menu";
+        case Section::NestedPopup: return "Nested popups";
+        case Section::NumericEdit: return "Numeric editing";
+        case Section::TextArea: return "Multiline text";
+        case Section::RadioGroup: return "Radio choices";
+        case Section::Slider: return "Slider";
+        case Section::Progress: return "Progress";
+        case Section::Image: return "Images";
+        case Section::kCount: return "";
+    }
+    return "";
+}
 
 Rect ResolveWidgetGalleryLayoutBounds(in DisplayMetrics display, in f32 preferredTop){
     const f32 height = (s_SelectorHeight + s_ContentGap) + s_ContentHeight;

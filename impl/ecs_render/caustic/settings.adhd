@@ -10,11 +10,9 @@
 
 
 const u32 s_RtMaxI32AsU32 = 2147483647u;
-
 // Shader variant selectors for the NWB_RT_CSG_ENABLED define.
 const StringView s_RayTracingCsgDisabledVariant = "NWB_RT_CSG_ENABLED=0";
 const StringView s_RayTracingCsgEnabledVariant = "NWB_RT_CSG_ENABLED=1";
-
 const u32 s_CausticAccumulatorChannelCount = 3u;
 const StringView s_CausticAccumulatorLabel = "Caustic Accumulator";
 const StringView s_CausticHistoryLabel = "Caustic History";
@@ -23,9 +21,156 @@ const StringView s_CausticResolveGeometryLabel = "Caustic Resolve Geometry";
 const StringView s_HardwareCausticEmissionTargetsName = "render.hardware_caustics.emission_targets";
 const StringView s_SoftwareCausticEmissionTargetsName = "render.software_caustics.emission_targets";
 const StringView s_CausticEmissionTargetsLabel = "Caustic Emission Targets";
-
 const f32 s_CausticSlotDisabled = -2.0f;
 const f32 s_CausticSlotEnabledThreshold = -1.5f;
+// Base grid sides that MakeCausticPhotonBudget accepts.
+const u32 s_CausticReducedBaseGridSide = 128u;
+const u32 s_CausticFullBaseGridSide = 512u;
+const u32 s_CausticTemporalDisabledPhaseCount = 1u;
+const u32 s_CausticTemporalPhaseCount = 2u;
+const f32 s_DefaultCausticTemporalDecay = 0.85f;
+const u32 s_CausticHalfPhotonGridDivisor = 2u;
+const u32 s_CausticQuarterPhotonGridDivisor = 4u;
+// The caustic resolve chain works on targets reduced by this factor in each axis.
+const u32 s_CausticResolveDownscaleFactor = 2u;
+const u32 s_CausticResolveGroupSize = 8u;
+const u32 s_CausticResolveGroupThreadCount = s_CausticResolveGroupSize;
+const u32 s_CausticResolveGroupLaneCount = s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount;
+const usize s_CausticResolveActivityBufferCount = 2u;
+const Name s_CausticResolveActivityBufferAName = "caustic_resolve_activity_a";
+const Name s_CausticResolveActivityBufferBName = "caustic_resolve_activity_b";
+const u32 s_CausticWaveletStepOneWidth = 1u;
+const u32 s_CausticWaveletStepTwoWidth = 2u;
+const usize s_CausticEmissionTargetInitialCapacity = 32u;
+const usize s_CausticResolvePushConstantsActivityInputSlotOffset = 52u;
+const usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 56u;
+const usize s_CausticResolvePushConstantsByteSize = 60u;
+const u32 s_CausticHwPhotonGridSide = 512u;
+// Resolve exposure; photon-count changes preserve brightness.
+const f32 s_CausticIntensity = 2.0f;
+// Runtime refractor bounds are inflated because emission uses bind-pose AABBs.
+const f32 s_CausticRuntimeBoundsInflation = 1.25f;
+const StringView s_CausticHwRaygenExportName = "CausticHwRayGen";
+const StringView s_CausticHwMissExportName = "CausticHwMiss";
+const StringView s_CausticHwHitGroupExportName = "CausticHwHitGroup";
+const StringView s_CausticResolvePrepareVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=3";
+const StringView s_CausticResolveWaveletVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=1";
+const StringView s_CausticResolveWaveletStepOneVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=5";
+const StringView s_CausticResolveWaveletStepTwoVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=6";
+const StringView s_CausticResolveWaveletDirectVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=4";
+const StringView s_CausticResolveUpsampleVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=2";
+const f32 s_CausticBoundsMidpointWeight = 0.5f;
+const usize s_CausticActivityUsesPerStage = 2u;
+const usize s_CausticMaxStageResourceUses = 8u;
+const usize s_HardwarePhotonResourceUseCapacity = 15u;
+const usize s_SoftwarePhotonResourceUseCapacity = 20u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shader-mirrored caustic resolve stages.
+enum<u32> CausticResolveStage{
+    PrepareDownsample = 0u,
+    Wavelet = 1u,
+    Upsample = 2u
+}
+
+[reflect]
+class CausticQualitySettings{
+    // Divide each photon-grid dimension by 1, 2, or 4; temporal phases and filtering stay unchanged.
+    public u32 photonGridDivisor = 1u;
+}
+
+[reflect]
+class CausticPhotonBudget{
+    public u32 gridSide = 0u;
+    public u32 fullGridCount = 0u;
+    public u32 photonsPerFrame = 0u;
+}
+
+// Shared CPU mirror of SW/HW caustic photon push constants.
+[serialize]
+class CausticPhotonPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 instanceCount = 0u;
+    public u32 photonCount = 0u;
+    public u32 emissionTargetCount = 0u;
+    public u32 gridSide = 0u;
+    public u32 frameIndex = 0u;
+    public u32 depthSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 emissionTargetSlot = 0u;
+    public u32 viewSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 accumulatorStorageSlot = 0u;
+    public u32 temporalPhaseCount = s_CausticTemporalDisabledPhaseCount;
+}
+
+class CausticResolveActivityLayout{
+    public u64 bufferByteSize = 0u;
+    public u32 tilesX = 0u;
+    public u32 tilesY = 0u;
+}
+
+// CPU/GPU refractive-instance AABB record.
+[serialize]
+class NwbCausticEmissionTargetGpu{
+    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+// CPU mirror of caustic resolve push constants.
+[serialize]
+class CausticResolvePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public f32 causticIntensity = 0.0f;
+    public u32 stepWidth = 1u;
+    public u32 stage = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 inputColorSlot = 0u;
+    public u32 geometrySlot = 0u;
+    public u32 accumulatorSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+    public u32 activityInputSlot = s_RtInvalidSlot;
+    public u32 activityOutputSlot = s_RtInvalidSlot;
+}
+
+// CPU mirror of caustic geometry-downsample push constants.
+[serialize]
+class CausticGeometryDownsamplePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+}
+
+// CPU mirror of caustic accumulator-decay push constants.
+[serialize]
+class CausticAccumulatorDecayPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public f32 decayFactor = 0.0f;
+    public u32 accumulatorStorageSlot = 0u;
+}
+
+class CausticResolveActivitySlots{
+    public u32 inputSlot = s_RtInvalidSlot;
+    public u32 outputSlot = s_RtInvalidSlot;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 CausticLightEligible(in SceneLightGpuData light){
     return light.params.y < s_LightTypeDirectionalMax || light.params.y > s_LightTypePointMax;
@@ -55,29 +200,6 @@ u32 SelectNextCausticSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f
     return bestIndex;
 }
 
-// Base grid sides that MakeCausticPhotonBudget accepts.
-const u32 s_CausticReducedBaseGridSide = 128u;
-const u32 s_CausticFullBaseGridSide = 512u;
-const u32 s_CausticTemporalDisabledPhaseCount = 1u;
-const u32 s_CausticTemporalPhaseCount = 2u;
-const f32 s_DefaultCausticTemporalDecay = 0.85f;
-
-[reflect]
-class CausticQualitySettings{
-    // Divide each photon-grid dimension by 1, 2, or 4; temporal phases and filtering stay unchanged.
-    public u32 photonGridDivisor = 1u;
-}
-
-[reflect]
-class CausticPhotonBudget{
-    public u32 gridSide = 0u;
-    public u32 fullGridCount = 0u;
-    public u32 photonsPerFrame = 0u;
-}
-
-const u32 s_CausticHalfPhotonGridDivisor = 2u;
-const u32 s_CausticQuarterPhotonGridDivisor = 4u;
-
 b8 ValidateCausticQualitySettings(in CausticQualitySettings settings){
     return settings.photonGridDivisor == 1u || settings.photonGridDivisor == s_CausticHalfPhotonGridDivisor || settings.photonGridDivisor == s_CausticQuarterPhotonGridDivisor;
 }
@@ -92,26 +214,6 @@ CausticPhotonBudget MakeCausticPhotonBudget(in CausticQualitySettings settings, 
     budget.fullGridCount = budget.gridSide * budget.gridSide;
     budget.photonsPerFrame = budget.fullGridCount / temporalPhaseCount;
     return budget;
-}
-
-// Shared CPU mirror of SW/HW caustic photon push constants.
-[serialize]
-class CausticPhotonPushConstants{
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 instanceCount = 0u;
-    public u32 photonCount = 0u;
-    public u32 emissionTargetCount = 0u;
-    public u32 gridSide = 0u;
-    public u32 frameIndex = 0u;
-    public u32 depthSlot = 0u;
-    public u32 worldPositionSlot = 0u;
-    public u32 emissionTargetSlot = 0u;
-    public u32 viewSlot = 0u;
-    public u32 deferredResourcesHeapSlot = 0u;
-    public u32 materialContextSlotsHeapSlot = 0u;
-    public u32 accumulatorStorageSlot = 0u;
-    public u32 temporalPhaseCount = s_CausticTemporalDisabledPhaseCount;
 }
 
 CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
@@ -149,27 +251,6 @@ CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
     return pushConstants;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The caustic resolve chain works on targets reduced by this factor in each axis.
-const u32 s_CausticResolveDownscaleFactor = 2u;
-const u32 s_CausticResolveGroupSize = 8u;
-const u32 s_CausticResolveGroupThreadCount = s_CausticResolveGroupSize;
-const u32 s_CausticResolveGroupLaneCount = s_CausticResolveGroupThreadCount * s_CausticResolveGroupThreadCount;
-const usize s_CausticResolveActivityBufferCount = 2u;
-const Name s_CausticResolveActivityBufferAName = "caustic_resolve_activity_a";
-const Name s_CausticResolveActivityBufferBName = "caustic_resolve_activity_b";
-const u32 s_CausticWaveletStepOneWidth = 1u;
-const u32 s_CausticWaveletStepTwoWidth = 2u;
-
-class CausticResolveActivityLayout{
-    public u64 bufferByteSize = 0u;
-    public u32 tilesX = 0u;
-    public u32 tilesY = 0u;
-}
-
 Expected<CausticResolveActivityLayout> TryResolveCausticActivityLayout(in u32 halfWidth, in u32 halfHeight){
     if(halfWidth == 0u || halfHeight == 0u || halfWidth > s_RtMaxI32AsU32 || halfHeight > s_RtMaxI32AsU32)
         return makeUnexpected(Failure());
@@ -185,94 +266,11 @@ Expected<CausticResolveActivityLayout> TryResolveCausticActivityLayout(in u32 ha
     return outLayout;
 }
 
-const usize s_CausticEmissionTargetInitialCapacity = 32u;
-
-// CPU/GPU refractive-instance AABB record.
-[serialize]
-class NwbCausticEmissionTargetGpu{
-    public f32x4 aabbMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 aabbMax(0.0f, 0.0f, 0.0f, 0.0f);
-}
-
-const usize s_CausticResolvePushConstantsActivityInputSlotOffset = 52u;
-const usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 56u;
-
-// Shader-mirrored caustic resolve stages.
-enum<u32> CausticResolveStage{
-    PrepareDownsample = 0u,
-    Wavelet = 1u,
-    Upsample = 2u
-}
-
-// CPU mirror of caustic resolve push constants.
-[serialize]
-class CausticResolvePushConstants{
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 halfWidth = 0u;
-    public u32 halfHeight = 0u;
-    public f32 causticIntensity = 0.0f;
-    public u32 stepWidth = 1u;
-    public u32 stage = 0u;
-    public u32 worldPositionSlot = 0u;
-    public u32 depthSlot = 0u;
-    public u32 inputColorSlot = 0u;
-    public u32 geometrySlot = 0u;
-    public u32 accumulatorSlot = 0u;
-    public u32 outputStorageSlot = 0u;
-    public u32 activityInputSlot = s_RtInvalidSlot;
-    public u32 activityOutputSlot = s_RtInvalidSlot;
-}
-
-const usize s_CausticResolvePushConstantsByteSize = 60u;
-
-// CPU mirror of caustic geometry-downsample push constants.
-[serialize]
-class CausticGeometryDownsamplePushConstants{
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 halfWidth = 0u;
-    public u32 halfHeight = 0u;
-    public u32 worldPositionSlot = 0u;
-    public u32 depthSlot = 0u;
-    public u32 outputStorageSlot = 0u;
-}
-
-// CPU mirror of caustic accumulator-decay push constants.
-[serialize]
-class CausticAccumulatorDecayPushConstants{
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public f32 decayFactor = 0.0f;
-    public u32 accumulatorStorageSlot = 0u;
-}
-
-const u32 s_CausticHwPhotonGridSide = 512u;
-// Resolve exposure; photon-count changes preserve brightness.
-const f32 s_CausticIntensity = 2.0f;
-// Runtime refractor bounds are inflated because emission uses bind-pose AABBs.
-const f32 s_CausticRuntimeBoundsInflation = 1.25f;
-
 f32 EffectiveCausticIntensity(in f32 decay){
     if(decay > 0.0f)
         return s_CausticIntensity * (1.0f - decay);
     return s_CausticIntensity;
 }
-
-const StringView s_CausticHwRaygenExportName = "CausticHwRayGen";
-const StringView s_CausticHwMissExportName = "CausticHwMiss";
-const StringView s_CausticHwHitGroupExportName = "CausticHwHitGroup";
-const StringView s_CausticResolvePrepareVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=3";
-const StringView s_CausticResolveWaveletVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=1";
-const StringView s_CausticResolveWaveletStepOneVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=5";
-const StringView s_CausticResolveWaveletStepTwoVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=6";
-const StringView s_CausticResolveWaveletDirectVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=4";
-const StringView s_CausticResolveUpsampleVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=2";
-const f32 s_CausticBoundsMidpointWeight = 0.5f;
-const usize s_CausticActivityUsesPerStage = 2u;
-const usize s_CausticMaxStageResourceUses = 8u;
-const usize s_HardwarePhotonResourceUseCapacity = 15u;
-const usize s_SoftwarePhotonResourceUseCapacity = 20u;
 
 CausticResolvePushConstants ResolveCausticResolvePushConstants(
     in u32 width,
@@ -306,11 +304,6 @@ CausticResolvePushConstants ResolveCausticResolvePushConstants(
     resolvePush.activityInputSlot = activityInputSlot;
     resolvePush.activityOutputSlot = activityOutputSlot;
     return resolvePush;
-}
-
-class CausticResolveActivitySlots{
-    public u32 inputSlot = s_RtInvalidSlot;
-    public u32 outputSlot = s_RtInvalidSlot;
 }
 
 CausticResolveActivitySlots ResolveCausticActivitySlots(

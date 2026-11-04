@@ -331,13 +331,13 @@ void Project::updateMainCamera(const f32 delta)noexcept{
     }
 
     const b8 keyboardCaptured = MakeNotNull(m_world->getSystem<NWB::Impl::UiLayerSystem>())->wantsKeyboard();
-    const SIMDVectorSingle moveAxes = LoadFloat(BuildFlyCameraMoveAxes(
+    const SIMDVectorSingle moveAxes = BuildFlyCameraMoveAxes(
         keyboardCaptured,
         keyPressed(NWB::Core::Key::D),
         keyPressed(NWB::Core::Key::A),
         keyPressed(NWB::Core::Key::W),
         keyPressed(NWB::Core::Key::S)
-    ));
+    );
     const b8 boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
     __hidden_testbed_runtime::ApplyFlyCameraInputToMainCamera(*m_world, moveAxes, boosted, VectorSet(mouseDeltaX, mouseDeltaY, 0.0f, 0.0f), delta);

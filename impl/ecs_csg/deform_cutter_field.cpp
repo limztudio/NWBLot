@@ -23,7 +23,7 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     const CsgShapeRegistry* shapeRegistry,
     Vector<f32, Core::Alloc::ScratchArena>& outDistances
 ){
-    CsgShapeInlineParameters inlineParameters = MakeCsgShapeInlineParameters(shape.parameter0, shape.parameter1);
+    CsgShapeInlineParameters inlineParameters = MakeCsgShapeInlineParameters(LoadFloat(shape.parameter0), LoadFloat(shape.parameter1));
     CsgShapeSignedDistanceCallback registryDistanceCallback = nullptr;
     CsgBuiltInShapeKind::Enum builtInKind = CsgBuiltInShapeKind::Plane;
 
@@ -49,19 +49,20 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     outDistances.clear();
     outDistances.resize(vertexCount, s_KeepDistanceZero);
 
+    const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
-        const Float4 shapePositionFloat4 = TransformCsgDeformVertexPosition(vertex, shape.worldToShape);
+        const SIMDVectorSingle shapePosition = TransformCsgDeformVertexPosition(vertex, worldToShape);
 
         f32 distance = 0.0f;
         if(registryDistanceCallback){
-            const auto evaluated = registryDistanceCallback(shapePositionFloat4, inlineParameters);
+            const auto evaluated = registryDistanceCallback(shapePosition, inlineParameters);
             if(!evaluated)
                 return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
             distance = *evaluated;
         }
         else
-            distance = EvaluateBuiltInCsgShapeSignedDistance(builtInKind, shapePositionFloat4, inlineParameters);
+            distance = EvaluateBuiltInCsgShapeSignedDistance(builtInKind, shapePosition, inlineParameters);
 
         const auto snapped = TrySnapCsgDeformSignedDistance(distance, boundaryEpsilon);
         if(!snapped)

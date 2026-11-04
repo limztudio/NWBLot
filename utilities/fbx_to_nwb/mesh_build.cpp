@@ -67,12 +67,6 @@ template<typename VisitTriangle>
     return ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(value.x), static_cast<f64>(value.y), static_cast<f64>(value.z), 0.0));
 }
 
-[[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position)noexcept{
-    Float4 positionVec;
-    StoreFloat(position, positionVec);
-    return MakePositionKeyFromVec(positionVec);
-}
-
 [[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 position = {};
     if(options.bakeTransforms){
@@ -134,11 +128,7 @@ template<typename VisitTriangle>
     const SourceTriangleCorner& corner,
     const b8 wantsSkinning
 )noexcept{
-    Float4 positionVec;
-    Float4 normalVec;
-    StoreFloat(position, positionVec);
-    StoreFloat(normal, normalVec);
-    return IsFiniteSourceTriangleCornerValues(positionVec, normalVec, corner, wantsSkinning);
+    return IsFiniteSourceTriangleCornerValues(position, normal, corner, wantsSkinning);
 }
 
 [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(

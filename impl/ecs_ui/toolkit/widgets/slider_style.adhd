@@ -209,7 +209,7 @@ Expected<SliderPlacement> TryPlaceSlider(in Rect bounds, in Rect clip, in Slider
     if(!clipped.has_value())
         return makeUnexpected(Failure());
     candidate.clip = clipped.value();
-    const f64x4 insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
+    const VectorDouble insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
     const f64 x = insetRect.x;
     const f64 y = insetRect.y;
     const f64 w = insetRect.z;

@@ -343,6 +343,20 @@ class PointerSource{
     public b8 inert;
 }
 
+class ContextOwnedTarget{
+    public HitTarget target;
+    public WidgetRoot root;
+}
+
+class ContextOwnedPopup{
+    public PopupScope scope;
+    public WidgetRoot root;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsPointerInputEventType(in InputEventType type){
     switch(type){
     case InputEventType::PointerMove:
@@ -569,16 +583,6 @@ void AppendRouterPointerGesture(
     pointerGestures.push_back(PointerGestureRecord(gesture, true));
     outActiveGestureSequence = inoutNextActionSequence;
     ++inoutNextActionSequence;
-}
-
-class ContextOwnedTarget{
-    public HitTarget target;
-    public WidgetRoot root;
-}
-
-class ContextOwnedPopup{
-    public PopupScope scope;
-    public WidgetRoot root;
 }
 
 b8 TryRegisterContextPopupScope(

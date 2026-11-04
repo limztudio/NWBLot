@@ -46,7 +46,7 @@ TEST(AdhdCompiler, RejectsMismatchedTemplatedInterfaceOverrideSignature){
         "    void send(in T item);\r\n"
         "}\r\n"
         "class BadSink : ISink<i32> {\r\n"
-        "    public void send(in f32 item) override {}\r\n"
+        "    public void send(in f32 item)override {}\r\n"
         "}\r\n";
     CompileResult badSinkRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_MismatchedTemplatedInterfaceSource, "impl/net/bad_sink.adhd", arena.arena, badSinkRes));
@@ -86,8 +86,8 @@ TEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonica
     AdhdTestArena arena;
 
     static constexpr MStringView s_ValidMatrixSplatSource =
-        "f32x4x4 makeSplatMatrix(in f32 s) {\r\n"
-        "    f32x4x4 m = f32x4x4(s);\r\n"
+        "MatrixSingle makeSplatMatrix(in f32 s) {\r\n"
+        "    MatrixSingle m = MatrixSingle(s);\r\n"
         "    return m;\r\n"
         "}\r\n";
     CompileResult validMatRes(arena.arena);
@@ -96,19 +96,44 @@ TEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonica
     EXPECT_NE(matSrcView.find("::MatrixSet("), MStringView::npos);
 
     static constexpr MStringView s_StorageOnlySimdParamSource =
-        "f32x4 combinePlane(in f32x4 rawNormal, in f32x4 cameraPosition) {\r\n"
+        "VectorSingle combinePlane(in VectorSingle rawNormal, in VectorSingle cameraPosition) {\r\n"
         "    return rawNormal + cameraPosition;\r\n"
         "}\r\n"
-        "f32x4 buildSidePlane(in f32x4 forward, in f32x4 side, in f32x4 tanHalfAngle, in f32x4 cameraPosition) {\r\n"
-        "    const f32x4 rawNormal = forward * tanHalfAngle + side;\r\n"
-        "    return combinePlane(f32x4(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);\r\n"
+        "VectorSingle buildSidePlane(in VectorSingle forward, in VectorSingle side, in VectorSingle tanHalfAngle, in VectorSingle cameraPosition) {\r\n"
+        "    const VectorSingle rawNormal = forward * tanHalfAngle + side;\r\n"
+        "    return combinePlane(VectorSingle(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);\r\n"
         "}\r\n";
     CompileResult storageOnlyRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_StorageOnlySimdParamSource, "impl/sim/storage_only_param.adhd", arena.arena, storageOnlyRes));
     const MStringView storageOnlyView(storageOnlyRes.generatedSource.data(), storageOnlyRes.generatedSource.size());
     const usize buildSidePos = storageOnlyView.find("buildSidePlane(");
     ASSERT_NE(buildSidePos, MStringView::npos);
-    EXPECT_EQ(storageOnlyView.substr(buildSidePos).find("__adhd_simd_cameraPosition"), MStringView::npos);
+    EXPECT_EQ(storageOnlyView.substr(buildSidePos).find("::LoadFloat(cameraPosition)"), MStringView::npos);
+
+    static constexpr MStringView s_BadStorageSimdParamSource =
+        "void badStorageParam(in f32x4 v) {\r\n"
+        "}\r\n";
+    CompileResult badStorageParamRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadStorageSimdParamSource, "impl/sim/bad_storage_param.adhd", arena.arena, badStorageParamRes));
+
+    static constexpr MStringView s_BadSimdCalcFieldSource =
+        "class BadCalcField {\r\n"
+        "    public VectorSingle centroid(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "}\r\n";
+    CompileResult badSimdCalcFieldRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSimdCalcFieldSource, "impl/sim/bad_calc_field.adhd", arena.arena, badSimdCalcFieldRes));
+
+    static constexpr MStringView s_BadSimdCalcContainerSource =
+        "void badCalcContainer() {\r\n"
+        "    Array<VectorSingle, 3u> positions;\r\n"
+        "}\r\n";
+    CompileResult badSimdCalcContainerRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSimdCalcContainerSource, "impl/sim/bad_calc_container.adhd", arena.arena, badSimdCalcContainerRes));
+
+    static constexpr MStringView s_BadSimdCalcGlobalConstSource =
+        "const VectorSingle s_DefaultVec(0.0f, 0.0f, 0.0f, 0.0f);\r\n";
+    CompileResult badSimdCalcGlobalConstRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSimdCalcGlobalConstSource, "impl/sim/bad_calc_const.adhd", arena.arena, badSimdCalcGlobalConstRes));
 
     static constexpr MStringView s_BadMixedSimdSplatSource =
         "void badMixedSplat() {\r\n"
@@ -118,7 +143,8 @@ TEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonica
     EXPECT_FALSE(Compiler::Compile(s_BadMixedSimdSplatSource, "impl/sim/bad_mixed_splat.adhd", arena.arena, badMixedSplatRes));
 
     static constexpr MStringView s_BadMixedSimdIndexSource =
-        "f32 badMixedIndex(in f32x3_i32 v) {\r\n"
+        "f32 badMixedIndex() {\r\n"
+        "    f32x3_i32 v(1.0f, 2.0f, 3.0f, 4);\r\n"
         "    return v[0];\r\n"
         "}\r\n";
     CompileResult badMixedIdxRes(arena.arena);
@@ -163,45 +189,44 @@ TEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonica
     EXPECT_FALSE(Compiler::Compile(s_BadMutThisLambdaInParSource, "impl/sim/bad_mut_this_par.adhd", arena.arena, badMutThisParRes));
 
     static constexpr MStringView s_SimdMutCondSaturateMatRowSource =
-        "b8 tryLoadVec(mut f32x4 outVec) {\r\n"
-        "    outVec = f32x4(1.0f, 2.0f, 3.0f, 4.0f);\r\n"
+        "b8 tryLoadVec(mut VectorSingle outVec) {\r\n"
+        "    outVec = VectorSingle(1.0f, 2.0f, 3.0f, 4.0f);\r\n"
         "    return true;\r\n"
         "}\r\n"
-        "f32 computeFromCondAndMat(in f32x3x4 mat) {\r\n"
-        "    f32x4 trackMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "f32 computeFromCondAndMat(in MatrixSingle mat) {\r\n"
+        "    VectorSingle trackMin = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
         "    if(!tryLoadVec(trackMin))\r\n"
         "        return 0.0f;\r\n"
-        "    const f32x4 clamped = saturate(trackMin);\r\n"
+        "    const VectorSingle clamped = saturate(trackMin);\r\n"
         "    return clamped.x + mat[0].x;\r\n"
         "}\r\n";
     CompileResult mutCondRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_SimdMutCondSaturateMatRowSource, "impl/sim/mut_cond_mat.adhd", arena.arena, mutCondRes));
     const MStringView mutCondView(mutCondRes.generatedSource.data(), mutCondRes.generatedSource.size());
-    EXPECT_NE(mutCondView.find("__adhd_simd_trackMin = ::LoadFloat(trackMin);"), MStringView::npos);
-    EXPECT_NE(mutCondView.find("::VectorSaturate("), MStringView::npos);
-    EXPECT_NE(mutCondView.find("mat.rows[0]"), MStringView::npos);
+    EXPECT_NE(mutCondView.find("::VectorSaturate(trackMin)"), MStringView::npos);
+    EXPECT_NE(mutCondView.find("mat.v[0]"), MStringView::npos);
 
     static constexpr MStringView s_SimdLaneInsertAndPermuteSource =
-        "f32x4 normalizeTangentWithSign(in f32x4 tangent, in f32x4 normal, in f32x3u posIn, mut f32x3u outPos) {\r\n"
-        "    const f32x4 loadedPos = f32x4(posIn.x, posIn.y, posIn.z, 0.0f);\r\n"
+        "VectorSingle normalizeTangentWithSign(in VectorSingle tangent, in VectorSingle normal, in f32x3u posIn, mut f32x3u outPos) {\r\n"
+        "    const VectorSingle loadedPos = VectorSingle(posIn.x, posIn.y, posIn.z, 0.0f);\r\n"
         "    outPos = f32x3u(loadedPos.x, loadedPos.y, loadedPos.z);\r\n"
         "    if(lengthSq(tangent.xyz) > 0.0001f) {\r\n"
-        "        const f32x4 normalized = normalize(tangent.xyz);\r\n"
+        "        const VectorSingle normalized = normalize(tangent.xyz);\r\n"
         "        f32 sign = 1.0f;\r\n"
         "        if(tangent.w < 0.0f)\r\n"
         "            sign = -1.0f;\r\n"
-        "        return f32x4(normalized.x, normalized.y, normalized.z, sign);\r\n"
+        "        return VectorSingle(normalized.x, normalized.y, normalized.z, sign);\r\n"
         "    }\r\n"
-        "    const f32x4 fallback = normalize(normal.xyz);\r\n"
-        "    return f32x4(fallback.x, fallback.y, fallback.z, normal.w);\r\n"
+        "    const VectorSingle fallback = normalize(normal.xyz);\r\n"
+        "    return VectorSingle(fallback.x, fallback.y, fallback.z, normal.w);\r\n"
         "}\r\n";
     CompileResult laneInsertRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_SimdLaneInsertAndPermuteSource, "impl/sim/lane_insert.adhd", arena.arena, laneInsertRes));
     const MStringView laneInsertView(laneInsertRes.generatedSource.data(), laneInsertRes.generatedSource.size());
     EXPECT_NE(laneInsertView.find("::LoadFloat(posIn)"), MStringView::npos);
-    EXPECT_NE(laneInsertView.find("::StoreFloat(__adhd_simd_loadedPos, outPos)"), MStringView::npos);
-    EXPECT_NE(laneInsertView.find("::VectorSetW(__adhd_simd_normalized, sign)"), MStringView::npos);
-    EXPECT_NE(laneInsertView.find("::VectorPermute<0u, 1u, 2u, 7u>(__adhd_simd_fallback, __adhd_simd_normal)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::StoreFloat(loadedPos, outPos)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::VectorSetW(normalized, sign)"), MStringView::npos);
+    EXPECT_NE(laneInsertView.find("::VectorPermute<0u, 1u, 2u, 7u>(fallback, normal)"), MStringView::npos);
     EXPECT_EQ(laneInsertView.find("::VectorSet("), MStringView::npos);
 }
 

@@ -16,20 +16,16 @@ const StringView s_CsgIntervalSampleEnabledImplicitDefineName = "NWB_CSG_INTERVA
 const StringView s_EnabledImplicitDefineValue = "1";
 const StringView s_IntervalSampleEnabledImplicitDefineValue = "1";
 const usize s_CsgClipAddedDefineCount = 2u;
-
 const StringView s_DependencyRepoRootAlias = "repo";
 const StringView s_DependencyGeneratedCacheRootAlias = "generated_cache";
 const usize s_MaxPreparedEntriesPerShaderEntry = 2u;
-
 const StringView s_ShaderVariantBytecodeExtension = ".spv";
 const u32 s_ShaderVariantCookKeyVersion = 2u;
-
 const Name s_GraphicsVolumeMetadataExtensionName = "assets_graphics/volume_metadata";
 const Name s_IncludeAssetTypeName = "include";
 const StringView s_MaterialBxdfSourceLabel = "bxdf";
 const StringView s_MaterialSurfaceSourceLabel = "surface";
 const StringView s_EngineGraphicsIncludeRoot = "engine/graphics";
-
 const StringView s_GraphicsComponentAssetField = "asset";
 const StringView s_RendererComponentMaterialField = "material";
 const StringView s_RendererComponentVisibleField = "visible";
@@ -47,6 +43,10 @@ const StringView s_OpticalVolumeCoincidenceSharedGroupText = "shared_group";
 const StringView s_OpticalBoundaryModeUnspecifiedText = "unspecified";
 const StringView s_OpticalBoundaryModeClosedNestedText = "closed_nested";
 const StringView s_OpticalBoundaryModeClosedPriorityText = "closed_priority";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [reflect]
 enum<u8> ShaderVariantCacheReadStatus{
@@ -87,6 +87,151 @@ class RendererComponentPayloadBinary{
     public u8 reserved0 = 0u;
     public u32 reserved1 = 0u;
 }
+
+class ShaderStageKey{
+    public Name shaderName;
+    public Name stageName;
+
+    public ShaderStageKey(){
+        this.shaderName = s_NameNone;
+        this.stageName = s_NameNone;
+    }
+
+    public ShaderStageKey(in Name inShaderName, in Name inStageName){
+        this.shaderName = inShaderName;
+        this.stageName = inStageName;
+    }
+
+    public b8 operator==(in ShaderStageKey rhs)const{
+        return this.shaderName == rhs.shaderName && this.stageName == rhs.stageName;
+    }
+
+    public usize hash()const{
+        usize seed = hashValue(this.shaderName);
+        return hashCombineValue(seed, this.stageName);
+    }
+}
+
+[subsystem("bvh_subsystem")]
+class BvhSubsystem{
+    public AssetRef<ComputeShader> bitonicSortCs;
+    public AssetRef<ComputeShader> fitCs;
+    public AssetRef<ComputeShader> mortonCs;
+    public AssetRef<ComputeShader> topologyCs;
+    public AssetRef<ComputeShader> sceneRefitCs;
+}
+
+[subsystem("csg_subsystem")]
+class CsgSubsystem{
+    public Vector<AssetRef<CsgShape>> basicShapes;
+    public AssetRef<PixelShader> intervalCapFillPs;
+    public AssetRef<ComputeShader> intervalCombineCs;
+    public AssetRef<ComputeShader> intervalPeelCs;
+    public AssetRef<ComputeShader> receiverSpanBuildCs;
+    public AssetRef<PixelShader> receiverSurfacePs;
+    public AssetRef<PixelShader> refractionCapFillPs;
+}
+
+[subsystem("deferred_subsystem")]
+class DeferredSubsystem{
+    public AssetRef<ComputeShader> compositeCs;
+    public AssetRef<PixelShader> compositePs;
+    public AssetRef<VertexShader> compositeVs;
+    public AssetRef<ComputeShader> lightingCs;
+}
+
+[subsystem("gi_subsystem")]
+class GiSubsystem{
+    public AssetRef<ComputeShader> surfelAgeFreeCs;
+    public AssetRef<ComputeShader> surfelHashBuildCs;
+    public AssetRef<ComputeShader> surfelResolveCs;
+    public AssetRef<ComputeShader> surfelSpawnCs;
+    public AssetRef<ComputeShader> surfelTraceBuildArgsCs;
+    public AssetRef<ComputeShader> surfelTraceCs;
+    public AssetRef<ComputeShader> surfelTraceHwCs;
+    public AssetRef<ComputeShader> surfelUpsampleCs;
+}
+
+[subsystem("mesh_subsystem")]
+class MeshSubsystem{
+    public AssetRef<VertexShader> emulationVs;
+    public AssetRef<ComputeShader> objectDecodeCs;
+    public AssetRef<VertexShader> objectVs;
+    public AssetRef<MeshShader> sharedMs;
+}
+
+[subsystem("reflection_subsystem")]
+class ReflectionSubsystem{
+    public AssetRef<ComputeShader> buildArgsCs;
+    public AssetRef<ComputeShader> classifyCs;
+    public AssetRef<ComputeShader> depthReduceCs;
+    public AssetRef<ComputeShader> resolveHwCs;
+    public AssetRef<ComputeShader> spatialCs;
+    public AssetRef<ComputeShader> temporalCs;
+}
+
+[subsystem("refractive_subsystem")]
+class RefractiveSubsystem{
+    public AssetRef<ComputeShader> causticAccumulatorDecayCs;
+    public AssetRef<ComputeShader> causticGeometryDownsampleCs;
+    public AssetRef<ClosestHitShader> causticPhotonHwChit;
+    public AssetRef<MissShader> causticPhotonHwMiss;
+    public AssetRef<RayGenerationShader> causticPhotonHwRaygen;
+    public AssetRef<ComputeShader> causticPhotonSwCs;
+    public AssetRef<ComputeShader> causticResolveCs;
+    public AssetRef<ComputeShader> refractionClassifyTilesCs;
+    public AssetRef<ComputeShader> refractionFinalizeTilesCs;
+    public AssetRef<ComputeShader> refractionResolveHwCs;
+    public AssetRef<ComputeShader> refractionResolveScreenCs;
+}
+
+[subsystem("renderer_subsystem")]
+class RendererSubsystem{
+    public Vector<AssetRef<Sampler>> basicSamplers;
+}
+
+[subsystem("shadow_subsystem")]
+class ShadowSubsystem{
+    public AssetRef<ComputeShader> hardwareTransparentEvaluateCs;
+    public AssetRef<ComputeShader> hardwareTransparentGatherCs;
+    public AssetRef<ComputeShader> hardwareTransparentOverflowCs;
+    public AssetRef<PixelShader> lightSpaceCapturePs;
+    public AssetRef<VertexShader> lightSpaceCaptureVs;
+    public AssetRef<ComputeShader> lightSpaceCullCs;
+    public AssetRef<ComputeShader> lightSpaceFallbackCs;
+    public AssetRef<ComputeShader> lightSpaceResolveCs;
+    public AssetRef<ComputeShader> lightSpaceResolveHwCs;
+    public AssetRef<ComputeShader> lightSpaceShadeCs;
+    public AssetRef<ComputeShader> lightSpaceViewCs;
+    public AssetRef<ComputeShader> shadowGeometryDownsampleCs;
+    public AssetRef<ComputeShader> shadowRayqueryCs;
+    public AssetRef<ComputeShader> shadowRayquerySoftCs;
+    public AssetRef<ComputeShader> shadowReprojectMergeCombinedCs;
+    public AssetRef<ComputeShader> shadowReprojectMergeCs;
+    public AssetRef<ComputeShader> shadowResolveCombinedCs;
+    public AssetRef<ComputeShader> shadowResolveCs;
+    public AssetRef<ComputeShader> shadowResolveRgbCs;
+    public AssetRef<ComputeShader> shadowResolveWaveletCombinedCs;
+    public AssetRef<ComputeShader> swShadowOpaquePrepassCs;
+    public AssetRef<ComputeShader> swShadowSoftOpaqueCs;
+    public AssetRef<ComputeShader> swShadowTransparentBuildargsCs;
+    public AssetRef<ComputeShader> swShadowTransparentClassifyCs;
+    public AssetRef<ComputeShader> swShadowTransparentCoarseCs;
+    public AssetRef<ComputeShader> swShadowTransparentIndirectCs;
+    public AssetRef<ComputeShader> swShadowTransparentResolveCs;
+    public AssetRef<ComputeShader> swShadowTransparentSoftCs;
+}
+
+[subsystem("transparent_subsystem")]
+class TransparentSubsystem{
+    public AssetRef<ComputeShader> avboitDepthWarpCs;
+    public AssetRef<ComputeShader> avboitIntegrateCs;
+    public AssetRef<ComputeShader> opticalBoundsFinalizeCs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 RendererComponentPayloadBinary PackRendererComponentPayloadBinary(in RendererComponent component){
     RendererComponentPayloadBinary binaryPayload;
@@ -247,147 +392,6 @@ u64 BuildShaderVariantCookKeyHash(in NameHash virtualPathHash, in u64 sourceChec
     hash = UpdateShaderFnv64U64(hash, sourceChecksum);
     hash = UpdateShaderFnv64U64(hash, bytecodeChecksum);
     return hash;
-}
-
-class ShaderStageKey{
-    public Name shaderName;
-    public Name stageName;
-
-    public ShaderStageKey(){
-        this.shaderName = s_NameNone;
-        this.stageName = s_NameNone;
-    }
-
-    public ShaderStageKey(in Name inShaderName, in Name inStageName){
-        this.shaderName = inShaderName;
-        this.stageName = inStageName;
-    }
-
-    public b8 operator==(in ShaderStageKey rhs)const{
-        return this.shaderName == rhs.shaderName && this.stageName == rhs.stageName;
-    }
-
-    public usize hash()const{
-        usize seed = hashValue(this.shaderName);
-        return hashCombineValue(seed, this.stageName);
-    }
-}
-
-[subsystem("bvh_subsystem")]
-class BvhSubsystem{
-    public AssetRef<ComputeShader> bitonicSortCs;
-    public AssetRef<ComputeShader> fitCs;
-    public AssetRef<ComputeShader> mortonCs;
-    public AssetRef<ComputeShader> topologyCs;
-    public AssetRef<ComputeShader> sceneRefitCs;
-}
-
-[subsystem("csg_subsystem")]
-class CsgSubsystem{
-    public Vector<AssetRef<CsgShape>> basicShapes;
-    public AssetRef<PixelShader> intervalCapFillPs;
-    public AssetRef<ComputeShader> intervalCombineCs;
-    public AssetRef<ComputeShader> intervalPeelCs;
-    public AssetRef<ComputeShader> receiverSpanBuildCs;
-    public AssetRef<PixelShader> receiverSurfacePs;
-    public AssetRef<PixelShader> refractionCapFillPs;
-}
-
-[subsystem("deferred_subsystem")]
-class DeferredSubsystem{
-    public AssetRef<ComputeShader> compositeCs;
-    public AssetRef<PixelShader> compositePs;
-    public AssetRef<VertexShader> compositeVs;
-    public AssetRef<ComputeShader> lightingCs;
-}
-
-[subsystem("gi_subsystem")]
-class GiSubsystem{
-    public AssetRef<ComputeShader> surfelAgeFreeCs;
-    public AssetRef<ComputeShader> surfelHashBuildCs;
-    public AssetRef<ComputeShader> surfelResolveCs;
-    public AssetRef<ComputeShader> surfelSpawnCs;
-    public AssetRef<ComputeShader> surfelTraceBuildArgsCs;
-    public AssetRef<ComputeShader> surfelTraceCs;
-    public AssetRef<ComputeShader> surfelTraceHwCs;
-    public AssetRef<ComputeShader> surfelUpsampleCs;
-}
-
-[subsystem("mesh_subsystem")]
-class MeshSubsystem{
-    public AssetRef<VertexShader> emulationVs;
-    public AssetRef<ComputeShader> objectDecodeCs;
-    public AssetRef<VertexShader> objectVs;
-    public AssetRef<MeshShader> sharedMs;
-}
-
-[subsystem("reflection_subsystem")]
-class ReflectionSubsystem{
-    public AssetRef<ComputeShader> buildArgsCs;
-    public AssetRef<ComputeShader> classifyCs;
-    public AssetRef<ComputeShader> depthReduceCs;
-    public AssetRef<ComputeShader> resolveHwCs;
-    public AssetRef<ComputeShader> spatialCs;
-    public AssetRef<ComputeShader> temporalCs;
-}
-
-[subsystem("refractive_subsystem")]
-class RefractiveSubsystem{
-    public AssetRef<ComputeShader> causticAccumulatorDecayCs;
-    public AssetRef<ComputeShader> causticGeometryDownsampleCs;
-    public AssetRef<ClosestHitShader> causticPhotonHwChit;
-    public AssetRef<MissShader> causticPhotonHwMiss;
-    public AssetRef<RayGenerationShader> causticPhotonHwRaygen;
-    public AssetRef<ComputeShader> causticPhotonSwCs;
-    public AssetRef<ComputeShader> causticResolveCs;
-    public AssetRef<ComputeShader> refractionClassifyTilesCs;
-    public AssetRef<ComputeShader> refractionFinalizeTilesCs;
-    public AssetRef<ComputeShader> refractionResolveHwCs;
-    public AssetRef<ComputeShader> refractionResolveScreenCs;
-}
-
-[subsystem("renderer_subsystem")]
-class RendererSubsystem{
-    public Vector<AssetRef<Sampler>> basicSamplers;
-}
-
-[subsystem("shadow_subsystem")]
-class ShadowSubsystem{
-    public AssetRef<ComputeShader> hardwareTransparentEvaluateCs;
-    public AssetRef<ComputeShader> hardwareTransparentGatherCs;
-    public AssetRef<ComputeShader> hardwareTransparentOverflowCs;
-    public AssetRef<PixelShader> lightSpaceCapturePs;
-    public AssetRef<VertexShader> lightSpaceCaptureVs;
-    public AssetRef<ComputeShader> lightSpaceCullCs;
-    public AssetRef<ComputeShader> lightSpaceFallbackCs;
-    public AssetRef<ComputeShader> lightSpaceResolveCs;
-    public AssetRef<ComputeShader> lightSpaceResolveHwCs;
-    public AssetRef<ComputeShader> lightSpaceShadeCs;
-    public AssetRef<ComputeShader> lightSpaceViewCs;
-    public AssetRef<ComputeShader> shadowGeometryDownsampleCs;
-    public AssetRef<ComputeShader> shadowRayqueryCs;
-    public AssetRef<ComputeShader> shadowRayquerySoftCs;
-    public AssetRef<ComputeShader> shadowReprojectMergeCombinedCs;
-    public AssetRef<ComputeShader> shadowReprojectMergeCs;
-    public AssetRef<ComputeShader> shadowResolveCombinedCs;
-    public AssetRef<ComputeShader> shadowResolveCs;
-    public AssetRef<ComputeShader> shadowResolveRgbCs;
-    public AssetRef<ComputeShader> shadowResolveWaveletCombinedCs;
-    public AssetRef<ComputeShader> swShadowOpaquePrepassCs;
-    public AssetRef<ComputeShader> swShadowSoftOpaqueCs;
-    public AssetRef<ComputeShader> swShadowTransparentBuildargsCs;
-    public AssetRef<ComputeShader> swShadowTransparentClassifyCs;
-    public AssetRef<ComputeShader> swShadowTransparentCoarseCs;
-    public AssetRef<ComputeShader> swShadowTransparentIndirectCs;
-    public AssetRef<ComputeShader> swShadowTransparentResolveCs;
-    public AssetRef<ComputeShader> swShadowTransparentSoftCs;
-}
-
-[subsystem("transparent_subsystem")]
-class TransparentSubsystem{
-    public AssetRef<ComputeShader> avboitDepthWarpCs;
-    public AssetRef<ComputeShader> avboitIntegrateCs;
-    public AssetRef<ComputeShader> opticalBoundsFinalizeCs;
 }
 
 

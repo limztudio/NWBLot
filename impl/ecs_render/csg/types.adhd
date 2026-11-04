@@ -31,6 +31,13 @@ const u32 s_CsgRayShapeCapsule = 4u;
 const f32 s_MinClipWForWorkRegion = 0.000001f;
 const i32 s_WorkRegionPixelPadding = 2;
 const u32 s_BoxCornerCount = 8u;
+type CsgReceiverCpuBounds = CsgBoundsGpuData;
+const usize s_TransparentCsgIntervalResourceUseCapacity = 20u;
+const usize s_TransparentCsgMaterialResourceSetUseCapacity = 2u;
+const usize s_OpaqueCsgMaterialBufferResourceUseCount = 2u;
+const usize s_OpaqueCsgRemovedIntervalResourceUseCount = 4u;
+const usize s_OpaqueCsgGbufferColorResourceUseCount = 4u;
+const usize s_OpaqueCsgIntervalSampleResourceSetUseCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,48 +56,6 @@ class CsgBoundsGpuData{
     public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
     public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
 }
-
-type CsgReceiverCpuBounds = CsgBoundsGpuData;
-
-b8 CsgReceiverBoundsCanCull(in CsgReceiverCpuBounds bounds){
-    return bounds.valid() && bounds.finite();
-}
-
-void RefreshRuntimeMeshCsgBounds(in f32x3_i32 minBounds, in f32x3_i32 maxBounds, in b8 finiteBounds, mut CsgReceiverCpuBounds outBounds){
-    outBounds.minBounds = minBounds;
-    outBounds.maxBounds = maxBounds;
-    outBounds.minBounds.w = s_CsgBoundsValidFlag;
-    if(finiteBounds)
-        outBounds.minBounds.w = outBounds.minBounds.w | s_CsgBoundsFiniteFlag;
-    outBounds.maxBounds.w = 0;
-}
-
-Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(in Span<f32x3u> positions){
-    if(positions.empty())
-        return makeUnexpected(Failure());
-
-    f32x4 minBounds(f32.max, f32.max, f32.max, 0.0f);
-    f32x4 maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
-    for(usize i = 0u; i < positions.size(); ++i){
-        const f32x3u pos = positions[i];
-        if(!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z))
-            return makeUnexpected(Failure());
-        const f32x4 p(pos.x, pos.y, pos.z, 0.0f);
-        minBounds = min(minBounds, p);
-        maxBounds = max(maxBounds, p);
-    }
-    if(minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z)
-        return makeUnexpected(Failure());
-
-    CsgReceiverCpuBounds outBounds;
-    outBounds.minBounds = f32x3_i32(minBounds.x, minBounds.y, minBounds.z, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
-    outBounds.maxBounds = f32x3_i32(maxBounds.x, maxBounds.y, maxBounds.z, 0);
-    return outBounds;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [serialize]
 class CsgReceiverRangeGpuData{
@@ -138,42 +103,6 @@ class CsgShadowReceiverInput{
     public f32x3u worldMin(0.0f, 0.0f, 0.0f);
     public f32x3u worldMax(0.0f, 0.0f, 0.0f);
 }
-
-f32 ComputeWorldToShapeScaleBound(in f32x3x4 worldToShape){
-    const f32x3x4 transposed = transpose(worldToShape);
-    const f32x4 row0 = mul(f32x4(1.0f, 0.0f, 0.0f, 0.0f), transposed);
-    const f32x4 row1 = mul(f32x4(0.0f, 1.0f, 0.0f, 0.0f), transposed);
-    const f32x4 row2 = mul(f32x4(0.0f, 0.0f, 1.0f, 0.0f), transposed);
-    const f32 lengthSquared = (lengthSq(row0.xyz) + lengthSq(row1.xyz)) + lengthSq(row2.xyz);
-    return sqrt(lengthSquared);
-}
-
-void CopyCsgCutterInlineParameters(in Span<u8> parameterBytes, mut CsgCutterGpuData inOutCutter){
-    inOutCutter.parameter0 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    inOutCutter.parameter1 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    if(parameterBytes.empty())
-        return;
-
-    inOutCutter.parameter0 = f32x4(
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 0u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 4u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 8u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 12u))
-    );
-    if(parameterBytes.size() <= 16u)
-        return;
-
-    inOutCutter.parameter1 = f32x4(
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 16u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 20u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 24u)),
-        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 28u))
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class CsgWorkRect{
     public CsgWorkRect(){
@@ -248,7 +177,7 @@ class CsgFrameWorkRegion{
         this.maxY = max(this.maxY, cast<u32>(clampedMaxY));
     }
 
-    public void expandWorldBounds(in f32x4x4 worldToClip, in f32x4 minBounds, in f32x4 maxBounds, in u32 frameWidth, in u32 frameHeight){
+    public void expandWorldBounds(in MatrixSingle worldToClip, in VectorSingle minBounds, in VectorSingle maxBounds, in u32 frameWidth, in u32 frameHeight){
         if(
             frameWidth == 0u || frameHeight == 0u
             || !isFinite(minBounds.x) || !isFinite(minBounds.y) || !isFinite(minBounds.z)
@@ -275,8 +204,8 @@ class CsgFrameWorkRegion{
             f32 wz = minBounds.z;
             if(((corner >> 2u) & 1u) != 0u)
                 wz = maxBounds.z;
-            const f32x4 worldPosition(wx, wy, wz, 1.0f);
-            const f32x4 clipPosition = mul(worldPosition, worldToClip);
+            const VectorSingle worldPosition(wx, wy, wz, 1.0f);
+            const VectorSingle clipPosition = mul(worldPosition, worldToClip);
             const f32 clipW = clipPosition.w;
             if(!isFinite(clipW) || clipW <= s_MinClipWForWorkRegion){
                 this.expandFull();
@@ -334,10 +263,6 @@ class CsgFrameWorkRegion{
     public b8 fullFrame = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // CSG context is one global UniformBuffer entry; no pass binds it locally.
 [serialize]
 class CsgClipContextSlots{
@@ -378,6 +303,96 @@ class CsgIntervalDispatchPushConstants{
     public u32 csgContextHeapSlot = 0u;
     public u32 resourceSlotPadding1 = 0u;
     public u32 resourceSlotPadding2 = 0u;
+}
+
+class CsgReceiverClipDrawInfo{
+    public Name evaluatorVariant;
+    public u32 cutterCount = 0u;
+}
+
+class CsgClipWorkBounds{
+    public f32x4 minBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maxBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 valid = false;
+}
+
+class CsgFrameStateCacheSignature{
+    public b8 operator==(in CsgFrameStateCacheSignature rhs)const{
+        return this.contentHash == rhs.contentHash && this.shapeRegistryRevision == rhs.shapeRegistryRevision;
+    }
+
+    public u64 contentHash = 0u;
+    public u64 shapeRegistryRevision = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CsgReceiverBoundsCanCull(in CsgReceiverCpuBounds bounds){
+    return bounds.valid() && bounds.finite();
+}
+
+void RefreshRuntimeMeshCsgBounds(in VectorSingle minBounds, in VectorSingle maxBounds, in b8 finiteBounds, mut CsgReceiverCpuBounds outBounds){
+    i32 minFlags = s_CsgBoundsValidFlag;
+    if(finiteBounds)
+        minFlags = minFlags | s_CsgBoundsFiniteFlag;
+    outBounds.minBounds = f32x3_i32(minBounds, minFlags);
+    outBounds.maxBounds = f32x3_i32(maxBounds, 0);
+}
+
+Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(in Span<f32x3u> positions){
+    if(positions.empty())
+        return makeUnexpected(Failure());
+
+    VectorSingle minBounds(f32.max, f32.max, f32.max, 0.0f);
+    VectorSingle maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
+    for(in f32x3u pos : positions){
+        if(!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z))
+            return makeUnexpected(Failure());
+        const VectorSingle p(pos);
+        minBounds = min(minBounds, p);
+        maxBounds = max(maxBounds, p);
+    }
+    if(minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z)
+        return makeUnexpected(Failure());
+
+    CsgReceiverCpuBounds outBounds;
+    outBounds.minBounds = f32x3_i32(minBounds, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
+    outBounds.maxBounds = f32x3_i32(maxBounds, 0);
+    return outBounds;
+}
+
+f32 ComputeWorldToShapeScaleBound(in MatrixSingle worldToShape){
+    const MatrixSingle transposed = transpose(worldToShape);
+    const VectorSingle row0 = mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), transposed);
+    const VectorSingle row1 = mul(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), transposed);
+    const VectorSingle row2 = mul(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), transposed);
+    const f32 lengthSquared = (lengthSq(row0.xyz) + lengthSq(row1.xyz)) + lengthSq(row2.xyz);
+    return sqrt(lengthSquared);
+}
+
+void CopyCsgCutterInlineParameters(in Span<u8> parameterBytes, mut CsgCutterGpuData inOutCutter){
+    inOutCutter.parameter0 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    inOutCutter.parameter1 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    if(parameterBytes.empty())
+        return;
+
+    inOutCutter.parameter0 = f32x4(
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 0u)),
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 4u)),
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 8u)),
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 12u))
+    );
+    if(parameterBytes.size() <= 16u)
+        return;
+
+    inOutCutter.parameter1 = f32x4(
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 16u)),
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 20u)),
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 24u)),
+        bit_cast<f32>(ReadLittleEndianWordBytes(parameterBytes, 28u))
+    );
 }
 
 CsgIntervalSampleStateGpuData ResolveCsgIntervalSampleState(
@@ -438,21 +453,6 @@ CsgClipContextSlots ResolveCsgClipContextSlots(
     return contextSlots;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CsgReceiverClipDrawInfo{
-    public Name evaluatorVariant;
-    public u32 cutterCount = 0u;
-}
-
-class CsgClipWorkBounds{
-    public f32x4 minBounds(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 maxBounds(0.0f, 0.0f, 0.0f, 0.0f);
-    public b8 valid = false;
-}
-
 b8 CsgClipCutterRequiresShapeBounds(in b8 receiverBoundsValid, in b8 hasShaderModule, in Name shapeName){
     if(receiverBoundsValid)
         return true;
@@ -463,8 +463,8 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
     in CsgClipWorkBounds receiverBounds,
     in b8 cutterBoundsResolved,
     in b8 cutterFiniteBounds,
-    in f32x4 cutterMinBounds,
-    in f32x4 cutterMaxBounds
+    in VectorSingle cutterMinBounds,
+    in VectorSingle cutterMaxBounds
 ){
     CsgClipWorkBounds outWorkBounds;
     if(!cutterBoundsResolved){
@@ -475,8 +475,8 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
     if(!cutterFiniteBounds)
         return receiverBounds;
     if(!receiverBounds.valid){
-        outWorkBounds.minBounds = cutterMinBounds;
-        outWorkBounds.maxBounds = cutterMaxBounds;
+        outWorkBounds.minBounds = f32x4(cutterMinBounds);
+        outWorkBounds.maxBounds = f32x4(cutterMaxBounds);
         outWorkBounds.valid = true;
         return outWorkBounds;
     }
@@ -500,21 +500,12 @@ Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
     )
         return makeUnexpected(Failure());
 
-    const f32x4 mergedMin = max(receiverBounds.minBounds, cutterMinBounds);
-    const f32x4 mergedMax = min(receiverBounds.maxBounds, cutterMaxBounds);
-    outWorkBounds.minBounds = mergedMin;
-    outWorkBounds.maxBounds = mergedMax;
+    const VectorSingle mergedMin = max(VectorSingle(receiverBounds.minBounds), cutterMinBounds);
+    const VectorSingle mergedMax = min(VectorSingle(receiverBounds.maxBounds), cutterMaxBounds);
+    outWorkBounds.minBounds = f32x4(mergedMin);
+    outWorkBounds.maxBounds = f32x4(mergedMax);
     outWorkBounds.valid = mergedMin.x <= mergedMax.x && mergedMin.y <= mergedMax.y && mergedMin.z <= mergedMax.z;
     return outWorkBounds;
-}
-
-class CsgFrameStateCacheSignature{
-    public b8 operator==(in CsgFrameStateCacheSignature rhs)const{
-        return this.contentHash == rhs.contentHash && this.shapeRegistryRevision == rhs.shapeRegistryRevision;
-    }
-
-    public u64 contentHash = 0u;
-    public u64 shapeRegistryRevision = 0u;
 }
 
 u32 ResolveCsgShapeGpuKind(in b8 hasShaderModule, in Name shapeName){
@@ -541,13 +532,6 @@ b8 CsgFrameHasReceiverPassWork(in CsgFrameState csgFrameState, in CsgReceiverPas
         return false;
     }
 }
-
-const usize s_TransparentCsgIntervalResourceUseCapacity = 20u;
-const usize s_TransparentCsgMaterialResourceSetUseCapacity = 2u;
-const usize s_OpaqueCsgMaterialBufferResourceUseCount = 2u;
-const usize s_OpaqueCsgRemovedIntervalResourceUseCount = 4u;
-const usize s_OpaqueCsgGbufferColorResourceUseCount = 4u;
-const usize s_OpaqueCsgIntervalSampleResourceSetUseCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -18,6 +18,16 @@ const u32 s_OpticalBoxCornerCount = 8u;
 const u32 s_CornerMaxXBit = 1u;
 const u32 s_CornerMaxYBit = 2u;
 const u32 s_CornerMaxZBit = 4u;
+const usize s_OpticalBoundsUseCapacity = 8u;
+const usize s_MinCoincidentCandidateCount = 2u;
+const u32 s_RtOpticalInstanceFlagTransparent = 1u;
+const u32 s_RtOpticalInstanceFlagBoundsValid = 2u;
+const u64 s_OpticalFnv64OffsetBasis = 14695981039346656037u;
+const u64 s_OpticalFnv64Prime = 1099511628211u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [serialize]
 class RayTracingOpticalRuntimeInputGpu{
@@ -43,12 +53,6 @@ class RayTracingOpticalInstanceGpu{
     public u32 flags = 0u;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const usize s_OpticalBoundsUseCapacity = 8u;
-
 [serialize]
 class OpticalBoundsFinalizePushConstants{
     public u32 sourceSceneSlot = 0u;
@@ -58,6 +62,26 @@ class OpticalBoundsFinalizePushConstants{
     public u32 runtimeCount = 0u;
     public u32 staticBoundsComplete = 0u;
 }
+
+// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
+class CoincidentOpticalVolumeCandidate{
+    public AssetRef<Mesh> mesh;
+    public AssetRef<Material> material;
+    public f32x4 position = f32x4(0.f, 0.f, 0.f, 0.f);
+    public f32x4 rotation = f32x4(0.f, 0.f, 0.f, 1.f);
+    public f32x4 scale = f32x4(1.f, 1.f, 1.f, 0.f);
+    public Span<u8> mutableTypedBytes;
+    public Name group = s_NameNone;
+    public EntityID entity = s_InvalidEntityId;
+    public i32 priority = 0;
+    // Identical-material grouping also requires the same authored medium semantics.
+    public u32 boundaryMode = 0u;
+    public i32 mediumPriority = 0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 OpticalBoundsFinalizePushConstants ResolveOpticalBoundsFinalizePushConstants(
     in u32 sourceSceneSlot,
@@ -78,25 +102,7 @@ OpticalBoundsFinalizePushConstants ResolveOpticalBoundsFinalizePushConstants(
     return push;
 }
 
-const usize s_MinCoincidentCandidateCount = 2u;
-
-// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
-class CoincidentOpticalVolumeCandidate{
-    public AssetRef<Mesh> mesh;
-    public AssetRef<Material> material;
-    public f32x4 position = f32x4(0.f, 0.f, 0.f, 0.f);
-    public f32x4 rotation = f32x4(0.f, 0.f, 0.f, 1.f);
-    public f32x4 scale = f32x4(1.f, 1.f, 1.f, 0.f);
-    public Span<u8> mutableTypedBytes;
-    public Name group = s_NameNone;
-    public EntityID entity = s_InvalidEntityId;
-    public i32 priority = 0;
-    // Identical-material grouping also requires the same authored medium semantics.
-    public u32 boundaryMode = 0u;
-    public i32 mediumPriority = 0;
-}
-
-b8 ValidCoincidentOpticalVolumeCandidateLanes(in f32x4 position, in f32x4 rotation, in f32x4 scale){
+b8 ValidCoincidentOpticalVolumeCandidateLanes(in VectorSingle position, in VectorSingle rotation, in VectorSingle scale){
     if(
         !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
         || !isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w)
@@ -111,7 +117,7 @@ b8 ValidCoincidentOpticalVolumeCandidateLanes(in f32x4 position, in f32x4 rotati
 b8 ValidCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate candidate){
     if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
         return false;
-    return ValidCoincidentOpticalVolumeCandidateLanes(candidate.position, candidate.rotation, candidate.scale);
+    return ValidCoincidentOpticalVolumeCandidateLanes(VectorSingle(candidate.position), VectorSingle(candidate.rotation), VectorSingle(candidate.scale));
 }
 
 b8 RendererComponentOpticalVolumeMergingEnabled(in RendererComponent renderer){
@@ -133,12 +139,12 @@ b8 CoincidentOpticalVolumeCandidateOutranks(in CoincidentOpticalVolumeCandidate 
 }
 
 b8 CoincidentOpticalVolumeTransformsEqual(
-    in f32x4 lhsPosition,
-    in f32x4 lhsRotation,
-    in f32x4 lhsScale,
-    in f32x4 rhsPosition,
-    in f32x4 rhsRotation,
-    in f32x4 rhsScale
+    in VectorSingle lhsPosition,
+    in VectorSingle lhsRotation,
+    in VectorSingle lhsScale,
+    in VectorSingle rhsPosition,
+    in VectorSingle rhsRotation,
+    in VectorSingle rhsScale
 ){
     return
         lhsPosition.x == rhsPosition.x
@@ -153,11 +159,6 @@ b8 CoincidentOpticalVolumeTransformsEqual(
         && lhsScale.z == rhsScale.z
     ;
 }
-
-const u32 s_RtOpticalInstanceFlagTransparent = 1u;
-const u32 s_RtOpticalInstanceFlagBoundsValid = 2u;
-const u64 s_OpticalFnv64OffsetBasis = 14695981039346656037u;
-const u64 s_OpticalFnv64Prime = 1099511628211u;
 
 u32 OpticalFloatingHashBits(in f32 value){
     if(value == 0.0f)
@@ -198,7 +199,7 @@ usize HashCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate c
 b8 EqualCoincidentOpticalVolumeCandidates(in CoincidentOpticalVolumeCandidate lhs, in CoincidentOpticalVolumeCandidate rhs){
     if(
         lhs.mesh != rhs.mesh || lhs.material != rhs.material || lhs.group != rhs.group
-        || !CoincidentOpticalVolumeTransformsEqual(lhs.position, lhs.rotation, lhs.scale, rhs.position, rhs.rotation, rhs.scale)
+        || !CoincidentOpticalVolumeTransformsEqual(VectorSingle(lhs.position), VectorSingle(lhs.rotation), VectorSingle(lhs.scale), VectorSingle(rhs.position), VectorSingle(rhs.rotation), VectorSingle(rhs.scale))
     )
         return false;
     if(lhs.group != s_NameNone)
@@ -225,8 +226,8 @@ RayTracingOpticalInstanceGpu BuildRayTracingOpticalInstance(
     in EntityID entity,
     in RendererComponent renderer,
     in b8 transparent,
-    in f32x4 boundsMin,
-    in f32x4 boundsMax,
+    in VectorSingle boundsMin,
+    in VectorSingle boundsMax,
     in b8 boundsValid,
     mut RayTracingOpticalSceneHeaderGpu inOutHeader,
     mut b8 inOutHasBounds,
@@ -249,17 +250,17 @@ RayTracingOpticalInstanceGpu BuildRayTracingOpticalInstance(
         if(finiteBounds){
             instance.flags |= s_RtOpticalInstanceFlagBoundsValid;
             if(!inOutHasBounds){
-                inOutHeader.boundsMin = f32x3u(boundsMin.x, boundsMin.y, boundsMin.z);
-                inOutHeader.boundsMax = f32x3u(boundsMax.x, boundsMax.y, boundsMax.z);
+                inOutHeader.boundsMin = f32x3u(boundsMin);
+                inOutHeader.boundsMax = f32x3u(boundsMax);
                 inOutHasBounds = true;
             }
             else{
-                const f32x4 currentMin(inOutHeader.boundsMin.x, inOutHeader.boundsMin.y, inOutHeader.boundsMin.z, 0.0f);
-                const f32x4 currentMax(inOutHeader.boundsMax.x, inOutHeader.boundsMax.y, inOutHeader.boundsMax.z, 0.0f);
-                const f32x4 nextMin = min(currentMin, boundsMin);
-                const f32x4 nextMax = max(currentMax, boundsMax);
-                inOutHeader.boundsMin = f32x3u(nextMin.x, nextMin.y, nextMin.z);
-                inOutHeader.boundsMax = f32x3u(nextMax.x, nextMax.y, nextMax.z);
+                const VectorSingle currentMin(inOutHeader.boundsMin);
+                const VectorSingle currentMax(inOutHeader.boundsMax);
+                const VectorSingle nextMin = min(currentMin, boundsMin);
+                const VectorSingle nextMax = max(currentMax, boundsMax);
+                inOutHeader.boundsMin = f32x3u(nextMin);
+                inOutHeader.boundsMax = f32x3u(nextMax);
             }
         }
         else{
@@ -291,12 +292,12 @@ CoincidentOpticalVolumeCandidate MakeCoincidentOpticalVolumeCandidate(
 }
 
 RayTracingOpticalRuntimeInputGpu MakeRayTracingOpticalRuntimeInputGpu(
-    in f32x3x4 objectToWorld,
+    in MatrixSingle objectToWorld,
     in u32 localBoundsSlot,
     in u32 instanceIndex
 ){
     RayTracingOpticalRuntimeInputGpu input;
-    input.objectToWorld = objectToWorld;
+    input.objectToWorld = f32x3x4(objectToWorld);
     input.localBoundsSlot = localBoundsSlot;
     input.instanceIndex = instanceIndex;
     return input;

@@ -54,15 +54,18 @@ namespace ECSRenderDetail{
     Array<f32, NWB_SCENE_MAX_LIGHTS> shadowImportance{};
     const usize gatheredCount = NWB::Impl::Scene::GatherSceneLights(world, defaultBasis.v[2], Span(sceneLights.data(), capacity));
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, NWB::Impl::Scene::s_CameraFallbackAspectRatio);
-    const Float4 cameraPositionData = cameraView.valid() ? cameraView.transform->position : Float4(0.f, 0.f, 0.f, 0.f);
+    const SIMDVectorSingle cameraPositionData = cameraView.valid() ? LoadFloat(cameraView.transform->position) : VectorZero();
 
     for(usize i = 0u; i < gatheredCount; ++i){
         const NWB::Impl::Scene::SceneLight& src = sceneLights[i];
         SceneLightGpuData& dst = outLights[i];
+        const SIMDVectorSingle srcPos = LoadFloat(src.position);
+        const SIMDVectorSingle srcDir = LoadFloat(src.direction);
+        const SIMDVectorSingle srcColorIntensity = LoadFloat(src.colorIntensity);
         dst = MakeSceneLightGpuData(
-            src.position,
-            src.direction,
-            src.colorIntensity,
+            srcPos,
+            srcDir,
+            srcColorIntensity,
             src.range,
             static_cast<f32>(src.type),
             s_ShadowSlotUnassigned,
@@ -70,8 +73,8 @@ namespace ECSRenderDetail{
             src.angularRadius,
             src.sourceRadius
         );
-        outCausticImportance[i] = SceneLightRadiantImportance(src.colorIntensity);
-        shadowImportance[i] = ShadowSlotImportanceData(dst.colorIntensity, dst.params, dst.position, cameraPositionData);
+        outCausticImportance[i] = SceneLightRadiantImportance(srcColorIntensity);
+        shadowImportance[i] = ShadowSlotImportance(srcColorIntensity, LoadFloat(dst.params), srcPos, cameraPositionData);
     }
 
     // Importance-ranked shadow slots: most important lights get the pool (slot -> params.z; rest stay lit).
@@ -91,12 +94,10 @@ namespace ECSRenderDetail{
 [[nodiscard]] inline SceneShadingGpuData ResolveSceneShadingState(const f32 fallbackAspectRatio, const u32 lightCount, Core::ECS::World& world)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid())
-        return MakeSceneShadingGpuData(cameraView.transform->position, lightCount);
+        return MakeSceneShadingGpuData(LoadFloat(cameraView.transform->position), lightCount);
 
     const SIMDMatrix defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
-    Float4 defaultCameraPosition;
-    StoreFloat(defaultBasis.v[3], defaultCameraPosition);
-    return MakeSceneShadingGpuData(defaultCameraPosition, lightCount);
+    return MakeSceneShadingGpuData(defaultBasis.v[3], lightCount);
 }
 
 

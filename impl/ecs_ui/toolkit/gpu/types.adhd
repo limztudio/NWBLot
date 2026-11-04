@@ -8,52 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum<u8> GpuCommandRecordingMode{
-    Direct,
-    CommandIrReplay,
-}
-
-[serialize]
-class GpuPaintPushConstants{
-    public Point scale;
-    public Point translate;
-    public u32 textureSlot = 0xffffffffu;
-    public u32 samplerSlot = 0xffffffffu;
-    public u32 material = 0u;
-    public u32 sdfChannel = 0u;
-    public u32 sdfSpreadPixels = 0u;
-    public u32 sdfDistanceEncoding = 0u;
-}
-
-[serialize]
-class GpuOutputPushConstants{
-    public u32 textureSlot = 0xffffffffu;
-    public u32 samplerSlot = 0xffffffffu;
-    public u32 presentationMode = 0u;
-}
-
-enum<u8> GpuSampledTextureImportError{
-    Identity,
-    Completion,
-    Texture,
-}
-
-// Call-scoped calculation scratch shared by native commands and command IR; never retained or uploaded.
-class GpuRasterGeometry{
-    public GpuRasterGeometry(){
-        this.pixelScale = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        this.targetSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    }
-
-    public GpuRasterGeometry(in DisplayMetrics display, in u32 targetWidth, in u32 targetHeight){
-        this.pixelScale = f32x4(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
-        this.targetSize = f32x4(cast<f32>(targetWidth), cast<f32>(targetHeight), cast<f32>(targetWidth), cast<f32>(targetHeight));
-    }
-
-    public f32x4 pixelScale;
-    public f32x4 targetSize;
-}
-
 const usize s_GpuTargetSlotCount = 3u;
 const usize s_GpuFrameCount = 4u;
 // Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
@@ -131,10 +85,64 @@ const Name s_GpuOutputPipelineName = "ui.output_pipeline";
 const Name s_GpuOutputTaskName = "ui.output";
 const Name s_GpuFrameTimingEndTaskName = "ui.frame_timing_end";
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> GpuCommandRecordingMode{
+    Direct,
+    CommandIrReplay,
+}
+
+enum<u8> GpuSampledTextureImportError{
+    Identity,
+    Completion,
+    Texture,
+}
+
+[serialize]
+class GpuPaintPushConstants{
+    public Point scale;
+    public Point translate;
+    public u32 textureSlot = 0xffffffffu;
+    public u32 samplerSlot = 0xffffffffu;
+    public u32 material = 0u;
+    public u32 sdfChannel = 0u;
+    public u32 sdfSpreadPixels = 0u;
+    public u32 sdfDistanceEncoding = 0u;
+}
+
+[serialize]
+class GpuOutputPushConstants{
+    public u32 textureSlot = 0xffffffffu;
+    public u32 samplerSlot = 0xffffffffu;
+    public u32 presentationMode = 0u;
+}
+
+// Call-scoped calculation scratch shared by native commands and command IR; never retained or uploaded.
+class GpuRasterGeometry{
+    public GpuRasterGeometry(){
+        this.pixelScale = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.targetSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    public GpuRasterGeometry(in DisplayMetrics display, in u32 targetWidth, in u32 targetHeight){
+        this.pixelScale = f32x4(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
+        this.targetSize = f32x4(cast<f32>(targetWidth), cast<f32>(targetHeight), cast<f32>(targetWidth), cast<f32>(targetHeight));
+    }
+
+    public f32x4 pixelScale;
+    public f32x4 targetSize;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<GpuPaintPushConstants> TryInitializeGpuPaintPushConstants(in GpuRasterGeometry geometry, in u32 samplerSlot){
     GpuPaintPushConstants outPush;
-    const f32x4 projection = f32x4(s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent, s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent) * geometry.pixelScale;
-    const f32x4 projectionScale = projection / geometry.targetSize;
+    const VectorSingle projection = VectorSingle(s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent, s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent) * VectorSingle(geometry.pixelScale);
+    const VectorSingle projectionScale = projection / VectorSingle(geometry.targetSize);
     outPush.scale.x = projectionScale.x;
     outPush.scale.y = projectionScale.y;
     outPush.translate.x = -1.0f;
@@ -146,12 +154,12 @@ Expected<GpuPaintPushConstants> TryInitializeGpuPaintPushConstants(in GpuRasterG
 }
 
 Expected<i32x4> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw){
-    const f32x4 coordinates(draw.clip.x, draw.clip.y, draw.clip.x + draw.clip.width, draw.clip.y + draw.clip.height);
-    const f32x4 physicalClip = coordinates * geometry.pixelScale;
-    const f32x4 first = floor(f32x4(physicalClip.x, physicalClip.y, 0.0f, 0.0f));
-    const f32x4 last = ceil(f32x4(physicalClip.z, physicalClip.w, 0.0f, 0.0f));
-    const f32x4 minimum = max(first, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
-    const f32x4 maximum = min(last, f32x4(geometry.targetSize.x, geometry.targetSize.y, 0.0f, 0.0f));
+    const VectorSingle coordinates(draw.clip.x, draw.clip.y, draw.clip.x + draw.clip.width, draw.clip.y + draw.clip.height);
+    const VectorSingle physicalClip = coordinates * VectorSingle(geometry.pixelScale);
+    const VectorSingle first = floor(VectorSingle(physicalClip.x, physicalClip.y, 0.0f, 0.0f));
+    const VectorSingle last = ceil(VectorSingle(physicalClip.z, physicalClip.w, 0.0f, 0.0f));
+    const VectorSingle minimum = max(first, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle maximum = min(last, VectorSingle(geometry.targetSize.x, geometry.targetSize.y, 0.0f, 0.0f));
     if(maximum.x <= minimum.x || maximum.y <= minimum.y)
         return makeUnexpected(Failure());
     return i32x4(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));

@@ -15,6 +15,15 @@ NWB_ADHD_BEGIN
 
 
 void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
+    if(expr.wrapInSimdResult){
+        out.append(IsDoubleSimdType(expr.resolvedSimdType) ? "::SIMDVectorDoubleResult{ " : "::SIMDVectorSingleResult{ ");
+        Expr unwrapped = expr;
+        unwrapped.wrapInSimdResult = false;
+        emitExpr(out, unwrapped);
+        out.append(" }");
+        return;
+    }
+
     if(expr.adaptToTChar && expr.kind != ExprKind::StringLiteral){
         out.append("::ConvertString(");
         Expr unwrapped = expr;
@@ -32,18 +41,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
 
     if(isDirectSimdRegExpr(expr)){
-        const MStringView simdType = expr.resolvedSimdType;
-        const MStringView storeFn = SimdStoreFunctionCpp(simdType);
-        TypeRef tmpType(m_arena);
-        tmpType.name = simdType;
-
-        out.append("([&]()noexcept{ ");
-        m_typeEmitter.emitTypeCpp(out, tmpType);
-        out.append(" __adhd_tmp{}; ");
-        out.append(storeFn.data(), storeFn.size());
-        out.push_back('(');
-        emitSimdRegExpr(out, expr, simdType);
-        out.append(", __adhd_tmp); return __adhd_tmp; }())");
+        emitSimdRegExpr(out, expr, expr.resolvedSimdType);
         return;
     }
 
@@ -103,11 +101,9 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             }
         }
         u32 lane = 0u;
-        if(!expr.isMutArg && expr.lhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType) && IsSingleSwizzleLane(expr.text, lane)){
-            if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
-                emitSimdLaneGetExpr(out, *expr.lhs, lane, nullptr);
-                break;
-            }
+        if(!expr.isMutArg && expr.lhs && SymbolTable::IsSimdRegisterVectorType(expr.lhs->resolvedSimdType) && IsSingleSwizzleLane(expr.text, lane)){
+            emitSimdLaneGetExpr(out, *expr.lhs, lane, nullptr);
+            break;
         }
         if(expr.derefNotNull)
             out.append("(*(");
@@ -131,12 +127,9 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         break;
     }
     case ExprKind::Index:{
-        u32 vecLanes = 0u;
-        if(!expr.isMutArg && expr.lhs && expr.rhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType) && SymbolTable::IsSimdVectorType(expr.lhs->resolvedSimdType, vecLanes)){
-            if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
-                emitSimdLaneGetExpr(out, *expr.lhs, 0u, expr.rhs);
-                break;
-            }
+        if(!expr.isMutArg && expr.lhs && expr.rhs && SymbolTable::IsSimdRegisterVectorType(expr.lhs->resolvedSimdType)){
+            emitSimdLaneGetExpr(out, *expr.lhs, 0u, expr.rhs);
+            break;
         }
         if(expr.isStringByteMutRef)
             out.append("reinterpret_cast<::u8&>(");
@@ -149,7 +142,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         if(expr.lhs)
             emitExpr(out, *expr.lhs);
         if(expr.isMatrixRowIndex)
-            out.append(".rows[");
+            out.append((expr.lhs && SymbolTable::IsSimdRegisterMatrixType(expr.lhs->resolvedSimdType)) ? ".v[" : ".rows[");
         else if(expr.isVectorRawIndex)
             out.append(".raw[");
         else
@@ -218,6 +211,22 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("))");
             break;
         }
+        const MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
+            ? m_symbols.resolveBaseTypeName(expr.lhs->text)
+            : MStringView{};
+        if((SymbolTable::IsSimdStorageType(baseCallee) || SymbolTable::IsUnalignedVectorType(baseCallee)) && !expr.arguments.empty()){
+            MString storeCallStr(m_arena);
+            if(tryEmitStorageStoreFromSimdArgs(storeCallStr, baseCallee, expr.arguments, "__adhd_tmp")){
+                TypeRef tmpType(m_arena);
+                tmpType.name = expr.lhs->text;
+                out.append("([&]()noexcept{ ");
+                m_typeEmitter.emitTypeCpp(out, tmpType);
+                out.append(" __adhd_tmp{}; ");
+                out.append(storeCallStr.data(), storeCallStr.size());
+                out.append("; return __adhd_tmp; }())");
+                break;
+            }
+        }
         if(expr.isStringByteMutRef)
             out.append("reinterpret_cast<::u8&>(");
         else if(expr.isStringByteConstRef)
@@ -229,13 +238,12 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall);
         if(!expr.callTemplateArgs.empty())
             m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
-        const MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
-            ? m_symbols.resolveBaseTypeName(expr.lhs->text)
-            : MStringView{};
         const MStringView injectedArena = expr.injectClassArena
             ? MStringView("s_ClassArena")
             : (expr.injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});
         emitCtorOrCallArgs(out, baseCallee, expr.arguments, injectedArena, false, false);
+        if(expr.unwrapSimdResultValue)
+            out.append(".value");
         if(expr.derefNotNull)
             out.push_back(')');
         if(expr.isStringByteMutRef || expr.isStringByteConstRef || expr.isStringByteRead)

@@ -4,10 +4,6 @@
 
 #include <impl/assets_ui_skin/types.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #include <impl/ecs_ui/toolkit/images/image_source.h>
 namespace NWB::Impl{
@@ -21,6 +17,40 @@ using SkinBinding = SkinBindingRecord<NWB::Impl::UiSkin, NWB::Impl::Texture>;
 }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Share of free space placed before an item to center it, or the midpoint of an extent.
+const f32 s_RectCenterFraction = 0.5f;
+const f64 s_RectCenterFractionF64 = 0.5;
+const f32 s_UiMaxFloat = 3.40282346638528859812e+38f;
+const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
+const usize s_PaintMaxImages = 64u;
+const usize s_PaintMaxOverlayDepth = 16u;
+const usize s_PaintDefaultClipDepth = 8u;
+const u32 s_PaintQuadVertexCount = 4u;
+const u32 s_PaintQuadIndexCount = 6u;
+const u32 s_PaintNineSliceAxisCells = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> PaintMaterial{
+    Solid,
+    Skin,
+    Glyph,
+    SdfGlyph,
+    Image,
+}
+
+enum<u8> UiRectPrecision{
+    RoundedEndpoints,
+    BoundedEndpoints,
+    PreciseExtents,
+    EmptyPaint,
+}
 
 class Point{
     public f32 x = 0.0f;
@@ -63,14 +93,6 @@ class DisplayMetrics{
     public f32 pixelScaleY = 1.0f;
 }
 
-enum<u8> PaintMaterial{
-    Solid,
-    Skin,
-    Glyph,
-    SdfGlyph,
-    Image,
-}
-
 class DrawCommand{
     public Rect clip;
     public u32 firstIndex = 0u;
@@ -83,27 +105,6 @@ class DrawCommand{
     public u32 textureImageIndex = 0xffffffffu;
     public PaintMaterial material = PaintMaterial::Solid;
 }
-
-// Share of free space placed before an item to center it, or the midpoint of an extent.
-const f32 s_RectCenterFraction = 0.5f;
-const f64 s_RectCenterFractionF64 = 0.5;
-const f32 s_UiMaxFloat = 3.40282346638528859812e+38f;
-const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
-
-enum<u8> UiRectPrecision{
-    RoundedEndpoints,
-    BoundedEndpoints,
-    PreciseExtents,
-    EmptyPaint,
-}
-
-const usize s_PaintMaxImages = 64u;
-const usize s_PaintMaxOverlayDepth = 16u;
-const usize s_PaintDefaultClipDepth = 8u;
-
-const u32 s_PaintQuadVertexCount = 4u;
-const u32 s_PaintQuadIndexCount = 6u;
-const u32 s_PaintNineSliceAxisCells = 3u;
 
 // Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
 class SkinBindingRecord<TUiSkin, TTexture>{
@@ -119,6 +120,10 @@ class PaintOverlayFrame{
     public usize clipDepth = 0u;
     public u32 layer = 0u;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Color ResolveUiSkinColor(in UiSkinPalette palette, in UiSkinColorRole role){
     const UiSkinColor value = palette.colors[cast<usize>(role)];
@@ -210,9 +215,9 @@ b8 IsValidPaintUvRect(in Rect uv){
 }
 
 Insets MaxUiPadding(in Insets lhs, in Insets rhs){
-    const f32x4 first(lhs.left, lhs.top, lhs.right, lhs.bottom);
-    const f32x4 second(rhs.left, rhs.top, rhs.right, rhs.bottom);
-    const f32x4 maximum = max(first, second);
+    const VectorSingle first(lhs.left, lhs.top, lhs.right, lhs.bottom);
+    const VectorSingle second(rhs.left, rhs.top, rhs.right, rhs.bottom);
+    const VectorSingle maximum = max(first, second);
     Insets out;
     out.left = maximum.x;
     out.top = maximum.y;
@@ -231,78 +236,56 @@ Insets MaxUiPadding(in Insets lhs, in UiSkinInsets rhs){
 }
 
 // Rectangle lanes are x, y, width, height; comparisons preserve scalar Min/Max ties and NaNs on every backend.
-f32x4 IntersectRectBoundsVec(in f32x4 lhs, in f32x4 rhs){
-    const f32 lhsEndX = lhs.x + lhs.z;
-    const f32 lhsEndY = lhs.y + lhs.w;
-    const f32 rhsEndX = rhs.x + rhs.z;
-    const f32 rhsEndY = rhs.y + rhs.w;
-    f32 originX = rhs.x;
-    if(lhs.x > rhs.x)
-        originX = lhs.x;
-    f32 originY = rhs.y;
-    if(lhs.y > rhs.y)
-        originY = lhs.y;
-    f32 endX = rhsEndX;
-    if(lhsEndX < rhsEndX)
-        endX = lhsEndX;
-    f32 endY = rhsEndY;
-    if(lhsEndY < rhsEndY)
-        endY = lhsEndY;
-    return f32x4(originX, originY, endX, endY);
+VectorSingle IntersectRectBoundsValue(in VectorSingle lhs, in VectorSingle rhs){
+    const VectorSingle lhsEnd = lhs.xyxy + lhs.zwzw;
+    const VectorSingle rhsEnd = rhs.xyxy + rhs.zwzw;
+    const VectorSingle origin = max(lhs, rhs);
+    const VectorSingle end = min(lhsEnd, rhsEnd);
+    return VectorSingle(origin.x, origin.y, end.x, end.y);
 }
 
-b8 HasVisibleRectIntersectionVec(in f32x4 rectangle, in f32x4 clip){
-    const f32x4 visibleBounds = IntersectRectBoundsVec(rectangle, clip);
+b8 HasVisibleRectIntersection(in VectorSingle rectangle, in VectorSingle clip){
+    const VectorSingle visibleBounds = IntersectRectBoundsValue(rectangle, clip);
     return visibleBounds.z > visibleBounds.x && visibleBounds.w > visibleBounds.y;
 }
 
+VectorSingle LoadRect(in Rect rectangle){
+    return VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+}
+
+Rect StoreRect(in VectorSingle rectangle){
+    return Rect(rectangle.x, rectangle.y, rectangle.z, rectangle.w);
+}
+
 b8 HasVisibleUiRectIntersection(in Rect rectangle, in Rect clip){
-    return HasVisibleRectIntersectionVec(
-        f32x4(rectangle.x, rectangle.y, rectangle.width, rectangle.height),
-        f32x4(clip.x, clip.y, clip.width, clip.height)
-    );
+    return HasVisibleRectIntersection(LoadRect(rectangle), LoadRect(clip));
 }
 
 b8 UiRectIntersectionContainsPoint(in Rect rectangle, in Rect clip, in Point pointer){
-    const f32x4 visibleBounds = IntersectRectBoundsVec(
-        f32x4(rectangle.x, rectangle.y, rectangle.width, rectangle.height),
-        f32x4(clip.x, clip.y, clip.width, clip.height)
-    );
+    const VectorSingle visibleBounds = IntersectRectBoundsValue(LoadRect(rectangle), LoadRect(clip));
     return pointer.x >= visibleBounds.x && pointer.y >= visibleBounds.y && pointer.x < visibleBounds.z && pointer.y < visibleBounds.w;
 }
 
-f32x4 IntersectRectVec(in f32x4 lhs, in f32x4 rhs){
-    const f32x4 bounds = IntersectRectBoundsVec(lhs, rhs);
-    const f32 extentX = bounds.z - bounds.x;
-    const f32 extentY = bounds.w - bounds.y;
-    f32 sizeX = extentX;
-    if(0.0f > extentX)
-        sizeX = 0.0f;
-    f32 sizeY = extentY;
-    if(0.0f > extentY)
-        sizeY = 0.0f;
-    return f32x4(bounds.x, bounds.y, sizeX, sizeY);
+VectorSingle IntersectRectValue(in VectorSingle lhs, in VectorSingle rhs){
+    const VectorSingle bounds = IntersectRectBoundsValue(lhs, rhs);
+    const VectorSingle extent = bounds.zwzw - bounds.xyxy;
+    const VectorSingle size = max(extent, VectorSingle(0.0f));
+    return VectorSingle(bounds.x, bounds.y, size.x, size.y);
 }
 
 // Padding lanes are left, top, right, bottom; retain the two separately rounded size subtractions.
-f32x4 InsetRectVec(in f32x4 rectangle, in f32x4 padding){
-    const f32 originX = rectangle.x + padding.x;
-    const f32 originY = rectangle.y + padding.y;
-    const f32 extentX = (rectangle.z - padding.x) - padding.z;
-    const f32 extentY = (rectangle.w - padding.y) - padding.w;
-    f32 sizeX = extentX;
-    if(0.0f > extentX)
-        sizeX = 0.0f;
-    f32 sizeY = extentY;
-    if(0.0f > extentY)
-        sizeY = 0.0f;
-    return f32x4(originX, originY, sizeX, sizeY);
+VectorSingle InsetRectValue(in VectorSingle rectangle, in VectorSingle padding){
+    const VectorSingle origin = rectangle.xyxy + padding.xyxy;
+    const VectorSingle extentX = (rectangle.zzzz - padding.xxxx) - padding.zzzz;
+    const VectorSingle extentY = (rectangle.wwww - padding.yyyy) - padding.wwww;
+    const VectorSingle size = max(VectorSingle(extentX.x, extentY.x, extentX.y, extentY.y), VectorSingle(0.0f));
+    return VectorSingle(origin.x, origin.y, size.x, size.y);
 }
 
 Rect ResolveSkinRegionUv(in UiSkinRect pixels, in u32 atlasWidth, in u32 atlasHeight){
     const f32 width = cast<f32>(atlasWidth);
     const f32 height = cast<f32>(atlasHeight);
-    const f32x4 normalized = f32x4(cast<f32>(pixels.x), cast<f32>(pixels.y), cast<f32>(pixels.width), cast<f32>(pixels.height)) / f32x4(width, height, width, height);
+    const VectorSingle normalized = VectorSingle(cast<f32>(pixels.x), cast<f32>(pixels.y), cast<f32>(pixels.width), cast<f32>(pixels.height)) / VectorSingle(width, height, width, height);
     Rect uv;
     uv.x = normalized.x;
     uv.y = normalized.y;
@@ -311,19 +294,19 @@ Rect ResolveSkinRegionUv(in UiSkinRect pixels, in u32 atlasWidth, in u32 atlasHe
     return uv;
 }
 
-f32x4 ResolveQuadTextureCoords(in Rect rectangle, in Rect visible, in Rect uv){
+VectorSingle ResolveQuadTextureCoords(in Rect rectangle, in Rect visible, in Rect uv){
     const f32 visibleRight = visible.x + visible.width;
     const f32 visibleBottom = visible.y + visible.height;
-    const f32x4 coordinates(visible.x, visible.y, visibleRight, visibleBottom);
-    const f32x4 delta = coordinates - f32x4(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
-    const f32x4 fraction = delta / f32x4(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
-    const f32x4 textureScale(uv.width, uv.height, uv.width, uv.height);
-    const f32x4 textureOrigin(uv.x, uv.y, uv.x, uv.y);
+    const VectorSingle coordinates(visible.x, visible.y, visibleRight, visibleBottom);
+    const VectorSingle delta = coordinates - VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
+    const VectorSingle fraction = delta / VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+    const VectorSingle textureScale(uv.width, uv.height, uv.width, uv.height);
+    const VectorSingle textureOrigin(uv.x, uv.y, uv.x, uv.y);
     return fraction * textureScale + textureOrigin;
 }
 
 Color PremultiplyPaintColor(in Color color){
-    const f32x4 rgb = f32x4(color.r, color.g, color.b, color.b) * color.a;
+    const VectorSingle rgb = VectorSingle(color.r, color.g, color.b, color.b) * color.a;
     Color out;
     out.r = rgb.x;
     out.g = rgb.y;
@@ -337,10 +320,10 @@ void ResolveNineSliceCoordinates(
     in UiSkinSliceInsets borders,
     in Rect rectangle,
     in f32 referenceDensity,
-    mut f32x4 outX,
-    mut f32x4 outY,
-    mut f32x4 outU,
-    mut f32x4 outV
+    mut VectorSingle outX,
+    mut VectorSingle outY,
+    mut VectorSingle outU,
+    mut VectorSingle outV
 ){
     const f32 borderLeft = cast<f32>(borders.left) / referenceDensity;
     const f32 borderRight = cast<f32>(borders.right) / referenceDensity;
@@ -362,15 +345,15 @@ void ResolveNineSliceCoordinates(
         firstY = rectangle.y + rectangle.height * (borderTop / borderExtentY);
         secondY = firstY;
     }
-    outX = f32x4(rectangle.x, firstX, secondX, endX);
-    outY = f32x4(rectangle.y, firstY, secondY, endY);
-    outU = f32x4(
+    outX = VectorSingle(rectangle.x, firstX, secondX, endX);
+    outY = VectorSingle(rectangle.y, firstY, secondY, endY);
+    outU = VectorSingle(
         cast<f32>(pixels.x),
         cast<f32>(pixels.x + borders.left),
         cast<f32>(pixels.x + pixels.width - borders.right),
         cast<f32>(pixels.x + pixels.width)
     );
-    outV = f32x4(
+    outV = VectorSingle(
         cast<f32>(pixels.y),
         cast<f32>(pixels.y + borders.top),
         cast<f32>(pixels.y + pixels.height - borders.bottom),

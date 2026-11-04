@@ -37,6 +37,18 @@ const usize s_RebuildReservePerCut = 16u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> CsgDeformViabilityReason{
+    Ok,
+    EmptyInput,
+    NonFiniteInput,
+    InvalidTopology,
+    InvalidCutter,
+    CapLoopFailed,
+    NoKeptGeometry,
+    TooLarge,
+    InvalidOutputArena,
+}
+
 class CsgDeformVertex{
     public f32x3u position(0.0f, 0.0f, 0.0f);
     public f32x4 normal(0.0f, 0.0f, 0.0f, 0.0f);
@@ -66,18 +78,6 @@ class CsgDeformBuildOptions{
     public b8 fillCaps = true;
 }
 
-enum<u8> CsgDeformViabilityReason{
-    Ok,
-    EmptyInput,
-    NonFiniteInput,
-    InvalidTopology,
-    InvalidCutter,
-    CapLoopFailed,
-    NoKeptGeometry,
-    TooLarge,
-    InvalidOutputArena,
-}
-
 class CsgDeformViability{
     public b8 viable = false;
     public CsgDeformViabilityReason reason = CsgDeformViabilityReason::Ok;
@@ -100,6 +100,20 @@ class CsgDeformFailure{
 class CsgDeformCutLoopEdge{
     public u32 first = 0u;
     public u32 second = 0u;
+}
+
+class CsgDeformTriangleClipPlan{
+    public u32 keepCount = 0u;
+    public u32 primaryCorner = 0u;
+    public u32 firstEdgeStart = 0u;
+    public u32 firstEdgeEnd = 0u;
+    public f32 firstEdgeStartDistance = 0.0f;
+    public f32 firstEdgeEndDistance = 0.0f;
+    public u32 secondEdgeStart = 0u;
+    public u32 secondEdgeEnd = 0u;
+    public f32 secondEdgeStartDistance = 0.0f;
+    public f32 secondEdgeEndDistance = 0.0f;
+    public u32 secondKeepVertex = 0u;
 }
 
 
@@ -199,23 +213,23 @@ b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexC
     return true;
 }
 
-f32x4 NormalizeCsgDeformNormal(in f32x4 normal){
+VectorSingle NormalizeCsgDeformNormal(in VectorSingle normal){
     if(lengthSq(normal.xyz) > s_NormalizeEpsilonSq){
-        const f32x4 normalized = normalize(normal.xyz);
-        return f32x4(normalized.x, normalized.y, normalized.z, normal.w);
+        const VectorSingle normalized = normalize(normal.xyz);
+        return VectorSingle(normalized, normal.w);
     }
-    return f32x4(0.0f, 1.0f, 0.0f, normal.w);
+    return VectorSingle(0.0f, 1.0f, 0.0f, normal.w);
 }
 
-f32x4 NormalizeCsgDeformTangent(in f32x4 tangent){
+VectorSingle NormalizeCsgDeformTangent(in VectorSingle tangent){
     if(lengthSq(tangent.xyz) > s_NormalizeEpsilonSq){
-        const f32x4 normalized = normalize(tangent.xyz);
+        const VectorSingle normalized = normalize(tangent.xyz);
         f32 sign = s_OneWeight;
         if(tangent.w < 0.0f)
             sign = s_NegativeOne;
-        return f32x4(normalized.x, normalized.y, normalized.z, sign);
+        return VectorSingle(normalized, sign);
     }
-    return f32x4(1.0f, 0.0f, 0.0f, 1.0f);
+    return VectorSingle(1.0f, 0.0f, 0.0f, 1.0f);
 }
 
 Expected<CsgDeformVertex> TryBuildInterpolatedCsgDeformVertex(
@@ -229,73 +243,75 @@ Expected<CsgDeformVertex> TryBuildInterpolatedCsgDeformVertex(
         return makeUnexpected(Failure());
     const f32 blend = blendResult.value();
     const f32 other = s_OneWeight - blend;
-    const f32x4 firstPos(firstVertex.position.x, firstVertex.position.y, firstVertex.position.z, 0.0f);
-    const f32x4 secondPos(secondVertex.position.x, secondVertex.position.y, secondVertex.position.z, 0.0f);
-    const f32x4 position = firstPos * blend + secondPos * other;
-    const f32x4 firstUv(firstVertex.uv0.x, firstVertex.uv0.y, 0.0f, 0.0f);
-    const f32x4 secondUv(secondVertex.uv0.x, secondVertex.uv0.y, 0.0f, 0.0f);
-    const f32x4 uv = firstUv * blend + secondUv * other;
-    const f32x4 color = firstVertex.color * blend + secondVertex.color * other;
+    const VectorSingle firstPos(firstVertex.position);
+    const VectorSingle secondPos(secondVertex.position);
+    const VectorSingle position = firstPos * blend + secondPos * other;
+    const VectorSingle firstUv(firstVertex.uv0);
+    const VectorSingle secondUv(secondVertex.uv0);
+    const VectorSingle uv = firstUv * blend + secondUv * other;
+    const VectorSingle color = VectorSingle(firstVertex.color) * blend + VectorSingle(secondVertex.color) * other;
+    const VectorSingle normal = NormalizeCsgDeformNormal(VectorSingle(firstVertex.normal) * blend + VectorSingle(secondVertex.normal) * other);
+    const VectorSingle tangent = NormalizeCsgDeformTangent(VectorSingle(firstVertex.tangent) * blend + VectorSingle(secondVertex.tangent) * other);
     CsgDeformVertex mixed;
-    mixed.position = f32x3u(position.x, position.y, position.z);
-    mixed.normal = NormalizeCsgDeformNormal(firstVertex.normal * blend + secondVertex.normal * other);
-    mixed.tangent = NormalizeCsgDeformTangent(firstVertex.tangent * blend + secondVertex.tangent * other);
-    mixed.uv0 = f32x2u(uv.x, uv.y);
-    mixed.color = color;
+    mixed.position = f32x3u(position);
+    mixed.normal = f32x4(normal);
+    mixed.tangent = f32x4(tangent);
+    mixed.uv0 = f32x2u(uv);
+    mixed.color = f32x4(color);
     if(!IsFiniteCsgDeformVertex(mixed))
         return makeUnexpected(Failure());
     return mixed;
 }
 
-Expected<f32x4> TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> vertices, in Span<u32> loop){
+Expected<VectorSingle> TryComputeCsgDeformLoopNormal(in Span<CsgDeformVertex> vertices, in Span<u32> loop){
     if(loop.size() < cast<usize>(s_MinLoopVertices))
         return makeUnexpected(Failure());
     const CsgDeformVertex originVertex = vertices[cast<usize>(loop[0u])];
-    const f32x4 origin(originVertex.position.x, originVertex.position.y, originVertex.position.z, 0.0f);
-    f32x4 area(0.0f, 0.0f, 0.0f, 0.0f);
+    const VectorSingle origin(originVertex.position);
+    VectorSingle area(0.0f, 0.0f, 0.0f, 0.0f);
     for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
         const CsgDeformVertex firstVertex = vertices[cast<usize>(loop[vertexIndex])];
         const CsgDeformVertex secondVertex = vertices[cast<usize>(loop[vertexIndex + 1u])];
-        const f32x4 first(firstVertex.position.x, firstVertex.position.y, firstVertex.position.z, 0.0f);
-        const f32x4 second(secondVertex.position.x, secondVertex.position.y, secondVertex.position.z, 0.0f);
+        const VectorSingle first(firstVertex.position);
+        const VectorSingle second(secondVertex.position);
         area = area + cross(first - origin, second - origin);
     }
     if(lengthSq(area.xyz) <= s_LoopAreaEpsilonSq)
         return makeUnexpected(Failure());
-    const f32x4 normalized = normalize(area.xyz);
-    return f32x4(normalized.x, normalized.y, normalized.z, 0.0f);
+    const VectorSingle normalized = normalize(area.xyz);
+    return VectorSingle(normalized, 0.0f);
 }
 
-Expected<CsgDeformVertex> TryBuildCsgDeformCapCenterVertex(in Span<CsgDeformVertex> vertices, in Span<u32> loop, in f32x4 loopNormal){
+Expected<CsgDeformVertex> TryBuildCsgDeformCapCenterVertex(in Span<CsgDeformVertex> vertices, in Span<u32> loop, in VectorSingle loopNormal){
     if(loop.size() < cast<usize>(s_MinLoopVertices))
         return makeUnexpected(Failure());
-    f32x4 centerPosition(0.0f, 0.0f, 0.0f, 0.0f);
-    f32x4 centerUv(0.0f, 0.0f, 0.0f, 0.0f);
-    f32x4 centerColor(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle centerPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle centerUv(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle centerColor(0.0f, 0.0f, 0.0f, 0.0f);
     for(in u32 vertexIndex : loop){
         assert(cast<usize>(vertexIndex) < vertices.size());
         const CsgDeformVertex vertex = vertices[cast<usize>(vertexIndex)];
-        centerPosition = centerPosition + f32x4(vertex.position.x, vertex.position.y, vertex.position.z, 0.0f);
-        centerUv = centerUv + f32x4(vertex.uv0.x, vertex.uv0.y, 0.0f, 0.0f);
-        centerColor = centerColor + vertex.color;
+        centerPosition = centerPosition + VectorSingle(vertex.position);
+        centerUv = centerUv + VectorSingle(vertex.uv0);
+        centerColor = centerColor + VectorSingle(vertex.color);
     }
     const f32 loopSize = cast<f32>(loop.size());
-    const f32x4 position = centerPosition / loopSize;
-    const f32x4 uv = centerUv / loopSize;
-    const f32x4 color = centerColor / loopSize;
+    const VectorSingle position = centerPosition / loopSize;
+    const VectorSingle uv = centerUv / loopSize;
+    const VectorSingle color = centerColor / loopSize;
     CsgDeformVertex center;
-    center.position = f32x3u(position.x, position.y, position.z);
-    center.normal = NormalizeCsgDeformNormal(loopNormal);
-    center.tangent = NormalizeCsgDeformTangent(f32x4(1.0f, 0.0f, 0.0f, 1.0f));
-    center.uv0 = f32x2u(uv.x, uv.y);
-    center.color = color;
+    center.position = f32x3u(position);
+    center.normal = f32x4(NormalizeCsgDeformNormal(loopNormal));
+    center.tangent = f32x4(NormalizeCsgDeformTangent(VectorSingle(1.0f, 0.0f, 0.0f, 1.0f)));
+    center.uv0 = f32x2u(uv);
+    center.color = f32x4(color);
     if(!IsFiniteCsgDeformVertex(center))
         return makeUnexpected(Failure());
     return center;
 }
 
-f32x4 TransformCsgDeformVertexPosition(in CsgDeformVertex vertex, in f32x3x4 worldToShape){
-    return mul(f32x4(vertex.position.x, vertex.position.y, vertex.position.z, s_AffineW), worldToShape);
+VectorSingle TransformCsgDeformVertexPosition(in CsgDeformVertex vertex, in MatrixSingle worldToShape){
+    return mul(VectorSingle(vertex.position, s_AffineW), worldToShape);
 }
 
 Expected<f32, CsgDeformViabilityReason> TrySnapCsgDeformSignedDistance(in f32 distance, in f32 boundaryEpsilon){
@@ -304,20 +320,6 @@ Expected<f32, CsgDeformViabilityReason> TrySnapCsgDeformSignedDistance(in f32 di
     if(abs(distance) <= boundaryEpsilon)
         return s_KeepDistanceZero;
     return distance;
-}
-
-class CsgDeformTriangleClipPlan{
-    public u32 keepCount = 0u;
-    public u32 primaryCorner = 0u;
-    public u32 firstEdgeStart = 0u;
-    public u32 firstEdgeEnd = 0u;
-    public f32 firstEdgeStartDistance = 0.0f;
-    public f32 firstEdgeEndDistance = 0.0f;
-    public u32 secondEdgeStart = 0u;
-    public u32 secondEdgeEnd = 0u;
-    public f32 secondEdgeStartDistance = 0.0f;
-    public f32 secondEdgeEndDistance = 0.0f;
-    public u32 secondKeepVertex = 0u;
 }
 
 CsgDeformTriangleClipPlan ClassifyCsgDeformTriangleClip(in CsgDeformTriangle triangle, in Span<f32> distances){

@@ -61,18 +61,16 @@ class CameraComponent{
 
 [reflect]
 class LightComponent{
-    public f32x4 color()const{
-        return f32x4(this.colorIntensity.x, this.colorIntensity.y, this.colorIntensity.z, 0.0f);
+    public VectorSingle color()const{
+        return VectorSingle(this.colorIntensity, 0.0f);
     }
 
     public f32 intensity()const{
         return this.colorIntensity.w;
     }
 
-    public void setColor(in f32x4 value){
-        this.colorIntensity.x = value.x;
-        this.colorIntensity.y = value.y;
-        this.colorIntensity.z = value.z;
+    public void setColor(in VectorSingle value){
+        this.colorIntensity = f32x4(value, this.colorIntensity.w);
     }
 
     public void setIntensity(in f32 value){
@@ -89,10 +87,10 @@ class LightComponent{
     public b8 enableCaustics = s_LightEnableCaustics;
 }
 
-SceneLight MakeSceneLight(in LightComponent light, in f32x4 position, in f32x4 direction){
+SceneLight MakeSceneLight(in LightComponent light, in VectorSingle position, in VectorSingle direction){
     SceneLight outLight;
-    outLight.position = position;
-    outLight.direction = direction;
+    outLight.position = f32x4(position);
+    outLight.direction = f32x4(direction);
     outLight.colorIntensity = light.colorIntensity;
     if(light.type != LightType::Directional)
         outLight.range = light.range;
@@ -103,7 +101,7 @@ SceneLight MakeSceneLight(in LightComponent light, in f32x4 position, in f32x4 d
     return outLight;
 }
 
-LightComponent MakeDirectionalLightComponent(in f32x4 color, in f32 intensity){
+LightComponent MakeDirectionalLightComponent(in VectorSingle color, in f32 intensity){
     LightComponent light;
     light.type = LightType::Directional;
     light.setColor(color);
@@ -111,7 +109,7 @@ LightComponent MakeDirectionalLightComponent(in f32x4 color, in f32 intensity){
     return light;
 }
 
-LightComponent MakePointLightComponent(in f32x4 color, in f32 intensity, in f32 range){
+LightComponent MakePointLightComponent(in VectorSingle color, in f32 intensity, in f32 range){
     LightComponent light;
     light.type = LightType::Point;
     light.setColor(color);
@@ -121,7 +119,7 @@ LightComponent MakePointLightComponent(in f32x4 color, in f32 intensity, in f32 
 }
 
 LightComponent MakeSpotLightComponent(
-    in f32x4 color,
+    in VectorSingle color,
     in f32 intensity,
     in f32 range,
     in f32 innerConeCos,
@@ -138,17 +136,17 @@ LightComponent MakeSpotLightComponent(
 }
 
 void AssignDecomposedTransformComponent(
-    in f32x4 translation,
-    in f32x4 rotation,
-    in f32x4 scale,
+    in VectorSingle translation,
+    in VectorSingle rotation,
+    in VectorSingle scale,
     mut TransformComponent outTransform
 ){
-    outTransform.position = f32x4(translation.x, translation.y, translation.z, 0.0f);
-    outTransform.rotation = rotation;
-    outTransform.scale = f32x4(scale.x, scale.y, scale.z, 0.0f);
+    outTransform.position = f32x4(translation, 0.0f);
+    outTransform.rotation = f32x4(rotation);
+    outTransform.scale = f32x4(scale, 0.0f);
 }
 
-b8 IsValidSceneLightRotation(in f32x4 rotation){
+b8 IsValidSceneLightRotation(in VectorSingle rotation){
     if(!isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w))
         return false;
     const f32 rotationLengthSquared = lengthSq(rotation);
@@ -158,10 +156,10 @@ b8 IsValidSceneLightRotation(in f32x4 rotation){
 b8 TryBuildSceneLightVectors(
     in TransformComponent transform,
     in LightComponent light,
-    mut f32x4 outPosition,
-    mut f32x4 outDirection
+    mut VectorSingle outPosition,
+    mut VectorSingle outDirection
 ){
-    const f32x4 colorIntensity = light.colorIntensity;
+    const VectorSingle colorIntensity(light.colorIntensity);
     if(
         !isFinite(colorIntensity.x)
         || !isFinite(colorIntensity.y)
@@ -171,14 +169,15 @@ b8 TryBuildSceneLightVectors(
     )
         return false;
 
+    const VectorSingle rotation(transform.rotation);
     switch(light.type){
     case LightType::Directional:{
-        if(!IsValidSceneLightRotation(transform.rotation))
+        if(!IsValidSceneLightRotation(rotation))
             return false;
 
-        outPosition = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-        const f32x4 rotated = RotateSceneVector3(f32x4(0.0f, 0.0f, 1.0f, 0.0f), transform.rotation);
-        outDirection = NormalizeSceneVector3Or(-rotated, f32x4(0.0f, 0.0f, -1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
+        outPosition = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+        const VectorSingle rotated = RotateSceneVector3(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), rotation);
+        outDirection = NormalizeSceneVector3Or(-rotated, VectorSingle(0.0f, 0.0f, -1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
         return true;
     }
     case LightType::Point:{
@@ -187,12 +186,12 @@ b8 TryBuildSceneLightVectors(
         if(!isFinite(light.range) || light.range <= 0.0f)
             return false;
 
-        outPosition = f32x4(transform.position.x, transform.position.y, transform.position.z, 1.0f);
-        outDirection = f32x4(0.0f, 0.0f, -1.0f, 1.0f);
+        outPosition = VectorSingle(transform.position, 1.0f);
+        outDirection = VectorSingle(0.0f, 0.0f, -1.0f, 1.0f);
         return true;
     }
     case LightType::Spot:{
-        if(!IsValidSceneLightRotation(transform.rotation))
+        if(!IsValidSceneLightRotation(rotation))
             return false;
         if(!isFinite(transform.position.x) || !isFinite(transform.position.y) || !isFinite(transform.position.z))
             return false;
@@ -201,10 +200,10 @@ b8 TryBuildSceneLightVectors(
         if(!IsValidLightCone(light.innerConeCos, light.outerConeCos))
             return false;
 
-        outPosition = f32x4(transform.position.x, transform.position.y, transform.position.z, light.innerConeCos);
-        const f32x4 rotated = RotateSceneVector3(f32x4(0.0f, 0.0f, 1.0f, 0.0f), transform.rotation);
-        const f32x4 normalized = NormalizeSceneVector3Or(rotated, f32x4(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
-        outDirection = f32x4(normalized.x, normalized.y, normalized.z, light.outerConeCos);
+        outPosition = VectorSingle(transform.position, light.innerConeCos);
+        const VectorSingle rotated = RotateSceneVector3(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), rotation);
+        const VectorSingle normalized = NormalizeSceneVector3Or(rotated, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
+        outDirection = VectorSingle(normalized, light.outerConeCos);
         return true;
     }
     default:

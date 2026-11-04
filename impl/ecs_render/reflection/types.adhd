@@ -10,29 +10,95 @@ using QueueSubmissionToken = Core::QueueSubmissionToken;
 }
 
 
-class ReflectionSampleBase{
-    public u32 x = 0u;
-    public u32 y = 0u;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Precompute two Sobol dimensions per frame; scrambling stays in the shader.
-ReflectionSampleBase ComputeReflectionSampleBase(in u32 sampleIndex){
-    ReflectionSampleBase base;
-    u32 remaining = sampleIndex;
-    const u32 sampleBitCount = 32u;
-    const u32 sampleDirectionHighBit = 0x80000000u;
-    u32 direction = sampleDirectionHighBit;
-    // x reverses index bits; y uses the Sobol generator (see pbr-book).
-    for(u32 bit = 0u; bit < sampleBitCount; ++bit){
-        const u32 selected = remaining & 1u;
-        base.x = (base.x << 1u) | selected;
-        if(selected != 0u)
-            base.y ^= direction;
-        remaining >>= 1u;
-        direction ^= direction >> 1u;
-    }
-    return base;
-}
+
+const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
+const u32 s_ReflectionDefaultSpatialRadius = 2u;
+const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;
+const f32 s_ReflectionDefaultDistanceFadeStart = 80.0f;
+const f32 s_ReflectionDefaultRoughnessCutoff = 0.8f;
+const u32 s_ReflectionDefaultMaxHardwareRaysPerFrame = 262144u;
+const u32 s_ReflectionDefaultMaxOpticalQueries = 16u;
+const u32 s_ReflectionDefaultScreenMaxSteps = 96u;
+const f32 s_ReflectionDefaultScreenThickness = 0.03f;
+const f32 s_ReflectionDefaultScreenConfidenceThreshold = 0.8f;
+const f32 s_ReflectionDefaultScreenEdgeFade = 0.05f;
+const f32 s_ReflectionDefaultEnvTopR = 0.15f;
+const f32 s_ReflectionDefaultEnvTopG = 0.2f;
+const f32 s_ReflectionDefaultEnvTopB = 0.3f;
+const f32 s_ReflectionDefaultEnvBottomRgb = 0.04f;
+const f32x3u s_ReflectionDefaultEnvironmentTop(s_ReflectionDefaultEnvTopR, s_ReflectionDefaultEnvTopG, s_ReflectionDefaultEnvTopB);
+const f32x3u s_ReflectionDefaultEnvironmentBottom(s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb);
+// One timed range owns a begin and an end timestamp query.
+const u32 s_ReflectionGpuTimingQueriesPerRange = 2u;
+const u32 s_ReflectionTraceSliceRays = 8192u;
+const u32 s_ReflectionIndirectArgumentBytes = 12u;
+const usize s_ReflectionDescriptorCount = 8u;
+const u32 s_ReflectionMaxDepthMips = 32u;
+const u32 s_ReflectionHistoryDescriptorIndex = 0u;
+const u32 s_ReflectionSpatialDescriptorIndex = 2u;
+const usize s_ReflectionTemporalExtraResourceUseCount = 2u;
+const usize s_ReflectionSliceIndexTextBufferSize = 11u;
+const usize s_ReflectionUseCapacity = 12u;
+const usize s_ReflectionExtraHardwareReadCapacity = 2u;
+const u32 s_ReflectionCounterHighWordShiftBits = 32u;
+const u32 s_ReflectionFeedbackGroupSize = 8u;
+const usize s_ReflectionFeedbackBankCount = 2u;
+const usize s_ReflectionPostprocessDescriptorCount = 4u;
+const u64 s_ReflectionFeedbackSurfaceCount = 2u;
+const u64 s_ReflectionFeedbackHeaderBytes = 16u;
+const u64 s_ReflectionFeedbackEntryBytes = 4u;
+const u64 s_ReflectionFeedbackMaxCount = 0xffffffffull;
+const u32 s_ReflectionFeedbackWriteEnabled = 1u;
+const u32 s_ReflectionFeedbackPreviousValid = 2u;
+const StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionBuildArgsVariant = "NWB_RT_CSG_ENABLED=0";
+const StringView s_ReflectionCsgBuildArgsVariant = "NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionHwCsgOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionHwCsgPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=1";
+const StringView s_ReflectionSpatialRadius1Variant = "NWB_REFLECTION_SPATIAL_RADIUS=1";
+const StringView s_ReflectionSpatialRadius2Variant = "NWB_REFLECTION_SPATIAL_RADIUS=2";
+const StringView s_ReflectionSpatialRadius3Variant = "NWB_REFLECTION_SPATIAL_RADIUS=3";
+const StringView s_ReflectionHardwareResolveTaskLabel = "Reflection Hardware Resolve";
+const Name s_ReflectionOpaqueHistoryName = "engine/reflection/opaque_history";
+const Name s_ReflectionOpaqueSpatialName = "engine/reflection/opaque_spatial";
+const Name s_ReflectionStatisticsReadback0Name = "engine/reflection/statistics_readback_0";
+const Name s_ReflectionStatisticsReadback1Name = "engine/reflection/statistics_readback_1";
+const Name s_ReflectionStatisticsReadback2Name = "engine/reflection/statistics_readback_2";
+const Name s_ReflectionScreenFeedback0Name = "engine/reflection/screen_feedback_0";
+const Name s_ReflectionScreenFeedback1Name = "engine/reflection/screen_feedback_1";
+const Name s_ReflectionRayQueueBufferName = "engine/reflection/ray_queue";
+const Name s_ReflectionIndirectArgsBufferName = "engine/reflection/indirect_args";
+const Name s_ReflectionOpaqueRadianceName = "engine/reflection/opaque_radiance";
+const Name s_ReflectionGlassRadianceName = "engine/reflection/glass_radiance";
+const Name s_ReflectionCountersBufferName = "engine/reflection/counters";
+const Name s_ReflectionFrameParametersBufferName = "engine/reflection/frame_parameters";
+const Name s_ReflectionDepthPyramidName = "engine/reflection/depth_pyramid";
+const Name s_ReflectionTemporalTaskName = "render.reflection.temporal";
+const Name s_ReflectionSpatialTaskName = "render.reflection.spatial";
+const Name s_ReflectionStatisticsTaskName = "render.reflection.statistics";
+const Name s_ReflectionFinalizeTaskName = "render.reflection.finalize";
+const Name s_ReflectionParametersUploadTaskName = "render.reflection.parameters_upload";
+const Name s_ReflectionClearCountersTaskName = "render.reflection.clear_counters";
+const Name s_ReflectionClassifyTaskName = "render.reflection.classify";
+const Name s_ReflectionBuildArgsTaskName = "render.reflection.build_args";
+const Name s_ReflectionHardwareTaskName = "render.reflection.hardware";
+const Name s_ReflectionCsgHardwareSliceFamily = "render.reflection.hardware.csg_slice";
+const StringView s_ReflectionBufferLabel = "Reflection Buffer";
+const StringView s_ReflectionHistoryImageLabel = "Reflection History Image";
+const StringView s_ReflectionDepthReduceTaskLabel = "Reflection Depth Reduce";
+const StringView s_ReflectionTemporalTaskLabel = "Reflection Temporal Accumulation";
+const StringView s_ReflectionSpatialTaskLabel = "Reflection Spatial Filter";
+const StringView s_ReflectionStatisticsTaskLabel = "Reflection Statistics Readback";
+const StringView s_ReflectionFinalizeTaskLabel = "Reflection Finalize Outputs";
+const StringView s_ReflectionParametersUploadTaskLabel = "Reflection Parameters Upload";
+const StringView s_ReflectionClearCountersTaskLabel = "Reflection Clear Counters";
+const StringView s_ReflectionClassifyTaskLabel = "Reflection Classify";
+const StringView s_ReflectionBuildArgsTaskLabel = "Reflection Build Arguments";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,48 +119,61 @@ enum<u8> ReflectionDebugView{
     Confidence
 }
 
+enum<u8> ReflectionFeedbackResetReason{
+    None,
+    FirstObservation,
+    ResourcesChanged,
+    SettingsChanged,
+    SceneChanged,
+    ViewChanged,
+    Disabled,
+    UntrustedScene,
+    HardwareChanged,
+    InvalidAcceptance
+}
+
+enum<u8> ReflectionHistoryResetReason{
+    None,
+    FirstSample,
+    SceneChanged,
+    ViewChanged,
+    SettingsChanged,
+    HardwareChanged,
+    UntrustedScene,
+    Disabled,
+    ResourcesChanged
+}
+
+[reflect]
+enum<u32> ReflectionDescriptorIndex{
+    OpaqueSampled,
+    OpaqueStorage,
+    GlassSampled,
+    GlassStorage,
+    Queue,
+    Counters,
+    Args,
+    Parameters
+}
+
+[reflect]
+enum<u8> ReflectionDispatchStage{
+    Classify,
+    BuildArgs,
+    Hardware
+}
+
+class ReflectionSampleBase{
+    public u32 x = 0u;
+    public u32 y = 0u;
+}
+
 // Root wiring retains textures and declares reads; compositing sees only this contract.
 class ReflectionCompositeInputs{
     public u32 opaqueRadianceSlot = 0xffffffffu;
     public u32 glassRadianceSlot = 0xffffffffu;
     public ReflectionDebugView debugView = ReflectionDebugView::None;
 }
-
-const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
-const u32 s_ReflectionDefaultSpatialRadius = 2u;
-const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;
-const f32 s_ReflectionDefaultDistanceFadeStart = 80.0f;
-const f32 s_ReflectionDefaultRoughnessCutoff = 0.8f;
-const u32 s_ReflectionDefaultMaxHardwareRaysPerFrame = 262144u;
-const u32 s_ReflectionDefaultMaxOpticalQueries = 16u;
-const u32 s_ReflectionDefaultScreenMaxSteps = 96u;
-const f32 s_ReflectionDefaultScreenThickness = 0.03f;
-const f32 s_ReflectionDefaultScreenConfidenceThreshold = 0.8f;
-const f32 s_ReflectionDefaultScreenEdgeFade = 0.05f;
-const f32 s_ReflectionDefaultEnvTopR = 0.15f;
-const f32 s_ReflectionDefaultEnvTopG = 0.2f;
-const f32 s_ReflectionDefaultEnvTopB = 0.3f;
-const f32 s_ReflectionDefaultEnvBottomRgb = 0.04f;
-const f32x3u s_ReflectionDefaultEnvironmentTop(s_ReflectionDefaultEnvTopR, s_ReflectionDefaultEnvTopG, s_ReflectionDefaultEnvTopB);
-const f32x3u s_ReflectionDefaultEnvironmentBottom(s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb);
-
-// One timed range owns a begin and an end timestamp query.
-const u32 s_ReflectionGpuTimingQueriesPerRange = 2u;
-const u32 s_ReflectionTraceSliceRays = 8192u;
-const u32 s_ReflectionIndirectArgumentBytes = 12u;
-const usize s_ReflectionDescriptorCount = 8u;
-const u32 s_ReflectionMaxDepthMips = 32u;
-const u32 s_ReflectionHistoryDescriptorIndex = 0u;
-const u32 s_ReflectionSpatialDescriptorIndex = 2u;
-const usize s_ReflectionTemporalExtraResourceUseCount = 2u;
-const usize s_ReflectionSliceIndexTextBufferSize = 11u;
-const usize s_ReflectionUseCapacity = 12u;
-const usize s_ReflectionExtraHardwareReadCapacity = 2u;
-const u32 s_ReflectionCounterHighWordShiftBits = 32u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Unavailable or unstamped inputs disable temporal reuse; versions alone prove nothing.
 class ReflectionSceneContentStamp{
@@ -123,31 +202,6 @@ class ReflectionSceneContentStamp{
     public u64 lighting;
     public u64 view;
     public b8 trusted;
-}
-
-enum<u8> ReflectionFeedbackResetReason{
-    None,
-    FirstObservation,
-    ResourcesChanged,
-    SettingsChanged,
-    SceneChanged,
-    ViewChanged,
-    Disabled,
-    UntrustedScene,
-    HardwareChanged,
-    InvalidAcceptance
-}
-
-enum<u8> ReflectionHistoryResetReason{
-    None,
-    FirstSample,
-    SceneChanged,
-    ViewChanged,
-    SettingsChanged,
-    HardwareChanged,
-    UntrustedScene,
-    Disabled,
-    ResourcesChanged
 }
 
 // A completed accepted reflection copy, regardless of later presentation outcome.
@@ -219,42 +273,6 @@ class ReflectionStatistics{
     public b8 schedulingCounterValid = false;
 }
 
-void CopyReflectionDiagnosticCounters(in Span<u32> completedCounters, in ReflectionStatistics metadata, mut ReflectionStatistics latest){
-    latest.candidates = completedCounters[0u];
-    latest.hardwareRays = completedCounters[1u];
-    latest.exteriorEligibleRays = completedCounters[23u];
-    latest.hardwareHits = completedCounters[2u];
-    latest.opaquePixels = completedCounters[3u];
-    latest.glassPixels = completedCounters[4u];
-    latest.fallbackPixels = completedCounters[5u];
-    latest.screenAttempts = completedCounters[6u];
-    latest.screenHits = completedCounters[7u];
-    latest.queryBudgetUnits = completedCounters[8u];
-    if(metadata.csgHardwareEnabled)
-        latest.physicalQueries = completedCounters[24u];
-    else
-        latest.physicalQueries = latest.queryBudgetUnits;
-    latest.bootstrapEvents = completedCounters[9u];
-    latest.transparentPaths = completedCounters[10u];
-    latest.unsupportedPaths = completedCounters[11u];
-    latest.limitedPaths = completedCounters[12u];
-    latest.ambiguousPaths = completedCounters[13u];
-    latest.tirEvents = completedCounters[14u];
-    latest.mediumOverflowPaths = completedCounters[15u];
-    latest.potentialReceivers = completedCounters[16u];
-    latest.screenReturns = completedCounters[17u];
-    latest.feedbackBypassedPixels = completedCounters[18u];
-    latest.feedbackProbeTiles = completedCounters[19u];
-    const u64 screenIterationsLow = cast<u64>(completedCounters[20u]);
-    const u64 screenIterationsHigh = cast<u64>(completedCounters[21u]);
-    latest.screenIterations = screenIterationsLow | (screenIterationsHigh << s_ReflectionCounterHighWordShiftBits);
-    latest.screenLimitMisses = completedCounters[22u];
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ReflectionFeedbackExtent{
     public ReflectionFeedbackExtent(){
         this.width = 0u;
@@ -284,56 +302,6 @@ class ReflectionFeedbackExtent{
     public u32 tilesY;
     public u32 entryCount;
     public u32 byteCount;
-}
-
-const u32 s_ReflectionFeedbackGroupSize = 8u;
-const usize s_ReflectionFeedbackBankCount = 2u;
-const usize s_ReflectionPostprocessDescriptorCount = 4u;
-const u64 s_ReflectionFeedbackSurfaceCount = 2u;
-const u64 s_ReflectionFeedbackHeaderBytes = 16u;
-const u64 s_ReflectionFeedbackEntryBytes = 4u;
-const u64 s_ReflectionFeedbackMaxCount = 0xffffffffull;
-const u32 s_ReflectionFeedbackWriteEnabled = 1u;
-const u32 s_ReflectionFeedbackPreviousValid = 2u;
-
-Expected<ReflectionFeedbackExtent> TryComputeReflectionFeedbackExtent(in u32 width, in u32 height){
-    if(width == 0u || height == 0u)
-        return makeUnexpected(Failure());
-    const u32 tilesX = divideUp(width, s_ReflectionFeedbackGroupSize);
-    const u32 tilesY = divideUp(height, s_ReflectionFeedbackGroupSize);
-    const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
-    const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
-    if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount)
-        return makeUnexpected(Failure());
-    return ReflectionFeedbackExtent(width, height, tilesX, tilesY, cast<u32>(entryCount), cast<u32>(byteCount));
-}
-
-[reflect]
-enum<u32> ReflectionDescriptorIndex{
-    OpaqueSampled,
-    OpaqueStorage,
-    GlassSampled,
-    GlassStorage,
-    Queue,
-    Counters,
-    Args,
-    Parameters
-}
-
-Expected<u32> TryResolveReflectionQueueCapacity(in u32 width, in u32 height, in u32 maxHardwareRaysPerFrame){
-    u64 pixelCount = cast<u64>(width) * cast<u64>(height);
-    if(width == 0u || height == 0u || pixelCount > cast<u64>(0xFFFFFFFFu) / 2u)
-        return makeUnexpected(Failure());
-    u64 boundedCapacity = max(cast<u64>(1u), min(pixelCount * 2u, cast<u64>(maxHardwareRaysPerFrame)));
-    if(boundedCapacity > cast<u64>(0xFFFFFFFFu) / 4u)
-        return makeUnexpected(Failure());
-    return cast<u32>(boundedCapacity);
-}
-
-u32 ResolveReflectionIndirectArgumentCount(in u32 capacity, in b8 sliced){
-    if(sliced)
-        return divideUp(capacity, s_ReflectionTraceSliceRays);
-    return 1u;
 }
 
 class ReflectionDepthPyramidMip{
@@ -392,10 +360,6 @@ class ReflectionFrameParameters{
     public f32 screenEdgeFade = s_ReflectionDefaultScreenEdgeFade;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [serialize]
 class ReflectionTemporalPushConstants{
     public u32 width = 0u;
@@ -432,69 +396,94 @@ class ReflectionDepthReducePushConstants{
     public u32 destinationHeight = 0u;
 }
 
-[reflect]
-enum<u8> ReflectionDispatchStage{
-    Classify,
-    BuildArgs,
-    Hardware
-}
-
 [serialize]
 class ReflectionCsgDispatchPushConstants{
     public u32 frameParametersSlot = 0u;
     public u32 rayOffset = 0u;
 }
 
-const StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionBuildArgsVariant = "NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionCsgBuildArgsVariant = "NWB_RT_CSG_ENABLED=1";
-const StringView s_ReflectionHwCsgOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=1";
-const StringView s_ReflectionHwCsgPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=1";
-const StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=1";
-const StringView s_ReflectionSpatialRadius1Variant = "NWB_REFLECTION_SPATIAL_RADIUS=1";
-const StringView s_ReflectionSpatialRadius2Variant = "NWB_REFLECTION_SPATIAL_RADIUS=2";
-const StringView s_ReflectionSpatialRadius3Variant = "NWB_REFLECTION_SPATIAL_RADIUS=3";
-const StringView s_ReflectionHardwareResolveTaskLabel = "Reflection Hardware Resolve";
 
-const Name s_ReflectionOpaqueHistoryName = "engine/reflection/opaque_history";
-const Name s_ReflectionOpaqueSpatialName = "engine/reflection/opaque_spatial";
-const Name s_ReflectionStatisticsReadback0Name = "engine/reflection/statistics_readback_0";
-const Name s_ReflectionStatisticsReadback1Name = "engine/reflection/statistics_readback_1";
-const Name s_ReflectionStatisticsReadback2Name = "engine/reflection/statistics_readback_2";
-const Name s_ReflectionScreenFeedback0Name = "engine/reflection/screen_feedback_0";
-const Name s_ReflectionScreenFeedback1Name = "engine/reflection/screen_feedback_1";
-const Name s_ReflectionRayQueueBufferName = "engine/reflection/ray_queue";
-const Name s_ReflectionIndirectArgsBufferName = "engine/reflection/indirect_args";
-const Name s_ReflectionOpaqueRadianceName = "engine/reflection/opaque_radiance";
-const Name s_ReflectionGlassRadianceName = "engine/reflection/glass_radiance";
-const Name s_ReflectionCountersBufferName = "engine/reflection/counters";
-const Name s_ReflectionFrameParametersBufferName = "engine/reflection/frame_parameters";
-const Name s_ReflectionDepthPyramidName = "engine/reflection/depth_pyramid";
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-const Name s_ReflectionTemporalTaskName = "render.reflection.temporal";
-const Name s_ReflectionSpatialTaskName = "render.reflection.spatial";
-const Name s_ReflectionStatisticsTaskName = "render.reflection.statistics";
-const Name s_ReflectionFinalizeTaskName = "render.reflection.finalize";
-const Name s_ReflectionParametersUploadTaskName = "render.reflection.parameters_upload";
-const Name s_ReflectionClearCountersTaskName = "render.reflection.clear_counters";
-const Name s_ReflectionClassifyTaskName = "render.reflection.classify";
-const Name s_ReflectionBuildArgsTaskName = "render.reflection.build_args";
-const Name s_ReflectionHardwareTaskName = "render.reflection.hardware";
-const Name s_ReflectionCsgHardwareSliceFamily = "render.reflection.hardware.csg_slice";
 
-const StringView s_ReflectionBufferLabel = "Reflection Buffer";
-const StringView s_ReflectionHistoryImageLabel = "Reflection History Image";
-const StringView s_ReflectionDepthReduceTaskLabel = "Reflection Depth Reduce";
-const StringView s_ReflectionTemporalTaskLabel = "Reflection Temporal Accumulation";
-const StringView s_ReflectionSpatialTaskLabel = "Reflection Spatial Filter";
-const StringView s_ReflectionStatisticsTaskLabel = "Reflection Statistics Readback";
-const StringView s_ReflectionFinalizeTaskLabel = "Reflection Finalize Outputs";
-const StringView s_ReflectionParametersUploadTaskLabel = "Reflection Parameters Upload";
-const StringView s_ReflectionClearCountersTaskLabel = "Reflection Clear Counters";
-const StringView s_ReflectionClassifyTaskLabel = "Reflection Classify";
-const StringView s_ReflectionBuildArgsTaskLabel = "Reflection Build Arguments";
+// Precompute two Sobol dimensions per frame; scrambling stays in the shader.
+ReflectionSampleBase ComputeReflectionSampleBase(in u32 sampleIndex){
+    ReflectionSampleBase base;
+    u32 remaining = sampleIndex;
+    const u32 sampleBitCount = 32u;
+    const u32 sampleDirectionHighBit = 0x80000000u;
+    u32 direction = sampleDirectionHighBit;
+    // x reverses index bits; y uses the Sobol generator (see pbr-book).
+    for(u32 bit = 0u; bit < sampleBitCount; ++bit){
+        const u32 selected = remaining & 1u;
+        base.x = (base.x << 1u) | selected;
+        if(selected != 0u)
+            base.y ^= direction;
+        remaining >>= 1u;
+        direction ^= direction >> 1u;
+    }
+    return base;
+}
+
+void CopyReflectionDiagnosticCounters(in Span<u32> completedCounters, in ReflectionStatistics metadata, mut ReflectionStatistics latest){
+    latest.candidates = completedCounters[0u];
+    latest.hardwareRays = completedCounters[1u];
+    latest.exteriorEligibleRays = completedCounters[23u];
+    latest.hardwareHits = completedCounters[2u];
+    latest.opaquePixels = completedCounters[3u];
+    latest.glassPixels = completedCounters[4u];
+    latest.fallbackPixels = completedCounters[5u];
+    latest.screenAttempts = completedCounters[6u];
+    latest.screenHits = completedCounters[7u];
+    latest.queryBudgetUnits = completedCounters[8u];
+    if(metadata.csgHardwareEnabled)
+        latest.physicalQueries = completedCounters[24u];
+    else
+        latest.physicalQueries = latest.queryBudgetUnits;
+    latest.bootstrapEvents = completedCounters[9u];
+    latest.transparentPaths = completedCounters[10u];
+    latest.unsupportedPaths = completedCounters[11u];
+    latest.limitedPaths = completedCounters[12u];
+    latest.ambiguousPaths = completedCounters[13u];
+    latest.tirEvents = completedCounters[14u];
+    latest.mediumOverflowPaths = completedCounters[15u];
+    latest.potentialReceivers = completedCounters[16u];
+    latest.screenReturns = completedCounters[17u];
+    latest.feedbackBypassedPixels = completedCounters[18u];
+    latest.feedbackProbeTiles = completedCounters[19u];
+    const u64 screenIterationsLow = cast<u64>(completedCounters[20u]);
+    const u64 screenIterationsHigh = cast<u64>(completedCounters[21u]);
+    latest.screenIterations = screenIterationsLow | (screenIterationsHigh << s_ReflectionCounterHighWordShiftBits);
+    latest.screenLimitMisses = completedCounters[22u];
+}
+
+Expected<ReflectionFeedbackExtent> TryComputeReflectionFeedbackExtent(in u32 width, in u32 height){
+    if(width == 0u || height == 0u)
+        return makeUnexpected(Failure());
+    const u32 tilesX = divideUp(width, s_ReflectionFeedbackGroupSize);
+    const u32 tilesY = divideUp(height, s_ReflectionFeedbackGroupSize);
+    const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
+    const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
+    if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount)
+        return makeUnexpected(Failure());
+    return ReflectionFeedbackExtent(width, height, tilesX, tilesY, cast<u32>(entryCount), cast<u32>(byteCount));
+}
+
+Expected<u32> TryResolveReflectionQueueCapacity(in u32 width, in u32 height, in u32 maxHardwareRaysPerFrame){
+    u64 pixelCount = cast<u64>(width) * cast<u64>(height);
+    if(width == 0u || height == 0u || pixelCount > cast<u64>(0xFFFFFFFFu) / 2u)
+        return makeUnexpected(Failure());
+    u64 boundedCapacity = max(cast<u64>(1u), min(pixelCount * 2u, cast<u64>(maxHardwareRaysPerFrame)));
+    if(boundedCapacity > cast<u64>(0xFFFFFFFFu) / 4u)
+        return makeUnexpected(Failure());
+    return cast<u32>(boundedCapacity);
+}
+
+u32 ResolveReflectionIndirectArgumentCount(in u32 capacity, in b8 sliced){
+    if(sliced)
+        return divideUp(capacity, s_ReflectionTraceSliceRays);
+    return 1u;
+}
 
 StringView ResolveReflectionSpatialVariant(in u32 radiusIndex){
     switch(radiusIndex){

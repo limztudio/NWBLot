@@ -2,6 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_SceneShadowSlotCount = 8u;
+const u32 s_ShadowReceiverFactorHalf = cast<u32>(ShadowReceiverResolution::Half);
+const u32 s_ShadowReceiverFactorQuarter = cast<u32>(ShadowReceiverResolution::Quarter);
+const u32 s_SwShadowTransparentSpp = 3u;
+// Crossings, overflow list, and overflow arguments.
+const usize s_HwTransparentScratchBufferCount = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [reflect]
 enum<u8> TransparentShadowSampling{
     ReferenceThree,
@@ -14,32 +25,10 @@ enum<u8> ShadowReceiverResolution{
     Quarter = 4u
 }
 
-const u32 s_SceneShadowSlotCount = 8u;
-const u32 s_ShadowReceiverFactorHalf = cast<u32>(ShadowReceiverResolution::Half);
-const u32 s_ShadowReceiverFactorQuarter = cast<u32>(ShadowReceiverResolution::Quarter);
-const u32 s_SwShadowTransparentSpp = 3u;
-// Crossings, overflow list, and overflow arguments.
-const usize s_HwTransparentScratchBufferCount = 3u;
-
 [reflect]
 class ShadowQualitySettings{
     public TransparentShadowSampling transparentSampling = TransparentShadowSampling::ReferenceThree;
     public ShadowReceiverResolution receiverResolution = ShadowReceiverResolution::Half;
-}
-
-b8 ValidateShadowQualitySettings(in ShadowQualitySettings settings){
-    return cast<u8>(settings.transparentSampling) <= cast<u8>(TransparentShadowSampling::TemporalOne) && (settings.receiverResolution == ShadowReceiverResolution::Half || settings.receiverResolution == ShadowReceiverResolution::Quarter);
-}
-
-// Reduced sampling requires an accepted history and an available transparent temporal filter.
-u32 ResolveTransparentShadowSampleCount(in ShadowQualitySettings settings, in b8 temporalHistoryUsable){
-    if(settings.transparentSampling == TransparentShadowSampling::TemporalOne && temporalHistoryUsable)
-        return 1u;
-    return s_SwShadowTransparentSpp;
-}
-
-b8 SameShadowQualitySettings(in ShadowQualitySettings first, in ShadowQualitySettings second){
-    return first.transparentSampling == second.transparentSampling && first.receiverResolution == second.receiverResolution;
 }
 
 // Qualifies the accepted RGB history generation independently from opaque-only history advancement.
@@ -68,6 +57,25 @@ class TransparentShadowSamplingHistory{
 
     private u32 m_acceptedSlots = 0u;
     private u32 m_pendingSlots = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateShadowQualitySettings(in ShadowQualitySettings settings){
+    return cast<u8>(settings.transparentSampling) <= cast<u8>(TransparentShadowSampling::TemporalOne) && (settings.receiverResolution == ShadowReceiverResolution::Half || settings.receiverResolution == ShadowReceiverResolution::Quarter);
+}
+
+// Reduced sampling requires an accepted history and an available transparent temporal filter.
+u32 ResolveTransparentShadowSampleCount(in ShadowQualitySettings settings, in b8 temporalHistoryUsable){
+    if(settings.transparentSampling == TransparentShadowSampling::TemporalOne && temporalHistoryUsable)
+        return 1u;
+    return s_SwShadowTransparentSpp;
+}
+
+b8 SameShadowQualitySettings(in ShadowQualitySettings first, in ShadowQualitySettings second){
+    return first.transparentSampling == second.transparentSampling && first.receiverResolution == second.receiverResolution;
 }
 
 

@@ -56,11 +56,11 @@ SkeletonHeaderBinary MakeSkeletonHeaderBinary(in u64 jointCount){
     return header;
 }
 
-b8 IsFiniteSkeletonJointRow(in f32x4 row){
+b8 IsFiniteSkeletonJointRow(in VectorSingle row){
     return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
 }
 
-b8 IsFiniteSkeletonJointMatrix(in SkeletonJointMatrix matrix){
+b8 IsFiniteSkeletonJointMatrix(in MatrixSingle matrix){
     return IsFiniteSkeletonJointRow(matrix[0u])
         && IsFiniteSkeletonJointRow(matrix[1u])
         && IsFiniteSkeletonJointRow(matrix[2u])
@@ -124,7 +124,7 @@ b8 ValidateSkeletonJointCounts(in usize jointCount, in usize lookupCount){
 b8 ValidateSkeletonJointsArray(in Span<SkeletonJoint> joints){
     for(usize i = 0u; i < joints.size(); ++i){
         const SkeletonJoint joint = joints[i];
-        if(!IsFiniteSkeletonJointMatrix(joint.localBindPose)){
+        if(!IsFiniteSkeletonJointMatrix(MatrixSingle(joint.localBindPose))){
             error("Skeleton::validatePayload failed: joint {} has non-finite local bind pose", i);
             return false;
         }

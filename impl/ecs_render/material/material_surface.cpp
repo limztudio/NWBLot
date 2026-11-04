@@ -482,7 +482,7 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
     const NWB::Impl::Scene::TransformComponent defaultTransform;
     const NWB::Impl::Scene::TransformComponent& resolvedTransform = transform ? *transform : defaultTransform;
     return ShadowOccluderMaterialContext{
-        ::NWB::Impl::BuildInstanceGpuData(entity, transform != nullptr, resolvedTransform.position, resolvedTransform.rotation, resolvedTransform.scale, mutableRange->byteOffset),
+        ::NWB::Impl::BuildInstanceGpuData(entity, transform != nullptr, LoadFloat(resolvedTransform.position), LoadFloat(resolvedTransform.rotation), LoadFloat(resolvedTransform.scale), mutableRange->byteOffset),
         constantRange->byteOffset
     };
 }

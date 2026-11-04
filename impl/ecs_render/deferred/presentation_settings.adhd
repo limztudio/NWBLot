@@ -8,12 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
-enum<u32> PresentationToneMap{
-    LinearClamp = 0u,
-    Reinhard = 1u
-}
-
 // Stages exchange linear radiance; exposure applies at presentation.
 const f32 s_PresentationDefaultShoulder = 0.65f;
 const u32 s_DeferredInvalidHeapSlot = 0xffffffffu;
@@ -21,6 +15,30 @@ const u32 s_DeferredPresentationSdr = 0u;
 const u32 s_DeferredPresentationHdr10 = 1u;
 const Name s_SceneShadingBufferName = "ecs_render/scene_shading_data";
 const Name s_SceneLightBufferName = "ecs_render/scene_light_data";
+const u32 s_IrradianceHistoryCopyRegionCount = 2u;
+const StringView s_CausticIrradianceLabel = "Caustic Irradiance";
+const StringView s_SurfelIrradianceLabel = "Surfel Irradiance";
+const Name s_LightingBindlessSlotsName = "render.deferred_lighting.bindless_slots";
+const StringView s_DeferredBindlessSlotsLabel = "Deferred Bindless Slots";
+const usize s_TransparentLaggedLightingDependencyCount = 2u;
+const usize s_TransparentLaggedSelectorDependencyCount = 3u;
+const usize s_OpaqueLaggedSelectorDependencyCount = 2u;
+const usize s_OpaqueProducerResourceSetUseCapacity = 3u;
+const usize s_OpaqueSharedRasterResourceUseCapacity = 9u;
+const usize s_OpaqueSharedResourceSetUseCapacity = 2u;
+const usize s_PresentBaseResourceUseCount = 3u;
+const usize s_PresentMaxResourceUseCount = 4u;
+const usize s_PresentMaxDependencyCount = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u32> PresentationToneMap{
+    LinearClamp = 0u,
+    Reinhard = 1u
+}
 
 [reflect]
 class PresentationSettings{
@@ -28,14 +46,6 @@ class PresentationSettings{
     public f32 exposure = 1.0f;
     public f32 shoulder = s_PresentationDefaultShoulder;
 }
-
-b8 ValidatePresentationSettings(in PresentationSettings settings){
-    return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Reinhard) && isFinite(settings.exposure) && settings.exposure >= 0.0f && isFinite(settings.shoulder) && settings.shoulder > 0.0f;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [serialize]
 class DeferredCompositePushConstants{
@@ -60,6 +70,14 @@ class DeferredPresentPushConstants{
 class DeferredLightingPushConstants{
     public u32 resourceSlots = 0u;
     public u32 presentationMode = s_DeferredPresentationSdr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidatePresentationSettings(in PresentationSettings settings){
+    return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Reinhard) && isFinite(settings.exposure) && settings.exposure >= 0.0f && isFinite(settings.shoulder) && settings.shoulder > 0.0f;
 }
 
 DeferredCompositePushConstants ResolveDeferredCompositePushConstants(
@@ -104,21 +122,6 @@ DeferredLightingPushConstants ResolveDeferredLightingPushConstants(
         pushConstants.presentationMode = s_DeferredPresentationHdr10;
     return pushConstants;
 }
-
-const u32 s_IrradianceHistoryCopyRegionCount = 2u;
-const StringView s_CausticIrradianceLabel = "Caustic Irradiance";
-const StringView s_SurfelIrradianceLabel = "Surfel Irradiance";
-const Name s_LightingBindlessSlotsName = "render.deferred_lighting.bindless_slots";
-const StringView s_DeferredBindlessSlotsLabel = "Deferred Bindless Slots";
-const usize s_TransparentLaggedLightingDependencyCount = 2u;
-const usize s_TransparentLaggedSelectorDependencyCount = 3u;
-const usize s_OpaqueLaggedSelectorDependencyCount = 2u;
-const usize s_OpaqueProducerResourceSetUseCapacity = 3u;
-const usize s_OpaqueSharedRasterResourceUseCapacity = 9u;
-const usize s_OpaqueSharedResourceSetUseCapacity = 2u;
-const usize s_PresentBaseResourceUseCount = 3u;
-const usize s_PresentMaxResourceUseCount = 4u;
-const usize s_PresentMaxDependencyCount = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

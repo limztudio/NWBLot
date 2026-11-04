@@ -8,6 +8,20 @@ const usize s_UiNativeKeySlotCount = 512u;
 const f32 s_MaxUiFrameDeltaFloatSeconds = 3.40282346638528859812e+38f;
 const f64 s_MaxUiFrameDeltaSeconds = cast<f64>(s_MaxUiFrameDeltaFloatSeconds);
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> UiInputOwner{
+    Scene = 0u,
+    Custom = 1u,
+}
+
+enum<u8> UiLayerPresentation{
+    Scene,
+    Standalone,
+}
+
 // Retains CPU update time until a UI paint frame actually begins.
 class UiFrameDelta{
     public void add(in f32 deltaSeconds){
@@ -34,15 +48,9 @@ class UiLiveRoot{
     public i32 order = 0;
 }
 
-enum<u8> UiInputOwner{
-    Scene = 0u,
-    Custom = 1u,
-}
 
-enum<u8> UiLayerPresentation{
-    Scene,
-    Standalone,
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 ValidUiMouseCoordinate(in f64 xpos, in f64 ypos){
     return isFinite(xpos) && isFinite(ypos) && abs(xpos) <= s_MaxUiFrameDeltaSeconds && abs(ypos) <= s_MaxUiFrameDeltaSeconds;

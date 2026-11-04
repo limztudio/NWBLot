@@ -52,10 +52,7 @@ namespace SkeletonRuntime{
 }
 
 [[nodiscard]] inline Expected<SIMDMatrix> EvaluateSkeletonPoseJointMatrix(const SkeletonPoseComponent& pose, const u32 targetJointIndex)noexcept{
-    const auto evaluated = TryEvaluateSkeletonPoseJointMatrix(pose, targetJointIndex);
-    if(!evaluated)
-        return MakeUnexpected(Failure{});
-    return LoadFloat(*evaluated);
+    return TryEvaluateSkeletonPoseJointMatrix(pose, targetJointIndex);
 }
 
 template<typename JointMatrixVector>

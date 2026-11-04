@@ -4,7 +4,6 @@
 
 const u32 s_FontMaxSourceBytes = 32u * 1024u * 1024u;
 const u32 s_FontMaxTableCount = 256u;
-
 const usize s_FontSfntHeaderBytes = 12u;
 const usize s_FontSfntTableRecordBytes = 16u;
 const usize s_FontSfntHeaderTableCountFieldOffset = 4u;
@@ -17,7 +16,6 @@ const u32 s_FontSfntHeadTag = 0x68656164u;
 const u32 s_FontSfntMaxpTag = 0x6d617870u;
 const usize s_FontSfntHeadUnitsPerEmOffset = 18u;
 const usize s_FontSfntMaxpGlyphCountOffset = 4u;
-
 const u32 s_TrueTypeSignature = 0x00010000u;
 const u32 s_CffSignature = 0x4f54544fu; // OTTO
 const u32 s_FvarTag = 0x66766172u; // fvar
@@ -42,7 +40,6 @@ const StringView s_FontOpFtNewLibrary = "FT_New_Library";
 const StringView s_FontOpFtNewMemoryFace = "FT_New_Memory_Face";
 const StringView s_FontOpAdmitStaticScalableFace = "admit_static_scalable_face";
 const StringView s_FontOpFtSelectCharmap = "FT_Select_Charmap";
-
 const StringView s_FontMetaDiagnosticPrefix = "Font meta";
 const StringView s_PreparedFontExtension = ".font";
 const StringView s_PreparedFontInvalidSerializeInputReason = "invalid font bytes, face index, or image group count";
@@ -62,7 +59,6 @@ const StringView s_PreparedFontImageBytesTruncatedReason = "prepared image bytes
 const StringView s_PreparedFontImageHashMismatchReason = "prepared image content hash differs from its directory";
 const StringView s_PreparedFontLengthChangedReason = "prepared source changed length during read";
 const StringView s_PreparedFontChangedDuringReadReason = "prepared source changed during read";
-
 const u32 s_PreparedFontMagic = 0x324e4f46u; // FON2 in little-endian wire order.
 const u32 s_PreparedFontVersion = 1u;
 const usize s_PreparedFontHeaderBytes = 56u;
@@ -82,9 +78,12 @@ const usize s_PreparedFontGroupByteCountOffset = 12u;
 const usize s_PreparedFontGroupSha256Offset = 16u;
 const u64 s_PreparedFontMaxPixelBytes = 128ul * 1024ul * 1024ul;
 const u64 s_PreparedFontMaxFileBytes = cast<u64>(s_PreparedFontHeaderBytes) + cast<u64>(s_PreparedFontMaxGroupCount) * cast<u64>(s_PreparedFontGroupHeaderBytes) + cast<u64>(s_FontMaxSourceBytes) + s_PreparedFontMaxPixelBytes;
-
 const u32 s_FontBinaryMagic = 0x464f4e31u; // FON1
 const u32 s_FontBinaryVersion = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [serialize]
 class FontBinaryHeader{
@@ -127,6 +126,61 @@ class NativeFontFailure{
     public i32 nativeError = 0;
     public b8 hasNativeError = false;
 }
+
+// Borrows the source buffer; the caller keeps it alive and unchanged while reading the directory or its tables.
+class FontSfntDirectory{
+    public void assign(in Span<u8> bytes, in u16 tableCount){
+        this.m_bytes = bytes;
+        this.m_tableCount = tableCount;
+    }
+
+    public u32 signature()const{
+        return ReadFontSfntU32BigEndian(this.m_bytes, 0u);
+    }
+
+    public usize directoryBytes()const{
+        return s_FontSfntHeaderBytes + cast<usize>(this.m_tableCount) * s_FontSfntTableRecordBytes;
+    }
+
+    public u16 tableCount()const{
+        return this.m_tableCount;
+    }
+
+    public Expected<FontSfntTable> table(in usize index)const{
+        const Expected<Span<u8>> rec = this.record(index);
+        if(!rec.has_value())
+            return makeUnexpected(Failure());
+        const u32 offset = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordOffsetFieldOffset);
+        const u32 length = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordLengthFieldOffset);
+        if(cast<usize>(offset) > this.m_bytes.size() || cast<usize>(length) > this.m_bytes.size() - cast<usize>(offset))
+            return makeUnexpected(Failure());
+        FontSfntTable outTable;
+        outTable.tag = ReadFontSfntU32BigEndian(rec.value(), 0u);
+        outTable.offset = offset;
+        outTable.bytes = this.m_bytes.subspan(cast<usize>(offset), cast<usize>(length));
+        return outTable;
+    }
+
+    public Expected<u32> tableTag(in usize index)const{
+        const Expected<Span<u8>> rec = this.record(index);
+        if(!rec.has_value())
+            return makeUnexpected(Failure());
+        return ReadFontSfntU32BigEndian(rec.value(), 0u);
+    }
+
+    private Span<u8> m_bytes;
+    private u16 m_tableCount = 0u;
+
+    private Expected<Span<u8>> record(in usize index)const{
+        if(index >= cast<usize>(this.m_tableCount))
+            return makeUnexpected(Failure());
+        return this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 FontBinaryHeader MakeFontBinaryHeader(in u32 faceIndex, in u64 byteCount){
     FontBinaryHeader header;
@@ -206,57 +260,6 @@ u32 ReadFontSfntU32BigEndian(in Span<u8> bytes, in usize offset){
     const u32 hi = cast<u32>(ReadFontSfntU16BigEndian(bytes, offset)) << s_FontSfntU16Bits;
     const u32 lo = cast<u32>(ReadFontSfntU16BigEndian(bytes, offset + s_FontSfntU16Bytes));
     return hi | lo;
-}
-
-// Borrows the source buffer; the caller keeps it alive and unchanged while reading the directory or its tables.
-class FontSfntDirectory{
-    public void assign(in Span<u8> bytes, in u16 tableCount){
-        this.m_bytes = bytes;
-        this.m_tableCount = tableCount;
-    }
-
-    public u32 signature()const{
-        return ReadFontSfntU32BigEndian(this.m_bytes, 0u);
-    }
-
-    public usize directoryBytes()const{
-        return s_FontSfntHeaderBytes + cast<usize>(this.m_tableCount) * s_FontSfntTableRecordBytes;
-    }
-
-    public u16 tableCount()const{
-        return this.m_tableCount;
-    }
-
-    public Expected<FontSfntTable> table(in usize index)const{
-        const Expected<Span<u8>> rec = this.record(index);
-        if(!rec.has_value())
-            return makeUnexpected(Failure());
-        const u32 offset = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordOffsetFieldOffset);
-        const u32 length = ReadFontSfntU32BigEndian(rec.value(), s_FontSfntRecordLengthFieldOffset);
-        if(cast<usize>(offset) > this.m_bytes.size() || cast<usize>(length) > this.m_bytes.size() - cast<usize>(offset))
-            return makeUnexpected(Failure());
-        FontSfntTable outTable;
-        outTable.tag = ReadFontSfntU32BigEndian(rec.value(), 0u);
-        outTable.offset = offset;
-        outTable.bytes = this.m_bytes.subspan(cast<usize>(offset), cast<usize>(length));
-        return outTable;
-    }
-
-    public Expected<u32> tableTag(in usize index)const{
-        const Expected<Span<u8>> rec = this.record(index);
-        if(!rec.has_value())
-            return makeUnexpected(Failure());
-        return ReadFontSfntU32BigEndian(rec.value(), 0u);
-    }
-
-    private Span<u8> m_bytes;
-    private u16 m_tableCount = 0u;
-
-    private Expected<Span<u8>> record(in usize index)const{
-        if(index >= cast<usize>(this.m_tableCount))
-            return makeUnexpected(Failure());
-        return this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
-    }
 }
 
 Expected<FontSfntDirectory> ReadFontSfntDirectory(in Span<u8> bytes){

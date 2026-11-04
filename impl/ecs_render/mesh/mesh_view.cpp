@@ -27,21 +27,21 @@ namespace ECSRenderDetail{
 
 
 MeshViewGpuData ResolveMeshViewState(const f32 fallbackAspectRatio, Core::ECS::World& world)noexcept{
-    Float44 viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasisRows();
+    SIMDMatrix viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
     NWB::Impl::Scene::CameraProjection projection = NWB::Impl::Scene::StoreDefaultCameraProjection(fallbackAspectRatio);
 
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
-        viewBasis = NWB::Impl::Scene::BuildSceneViewBasisRows(cameraView.transform->position, cameraView.transform->rotation);
+        viewBasis = NWB::Impl::Scene::BuildSceneViewBasis(LoadFloat(cameraView.transform->position), LoadFloat(cameraView.transform->rotation));
         projection = cameraView.projection;
     }
 
     return BuildMeshViewGpuData(
-        viewBasis.rows[0u],
-        viewBasis.rows[1u],
-        viewBasis.rows[2u],
-        viewBasis.rows[3u],
-        projection.projectionParams,
+        viewBasis.v[0u],
+        viewBasis.v[1u],
+        viewBasis.v[2u],
+        viewBasis.v[3u],
+        LoadFloat(projection.projectionParams),
         projection.tanHalfVerticalFov,
         projection.aspectRatio,
         projection.nearPlane,

@@ -118,7 +118,7 @@ b8 ReflectionRoughnessScene::applyMutation(){
         break;
     case ReflectionRoughnessCase::Light:
         // Keep a positive-intensity authored light present so scene gathering does not insert its default light.
-        m_world.entity(m_light).getComponent<NWB::Impl::Scene::LightComponent>().setColor(Float4(0.f, 0.f, 0.f, 0.f));
+        m_world.entity(m_light).getComponent<NWB::Impl::Scene::LightComponent>().setColor(VectorZero());
         break;
     case ReflectionRoughnessCase::Deform:{
         auto& pose = m_world.entity(m_skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();

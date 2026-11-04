@@ -5,16 +5,31 @@
 #include "style.adhd"
 #include <impl/ecs_ui/toolkit/input/input.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #include <impl/assets_ui_skin/asset.h>
 #include <impl/ecs_ui/toolkit/paint.h>
 #include <impl/ecs_ui/toolkit/text/service.h>
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_ListDefaultHeight = 240.0f;
+// Padding left, top, right, bottom, then minimum x and y.
+const usize s_ListRowMetricCount = 6u;
+const usize s_ListLanguageBufferBytes = 64u;
+const u32 s_ListMaxPreparedRows = 1024u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> ListActionOutcome{
+    Continue,
+    Stop,
+    Failed,
+}
 
 class SelectableStyle{
     public Name normal = Name("list.row.normal");
@@ -42,12 +57,6 @@ class ListStyle{
     public f32 scrollbarWidth = s_StyleScrollbarThickness;
     public f32 minimumThumb = s_StyleScrollbarMinimumThumb;
 }
-
-const f32 s_ListDefaultHeight = 240.0f;
-// Padding left, top, right, bottom, then minimum x and y.
-const usize s_ListRowMetricCount = 6u;
-const usize s_ListLanguageBufferBytes = 64u;
-const u32 s_ListMaxPreparedRows = 1024u;
 
 class ListOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
@@ -90,14 +99,6 @@ class ListKeyResolution{
 
     public u64 index;
     public b8 present;
-}
-
-b8 IsValidListOptions(in ListOptions options){
-    return options.enabled && isFinite(options.wheelRows) && options.wheelRows > 0.0f;
-}
-
-b8 IsReverseListControlAction(in ControlActionKind kind){
-    return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
 class ListMeasureKey{
@@ -144,6 +145,18 @@ class ListMeasureKey{
     public Array<f32, s_ListRowMetricCount> rowMetrics;
     public Array<u8, s_ListLanguageBufferBytes> language;
     public u32 scriptTag = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidListOptions(in ListOptions options){
+    return options.enabled && isFinite(options.wheelRows) && options.wheelRows > 0.0f;
+}
+
+b8 IsReverseListControlAction(in ControlActionKind kind){
+    return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
 Expected<f64> TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 maximum){

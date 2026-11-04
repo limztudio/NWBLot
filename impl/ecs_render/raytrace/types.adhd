@@ -31,6 +31,73 @@ const StringView s_SceneGeometryDomainLabel = "Scene Acceleration and Geometry";
 const StringView s_BlasNameSuffix = ":blas";
 const StringView s_SoftwareSceneRefitInputsName = "software_scene_refit_inputs";
 const usize s_TraceResourceSetUseCapacity = 2u;
+const usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
+const usize s_NwbBvhNodeGpuByteSize = 32u;
+// Finite infinity for CPU BVH bounds.
+const f32 s_RayTracingFiniteInfinity = 1e30f;
+const u32 s_RayTracingTriangleIndexCount = 3u;
+const u32 s_RayTracingAllInstanceMask = 0xFFu;
+// Heap geometry buffers per mesh.
+const u32 s_HardwareRayTracingMeshBufferCount = 3u;
+const u32 s_SoftwareRayTracingMeshBufferCount = 4u;
+// Limit skinned BLAS refits before rebuilding topology.
+const u32 s_BlasMaxRefitsBeforeRebuild = 8u;
+// Scale rebuild cadence by mesh size, clamped to preserve quality.
+const u32 s_BlasMinRefitsBeforeRebuild = 4u;
+const u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
+const u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
+const usize s_TlasInitialInstanceCapacity = 128u;
+const usize s_BvhSortInitialCapacity = 1024u;
+const u32 s_BvhSortModeLocalTile = 0u;
+const usize s_BvhBuildInitialCapacity = 1024u;
+// Maximum per-mesh software BVH size; oversized meshes are skipped.
+const u32 s_BvhMaxPrimitivesPerMesh = 262144u;
+const usize s_SceneBvhInitialInstanceCapacity = 64u;
+// Fixed-grid binned SAH; leaf cost weights instance intersection cost.
+const u32 s_SceneBvhAxisCount = 3u;
+const u32 s_SceneBvhSahBinCount = 12u;
+const f32 s_SceneBvhSahTraversalCost = 1.0f;
+const usize s_SoftwareSceneRefitFixedUseCapacity = 2u;
+const u32 s_BvhBuildModeFull = 0u;
+const u32 s_RtOpticalBaseInstanceMask = 0x1u;
+const u32 s_RtOpticalTransparentInstanceMask = 0x2u;
+const u32 s_RtShadowBaseInstanceMask = 0x4u;
+const u32 s_RtShadowTransparentInstanceMask = 0x8u;
+const u32 s_RtCsgInstanceMask = 0x10u;
+const u32 s_RtRefractiveInstanceMask = 0x20u;
+const Name s_SceneTlasDebugName = "scene_tlas";
+const u32 s_BvhSortGroupSize = 256u;
+// Conservative top-level bounds for transparent-shadow rays.
+const f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
+const f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
+const usize s_FixedSceneResourceUseCount = 6u;
+const usize s_SortBuildStateCapacity = 3u;
+const u32 s_SceneBuffersPerCandidate = 5u;
+const u32 s_SceneBuffersPerCsgCandidate = 7u;
+const usize s_SceneImportedBufferCount = 4u;
+const usize s_SceneShadowBufferCount = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
+flag<u32> RtInstanceMaterialFlag{
+    None = 0u,
+    Transparent,
+    Refractive,
+    CsgShadow,
+    RefractionEntryCertified
+}
+
+// Shader-mirrored BVH child encoding.
+flag<u32> BvhNodeIndex{
+    LeafFlag = 0x80000000u,
+    // Reuses LeafFlag in rightChild to mark transparent subtrees.
+    TransparentSubtreeFlag = 0x80000000u,
+    ChildIndexMask = 0x7fffffffu,
+    Invalid = 0xffffffffu
+}
 
 // Heap-slot indirection for the ray-tracing material context.
 [serialize]
@@ -45,10 +112,6 @@ class RayTraceMaterialContextSlots{
     public u32 opticalInstanceCount = 0u;
     public u32 csgContext = 4294967295u;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Semantic identities selected by the current scene preflight, including direct transform and material edits.
 // Runtime deformation is unstamped.
@@ -86,29 +149,12 @@ class NwbRtInstanceMaterialGpu{
     public u32 nodeSlot = s_RtInvalidSlot;
 }
 
-const usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
-
-// Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
-flag<u32> RtInstanceMaterialFlag{
-    None = 0u,
-    Transparent,
-    Refractive,
-    CsgShadow,
-    RefractionEntryCertified
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // CPU mirror of the shader BVH node.
 [serialize]
 class NwbBvhNodeGpu{
     public f32x3_u32 aabbMinLeftChild(0.0f, 0.0f, 0.0f, 0u);
     public f32x3_u32 aabbMaxRightChild(0.0f, 0.0f, 0.0f, 0u);
 }
-
-const usize s_NwbBvhNodeGpuByteSize = 32u;
 
 // CPU mirror of the software scene-BVH instance ABI.
 [serialize]
@@ -127,45 +173,6 @@ class SoftwareSceneRefitInstanceGpu{
     public Array<u32, 3u> reserved;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Finite infinity for CPU BVH bounds.
-const f32 s_RayTracingFiniteInfinity = 1e30f;
-const u32 s_RayTracingTriangleIndexCount = 3u;
-const u32 s_RayTracingAllInstanceMask = 0xFFu;
-// Heap geometry buffers per mesh.
-const u32 s_HardwareRayTracingMeshBufferCount = 3u;
-const u32 s_SoftwareRayTracingMeshBufferCount = 4u;
-
-// Limit skinned BLAS refits before rebuilding topology.
-const u32 s_BlasMaxRefitsBeforeRebuild = 8u;
-// Scale rebuild cadence by mesh size, clamped to preserve quality.
-const u32 s_BlasMinRefitsBeforeRebuild = 4u;
-const u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
-const u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
-
-// Cube-root-scaled refit budget.
-u32 AdaptiveRefitsBeforeRebuild(in u32 primitiveCount){
-    u32 log2Val = 0u;
-    u32 n = primitiveCount;
-    while(n > 1u){
-        n >>= 1u;
-        ++log2Val;
-    }
-    u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2Val / s_BlasRefitBudgetLog2ExponentStep);
-    if(budget < s_BlasMinRefitsBeforeRebuild)
-        budget = s_BlasMinRefitsBeforeRebuild;
-    if(budget > s_BlasMaxRefitsBeforeRebuildCap)
-        budget = s_BlasMaxRefitsBeforeRebuildCap;
-    return budget;
-}
-
-const usize s_TlasInitialInstanceCapacity = 128u;
-const usize s_BvhSortInitialCapacity = 1024u;
-const u32 s_BvhSortModeLocalTile = 0u;
-
 // CPU mirror of NwbBvhBitonicSortPushConstants.
 [serialize]
 class BvhSortPushConstants{
@@ -176,10 +183,6 @@ class BvhSortPushConstants{
     public u32 keysHeapSlot = s_RtInvalidSlot;
     public u32 payloadHeapSlot = s_RtInvalidSlot;
 }
-
-const usize s_BvhBuildInitialCapacity = 1024u;
-// Maximum per-mesh software BVH size; oversized meshes are skipped.
-const u32 s_BvhMaxPrimitivesPerMesh = 262144u;
 
 [serialize]
 class SceneBvhNodeCalculation{
@@ -197,44 +200,12 @@ class SceneBvhPrimitiveCalculation{
     public b8 transparentOccluder = false;
 }
 
-// Shader-mirrored BVH child encoding.
-flag<u32> BvhNodeIndex{
-    LeafFlag = 0x80000000u,
-    // Reuses LeafFlag in rightChild to mark transparent subtrees.
-    TransparentSubtreeFlag = 0x80000000u,
-    ChildIndexMask = 0x7fffffffu,
-    Invalid = 0xffffffffu
-}
-
-const usize s_SceneBvhInitialInstanceCapacity = 64u;
-// Fixed-grid binned SAH; leaf cost weights instance intersection cost.
-const u32 s_SceneBvhAxisCount = 3u;
-const u32 s_SceneBvhSahBinCount = 12u;
-const f32 s_SceneBvhSahTraversalCost = 1.0f;
-
 class RayTracingDispatchGroups{
     public u32 width = 0u;
     public u32 height = 0u;
     public u32 x = 0u;
     public u32 y = 0u;
 }
-
-RayTracingDispatchGroups ResolveRayTracingDispatchGroups(in u32 width, in u32 height, in u32 receiverFactor, in u32 groupSize){
-    const u32 receiverWidth = divideUp(width, receiverFactor);
-    const u32 receiverHeight = divideUp(height, receiverFactor);
-    RayTracingDispatchGroups groups;
-    groups.width = receiverWidth;
-    groups.height = receiverHeight;
-    groups.x = divideUp(receiverWidth, groupSize);
-    groups.y = divideUp(receiverHeight, groupSize);
-    return groups;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const usize s_SoftwareSceneRefitFixedUseCapacity = 2u;
 
 [serialize]
 class SoftwareSceneRefitPushConstants{
@@ -243,8 +214,6 @@ class SoftwareSceneRefitPushConstants{
     public u32 instanceInputSlot = 0u;
     public u32 instanceCount = 0u;
 }
-
-const u32 s_BvhBuildModeFull = 0u;
 
 // CPU mirror of NwbBvhBuildPushConstants.
 [serialize]
@@ -263,6 +232,42 @@ class BvhBuildPushConstants{
     public u32 visitCounterHeapSlot = s_RtInvalidSlot;
 }
 
+class RayTracingInstanceWorldBounds{
+    public f32x3u minimum(0.0f, 0.0f, 0.0f);
+    public f32x3u maximum(0.0f, 0.0f, 0.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Cube-root-scaled refit budget.
+u32 AdaptiveRefitsBeforeRebuild(in u32 primitiveCount){
+    u32 log2Val = 0u;
+    u32 n = primitiveCount;
+    while(n > 1u){
+        n >>= 1u;
+        ++log2Val;
+    }
+    u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2Val / s_BlasRefitBudgetLog2ExponentStep);
+    if(budget < s_BlasMinRefitsBeforeRebuild)
+        budget = s_BlasMinRefitsBeforeRebuild;
+    if(budget > s_BlasMaxRefitsBeforeRebuildCap)
+        budget = s_BlasMaxRefitsBeforeRebuildCap;
+    return budget;
+}
+
+RayTracingDispatchGroups ResolveRayTracingDispatchGroups(in u32 width, in u32 height, in u32 receiverFactor, in u32 groupSize){
+    const u32 receiverWidth = divideUp(width, receiverFactor);
+    const u32 receiverHeight = divideUp(height, receiverFactor);
+    RayTracingDispatchGroups groups;
+    groups.width = receiverWidth;
+    groups.height = receiverHeight;
+    groups.x = divideUp(receiverWidth, groupSize);
+    groups.y = divideUp(receiverHeight, groupSize);
+    return groups;
+}
+
 NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterialData(in u32 surfaceDispatchId, in u32 shadingModelId, in b8 transparent, in b8 refractive, in u32 materialConstantByteOffset, in u32 meshInstanceIndex){
     NwbRtInstanceMaterialGpu material;
     material.surfaceDispatchId = surfaceDispatchId;
@@ -277,19 +282,6 @@ NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterialData(in u32 surfaceDispatc
     material.meshInstanceIndex = meshInstanceIndex;
     return material;
 }
-
-class RayTracingInstanceWorldBounds{
-    public f32x3u minimum(0.0f, 0.0f, 0.0f);
-    public f32x3u maximum(0.0f, 0.0f, 0.0f);
-}
-
-const u32 s_RtOpticalBaseInstanceMask = 0x1u;
-const u32 s_RtOpticalTransparentInstanceMask = 0x2u;
-const u32 s_RtShadowBaseInstanceMask = 0x4u;
-const u32 s_RtShadowTransparentInstanceMask = 0x8u;
-const u32 s_RtCsgInstanceMask = 0x10u;
-const u32 s_RtRefractiveInstanceMask = 0x20u;
-const Name s_SceneTlasDebugName = "scene_tlas";
 
 u32 ResolveRayTracingInstanceMask(in b8 transparent, in b8 refractive){
     u32 mask = s_RtOpticalBaseInstanceMask | s_RtShadowBaseInstanceMask;
@@ -307,8 +299,6 @@ u32 ResolveRayTracingCsgInstanceMask(in b8 transparent){
     return mask;
 }
 
-const u32 s_BvhSortGroupSize = 256u;
-
 u32 ResolveBvhPaddedSortCount(in u32 primitiveCount){
     u32 paddedCount = s_BvhSortGroupSize;
     while(paddedCount < primitiveCount)
@@ -324,18 +314,13 @@ b8 IsValidSceneBvhNodeChildren(in u32 leftChild, in u32 rightChild, in u32 nodeI
     return leftChild > nodeIndex && rightChild > nodeIndex && leftChild < nodeCount && rightChild < nodeCount;
 }
 
-// Conservative top-level bounds for transparent-shadow rays.
-const f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
-const f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
-const usize s_FixedSceneResourceUseCount = 6u;
-
 NwbBvhNodeGpu PackSceneBvhNodeGpu(in SceneBvhNodeCalculation buildNode){
     NwbBvhNodeGpu node;
-    node.aabbMinLeftChild = f32x3_u32(buildNode.aabbMin.x, buildNode.aabbMin.y, buildNode.aabbMin.z, buildNode.leftChild);
+    node.aabbMinLeftChild = f32x3_u32(VectorSingle(buildNode.aabbMin), buildNode.leftChild);
     u32 taggedRightChild = buildNode.rightChild;
     if(buildNode.containsTransparentOccluder)
         taggedRightChild |= cast<u32>(BvhNodeIndex::TransparentSubtreeFlag);
-    node.aabbMaxRightChild = f32x3_u32(buildNode.aabbMax.x, buildNode.aabbMax.y, buildNode.aabbMax.z, taggedRightChild);
+    node.aabbMaxRightChild = f32x3_u32(VectorSingle(buildNode.aabbMax), taggedRightChild);
     return node;
 }
 
@@ -364,12 +349,6 @@ b8 IsRefractiveInstanceBoundsIsolated(in Span<RayTracingInstanceWorldBounds> ins
     }
     return true;
 }
-
-const usize s_SortBuildStateCapacity = 3u;
-const u32 s_SceneBuffersPerCandidate = 5u;
-const u32 s_SceneBuffersPerCsgCandidate = 7u;
-const usize s_SceneImportedBufferCount = 4u;
-const usize s_SceneShadowBufferCount = 5u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

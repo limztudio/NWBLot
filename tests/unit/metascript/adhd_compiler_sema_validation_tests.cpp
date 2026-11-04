@@ -133,7 +133,7 @@ TEST(AdhdCompiler, TopologicallyOrdersOutOfOrderDeclarationsAndRejectsAccessViol
         "    void step();\r\n"
         "}\r\n"
         "class NodeImpl : INode {\r\n"
-        "    public void step() override {}\r\n"
+        "    public void step()override {}\r\n"
         "}\r\n"
         "void badRebind(mut NodeImpl a, in NodeImpl b) {\r\n"
         "    mut INode ref = a;\r\n"
@@ -325,7 +325,12 @@ TEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEval
         "    return cast<u32>(combined) + kSepDec + kSepHex + kSepBin + cast<u32>(lut.size());\r\n"
         "}\r\n";
     CompileResult validRes(arena.arena);
-    EXPECT_TRUE(Compiler::Compile(s_ValidEdgeCasesSource, "impl/sim/valid_edge_cases.adhd", arena.arena, validRes));
+    ASSERT_TRUE(Compiler::Compile(s_ValidEdgeCasesSource, "impl/sim/valid_edge_cases.adhd", arena.arena, validRes));
+    const MStringView validHdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
+    EXPECT_NE(validHdrView.find("enum Flag : ::u32"), MStringView::npos);
+    EXPECT_NE(validHdrView.find("Opaque = (static_cast<::u32>(1) << 0u)"), MStringView::npos);
+    EXPECT_NE(validHdrView.find("Shadow = (static_cast<::u32>(1) << 1u)"), MStringView::npos);
+    EXPECT_NE(validHdrView.find("const RenderFlags::Flag f"), MStringView::npos);
 
     static constexpr MStringView s_BadAdjacentSeparatorSource =
         "const u32 kBad = 1''000u;\r\n";
@@ -494,9 +499,9 @@ TEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStric
         "    public Vector<Name> names;\r\n"
         "    public HashMap<Name, u32> lookup;\r\n"
         "}\r\n"
-        "usize hashSimdAndWrap(in f32x4 a, in f32x4 b) {\r\n"
+        "usize hashSimdAndWrap(in VectorSingle a, in VectorSingle b) {\r\n"
         "    auto wrapped = wrapInBox(42u);\r\n"
-        "    f32x4 sum = a + b;\r\n"
+        "    f32x4 sum(a + b);\r\n"
         "    return hashCombineValue(usize(wrapped.value), sum);\r\n"
         "}\r\n";
     CompileResult instSimdRes(arena.arena);
@@ -504,7 +509,7 @@ TEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStric
     const MStringView instHdr(instSimdRes.generatedHeader.data(), instSimdRes.generatedHeader.size());
     const MStringView instSrc(instSimdRes.generatedSource.data(), instSimdRes.generatedSource.size());
     EXPECT_NE(instHdr.find("template<>\r\nclass Box<u32> final"), MStringView::npos);
-    EXPECT_NE(instSrc.find("::StoreFloat(__adhd_simd_sum, sum);"), MStringView::npos);
+    EXPECT_NE(instSrc.find("::StoreFloat(::VectorAdd(a, b), sum);"), MStringView::npos);
     EXPECT_NE(instSrc.find("::HashCombineValue(usize(wrapped.value), sum)"), MStringView::npos);
 }
 

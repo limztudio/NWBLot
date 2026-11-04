@@ -61,27 +61,14 @@ struct ThrowingCornerVisitor{
     [[nodiscard]] b8 operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const;
 };
 
-struct NoThrowTriangleNormal{
-    [[nodiscard]] SIMDVectorSingle operator()(const u32&)const noexcept;
-};
-
-struct ThrowingTriangleNormal{
-    [[nodiscard]] SIMDVectorSingle operator()(const u32&)const;
-};
-
 using OneMeshlet = Array<Impl::MeshletDesc, 1u>;
 using OneLocalVertex = Array<Impl::MeshletLocalVertexRef, 1u>;
 using OnePrimitive = Array<u8, 1u>;
-using OneTriangle = Array<u32, 1u>;
 
 static_assert(noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<const Impl::Mesh&>(), DeclVal<usize&>())));
 static_assert(!noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<const ThrowingPositionStreamGeometry&>(), DeclVal<usize&>())));
 static_assert(noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<NoThrowCornerVisitor&>())));
 static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<ThrowingCornerVisitor&>())));
-static_assert(noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const ThrowingTriangleNormal&>())));
-static_assert(noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const NoThrowTriangleNormal&>())));
-static_assert(!noexcept(Impl::MeshletCandidateSearch::PredictMeshletScoreConeWidening(DeclVal<const OneTriangle&>(), DeclVal<const Impl::MeshletScoreState&>(), 0u, VectorZero(), DeclVal<const ThrowingTriangleNormal&>())));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

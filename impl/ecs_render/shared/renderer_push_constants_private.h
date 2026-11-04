@@ -89,8 +89,8 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
         instanceIndex,
         materialConstantByteOffset,
         hasViewport,
-        Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
-        Float4(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY)),
+        VectorSet(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
+        VectorSet(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY)),
         frameHeapSlots,
         dispatchFlags
     );

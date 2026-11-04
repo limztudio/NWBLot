@@ -263,8 +263,14 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         if(typeRef.funcReturnType && !checkReturnTypeRef(*typeRef.funcReturnType, enclosingClass, enclosingMethod, typeRef.span, errors))
             ok = false;
         for(const FuncParamType& fp : typeRef.funcParams){
-            if(fp.type && !checkTypeRef(*fp.type, enclosingClass, enclosingMethod, errors))
-                ok = false;
+            if(fp.type){
+                if(!checkTypeRef(*fp.type, enclosingClass, enclosingMethod, errors))
+                    ok = false;
+                if(!fp.type->isFuncType && SymbolTable::IsSimdStorageType(m_symbols.resolveBaseTypeName(fp.type->name))){
+                    reportError(errors, fp.type->span, "SIMD memory-layout type cannot be used as a parameter; use 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble' instead");
+                    ok = false;
+                }
+            }
         }
     }
     if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeRef.name)){
@@ -342,6 +348,34 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
 
     if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
         ok = false;
+    if(!typeRef.templateArgs.empty()){
+        const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeRef.name);
+        const b8 allowsDirectSimdValueArg = genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional);
+        for(usize argIdx = 0u; argIdx < typeRef.templateArgs.size(); ++argIdx){
+            const TypeRef* argType = typeRef.templateArgs[argIdx].type;
+            if(!argType)
+                continue;
+            const TypeRef* unwrappedArg = m_symbols.unwrapTypeAlias(argType);
+            b8 invalidSimdHold = false;
+            if(allowsDirectSimdValueArg && argIdx == 0u){
+                if(unwrappedArg){
+                    for(const TypeArg& nestedArg : unwrappedArg->templateArgs){
+                        if(nestedArg.type && TypeContainsSimdRegisterType(*nestedArg.type, m_symbols)){
+                            invalidSimdHold = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            else if(TypeContainsSimdRegisterType(*argType, m_symbols)){
+                invalidSimdHold = true;
+            }
+            if(invalidSimdHold){
+                reportError(errors, argType->span.line > 0u ? argType->span : typeRef.span, "containers and generic types cannot hold SIMD calculation types ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
+                ok = false;
+            }
+        }
+    }
     if(!typeRef.isAuto && !typeRef.isFuncType && !typeRef.name.empty()){
         if((m_symbols.findGlobalConstant(typeRef.name) != nullptr && !m_symbols.hasTypeSymbol(typeRef.name)) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, typeRef.name)){
             reportError(errors, typeRef.span, "compile-time constant cannot be used as a type");

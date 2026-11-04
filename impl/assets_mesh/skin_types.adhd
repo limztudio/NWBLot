@@ -8,6 +8,10 @@ const u32 s_SkinBinaryMagic = 0x534B4E31u; // SKN1
 const f32 s_SkinValidationEpsilon = 0.000001f;
 const f32 s_SkinWeightSumEpsilon = 0.001f;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [serialize]
 class SkinInfluence4{
     public Array<u16, s_SkinInfluenceJointCount> joint;
@@ -24,13 +28,25 @@ class SkinHeaderBinary{
     public u64 inverseBindMatrixCount = 0u;
 }
 
-b8 ValidSkinInfluenceWeights(in f32x4u weights){
-    for(usize i = 0u; i < 4u; ++i){
-        const f32 w = weights[i];
-        if(!isFinite(w) || w < 0.0f)
-            return false;
-    }
-    const f32 sum = weights[0u] + weights[1u] + weights[2u] + weights[3u];
+[subsystem("skinning_subsystem")]
+class SkinningSubsystem{
+    public AssetRef<ComputeShader> localBoundsCs;
+    public AssetRef<ComputeShader> meshletBoundsCs;
+    public AssetRef<ComputeShader> repackNormalsCs;
+    public AssetRef<ComputeShader> skinningCs;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidSkinInfluenceWeights(in VectorSingle weights){
+    if(
+        !isFinite(weights.x) || !isFinite(weights.y) || !isFinite(weights.z) || !isFinite(weights.w)
+        || weights.x < 0.0f || weights.y < 0.0f || weights.z < 0.0f || weights.w < 0.0f
+    )
+        return false;
+    const f32 sum = dot(weights, VectorSingle(1.0f));
     return isFinite(sum) && abs(sum - 1.0f) <= s_SkinWeightSumEpsilon;
 }
 
@@ -102,7 +118,7 @@ b8 ValidateSkinAssetHeaderAndCounts(
 b8 ValidateSkinInfluenceStream(in Span<SkinInfluence4> influences, in u32 jointCount){
     for(usize index = 0u; index < influences.size(); ++index){
         const SkinInfluence4 influence = influences[index];
-        if(!ValidSkinInfluenceWeights(influence.weight) || !SkinInfluenceFitsSkeleton(influence, jointCount)){
+        if(!ValidSkinInfluenceWeights(VectorSingle(influence.weight)) || !SkinInfluenceFitsSkeleton(influence, jointCount)){
             error("Skin::validatePayload failed: influence {} has invalid weights or joint indices", index);
             return false;
         }
@@ -116,14 +132,6 @@ b8 ValidateSkinHeaderBinary(in SkinHeaderBinary header){
 
     error("Skin::loadBinary failed: reserved header fields must be zero");
     return false;
-}
-
-[subsystem("skinning_subsystem")]
-class SkinningSubsystem{
-    public AssetRef<ComputeShader> localBoundsCs;
-    public AssetRef<ComputeShader> meshletBoundsCs;
-    public AssetRef<ComputeShader> repackNormalsCs;
-    public AssetRef<ComputeShader> skinningCs;
 }
 
 

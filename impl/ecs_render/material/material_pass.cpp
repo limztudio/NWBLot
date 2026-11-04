@@ -375,9 +375,9 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             InstanceGpuData instance = ::NWB::Impl::BuildInstanceGpuData(
                 entity,
                 transform != nullptr,
-                resolvedTransform.position,
-                resolvedTransform.rotation,
-                resolvedTransform.scale,
+                LoadFloat(resolvedTransform.position),
+                LoadFloat(resolvedTransform.rotation),
+                LoadFloat(resolvedTransform.scale),
                 typedRanges.mutableRange.byteOffset
             );
             m_meshSystem.populateMeshGeometryHeapSlots(mesh, instance);
@@ -497,7 +497,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         drawItem.instanceIndex = instanceIndex;
         drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
         drawItem.shadingModelId = materialInfo->shadingModelId;
-        drawItem.meshletConeCullScaleSafe = transform ? MeshletConeCullScaleSafe(transform->scale) : true;
+        drawItem.meshletConeCullScaleSafe = transform ? MeshletConeCullScaleSafe(LoadFloat(transform->scale)) : true;
 
         if(passDrawItemActive){
             MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;

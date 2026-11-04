@@ -2,50 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum<u8> InputCommand{
-    None,
-    FocusNext,
-    FocusPrevious,
-    Activate,
-    Accept,
-    Submit,
-    Cancel,
-    Left,
-    Right,
-    Up,
-    Down,
-    PageUp,
-    PageDown,
-    Home,
-    End,
-    WordLeft,
-    WordRight,
-    DocumentHome,
-    DocumentEnd,
-    Backspace,
-    Delete,
-    WordBackspace,
-    WordDelete,
-    SelectAll,
-    Copy,
-    Cut,
-    Paste,
-    Undo,
-    Redo,
-    Newline,
-    ContextMenu,
-}
-
-enum<u8> InputSelectionPolicy{
-    None,
-    Always,
-    Shift,
-}
-
 const i32 s_InputKeyUnknown = -1;
 const usize s_InputMaxBindings = 256u;
 const usize s_DefaultInputKeyBindingCount = 55u;
-
 const i32 s_InputModifierShift = 0x0001;
 const i32 s_InputModifierControl = 0x0002;
 const i32 s_InputModifierAlt = 0x0004;
@@ -54,7 +13,6 @@ const i32 s_InputModifierCapsLock = 0x0010;
 const i32 s_InputModifierNumLock = 0x0020;
 const i32 s_InputBindingModifierMask = s_InputModifierShift | s_InputModifierControl | s_InputModifierAlt | s_InputModifierSuper;
 const i32 s_InputLockModifierMask = s_InputModifierCapsLock | s_InputModifierNumLock;
-
 const i32 s_InputKeySpace = 32;
 const i32 s_InputKeyApostrophe = 39;
 const i32 s_InputKeyComma = 44;
@@ -95,6 +53,51 @@ const i32 s_InputKeyKeypadEnter = 335;
 const i32 s_InputKeyKeypadEqual = 336;
 const i32 s_InputKeyLeftShift = 340;
 const i32 s_InputKeyMenu = 348;
+const InputSource s_NativePointerSource = InputSource(0u, 1u);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> InputCommand{
+    None,
+    FocusNext,
+    FocusPrevious,
+    Activate,
+    Accept,
+    Submit,
+    Cancel,
+    Left,
+    Right,
+    Up,
+    Down,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    WordLeft,
+    WordRight,
+    DocumentHome,
+    DocumentEnd,
+    Backspace,
+    Delete,
+    WordBackspace,
+    WordDelete,
+    SelectAll,
+    Copy,
+    Cut,
+    Paste,
+    Undo,
+    Redo,
+    Newline,
+    ContextMenu,
+}
+
+enum<u8> InputSelectionPolicy{
+    None,
+    Always,
+    Shift,
+}
 
 class InputKeyBinding{
     public i32 key = s_InputKeyUnknown;
@@ -125,14 +128,16 @@ class InputSource{
     public u64 control = 0u;
 }
 
-const InputSource s_NativePointerSource = InputSource(0u, 1u);
-
 class InputCommandIntent{
     public InputCommand command = InputCommand::None;
     public b8 extend = false;
     public b8 edit = true;
     public b8 allowText = false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 IsValidInputKeyBinding(in InputKeyBinding binding, in b8 validKey, in i32 modifierMask){
     return validKey

@@ -357,9 +357,10 @@ b8 MeshCookSourceStreams::ParseSourceSkinInfluencesInto(
                 return false;
             }
 
-            StoreFloat(VectorDivide(rawWeights, weightSum), influence.weight);
-            if(!ValidSkinInfluenceWeights(influence.weight))
+            const SIMDVectorSingle normalizedWeights = VectorDivide(rawWeights, weightSum);
+            if(!ValidSkinInfluenceWeights(normalizedWeights))
                 return false;
+            StoreFloat(normalizedWeights, influence.weight);
         }
         else
             influence.weight = parsedWeights;

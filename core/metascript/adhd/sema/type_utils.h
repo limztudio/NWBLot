@@ -310,6 +310,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept;
 [[nodiscard]] b8 IsConcreteTemplateArgList(Span<const TemplateParamDecl> params, Span<const TypeArg> args, const SymbolTable& symbols)noexcept;
 [[nodiscard]] b8 TypeContainsArenaBackedContainer(const TypeRef& type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
+[[nodiscard]] b8 TypeContainsSimdRegisterType(const TypeRef& type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
 [[nodiscard]] b8 ShouldPackSerializeClass(Span<const FieldDecl* const> fields, const SymbolTable& symbols)noexcept;
 [[nodiscard]] i32 ScoreCallableParams(const SymbolTable& symbols, Span<const ParamDecl> params, Span<const MStringView> argTypeNames, Span<const u8> argIsMut)noexcept;
 

@@ -88,7 +88,7 @@ b8 CsgDeformCapBuilder::OrderBoundaryLoop(Core::Alloc::ScratchArena& scratchAren
     return true;
 }
 
-Expected<u32> CsgDeformCapBuilder::FillCapLoop(const Float4& loopNormal, const Span<const u32> loop, CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices, CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles){
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormal, const Span<const u32> loop, CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices, CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles){
     u32 capTriangles = 0u;
     if(inOutVertices.size() + 1u > s_MaxDeformVertices)
         return MakeUnexpected(Failure{});
@@ -158,7 +158,7 @@ Expected<u32> CsgDeformCapBuilder::FillCutCaps(
         const auto loopNormal = TryComputeCsgDeformLoopNormal(inOutVertices, loop);
         if(!loopNormal)
             return MakeUnexpected(Failure{});
-        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(*loopNormal, loop, inOutVertices, inOutTriangles);
+        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(loopNormal->value, loop, inOutVertices, inOutTriangles);
         if(!loopCaps)
             return MakeUnexpected(Failure{});
         capTriangles += *loopCaps;

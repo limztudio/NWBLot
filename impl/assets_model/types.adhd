@@ -309,7 +309,7 @@ b8 IsCompleteModelSkinnedMeshObject(in ModelSkinnedMeshObject object){
 }
 
 b8 ValidateModelSkeletonObject(in ModelSkeletonObject object, in usize index, in b8 nameIsUnique){
-    if(!IsFiniteSkeletonJointMatrix(object.transform)){
+    if(!IsFiniteSkeletonJointMatrix(MatrixSingle(object.transform))){
         error("Model::validatePayload failed: skeleton object {} has non-finite transform", index);
         return false;
     }
@@ -331,7 +331,7 @@ b8 ValidateModelStaticMeshObject(
     in b8 parentExists,
     in b8 parentIsSkeleton
 ){
-    if(!IsFiniteSkeletonJointMatrix(object.transform)){
+    if(!IsFiniteSkeletonJointMatrix(MatrixSingle(object.transform))){
         error("Model::validatePayload failed: static mesh object {} has non-finite transform", index);
         return false;
     }
@@ -369,7 +369,7 @@ b8 ValidateModelSkinnedMeshObject(
     in b8 nameIsUnique,
     in b8 targetIsSkeleton
 ){
-    if(!IsFiniteSkeletonJointMatrix(object.transform)){
+    if(!IsFiniteSkeletonJointMatrix(MatrixSingle(object.transform))){
         error("Model::validatePayload failed: skinned mesh object {} has non-finite transform", index);
         return false;
     }

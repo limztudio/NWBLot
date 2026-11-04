@@ -15,7 +15,6 @@
 #include "cook_meshlets.h"
 #include "binary_payload_io.h"
 #include "meshlet_triangle_indices.h"
-#include "cook_topology.h"
 
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>

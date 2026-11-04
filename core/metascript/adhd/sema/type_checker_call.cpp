@@ -146,6 +146,23 @@ b8 TypeChecker::checkCallableArguments(
             markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         if(!checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
+        if(expectedParamTypeRef){
+            const TypeRef* unwrappedParam = m_symbols.unwrapTypeAlias(expectedParamTypeRef);
+            if(unwrappedParam && !unwrappedParam->templateArgs.empty() && unwrappedParam->templateArgs[0].type){
+                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedParam->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+                    const MStringView valBase = m_symbols.resolveBaseTypeName(unwrappedParam->templateArgs[0].type->name);
+                    if(SymbolTable::IsSimdRegisterVectorType(valBase) && arg->resolvedSimdType == valBase)
+                        arg->wrapInSimdResult = true;
+                }
+            }
+        }
+        if(builtinFnInfo && (builtinFnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply)){
+            const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
+            if(SymbolTable::IsSimdStorageType(actualArgType) || SymbolTable::IsUnalignedVectorType(actualArgType)){
+                reportError(errors, arg->span, "SIMD math intrinsics require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");
+                ok = false;
+            }
+        }
         if(builtinArgRule && !builtinArgRule->errorMessage.empty()){
             const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
             const b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && actualArgType != builtinArgRule->requiredExactType)
@@ -345,6 +362,16 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     reportError(errors, expr.span, "wrong number of arguments to built-in vector/matrix constructor");
                     ok = false;
                 }
+                else if(callArgCount == 2u && expr.arguments[0] && !SymbolTable::IsSimdRegisterVectorType(baseCallee)){
+                    const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee);
+                    const BuiltinUnalignedVectorInfo* unalignedInfo = simdVecInfo ? nullptr : FindBuiltinUnalignedVectorType(baseCallee);
+                    const b8 requiresSimdRegArg0 = (simdVecInfo && simdVecInfo->lanes == 4u && simdVecInfo->altCtorArity != 2u)
+                        || (unalignedInfo && unalignedInfo->lanes == 4u && unalignedInfo->altCtorArity != 2u);
+                    if(requiresSimdRegArg0 && !SymbolTable::IsSimdRegisterVectorType(inferExprTypeName(ownerClass, &method, *expr.arguments[0], scope))){
+                        reportError(errors, expr.span, "wrong number of arguments to built-in vector/matrix constructor");
+                        ok = false;
+                    }
+                }
                 if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee); simdVecInfo && simdVecInfo->isMixed && callArgCount == 1u && expr.arguments[0]){
                     const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *expr.arguments[0], scope);
                     if(arg0Type != baseCallee){
@@ -459,6 +486,12 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(isMutationTarget){
                     reportError(errors, expr.span, "cannot mutate or pass temporary rvalue return value to a 'mut' target");
                     ok = false;
+                }
+            }
+            else if(mName == "value" && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
+                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(objType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+                    if(SymbolTable::IsSimdRegisterVectorType(m_symbols.resolveBaseTypeName(recvTypeRef->templateArgs[0].type->name)))
+                        expr.unwrapSimdResultValue = true;
                 }
             }
             else if(IsStringByteAccessorMethod(objType, mName)){
@@ -576,6 +609,14 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         ok = false;
     }
 
+    if(!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier && expr.arguments.size() == 1u && expr.arguments[0]){
+        const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(baseCallee); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+            if(SymbolTable::IsSimdRegisterVectorType(expr.arguments[0]->resolvedSimdType))
+                expr.arguments[0]->wrapInSimdResult = true;
+        }
+    }
+
     if(targetCallable && expr.callTemplateArgs.empty() && !targetCallable->templateParams.empty())
         deduceCallTemplateArgs(ownerClass, &method, *targetCallable, expr.arguments, scope, expr.deducedTemplateArgs);
 
@@ -650,8 +691,14 @@ b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, const Span<const ScopedVa
             reportError(errors, p.span, "duplicate parameter or capture name in lambda");
             ok = false;
         }
-        if(p.type && !checkTypeRef(*p.type, ownerClass, &method, errors))
-            ok = false;
+        if(p.type){
+            if(!checkTypeRef(*p.type, ownerClass, &method, errors))
+                ok = false;
+            if(!p.type->isFuncType && SymbolTable::IsSimdStorageType(m_symbols.resolveBaseTypeName(p.type->name))){
+                reportError(errors, p.span, "SIMD memory-layout type cannot be used as a parameter; use 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble' instead");
+                ok = false;
+            }
+        }
         ScopedVarInfo paramVar;
         paramVar.name = p.name;
         paramVar.type = p.type;

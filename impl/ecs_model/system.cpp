@@ -272,9 +272,10 @@ b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const Mo
 
 Core::ECS::Entity ModelSystem::createSpawnedObjectEntity(const Core::ECS::EntityID owner, const Name objectName, const SkeletonJointMatrix& localTransform, const ModelObjectKind::Enum kind){
     Core::ECS::Entity entity = m_world.createEntity();
-    entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localTransform, kind);
+    const SIMDMatrix localMatrix = LoadFloat(localTransform);
+    entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localMatrix, kind);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, owner), LoadFloat(localTransform))))
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, owner), localMatrix)))
         Scene::StoreDecomposedTransform(*decomposition, transform);
     return entity;
 }

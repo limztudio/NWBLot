@@ -167,18 +167,14 @@ b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShap
 
     const auto cutterBounds = shapeRegistry.buildShapeBounds(shapeType.id, shapeToWorld, parameterBytes);
     if(!cutterBounds){
-        const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f));
+        const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, VectorZero(), VectorZero());
         if(!resolved)
             return false;
         outWorkBounds = *resolved;
         return true;
     }
 
-    Float4 cutterMinBounds(0.0f, 0.0f, 0.0f, 0.0f);
-    Float4 cutterMaxBounds(0.0f, 0.0f, 0.0f, 0.0f);
-    StoreFloat(cutterBounds->minBounds, cutterMinBounds);
-    StoreFloat(cutterBounds->maxBounds, cutterMaxBounds);
-    const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds->finiteBounds, cutterMinBounds, cutterMaxBounds);
+    const Expected<CsgClipWorkBounds> resolved = ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds->finiteBounds, cutterBounds->minBounds, cutterBounds->maxBounds);
     if(!resolved)
         return false;
     outWorkBounds = *resolved;
@@ -252,16 +248,14 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
         return MakeUnexpected(Failure{});
 
     b8 meshViewReady = false;
-    Float44 worldToClip{};
+    SIMDMatrix worldToClipSimd{};
     if(csgWorkRegionMeshViewState){
-        worldToClip = csgWorkRegionMeshViewState->worldToClip;
-        const SIMDMatrix worldToClipSimd = LoadFloat(worldToClip);
+        worldToClipSimd = LoadFloat(csgWorkRegionMeshViewState->worldToClip);
         meshViewReady = !MatrixIsNaN(worldToClipSimd) && !MatrixIsInfinite(worldToClipSimd);
     }
     else{
         if(const auto acceptedWorldToClip = m_meshSystem.snapshotAcceptedMeshViewWorldToClip()){
-            worldToClip = *acceptedWorldToClip;
-            const SIMDMatrix worldToClipSimd = LoadFloat(worldToClip);
+            worldToClipSimd = LoadFloat(*acceptedWorldToClip);
             meshViewReady = !MatrixIsNaN(worldToClipSimd) && !MatrixIsInfinite(worldToClipSimd);
         }
     }
@@ -282,10 +276,10 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
             const SIMDMatrix worldToShape = resolvedCutter.worldToShape;
             cutterGpuData = CsgCutterGpuData{};
             StoreFloat(worldToShape, cutterGpuData.worldToShape);
-            __hidden_csg_clip_resolve::BuildResolvedClipCutterGpuData(resolvedCutter, ComputeWorldToShapeScaleBound(cutterGpuData.worldToShape), cutterGpuData);
+            __hidden_csg_clip_resolve::BuildResolvedClipCutterGpuData(resolvedCutter, ComputeWorldToShapeScaleBound(worldToShape), cutterGpuData);
 
             if(meshViewReady && resolvedCutter.workBounds.valid)
-                receiverWorkRegion.expandWorldBounds(worldToClip, resolvedCutter.workBounds.minBounds, resolvedCutter.workBounds.maxBounds, frameWidth, frameHeight);
+                receiverWorkRegion.expandWorldBounds(worldToClipSimd, LoadFloat(resolvedCutter.workBounds.minBounds), LoadFloat(resolvedCutter.workBounds.maxBounds), frameWidth, frameHeight);
             else
                 receiverWorkRegion.expandFull();
 

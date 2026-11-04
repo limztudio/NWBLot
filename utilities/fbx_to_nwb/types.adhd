@@ -520,7 +520,7 @@ usize HashMeshSkinInfluence(in MeshSkinInfluence value){
     return seed;
 }
 
-PositionKey MakePositionKeyFromVec(in f32x4 position){
+PositionKey MakePositionKey(in VectorSingle position){
     PositionKey key;
     key.x = FbxFloatingHashBits(position.x);
     key.y = FbxFloatingHashBits(position.y);
@@ -649,9 +649,9 @@ b8 ValidatePlainMeshSourceSkin(in usize skinCount, in Span<SourceVertexRef> vert
     return true;
 }
 
-b8 NearlyEqualFbxJointMatrices(in f32x3x4 lhs, in f32x3x4 rhs){
+b8 NearlyEqualFbxJointMatrices(in MatrixSingle lhs, in MatrixSingle rhs){
     for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
-        const f32x4 diff = abs(lhs[rowIndex] - rhs[rowIndex]);
+        const VectorSingle diff = abs(lhs[rowIndex] - rhs[rowIndex]);
         if(
             !isFinite(diff.x) || !isFinite(diff.y) || !isFinite(diff.z) || !isFinite(diff.w)
             || diff.x > s_JointMatrixRowEpsilon
@@ -665,8 +665,8 @@ b8 NearlyEqualFbxJointMatrices(in f32x3x4 lhs, in f32x3x4 rhs){
 }
 
 b8 IsFiniteSourceTriangleCornerValues(
-    in f32x4 position,
-    in f32x4 normal,
+    in VectorSingle position,
+    in VectorSingle normal,
     in SourceTriangleCorner corner,
     in b8 wantsSkinning
 ){

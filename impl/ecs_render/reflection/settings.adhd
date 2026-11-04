@@ -37,6 +37,72 @@ class ReflectionSettings{
     public b8 spatialFilterEnabled = true;
 }
 
+class ReflectionFeedbackPlan{
+    public ReflectionSceneContentStamp stamp;
+    public ReflectionSettings settings;
+    public u64 generation = 0u;
+    public u64 sequence = 0u;
+    public u64 acceptedSequence = 0u;
+    public u64 epoch = 0u;
+    public u64 graphicsFrameIndex = 0u;
+    public u64 startGraphicsFrame = 0u;
+    public u32 probeIndex = 0u;
+    public u32 currentBank = 0u;
+    public u32 previousBank = 0u;
+    public b8 enabled = false;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public b8 previousHardwareReady = false;
+    public b8 quarantined = false;
+    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::None;
+}
+
+class ReflectionFeedbackOutcome{
+    public u64 epoch = 0u;
+    public u64 startGraphicsFrame = 0u;
+    public u32 probeIndex = 0u;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::None;
+}
+
+class ReflectionHistoryPlan{
+    public ReflectionSceneContentStamp stamp;
+    public ReflectionSettings settings;
+    public u64 generation = 0u;
+    public u64 sequence = 0u;
+    public u64 acceptedSequence = 0u;
+    public u64 epoch = 0u;
+    public u64 graphicsFrameIndex = 0u;
+    public u64 historyStartGraphicsFrame = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 previousSampleCount = 0u;
+    public u32 currentBank = 0u;
+    public u32 previousBank = 0u;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public b8 previousHardwareReady = false;
+    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
+}
+
+class ReflectionHistoryOutcome{
+    public u64 epoch = 0u;
+    public u64 historyStartGraphicsFrame = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 sampleCount = 0u;
+    public b8 eligible = false;
+    public b8 reused = false;
+    public b8 reset = false;
+    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 SameReflectionTraceSettings(in ReflectionSettings first, in ReflectionSettings second){
     return
         first.traceMode == second.traceMode
@@ -115,41 +181,6 @@ b8 ValidateReflectionSettings(in ReflectionSettings settings){
 b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSettings second){
     // Diagnostics/filter leave the temporal estimator unchanged.
     return first.temporalEnabled == second.temporalEnabled && first.temporalMaxSamples == second.temporalMaxSamples && SameReflectionTraceSettings(first, second);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ReflectionFeedbackPlan{
-    public ReflectionSceneContentStamp stamp;
-    public ReflectionSettings settings;
-    public u64 generation = 0u;
-    public u64 sequence = 0u;
-    public u64 acceptedSequence = 0u;
-    public u64 epoch = 0u;
-    public u64 graphicsFrameIndex = 0u;
-    public u64 startGraphicsFrame = 0u;
-    public u32 probeIndex = 0u;
-    public u32 currentBank = 0u;
-    public u32 previousBank = 0u;
-    public b8 enabled = false;
-    public b8 eligible = false;
-    public b8 reused = false;
-    public b8 reset = false;
-    public b8 previousHardwareReady = false;
-    public b8 quarantined = false;
-    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::None;
-}
-
-class ReflectionFeedbackOutcome{
-    public u64 epoch = 0u;
-    public u64 startGraphicsFrame = 0u;
-    public u32 probeIndex = 0u;
-    public b8 eligible = false;
-    public b8 reused = false;
-    public b8 reset = false;
-    public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::None;
 }
 
 ReflectionFeedbackPlan ResolveReflectionFeedbackPlan(
@@ -245,37 +276,6 @@ ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedback
     else
         result.resetReason = plan.resetReason;
     return result;
-}
-
-class ReflectionHistoryPlan{
-    public ReflectionSceneContentStamp stamp;
-    public ReflectionSettings settings;
-    public u64 generation = 0u;
-    public u64 sequence = 0u;
-    public u64 acceptedSequence = 0u;
-    public u64 epoch = 0u;
-    public u64 graphicsFrameIndex = 0u;
-    public u64 historyStartGraphicsFrame = 0u;
-    public u32 sampleIndex = 0u;
-    public u32 previousSampleCount = 0u;
-    public u32 currentBank = 0u;
-    public u32 previousBank = 0u;
-    public b8 eligible = false;
-    public b8 reused = false;
-    public b8 reset = false;
-    public b8 previousHardwareReady = false;
-    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
-}
-
-class ReflectionHistoryOutcome{
-    public u64 epoch = 0u;
-    public u64 historyStartGraphicsFrame = 0u;
-    public u32 sampleIndex = 0u;
-    public u32 sampleCount = 0u;
-    public b8 eligible = false;
-    public b8 reused = false;
-    public b8 reset = false;
-    public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
 }
 
 ReflectionHistoryPlan ResolveReflectionHistoryPlan(
@@ -384,10 +384,6 @@ ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPla
         result.sampleCount = 0u;
     return result;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void PopulateReflectionFrameSettingsParameters(in ReflectionSettings settings, mut ReflectionFrameParameters outParameters){
     outParameters.traceMode = cast<u32>(settings.traceMode);

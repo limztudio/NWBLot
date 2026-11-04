@@ -46,26 +46,7 @@ static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0u, "Tr
 }
 
 inline void StoreDecomposedTransform(const MatrixDecomposition& decomposition, TransformComponent& transform)noexcept{
-    Float4 translationVec;
-    Float4 rotationVec;
-    Float4 scaleVec;
-    StoreFloat(decomposition.translation, translationVec);
-    StoreFloat(decomposition.rotation, rotationVec);
-    StoreFloat(decomposition.scale, scaleVec);
-    AssignDecomposedTransformComponent(translationVec, rotationVec, scaleVec, transform);
-}
-
-// Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
-[[nodiscard]] inline SIMDMatrix BuildDefaultSceneViewBasis()noexcept{
-    return LoadFloat(BuildDefaultSceneViewBasisRows());
-}
-
-[[nodiscard]] inline SIMDMatrix BuildSceneViewBasis(const SIMDVectorSingle position, const SIMDVectorSingle rotation)noexcept{
-    Float4 posVec;
-    Float4 rotVec;
-    StoreFloat(position, posVec);
-    StoreFloat(rotation, rotVec);
-    return LoadFloat(BuildSceneViewBasisRows(posVec, rotVec));
+    AssignDecomposedTransformComponent(decomposition.translation, decomposition.rotation, decomposition.scale, transform);
 }
 
 

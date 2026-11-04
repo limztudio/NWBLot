@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_RadioGroupMaxChoices = 64u;
+const u32 s_RadioGroupStampFencePassCount = 2u;
+const f32 s_RadioGroupMaxMarkInset = 0.5f;
+const f64 s_RadioGroupMaxMarkInsetF64 = 0.5;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RadioGroupStyle{
     public Name normal = Name("radio.normal");
     public Name hover = Name("radio.hover");
@@ -29,11 +38,6 @@ class RadioGroupStyle{
     // Fraction of the indicator extent inset on each side of its checked mark.
     public f32 markInset = s_StyleMarkInset;
 }
-
-const u32 s_RadioGroupMaxChoices = 64u;
-const u32 s_RadioGroupStampFencePassCount = 2u;
-const f32 s_RadioGroupMaxMarkInset = 0.5f;
-const f64 s_RadioGroupMaxMarkInsetF64 = 0.5;
 
 class RadioGroupOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
@@ -118,6 +122,10 @@ class RadioGroupPlacement{
     public Array<RadioGroupChoicePlacement, s_RadioGroupMaxChoices> rows;
     public u32 count = 0u;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 IsValidRadioGroupChoices(in RadioGroupChoices choices){
     if(choices.sourceGeneration == 0u || choices.sourceRevision == 0u || choices.count > s_RadioGroupMaxChoices){
@@ -306,7 +314,7 @@ Expected<RadioGroupPlacement> TryPlaceRadioGroup(in Rect bounds, in Rect clip, i
     if(!clipped.has_value())
         return makeUnexpected(Failure());
     candidate.clip = clipped.value();
-    const f64x4 insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
+    const VectorDouble insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
     const Expected<Rect> content = TryMakeUiRect(insetRect.x, insetRect.y, insetRect.z, insetRect.w, UiRectPrecision::PreciseExtents);
     if(!content.has_value())
         return makeUnexpected(Failure());

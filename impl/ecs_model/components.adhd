@@ -9,15 +9,15 @@
 
 
 [reflect]
-class ModelComponent{
-    public AssetRef<Model> model;
-}
-
-[reflect]
 enum<u32> ModelObjectKind{
     Skeleton,
     StaticMesh,
     SkinnedMesh
+}
+
+[reflect]
+class ModelComponent{
+    public AssetRef<Model> model;
 }
 
 [reflect]

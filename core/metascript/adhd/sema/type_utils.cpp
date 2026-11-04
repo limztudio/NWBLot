@@ -170,15 +170,21 @@ const BuiltinSimdMatrixInfo* FindBuiltinSimdMatrixType(const MStringView name)no
 }
 
 b8 IsValidBuiltinVectorOrMatrixCtorArity(const MStringView baseTypeName, const usize argCount)noexcept{
+    if(SymbolTable::IsSimdRegisterVectorType(baseTypeName))
+        return argCount <= 4u;
+    if(SymbolTable::IsSimdRegisterMatrixType(baseTypeName))
+        return argCount == 0u || argCount == 1u || argCount == 3u || argCount == 4u || argCount == 9u || argCount == 12u || argCount == 16u;
     if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(baseTypeName)){
         return argCount == 0u
             || argCount == 1u
+            || (vecInfo->lanes == 4u && argCount == 2u)
             || argCount == vecInfo->lanes
             || (vecInfo->altCtorArity > 0u && argCount == vecInfo->altCtorArity);
     }
     if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(baseTypeName)){
         return argCount == 0u
             || argCount == 1u
+            || (unalignedInfo->lanes == 4u && !unalignedInfo->isHalfFloat && argCount == 2u)
             || argCount == unalignedInfo->lanes
             || (unalignedInfo->altCtorArity > 0u && argCount == unalignedInfo->altCtorArity);
     }
@@ -270,6 +276,8 @@ b8 IsBorrowViewType(const MStringView name)noexcept{
 }
 
 b8 IsNonSerializableBuiltinType(const MStringView name)noexcept{
+    if(SymbolTable::IsSimdRegisterType(name))
+        return true;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name))
         return !objInfo->isBinarySerializable;
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
@@ -602,6 +610,21 @@ b8 TypeContainsArenaBackedContainer(const TypeRef& type, const SymbolTable& symb
         return true;
     for(const TypeArg& targ : unwrapped->templateArgs){
         if(targ.type && TypeContainsArenaBackedContainer(*targ.type, symbols, depth + 1u))
+            return true;
+    }
+    return false;
+}
+
+b8 TypeContainsSimdRegisterType(const TypeRef& type, const SymbolTable& symbols, const u32 depth)noexcept{
+    if(depth >= 8u || type.isFuncType)
+        return false;
+    const TypeRef* unwrapped = symbols.unwrapTypeAlias(&type);
+    if(!unwrapped || unwrapped->isFuncType)
+        return false;
+    if(SymbolTable::IsSimdRegisterType(symbols.resolveBaseTypeName(unwrapped->name)))
+        return true;
+    for(const TypeArg& targ : unwrapped->templateArgs){
+        if(targ.type && TypeContainsSimdRegisterType(*targ.type, symbols, depth + 1u))
             return true;
     }
     return false;

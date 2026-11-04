@@ -373,7 +373,13 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
         }
         else if(field->hasCtorInit){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
-            m_sourceEmitter.emitCtorOrCallArgs(out, baseFieldType, field->ctorArgs, field->usesClassArena ? MStringView("s_ClassArena") : MStringView{}, true, true);
+            if(SymbolTable::IsSimdRegisterType(baseFieldType)){
+                out.append(" = ");
+                m_sourceEmitter.emitSimdVectorCtorReg(out, baseFieldType, field->ctorArgs);
+            }
+            else{
+                m_sourceEmitter.emitCtorOrCallArgs(out, baseFieldType, field->ctorArgs, field->usesClassArena ? MStringView("s_ClassArena") : MStringView{}, true, true);
+            }
         }
         else if(field->usesClassArena){
             out.append("{s_ClassArena}");
@@ -382,6 +388,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
             if(
                 NeedsBraceDefaultFieldInit(baseFieldType)
+                || SymbolTable::IsSimdType(baseFieldType)
                 || SymbolTable::IsUnalignedVectorType(baseFieldType)
                 || m_symbols.findEnum(baseFieldType) != nullptr
                 || m_symbols.findClass(baseFieldType) != nullptr

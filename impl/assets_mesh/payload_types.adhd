@@ -427,7 +427,7 @@ u32 PackMeshletConeCutoffUnorm8(in f32 value){
     return cast<u32>(clamp(value, 0.0f, 1.0f) * s_MeshletUnorm8Max);
 }
 
-f32x4 FoldMeshletConeOctAxisVec(in f32x4 axis){
+VectorSingle FoldMeshletConeOctAxis(in VectorSingle axis){
     if(axis.z >= 0.0f)
         return axis;
     const f32 absX = abs(axis.x);
@@ -438,19 +438,19 @@ f32x4 FoldMeshletConeOctAxisVec(in f32x4 axis){
     f32 signY = 1.0f;
     if(axis.y < 0.0f)
         signY = -1.0f;
-    return f32x4((1.0f - absY) * signX, (1.0f - absX) * signY, axis.z, axis.w);
+    return VectorSingle((1.0f - absY) * signX, (1.0f - absX) * signY, axis.z, axis.w);
 }
 
-f32 ConservativePackedMeshletConeCutoffVec(in f32x4 axis, in f32 cutoff, in f32x4 unpackedAxis){
-    f32x4 normalizedAxis = unpackedAxis;
+f32 ConservativePackedMeshletConeCutoff(in VectorSingle axis, in f32 cutoff, in VectorSingle unpackedAxis){
+    VectorSingle normalizedAxis = unpackedAxis;
     if(lengthSq(axis.xyz) > s_MeshletConeAxisLengthSquaredEpsilon)
         normalizedAxis = normalize(axis.xyz);
     const f32 axisDot = clamp(dot(normalizedAxis.xyz, unpackedAxis.xyz), -1.0f, 1.0f);
     const f32 safeCutoff = clamp(cutoff, 0.0f, 1.0f);
-    const f32x4 anglePair(safeCutoff, axisDot, 0.0f, 0.0f);
-    const f32x4 oneMinusSquare = f32x4(1.0f) - anglePair * anglePair;
-    const f32x4 clampedSquare = max(oneMinusSquare, f32x4(0.0f));
-    const f32x4 sinPair = sqrt(clampedSquare);
+    const VectorSingle anglePair(safeCutoff, axisDot, 0.0f, 0.0f);
+    const VectorSingle oneMinusSquare = VectorSingle(1.0f) - anglePair * anglePair;
+    const VectorSingle clampedSquare = max(oneMinusSquare, VectorSingle(0.0f));
+    const VectorSingle sinPair = sqrt(clampedSquare);
     const f32 cutoffSin = sinPair.x;
     const f32 axisSin = sinPair.y;
     return safeCutoff * axisDot - cutoffSin * axisSin;
@@ -463,13 +463,13 @@ u32 PackMeshletConeFromAxisAndCutoff(in u32 packedAxis, in f32 conservativeCutof
     return packedAxis | (packedCutoff << s_MeshletConeCutoffShift) | (s_MeshletConeFlagEnabled << s_MeshletConeFlagShift);
 }
 
-b8 IsValidMeshDirectionVector(in f32x4 direction){
+b8 IsValidMeshDirectionVector(in VectorSingle direction){
     if(!isFinite(direction.x) || !isFinite(direction.y) || !isFinite(direction.z))
         return false;
     return abs(lengthSq(direction.xyz) - 1.0f) <= s_DirectionLengthTolerance;
 }
 
-b8 IsValidMeshTangentVector(in f32x4 tangent){
+b8 IsValidMeshTangentVector(in VectorSingle tangent){
     if(!isFinite(tangent.x) || !isFinite(tangent.y) || !isFinite(tangent.z) || !isFinite(tangent.w))
         return false;
     return
@@ -580,44 +580,48 @@ Expected<usize> TryFindInvalidMeshletPrimitiveIndex(
     return makeUnexpected(Failure());
 }
 
-u32 PackMeshletConeOct16Vec(in f32x4 axis){
+u32 PackMeshletConeOct16(in VectorSingle axis){
     const f32 l1Length = abs(axis.x) + abs(axis.y) + abs(axis.z);
     if(!isFinite(l1Length) || !(l1Length > s_MeshletConeAxisLengthEpsilon))
         return s_MeshletConeAxisFallback;
 
     const f32 invL1 = 1.0f / l1Length;
-    f32x4 octAxis = FoldMeshletConeOctAxisVec(f32x4(axis.x * invL1, axis.y * invL1, axis.z * invL1, 0.0f));
+    VectorSingle octAxis = FoldMeshletConeOctAxis(VectorSingle(axis.x * invL1, axis.y * invL1, axis.z * invL1, 0.0f));
     const f32 encodedX = clamp(octAxis.x * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
     const f32 encodedY = clamp(octAxis.y * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
     return (cast<u32>(encodedX) << s_MeshletConeAxisXShift) | (cast<u32>(encodedY) << s_MeshletConeAxisYShift);
 }
 
-f32x4 UnpackMeshletConeOct16AxisVec(in u32 conePacked){
+VectorSingle UnpackMeshletConeOct16Axis(in u32 conePacked){
     const f32 invUnorm8Max = 1.0f / s_MeshletUnorm8Max;
     const f32 packedX = cast<f32>((conePacked >> s_MeshletConeAxisXShift) & s_MeshletPackedByteMask) * invUnorm8Max;
     const f32 packedY = cast<f32>((conePacked >> s_MeshletConeAxisYShift) & s_MeshletPackedByteMask) * invUnorm8Max;
     const f32 octX = packedX * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
     const f32 octY = packedY * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
     const f32 octZ = 1.0f - (abs(octX) + abs(octY));
-    const f32x4 folded = FoldMeshletConeOctAxisVec(f32x4(octX, octY, octZ, 0.0f));
+    const VectorSingle folded = FoldMeshletConeOctAxis(VectorSingle(octX, octY, octZ, 0.0f));
     const f32 lengthSquared = lengthSq(folded.xyz);
     if(isFinite(lengthSquared) && lengthSquared > s_MeshletConeAxisLengthSquaredEpsilon){
-        const f32x4 normalized = folded * rsqrt(f32x4(lengthSquared));
+        const VectorSingle normalized = folded * rsqrt(VectorSingle(lengthSquared));
         if(isFinite(normalized.x) && isFinite(normalized.y) && isFinite(normalized.z))
-            return f32x4(normalized.x, normalized.y, normalized.z, 0.0f);
+            return VectorSingle(normalized, 0.0f);
     }
-    return f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    return VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
 }
 
-u32 PackMeshletConeVec(in f32x4 axis, in f32 cutoff){
+u32 PackMeshletCone(in VectorSingle axis, in f32 cutoff){
     if(cutoff <= 0.0f)
         return 0u;
 
-    const u32 packedAxis = PackMeshletConeOct16Vec(axis);
+    const u32 packedAxis = PackMeshletConeOct16(axis);
     return PackMeshletConeFromAxisAndCutoff(
         packedAxis,
-        ConservativePackedMeshletConeCutoffVec(axis, cutoff, UnpackMeshletConeOct16AxisVec(packedAxis))
+        ConservativePackedMeshletConeCutoff(axis, cutoff, UnpackMeshletConeOct16Axis(packedAxis))
     );
+}
+
+u32 PackMeshletCone(in VectorSingle axis, in VectorSingle cutoff){
+    return PackMeshletCone(axis, cutoff.x);
 }
 
 b8 ValidateMeshBaseHeader(in MeshBinaryHeader header){
@@ -646,14 +650,6 @@ StringView ResolveMeshVirtualPathText(in Name virtualPath){
 
 b8 MeshStreamSizeFitsU32(in usize count){
     return count <= cast<usize>(u32.max);
-}
-
-f32x4 UnpackHalf4UToF32x4(in f16x4u halfValue){
-    f32x4 outDecoded(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in halfValue, mut outDecoded){
-        ::StoreFloat(::LoadHalf(halfValue), outDecoded);
-    }
-    return outDecoded;
 }
 
 void LogMeshPayloadValidation(in StringView contextText, in StringView meshPathText, in StringView detailText){
@@ -733,15 +729,15 @@ b8 ValidateMeshStreams(
         return false;
     }
     for(usize i = 0u; i < normals.size(); ++i){
-        const f32x4 normal = UnpackHalf4UToF32x4(normals[i]);
-        if(IsValidMeshDirectionVector(f32x4(normal.x, normal.y, normal.z, 0.0f)))
+        const VectorSingle normal(normals[i]);
+        if(IsValidMeshDirectionVector(VectorSingle(normal, 0.0f)))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_NormalsStreamLabelText, i, s_InvalidStreamReasonText);
         return false;
     }
     for(usize i = 0u; i < tangents.size(); ++i){
-        if(IsValidMeshTangentVector(UnpackHalf4UToF32x4(tangents[i])))
+        if(IsValidMeshTangentVector(VectorSingle(tangents[i])))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_TangentsStreamLabelText, i, s_InvalidStreamReasonText);
@@ -756,7 +752,7 @@ b8 ValidateMeshStreams(
         return false;
     }
     for(usize i = 0u; i < colors.size(); ++i){
-        const f32x4 color = UnpackHalf4UToF32x4(colors[i]);
+        const VectorSingle color(colors[i]);
         if(isFinite(color.x) && isFinite(color.y) && isFinite(color.z) && isFinite(color.w))
             continue;
 

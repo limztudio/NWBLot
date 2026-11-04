@@ -6,26 +6,27 @@ const f32 s_DefaultSceneViewYaw = 0.82f;
 const f32 s_DefaultSceneViewPitch = 0.94f;
 const f32 s_DefaultSceneViewDepthOffset = 2.2f;
 
-f32x4 RotateSceneVector3(in f32x4 value, in f32x4 rotationQuaternion){
-    const f32x4 t = cross(rotationQuaternion.xyz, value.xyz) * 2.0f;
-    const f32x4 rotated = value + t * f32x4(rotationQuaternion.w) + cross(rotationQuaternion.xyz, t.xyz);
-    return f32x4(rotated.x, rotated.y, rotated.z, 0.0f);
+VectorSingle RotateSceneVector3(in VectorSingle value, in VectorSingle rotationQuaternion){
+    const VectorSingle t = cross(rotationQuaternion.xyz, value.xyz) * 2.0f;
+    const VectorSingle rotated = value + t * VectorSingle(rotationQuaternion.w) + cross(rotationQuaternion.xyz, t.xyz);
+    return VectorSingle(rotated, 0.0f);
 }
 
-f32x4 NormalizeSceneVector3Or(in f32x4 value, in f32x4 fallback, in f32 lengthSquaredEpsilon){
+VectorSingle NormalizeSceneVector3Or(in VectorSingle value, in VectorSingle fallback, in f32 lengthSquaredEpsilon){
     const f32 lenSq = lengthSq(value.xyz);
     if(!isFinite(lenSq) || !(lenSq > lengthSquaredEpsilon))
         return fallback;
-    const f32x4 scaled = value * rsqrt(f32x4(lenSq));
-    return f32x4(scaled.x, scaled.y, scaled.z, 0.0f);
+    const VectorSingle scaled = value * rsqrt(VectorSingle(lenSq));
+    return VectorSingle(scaled, 0.0f);
 }
 
-f32x4x4 BuildDefaultSceneViewBasisRows(){
+// Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
+MatrixSingle BuildDefaultSceneViewBasis(){
     const f32 sinYaw = sin(s_DefaultSceneViewYaw);
     const f32 cosYaw = cos(s_DefaultSceneViewYaw);
     const f32 sinPitch = sin(s_DefaultSceneViewPitch);
     const f32 cosPitch = cos(s_DefaultSceneViewPitch);
-    return f32x4x4(
+    return MatrixSingle(
         cosYaw, 0.0f, sinYaw, 0.0f,
         sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f,
         -sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f,
@@ -33,16 +34,11 @@ f32x4x4 BuildDefaultSceneViewBasisRows(){
     );
 }
 
-f32x4x4 BuildSceneViewBasisRows(in f32x4 position, in f32x4 rotation){
-    const f32x4 right = RotateSceneVector3(f32x4(1.0f, 0.0f, 0.0f, 0.0f), rotation);
-    const f32x4 up = RotateSceneVector3(f32x4(0.0f, 1.0f, 0.0f, 0.0f), rotation);
-    const f32x4 forward = RotateSceneVector3(f32x4(0.0f, 0.0f, 1.0f, 0.0f), rotation);
-    return f32x4x4(
-        right.x, right.y, right.z, right.w,
-        up.x, up.y, up.z, up.w,
-        forward.x, forward.y, forward.z, forward.w,
-        position.x, position.y, position.z, position.w
-    );
+MatrixSingle BuildSceneViewBasis(in VectorSingle position, in VectorSingle rotation){
+    const VectorSingle right = RotateSceneVector3(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), rotation);
+    const VectorSingle up = RotateSceneVector3(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotation);
+    const VectorSingle forward = RotateSceneVector3(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), rotation);
+    return MatrixSingle(right, up, forward, position);
 }
 
 

@@ -52,10 +52,9 @@ namespace __hidden_encode{
     for(u32 y = 0u; y < inOutPlane.get_height(); ++y){
         for(u32 x = 0u; x < inOutPlane.get_width(); ++x){
             basisu::vec4F& pixel = inOutPlane(x, y);
-            const Float4 rgbVec(pixel[0u], pixel[1u], pixel[2u], 0.0f);
-            if(!ValidateTexConvRgbPixel(rgbVec, maxRgb))
+            const SIMDVectorSingle rgb = VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f);
+            if(!ValidateTexConvRgbPixel(rgb, maxRgb))
                 return false;
-            const SIMDVectorSingle rgb = LoadFloat(rgbVec);
 
             const f32 maskAlpha = alphaSource.mode == AlphaSourceMode::Image ? alphaMask(x, y)[0u] : 0.0f;
             const auto alpha = TryResolveTexConvPixelAlpha(alphaSource.mode, pixel[3u], alphaSource.constant, maskAlpha);

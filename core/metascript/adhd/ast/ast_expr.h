@@ -162,6 +162,8 @@ struct Expr{
     b8 isStringByteRead = false;
     b8 isStringByteConstRef = false;
     b8 isStringByteMutRef = false;
+    b8 wrapInSimdResult = false;
+    b8 unwrapSimdResultValue = false;
 
 
 public:

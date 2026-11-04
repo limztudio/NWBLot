@@ -170,9 +170,9 @@ void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, cons
     out.append(fieldName.data(), fieldName.size());
     out.append(" = *__e; } else if(__f->isList()){ ");
     out.append(enumName.data(), enumName.size());
-    out.append("::Enum __flags = static_cast<");
+    out.append("::Flag __flags = static_cast<");
     out.append(enumName.data(), enumName.size());
-    out.append("::Enum>(0); for(const auto& __item : __f->asList()){ if(__item.isString()){ if(const auto __e = ");
+    out.append("::Flag>(0); for(const auto& __item : __f->asList()){ if(__item.isString()){ if(const auto __e = ");
     out.append(enumName.data(), enumName.size());
     out.append("::parseNamedEnum(__item.asString())) __flags |= *__e; } } this->");
     out.append(fieldName.data(), fieldName.size());
@@ -246,7 +246,7 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
         return true;
     }
     u32 simdLanes = 0u;
-    if((SymbolTable::IsSimdVectorType(typeName, simdLanes) || SymbolTable::IsUnalignedVectorType(typeName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
+    if((SymbolTable::IsSimdStorageVectorType(typeName, simdLanes) || SymbolTable::IsUnalignedVectorType(typeName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isList() && __f->asList().size() == ");
         AppendAdhdUnsigned(out, simdLanes);
@@ -355,7 +355,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
             out.append(")) return false; } }\r\n");
         }
     }
-    else if(u32 simdLanes = 0u; (SymbolTable::IsSimdVectorType(elemName, simdLanes) || SymbolTable::IsUnalignedVectorType(elemName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
+    else if(u32 simdLanes = 0u; (SymbolTable::IsSimdStorageVectorType(elemName, simdLanes) || SymbolTable::IsUnalignedVectorType(elemName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
         out.append("{ ");
         EmitNwbListSizeContinueGuard(out, elemAccessor, simdLanes);
@@ -367,7 +367,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
             out.push_back(')');
         out.append("; } }\r\n");
     }
-    else if(SymbolTable::IsSimdMatrixType(elemName)){
+    else if(SymbolTable::IsSimdStorageMatrixType(elemName)){
         const u32 elemCount = SimdMatrixElementCount(elemName);
         EmitNwbListContainerLoopHeader(out, fieldName, isForwardList, isFixedVec, isDynVec);
         out.append("{ ");
@@ -382,7 +382,7 @@ void EmitNwbListContainerFieldDeserialize(MString& out, const MStringView fieldN
 void EmitNwbOptionalFieldDeserialize(MString& out, const MStringView fieldName, const MStringView innerName, const SymbolTable& symbols){
     if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, fieldName, innerName, symbols, true))
         return;
-    if(SymbolTable::IsSimdMatrixType(innerName)){
+    if(SymbolTable::IsSimdStorageMatrixType(innerName)){
         const u32 elemCount = SimdMatrixElementCount(innerName);
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isList() && __f->asList().size() == ");
@@ -472,7 +472,7 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         emitKeyGuardClose();
         out.append(" } }\r\n");
     }
-    else if(u32 simdLanes = 0u; (SymbolTable::IsSimdVectorType(valName, simdLanes) || SymbolTable::IsUnalignedVectorType(valName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
+    else if(u32 simdLanes = 0u; (SymbolTable::IsSimdStorageVectorType(valName, simdLanes) || SymbolTable::IsUnalignedVectorType(valName, simdLanes)) && simdLanes >= 2u && simdLanes <= 4u){
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
         out.append(fieldName.data(), fieldName.size());
@@ -489,7 +489,7 @@ void EmitNwbMapFieldDeserialize(MString& out, const MStringView fieldName, const
         emitKeyGuardClose();
         out.append(" } }\r\n");
     }
-    else if(SymbolTable::IsSimdMatrixType(valName)){
+    else if(SymbolTable::IsSimdStorageMatrixType(valName)){
         const u32 elemCount = SimdMatrixElementCount(valName);
         EmitNwbFieldFindPrefix(out, fieldName);
         out.append("__f->isMap()){ this->");
@@ -560,7 +560,7 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const 
         if(TryEmitNwbSharedScalarOrVectorFieldDeserialize(out, field->name, tname, m_symbols)){
             continue;
         }
-        else if(SymbolTable::IsSimdMatrixType(tname)){
+        else if(SymbolTable::IsSimdStorageMatrixType(tname)){
             const u32 elemCount = SimdMatrixElementCount(tname);
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isList() && __f->asList().size() == ");

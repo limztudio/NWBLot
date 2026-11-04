@@ -31,7 +31,6 @@ const u32 s_FontAtlasDefaultGuardTexels = 1u;
 const u32 s_FontAtlasKernTag = 0x6b65726eu;
 const u32 s_FontAtlasGposTag = 0x47504f53u;
 const u32 s_FontAtlasGdefTag = 0x47444546u;
-
 const u32 s_FontAtlasBinaryMagic = 0x31415446u; // FTA1, explicitly encoded little endian.
 const u32 s_FontAtlasBinaryVersion = 2u;
 const u32 s_FontAtlasBinaryHeaderBytes = 164u;
@@ -39,14 +38,11 @@ const u32 s_FontAtlasBinaryGlyphBytes = 52u;
 const u32 s_FontAtlasBinaryGroupHeaderBytes = 48u;
 const u32 s_FontAtlasBinaryTableHeaderBytes = 40u;
 const u32 s_FontAtlasQwordHighWordShift = 32u;
-
 const usize s_FontAtlasOccupiedWordLastBit = 63u;
 const usize s_FontAtlasBitsPerOccupiedWord = 64u;
 const f32 s_FontAtlasGlyphPlaneSizeRelativeTolerance = 0.0001f;
-
 const Name s_AssetsFontAtlasLoadBinaryArena = "impl/assets_font_atlas/load_binary";
 const Name s_AssetsFontAtlasSerializeArena = "impl/assets_font_atlas/serialize";
-
 const StringView s_FontAtlasMetaDiagnosticPrefix = "Font atlas meta";
 const StringView s_FontAtlasMetaFontField = "font";
 const StringView s_FontAtlasBakePpemField = "bake_ppem";
@@ -58,7 +54,6 @@ const StringView s_FontAtlasLineGapUnitsField = "line_gap_units";
 const StringView s_FontAtlasRasterModeBitmap = "bitmap";
 const StringView s_FontAtlasRasterModeOutline = "outline";
 const StringView s_FontAtlasGlyphsField = "glyphs";
-
 const StringView s_FontAtlasGlyphMetaDiagnosticPrefix = "Font atlas glyph meta";
 const StringView s_FontAtlasGlyphAdvanceUnitsField = "advance_units";
 const StringView s_FontAtlasGlyphGroupField = "group";
@@ -69,6 +64,10 @@ const StringView s_FontAtlasGlyphWidthField = "width";
 const StringView s_FontAtlasGlyphHeightField = "height";
 const StringView s_FontAtlasGlyphPlaneLeftField = "plane_left";
 const StringView s_FontAtlasGlyphPlaneTopField = "plane_top";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [reflect]
 enum<u32> FontAtlasRasterMode{
@@ -92,6 +91,24 @@ class FontAtlasGlyph{
     public f32 advanceUnits = 0.0f;
     public u32 drawable = 0u;
 }
+
+class FontFaceSfntMetrics{
+    public u32 unitsPerEm = 0u;
+    public u32 sourceGlyphCount = 0u;
+}
+
+class FontAtlasGroupCompactBounds{
+    public u32 firstX = 0u;
+    public u32 firstY = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = 0u;
+    public b8 unchanged = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<FontAtlasRasterMode> TryParseFontAtlasRasterMode(in StringView text){
     if(text == s_FontAtlasRasterModeBitmap)
@@ -230,11 +247,6 @@ b8 IsFontAtlasPositioningTableTag(in u32 tag){
     return tag == s_FontAtlasKernTag || tag == s_FontAtlasGposTag || tag == s_FontAtlasGdefTag;
 }
 
-class FontFaceSfntMetrics{
-    public u32 unitsPerEm = 0u;
-    public u32 sourceGlyphCount = 0u;
-}
-
 Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes){
     const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
     if(!directory.has_value())
@@ -272,15 +284,6 @@ Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontByt
     out.unitsPerEm = unitsPerEm;
     out.sourceGlyphCount = sourceGlyphCount;
     return out;
-}
-
-class FontAtlasGroupCompactBounds{
-    public u32 firstX = 0u;
-    public u32 firstY = 0u;
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 channelCount = 0u;
-    public b8 unchanged = false;
 }
 
 FontAtlasGroupCompactBounds ComputeFontAtlasGroupCompactBounds(

@@ -30,7 +30,7 @@ struct alignas(SIMDVectorSingle) CsgShapeBounds{
 static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes);
-using CsgShapeSignedDistanceCallback = Expected<f32>(*)(const Float4& shapePosition, const CsgShapeInlineParameters& parameters);
+using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters);
 
 [[nodiscard]] Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept;
 
@@ -46,7 +46,7 @@ template<typename ShapeT>
 }
 
 template<typename ShapeT>
-[[nodiscard]] Expected<f32> EvaluateCsgShapeSignedDistanceCallback(const Float4& shapePosition, const CsgShapeInlineParameters& parameters)noexcept{
+[[nodiscard]] Expected<f32> EvaluateCsgShapeSignedDistanceCallback(const SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept{
     static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
 
     const ShapeT shape{};

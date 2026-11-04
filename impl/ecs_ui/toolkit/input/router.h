@@ -7,7 +7,6 @@
 
 #include "bindings.h"
 
-#include <impl/ecs_ui/toolkit/rect_math.h>
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
 #include <impl/ecs_ui/toolkit/id.adhd.h>

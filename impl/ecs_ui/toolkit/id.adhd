@@ -20,7 +20,6 @@ const StringView s_WidgetPartScrollCorner = "scroll.corner";
 const StringView s_WindowChromeTitleKey = "@window.title";
 const StringView s_WindowChromeCollapseKey = "@window.collapse";
 const StringView s_WindowChromeResizeKey = "@window.resize";
-
 const u64 s_WidgetMaxStates = 4096u;
 const usize s_WidgetStateRetainedCapacity = 8192u;
 const usize s_WidgetFrameReserve = 16u;
@@ -32,6 +31,29 @@ const u64 s_WidgetFnv64Prime = 1099511628211ull;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+enum<u8> WidgetKind{
+    Panel,
+    Container,
+    Label,
+    Button,
+    Checkbox,
+    Window,
+    Separator,
+    EditBox,
+    Popup,
+    Selectable,
+    VirtualList,
+    ComboBox,
+    SearchComboBox,
+    Tooltip,
+    ContextMenu,
+    TextArea,
+    RadioGroup,
+    Slider,
+    Progress,
+    Image,
+}
 
 class WidgetId{
     public b8 operator==(in WidgetId rhs)const{
@@ -61,29 +83,6 @@ class WidgetRoot{
 
     public u64 value = 0u;
     public u64 generation = 1u;
-}
-
-enum<u8> WidgetKind{
-    Panel,
-    Container,
-    Label,
-    Button,
-    Checkbox,
-    Window,
-    Separator,
-    EditBox,
-    Popup,
-    Selectable,
-    VirtualList,
-    ComboBox,
-    SearchComboBox,
-    Tooltip,
-    ContextMenu,
-    TextArea,
-    RadioGroup,
-    Slider,
-    Progress,
-    Image,
 }
 
 class WidgetState{
@@ -122,6 +121,10 @@ class ContextStateClaim{
     public u64 instanceGeneration = 0u;
     public WidgetKind kind = WidgetKind::Panel;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 usize ContextStateClaimHash(in ContextStateClaim claim){
     const usize seed = hashValue(claim.instanceGeneration);

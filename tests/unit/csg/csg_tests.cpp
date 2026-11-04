@@ -505,15 +505,15 @@ public:
     }
 
     virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{
-        return NWB::Impl::MakeCsgShapeInlineParameters(Float4(0.5f, 1.0f, 1.0f, 0.0f), NWB::Impl::s_CsgZeroShapeParameter);
+        return NWB::Impl::MakeCsgShapeInlineParameters(VectorSet(0.5f, 1.0f, 1.0f, 0.0f), LoadFloat(NWB::Impl::s_CsgZeroShapeParameter));
     }
 
     virtual Expected<NWB::Impl::CsgShapeLocalBounds> computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
-        return NWB::Impl::MakeCsgSymmetricLocalBounds(parameters.parameter0);
+        return NWB::Impl::MakeCsgSymmetricLocalBounds(LoadFloat(parameters.parameter0));
     }
 
-    virtual f32 evaluateSignedDistance(const Float4& shapePosition, const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
-        return shapePosition.x + parameters.parameter0.x;
+    virtual f32 evaluateSignedDistance(const SIMDVectorSingle shapePosition, const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
+        return VectorGetX(shapePosition) + parameters.parameter0.x;
     }
 };
 
@@ -523,7 +523,7 @@ public:
     virtual u32 parameterByteSize()const noexcept override{ return static_cast<u32>(NWB::Impl::s_CsgShapeInlineParameterMaxBytes) + 1u; }
     virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{ return {}; }
     virtual Expected<NWB::Impl::CsgShapeLocalBounds> computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return MakeUnexpected(Failure{}); }
-    virtual f32 evaluateSignedDistance(const Float4&, const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return 0.0f; }
+    virtual f32 evaluateSignedDistance(const SIMDVectorSingle, const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return 0.0f; }
 };
 
 TEST(Csg, OversizedProjectShapeDoesNotChangeRegistry){

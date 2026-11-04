@@ -27,16 +27,12 @@ static_assert(OpticalBoundaryMode::ClosedPriority == NWB_RT_OPTICAL_BOUNDARY_CLO
 
 
 void RayTracingOpticalSceneGather::append(const Core::ECS::EntityID entity, const RendererComponent& renderer, const b8 transparent, const SIMDVectorSingle boundsMin, const SIMDVectorSingle boundsMax, const b8 boundsValid){
-    Float4 minVec;
-    Float4 maxVec;
-    StoreFloat(boundsMin, minVec);
-    StoreFloat(boundsMax, maxVec);
     const RayTracingOpticalInstanceGpu instance = BuildRayTracingOpticalInstance(
         entity,
         renderer,
         transparent,
-        minVec,
-        maxVec,
+        boundsMin,
+        boundsMax,
         boundsValid,
         header,
         hasBounds,

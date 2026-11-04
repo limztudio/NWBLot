@@ -102,6 +102,24 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     const MStringView name = type.name;
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional) && !type.templateArgs.empty() && type.templateArgs[0].type){
+        const MStringView valBase = m_symbols.resolveBaseTypeName(type.templateArgs[0].type->name);
+        if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(valBase); simdVecInfo && simdVecInfo->cppExportName == simdVecInfo->regCppType){
+            const MStringView cppGenericName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : name;
+            out.append(cppGenericName.data(), cppGenericName.size());
+            out.append(simdVecInfo->isDoubleReg ? "<::SIMDVectorDoubleResult" : "<::SIMDVectorSingleResult");
+            for(usize i = 1u; i < type.templateArgs.size(); ++i){
+                out.append(", ");
+                const TypeArg& arg = type.templateArgs[i];
+                if(arg.type)
+                    emitTypeCpp(out, *arg.type);
+                else if(!arg.constantText.empty())
+                    out.append(arg.constantText.data(), arg.constantText.size());
+            }
+            out.push_back('>');
+            return;
+        }
+    }
     if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && genericInfo->isBorrowView && type.templateArgs.size() == 1u && type.templateArgs[0].type){
         const MStringView cppViewName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : name;
         out.append(cppViewName.data(), cppViewName.size());
@@ -117,9 +135,9 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         return;
     }
 
-    if(m_symbols.findEnum(name)){
+    if(const EnumDecl* enumDecl = m_symbols.findEnum(name)){
         out.append(name.data(), name.size());
-        out.append("::Enum");
+        out.append(enumDecl->isFlag ? "::Flag" : "::Enum");
         return;
     }
 

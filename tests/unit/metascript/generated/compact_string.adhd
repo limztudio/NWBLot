@@ -34,22 +34,22 @@ i32 callShadowedMax(in i32 a, in i32 b){
 }
 
 
-f32x4 max(in f32x4 a, in f32x4 b){
+VectorSingle max(in VectorSingle a, in VectorSingle b){
     return a - b;
 }
 
 f32 callShadowedVectorMax(){
-    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
-    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
-    f32x4 result = max(a, b);
+    VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
+    VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
+    VectorSingle result = max(a, b);
     return result.x;
 }
 
 
 f32 callBuiltinVectorMin(){
-    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
-    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
-    f32x4 result = min(a, b);
+    VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
+    VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
+    VectorSingle result = min(a, b);
     return result.x;
 }
 
@@ -61,30 +61,30 @@ i32 callShadowedLocalMin(){
 
 
 f32 callNestedShadowedVector(){
-    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
-    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
-    f32x4 c = f32x4(2.0f, 2.0f, 2.0f, 2.0f);
-    f32x4 result = min(max(a, b), c);
+    VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
+    VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
+    VectorSingle c = VectorSingle(2.0f, 2.0f, 2.0f, 2.0f);
+    VectorSingle result = min(max(a, b), c);
     return result.x;
 }
 
 
-f32x4x4 mul(in f32x4x4 a, in f32x4x4 b){
+MatrixSingle mul(in MatrixSingle a, in MatrixSingle b){
     return a + b;
 }
 
 f32 callShadowedMatrixMul(){
-    f32x4x4 a = f32x4x4(1.0f);
-    f32x4x4 b = f32x4x4(2.0f);
-    f32x4x4 result = transpose(mul(a, b));
+    MatrixSingle a = MatrixSingle(1.0f);
+    MatrixSingle b = MatrixSingle(2.0f);
+    MatrixSingle result = transpose(mul(a, b));
     return result[0].x;
 }
 
 
 f32 callShadowedLocalDot(){
-    auto dot = lambda(in f32x4 a, in f32x4 b) -> f32 { return a.x - b.x; };
-    f32x4 a = f32x4(3.0f, 3.0f, 3.0f, 3.0f);
-    f32x4 b = f32x4(7.0f, 7.0f, 7.0f, 7.0f);
+    auto dot = lambda(in VectorSingle a, in VectorSingle b) -> f32 { return a.x - b.x; };
+    VectorSingle a = VectorSingle(3.0f, 3.0f, 3.0f, 3.0f);
+    VectorSingle b = VectorSingle(7.0f, 7.0f, 7.0f, 7.0f);
     return dot(a, b);
 }
 

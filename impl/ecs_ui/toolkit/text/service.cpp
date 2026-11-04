@@ -45,12 +45,7 @@ static Atomic<u64> s_NextServiceIdentity{ 1u };
     const SdfAtlasPage& page = *atlas.page(glyph.group);
     const SdfAtlasPageBinding& binding = page.binding();
     const auto& pixels = page.pixels();
-    Double4 planeVec;
-    StoreDouble(plane->value, planeVec);
-    const auto support = TryLoadSdfGlyphSupport(planeVec, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<const u8>(pixels.data(), pixels.size()), display);
-    if(!support)
-        return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ LoadDouble(*support) };
+    return TryLoadSdfGlyphSupport(plane->value, glyph, binding.width, binding.height, binding.channelCount, binding.spreadPixels, Span<const u8>(pixels.data(), pixels.size()), display);
 }
 
 template<typename TPage, typename TValue>

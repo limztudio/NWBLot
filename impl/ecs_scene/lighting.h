@@ -27,7 +27,7 @@ NWB_IMPL_SCENE_BEGIN
     auto& transform = lightEntity.addComponent<TransformComponent>();
     StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
 
-    lightEntity.addComponent<LightComponent>() = MakeDirectionalLightComponent(color, intensity);
+    lightEntity.addComponent<LightComponent>() = MakeDirectionalLightComponent(LoadFloat(color), intensity);
     return lightEntity.id();
 }
 
@@ -36,7 +36,7 @@ NWB_IMPL_SCENE_BEGIN
     auto& transform = lightEntity.addComponent<TransformComponent>();
     transform.position = position;
 
-    lightEntity.addComponent<LightComponent>() = MakePointLightComponent(color, intensity, range);
+    lightEntity.addComponent<LightComponent>() = MakePointLightComponent(LoadFloat(color), intensity, range);
     return lightEntity.id();
 }
 
@@ -57,7 +57,7 @@ NWB_IMPL_SCENE_BEGIN
     transform.position = position;
     StoreFloat(QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians), transform.rotation);
 
-    lightEntity.addComponent<LightComponent>() = MakeSpotLightComponent(color, intensity, range, innerConeCos, outerConeCos);
+    lightEntity.addComponent<LightComponent>() = MakeSpotLightComponent(LoadFloat(color), intensity, range, innerConeCos, outerConeCos);
     return lightEntity.id();
 }
 
@@ -97,8 +97,8 @@ static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep stor
 
         [[maybe_unused]] auto&& [entity, transform, light] = *it;
 
-        Float4 position;
-        Float4 direction;
+        SIMDVectorSingle position{};
+        SIMDVectorSingle direction{};
         if(TryBuildSceneLightVectors(transform, light, position, direction)){
             outLights[count] = MakeSceneLight(light, position, direction);
             ++count;
@@ -106,11 +106,9 @@ static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep stor
     }
 
     if(count == 0u){
-        Float4 forwardVec;
-        StoreFloat(defaultForward, forwardVec);
-        const Float4 direction = NormalizeSceneVector3Or(
-            Float4(-forwardVec.x, -forwardVec.y, -forwardVec.z, 0.0f),
-            Float4(0.0f, 0.0f, -1.0f, 0.0f),
+        const SIMDVectorSingle direction = NormalizeSceneVector3Or(
+            VectorNegate(VectorAndInt(defaultForward, s_SIMDMask3)),
+            VectorSet(0.0f, 0.0f, -1.0f, 0.0f),
             s_NormalizeLengthSquaredEpsilon
         );
         outLights[0] = MakeDefaultSceneLight(direction);

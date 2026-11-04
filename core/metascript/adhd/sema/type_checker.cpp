@@ -291,6 +291,10 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 }
             }
         }
+        if(gc->varType && !gc->varType->isAuto && TypeContainsSimdRegisterType(*gc->varType, m_symbols)){
+            reportError(errors, gc->span, "file-level 'const' cannot hold SIMD calculation type ('VectorSingle', 'VectorDouble', 'MatrixSingle', 'MatrixDouble'); use memory-layout types instead");
+            ok = false;
+        }
         if(!checkConstructorInitArguments(
             nullptr,
             gc->isCtorInit ? gc->varType : nullptr,

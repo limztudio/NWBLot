@@ -4,10 +4,6 @@
 
 #include <impl/assets_font_atlas/types.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 namespace NWB::FontBuilderUtility{
 using NWB::Impl::s_FontAtlasMinBakePpem;
@@ -28,18 +24,19 @@ namespace FontAtlasRasterMode = NWB::Impl::FontAtlasRasterMode;
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_TrueTypeExtension = ".ttf";
 const StringView s_OpenTypeExtension = ".otf";
 // One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
 const u32 s_GlyphGuardExtent = 2u;
 const u32 s_DefaultBakeExtent = 1024u;
 const u32 s_MinBakeExtent = 32u;
-
 const StringView s_PublicationDiagnosticTag = "font_builder_publication";
 const Name s_FontBuilderArena = "utilities/font_builder";
 const Name s_FontBuilderBakeArena = "utilities/font_builder/bake";
 const i32 s_FontBuilderEntryFailure = -1;
-
 const StringView s_FontBuilderAppDescription = "Build readable .nwb font declarations and a paired .font containing shaping bytes and compact SDF images.";
 const StringView s_FontOptionFlag = "--font";
 const StringView s_OutputOptionFlag = "-o,--output";
@@ -49,6 +46,7 @@ const StringView s_ExtentOptionFlag = "--extent";
 const StringView s_MaxGroupsOptionFlag = "--max-groups";
 const StringView s_RendererOptionFlag = "--renderer";
 const StringView s_OverwriteOptionFlag = "--overwrite";
+const usize s_MaxBakeShelfPages = s_FontAtlasMaxGroupCount * s_FontAtlasMaxChannelCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,6 +57,18 @@ class Shelf{
     public u32 y = 0u;
     public u32 height = 0u;
 }
+
+class ShelfPlacement{
+    public u32 page = 0u;
+    public u32 group = 0u;
+    public u32 channel = 0u;
+    public u32 x = 0u;
+    public u32 y = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 TryPlaceGlyphOnShelf(in u32 width, in u32 height, in u32 extent, mut Shelf inOutShelf, mut u32 outX, mut u32 outY){
     Shelf next = inOutShelf;
@@ -90,16 +100,6 @@ b8 IsValidBakeNumericOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 m
         && maxGroups <= s_FontAtlasMaxGroupCount
         && cast<u64>(extent) * cast<u64>(extent) * cast<u64>(s_FontAtlasMaxChannelCount) * cast<u64>(maxGroups) <= s_FontAtlasMaxPixelBytes
     ;
-}
-
-const usize s_MaxBakeShelfPages = s_FontAtlasMaxGroupCount * s_FontAtlasMaxChannelCount;
-
-class ShelfPlacement{
-    public u32 page = 0u;
-    public u32 group = 0u;
-    public u32 channel = 0u;
-    public u32 x = 0u;
-    public u32 y = 0u;
 }
 
 Expected<b8> TryParseBakeRendererOutline(in StringView rendererArgument){

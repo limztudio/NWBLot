@@ -10,9 +10,73 @@
 
 
 const u32 s_RtInvalidSlot = 0xffffffffu;
-
 const usize s_SmallInlineIndexCapacity = 32u;
 const usize s_PromotedInlineIndexCapacity = s_SmallInlineIndexCapacity * 4u;
+// Shared-output emulation alternates one generate and one raster phase per draw.
+// Keep supported range in contract; domains stay independent of RendererFramePipeline.
+const usize s_SharedComputeEmulationPhasesPerDraw = 2u;
+const usize s_SharedComputeEmulationMinimumDrawCount = 2u;
+const usize s_SharedComputeEmulationMaximumDrawCount = 5u;
+const usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+const Name s_PrepareArena = "impl/ecs_render/prepare";
+const Name s_RenderArena = "impl/ecs_render/render";
+const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
+const u32 s_FullscreenTriangleVertexCount = 3u;
+const u32 s_EmulatedVertexStride = 64u;
+const StringView s_AvboitDepthWarpName = "render.avboit.depth_warp";
+const StringView s_AvboitDepthWarpLabel = "AVBOIT Depth Warp";
+const StringView s_AvboitExtinctionName = "render.avboit.extinction";
+const StringView s_AvboitExtinctionLabel = "AVBOIT Extinction";
+const StringView s_AvboitIntegrationLabel = "AVBOIT Integration";
+const StringView s_TransparentCsgIntervalsLabel = "Transparent CSG Intervals";
+const StringView s_ShadowVisibilityLabel = "Shadow Visibility";
+const StringView s_DeferredLightingLabel = "Deferred Lighting";
+const StringView s_DeferredCompositeLabel = "Deferred Composite";
+const StringView s_DeferredPresentLabel = "Deferred Present";
+const f32 s_LightTypeDirectionalMax = 0.5f;
+const f32 s_LightTypePointMax = 1.5f;
+const u32 s_StatisticsReadbackSlotCount = 3u;
+const u32 s_GpuTimingQueriesPerRange = 2u;
+const u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
+const u32 s_GpuTimingRefractionTileScopeQueryBudget = 32u;
+const u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
+const StringView s_UnknownStageLabel = "Unknown";
+const StringView s_GraphicsQueueLabel = "Graphics";
+const StringView s_ComputeQueueLabel = "Compute";
+const StringView s_TransferQueueLabel = "Transfer";
+const StringView s_InternalRouteLabel = "Internal";
+const StringView s_ExternalImportRouteLabel = "ExternalImport";
+const StringView s_ExternalExportRouteLabel = "ExternalExport";
+const StringView s_ExclusiveSharingLabel = "Exclusive";
+const StringView s_AsyncComputeSharingLabel = "AsyncCompute";
+const StringView s_GraphicsAndAsyncComputeSharingLabel = "GraphicsAndAsyncCompute";
+const StringView s_GraphicsAndTransferSharingLabel = "GraphicsAndTransfer";
+const StringView s_AsyncComputeAndTransferSharingLabel = "AsyncComputeAndTransfer";
+const StringView s_GraphicsAsyncComputeAndTransferSharingLabel = "GraphicsAsyncComputeAndTransfer";
+const StringView s_RendererFrameTitle = "Renderer Frame";
+const f64 s_MillisecondsPerSecondTelemetry = 1000.0;
+const f64 s_PercentScaleTelemetry = 100.0;
+const usize s_OpaqueDrawResourceUseCount = 8u;
+const usize s_NoOpaqueDrawResourceUseCount = 6u;
+const usize s_GbufferMaterialResourceSetUseCapacity = 4u;
+const usize s_NormalizeResourceUseCapacity = 9u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> RendererTaskTimingFeedbackCollectionAction{
+    None = 0u,
+    Enable = 1u,
+    Disable = 2u,
+    kCount = 3u
+}
+
+[reflect]
+enum<u8> SharedComputeEmulationPhase{
+    Generate = 0u,
+    Raster = 1u
+}
 
 // Ray tracing gathers emission targets before Deferred ranks lights. The root module brokers this contract between them.
 class RayTracingLightingClassificationInput{
@@ -115,27 +179,6 @@ class RendererTaskTimingFeedbackDrainResult{
     public usize rejectedSampleCount = 0u;
 }
 
-enum<u8> RendererTaskTimingFeedbackCollectionAction{
-    None = 0u,
-    Enable = 1u,
-    Disable = 2u,
-    kCount = 3u
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[reflect]
-enum<u8> SharedComputeEmulationPhase{
-    Generate = 0u,
-    Raster = 1u
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [serialize]
 class MeshFrameHeapSlots{
     public u32 instance = 0u;
@@ -192,57 +235,12 @@ class SceneLightGpuData{
     public f32x4 params2(0.00465f, 0.05f, 0.0f, 0.0f);
 }
 
-void HashCombineF32x4(in f32x4 value, mut usize seed){
-    seed = hashCombineValue(seed, bit_cast<u32>(value.x));
-    seed = hashCombineValue(seed, bit_cast<u32>(value.y));
-    seed = hashCombineValue(seed, bit_cast<u32>(value.z));
-    seed = hashCombineValue(seed, bit_cast<u32>(value.w));
-}
-
-// Hashes the immutable upload payload, including edits and light order.
-u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
-    const u32 lightCount = cast<u32>(lights.size());
-    usize seed = hashValue(lightCount);
-    HashCombineF32x4(shading.cameraPositionLightCount, seed);
-    for(usize i = 0u; i < lights.size(); ++i){
-        HashCombineF32x4(lights[i].position, seed);
-        HashCombineF32x4(lights[i].direction, seed);
-        HashCombineF32x4(lights[i].colorIntensity, seed);
-        HashCombineF32x4(lights[i].params, seed);
-        HashCombineF32x4(lights[i].params2, seed);
-    }
-    return cast<u64>(seed);
-}
-
 // Only the compute producer reads this tail; raster and custom geometry use the base mesh push ABI.
 [serialize]
 class MeshComputePushConstants{
     public ShaderDrivenPushConstants mesh;
     public u32 generatedIndexByteOffset = 0u;
     public Array<u32, 3u> reserved;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Shared-output emulation alternates one generate and one raster phase per draw.
-// Keep supported range in contract; domains stay independent of RendererFramePipeline.
-const usize s_SharedComputeEmulationPhasesPerDraw = 2u;
-const usize s_SharedComputeEmulationMinimumDrawCount = 2u;
-const usize s_SharedComputeEmulationMaximumDrawCount = 5u;
-const usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
-
-b8 IsSupportedSharedComputeEmulationDrawCount(in usize drawCount){
-    return drawCount >= s_SharedComputeEmulationMinimumDrawCount && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
-}
-
-usize SharedComputeEmulationPhaseCountForDrawCount(in usize drawCount){
-    return drawCount * s_SharedComputeEmulationPhasesPerDraw;
-}
-
-b8 IsSupportedSharedComputeEmulationPhaseCount(in usize phaseCount){
-    return phaseCount >= s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
 }
 
 // Immutable frame facts for graph declaration; queue assignment stays a compiler result.
@@ -256,31 +254,52 @@ class RendererFrameGraphFeatures{
     public b8 hardwareCaustics = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const Name s_PrepareArena = "impl/ecs_render/prepare";
-const Name s_RenderArena = "impl/ecs_render/render";
-const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
-
-const u32 s_FullscreenTriangleVertexCount = 3u;
-const u32 s_EmulatedVertexStride = 64u;
-
-const StringView s_AvboitDepthWarpName = "render.avboit.depth_warp";
-const StringView s_AvboitDepthWarpLabel = "AVBOIT Depth Warp";
-const StringView s_AvboitExtinctionName = "render.avboit.extinction";
-const StringView s_AvboitExtinctionLabel = "AVBOIT Extinction";
-const StringView s_AvboitIntegrationLabel = "AVBOIT Integration";
-const StringView s_TransparentCsgIntervalsLabel = "Transparent CSG Intervals";
-const StringView s_ShadowVisibilityLabel = "Shadow Visibility";
-const StringView s_DeferredLightingLabel = "Deferred Lighting";
-const StringView s_DeferredCompositeLabel = "Deferred Composite";
-const StringView s_DeferredPresentLabel = "Deferred Present";
+class SceneShadingBufferUploads{
+    public Array<SceneLightGpuData, 64u> lightData;
+    public SceneShadingGpuData sceneShadingState;
+    public RayTracingLightingClassification lightingClassification;
+    public u32 lightCount = 0u;
+    public b8 lightUploadRequired = false;
+    public b8 sceneShadingUploadRequired = false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void HashCombineF32x4(in VectorSingle value, mut usize seed){
+    seed = hashCombineValue(seed, bit_cast<u32>(value.x));
+    seed = hashCombineValue(seed, bit_cast<u32>(value.y));
+    seed = hashCombineValue(seed, bit_cast<u32>(value.z));
+    seed = hashCombineValue(seed, bit_cast<u32>(value.w));
+}
+
+// Hashes the immutable upload payload, including edits and light order.
+u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
+    const u32 lightCount = cast<u32>(lights.size());
+    usize seed = hashValue(lightCount);
+    HashCombineF32x4(VectorSingle(shading.cameraPositionLightCount), seed);
+    for(usize i = 0u; i < lights.size(); ++i){
+        HashCombineF32x4(VectorSingle(lights[i].position), seed);
+        HashCombineF32x4(VectorSingle(lights[i].direction), seed);
+        HashCombineF32x4(VectorSingle(lights[i].colorIntensity), seed);
+        HashCombineF32x4(VectorSingle(lights[i].params), seed);
+        HashCombineF32x4(VectorSingle(lights[i].params2), seed);
+    }
+    return cast<u64>(seed);
+}
+
+b8 IsSupportedSharedComputeEmulationDrawCount(in usize drawCount){
+    return drawCount >= s_SharedComputeEmulationMinimumDrawCount && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
+}
+
+usize SharedComputeEmulationPhaseCountForDrawCount(in usize drawCount){
+    return drawCount * s_SharedComputeEmulationPhasesPerDraw;
+}
+
+b8 IsSupportedSharedComputeEmulationPhaseCount(in usize phaseCount){
+    return phaseCount >= s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
+}
 
 b8 FrameSetupReady(in b8 meshViewSetupReady, in b8 sceneShadingSetupReady){
     return meshViewSetupReady && sceneShadingSetupReady;
@@ -300,8 +319,8 @@ ShaderDrivenPushConstants ResolveShaderDrivenPushConstants(
     in u32 instanceIndex,
     in u32 materialConstantByteOffset,
     in b8 hasViewport,
-    in f32x4 viewportRect,
-    in f32x4 scissorRect,
+    in VectorSingle viewportRect,
+    in VectorSingle scissorRect,
     in MeshFrameHeapSlots frameHeapSlots,
     in u32 dispatchFlags
 ){
@@ -315,8 +334,8 @@ ShaderDrivenPushConstants ResolveShaderDrivenPushConstants(
         return pushConstants;
 
     pushConstants.dispatchFlags |= (1u << 0u);
-    pushConstants.viewportRect = viewportRect;
-    pushConstants.scissorRect = scissorRect;
+    pushConstants.viewportRect = f32x4(viewportRect);
+    pushConstants.scissorRect = f32x4(scissorRect);
     return pushConstants;
 }
 
@@ -341,38 +360,22 @@ TransparentDrawPushConstants ResolveTransparentDrawPushConstants(
     return pushConstants;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const f32 s_LightTypeDirectionalMax = 0.5f;
-const f32 s_LightTypePointMax = 1.5f;
-
-class SceneShadingBufferUploads{
-    public Array<SceneLightGpuData, 64u> lightData;
-    public SceneShadingGpuData sceneShadingState;
-    public RayTracingLightingClassification lightingClassification;
-    public u32 lightCount = 0u;
-    public b8 lightUploadRequired = false;
-    public b8 sceneShadingUploadRequired = false;
-}
-
-f32 SceneLightRadiantImportance(in f32x4 colorIntensity){
-    const f32 luminance = dot(colorIntensity, f32x4(0.2126f, 0.7152f, 0.0722f, 0.0f));
+f32 SceneLightRadiantImportance(in VectorSingle colorIntensity){
+    const f32 luminance = dot(colorIntensity, VectorSingle(0.2126f, 0.7152f, 0.0722f, 0.0f));
     const f32 intensity = max(colorIntensity.w, 0.0f);
     return luminance * intensity;
 }
 
-SceneShadingGpuData MakeSceneShadingGpuData(in f32x4 cameraPosition, in u32 lightCount){
+SceneShadingGpuData MakeSceneShadingGpuData(in VectorSingle cameraPosition, in u32 lightCount){
     SceneShadingGpuData state;
-    state.cameraPositionLightCount = f32x4(cameraPosition.x, cameraPosition.y, cameraPosition.z, cast<f32>(lightCount));
+    state.cameraPositionLightCount = f32x4(cameraPosition, cast<f32>(lightCount));
     return state;
 }
 
 SceneLightGpuData MakeSceneLightGpuData(
-    in f32x4 position,
-    in f32x4 direction,
-    in f32x4 colorIntensity,
+    in VectorSingle position,
+    in VectorSingle direction,
+    in VectorSingle colorIntensity,
     in f32 range,
     in f32 lightType,
     in f32 shadowSlot,
@@ -381,46 +384,13 @@ SceneLightGpuData MakeSceneLightGpuData(
     in f32 sourceRadius
 ){
     SceneLightGpuData dst;
-    dst.position = position;
-    dst.direction = direction;
-    dst.colorIntensity = colorIntensity;
+    dst.position = f32x4(position);
+    dst.direction = f32x4(direction);
+    dst.colorIntensity = f32x4(colorIntensity);
     dst.params = f32x4(range, lightType, shadowSlot, causticSlot);
     dst.params2 = f32x4(angularRadius, sourceRadius, 0.0f, 0.0f);
     return dst;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const u32 s_StatisticsReadbackSlotCount = 3u;
-
-const u32 s_GpuTimingQueriesPerRange = 2u;
-const u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
-const u32 s_GpuTimingRefractionTileScopeQueryBudget = 32u;
-const u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
-
-const StringView s_UnknownStageLabel = "Unknown";
-const StringView s_GraphicsQueueLabel = "Graphics";
-const StringView s_ComputeQueueLabel = "Compute";
-const StringView s_TransferQueueLabel = "Transfer";
-const StringView s_InternalRouteLabel = "Internal";
-const StringView s_ExternalImportRouteLabel = "ExternalImport";
-const StringView s_ExternalExportRouteLabel = "ExternalExport";
-const StringView s_ExclusiveSharingLabel = "Exclusive";
-const StringView s_AsyncComputeSharingLabel = "AsyncCompute";
-const StringView s_GraphicsAndAsyncComputeSharingLabel = "GraphicsAndAsyncCompute";
-const StringView s_GraphicsAndTransferSharingLabel = "GraphicsAndTransfer";
-const StringView s_AsyncComputeAndTransferSharingLabel = "AsyncComputeAndTransfer";
-const StringView s_GraphicsAsyncComputeAndTransferSharingLabel = "GraphicsAsyncComputeAndTransfer";
-const StringView s_RendererFrameTitle = "Renderer Frame";
-const f64 s_MillisecondsPerSecondTelemetry = 1000.0;
-const f64 s_PercentScaleTelemetry = 100.0;
-
-const usize s_OpaqueDrawResourceUseCount = 8u;
-const usize s_NoOpaqueDrawResourceUseCount = 6u;
-const usize s_GbufferMaterialResourceSetUseCapacity = 4u;
-const usize s_NormalizeResourceUseCapacity = 9u;
 
 b8 CanAcceptMeshFrameBindingCapacities(
     in b8 bindingValid,

@@ -11,7 +11,6 @@
 
 // The caret is visible for the first half of its one-second cycle.
 const f64 s_CaretVisiblePhaseEnd = 0.5;
-
 const usize s_EditDefaultMaxBytes = 4096u;
 const usize s_EditDefaultMaxHistoryRecords = 64u;
 const usize s_EditDefaultMaxHistoryBytes = 131072u;
@@ -20,7 +19,6 @@ const usize s_EditMaxHistoryRecords = 256u;
 const usize s_EditMaxHistoryBytes = 16777216u;
 const usize s_EditUtf8MaxSequenceBytes = 4u;
 const StringView s_EditNewlineText = "\n";
-
 const u32 s_EditUnicodeTab = 0x09u;
 const u32 s_EditUnicodeLineFeed = 0x0Au;
 const u32 s_EditUnicodeCarriageReturn = 0x0Du;
@@ -40,11 +38,9 @@ const u32 s_EditAsciiLeftBracket = 0x5Bu;
 const u32 s_EditAsciiGrave = 0x60u;
 const u32 s_EditAsciiLeftBrace = 0x7Bu;
 const u32 s_EditAsciiTilde = 0x7Eu;
-
 const usize s_NumericEditMaxBytes = 128u;
 const usize s_NumericEditMaxHistoryRecords = 64u;
 const usize s_NumericEditHistoryBytesFactor = 128u;
-
 const i64 s_NumericEditMaxI64 = 9223372036854775807ll;
 const i64 s_NumericEditMinI64 = -s_NumericEditMaxI64 - 1ll;
 const f64 s_NumericEditMaxF64 = 1.79769313486231570815e+308;
@@ -64,6 +60,81 @@ enum<u8> EditAction{
 enum<u8> EditTextMode{
     SingleLine,
     Multiline,
+}
+
+enum<u8> EditMove{
+    Left,
+    Right,
+    Home,
+    End,
+    WordLeft,
+    WordRight,
+    DocumentHome,
+    DocumentEnd,
+}
+
+enum<u8> EditCommand{
+    None,
+    Left,
+    Right,
+    Home,
+    End,
+    WordLeft,
+    WordRight,
+    Backspace,
+    Delete,
+    WordBackspace,
+    WordDelete,
+    SelectAll,
+    Copy,
+    Cut,
+    Paste,
+    Undo,
+    Redo,
+    Submit,
+    Cancel,
+    DocumentHome,
+    DocumentEnd,
+    Newline,
+}
+
+enum<u8> EditClipboardAction{
+    None,
+    Copy,
+    Cut,
+    Paste,
+    PublishSelection,
+}
+
+enum<u8> EditNavigationDirection{
+    Up,
+    Down,
+    PageUp,
+    PageDown,
+}
+
+enum<u8> NumericParseStatus{
+    Complete,
+    Incomplete,
+    Invalid,
+    OutOfRange,
+}
+
+enum<u8> NumericBoundsPolicy{
+    Reject,
+    Clamp,
+}
+
+enum<u8> EditTextStatus{
+    InvalidText = 0u,
+    TooLarge,
+}
+
+enum<u8> EditNavigationRunClass{
+    Whitespace,
+    Punctuation,
+    Text,
+    LineBreak,
 }
 
 class TextAreaModelStamp{
@@ -130,17 +201,6 @@ class TextAreaModelStamp{
     public EditTextMode textMode;
 }
 
-enum<u8> EditMove{
-    Left,
-    Right,
-    Home,
-    End,
-    WordLeft,
-    WordRight,
-    DocumentHome,
-    DocumentEnd,
-}
-
 class EditLimits{
     public usize maxBytes = s_EditDefaultMaxBytes;
     public usize maxHistoryRecords = s_EditDefaultMaxHistoryRecords;
@@ -161,39 +221,6 @@ class EditCompositionView{
     public b8 active = false;
 }
 
-enum<u8> EditCommand{
-    None,
-    Left,
-    Right,
-    Home,
-    End,
-    WordLeft,
-    WordRight,
-    Backspace,
-    Delete,
-    WordBackspace,
-    WordDelete,
-    SelectAll,
-    Copy,
-    Cut,
-    Paste,
-    Undo,
-    Redo,
-    Submit,
-    Cancel,
-    DocumentHome,
-    DocumentEnd,
-    Newline,
-}
-
-enum<u8> EditClipboardAction{
-    None,
-    Copy,
-    Cut,
-    Paste,
-    PublishSelection,
-}
-
 class EditCommandRequest{
     public EditCommand command = EditCommand::None;
     public b8 extend = false;
@@ -208,13 +235,6 @@ class EditCommandResult{
     public b8 compositionChanged = false;
     public b8 submitted = false;
     public b8 cancelled = false;
-}
-
-enum<u8> EditNavigationDirection{
-    Up,
-    Down,
-    PageUp,
-    PageDown,
 }
 
 class EditNavigationSnapshot{
@@ -251,18 +271,6 @@ class EditNavigationResult{
     public f32 preferredX = 0.0f;
 }
 
-enum<u8> NumericParseStatus{
-    Complete,
-    Incomplete,
-    Invalid,
-    OutOfRange,
-}
-
-enum<u8> NumericBoundsPolicy{
-    Reject,
-    Clamp,
-}
-
 class IntegerBounds{
     public i64 minimum = s_NumericEditMinI64;
     public i64 maximum = s_NumericEditMaxI64;
@@ -285,9 +293,16 @@ class NumericEditResult{
     public b8 restored = false;
 }
 
-enum<u8> EditTextStatus{
-    InvalidText = 0u,
-    TooLarge,
+class MultilineTextStep{
+    public usize sourceBytes = 0u;
+    public usize outputBytes = 0u;
+    public u8 replacement = 0u;
+}
+
+class SingleLineTextStep{
+    public usize sourceBytes = 0u;
+    public usize outputBytes = 0u;
+    public b8 space = false;
 }
 
 
@@ -436,25 +451,6 @@ Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
     if(!value.has_value() || !isFinite(value.value()))
         return makeUnexpected(NumericParseStatus::OutOfRange);
     return value.value();
-}
-
-enum<u8> EditNavigationRunClass{
-    Whitespace,
-    Punctuation,
-    Text,
-    LineBreak,
-}
-
-class MultilineTextStep{
-    public usize sourceBytes = 0u;
-    public usize outputBytes = 0u;
-    public u8 replacement = 0u;
-}
-
-class SingleLineTextStep{
-    public usize sourceBytes = 0u;
-    public usize outputBytes = 0u;
-    public b8 space = false;
 }
 
 Expected<EditNavigationDirection> TryTranslateEditNavigation(in InputCommandIntent intent){

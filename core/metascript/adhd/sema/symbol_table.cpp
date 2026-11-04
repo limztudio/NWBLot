@@ -217,6 +217,34 @@ b8 SymbolTable::IsArenaBackedContainer(const MStringView typeName)noexcept{
     return false;
 }
 
+b8 SymbolTable::IsSimdRegisterVectorType(const MStringView typeName)noexcept{
+    if(const BuiltinSimdVectorInfo* info = FindBuiltinSimdVectorType(typeName))
+        return info->cppExportName == info->regCppType;
+    return false;
+}
+
+b8 SymbolTable::IsSimdRegisterMatrixType(const MStringView typeName)noexcept{
+    if(const BuiltinSimdMatrixInfo* info = FindBuiltinSimdMatrixType(typeName))
+        return info->cppExportName == info->regCppType;
+    return false;
+}
+
+b8 SymbolTable::IsSimdRegisterType(const MStringView typeName)noexcept{
+    return IsSimdRegisterVectorType(typeName) || IsSimdRegisterMatrixType(typeName);
+}
+
+b8 SymbolTable::IsSimdStorageVectorType(const MStringView typeName, u32& outLanes)noexcept{
+    return !IsSimdRegisterVectorType(typeName) && IsSimdVectorType(typeName, outLanes);
+}
+
+b8 SymbolTable::IsSimdStorageMatrixType(const MStringView typeName)noexcept{
+    return !IsSimdRegisterMatrixType(typeName) && IsSimdMatrixType(typeName);
+}
+
+b8 SymbolTable::IsSimdStorageType(const MStringView typeName)noexcept{
+    return !IsSimdRegisterType(typeName) && IsSimdType(typeName);
+}
+
 b8 SymbolTable::IsSimdVectorType(const MStringView typeName, u32& outLanes)noexcept{
     if(const BuiltinSimdVectorInfo* info = FindBuiltinSimdVectorType(typeName)){
         outLanes = info->lanes;
@@ -550,7 +578,7 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl*
 
 b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
     typeName = resolveBaseTypeName(typeName);
-    if(IsScalarType(typeName) || findEnum(typeName) != nullptr)
+    if(IsScalarType(typeName) || IsSimdRegisterVectorType(typeName) || findEnum(typeName) != nullptr)
         return true;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->isSmallValue;

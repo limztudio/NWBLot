@@ -208,6 +208,16 @@ static void AppendDepfileEscapedPath(const Core::Metascript::MStringView pathTex
 
 
 class FilesystemIncludeResolver final : public Core::Metascript::IIncludeResolver{
+private:
+    struct ResolveResult{
+        enum Enum : u8{
+            Found,
+            Missing,
+            Error,
+        };
+    };
+
+
 public:
     FilesystemIncludeResolver(const Path<Core::Metascript::MetaArena>& currentFileDir, const Span<const Core::Metascript::MString> includeDirs, Core::Metascript::MetaArena& arena)
         : m_resolvedParentDirs(arena)
@@ -225,8 +235,7 @@ public:
             return false;
         const MString relPath(includePath, arena);
 
-        enum class ResolveResult{ Found, Missing, Error };
-        const auto tryResolveFromBase = [&](const Path<MetaArena>& baseDir) -> ResolveResult{
+        const auto tryResolveFromBase = [&](const Path<MetaArena>& baseDir) -> ResolveResult::Enum{
             const Path<MetaArena> include(arena, relPath);
 #if defined(NWB_PLATFORM_WINDOWS)
             const auto includeText = include.native();
@@ -253,7 +262,7 @@ public:
 
         if(!isAngleBracket){
             for(usize i = m_resolvedParentDirs.size(); i > 0u; --i){
-                const ResolveResult result = tryResolveFromBase(m_resolvedParentDirs[i - 1u]);
+                const ResolveResult::Enum result = tryResolveFromBase(m_resolvedParentDirs[i - 1u]);
                 if(result != ResolveResult::Missing)
                     return result == ResolveResult::Found;
             }
@@ -261,7 +270,7 @@ public:
 
         for(const MString& dirText : m_includeDirs){
             const Path<MetaArena> baseDir(arena, dirText);
-            const ResolveResult result = tryResolveFromBase(baseDir);
+            const ResolveResult::Enum result = tryResolveFromBase(baseDir);
             if(result != ResolveResult::Missing)
                 return result == ResolveResult::Found;
         }

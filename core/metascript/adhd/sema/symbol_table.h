@@ -20,6 +20,12 @@ NWB_ADHD_BEGIN
 class SymbolTable final{
 public:
     [[nodiscard]] static b8 IsArenaBackedContainer(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdRegisterVectorType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdRegisterMatrixType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdRegisterType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdStorageVectorType(MStringView typeName, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 IsSimdStorageMatrixType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdStorageType(MStringView typeName)noexcept;
     [[nodiscard]] static b8 IsSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
     [[nodiscard]] static b8 IsUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
     [[nodiscard]] static b8 IsUnalignedVectorType(MStringView typeName)noexcept;

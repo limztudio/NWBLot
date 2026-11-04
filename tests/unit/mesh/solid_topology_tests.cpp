@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/cook_topology.h>
+#include <impl/assets_mesh/cook_types.adhd.h>
 
 #include <global/simd/vector.h>
 
@@ -25,7 +25,6 @@ namespace Tests{
 
 
 TEST(MeshSolidTopology, MixedClosedOpenAndInwardComponentsKeepIndependentMembership){
-    Core::Alloc::ScratchArena scratch(Name("tests/assets_mesh/mixed_solid_topology"));
     const Array<Float3U, 11u> positions = {
         Float3U{0.f, 0.f, 0.f}, Float3U{1.f, 0.f, 0.f}, Float3U{0.f, 1.f, 0.f}, Float3U{0.f, 0.f, 1.f},
         Float3U{2.f, 0.f, 0.f}, Float3U{3.f, 0.f, 0.f}, Float3U{2.f, 1.f, 0.f}, Float3U{2.f, 0.f, 1.f},
@@ -36,14 +35,13 @@ TEST(MeshSolidTopology, MixedClosedOpenAndInwardComponentsKeepIndependentMembers
         4u, 5u, 6u, 4u, 7u, 5u, 4u, 6u, 7u, 5u, 7u, 6u,
         8u, 9u, 10u,
     };
-    const auto words = Impl::BuildSolidTriangleWords(positions, indices, scratch);
+    const auto words = Impl::BuildSolidTriangleWords(positions, indices);
     ASSERT_TRUE(words);
     ASSERT_EQ(words->size(), 1u);
     EXPECT_EQ((*words)[0], 0xffu);
 }
 
 TEST(MeshSolidTopology, BrokenWindingNonManifoldAndDegenerateFacesInvalidateTheirWholeComponent){
-    Core::Alloc::ScratchArena scratch(Name("tests/assets_mesh/invalid_solid_topology"));
     const Array<Float3U, 5u> positions = {
         Float3U{0.f, 0.f, 0.f}, Float3U{1.f, 0.f, 0.f}, Float3U{0.f, 1.f, 0.f}, Float3U{0.f, 0.f, 1.f},
         Float3U{0.5f, 0.f, 0.f},
@@ -52,7 +50,7 @@ TEST(MeshSolidTopology, BrokenWindingNonManifoldAndDegenerateFacesInvalidateThei
     const Array<u32, 15u> nonManifold = {0u, 2u, 1u, 0u, 1u, 3u, 0u, 3u, 2u, 1u, 2u, 3u, 0u, 1u, 4u};
     const Array<u32, 12u> degenerate = {0u, 2u, 1u, 0u, 1u, 4u, 0u, 4u, 2u, 1u, 2u, 4u};
     for(const Span<const u32> indices : {Span<const u32>(brokenWinding), Span<const u32>(nonManifold), Span<const u32>(degenerate)}){
-        const auto words = Impl::BuildSolidTriangleWords(positions, indices, scratch);
+        const auto words = Impl::BuildSolidTriangleWords(positions, indices);
         ASSERT_TRUE(words);
         ASSERT_EQ(words->size(), 1u);
         EXPECT_EQ((*words)[0], 0u);
@@ -60,13 +58,12 @@ TEST(MeshSolidTopology, BrokenWindingNonManifoldAndDegenerateFacesInvalidateThei
 }
 
 TEST(MeshSolidTopology, CoincidentIndependentPositionsDoNotRepairAnOpenSeam){
-    Core::Alloc::ScratchArena scratch(Name("tests/assets_mesh/independent_position_seam"));
     const Array<Float3U, 7u> positions = {
         Float3U{0.f, 0.f, 0.f}, Float3U{1.f, 0.f, 0.f}, Float3U{0.f, 1.f, 0.f}, Float3U{0.f, 0.f, 1.f},
         Float3U{0.f, 0.f, 0.f}, Float3U{1.f, 0.f, 0.f}, Float3U{0.f, 1.f, 0.f},
     };
     const Array<u32, 12u> indices = {4u, 6u, 5u, 0u, 1u, 3u, 0u, 3u, 2u, 1u, 2u, 3u};
-    const auto words = Impl::BuildSolidTriangleWords(positions, indices, scratch);
+    const auto words = Impl::BuildSolidTriangleWords(positions, indices);
     ASSERT_TRUE(words);
     ASSERT_EQ(words->size(), 1u);
     EXPECT_EQ((*words)[0], 0u);
@@ -86,7 +83,7 @@ TEST(MeshSolidTopology, MembershipCrossesWordBoundariesWithoutSettingTailPadding
         for(const u32 corner : s_Tetrahedron)
             indices.push_back(component * 4u + corner);
     }
-    const auto words = Impl::BuildSolidTriangleWords(positions, indices, scratch);
+    const auto words = Impl::BuildSolidTriangleWords(positions, indices);
     ASSERT_TRUE(words);
     ASSERT_EQ(words->size(), 2u);
     EXPECT_EQ((*words)[0], 0xffffffffu);
@@ -94,24 +91,22 @@ TEST(MeshSolidTopology, MembershipCrossesWordBoundariesWithoutSettingTailPadding
 }
 
 TEST(MeshSolidTopology, NonFinitePositionsAndInvalidCornerRangesCannotProduceMembership){
-    Core::Alloc::ScratchArena scratch(Name("tests/assets_mesh/invalid_topology_inputs"));
     Array<Float3U, 3u> positions = {Float3U{0.f, 0.f, 0.f}, Float3U{1.f, 0.f, 0.f}, Float3U{0.f, 1.f, 0.f}};
     const Array<u32, 3u> validCorners = {0u, 1u, 2u};
     const Array<u32, 2u> missingCorner = {0u, 1u};
     const Array<u32, 3u> outOfRange = {0u, 1u, 3u};
-    EXPECT_FALSE(Impl::BuildSolidTriangleWords(positions, missingCorner, scratch));
-    EXPECT_FALSE(Impl::BuildSolidTriangleWords(positions, outOfRange, scratch));
+    EXPECT_FALSE(Impl::BuildSolidTriangleWords(positions, missingCorner));
+    EXPECT_FALSE(Impl::BuildSolidTriangleWords(positions, outOfRange));
     positions[2].x = Limit<f32>::s_QuietNaN;
-    EXPECT_FALSE(Impl::BuildSolidTriangleWords(positions, validCorners, scratch));
+    EXPECT_FALSE(Impl::BuildSolidTriangleWords(positions, validCorners));
 }
 
 TEST(MeshSolidTopology, OpposedSheetsAndCoplanarClosedComponentsRemainSurfaces){
-    Core::Alloc::ScratchArena scratch(Name("tests/assets_mesh/zero_solid_volume"));
     const Array<Float3U, 4u> positions = {Float3U{0.f, 0.f, 0.f}, Float3U{1.f, 0.f, 0.f}, Float3U{0.f, 1.f, 0.f}, Float3U{1.f, 1.f, 0.f}};
     const Array<u32, 6u> sheet = {0u, 1u, 2u, 0u, 2u, 1u};
     const Array<u32, 12u> flatTetrahedron = {0u, 2u, 1u, 0u, 1u, 3u, 0u, 3u, 2u, 1u, 2u, 3u};
     for(const Span<const u32> indices : {Span<const u32>(sheet), Span<const u32>(flatTetrahedron)}){
-        const auto words = Impl::BuildSolidTriangleWords(positions, indices, scratch);
+        const auto words = Impl::BuildSolidTriangleWords(positions, indices);
         ASSERT_TRUE(words);
         ASSERT_EQ(words->size(), 1u);
         EXPECT_EQ((*words)[0], 0u);
@@ -119,7 +114,6 @@ TEST(MeshSolidTopology, OpposedSheetsAndCoplanarClosedComponentsRemainSurfaces){
 }
 
 TEST(MeshSolidTopology, RelativeComponentVolumePreservesTinyAndTranslatedSolids){
-    Core::Alloc::ScratchArena scratch(Name("tests/assets_mesh/relative_solid_volume"));
     struct VolumeCase{
         Float3U origin;
         f32 size;
@@ -139,7 +133,7 @@ TEST(MeshSolidTopology, RelativeComponentVolumePreservesTinyAndTranslatedSolids)
             Float3U{origin.x, VectorGetY(shifted), origin.z},
             Float3U{origin.x, origin.y, VectorGetZ(shifted)},
         };
-        const auto words = Impl::BuildSolidTriangleWords(positions, indices, scratch);
+        const auto words = Impl::BuildSolidTriangleWords(positions, indices);
         ASSERT_TRUE(words);
         ASSERT_EQ(words->size(), 1u);
         EXPECT_EQ((*words)[0], 0xfu);

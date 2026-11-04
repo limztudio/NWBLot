@@ -38,9 +38,7 @@ inline constexpr Array<MStringView, 4> s_LaneCallSuffixes = {
 
 
 [[nodiscard]] b8 IsRegisterPromotableSimdType(const MStringView simdType)noexcept{
-    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType))
-        return vecInfo->isFloatReg || vecInfo->isIntReg;
-    return FindBuiltinSimdMatrixType(simdType) != nullptr;
+    return SymbolTable::IsSimdRegisterType(simdType);
 }
 
 [[nodiscard]] b8 IsDoubleSimdType(const MStringView simdType)noexcept{

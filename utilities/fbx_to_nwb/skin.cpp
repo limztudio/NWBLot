@@ -51,11 +51,7 @@ SIMDMatrix ConvertJointMatrix(const SIMDMatrixDouble& matrix)noexcept{
 }
 
 b8 NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs)noexcept{
-    Float34 lhsStored{};
-    Float34 rhsStored{};
-    StoreFloat(lhs, lhsStored);
-    StoreFloat(rhs, rhsStored);
-    return NearlyEqualFbxJointMatrices(lhsStored, rhsStored);
+    return NearlyEqualFbxJointMatrices(lhs, rhs);
 }
 
 AStringView NodeDisplayName(const ufbx_node* node)noexcept{

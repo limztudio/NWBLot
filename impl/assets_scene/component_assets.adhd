@@ -15,7 +15,7 @@ using Scene::CameraComponent;
 using Scene::CameraProjection;
 namespace LightType = Scene::LightType;
 using Scene::LightComponent;
-using Scene::TryBuildCameraProjectionData;
+using Scene::TryBuildCameraProjection;
 using Scene::s_CameraFallbackAspectRatio;
 using Scene::IsValidLightCone;
 NWB_IMPL_END
@@ -280,7 +280,7 @@ Expected<LightComponent> UnpackLightComponentPayloadBinary(in LightComponentPayl
 }
 
 b8 IsValidLightComponentParameters(in LightComponent component){
-    f32x4 color = component.color();
+    VectorSingle color = component.color();
     f32 intensity = component.intensity();
     b8 validType =
         component.type == LightType::Directional
@@ -350,8 +350,8 @@ b8 IsAllowedSceneAssetField(in StringView fieldName){
     ;
 }
 
-Expected<f32x4> TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w){
-    const f32x4 rawQuaternion(x, y, z, w);
+Expected<VectorSingle> TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w){
+    const VectorSingle rawQuaternion(x, y, z, w);
     const f32 lenSq = lengthSq(rawQuaternion);
     if(!isFinite(lenSq) || lenSq <= s_SceneMinQuaternionLengthSq)
         return makeUnexpected(Failure());
@@ -367,7 +367,7 @@ b8 IsValidTransformComponentParameters(in TransformComponent component){
     )
         return false;
 
-    const f32 rotationLengthSq = lengthSq(component.rotation);
+    const f32 rotationLengthSq = lengthSq(VectorSingle(component.rotation));
     return isFinite(rotationLengthSq) && abs(rotationLengthSq - 1.0f) <= s_TransformRotationUnitLengthSquaredTolerance;
 }
 
@@ -399,9 +399,9 @@ b8 ValidateTransformComponentAssetPayload(in TransformComponent component, in Na
 }
 
 b8 ValidateCameraComponentAssetPayload(in CameraComponent component, in Name virtualPath){
-    const f32x4 projection = component.projection;
+    const VectorSingle projection(component.projection);
     const f32 aspectRatio = projection.w;
-    const Expected<CameraProjection> builtProjection = TryBuildCameraProjectionData(
+    const Expected<CameraProjection> builtProjection = TryBuildCameraProjection(
         projection.x,
         projection.y,
         projection.z,

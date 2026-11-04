@@ -66,7 +66,7 @@
     };
 
     namespace RenderMask {
-        enum Enum : u32 {
+        enum Flag : u32 {
             None = 0,
             Opaque = (static_cast<::u32>(1) << 0u),
             Shadow = (static_cast<::u32>(1) << 1u),
@@ -275,19 +275,19 @@
 | `f64` | `f64` | 8 B | 64-bit IEEE-754 double |
 | `void` | `void` | — | Return-only empty type |
 
-### 5.2 SIMD-Like Types (Strictly Aligned Only — `f32x4` Naming)
-- **Rule**: SIMD-like types in `adhd` use `<scalar>x<lanes>` naming (e.g., `f32x4`, never `Float4`) and are **always aligned** (`alignas(16)` for 32-bit lane packs, `alignas(32)` for 64-bit lane packs). They are **never** converted to or stored as unaligned `*U` types (`Float2U`, `Float3U`, `Float4U`, `Float33U`, `Float44U`, etc.).
-- **Aligned `adhd` SIMD Types & C++ Lowering** (`type_vector_aligned.h`, `type_matrix_storage.h`, `type_register.h`):
-  - **16-byte Aligned (`alignas(16)`)**:
-    - Vectors: `f32x4` (`Float4` / `SIMDVectorSingle`), `i32x4` (`Int4`), `u32x4` (`UInt4`), `f32x3_i32` (`Float3Int`), `f32x3_u32` (`Float3UInt`).
-    - Matrices: `f32x3x4` (`Float34`), `f32x4x4` (`Float44` / `SIMDMatrix`).
-  - **32-byte Aligned (`alignas(32)`)**:
-    - Vectors: `f64x2` (`Double2`), `f64x3` (`Double3`), `f64x4` (`Double4` / `SIMDVectorDouble`), `i64x4` (`Int64x4`), `u64x4` (`UInt64x4`), `f64x3_i64` (`Double3Int`), `f64x3_u64` (`Double3UInt`).
-    - Matrices: `f64x3x3` (`Double33`), `f64x3x4` (`Double34`), `f64x4x4` (`Double44` / `SIMDMatrixDouble`).
-- **SIMD Construction & Shader-Style Swizzling**:
-  - Direct construction from lanes: e.g., `f32x4(1.0f, 2.0f, 3.0f, 1.0f)`.
+### 5.2 SIMD Calculation Types vs. Memory-Layout Types (`VectorSingle`/`MatrixSingle` vs. `f32x4~`)
+- **Rule**: `.adhd` strictly separates **SIMD calculation/register types** (`VectorSingle`, `VectorDouble`, `MatrixSingle`, `MatrixDouble`) from **memory-layout storage types** (`f32x4~` and unaligned `*u` types):
+  - **SIMD Calculation & Parameter Types** (`type_register.h`, `result.h`):
+    - `VectorSingle` (`::SIMDVectorSingle`, passed by value on `in`), `VectorDouble` (`::SIMDVectorDouble`, passed by value on `in`), `MatrixSingle` (`::SIMDMatrix`, passed by `const &` on `in`), `MatrixDouble` (`::SIMDMatrixDouble`, passed by `const &` on `in`). Inside `Expected<...>` and `Optional<...>`, `VectorSingle` and `VectorDouble` lower to `::SIMDVectorSingleResult` and `::SIMDVectorDoubleResult`.
+    - All SIMD arithmetic, multi-lane swizzling, SIMD math intrinsics, and SIMD function/method/lambda/`Func` parameters must use `VectorSingle`, `VectorDouble`, `MatrixSingle`, or `MatrixDouble`. They cannot be held in memory as `class` member fields, container/array/span elements, or file-scope `const` declarations.
+  - **Aligned Memory-Layout Types** (`type_vector_aligned.h`, `type_matrix_storage.h`):
+    - **16-byte Aligned (`alignas(16)`)**: `f32x4` (`Float4`), `i32x4` (`Int4`), `u32x4` (`UInt4`), `f32x3_i32` (`Float3Int`), `f32x3_u32` (`Float3UInt`), `f32x3x4` (`Float34`), `f32x4x4` (`Float44`).
+    - **32-byte Aligned (`alignas(32)`)**: `f64x2` (`Double2`), `f64x3` (`Double3`), `f64x4` (`Double4`), `i64x4` (`Int64x4`), `u64x4` (`UInt64x4`), `f64x3_i64` (`Double3Int`), `f64x3_u64` (`Double3UInt`), `f64x3x3` (`Double33`), `f64x3x4` (`Double34`), `f64x4x4` (`Double44`).
+    - Used whenever SIMD values are held in memory (all `class` member fields, container/array/span elements, and file-scope constants); prohibited as direct callable parameters or direct operands of SIMD arithmetic/intrinsics.
+- **Explicit Load/Store & Shader-Style Swizzling**:
+  - Load from memory layout into calculation registers via `VectorSingle(storage)` / `VectorDouble(storage)` / `MatrixSingle(storage)` / `MatrixDouble(storage)` (or `VectorSingle(storage, w)`), and store back via `f32x4(vec)` / `f32x3u(vec)` / `f32x3_i32(vec, w)` / `f32x3x4(mat)`.
   - Single-lane access via `.x`, `.y`, `.z`, `.w` and `.r`, `.g`, `.b`, `.a`.
-  - Shader-style multi-lane swizzling (e.g., `v.xyz`, `v.zyx`, `v.xxxx`, `v.xyzw`, `v.rgba`) is supported and lowers directly to `global/simd/vector_swizzle.h`.
+  - Shader-style multi-lane swizzling on `VectorSingle`/`VectorDouble` (e.g., `v.xyz`, `v.zyx`, `v.xxxx`, `v.xyzw`, `v.rgba`) lowers directly to `global/simd/vector_swizzle.h`.
 - **Built-In Math & SIMD Intrinsics (No `native` Block Required)**:
   - Scalar & SIMD vector/matrix intrinsics are available out of the box and lower directly to `global/simplemath.h` and `global/simdmath.h`:
     - **Scalar & Vector**: `abs`, `min`, `max`, `clamp`, `lerp`, `sqrt`, `rsqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `round`

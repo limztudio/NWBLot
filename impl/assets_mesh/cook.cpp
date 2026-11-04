@@ -148,22 +148,6 @@ namespace MeshAssetBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FillMeshBaseHeader(const Mesh& mesh, MeshBinaryHeader& outHeader)noexcept{
-    outHeader = MakeMeshBinaryHeader(
-        mesh.positionStream().size(),
-        mesh.normalStream().size(),
-        mesh.tangentStream().size(),
-        mesh.uv0Stream().size(),
-        mesh.colorStream().size(),
-        mesh.meshlets().size(),
-        mesh.meshletBounds().size(),
-        mesh.meshletPositionRefDeltas().size(),
-        mesh.meshletAttributeRefDeltas().size(),
-        mesh.meshletLocalVertexRefs().size(),
-        mesh.meshletPrimitiveIndices().size()
-    );
-}
-
 [[nodiscard]] b8 AppendMeshAttributeStreams(const Mesh& mesh, const TStringView failureContext, Core::Assets::AssetBytes& outBinary){
     return
         Core::Assets::AppendVectorPayload(mesh.positionStream(), failureContext, s_PositionsStreamLabel, outBinary)
@@ -212,8 +196,19 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    MeshBinaryHeader header;
-    MeshAssetBinaryPayload::FillMeshBaseHeader(mesh, header);
+    const MeshBinaryHeader header = MakeMeshBinaryHeader(
+        mesh.positionStream().size(),
+        mesh.normalStream().size(),
+        mesh.tangentStream().size(),
+        mesh.uv0Stream().size(),
+        mesh.colorStream().size(),
+        mesh.meshlets().size(),
+        mesh.meshletBounds().size(),
+        mesh.meshletPositionRefDeltas().size(),
+        mesh.meshletAttributeRefDeltas().size(),
+        mesh.meshletLocalVertexRefs().size(),
+        mesh.meshletPrimitiveIndices().size()
+    );
     AppendPOD(outBinary, header);
 
     const TStringView serializeFailureContext = MeshBinaryPayload::s_MeshSerializeContext;

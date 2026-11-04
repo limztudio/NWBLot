@@ -1,0 +1,360 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "router_popup.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendRouterControlAction(
+    in HitTarget host,
+    in HitTarget source,
+    in u64 layoutGeneration,
+    in ControlActionKind kind,
+    in f64 delta,
+    in f64 deltaX,
+    mut Vector<ControlAction> controlActions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    if(controlActions.size() == s_InputMaxControlActions || inOutNextActionSequence == 0u){
+        inOutResult.activationOverflow = true;
+        return;
+    }
+    ControlAction action;
+    action.id.target = host.id;
+    action.id.declarationGeneration = host.declarationGeneration;
+    action.id.layoutGeneration = layoutGeneration;
+    action.id.sequence = inOutNextActionSequence;
+    action.source = source.id;
+    action.popup = host.popup;
+    action.control = host.control;
+    action.kind = kind;
+    action.delta = delta;
+    action.value = source.value;
+    action.step = host.scrollStep;
+    action.pageRows = host.pageRows;
+    action.maximum = host.gestureMaximum;
+    action.sourceDeclarationGeneration = source.declarationGeneration;
+    action.sourceControl = source.control;
+    action.deltaX = deltaX;
+    action.stepX = host.scrollStepX;
+    action.maximumX = host.gestureMaximumX;
+    controlActions.push_back(action);
+    ++inOutNextActionSequence;
+}
+
+b8 IsValidRouterControlHostTarget(in Span<PopupRecord> popups, in HitTarget target, in HitTarget host){
+    return
+        host.enabled && host.focusable && !host.owner.valid()
+        && host.control.valid() && host.control == target.control && host.popup == target.popup
+        && IsTargetAllowedByRouterPopup(popups, host)
+        && HasVisibleUiRectIntersection(host.rectangle, host.clip)
+    ;
+}
+
+Expected<usize> TryResolveRouterControlHostIndex(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in HitTarget target
+){
+    if(target.owner.valid()){
+        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
+        if(!hostIndex.has_value())
+            return makeUnexpected(Failure());
+        const HitTarget host = targets[hostIndex.value()];
+        if(!IsValidRouterControlHostTarget(popups, target, host))
+            return makeUnexpected(Failure());
+        return hostIndex.value();
+    }
+    if(!IsValidRouterControlHostTarget(popups, target, target))
+        return makeUnexpected(Failure());
+    return FindTargetIndexInTable(targets, lookup, target.id, target.declarationGeneration);
+}
+
+Expected<HitTarget> TryResolveRouterControlHost(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in HitTarget target
+){
+    HitTarget host = target;
+    if(target.owner.valid()){
+        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
+        if(!hostIndex.has_value())
+            return makeUnexpected(Failure());
+        host = targets[hostIndex.value()];
+    }
+    if(!IsValidRouterControlHostTarget(popups, target, host))
+        return makeUnexpected(Failure());
+    return host;
+}
+
+b8 IsRouterTargetInteractive(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in HitTarget target
+){
+    return
+        target.enabled
+        && HasVisibleUiRectIntersection(target.rectangle, target.clip)
+        && IsTargetAllowedByRouterPopup(popups, target)
+        && (!target.owner.valid() || TryResolveRouterControlHost(targets, lookup, popups, target).has_value())
+    ;
+}
+
+Expected<usize> TryResolveRouterCommandHostIndex(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in HitTarget source
+){
+    if(!source.textEditable || !source.commandOwner.valid() || !source.commandControl.valid() || !IsRouterTargetInteractive(targets, lookup, popups, source))
+        return makeUnexpected(Failure());
+    const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
+    if(!hostIndex.has_value())
+        return makeUnexpected(Failure());
+    const HitTarget host = targets[hostIndex.value()];
+    if(
+        !IsRouterTargetInteractive(targets, lookup, popups, host)
+        || !host.focusable || !host.navigable || host.owner.valid()
+        || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer
+    )
+        return makeUnexpected(Failure());
+    return hostIndex.value();
+}
+
+b8 IsCurrentRouterControlCommandOwner(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in CommandSource held
+){
+    const ControlCommandOwner owner = held.controlOwner;
+    const TargetOwner sourceOwner = held.focusOwner;
+    const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, owner.host, owner.declarationGeneration);
+    const Expected<usize> sourceIndex = FindTargetIndexInTable(targets, lookup, sourceOwner.target, sourceOwner.declarationGeneration);
+    if(!hostIndex.has_value() || !sourceIndex.has_value())
+        return false;
+    const HitTarget host = targets[hostIndex.value()];
+    const HitTarget source = targets[sourceIndex.value()];
+    if(
+        !IsRouterTargetInteractive(targets, lookup, popups, host) || !host.navigable || host.owner.valid()
+        || host.control != owner.control || host.popup != owner.popup
+        || !IsRouterTargetInteractive(targets, lookup, popups, source)
+        || source.control != sourceOwner.control || source.popup != sourceOwner.popup
+        || (owner.horizontal && !host.horizontalNavigation)
+    )
+        return false;
+    if(sourceIndex.value() == hostIndex.value())
+        return true;
+    const Expected<usize> commandHostIndex = TryResolveRouterCommandHostIndex(targets, lookup, popups, source);
+    return commandHostIndex.has_value() && commandHostIndex.value() == hostIndex.value();
+}
+
+b8 IsCurrentRouterControlAction(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in ControlAction action
+){
+    const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, action.id.target, action.id.declarationGeneration);
+    if(!hostIndex.has_value())
+        return false;
+    const HitTarget host = targets[hostIndex.value()];
+    if(
+        !IsRouterTargetInteractive(targets, lookup, popups, host)
+        || !host.focusable || host.owner.valid()
+        || !action.control.valid() || host.control != action.control || host.popup != action.popup
+    )
+        return false;
+    if(action.kind == ControlActionKind::Wheel)
+        return host.scrollable;
+    if(action.kind != ControlActionKind::Activate){
+        if(!host.navigable || ((action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right) && !host.horizontalNavigation))
+            return false;
+        if(action.source == host.id)
+            return true;
+        const Expected<usize> sourceIndex = FindTargetIndexInTable(targets, lookup, action.source, action.sourceDeclarationGeneration);
+        if(!sourceIndex.has_value())
+            return false;
+        const HitTarget source = targets[sourceIndex.value()];
+        if(!IsRouterTargetInteractive(targets, lookup, popups, source) || source.control != action.sourceControl)
+            return false;
+        const Expected<usize> commandHostIndex = TryResolveRouterCommandHostIndex(targets, lookup, popups, source);
+        return commandHostIndex.has_value() && commandHostIndex.value() == hostIndex.value();
+    }
+    const Expected<usize> sourceIndex = FindTargetIndexInTable(targets, lookup, action.source, action.sourceDeclarationGeneration);
+    if(!sourceIndex.has_value())
+        return false;
+    const HitTarget source = targets[sourceIndex.value()];
+    return
+        IsRouterTargetInteractive(targets, lookup, popups, source) && source.activatable
+        && source.owner == host.id && source.ownerDeclarationGeneration == host.declarationGeneration
+        && source.control == action.control && source.popup == action.popup && source.value == action.value
+    ;
+}
+
+Expected<ControlAction> TryConsumeRouterControlAction(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in WidgetId host,
+    in u64 declarationGeneration,
+    in ControlToken token,
+    mut Vector<ControlAction> controlActions
+){
+    const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, host, declarationGeneration);
+    if(declarationGeneration == 0u || !token.valid() || !targetIndex.has_value())
+        return makeUnexpected(Failure());
+    const HitTarget target = targets[targetIndex.value()];
+    if(!IsRouterTargetInteractive(targets, lookup, popups, target) || target.control != token || target.owner.valid() || !target.focusable)
+        return makeUnexpected(Failure());
+    for(usize index = 0u; index < controlActions.size(); ++index){
+        const ControlAction candidate = controlActions[index];
+        if(candidate.id.target != host || candidate.id.declarationGeneration != declarationGeneration || candidate.control != token || !IsCurrentRouterControlAction(targets, lookup, popups, candidate))
+            continue;
+        for(usize moveIndex = index + 1u; moveIndex < controlActions.size(); ++moveIndex)
+            controlActions[moveIndex - 1u] = controlActions[moveIndex];
+        controlActions.pop_back();
+        return candidate;
+    }
+    return makeUnexpected(Failure());
+}
+
+b8 FenceRouterControlTargets(
+    in WidgetId host,
+    in u64 declarationGeneration,
+    in ControlToken token,
+    in Span<TargetLookup> lookup,
+    mut Vector<HitTarget> targets
+){
+    const Expected<usize> acceptedIndex = FindTargetIndexInTable(targets, lookup, host, 0u);
+    if(!acceptedIndex.has_value())
+        return false;
+    const HitTarget accepted = targets[acceptedIndex.value()];
+    if(accepted.declarationGeneration == declarationGeneration && accepted.control == token)
+        return false;
+    const b8 preserveText = accepted.declarationGeneration == declarationGeneration && accepted.textEditable && !accepted.owner.valid() && (accepted.scrollable || accepted.control.empty());
+    for(usize index = 0u; index < targets.size(); ++index){
+        HitTarget target = targets[index];
+        if(target.id == host){
+            if(preserveText){
+                target.control = ControlToken();
+                target.scrollable = false;
+                target.navigable = false;
+                target.horizontalNavigation = false;
+            }
+            else
+                target.enabled = false;
+            targets[index] = target;
+        }
+        else if(target.owner == host){
+            target.enabled = false;
+            targets[index] = target;
+        }
+    }
+    return true;
+}
+
+void ReconcileRouterControlActions(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    mut Vector<ControlAction> controlActions,
+    mut Vector<CommandSource> commandSources
+){
+    usize keptActions = 0u;
+    for(usize index = 0u; index < controlActions.size(); ++index){
+        if(IsCurrentRouterControlAction(targets, lookup, popups, controlActions[index])){
+            if(keptActions != index)
+                controlActions[keptActions] = controlActions[index];
+            ++keptActions;
+        }
+    }
+    controlActions.resize(keptActions);
+    for(usize index = 0u; index < commandSources.size(); ++index){
+        CommandSource source = commandSources[index];
+        if(!IsCurrentRouterControlCommandOwner(targets, lookup, popups, source)){
+            if(source.controlOwner.host.valid())
+                source.submitArmed = false;
+            source.controlOwner = ControlCommandOwner();
+        }
+        const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, source.focusOwner.target, source.focusOwner.declarationGeneration);
+        b8 validFocus = false;
+        if(focusedIndex.has_value()){
+            const HitTarget focused = targets[focusedIndex.value()];
+            validFocus = IsRouterTargetInteractive(targets, lookup, popups, focused)
+                && focused.popup == source.focusOwner.popup
+                && focused.control == source.focusOwner.control;
+        }
+        if(!validFocus)
+            source.focusOwner = TargetOwner();
+        commandSources[index] = source;
+    }
+}
+
+b8 TryRouteRouterControlNavigation(
+    in InputEvent event,
+    in HitTarget host,
+    in HitTarget source,
+    in b8 alreadyPressed,
+    in u64 layoutGeneration,
+    mut CommandSource inOutHeld,
+    mut Vector<ControlAction> controlActions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    const Expected<ControlActionKind> kind = TryTranslateControlNavigationCommand(event.command, host.horizontalNavigation);
+    if(!kind.has_value())
+        return false;
+    ControlCommandOwner owner = inOutHeld.controlOwner;
+    if(!alreadyPressed && !event.repeat){
+        owner = ControlCommandOwner(host.id, host.declarationGeneration, host.popup, host.control, kind.value() == ControlActionKind::Left || kind.value() == ControlActionKind::Right);
+        inOutHeld.controlOwner = owner;
+    }
+    if(
+        owner.host == host.id && owner.declarationGeneration == host.declarationGeneration
+        && owner.popup == host.popup && owner.control == host.control
+        && inOutHeld.focusOwner.target == source.id && inOutHeld.focusOwner.declarationGeneration == source.declarationGeneration
+        && inOutHeld.focusOwner.popup == source.popup && inOutHeld.focusOwner.control == source.control
+    )
+        AppendRouterControlAction(host, source, layoutGeneration, kind.value(), 0.0, 0.0, controlActions, inOutNextActionSequence, inOutResult);
+    return true;
+}
+
+void RouteRouterWheel(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in InputEvent event,
+    in b8 hasHit,
+    in HitTarget hit,
+    in b8 primaryDown,
+    in b8 pointerSequenceConsumed,
+    in b8 secondaryDown,
+    in b8 secondarySequenceConsumed,
+    in u64 layoutGeneration,
+    mut Vector<ControlAction> controlActions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    if(primaryDown)
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || pointerSequenceConsumed;
+    else if(secondaryDown)
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || secondarySequenceConsumed;
+    else
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || hasHit;
+    if((primaryDown && !pointerSequenceConsumed) || (secondaryDown && !secondarySequenceConsumed) || !hasHit || (event.scrollX == 0.0 && event.scrollY == 0.0))
+        return;
+    const Expected<HitTarget> host = TryResolveRouterControlHost(targets, lookup, popups, hit);
+    if(host.has_value() && host.value().scrollable && (event.scrollY != 0.0 || host.value().scrollStepX > 0.0))
+        AppendRouterControlAction(host.value(), hit, layoutGeneration, ControlActionKind::Wheel, event.scrollY, event.scrollX, controlActions, inOutNextActionSequence, inOutResult);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

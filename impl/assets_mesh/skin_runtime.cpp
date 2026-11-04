@@ -70,10 +70,8 @@ b8 Skin::validatePayload()const{
     if(!ValidateSkinInfluenceStream(m_influences, jointCount))
         return false;
     for(usize index = 0u; index < m_inverseBindMatrices.size(); ++index){
-        if(!MatrixIsInvertibleAffine(LoadFloat(m_inverseBindMatrices[index]), s_SkinValidationEpsilon, s_SkinValidationEpsilon)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: inverse bind matrix {} is not a finite invertible affine matrix"), index);
+        if(!ValidateSkinInverseBindMatrixAt(LoadFloat(m_inverseBindMatrices[index]), index))
             return false;
-        }
     }
     return true;
 }

@@ -1,0 +1,569 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "commands.adhd"
+#include "pointer.adhd"
+#include <impl/ecs_ui/toolkit/id.adhd>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd>
+#include "popup.adhd"
+#include "control.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_InputMaxTargets = 4096u;
+const usize s_InputMaxEvents = 256u;
+const usize s_InputMaxSources = 256u;
+const usize s_InputMaxActions = 256u;
+const usize s_InputMaxPointerGestures = 256u;
+const usize s_InputMaxControlActions = 256u;
+const usize s_InputMaxContextMenuActions = 256u;
+const usize s_InputSourceReserve = 16u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> InputEventType{
+    PointerMove,
+    PrimaryDown,
+    PrimaryUp,
+    KeyDown,
+    KeyUp,
+    FocusLost,
+    PointerLeave,
+    PointerCaptureLost,
+    FocusGained,
+    PointerWheel,
+    SecondaryDown,
+    SecondaryUp,
+    CommandDown,
+    CommandUp,
+}
+
+enum<u8> InputActionSource{
+    Pointer,
+    Command,
+}
+
+enum<u8> PointerGestureState{
+    Active,
+    Completed,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class InputEvent{
+    public InputEventType type = InputEventType::PointerMove;
+    public InputCommand command = InputCommand::None;
+    public b8 extend = false;
+    public b8 edit = true;
+    public Point position;
+    public i32 key = s_InputKeyUnknown;
+    public b8 shift = false;
+    public b8 repeat = false;
+    public b8 control = false;
+    public b8 alt = false;
+    public b8 super = false;
+    public b8 allowText = false;
+    public b8 hoverCapable = false;
+    public f64 scrollX = 0.0;
+    public f64 scrollY = 0.0;
+    // Optional monotonic timestamp at native ingress; zero leaves pointer clicks ungrouped.
+    public u64 timestampMs = 0u;
+    public InputSource source;
+}
+
+// Rectangle and clip use the same logical coordinates as painting; publication order provides the default focus traversal order.
+class HitTarget{
+    public WidgetId id;
+    public u64 declarationGeneration = 1u;
+    public PopupToken popup;
+    public ControlToken control;
+    public WidgetId owner;
+    public u64 ownerDeclarationGeneration = 0u;
+    public u64 value = 0u;
+    public f64 scrollStep = 0.0;
+    public u64 pageRows = 1u;
+    public f64 gestureMaximum = 0.0;
+    public WidgetId commandOwner;
+    public u64 commandOwnerDeclarationGeneration = 0u;
+    public ControlToken commandControl;
+    public f64 scrollStepX = 0.0;
+    public f64 gestureMaximumX = 0.0;
+    public Rect rectangle;
+    public Rect clip;
+    // Both zero dimensions omit the reference; a supplied reference has two positive dimensions.
+    public Rect gestureReference;
+    public u32 paintOrder = 0u;
+    public u32 layer = 0u;
+    public b8 enabled = true;
+    public b8 focusable = false;
+    public b8 activatable = false;
+    public b8 pointerGesture = false;
+    public b8 textEditable = false;
+    public b8 navigable = false;
+    public b8 scrollable = false;
+    public b8 focusOnCommit = false;
+    // A focused editor may borrow vertical navigation and submission from another accepted control lifetime.
+    public b8 contextMenu = false;
+    public b8 horizontalNavigation = false;
+}
+
+// Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
+class InputActionId{
+    public b8 operator==(in InputActionId rhs)const{
+        return this.target == rhs.target && this.declarationGeneration == rhs.declarationGeneration && this.layoutGeneration == rhs.layoutGeneration && this.sequence == rhs.sequence;
+    }
+
+    public b8 operator!=(in InputActionId rhs)const{
+        return this.target != rhs.target || this.declarationGeneration != rhs.declarationGeneration || this.layoutGeneration != rhs.layoutGeneration || this.sequence != rhs.sequence;
+    }
+
+    public b8 valid()const{
+        return this.target.valid() && this.declarationGeneration != 0u && this.layoutGeneration != 0u && this.sequence != 0u;
+    }
+
+    public WidgetId target;
+    public u64 declarationGeneration = 0u;
+    public u64 layoutGeneration = 0u;
+    public u64 sequence = 0u;
+}
+
+class InputAction{
+    public InputActionId id;
+    public InputActionSource origin = InputActionSource::Pointer;
+    public PopupToken popup;
+    public ControlToken control;
+    public InputSource inputSource;
+}
+
+// Context-menu triggers retain the accepted anchor and lifetime without borrowing the declaration.
+class ContextMenuAction{
+    public InputActionId id;
+    public PopupToken popup;
+    public ControlToken control;
+    public Point position;
+    public InputActionSource origin = InputActionSource::Pointer;
+    public InputSource inputSource;
+}
+
+// Ordered copied input addressed to a focusable host, including stable values selected by its parts.
+class ControlAction{
+    public InputActionId id;
+    public WidgetId source;
+    public PopupToken popup;
+    public ControlToken control;
+    public ControlActionKind kind = ControlActionKind::Wheel;
+    public f64 delta = 0.0;
+    public u64 value = 0u;
+    public f64 step = 0.0;
+    public u64 pageRows = 1u;
+    public f64 maximum = 0.0;
+    public u64 sourceDeclarationGeneration = 0u;
+    public ControlToken sourceControl;
+    // Positive X moves right; positive Y moves up. Each wheel action carries one native event.
+    public f64 deltaX = 0.0;
+    public f64 stepX = 0.0;
+    public f64 maximumX = 0.0;
+}
+
+// One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.
+class PointerGesture{
+    public InputActionId id;
+    public InputSource inputSource;
+    public Point origin;
+    public Point position;
+    public Rect targetRectangle;
+    public Rect referenceRectangle;
+    public PointerGestureState state = PointerGestureState::Active;
+    public PopupToken popup;
+    public ControlToken control;
+    public f64 maximum = 0.0;
+    public u64 updateSequence = 0u;
+    // Copied once from the accepted target at the initial press; later updates retain these opaque bits.
+    public u64 value = 0u;
+}
+
+class InputRoutingResult{
+    public b8 pointerConsumed = false;
+    public b8 commandConsumed = false;
+    public b8 wantsPointer = false;
+    public b8 wantsCommands = false;
+    public b8 pointerRouted = false;
+    public b8 activationOverflow = false;
+    public b8 gestureOverflow = false;
+    public WidgetId hover;
+    public WidgetId focus;
+    public WidgetId capture;
+}
+
+class PointerGestureRecord{
+    public PointerGestureRecord(){
+        this.pendingUpdate = true;
+    }
+
+    public PointerGestureRecord(in PointerGesture inGesture, in b8 inPendingUpdate){
+        this.gesture = inGesture;
+        this.pendingUpdate = inPendingUpdate;
+    }
+
+    public PointerGesture gesture;
+    public b8 pendingUpdate;
+}
+
+class TargetLookup{
+    public TargetLookup(){
+        this.value = 0u;
+        this.index = 0u;
+    }
+
+    public TargetLookup(in u64 inValue, in u32 inIndex){
+        this.value = inValue;
+        this.index = inIndex;
+    }
+
+    public u64 value;
+    public u32 index;
+}
+
+class ControlCommandOwner{
+    public ControlCommandOwner(){
+        this.declarationGeneration = 0u;
+        this.horizontal = false;
+    }
+
+    public ControlCommandOwner(in WidgetId inHost, in u64 inDeclarationGeneration, in PopupToken inPopup, in ControlToken inControl, in b8 inHorizontal){
+        this.host = inHost;
+        this.declarationGeneration = inDeclarationGeneration;
+        this.popup = inPopup;
+        this.control = inControl;
+        this.horizontal = inHorizontal;
+    }
+
+    public WidgetId host;
+    public u64 declarationGeneration;
+    public PopupToken popup;
+    public ControlToken control;
+    public b8 horizontal;
+}
+
+class TargetOwner{
+    public TargetOwner(){
+        this.declarationGeneration = 0u;
+    }
+
+    public TargetOwner(in WidgetId inTarget, in u64 inDeclarationGeneration, in PopupToken inPopup, in ControlToken inControl){
+        this.target = inTarget;
+        this.declarationGeneration = inDeclarationGeneration;
+        this.popup = inPopup;
+        this.control = inControl;
+    }
+
+    public WidgetId target;
+    public u64 declarationGeneration;
+    public PopupToken popup;
+    public ControlToken control;
+}
+
+class BoundSource{
+    public BoundSource(){}
+
+    public BoundSource(in InputSource inSource, in InputCommandIntent inIntent){
+        this.source = inSource;
+        this.intent = inIntent;
+    }
+
+    public InputSource source;
+    public InputCommandIntent intent;
+}
+
+class CommandSource{
+    public InputSource source;
+    public ControlCommandOwner controlOwner;
+    public TargetOwner focusOwner;
+    public Point contextPosition;
+    public b8 consumed = false;
+    public b8 delegated = false;
+    public b8 submitArmed = false;
+    public b8 contextArmed = false;
+}
+
+class HoverIdentity{
+    public HoverIdentity(){
+        this.declarationGeneration = 0u;
+    }
+
+    public HoverIdentity(in WidgetId inOwner, in u64 inDeclarationGeneration, in PopupToken inPopup, in ControlToken inControl){
+        this.owner = inOwner;
+        this.declarationGeneration = inDeclarationGeneration;
+        this.popup = inPopup;
+        this.control = inControl;
+    }
+
+    public WidgetId owner;
+    public u64 declarationGeneration;
+    public PopupToken popup;
+    public ControlToken control;
+}
+
+class PointerBinding{
+    public PointerBinding(){
+        this.intent = PointerIntent::Activate;
+        this.hoverCapable = false;
+    }
+
+    public PointerBinding(in InputSource inSource, in PointerIntent inIntent, in b8 inHoverCapable){
+        this.source = inSource;
+        this.intent = inIntent;
+        this.hoverCapable = inHoverCapable;
+    }
+
+    public InputSource source;
+    public PointerIntent intent;
+    public b8 hoverCapable;
+}
+
+class PointerSource{
+    public PointerSource(){
+        this.intent = PointerIntent::Activate;
+        this.consumed = false;
+        this.inert = false;
+    }
+
+    public PointerSource(in InputSource inSource, in PointerIntent inIntent, in b8 inConsumed, in b8 inInert){
+        this.source = inSource;
+        this.intent = inIntent;
+        this.consumed = inConsumed;
+        this.inert = inInert;
+    }
+
+    public InputSource source;
+    public PointerIntent intent;
+    public b8 consumed;
+    public b8 inert;
+}
+
+class ContextOwnedTarget{
+    public HitTarget target;
+    public WidgetRoot root;
+}
+
+class ContextOwnedPopup{
+    public PopupScope scope;
+    public WidgetRoot root;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsPointerInputEventType(in InputEventType type){
+    switch(type){
+    case InputEventType::PointerMove:
+    case InputEventType::PrimaryDown:
+    case InputEventType::PrimaryUp:
+    case InputEventType::SecondaryDown:
+    case InputEventType::SecondaryUp:
+    case InputEventType::PointerWheel:
+    case InputEventType::PointerLeave:
+    case InputEventType::PointerCaptureLost:
+        return true;
+    default:
+        return false;
+    }
+}
+
+Expected<InputEvent> TryMakePointerInputEvent(in PointerInput input){
+    InputEvent outEvent;
+    if(input.phase > PointerPhase::Scroll || input.intent > PointerIntent::ContextMenu)
+        return makeUnexpected(Failure());
+    switch(input.phase){
+    case PointerPhase::Move:
+        outEvent.type = InputEventType::PointerMove;
+        break;
+    case PointerPhase::Press:
+        if(input.intent == PointerIntent::Activate)
+            outEvent.type = InputEventType::PrimaryDown;
+        else
+            outEvent.type = InputEventType::SecondaryDown;
+        break;
+    case PointerPhase::Release:
+        if(input.intent == PointerIntent::Activate)
+            outEvent.type = InputEventType::PrimaryUp;
+        else
+            outEvent.type = InputEventType::SecondaryUp;
+        break;
+    case PointerPhase::Cancel:
+        outEvent.type = InputEventType::PointerCaptureLost;
+        break;
+    case PointerPhase::Leave:
+        outEvent.type = InputEventType::PointerLeave;
+        break;
+    case PointerPhase::Scroll:
+        outEvent.type = InputEventType::PointerWheel;
+        break;
+    }
+    outEvent.source = input.source;
+    outEvent.position = input.position;
+    outEvent.scrollX = input.scrollX;
+    outEvent.scrollY = input.scrollY;
+    outEvent.timestampMs = input.timestampMs;
+    outEvent.extend = input.extend;
+    outEvent.hoverCapable = input.hoverCapable;
+    return outEvent;
+}
+
+b8 HasValidHitTargetControlProperties(in HitTarget target){
+    if(
+        (!target.control.empty() && !target.control.valid())
+        || !isFinite(target.scrollStep) || target.scrollStep < 0.0
+        || !isFinite(target.scrollStepX) || target.scrollStepX < 0.0
+        || !isFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
+        || !isFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
+        || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
+        || (target.horizontalNavigation && !target.navigable)
+        || (target.focusOnCommit && (!target.focusable || target.owner.valid()))
+    )
+        return false;
+    if(!target.owner.valid())
+        return target.ownerDeclarationGeneration == 0u;
+    return target.owner != target.id
+        && target.ownerDeclarationGeneration != 0u
+        && target.control.valid()
+        && !target.focusable
+        && !target.navigable
+        && !target.scrollable
+        && !target.focusOnCommit
+        && !target.horizontalNavigation;
+}
+
+Expected<ControlActionKind> TryTranslateControlNavigationCommand(in InputCommand command, in b8 horizontalNavigation){
+    switch(command){
+    case InputCommand::Left:
+    case InputCommand::WordLeft:
+        if(!horizontalNavigation)
+            return makeUnexpected(Failure());
+        return ControlActionKind::Left;
+    case InputCommand::Right:
+    case InputCommand::WordRight:
+        if(!horizontalNavigation)
+            return makeUnexpected(Failure());
+        return ControlActionKind::Right;
+    case InputCommand::Up:
+        return ControlActionKind::Up;
+    case InputCommand::Down:
+        return ControlActionKind::Down;
+    case InputCommand::PageUp:
+        return ControlActionKind::PageUp;
+    case InputCommand::PageDown:
+        return ControlActionKind::PageDown;
+    case InputCommand::DocumentHome:
+    case InputCommand::Home:
+        return ControlActionKind::Home;
+    case InputCommand::DocumentEnd:
+    case InputCommand::End:
+        return ControlActionKind::End;
+    default:
+        return makeUnexpected(Failure());
+    }
+}
+
+b8 HasValidHitTargetCommandOwnerProperties(in HitTarget source){
+    if(!source.commandOwner.valid())
+        return source.commandOwnerDeclarationGeneration == 0u && source.commandControl.empty();
+    return source.enabled
+        && source.focusable
+        && source.textEditable
+        && !source.owner.valid()
+        && !source.navigable
+        && !source.scrollable
+        && source.commandOwner != source.id
+        && source.commandOwnerDeclarationGeneration != 0u
+        && source.commandControl.valid();
+}
+
+Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in WidgetId id, in u64 declarationGeneration){
+    usize begin = 0u;
+    usize end = lookup.size();
+    while(begin < end){
+        usize middle = begin + (end - begin) / 2u;
+        if(lookup[middle].value < id.value)
+            begin = middle + 1u;
+        else
+            end = middle;
+    }
+    if(begin == lookup.size() || lookup[begin].value != id.value)
+        return makeUnexpected(Failure());
+    usize targetIndex = cast<usize>(lookup[begin].index);
+    if(targetIndex >= targets.size())
+        return makeUnexpected(Failure());
+    HitTarget target = targets[targetIndex];
+    if(declarationGeneration != 0u && target.declarationGeneration != declarationGeneration)
+        return makeUnexpected(Failure());
+    return targetIndex;
+}
+
+b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
+    for(usize i = 0u; i < targets.size(); ++i){
+        const HitTarget target = targets[i];
+        if(!HasValidHitTargetControlProperties(target))
+            return false;
+        if(!target.owner.valid())
+            continue;
+        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration);
+        if(!hostIndex.has_value())
+            return false;
+        const HitTarget host = targets[hostIndex.value()];
+        if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
+            return false;
+    }
+    return true;
+}
+
+b8 ValidateStagedHitTargetCommandOwners(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
+    for(usize i = 0u; i < targets.size(); ++i){
+        const HitTarget source = targets[i];
+        if(!HasValidHitTargetCommandOwnerProperties(source))
+            return false;
+        if(!source.commandOwner.valid())
+            continue;
+        const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
+        if(!hostIndex.has_value())
+            return false;
+        const HitTarget host = targets[hostIndex.value()];
+        if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer)
+            return false;
+    }
+    return true;
+}
+
+b8 ValidStagedPopupTarget(in HitTarget target, in Span<PopupRecord> stagedPopups){
+    if(!target.popup.widget.valid())
+        return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
+    for(usize i = 0u; i < stagedPopups.size(); ++i){
+        if(stagedPopups[i].scope.token == target.popup)
+            return target.layer == stagedPopups[i].scope.layer;
+    }
+    return false;
+}
+
+i32 BuildInputEventModifierMask(in InputEvent event){
+    i32 modifiers = 0;
+    if(event.shift)
+        modifiers |= s_InputModifierShift;
+    if(event.control)
+        modifiers |= s_InputModifierControl;
+    if(event.alt)
+        modifiers |= s_InputModifierAlt;
+    if(event.super)
+        modifiers |= s_InputModifierSuper;
+    return modifiers;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

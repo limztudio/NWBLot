@@ -1,0 +1,139 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_NumericEditMaxBytes = 128u;
+const usize s_NumericEditMaxHistoryRecords = 64u;
+const usize s_NumericEditHistoryBytesFactor = 128u;
+const i64 s_NumericEditMaxI64 = 9223372036854775807ll;
+const i64 s_NumericEditMinI64 = -s_NumericEditMaxI64 - 1ll;
+const f64 s_NumericEditMaxF64 = 1.79769313486231570815e+308;
+const f64 s_NumericEditMinF64 = -s_NumericEditMaxF64;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> NumericParseStatus{
+    Complete,
+    Incomplete,
+    Invalid,
+    OutOfRange,
+}
+
+enum<u8> NumericBoundsPolicy{
+    Reject,
+    Clamp,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class IntegerBounds{
+    public i64 minimum = s_NumericEditMinI64;
+    public i64 maximum = s_NumericEditMaxI64;
+    public NumericBoundsPolicy policy = NumericBoundsPolicy::Reject;
+}
+
+class FloatBounds{
+    public f64 minimum = s_NumericEditMinF64;
+    public f64 maximum = s_NumericEditMaxF64;
+    public NumericBoundsPolicy policy = NumericBoundsPolicy::Reject;
+}
+
+class NumericEditResult{
+    public b8 valid = false;
+    public b8 committed = false;
+    public b8 valueChanged = false;
+    public b8 cancelled = false;
+    public b8 rejected = false;
+    public b8 clamped = false;
+    public b8 restored = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateIntegerBounds(in IntegerBounds bounds){
+    return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
+}
+
+b8 ValidateFloatBounds(in FloatBounds bounds){
+    return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
+}
+
+NumericParseStatus ToNumericParseStatus(in u8 status){
+    if(status == s_NumericGrammarComplete)
+        return NumericParseStatus::Complete;
+    if(status == s_NumericGrammarIncomplete)
+        return NumericParseStatus::Incomplete;
+    return NumericParseStatus::Invalid;
+}
+
+// ASCII edge whitespace is ignored; incomplete and malformed drafts retain their classification.
+Expected<i64, NumericParseStatus> ParseIntegerDraft(in StringView text){
+    const StringView trimmed = trimView(text);
+    const NumericParseStatus status = ToNumericParseStatus(classifyIntegerGrammar(trimmed));
+    if(status != NumericParseStatus::Complete)
+        return makeUnexpected(status);
+    StringView number = trimmed;
+    if(trimmed.front() == '+')
+        number = trimmed.substr(1u);
+    const Expected<i64> value = parseI64(number);
+    if(!value.has_value())
+        return makeUnexpected(NumericParseStatus::OutOfRange);
+    return value.value();
+}
+
+Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
+    const StringView trimmed = trimView(text);
+    const NumericParseStatus status = ToNumericParseStatus(classifyFloatGrammar(trimmed));
+    if(status != NumericParseStatus::Complete)
+        return makeUnexpected(status);
+    StringView number = trimmed;
+    if(trimmed.front() == '+')
+        number = trimmed.substr(1u);
+    const Expected<f64> value = parseF64(number);
+    if(!value.has_value() || !isFinite(value.value()))
+        return makeUnexpected(NumericParseStatus::OutOfRange);
+    return value.value();
+}
+
+NumericParseStatus EvaluateIntegerDraftStatus(in StringView text, in IntegerBounds bounds){
+    if(!ValidateIntegerBounds(bounds))
+        return NumericParseStatus::Invalid;
+    const Expected<i64, NumericParseStatus> parsed = ParseIntegerDraft(text);
+    if(!parsed.has_value())
+        return parsed.error();
+    const i64 value = parsed.value();
+    if(value < bounds.minimum || value > bounds.maximum)
+        return NumericParseStatus::OutOfRange;
+    return NumericParseStatus::Complete;
+}
+
+NumericParseStatus EvaluateFloatDraftStatus(in StringView text, in FloatBounds bounds){
+    if(!ValidateFloatBounds(bounds))
+        return NumericParseStatus::Invalid;
+    const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(text);
+    if(!parsed.has_value())
+        return parsed.error();
+    const f64 value = parsed.value();
+    if(value < bounds.minimum || value > bounds.maximum)
+        return NumericParseStatus::OutOfRange;
+    return NumericParseStatus::Complete;
+}
+
+void MergeNumericEditResult(in NumericEditResult delta, mut NumericEditResult inOutResult){
+    inOutResult.valid = inOutResult.valid && delta.valid;
+    inOutResult.committed = inOutResult.committed || delta.committed;
+    inOutResult.valueChanged = inOutResult.valueChanged || delta.valueChanged;
+    inOutResult.cancelled = inOutResult.cancelled || delta.cancelled;
+    inOutResult.rejected = inOutResult.rejected || delta.rejected;
+    inOutResult.clamped = inOutResult.clamped || delta.clamped;
+    inOutResult.restored = inOutResult.restored || delta.restored;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

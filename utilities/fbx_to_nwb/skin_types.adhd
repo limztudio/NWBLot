@@ -1,0 +1,256 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_skeleton/joint_types.adhd>
+#include <utilities/fbx_to_nwb/mesh_stream_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::FbxToNwb{
+using NWB::Impl::IsFiniteSkeletonJointMatrix;
+using NWB::Impl::IsFiniteSkeletonJointRow;
+using NWB::Impl::s_SkeletonJointMatrixFloatCount;
+using NWB::Impl::s_SkeletonJointMatrixRowCount;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_MaxSkeletonJointCount = cast<usize>(u16.max) + 1u;
+const f64 s_UniformScaleNumerator = 1.0;
+const f64 s_InvertibleMatrixDeterminantEpsilon = 0.00000001;
+const f32 s_JointMatrixRowEpsilon = 0.0001f;
+const f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
+const StringView s_JointFallbackNamePrefix = "joint_";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateSplitSkinSourceCounts(
+    in usize skinCount,
+    in usize skeletonJointCount,
+    in usize bindPoseMatrixCount,
+    in usize inverseBindMatrixCount
+){
+    if(skinCount == 0u){
+        error("Failed to write NWB model: skinned model requires source skin influences");
+        return false;
+    }
+    if(skeletonJointCount == 0u){
+        error("Failed to write NWB model: skinned model requires skeleton joints");
+        return false;
+    }
+    if(bindPoseMatrixCount != skeletonJointCount){
+        error("Failed to write NWB model: skeleton bind-pose matrix count must match joint count");
+        return false;
+    }
+    if(inverseBindMatrixCount != skeletonJointCount){
+        error("Failed to write NWB model: skin inverse bind matrix count must match joint count");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSkeletonOutputInputCounts(in usize jointCount, in usize bindPoseCount, in usize inverseBindCount){
+    if(jointCount != bindPoseCount || inverseBindCount != jointCount){
+        error("Failed to write NWB skeleton: joint and matrix counts differ");
+        return false;
+    }
+    if(jointCount > s_MaxSkeletonJointCount){
+        error("Failed to write NWB skeleton: skeleton has more than {} joints", s_MaxSkeletonJointCount);
+        return false;
+    }
+    return true;
+}
+
+Expected<u32> TryComputeSkeletonJointHierarchyDepth(in Span<u32> parentIndices, in usize jointIndex){
+    u32 depth = 0u;
+    u32 parentIndex = parentIndices[jointIndex];
+    for(usize guard = 0u; parentIndex != s_MeshMissingStreamIndex; ++guard){
+        if(guard >= parentIndices.size() || cast<usize>(parentIndex) >= parentIndices.size()){
+            error("Failed to write NWB skeleton: skeleton hierarchy contains a cycle");
+            return makeUnexpected(Failure());
+        }
+        ++depth;
+        parentIndex = parentIndices[cast<usize>(parentIndex)];
+    }
+    return depth;
+}
+
+b8 RemapSkinInfluence(in Span<u16> oldToNewJointIndices, mut MeshSkinInfluence inOutInfluence){
+    for(usize slot = 0u; slot < s_SkinInfluenceJointCount; ++slot){
+        const u16 oldJointIndex = inOutInfluence.joint[slot];
+        if(cast<usize>(oldJointIndex) >= oldToNewJointIndices.size()){
+            error("Failed to write NWB skin: skin influence references out-of-range joint {}", oldJointIndex);
+            return false;
+        }
+        inOutInfluence.joint[slot] = oldToNewJointIndices[cast<usize>(oldJointIndex)];
+    }
+    return true;
+}
+
+b8 IsFiniteFbxMatrix4x4(in MatrixSingle matrix){
+    return IsFiniteSkeletonJointRow(matrix[0u])
+        && IsFiniteSkeletonJointRow(matrix[1u])
+        && IsFiniteSkeletonJointRow(matrix[2u])
+        && IsFiniteSkeletonJointRow(matrix[3u]);
+}
+
+Expected<MatrixSingle> TryInvertFbxJointMatrix(in MatrixSingle matrix){
+    if(!IsFiniteFbxMatrix4x4(matrix))
+        return makeUnexpected(Failure());
+    const f32 determinant = dot(matrix[0u].xyz, cross(matrix[1u].xyz, matrix[2u].xyz));
+    if(!isFinite(determinant) || !(abs(determinant) > s_InvertibleJointDeterminantEpsilon))
+        return makeUnexpected(Failure());
+    const MatrixSingle inverted = inverse(matrix);
+    if(!IsFiniteFbxMatrix4x4(inverted))
+        return makeUnexpected(Failure());
+    return inverted;
+}
+
+Expected<MatrixSingle> TryBuildFbxLocalBindPoseMatrix(
+    in MatrixSingle globalBindPose,
+    in b8 hasParentGlobalBindPose,
+    in MatrixSingle parentGlobalBindPose
+){
+    if(!IsFiniteFbxMatrix4x4(globalBindPose))
+        return makeUnexpected(Failure());
+    if(!hasParentGlobalBindPose)
+        return globalBindPose;
+    const Expected<MatrixSingle> parentInverse = TryInvertFbxJointMatrix(parentGlobalBindPose);
+    if(!parentInverse.has_value())
+        return makeUnexpected(Failure());
+    const MatrixSingle localBindPose = mul(parentInverse.value(), globalBindPose);
+    if(!IsFiniteFbxMatrix4x4(localBindPose))
+        return makeUnexpected(Failure());
+    return localBindPose;
+}
+
+b8 IsFiniteFbxMatrixDoubleRow(in VectorDouble row){
+    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+}
+
+b8 FiniteUfbxMatrix(in MatrixDouble matrix){
+    return IsFiniteFbxMatrixDoubleRow(matrix[0u])
+        && IsFiniteFbxMatrixDoubleRow(matrix[1u])
+        && IsFiniteFbxMatrixDoubleRow(matrix[2u]);
+}
+
+VectorSingle ConvertFbxJointRowDoubleToSingle(in VectorDouble row){
+    return VectorSingle(cast<f32>(row.x), cast<f32>(row.y), cast<f32>(row.z), cast<f32>(row.w));
+}
+
+MatrixSingle ConvertJointMatrix(in MatrixDouble matrix){
+    return MatrixSingle(
+        ConvertFbxJointRowDoubleToSingle(matrix[0u]),
+        ConvertFbxJointRowDoubleToSingle(matrix[1u]),
+        ConvertFbxJointRowDoubleToSingle(matrix[2u]),
+        VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
+    );
+}
+
+b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, mut MeshSkinInfluence inOutInfluence){
+    if(!isFinite(weightSum) || weightSum <= 0.0){
+        error("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights");
+        return false;
+    }
+    const f32 normalization = cast<f32>(s_UniformScaleNumerator / weightSum);
+    const VectorSingle normalized = VectorSingle(inOutInfluence.weight) * VectorSingle(normalization);
+    inOutInfluence.weight = f32x4u(normalized);
+    return true;
+}
+
+b8 EqualMeshSkinInfluence(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        if(lhs.joint[i] != rhs.joint[i] || FbxFloatingHashBits(lhs.weight[i]) != FbxFloatingHashBits(rhs.weight[i]))
+            return false;
+    }
+    return true;
+}
+
+usize HashMeshSkinInfluence(in MeshSkinInfluence value){
+    usize seed = hashValue(value.joint[0u]);
+    for(usize i = 1u; i < s_SkinInfluenceJointCount; ++i)
+        seed = hashCombineValue(seed, value.joint[i]);
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i)
+        seed = hashCombineValue(seed, FbxFloatingHashBits(value.weight[i]));
+    return seed;
+}
+
+b8 LessMeshSkinInfluence(in MeshSkinInfluence lhs, in MeshSkinInfluence rhs){
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        if(lhs.joint[i] != rhs.joint[i])
+            return lhs.joint[i] < rhs.joint[i];
+    }
+    for(usize i = 0u; i < s_SkinInfluenceJointCount; ++i){
+        const u32 lhsBits = FbxFloatingHashBits(lhs.weight[i]);
+        const u32 rhsBits = FbxFloatingHashBits(rhs.weight[i]);
+        if(lhsBits != rhsBits)
+            return lhsBits < rhsBits;
+    }
+    return false;
+}
+
+Expected<usize> ValidateFbxSkinClusterCount(in usize clusterCount, in usize currentJointCount){
+    if(clusterCount == 0u){
+        error("Failed to build mesh: skin deformer contains no clusters");
+        return makeUnexpected(Failure());
+    }
+    if(clusterCount > cast<usize>(u32.max)){
+        error("Failed to build mesh: skin deformer has too many clusters");
+        return makeUnexpected(Failure());
+    }
+    if(clusterCount > usize.max - currentJointCount){
+        error("Failed to build mesh: skin deformer cluster count overflows skeleton joint capacity");
+        return makeUnexpected(Failure());
+    }
+    return currentJointCount + clusterCount;
+}
+
+b8 ValidateFbxSkinVertexWeightRange(in u32 weightBegin, in u32 numWeights, in usize totalWeights){
+    if(cast<usize>(weightBegin) <= totalWeights && cast<usize>(numWeights) <= totalWeights - cast<usize>(weightBegin))
+        return true;
+
+    error("Failed to build mesh: skin vertex weight range is out of bounds");
+    return false;
+}
+
+b8 IsBeforeFbxSkeletonJointSortKey(
+    in u32 lhsDepth,
+    in u32 rhsDepth,
+    in StringView lhsName,
+    in StringView rhsName,
+    in usize lhsIndex,
+    in usize rhsIndex
+){
+    if(lhsDepth != rhsDepth)
+        return lhsDepth < rhsDepth;
+    if(lhsName != rhsName)
+        return lhsName < rhsName;
+    return lhsIndex < rhsIndex;
+}
+
+b8 NearlyEqualFbxJointMatrices(in MatrixSingle lhs, in MatrixSingle rhs){
+    for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
+        const VectorSingle diff = abs(lhs[rowIndex] - rhs[rowIndex]);
+        if(
+            !isFinite(diff.x) || !isFinite(diff.y) || !isFinite(diff.z) || !isFinite(diff.w)
+            || diff.x > s_JointMatrixRowEpsilon
+            || diff.y > s_JointMatrixRowEpsilon
+            || diff.z > s_JointMatrixRowEpsilon
+            || diff.w > s_JointMatrixRowEpsilon
+        )
+            return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

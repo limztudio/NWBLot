@@ -126,16 +126,8 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 ValidateShaderDoesNotUseImplicitDefine(const ShaderCook::ShaderEntry& entry, const AStringView defineName){
-    if(entry.defineValues.find(defineName) == entry.defineValues.end())
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader '{}' uses reserved implicit define '{}' as a variant define"), ConvertString(entry.name), ConvertString(defineName));
-    return false;
-}
-
 static b8 SetShaderImplicitDefine(const AStringView defineName, const AStringView defineValue, ShaderCook::ShaderEntry& inOutEntry){
-    if(!ValidateShaderDoesNotUseImplicitDefine(inOutEntry, defineName))
+    if(!ValidateShaderDoesNotUseImplicitDefine(inOutEntry.name, defineName, inOutEntry.defineValues.find(defineName) != inOutEntry.defineValues.end()))
         return false;
 
     ShaderCook::CookArena& arena = inOutEntry.name.get_allocator().arena();
@@ -158,16 +150,8 @@ static Expected<u64> CountShaderVariants(const ShaderCook::ShaderEntry& entry){
     u64 variantCount = 1u;
 
     for(const auto& [defineName, defineEntry] : entry.defineValues){
-        const u64 valueCount = static_cast<u64>(defineEntry.values.size());
-        if(valueCount == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: entry '{}' has define '{}' with no values"), ConvertString(entry.name), ConvertString(defineName));
+        if(!TryAccumulateShaderDefineVariantCount(entry.name, defineName, static_cast<u64>(defineEntry.values.size()), variantCount))
             return MakeUnexpected(Failure{});
-        }
-        if(variantCount > Limit<u64>::s_Max / valueCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: variant count overflow for entry '{}'"), ConvertString(entry.name));
-            return MakeUnexpected(Failure{});
-        }
-        variantCount *= valueCount;
     }
 
     return variantCount;
@@ -387,11 +371,11 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             return MakeUnexpected(Failure{});
         if(preparedEntry.dependencies.size() != initialDependencyCount)
             shaderCook.mergeInheritedDefines(preparedEntry.dependencies, includeMetadata, scratchArena, preparedEntry.entry);
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, s_MaterialBindTypedBindingImplicitDefineText))
+        if(!ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry.name, s_MaterialBindTypedBindingImplicitDefineText, preparedEntry.entry.defineValues.find(s_MaterialBindTypedBindingImplicitDefineText) != preparedEntry.entry.defineValues.end()))
             return MakeUnexpected(Failure{});
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, s_CsgClipImplicitDefineName))
+        if(!ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry.name, s_CsgClipImplicitDefineName, preparedEntry.entry.defineValues.find(s_CsgClipImplicitDefineName) != preparedEntry.entry.defineValues.end()))
             return MakeUnexpected(Failure{});
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, s_CsgIntervalSampleEnabledImplicitDefineName))
+        if(!ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry.name, s_CsgIntervalSampleEnabledImplicitDefineName, preparedEntry.entry.defineValues.find(s_CsgIntervalSampleEnabledImplicitDefineName) != preparedEntry.entry.defineValues.end()))
             return MakeUnexpected(Failure{});
 
         auto materialDependency = ResolveMaterialBindDependencyInterface(AStringView(preparedEntry.entry.name), materialBindIncludeRoot, materialBindEntries, preparedEntry.dependencies, cookArena, scratchArena);

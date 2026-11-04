@@ -1,0 +1,645 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/text/shaper_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_TextCarriageReturnLineFeedBytes = 2u;
+const f64 s_TextRasterMarginPixels = 2.0;
+const f64 s_TextHalfPixel = 0.5;
+const f64 s_TextSdfMinimumFilterWidth = 0.001;
+const f64 s_TextSdfEncodedHalfRange = 128.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> TextCaretEdge{
+    Leading,
+    Trailing,
+}
+
+enum<u8> TextGlyphIntersection{
+    Invalid,
+    Invisible,
+    Visible,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextCluster{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u32 firstGlyph = 0u;
+    public u32 glyphCount = 0u;
+    public u32 lineIndex = 0u;
+    public f32 leadingX = 0.0f;
+    public f32 trailingX = 0.0f;
+}
+
+class TextLine{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u32 breakEnd = 0u;
+    public u32 firstGlyph = 0u;
+    public u32 glyphCount = 0u;
+    public u32 firstCluster = 0u;
+    public u32 clusterCount = 0u;
+    public f32 top = 0.0f;
+    public f32 baseline = 0.0f;
+    public f32 height = 0.0f;
+    public f32 advance = 0.0f;
+}
+
+class TextHit{
+    public u32 byteOffset = 0u;
+}
+
+class TextRasterMetrics{
+    public f32 physicalSize = 0.0f;
+    public f32 rasterPpem = 0.0f;
+    public f32 rasterScale = 0.0f;
+    public u32 pixelSize = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in DisplayMetrics display){
+    TextRasterMetrics outMetrics;
+    if(!IsValidTextFontSize(fontSize) || !isFinite(display.pixelScaleX) || !isFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
+        return makeUnexpected(Failure());
+    const f32 physicalSize = fontSize * max(display.pixelScaleX, display.pixelScaleY);
+    const f32 rasterPpem = ceil(physicalSize);
+    if(!isFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
+        return makeUnexpected(Failure());
+    outMetrics.physicalSize = physicalSize;
+    outMetrics.rasterPpem = rasterPpem;
+    outMetrics.rasterScale = rasterPpem / fontSize;
+    outMetrics.pixelSize = cast<u32>(rasterPpem);
+    return outMetrics;
+}
+
+Expected<Rect> TryMakeMeasuredTextRect(in f64 left, in f64 top, in f64 right, in f64 bottom){
+    if(
+        !isFinite(left) || !isFinite(top) || !isFinite(right) || !isFinite(bottom)
+        || left < -s_TextMaxCoordinateF64 || top < -s_TextMaxCoordinateF64
+        || right > s_TextMaxCoordinateF64 || bottom > s_TextMaxCoordinateF64
+        || right < left || bottom < top
+    )
+        return makeUnexpected(Failure());
+    const f32 x = roundF64ToF32Bound(left, false);
+    const f32 y = roundF64ToF32Bound(top, false);
+    const f64 width = cast<f64>(roundF64ToF32Bound(right, true)) - cast<f64>(x);
+    const f64 height = cast<f64>(roundF64ToF32Bound(bottom, true)) - cast<f64>(y);
+    if(width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64)
+        return makeUnexpected(Failure());
+    const f32 roundedWidth = roundF64ToF32Bound(width, true);
+    const f32 roundedHeight = roundF64ToF32Bound(height, true);
+    if(
+        !isFinite(roundedWidth) || roundedWidth < 0.0f
+        || !isFinite(roundedHeight) || roundedHeight < 0.0f
+        || !isFinite(x + roundedWidth) || !isFinite(y + roundedHeight)
+    )
+        return makeUnexpected(Failure());
+    return Rect(x, y, roundedWidth, roundedHeight);
+}
+
+TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters, in Point point){
+    TextHit hit;
+    if(lines.empty() || !isFinite(point.x) || !isFinite(point.y))
+        return hit;
+    usize lineIndex = lines.size() - 1u;
+    for(usize index = 0u; index < lines.size(); ++index){
+        if(point.y < lines[index].top + lines[index].height){
+            lineIndex = index;
+            break;
+        }
+    }
+    const TextLine line = lines[lineIndex];
+    hit.byteOffset = line.byteBegin;
+    if(line.clusterCount == 0u)
+        return hit;
+    f32 nearest = s_TextMaxCoordinateF32;
+    for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
+        const TextCluster cluster = clusters[cast<usize>(index)];
+        const f32 leadingDistance = abs(point.x - cluster.leadingX);
+        const f32 trailingDistance = abs(point.x - cluster.trailingX);
+        if(leadingDistance <= nearest){
+            nearest = leadingDistance;
+            hit.byteOffset = cluster.byteBegin;
+        }
+        if(trailingDistance < nearest){
+            nearest = trailingDistance;
+            hit.byteOffset = cluster.byteEnd;
+        }
+    }
+    return hit;
+}
+
+Expected<Rect> TryResolveTextCaretRect(in Span<TextLine> lines, in Span<TextCluster> clusters, in TextDirection direction, in u32 byteOffset, in TextCaretEdge edge){
+    if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
+        return makeUnexpected(Failure());
+    b8 hasAlternate = false;
+    TextCluster alternate;
+    for(usize i = 0u; i < clusters.size(); ++i){
+        const TextCluster cluster = clusters[i];
+        b8 matched = false;
+        if(edge == TextCaretEdge::Leading)
+            matched = cluster.byteBegin == byteOffset;
+        else
+            matched = cluster.byteEnd == byteOffset;
+        if(matched){
+            const TextLine line = lines[cast<usize>(cluster.lineIndex)];
+            f32 x = cluster.trailingX;
+            if(edge == TextCaretEdge::Leading)
+                x = cluster.leadingX;
+            return Rect(x, line.top, 0.0f, line.height);
+        }
+        if(cluster.byteBegin == byteOffset || cluster.byteEnd == byteOffset){
+            alternate = cluster;
+            hasAlternate = true;
+        }
+    }
+    if(hasAlternate){
+        const TextLine line = lines[cast<usize>(alternate.lineIndex)];
+        f32 x = alternate.trailingX;
+        if(alternate.byteBegin == byteOffset)
+            x = alternate.leadingX;
+        return Rect(x, line.top, 0.0f, line.height);
+    }
+    for(usize i = 0u; i < lines.size(); ++i){
+        const TextLine line = lines[i];
+        if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
+            const b8 atBegin = byteOffset == line.byteBegin;
+            f32 x = line.advance;
+            if(atBegin == (direction == TextDirection::LeftToRight))
+                x = 0.0f;
+            return Rect(x, line.top, 0.0f, line.height);
+        }
+    }
+    return makeUnexpected(Failure());
+}
+
+TextGlyphIntersection TryIntersectTextBounds(in f64 minX, in f64 minY, in f64 maxX, in f64 maxY, in Rect clip){
+    if(
+        !FitsTextCoordinate(minX) || !FitsTextCoordinate(minY)
+        || !FitsTextCoordinate(maxX) || !FitsTextCoordinate(maxY)
+        || maxX < minX || maxY < minY
+    )
+        return TextGlyphIntersection::Invalid;
+    const f64 extentX = maxX - minX;
+    const f64 extentY = maxY - minY;
+    if(extentX > s_TextMaxCoordinateF64 || extentY > s_TextMaxCoordinateF64)
+        return TextGlyphIntersection::Invalid;
+    const f64 clipX = cast<f64>(clip.x);
+    const f64 clipY = cast<f64>(clip.y);
+    if(maxX <= minX || maxY <= minY || clip.width <= 0.0f || clip.height <= 0.0f || maxX <= clipX || maxY <= clipY)
+        return TextGlyphIntersection::Invisible;
+    const f64 clipEndX = clipX + cast<f64>(clip.width);
+    const f64 clipEndY = clipY + cast<f64>(clip.height);
+    if(minX >= clipEndX || minY >= clipEndY)
+        return TextGlyphIntersection::Invisible;
+    return TextGlyphIntersection::Visible;
+}
+
+TextGlyphIntersection TryIntersectTextRects(in Rect rectangle, in Rect clip){
+    if(!IsValidUiRect(rectangle) || !IsValidUiRect(clip))
+        return TextGlyphIntersection::Invalid;
+    const f64 minX = cast<f64>(rectangle.x);
+    const f64 minY = cast<f64>(rectangle.y);
+    const f64 maxX = minX + cast<f64>(rectangle.width);
+    const f64 maxY = minY + cast<f64>(rectangle.height);
+    return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
+}
+
+Point ResolveLabelPaintOrigin(in Rect bounds, in Rect measured){
+    return Point(bounds.x - measured.x, bounds.y - measured.y);
+}
+
+b8 IsValidTextGlyphLocation(in Point glyphPosition, in Point topLeft){
+    return isFinite(glyphPosition.x) && isFinite(glyphPosition.y) && isFinite(topLeft.x) && isFinite(topLeft.y);
+}
+
+Expected<VectorDouble> TryLoadGlyphAtlasRectangle(
+    in Point glyphPosition,
+    in Point topLeft,
+    in f32 fontSize,
+    in u32 unitsPerEm,
+    in FontAtlasGlyph record
+){
+    if(!IsValidTextGlyphLocation(glyphPosition, topLeft) || !IsValidTextFontSize(fontSize) || unitsPerEm == 0u)
+        return makeUnexpected(Failure());
+    if(record.drawable == 0u)
+        return VectorDouble(0.0, 0.0, 0.0, 0.0);
+    if(
+        !isFinite(record.planeLeft) || !isFinite(record.planeTop)
+        || !isFinite(record.planeRight) || !isFinite(record.planeBottom)
+        || record.planeRight <= record.planeLeft || record.planeBottom <= record.planeTop
+    )
+        return makeUnexpected(Failure());
+    const f64 scale = cast<f64>(fontSize) / cast<f64>(unitsPerEm);
+    const f64 x = (cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x)) + (cast<f64>(record.planeLeft) * scale);
+    const f64 y = (cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y)) + (cast<f64>(record.planeTop) * scale);
+    const f64 width = (cast<f64>(record.planeRight) - cast<f64>(record.planeLeft)) * scale;
+    const f64 height = (cast<f64>(record.planeBottom) - cast<f64>(record.planeTop)) * scale;
+    if(
+        !FitsTextCoordinate(x) || !FitsTextCoordinate(y)
+        || !FitsTextCoordinate(width) || !FitsTextCoordinate(height)
+        || width < 0.0 || height < 0.0
+        || !FitsTextCoordinate(x + width) || !FitsTextCoordinate(y + height)
+    )
+        return makeUnexpected(Failure());
+    const VectorSingle rounded(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
+    if(!isFinite(rounded.x) || !isFinite(rounded.y) || !isFinite(rounded.z) || !isFinite(rounded.w) || !isFinite(rounded.x + rounded.z) || !isFinite(rounded.y + rounded.w))
+        return makeUnexpected(Failure());
+    return VectorDouble(rounded);
+}
+
+TextGlyphIntersection IntersectTextCoverageInk(
+    in Point glyphPosition,
+    in Point topLeft,
+    in Rect ink,
+    in b8 coverageKnown,
+    in u32 unitsPerEm,
+    in f32 fontSize,
+    in f32 physicalSize,
+    in Rect clip,
+    in Point pixelScale
+){
+    const f64 fontSizeF64 = cast<f64>(fontSize);
+    const f64 shapedSize = floor((fontSizeF64 * s_TextFixedPointScaleF64) + s_TextHalfPixel) / s_TextFixedPointScaleF64;
+    f64 correctionScalar = 1.0;
+    if(!coverageKnown)
+        correctionScalar = fontSizeF64 / shapedSize;
+    const f64 rasterScale = cast<f64>(physicalSize) / fontSizeF64;
+    f64 outlineAllowance = 0.0;
+    if(!coverageKnown)
+        outlineAllowance = fontSizeF64 / cast<f64>(unitsPerEm);
+    // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
+    const f64 rasterMarginScalar = ((max(1.0, correctionScalar) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / rasterScale)) + outlineAllowance;
+    const f64 marginX = rasterMarginScalar + (s_TextHalfPixel / cast<f64>(pixelScale.x));
+    const f64 marginY = rasterMarginScalar + (s_TextHalfPixel / cast<f64>(pixelScale.y));
+    const f64 inkOriginX = cast<f64>(ink.x);
+    const f64 inkOriginY = cast<f64>(ink.y);
+    const f64 inkEndX = inkOriginX + cast<f64>(ink.width);
+    const f64 inkEndY = inkOriginY + cast<f64>(ink.height);
+    const f64 posX = cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x);
+    const f64 posY = cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y);
+    const f64 minX = (posX + min(inkOriginX, inkOriginX * correctionScalar)) - marginX;
+    const f64 minY = (posY + min(inkOriginY, inkOriginY * correctionScalar)) - marginY;
+    const f64 maxX = (posX + max(inkEndX, inkEndX * correctionScalar)) + marginX;
+    const f64 maxY = (posY + max(inkEndY, inkEndY * correctionScalar)) + marginY;
+    return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
+}
+
+Expected<Rect> TryResolveGlyphCoverageRectangle(
+    in Point glyphPosition,
+    in u32 pageIndex,
+    in Rect recordPixels,
+    in i32 bearingX,
+    in i32 bearingY,
+    in f32 rasterScale,
+    in Point topLeft,
+    in Point pixelScale
+){
+    if(
+        !IsValidTextGlyphLocation(glyphPosition, topLeft)
+        || !isFinite(rasterScale) || rasterScale <= 0.0f
+        || !IsValidUiRect(recordPixels)
+        || !isFinite(pixelScale.x) || !isFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
+    )
+        return makeUnexpected(Failure());
+    if(pageIndex == s_GlyphAtlasNoPage)
+        return Rect();
+    const f64 scaleF64 = cast<f64>(rasterScale);
+    const f64 posX = (cast<f64>(topLeft.x) + cast<f64>(glyphPosition.x)) + (cast<f64>(bearingX) / scaleF64);
+    const f64 posY = (cast<f64>(topLeft.y) + cast<f64>(glyphPosition.y)) - (cast<f64>(bearingY) / scaleF64);
+    const f64 scaleX = cast<f64>(pixelScale.x);
+    const f64 scaleY = cast<f64>(pixelScale.y);
+    const f64 alignedX = floor((posX * scaleX) + s_TextHalfPixel) / scaleX;
+    const f64 alignedY = floor((posY * scaleY) + s_TextHalfPixel) / scaleY;
+    const f64 width = cast<f64>(recordPixels.width) / scaleF64;
+    const f64 height = cast<f64>(recordPixels.height) / scaleF64;
+    return TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints);
+}
+
+Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
+    const f64 originX = cast<f64>(position.x) + cast<f64>(ink.x);
+    const f64 originY = cast<f64>(position.y) + cast<f64>(ink.y);
+    const f64 endX = originX + cast<f64>(ink.width);
+    const f64 endY = originY + cast<f64>(ink.height);
+    if(!FitsTextCoordinate(originX) || !FitsTextCoordinate(originY) || !FitsTextCoordinate(endX) || !FitsTextCoordinate(endY))
+        return makeUnexpected(Failure());
+    const f32 rectX = cast<f32>(originX);
+    const f32 rectY = cast<f32>(originY);
+    const f32 rectW = ink.width;
+    const f32 rectH = ink.height;
+    if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
+        return makeUnexpected(Failure());
+    return VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+}
+
+b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 inoutHasInk){
+    if(ink.z <= 0.0 || ink.w <= 0.0)
+        return true;
+    if(!inoutHasInk){
+        inoutBounds = ink;
+        inoutHasInk = true;
+        return true;
+    }
+    f64 originX = ink.x;
+    if(inoutBounds.x < ink.x)
+        originX = inoutBounds.x;
+    f64 originY = ink.y;
+    if(inoutBounds.y < ink.y)
+        originY = inoutBounds.y;
+    const f64 boundsEndX = inoutBounds.x + inoutBounds.z;
+    const f64 boundsEndY = inoutBounds.y + inoutBounds.w;
+    const f64 inkEndX = ink.x + ink.z;
+    const f64 inkEndY = ink.y + ink.w;
+    f64 endX = inkEndX;
+    if(boundsEndX > inkEndX)
+        endX = boundsEndX;
+    f64 endY = inkEndY;
+    if(boundsEndY > inkEndY)
+        endY = boundsEndY;
+    const f64 sizeX = endX - originX;
+    const f64 sizeY = endY - originY;
+    if(!FitsTextCoordinate(sizeX) || !FitsTextCoordinate(sizeY))
+        return false;
+    const f32 rectX = cast<f32>(originX);
+    const f32 rectY = cast<f32>(originY);
+    const f32 rectW = cast<f32>(sizeX);
+    const f32 rectH = cast<f32>(sizeY);
+    if(!isFinite(rectX + rectW) || !isFinite(rectY + rectH))
+        return false;
+    inoutBounds = VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+    return true;
+}
+
+Expected<VectorDouble> TryLoadSdfGlyphSupport(
+    in VectorDouble plane,
+    in FontAtlasGlyph glyph,
+    in u32 pageWidth,
+    in u32 pageHeight,
+    in u32 channelCount,
+    in u32 spreadPixels,
+    in Span<u8> pixels,
+    in DisplayMetrics display
+){
+    if(plane.z <= 0.0 || plane.w <= 0.0)
+        return plane;
+    const f64 texelSizeX = plane.z / cast<f64>(glyph.width);
+    const f64 texelSizeY = plane.w / cast<f64>(glyph.height);
+    const f64 physicalStepX = 1.0 / (texelSizeX * cast<f64>(display.pixelScaleX));
+    const f64 physicalStepY = 1.0 / (texelSizeY * cast<f64>(display.pixelScaleY));
+    if(!isFinite(physicalStepX) || !isFinite(physicalStepY))
+        return makeUnexpected(Failure());
+    const f64 haloCandidateX = ceil(physicalStepX) + 1.0;
+    const f64 haloCandidateY = ceil(physicalStepY) + 1.0;
+    const u32 haloX = cast<u32>(min(cast<f64>(pageWidth), haloCandidateX));
+    const u32 haloY = cast<u32>(min(cast<f64>(pageHeight), haloCandidateY));
+    u32 firstX = 0u;
+    if(glyph.x > haloX)
+        firstX = glyph.x - haloX;
+    u32 firstY = 0u;
+    if(glyph.y > haloY)
+        firstY = glyph.y - haloY;
+    const u32 lastX = min(pageWidth - 1u, glyph.x + glyph.width + haloX);
+    const u32 lastY = min(pageHeight - 1u, glyph.y + glyph.height + haloY);
+    const usize stride = cast<usize>(pageWidth);
+    const usize channels = cast<usize>(channelCount);
+    const usize ch = cast<usize>(glyph.channel);
+    i32 gradientX = 0;
+    i32 gradientY = 0;
+    for(u32 y = firstY; y <= lastY; ++y){
+        for(u32 x = firstX; x <= lastX; ++x){
+            const i32 value = cast<i32>(pixels[((cast<usize>(y) * stride) + cast<usize>(x)) * channels + ch]);
+            if(x != lastX){
+                const i32 rightValue = cast<i32>(pixels[((cast<usize>(y) * stride) + cast<usize>(x + 1u)) * channels + ch]);
+                gradientX = max(gradientX, abs(rightValue - value));
+            }
+            if(y != lastY){
+                const i32 downValue = cast<i32>(pixels[((cast<usize>(y + 1u) * stride) + cast<usize>(x)) * channels + ch]);
+                gradientY = max(gradientY, abs(downValue - value));
+            }
+        }
+    }
+    const f64 derivative = (cast<f64>(gradientX) * physicalStepX) + (cast<f64>(gradientY) * physicalStepY);
+    const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / cast<f64>(spreadPixels);
+    const f64 halfWidth = s_TextHalfPixel * max(derivative, minimumDerivative);
+    const f64 glyphWidthF64 = cast<f64>(glyph.width);
+    const f64 glyphHeightF64 = cast<f64>(glyph.height);
+    f64 supportMinX = glyphWidthF64;
+    f64 supportMinY = glyphHeightF64;
+    f64 supportMaxX = 0.0;
+    f64 supportMaxY = 0.0;
+    b8 visible = false;
+    for(u32 y = 0u; y <= glyph.height; ++y){
+        u32 y0 = 0u;
+        if(glyph.y + y != 0u)
+            y0 = glyph.y + y - 1u;
+        const u32 y1 = min(pageHeight - 1u, glyph.y + y);
+        for(u32 x = 0u; x <= glyph.width; ++x){
+            u32 x0 = 0u;
+            if(glyph.x + x != 0u)
+                x0 = glyph.x + x - 1u;
+            const u32 x1 = min(pageWidth - 1u, glyph.x + x);
+            const i32 s00 = cast<i32>(pixels[((cast<usize>(y0) * stride) + cast<usize>(x0)) * channels + ch]);
+            const i32 s10 = cast<i32>(pixels[((cast<usize>(y0) * stride) + cast<usize>(x1)) * channels + ch]);
+            const i32 s01 = cast<i32>(pixels[((cast<usize>(y1) * stride) + cast<usize>(x0)) * channels + ch]);
+            const i32 s11 = cast<i32>(pixels[((cast<usize>(y1) * stride) + cast<usize>(x1)) * channels + ch]);
+            const i32 maximum = max(max(s00, s10), max(s01, s11));
+            if(cast<f64>(maximum) + halfWidth < s_TextSdfEncodedHalfRange)
+                continue;
+            const f64 posX = cast<f64>(x);
+            const f64 posY = cast<f64>(y);
+            const f64 firstCellX = max(0.0, posX - s_TextHalfPixel);
+            const f64 firstCellY = max(0.0, posY - s_TextHalfPixel);
+            const f64 lastCellX = min(glyphWidthF64, posX + s_TextHalfPixel);
+            const f64 lastCellY = min(glyphHeightF64, posY + s_TextHalfPixel);
+            supportMinX = min(supportMinX, firstCellX);
+            supportMinY = min(supportMinY, firstCellY);
+            supportMaxX = max(supportMaxX, lastCellX);
+            supportMaxY = max(supportMaxY, lastCellY);
+            visible = true;
+        }
+    }
+    if(!visible)
+        return VectorDouble(0.0, 0.0, 0.0, 0.0);
+    const f64 minX = supportMinX * texelSizeX + plane.x;
+    const f64 minY = supportMinY * texelSizeY + plane.y;
+    const f64 maxX = supportMaxX * texelSizeX + plane.x;
+    const f64 maxY = supportMaxY * texelSizeY + plane.y;
+    const Expected<Rect> measured = TryMakeMeasuredTextRect(minX, minY, maxX, maxY);
+    if(!measured.has_value())
+        return makeUnexpected(Failure());
+    return VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));
+}
+
+void ResolveNextTextLineRange(
+    in StringView text,
+    in usize byteBegin,
+    mut usize outByteEnd,
+    mut usize outBreakEnd
+){
+    usize byteEnd = byteBegin;
+    while(byteEnd < text.size() && text[byteEnd] != '\r' && text[byteEnd] != '\n')
+        ++byteEnd;
+    usize breakEnd = byteEnd;
+    if(breakEnd < text.size()){
+        if(text[breakEnd] == '\r')
+            breakEnd += s_TextCarriageReturnLineFeedBytes;
+        else
+            breakEnd += 1u;
+    }
+    outByteEnd = byteEnd;
+    outBreakEnd = breakEnd;
+}
+
+Expected<TextLine> TryBuildInitialTextLine(
+    in usize byteBegin,
+    in usize byteEnd,
+    in usize breakEnd,
+    in usize firstGlyph,
+    in usize glyphCount,
+    in usize firstCluster,
+    in f32 top,
+    in FontMetrics metrics
+){
+    const f64 baseline = cast<f64>(top) + cast<f64>(metrics.ascender);
+    const f64 height = (cast<f64>(metrics.ascender) + cast<f64>(metrics.descender)) + cast<f64>(metrics.lineGap);
+    if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(cast<f64>(top) + height))
+        return makeUnexpected(Failure());
+    TextLine line;
+    line.byteBegin = cast<u32>(byteBegin);
+    line.byteEnd = cast<u32>(byteEnd);
+    line.breakEnd = cast<u32>(breakEnd);
+    line.firstGlyph = cast<u32>(firstGlyph);
+    line.glyphCount = cast<u32>(glyphCount);
+    line.firstCluster = cast<u32>(firstCluster);
+    line.top = top;
+    line.baseline = cast<f32>(baseline);
+    line.height = cast<f32>(height);
+    return line;
+}
+
+Expected<Point> TryAdvanceTextGlyphPosition(
+    in f32 baseline,
+    in Point offset,
+    in Point advance,
+    in Rect ink,
+    in GlyphCoverageBounds coverage,
+    mut f32 inOutPen,
+    mut VectorDouble inOutInkBounds,
+    mut b8 inOutHasInk
+){
+    const f64 x = cast<f64>(inOutPen) + cast<f64>(offset.x);
+    const f64 y = cast<f64>(baseline) + cast<f64>(offset.y);
+    const f64 nextPen = cast<f64>(inOutPen) + cast<f64>(advance.x);
+    if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
+        return makeUnexpected(Failure());
+    const Point position(cast<f32>(x), cast<f32>(y));
+    const Expected<VectorDouble> translatedInk = TryTranslateTextInk(position, ink);
+    if(!translatedInk.has_value() || !TryIncludeTextInk(translatedInk.value(), inOutInkBounds, inOutHasInk))
+        return makeUnexpected(Failure());
+    if(coverage.known && !TryTranslateTextInk(position, coverage.ink).has_value())
+        return makeUnexpected(Failure());
+    inOutPen = cast<f32>(nextPen);
+    return position;
+}
+
+TextCluster MakeTextCluster(
+    in u32 lineByteBegin,
+    in u32 glyphByteBegin,
+    in u32 glyphByteEnd,
+    in u32 firstGlyph,
+    in u32 glyphCount,
+    in u32 lineIndex,
+    in TextDirection direction,
+    in f32 clusterLeft,
+    in f32 pen
+){
+    TextCluster cluster;
+    cluster.byteBegin = lineByteBegin + glyphByteBegin;
+    cluster.byteEnd = lineByteBegin + glyphByteEnd;
+    cluster.firstGlyph = firstGlyph;
+    cluster.glyphCount = glyphCount;
+    cluster.lineIndex = lineIndex;
+    if(direction == TextDirection::LeftToRight){
+        cluster.leadingX = clusterLeft;
+        cluster.trailingX = pen;
+    }
+    else{
+        cluster.leadingX = pen;
+        cluster.trailingX = clusterLeft;
+    }
+    return cluster;
+}
+
+VectorDouble ComputeInitialMeasuredTextBounds(in Point logical, in Rect ink){
+    const f64 inkEndX = cast<f64>(ink.x) + cast<f64>(ink.width);
+    const f64 inkEndY = cast<f64>(ink.y) + cast<f64>(ink.height);
+    const f64 minX = min(0.0, cast<f64>(ink.x));
+    const f64 minY = min(0.0, cast<f64>(ink.y));
+    const f64 maxX = max(cast<f64>(logical.x), inkEndX);
+    const f64 maxY = max(cast<f64>(logical.y), inkEndY);
+    return VectorDouble(minX, minY, maxX, maxY);
+}
+
+void ExpandMeasuredTextBoundsWithSdfSupport(in VectorDouble support, mut VectorDouble inOutBounds){
+    if(support.z <= 0.0 || support.w <= 0.0)
+        return;
+    const f64 firstX = support.x;
+    const f64 firstY = support.y;
+    const f64 lastX = firstX + support.z;
+    const f64 lastY = firstY + support.w;
+    inOutBounds = VectorDouble(
+        min(inOutBounds.x, firstX),
+        min(inOutBounds.y, firstY),
+        max(inOutBounds.z, lastX),
+        max(inOutBounds.w, lastY)
+    );
+}
+
+void ExpandMeasuredTextBoundsWithRaster(
+    in Point glyphPosition,
+    in Rect raster,
+    in f32 rasterScale,
+    in DisplayMetrics display,
+    mut VectorDouble inOutBounds
+){
+    if(raster.width <= 0.0f || raster.height <= 0.0f)
+        return;
+    const f64 scale = cast<f64>(rasterScale);
+    const f64 originX = cast<f64>(glyphPosition.x);
+    const f64 originY = cast<f64>(glyphPosition.y);
+    const f64 pixelOriginX = cast<f64>(raster.x);
+    const f64 pixelOriginY = cast<f64>(raster.y);
+    const f64 pixelEndX = pixelOriginX + cast<f64>(raster.width);
+    const f64 pixelEndY = pixelOriginY + cast<f64>(raster.height);
+    // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
+    const f64 snapX = s_TextHalfPixel / cast<f64>(display.pixelScaleX);
+    const f64 snapY = s_TextHalfPixel / cast<f64>(display.pixelScaleY);
+    const f64 firstX = (originX + (pixelOriginX / scale)) - snapX;
+    const f64 firstY = (originY + (pixelOriginY / scale)) - snapY;
+    const f64 lastX = (originX + (pixelEndX / scale)) + snapX;
+    const f64 lastY = (originY + (pixelEndY / scale)) + snapY;
+    inOutBounds = VectorDouble(
+        min(inOutBounds.x, firstX),
+        min(inOutBounds.y, firstY),
+        max(inOutBounds.z, lastX),
+        max(inOutBounds.w, lastY)
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

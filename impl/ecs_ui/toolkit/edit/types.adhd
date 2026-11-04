@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/input/commands.adhd>
-#include <impl/ecs_ui/toolkit/text/types.adhd>
+#include <impl/ecs_ui/toolkit/edit/navigation_types.adhd>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,19 +17,11 @@ const usize s_EditDefaultMaxHistoryBytes = 131072u;
 const usize s_EditMaxBytes = 1048576u;
 const usize s_EditMaxHistoryRecords = 256u;
 const usize s_EditMaxHistoryBytes = 16777216u;
-const usize s_EditUtf8MaxSequenceBytes = 4u;
 const StringView s_EditNewlineText = "\n";
 const u32 s_EditUnicodeTab = 0x09u;
 const u32 s_EditUnicodeLineFeed = 0x0Au;
 const u32 s_EditUnicodeCarriageReturn = 0x0Du;
 const u32 s_EditUnicodeNextLine = 0x85u;
-const usize s_NumericEditMaxBytes = 128u;
-const usize s_NumericEditMaxHistoryRecords = 64u;
-const usize s_NumericEditHistoryBytesFactor = 128u;
-const i64 s_NumericEditMaxI64 = 9223372036854775807ll;
-const i64 s_NumericEditMinI64 = -s_NumericEditMaxI64 - 1ll;
-const f64 s_NumericEditMaxF64 = 1.79769313486231570815e+308;
-const f64 s_NumericEditMinF64 = -s_NumericEditMaxF64;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,22 +32,6 @@ enum<u8> EditAction{
     Cancel,
     Blur,
     Abandon,
-}
-
-enum<u8> EditTextMode{
-    SingleLine,
-    Multiline,
-}
-
-enum<u8> EditMove{
-    Left,
-    Right,
-    Home,
-    End,
-    WordLeft,
-    WordRight,
-    DocumentHome,
-    DocumentEnd,
 }
 
 enum<u8> EditCommand{
@@ -91,36 +67,14 @@ enum<u8> EditClipboardAction{
     PublishSelection,
 }
 
-enum<u8> EditNavigationDirection{
-    Up,
-    Down,
-    PageUp,
-    PageDown,
-}
-
-enum<u8> NumericParseStatus{
-    Complete,
-    Incomplete,
-    Invalid,
-    OutOfRange,
-}
-
-enum<u8> NumericBoundsPolicy{
-    Reject,
-    Clamp,
-}
-
 enum<u8> EditTextStatus{
     InvalidText = 0u,
     TooLarge,
 }
 
-enum<u8> EditNavigationRunClass{
-    Whitespace,
-    Punctuation,
-    Text,
-    LineBreak,
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class TextAreaModelStamp{
     public TextAreaModelStamp(){
@@ -192,11 +146,6 @@ class EditLimits{
     public usize maxHistoryBytes = s_EditDefaultMaxHistoryBytes;
 }
 
-class EditWordRange{
-    public usize begin = 0u;
-    public usize end = 0u;
-}
-
 class EditCompositionView{
     public StringView text = "";
     public usize anchor = 0u;
@@ -220,62 +169,6 @@ class EditCommandResult{
     public b8 compositionChanged = false;
     public b8 submitted = false;
     public b8 cancelled = false;
-}
-
-class EditNavigationSnapshot{
-    public EditNavigationSnapshot(){
-        this.instanceGeneration = 0u;
-        this.generation = 0u;
-        this.preferredX = 0.0f;
-        this.valid = false;
-    }
-
-    public EditNavigationSnapshot(in u64 inInstanceGeneration, in u64 inGeneration, in f32 inPreferredX, in b8 inValid){
-        this.instanceGeneration = inInstanceGeneration;
-        this.generation = inGeneration;
-        this.preferredX = inPreferredX;
-        this.valid = inValid;
-    }
-
-    public b8 operator==(in EditNavigationSnapshot rhs)const{
-        return this.instanceGeneration == rhs.instanceGeneration && this.generation == rhs.generation && this.preferredX == rhs.preferredX && this.valid == rhs.valid;
-    }
-
-    public b8 operator!=(in EditNavigationSnapshot rhs)const{
-        return this.instanceGeneration != rhs.instanceGeneration || this.generation != rhs.generation || this.preferredX != rhs.preferredX || this.valid != rhs.valid;
-    }
-
-    public u64 instanceGeneration;
-    public u64 generation;
-    public f32 preferredX;
-    public b8 valid;
-}
-
-class EditNavigationResult{
-    public usize committedByte = 0u;
-    public f32 preferredX = 0.0f;
-}
-
-class IntegerBounds{
-    public i64 minimum = s_NumericEditMinI64;
-    public i64 maximum = s_NumericEditMaxI64;
-    public NumericBoundsPolicy policy = NumericBoundsPolicy::Reject;
-}
-
-class FloatBounds{
-    public f64 minimum = s_NumericEditMinF64;
-    public f64 maximum = s_NumericEditMaxF64;
-    public NumericBoundsPolicy policy = NumericBoundsPolicy::Reject;
-}
-
-class NumericEditResult{
-    public b8 valid = false;
-    public b8 committed = false;
-    public b8 valueChanged = false;
-    public b8 cancelled = false;
-    public b8 rejected = false;
-    public b8 clamped = false;
-    public b8 restored = false;
 }
 
 class MultilineTextStep{
@@ -346,63 +239,6 @@ EditCommandRequest TranslateEditCommand(in InputCommandIntent intent, in b8 repe
     return request;
 }
 
-b8 ValidateIntegerBounds(in IntegerBounds bounds){
-    return bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
-}
-
-b8 ValidateFloatBounds(in FloatBounds bounds){
-    return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
-}
-
-NumericParseStatus ToNumericParseStatus(in u8 status){
-    if(status == s_NumericGrammarComplete)
-        return NumericParseStatus::Complete;
-    if(status == s_NumericGrammarIncomplete)
-        return NumericParseStatus::Incomplete;
-    return NumericParseStatus::Invalid;
-}
-
-// ASCII edge whitespace is ignored; incomplete and malformed drafts retain their classification.
-Expected<i64, NumericParseStatus> ParseIntegerDraft(in StringView text){
-    const StringView trimmed = trimView(text);
-    const NumericParseStatus status = ToNumericParseStatus(classifyIntegerGrammar(trimmed));
-    if(status != NumericParseStatus::Complete)
-        return makeUnexpected(status);
-    StringView number = trimmed;
-    if(trimmed.front() == '+')
-        number = trimmed.substr(1u);
-    const Expected<i64> value = parseI64(number);
-    if(!value.has_value())
-        return makeUnexpected(NumericParseStatus::OutOfRange);
-    return value.value();
-}
-
-Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
-    const StringView trimmed = trimView(text);
-    const NumericParseStatus status = ToNumericParseStatus(classifyFloatGrammar(trimmed));
-    if(status != NumericParseStatus::Complete)
-        return makeUnexpected(status);
-    StringView number = trimmed;
-    if(trimmed.front() == '+')
-        number = trimmed.substr(1u);
-    const Expected<f64> value = parseF64(number);
-    if(!value.has_value() || !isFinite(value.value()))
-        return makeUnexpected(NumericParseStatus::OutOfRange);
-    return value.value();
-}
-
-Expected<EditNavigationDirection> TryTranslateEditNavigation(in InputCommandIntent intent){
-    if(!intent.edit)
-        return makeUnexpected(Failure());
-    switch(intent.command){
-    case InputCommand::Up: return EditNavigationDirection::Up;
-    case InputCommand::Down: return EditNavigationDirection::Down;
-    case InputCommand::PageUp: return EditNavigationDirection::PageUp;
-    case InputCommand::PageDown: return EditNavigationDirection::PageDown;
-    default: return makeUnexpected(Failure());
-    }
-}
-
 b8 IsMutatingEditCommand(in EditCommand command){
     return
         command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
@@ -441,14 +277,6 @@ b8 IsMultilineLineBreakScalar(in u32 scalar){
 
 b8 IsCanonicalMultilineScalar(in u32 scalar){
     return scalar == s_EditUnicodeLineFeed || (scalar >= s_TextUnicodeSpace && (scalar < s_TextUnicodeDelete || scalar > s_TextUnicodeC1Last) && scalar != s_TextUnicodeLineSeparator && scalar != s_TextUnicodeParagraphSeparator);
-}
-
-EditNavigationRunClass ClassifyEditNavigationScalar(in u32 scalar){
-    if(isUnicodeWhitespace(scalar))
-        return EditNavigationRunClass::Whitespace;
-    if(isAsciiPunctuation(scalar))
-        return EditNavigationRunClass::Punctuation;
-    return EditNavigationRunClass::Text;
 }
 
 // The caret has a one-second cycle. Invalid or nonpositive deltas leave its phase unchanged.
@@ -643,185 +471,6 @@ void BuildErasedAroundSelectionEditString(in StringView currentText, in usize be
     outCandidate.append(currentText.substr(suffixStart, currentText.size() - suffixStart));
 }
 
-EditWordRange ResolveEditBackspaceRange(in Span<usize> boundaries, in usize anchor, in usize caret){
-    EditWordRange range;
-    if(anchor != caret){
-        range.begin = min(anchor, caret);
-        range.end = max(anchor, caret);
-    }
-    else{
-        range.begin = PreviousEditBoundary(boundaries, caret);
-        range.end = caret;
-    }
-    return range;
-}
-
-EditWordRange ResolveEditEraseForwardRange(in Span<usize> boundaries, in usize textSize, in usize anchor, in usize caret){
-    EditWordRange range;
-    if(anchor != caret){
-        range.begin = min(anchor, caret);
-        range.end = max(anchor, caret);
-    }
-    else{
-        range.begin = caret;
-        range.end = NextEditBoundary(boundaries, textSize, caret);
-    }
-    return range;
-}
-
-b8 IsEditBoundary(in Span<usize> boundaries, in usize position){
-    const usize index = lowerBoundIndex(boundaries, position);
-    return index < boundaries.size() && boundaries[index] == position;
-}
-
-usize PreviousEditBoundary(in Span<usize> boundaries, in usize position){
-    const usize index = lowerBoundIndex(boundaries, position);
-    if(index == 0u)
-        return 0u;
-    return boundaries[index - 1u];
-}
-
-usize NextEditBoundary(in Span<usize> boundaries, in usize textSize, in usize position){
-    usize index = lowerBoundIndex(boundaries, position);
-    if(index < boundaries.size() && boundaries[index] == position)
-        ++index;
-    if(index >= boundaries.size())
-        return textSize;
-    return boundaries[index];
-}
-
-EditNavigationRunClass ClassifyEditNavigationOffset(in StringView text, in usize offset){
-    u32 codePoint = 0u;
-    usize byteCount = 0u;
-    if(!tryDecodeUtf8CodePoint(text.substr(offset, s_EditUtf8MaxSequenceBytes), codePoint, byteCount))
-        return EditNavigationRunClass::Text;
-    return ClassifyEditNavigationScalar(codePoint);
-}
-
-EditNavigationRunClass ClassifyEditWordRangeOffset(in StringView text, in usize offset){
-    if(text[offset] == '\n')
-        return EditNavigationRunClass::LineBreak;
-    return ClassifyEditNavigationOffset(text, offset);
-}
-
-usize ResolveEditWordBoundary(in StringView text, in Span<usize> boundaries, in usize position, in b8 forward){
-    if((forward && position == text.size()) || (!forward && position == 0u) || boundaries.empty())
-        return position;
-    usize cursor = lowerBoundIndex(boundaries, position);
-    const usize lastBoundaryIndex = boundaries.size() - 1u;
-    if(forward){
-        const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, position);
-        while(cursor < lastBoundaryIndex && ClassifyEditNavigationOffset(text, boundaries[cursor]) == category)
-            ++cursor;
-        while(cursor < lastBoundaryIndex && ClassifyEditNavigationOffset(text, boundaries[cursor]) == EditNavigationRunClass::Whitespace)
-            ++cursor;
-        return boundaries[cursor];
-    }
-    while(cursor != 0u && ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]) == EditNavigationRunClass::Whitespace)
-        --cursor;
-    if(cursor == 0u)
-        return 0u;
-    const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]);
-    while(cursor != 0u && ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]) == category)
-        --cursor;
-    return boundaries[cursor];
-}
-
-Expected<EditWordRange> ResolveEditWordRangeAt(in StringView text, in Span<usize> boundaries, in usize position){
-    const usize requested = lowerBoundIndex(boundaries, position);
-    if(requested >= boundaries.size() || boundaries[requested] != position)
-        return makeUnexpected(Failure());
-    if(text.empty())
-        return EditWordRange();
-    usize origin = requested;
-    if(position == text.size())
-        origin = requested - 1u;
-    const EditNavigationRunClass run = ClassifyEditWordRangeOffset(text, boundaries[origin]);
-    usize first = origin;
-    usize last = origin + 1u;
-    const usize lastBoundaryIndex = boundaries.size() - 1u;
-    while(first != 0u && ClassifyEditWordRangeOffset(text, boundaries[first - 1u]) == run)
-        --first;
-    while(last < lastBoundaryIndex && ClassifyEditWordRangeOffset(text, boundaries[last]) == run)
-        ++last;
-    EditWordRange range;
-    range.begin = boundaries[first];
-    range.end = boundaries[last];
-    return range;
-}
-
-Expected<usize> TryResolveEditMoveTarget(
-    in StringView text,
-    in Span<usize> boundaries,
-    in EditTextMode textMode,
-    in usize anchor,
-    in usize caret,
-    in EditMove movement,
-    in b8 extend
-){
-    if(cast<u8>(movement) > cast<u8>(EditMove::DocumentEnd))
-        return makeUnexpected(Failure());
-    usize target = caret;
-    if(!extend && anchor != caret && (movement == EditMove::Left || movement == EditMove::Right)){
-        if(movement == EditMove::Left)
-            target = min(anchor, caret);
-        else
-            target = max(anchor, caret);
-    }
-    else{
-        switch(movement){
-        case EditMove::Left:
-            target = PreviousEditBoundary(boundaries, target);
-            break;
-        case EditMove::Right:
-            target = NextEditBoundary(boundaries, text.size(), target);
-            break;
-        case EditMove::Home:
-            if(textMode == EditTextMode::SingleLine){
-                target = 0u;
-            }
-            else{
-                while(target != 0u && text[target - 1u] != '\n')
-                    --target;
-            }
-            break;
-        case EditMove::End:
-            if(textMode == EditTextMode::SingleLine){
-                target = text.size();
-            }
-            else{
-                while(target < text.size() && text[target] != '\n')
-                    ++target;
-            }
-            break;
-        case EditMove::WordLeft:
-            target = ResolveEditWordBoundary(text, boundaries, target, false);
-            break;
-        case EditMove::WordRight:
-            target = ResolveEditWordBoundary(text, boundaries, target, true);
-            break;
-        case EditMove::DocumentHome:
-            target = 0u;
-            break;
-        case EditMove::DocumentEnd:
-            target = text.size();
-            break;
-        }
-    }
-    return target;
-}
-
-Expected<f32> TryResolveEditNavigationPreferredX(in f32 preferredX){
-    if(!isFinite(preferredX))
-        return makeUnexpected(Failure());
-    return preferredX;
-}
-
-void ClearEditNavigationPreferredX(mut f32 outPreferredX, mut b8 outValid){
-    outPreferredX = 0.0f;
-    outValid = false;
-}
-
 b8 MatchesEditModelSurrounding(
     in TextAreaModelStamp currentStamp,
     in StringView currentText,
@@ -855,30 +504,6 @@ b8 MatchesEditModelSnapshot(
         && currentComposition.replacementEnd == expectedComposition.replacementEnd;
 }
 
-NumericParseStatus EvaluateIntegerDraftStatus(in StringView text, in IntegerBounds bounds){
-    if(!ValidateIntegerBounds(bounds))
-        return NumericParseStatus::Invalid;
-    const Expected<i64, NumericParseStatus> parsed = ParseIntegerDraft(text);
-    if(!parsed.has_value())
-        return parsed.error();
-    const i64 value = parsed.value();
-    if(value < bounds.minimum || value > bounds.maximum)
-        return NumericParseStatus::OutOfRange;
-    return NumericParseStatus::Complete;
-}
-
-NumericParseStatus EvaluateFloatDraftStatus(in StringView text, in FloatBounds bounds){
-    if(!ValidateFloatBounds(bounds))
-        return NumericParseStatus::Invalid;
-    const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(text);
-    if(!parsed.has_value())
-        return parsed.error();
-    const f64 value = parsed.value();
-    if(value < bounds.minimum || value > bounds.maximum)
-        return NumericParseStatus::OutOfRange;
-    return NumericParseStatus::Complete;
-}
-
 Expected<EditMove> TryMapEditCommandToMove(in EditCommand command){
     switch(command){
     case EditCommand::Left: return EditMove::Left;
@@ -903,17 +528,6 @@ Expected<EditCommandResult> TryMapEditCommandToPassiveResult(in EditCommand comm
     case EditCommand::Submit: outResult.submitted = true; return outResult;
     case EditCommand::Cancel: outResult.cancelled = true; return outResult;
     default: return makeUnexpected(Failure());
-    }
-}
-
-void ComputeEditWordEraseDistances(in b8 forward, in usize caret, in usize boundary, mut usize outBeforeBytes, mut usize outAfterBytes){
-    if(forward){
-        outBeforeBytes = 0u;
-        outAfterBytes = boundary - caret;
-    }
-    else{
-        outBeforeBytes = caret - boundary;
-        outAfterBytes = 0u;
     }
 }
 
@@ -976,16 +590,6 @@ usize ResolveReplacedEditCaret(in Span<usize> boundaries, in usize begin, in usi
 
 b8 CanRecordEditHistory(in usize maxHistoryRecords, in usize maxHistoryBytes, in usize cost){
     return maxHistoryRecords != 0u && cost <= maxHistoryBytes;
-}
-
-void MergeNumericEditResult(in NumericEditResult delta, mut NumericEditResult inOutResult){
-    inOutResult.valid = inOutResult.valid && delta.valid;
-    inOutResult.committed = inOutResult.committed || delta.committed;
-    inOutResult.valueChanged = inOutResult.valueChanged || delta.valueChanged;
-    inOutResult.cancelled = inOutResult.cancelled || delta.cancelled;
-    inOutResult.rejected = inOutResult.rejected || delta.rejected;
-    inOutResult.clamped = inOutResult.clamped || delta.clamped;
-    inOutResult.restored = inOutResult.restored || delta.restored;
 }
 
 

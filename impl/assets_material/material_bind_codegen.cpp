@@ -83,20 +83,6 @@ static b8 RegisterGeneratedMaterialBindSymbol(const AStringView includePath, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static ScratchString BuildMaterialBindFieldLookupFunctionName(const MaterialLayoutFieldType::Enum fieldType, const MaterialBlockClass::Enum blockClass, ScratchArena& arena){
-    ScratchString functionName(arena);
-    const AStringView storageName = MaterialBindFieldLookupFunctionStorageName(blockClass);
-    const AStringView typeName = MaterialBindFieldLookupFunctionTypeName(fieldType);
-    if(storageName.empty() || typeName.empty())
-        return functionName;
-
-    functionName += s_MaterialBindLoadFunctionPrefix;
-    functionName += storageName;
-    functionName += typeName;
-    return functionName;
-}
-
-
 static b8 AppendMaterialBindConstantPrefix(const AStringView includePath, const AStringView symbol, const AStringView type, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSymbols, CookString& inOutSource){
     if(!RegisterGeneratedMaterialBindSymbol(includePath, symbol, scratchArena, inOutSymbols))
         return false;
@@ -326,7 +312,7 @@ static b8 AppendMaterialBindGeneratedInstance(
             continue;
         }
 
-        const ScratchString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(layoutField.fieldType, layoutBlock.blockClass, scratchArena);
+        const auto loadFunctionName = BuildMaterialBindFieldLookupFunctionName(layoutField.fieldType, layoutBlock.blockClass);
         NWB_ASSERT(!loadFunctionName.empty());
         const ScratchString keySymbol = BuildMaterialBindGeneratedSymbol({ AStringView(instance.name), AStringView(field.name) }, s_MaterialBindKeySymbolSuffix, scratchArena);
         const ScratchString defaultSymbol = BuildMaterialBindGeneratedSymbol({ AStringView(instance.name), AStringView(field.name) }, s_MaterialBindDefaultSymbolSuffix, scratchArena);

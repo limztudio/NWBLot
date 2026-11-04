@@ -74,13 +74,6 @@ using namespace Core::Metascript;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<Core::Assets::AssetVector<SkinInfluence4>> ParseSkinInfluences(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
-    Core::Assets::AssetVector<SkinInfluence4> values(arena);
-    if(!MeshCookSourceStreams::ParseSourceSkinInfluencesInto(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, values))
-        return MakeUnexpected(Failure{});
-    return values;
-}
-
 [[nodiscard]] Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
 
@@ -95,7 +88,7 @@ using namespace Core::Metascript;
         if(!matrix)
             return MakeUnexpected(Failure{});
 
-        if(!MatrixIsInvertibleAffine(LoadFloat(*matrix), s_SkinValidationEpsilon, s_SkinValidationEpsilon)){
+        if(!IsValidSkinInverseBindMatrix(LoadFloat(*matrix))){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"), PathToString<tchar>(nwbFilePath), matrixIndex);
             return MakeUnexpected(Failure{});
         }
@@ -171,10 +164,8 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     entry.skeleton = *skeletonResult;
-    auto influencesResult = ParseSkinInfluences(nwbFilePath, asset, arena);
-    if(!influencesResult)
+    if(!MeshCookSourceStreams::ParseSourceSkinInfluencesInto(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
         return MakeUnexpected(Failure{});
-    entry.influences = Move(*influencesResult);
     auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, asset, arena);
     if(!inverseBindMatricesResult)
         return MakeUnexpected(Failure{});

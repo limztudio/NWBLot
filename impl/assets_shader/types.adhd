@@ -259,47 +259,29 @@ b8 IsReservedShaderEngineDefineName(in StringView defineName){
     return defineName == "NWB_BINDLESS_TLAS" || defineName == "NWB_CAUSTIC_PHOTON_TRANSPORT";
 }
 
-b8 IsShaderAsciiSpace(in i8 ch){
-    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '\v' || ch == '\f';
-}
-
-b8 IsShaderAsciiIdentifierChar(in i8 ch){
-    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
-}
-
-StringView TrimShaderSourceView(in StringView text){
-    usize begin = 0u;
-    while(begin < text.size() && IsShaderAsciiSpace(text[begin]))
-        ++begin;
-    usize end = text.size();
-    while(end > begin && IsShaderAsciiSpace(text[end - 1u]))
-        --end;
-    return text.substr(begin, end - begin);
-}
-
 Expected<IncludeDirective> TryExtractIncludeDirective(in StringView line){
     IncludeDirective include;
 
     usize cursor = 0u;
-    while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
+    while(cursor < line.size() && isAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size() || line[cursor] != '#')
         return makeUnexpected(Failure());
     ++cursor;
-    while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
+    while(cursor < line.size() && isAsciiSpace(line[cursor]))
         ++cursor;
     usize directiveBegin = cursor;
-    while(cursor < line.size() && IsShaderAsciiIdentifierChar(line[cursor]))
+    while(cursor < line.size() && isAsciiIdentifierChar(line[cursor]))
         ++cursor;
     StringView directive = line.substr(directiveBegin, cursor - directiveBegin);
     if(directive == "include_next" || directive == "import"){
         include.kind = IncludeKind::Unsupported;
-        include.name = TrimShaderSourceView(line.substr(cursor));
+        include.name = trimView(line.substr(cursor));
         return include;
     }
     if(directive != "include")
         return makeUnexpected(Failure());
-    while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
+    while(cursor < line.size() && isAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size()){
         include.kind = IncludeKind::Unsupported;
@@ -315,7 +297,7 @@ Expected<IncludeDirective> TryExtractIncludeDirective(in StringView line){
     }
     else{
         include.kind = IncludeKind::Macro;
-        include.name = TrimShaderSourceView(line.substr(cursor));
+        include.name = trimView(line.substr(cursor));
         return include;
     }
     ++cursor;
@@ -339,7 +321,7 @@ b8 IsAllowedIncludeMetadataField(in StringView field){
 }
 
 b8 IsValidShaderDefineValueText(in StringView valueView){
-    if(valueView.empty() || TrimShaderSourceView(valueView) != valueView)
+    if(valueView.empty() || trimView(valueView) != valueView)
         return false;
     for(usize i = 0u; i < valueView.size(); ++i){
         const i8 ch = valueView[i];
@@ -367,7 +349,7 @@ b8 TryParseVariantSignatureSegment(
     }
     inOutCursor = segmentEnd + 1u;
 
-    const StringView segment = TrimShaderSourceView(variantSignature.substr(begin, segmentEnd - begin));
+    const StringView segment = trimView(variantSignature.substr(begin, segmentEnd - begin));
     outSegment = segment;
     if(segment.empty()){
         outError = VariantSignatureSegmentError::EmptySegment;
@@ -386,8 +368,8 @@ b8 TryParseVariantSignatureSegment(
         return false;
     }
 
-    const StringView defineName = TrimShaderSourceView(segment.substr(0u, equalPos));
-    const StringView defineValue = TrimShaderSourceView(segment.substr(equalPos + 1u));
+    const StringView defineName = trimView(segment.substr(0u, equalPos));
+    const StringView defineValue = trimView(segment.substr(equalPos + 1u));
     if(defineName.empty() || defineValue.empty()){
         outError = VariantSignatureSegmentError::InvalidAssignment;
         return false;

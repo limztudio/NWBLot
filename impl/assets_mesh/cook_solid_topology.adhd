@@ -1,0 +1,251 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/payload_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_ManifoldEdgeTriangleCount = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TriangleEdge{
+    public u64 positions = 0u;
+    public u32 triangle = 0u;
+    public b8 forward = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TriangleEdge MakeTriangleEdge(in u32 first, in u32 second, in u32 triangle){
+    TriangleEdge edge;
+    edge.positions = packUnorderedU32Pair(first, second);
+    edge.triangle = triangle;
+    edge.forward = first < second;
+    return edge;
+}
+
+b8 EqualDoubleLaneProducts(in VectorDouble lhs, in VectorDouble rhs){
+    const VectorDouble products = lhs * rhs;
+    return products.x == products.y;
+}
+
+b8 DegenerateTriangle(in VectorDouble a, in VectorDouble b, in VectorDouble c){
+    const VectorDouble ab = b - a;
+    const VectorDouble ac = c - a;
+    return
+        EqualDoubleLaneProducts(ab.yzww, ac.zyww)
+        && EqualDoubleLaneProducts(ab.zxww, ac.xzww)
+        && EqualDoubleLaneProducts(ab.xyww, ac.yxww)
+    ;
+}
+
+f64 RelativeTriangleVolume(in VectorDouble a, in VectorDouble b, in VectorDouble c, in VectorDouble origin){
+    return dot((a - origin).xyz, cross((b - origin).xyz, (c - origin).xyz));
+}
+
+b8 AreAllMeshPositionsFinite(in Span<f32x3u> positions){
+    for(in f32x3u position : positions){
+        if(!isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z))
+            return false;
+    }
+    return true;
+}
+
+b8 IsTriangleDegenerateAtIndices(in Span<f32x3u> positions, in u32 a, in u32 b, in u32 c){
+    if(a == b || b == c || c == a)
+        return true;
+    return DegenerateTriangle(
+        VectorDouble(VectorSingle(positions[cast<usize>(a)])),
+        VectorDouble(VectorSingle(positions[cast<usize>(b)])),
+        VectorDouble(VectorSingle(positions[cast<usize>(c)]))
+    );
+}
+
+f64 ComputeTriangleRelativeVolumeAtIndices(in Span<f32x3u> positions, in u32 a, in u32 b, in u32 c, in VectorDouble origin){
+    return RelativeTriangleVolume(
+        VectorDouble(VectorSingle(positions[cast<usize>(a)])),
+        VectorDouble(VectorSingle(positions[cast<usize>(b)])),
+        VectorDouble(VectorSingle(positions[cast<usize>(c)])),
+        origin
+    );
+}
+
+u32 FindMeshTopologyComponent(in u32 triangle, mut Vector<u32> inOutParents){
+    u32 current = triangle;
+    while(inOutParents[cast<usize>(current)] != current){
+        const u32 parent = inOutParents[cast<usize>(current)];
+        inOutParents[cast<usize>(current)] = inOutParents[cast<usize>(parent)];
+        current = inOutParents[cast<usize>(current)];
+    }
+    return current;
+}
+
+void JoinMeshTopologyComponents(
+    in u32 first,
+    in u32 second,
+    mut Vector<u32> inOutParents,
+    mut Vector<u8> inOutRanks
+){
+    u32 firstRoot = FindMeshTopologyComponent(first, inOutParents);
+    u32 secondRoot = FindMeshTopologyComponent(second, inOutParents);
+    if(firstRoot == secondRoot)
+        return;
+    if(inOutRanks[cast<usize>(firstRoot)] < inOutRanks[cast<usize>(secondRoot)]){
+        const u32 temp = firstRoot;
+        firstRoot = secondRoot;
+        secondRoot = temp;
+    }
+    inOutParents[cast<usize>(secondRoot)] = firstRoot;
+    if(inOutRanks[cast<usize>(firstRoot)] == inOutRanks[cast<usize>(secondRoot)])
+        ++inOutRanks[cast<usize>(firstRoot)];
+}
+
+b8 PrepareMeshTopologyEdges(
+    in Span<f32x3u> positions,
+    in Span<u32> triangleIndices,
+    mut Vector<u32> outParents,
+    mut Vector<u8> outRanks,
+    mut Vector<u8> outInvalidTriangles,
+    mut Vector<TriangleEdge> outEdges
+){
+    if(triangleIndices.empty() || (triangleIndices.size() % cast<usize>(s_MeshletTriangleIndexCount)) != 0u)
+        return false;
+    const usize triangleCount = triangleIndices.size() / cast<usize>(s_MeshletTriangleIndexCount);
+    if(triangleCount > cast<usize>(u32.max) || !AreAllMeshPositionsFinite(positions))
+        return false;
+
+    outParents.clear();
+    outParents.resize(triangleCount, 0u);
+    outRanks.clear();
+    outRanks.resize(triangleCount, 0u);
+    outInvalidTriangles.clear();
+    outInvalidTriangles.resize(triangleCount, 0u);
+    outEdges.clear();
+    outEdges.reserve(triangleIndices.size());
+
+    for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
+        outParents[cast<usize>(triangle)] = triangle;
+        const usize base = cast<usize>(triangle) * cast<usize>(s_MeshletTriangleIndexCount);
+        const u32 a = triangleIndices[base];
+        const u32 b = triangleIndices[base + 1u];
+        const u32 c = triangleIndices[base + 2u];
+        if(
+            cast<usize>(a) >= positions.size()
+            || cast<usize>(b) >= positions.size()
+            || cast<usize>(c) >= positions.size()
+        )
+            return false;
+        if(IsTriangleDegenerateAtIndices(positions, a, b, c))
+            outInvalidTriangles[cast<usize>(triangle)] = 1u;
+        for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
+            const u32 first = triangleIndices[base + cast<usize>(corner)];
+            const u32 second = triangleIndices[base + cast<usize>((corner + 1u) % s_MeshletTriangleIndexCount)];
+            outEdges.push_back(MakeTriangleEdge(first, second, triangle));
+        }
+    }
+    return true;
+}
+
+void FinalizeMeshSolidTriangleWords(
+    in Span<f32x3u> positions,
+    in Span<u32> triangleIndices,
+    in Span<TriangleEdge> sortedEdges,
+    mut Vector<u32> inOutParents,
+    mut Vector<u8> inOutRanks,
+    mut Vector<u8> inOutInvalidTriangles,
+    mut Vector<u32> outWords
+){
+    const usize triangleCount = inOutParents.size();
+    usize first = 0u;
+    while(first < sortedEdges.size()){
+        usize end = first + 1u;
+        while(end < sortedEdges.size() && sortedEdges[end].positions == sortedEdges[first].positions)
+            ++end;
+        const b8 validEdge = (end - first) == s_ManifoldEdgeTriangleCount && sortedEdges[first].forward != sortedEdges[first + 1u].forward;
+        for(usize index = first; index < end; ++index){
+            JoinMeshTopologyComponents(sortedEdges[first].triangle, sortedEdges[index].triangle, inOutParents, inOutRanks);
+            if(!validEdge)
+                inOutInvalidTriangles[cast<usize>(sortedEdges[index].triangle)] = 1u;
+        }
+        first = end;
+    }
+
+    Vector<u8> invalidComponents;
+    invalidComponents.resize(triangleCount, 0u);
+    for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
+        if(inOutInvalidTriangles[cast<usize>(triangle)] != 0u)
+            invalidComponents[cast<usize>(FindMeshTopologyComponent(triangle, inOutParents))] = 1u;
+    }
+
+    Vector<f64> componentVolumes;
+    componentVolumes.resize(triangleCount, 0.0);
+    u32 originComponent = u32.max;
+    VectorDouble origin(0.0, 0.0, 0.0, 0.0);
+    for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
+        const u32 component = FindMeshTopologyComponent(triangle, inOutParents);
+        if(invalidComponents[cast<usize>(component)] != 0u)
+            continue;
+        const usize base = cast<usize>(triangle) * cast<usize>(s_MeshletTriangleIndexCount);
+        if(component != originComponent){
+            const usize originBase = cast<usize>(component) * cast<usize>(s_MeshletTriangleIndexCount);
+            origin = VectorDouble(VectorSingle(positions[cast<usize>(triangleIndices[originBase])]));
+            originComponent = component;
+        }
+        componentVolumes[cast<usize>(component)] += ComputeTriangleRelativeVolumeAtIndices(
+            positions,
+            triangleIndices[base],
+            triangleIndices[base + 1u],
+            triangleIndices[base + 2u],
+            origin
+        );
+    }
+
+    outWords.clear();
+    outWords.resize(divideUp(triangleCount, cast<usize>(s_MeshletSolidTriangleWordBits)), 0u);
+    for(u32 triangle = 0u; triangle < cast<u32>(triangleCount); ++triangle){
+        const u32 component = FindMeshTopologyComponent(triangle, inOutParents);
+        if(invalidComponents[cast<usize>(component)] == 0u && componentVolumes[cast<usize>(component)] != 0.0)
+            outWords[cast<usize>(triangle / s_MeshletSolidTriangleWordBits)] |= (1u << (triangle % s_MeshletSolidTriangleWordBits));
+    }
+}
+
+b8 BuildSolidTriangleWordsInto(
+    in Span<f32x3u> positions,
+    in Span<u32> triangleIndices,
+    mut Vector<u32> outWords
+){
+    Vector<u32> parents;
+    Vector<u8> ranks;
+    Vector<u8> invalidTriangles;
+    Vector<TriangleEdge> edges;
+    if(!PrepareMeshTopologyEdges(positions, triangleIndices, parents, ranks, invalidTriangles, edges))
+        return false;
+    native(mut edges){
+        ::Sort(edges.begin(), edges.end(), [](const TriangleEdge& first, const TriangleEdge& second)noexcept{
+            return first.positions < second.positions;
+        });
+    }
+    FinalizeMeshSolidTriangleWords(positions, triangleIndices, edges, parents, ranks, invalidTriangles, outWords);
+    return true;
+}
+
+Expected<Vector<u32>> BuildSolidTriangleWords(
+    in Span<f32x3u> positions,
+    in Span<u32> triangleIndices
+){
+    Vector<u32> words;
+    if(!BuildSolidTriangleWordsInto(positions, triangleIndices, words))
+        return makeUnexpected(Failure());
+    return words;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

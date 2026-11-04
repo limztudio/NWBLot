@@ -1,0 +1,378 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TryRegisterContextPopupScope(
+    in WidgetState state,
+    in PopupToken currentPopup,
+    in PopupScope scope,
+    mut Vector<ContextOwnedPopup> popups,
+    mut PopupToken outFenceToken
+){
+    outFenceToken = PopupToken();
+    if(
+        state.kind != WidgetKind::Popup
+        || !scope.token.valid()
+        || scope.token.widget != state.id
+        || scope.token.declarationGeneration != state.declarationGeneration
+        || scope.parent != currentPopup
+        || popups.size() == s_InputMaxPopups
+        || !HasValidPopupScopeGeometry(scope)
+    )
+        return false;
+    for(in ContextOwnedPopup previous : popups){
+        if(previous.scope.token.widget == scope.token.widget)
+            return false;
+    }
+    PopupScope admitted = scope;
+    if(popups.empty())
+        admitted.layer = 1u;
+    else
+        admitted.layer = popups.back().scope.layer + 1u;
+    ContextOwnedPopup owned;
+    owned.scope = admitted;
+    owned.root = state.root;
+    popups.push_back(owned);
+    outFenceToken = admitted.token;
+    return true;
+}
+
+b8 TryActivateContextPopupScope(
+    in PopupToken token,
+    in WidgetRoot root,
+    in PopupToken currentPopup,
+    in Span<ContextOwnedPopup> popups,
+    mut Array<PopupToken, s_InputMaxPopups> popupStack,
+    mut usize inOutPopupDepth,
+    mut PopupToken outCurrentPopup,
+    mut u32 outPopupLayer
+){
+    if(!token.valid() || inOutPopupDepth == s_InputMaxPopups)
+        return false;
+    for(in ContextOwnedPopup owned : popups){
+        if(owned.scope.token != token)
+            continue;
+        if(owned.root != root || owned.scope.parent != currentPopup)
+            return false;
+        popupStack[inOutPopupDepth] = token;
+        ++inOutPopupDepth;
+        outCurrentPopup = token;
+        outPopupLayer = owned.scope.layer;
+        return true;
+    }
+    return false;
+}
+
+b8 TryUpdateContextPopupScope(
+    in PopupToken token,
+    in WidgetRoot root,
+    in PopupScope scope,
+    mut Vector<ContextOwnedPopup> popups
+){
+    if(!token.valid() || scope.token != token || !HasValidPopupScopeGeometry(scope))
+        return false;
+    for(usize index = 0u; index < popups.size(); ++index){
+        const ContextOwnedPopup owned = popups[index];
+        if(owned.scope.token != token)
+            continue;
+        if(owned.root != root || scope.parent != owned.scope.parent || (scope.layer != 0u && scope.layer != owned.scope.layer))
+            return false;
+        PopupScope updated = scope;
+        updated.layer = owned.scope.layer;
+        popups[index].scope = updated;
+        return true;
+    }
+    return false;
+}
+
+u32 ResolveContextPopupLayer(in Span<ContextOwnedPopup> popups, in PopupToken token){
+    for(in ContextOwnedPopup owned : popups){
+        if(owned.scope.token == token)
+            return owned.scope.layer;
+    }
+    return 0u;
+}
+
+b8 TryEndContextPopupScope(
+    in Span<ContextOwnedPopup> popups,
+    mut Array<PopupToken, s_InputMaxPopups> popupStack,
+    mut usize inOutPopupDepth,
+    mut PopupToken inOutCurrentPopup,
+    mut u32 outPopupLayer,
+    mut PopupToken outEndedToken
+){
+    outEndedToken = PopupToken();
+    if(inOutPopupDepth == 0u || !inOutCurrentPopup.valid())
+        return false;
+    outEndedToken = inOutCurrentPopup;
+    --inOutPopupDepth;
+    popupStack[inOutPopupDepth] = PopupToken();
+    if(inOutPopupDepth == 0u)
+        inOutCurrentPopup = PopupToken();
+    else
+        inOutCurrentPopup = popupStack[inOutPopupDepth - 1u];
+    outPopupLayer = ResolveContextPopupLayer(popups, inOutCurrentPopup);
+    return true;
+}
+
+b8 DiscardContextPopupScope(
+    in PopupToken token,
+    in Array<PopupToken, s_InputMaxPopups> popupStack,
+    in usize popupDepth,
+    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<ContextOwnedPopup> popups,
+    mut b8 outRemovedAny
+){
+    outRemovedAny = false;
+    Array<b8, s_InputMaxPopups> removed;
+    b8 found = false;
+    for(usize index = 0u; index < popups.size(); ++index){
+        b8 isRemoved = popups[index].scope.token == token;
+        for(usize ancestor = 0u; ancestor < index && !isRemoved; ++ancestor)
+            isRemoved = removed[ancestor] && popups[index].scope.parent == popups[ancestor].scope.token;
+        removed[index] = isRemoved;
+        found = found || isRemoved;
+    }
+    if(!found)
+        return true;
+    for(usize active = 0u; active < popupDepth; ++active){
+        const PopupToken activeToken = popupStack[active];
+        for(usize popup = 0u; popup < popups.size(); ++popup){
+            if(removed[popup] && activeToken == popups[popup].scope.token)
+                return false;
+        }
+    }
+    usize keptTargets = 0u;
+    for(usize index = 0u; index < targets.size(); ++index){
+        const PopupToken targetPopup = targets[index].target.popup;
+        b8 removeTarget = false;
+        for(usize popup = 0u; popup < popups.size(); ++popup){
+            if(removed[popup] && targetPopup == popups[popup].scope.token){
+                removeTarget = true;
+                break;
+            }
+        }
+        if(!removeTarget){
+            if(keptTargets != index)
+                targets[keptTargets] = targets[index];
+            ++keptTargets;
+        }
+    }
+    targets.resize(keptTargets);
+    usize keptPopups = 0u;
+    for(usize index = 0u; index < popups.size(); ++index){
+        if(!removed[index]){
+            if(keptPopups != index)
+                popups[keptPopups] = popups[index];
+            ++keptPopups;
+        }
+    }
+    popups.resize(keptPopups);
+    outRemovedAny = true;
+    return true;
+}
+
+b8 TryAppendContextTarget(
+    in WidgetState state,
+    in PopupToken currentPopup,
+    in u32 popupLayer,
+    in HitTarget target,
+    mut Vector<ContextOwnedTarget> targets
+){
+    if(targets.size() >= s_InputMaxTargets)
+        return false;
+    HitTarget admitted = target;
+    admitted.id = state.id;
+    admitted.declarationGeneration = state.declarationGeneration;
+    admitted.paintOrder = cast<u32>(targets.size());
+    admitted.popup = currentPopup;
+    admitted.layer = popupLayer;
+    ContextOwnedTarget owned;
+    owned.target = admitted;
+    owned.root = state.root;
+    targets.push_back(owned);
+    return true;
+}
+
+b8 TryAppendContextPartTarget(
+    in WidgetState owner,
+    in WidgetId part,
+    in PopupToken currentPopup,
+    in u32 popupLayer,
+    in HitTarget target,
+    mut Vector<ContextOwnedTarget> targets
+){
+    if(!part.valid() || part == owner.id || targets.size() >= s_InputMaxTargets)
+        return false;
+    HitTarget admitted = target;
+    admitted.id = part;
+    admitted.declarationGeneration = owner.declarationGeneration;
+    admitted.owner = owner.id;
+    admitted.ownerDeclarationGeneration = owner.declarationGeneration;
+    admitted.paintOrder = cast<u32>(targets.size());
+    admitted.popup = currentPopup;
+    admitted.layer = popupLayer;
+    ContextOwnedTarget owned;
+    owned.target = admitted;
+    owned.root = owner.root;
+    targets.push_back(owned);
+    return true;
+}
+
+void ExtractContextCommitPayloads(
+    in Span<ContextOwnedTarget> targets,
+    in Span<ContextOwnedPopup> popups,
+    mut Vector<HitTarget> commitTargets,
+    mut Vector<PopupScope> commitPopups
+){
+    commitTargets.clear();
+    for(in ContextOwnedTarget owned : targets)
+        commitTargets.push_back(owned.target);
+    commitPopups.clear();
+    for(in ContextOwnedPopup owned : popups)
+        commitPopups.push_back(owned.scope);
+}
+
+b8 TryBeginContextFrame(
+    in u64 generation,
+    in u64 focusLossGeneration,
+    in u64 readyGeneration,
+    mut u64 inOutLastFrameGeneration,
+    mut u64 inOutFrameGeneration,
+    mut u64 outFocusLossGeneration,
+    mut b8 outFailed,
+    mut usize outDeclarationCount,
+    mut usize outStateClaimCount,
+    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<ContextOwnedPopup> popups,
+    mut usize outPopupDepth,
+    mut PopupToken outCurrentPopup,
+    mut u32 outPopupLayer
+){
+    if(generation <= inOutLastFrameGeneration || inOutFrameGeneration != 0u || readyGeneration != 0u)
+        return false;
+    inOutLastFrameGeneration = generation;
+    inOutFrameGeneration = generation;
+    outFocusLossGeneration = focusLossGeneration;
+    outFailed = false;
+    outDeclarationCount = 0u;
+    outStateClaimCount = 0u;
+    targets.clear();
+    popups.clear();
+    outPopupDepth = 0u;
+    outCurrentPopup = PopupToken();
+    outPopupLayer = 0u;
+    return true;
+}
+
+b8 TryBeginContextRoot(
+    in b8 failed,
+    in u64 frameGeneration,
+    in b8 rootActive,
+    in WidgetRoot root,
+    mut WidgetRoot outRoot,
+    mut b8 outRootActive,
+    mut Vector<WidgetId> scopes
+){
+    if(failed || frameGeneration == 0u || rootActive || root.generation == 0u)
+        return false;
+    const Expected<WidgetId> rootId = TryMakeRootId(root);
+    if(!rootId.has_value())
+        return false;
+    outRoot = root;
+    outRootActive = true;
+    scopes.clear();
+    scopes.push_back(rootId.value());
+    return true;
+}
+
+b8 TryEndContextRoot(
+    in b8 failed,
+    in usize popupDepth,
+    in PopupToken currentPopup,
+    mut b8 inOutRootActive,
+    mut Vector<WidgetId> scopes
+){
+    const b8 valid = inOutRootActive && scopes.size() == 1u && popupDepth == 0u && !currentPopup.valid();
+    inOutRootActive = false;
+    scopes.clear();
+    return valid && !failed;
+}
+
+b8 TryPushContextScope(
+    in b8 failed,
+    in b8 rootActive,
+    in StringView stableKey,
+    mut Vector<WidgetId> scopes
+){
+    if(failed || !rootActive || scopes.size() >= s_ContextMaxScopeDepth || scopes.size() == 0u)
+        return false;
+    const Expected<WidgetId> id = TryMakeWidgetId(scopes[scopes.size() - 1u], stableKey);
+    if(!id.has_value())
+        return false;
+    scopes.push_back(id.value());
+    return true;
+}
+
+b8 TryPopContextScope(
+    in b8 failed,
+    in b8 rootActive,
+    mut Vector<WidgetId> scopes
+){
+    if(!rootActive || scopes.size() <= 1u)
+        return false;
+    scopes.pop_back();
+    return !failed;
+}
+
+b8 CanFinishContextFrame(
+    in b8 failed,
+    in u64 frameGeneration,
+    in b8 rootActive,
+    in usize popupDepth,
+    in PopupToken currentPopup
+){
+    return !failed && frameGeneration != 0u && !rootActive && popupDepth == 0u && !currentPopup.valid();
+}
+
+void ResetContextPopupAndTargetState(
+    mut Vector<ContextOwnedTarget> targets,
+    mut Vector<ContextOwnedPopup> popups,
+    mut PopupToken outCurrentPopup,
+    mut usize outPopupDepth,
+    mut Array<PopupToken, s_InputMaxPopups> outPopupStack,
+    mut u32 outPopupLayer,
+    mut u64 outReadyGeneration
+){
+    targets.clear();
+    popups.clear();
+    outCurrentPopup = PopupToken();
+    outPopupDepth = 0u;
+    for(usize index = 0u; index < s_InputMaxPopups; ++index)
+        outPopupStack[index] = PopupToken();
+    outPopupLayer = 0u;
+    outReadyGeneration = 0u;
+}
+
+b8 TryClaimSmallContextState(
+    in ContextStateClaim claim,
+    mut Array<ContextStateClaim, s_SmallStateClaims> inOutSmallStateClaims,
+    mut usize inOutStateClaimCount
+){
+    for(usize index = 0u; index < inOutStateClaimCount; ++index){
+        if(inOutSmallStateClaims[index] == claim)
+            return false;
+    }
+    inOutSmallStateClaims[inOutStateClaimCount] = claim;
+    ++inOutStateClaimCount;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

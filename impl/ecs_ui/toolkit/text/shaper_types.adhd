@@ -1,0 +1,331 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/text/atlas_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_TextBytesPerKilobyte = 1024u;
+const usize s_TextMaxBytes = s_TextBytesPerKilobyte * s_TextBytesPerKilobyte;
+const usize s_TextMaxFontSources = 8u;
+const usize s_TextMaxLanguageBytes = 63u;
+const f32 s_TextDefaultFontSize = 16.0f;
+const StringView s_TextDefaultLanguage = "en";
+const f32 s_TextFixedPointScale = 64.0f;
+const f64 s_TextFixedPointScaleF64 = 64.0;
+const f32 s_TextMaxFontSize = 2048.0f;
+const u32 s_TextMaxRasterPpem = 4096u;
+const f32 s_TextMaxRasterPpemF32 = 4096.0f;
+const u32 s_TextDefaultScriptTag = 0x4c61746eu;
+const u32 s_ScriptTagLetterCount = 4u;
+const u32 s_ScriptTagLetterMask = 0xffu;
+const u32 s_ScriptTagBitsPerByte = 8u;
+const u32 s_TextUnicodeSpace = 0x20u;
+const u32 s_TextUnicodeDelete = 0x7fu;
+const u32 s_TextUnicodeC1Last = 0x9fu;
+const u32 s_TextUnicodeLineSeparator = 0x2028u;
+const u32 s_TextUnicodeParagraphSeparator = 0x2029u;
+const f32 s_TextFixedPointRoundBiasF32 = 0.5f;
+const f64 s_TextOutlineBoundsMargin = 1.0;
+const f64 s_TextOutlineBoundsMarginBothSides = 2.0;
+const f32 s_TextMaxCoordinateF32 = 3.40282346638528859812e+38f;
+const f64 s_TextMaxCoordinateF64 = cast<f64>(s_TextMaxCoordinateF32);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> TextDirection{
+    LeftToRight,
+    RightToLeft,
+}
+
+enum<u8> TextLayoutStatus{
+    Success,
+    InvalidUtf8,
+    UnsupportedControl,
+    MissingGlyph,
+    InvalidParameters,
+    FontFailure,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShapeRequest{
+    public StringView text = "";
+    public StringView language = s_TextDefaultLanguage;
+    public f32 fontSize = s_TextDefaultFontSize;
+    public u32 scriptTag = s_TextDefaultScriptTag;
+    public TextDirection direction = TextDirection::LeftToRight;
+}
+
+class FontMetrics{
+    public f32 ascender = 0.0f;
+    public f32 descender = 0.0f;
+    public f32 lineGap = 0.0f;
+}
+
+class GlyphCoverageBounds{
+    public GlyphCoverageBounds(){
+        this.known = false;
+    }
+
+    public GlyphCoverageBounds(in Rect inInk, in b8 inKnown){
+        this.ink = inInk;
+        this.known = inKnown;
+    }
+
+    public Rect ink;
+    public b8 known;
+}
+
+class RawShapedGlyph{
+    public RawShapedGlyph(){
+        this.glyphId = 0u;
+        this.byteBegin = 0u;
+        this.byteEnd = 0u;
+    }
+
+    public RawShapedGlyph(in u32 inGlyphId, in u32 inByteBegin, in u32 inByteEnd, in Point inOffset, in Point inAdvance, in Rect inInk, in GlyphCoverageBounds inCoverage){
+        this.glyphId = inGlyphId;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+        this.offset = inOffset;
+        this.advance = inAdvance;
+        this.ink = inInk;
+        this.coverage = inCoverage;
+    }
+
+    public u32 glyphId;
+    public u32 byteBegin;
+    public u32 byteEnd;
+    public Point offset;
+    public Point advance;
+    public Rect ink;
+    public GlyphCoverageBounds coverage;
+}
+
+class TextFontSpan{
+    public TextFontSpan(){
+        this.fontIndex = 0u;
+        this.glyphBegin = 0u;
+        this.glyphEnd = 0u;
+        this.byteBegin = 0u;
+        this.byteEnd = 0u;
+    }
+
+    public TextFontSpan(in usize inFontIndex, in usize inGlyphBegin, in usize inGlyphEnd, in u32 inByteBegin, in u32 inByteEnd){
+        this.fontIndex = inFontIndex;
+        this.glyphBegin = inGlyphBegin;
+        this.glyphEnd = inGlyphEnd;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+    }
+
+    public usize fontIndex;
+    public usize glyphBegin;
+    public usize glyphEnd;
+    public u32 byteBegin;
+    public u32 byteEnd;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
+    return isAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
+}
+
+// This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
+TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
+    if(
+        request.text.size() > s_TextMaxBytes
+        || !isFinite(request.fontSize)
+        || request.fontSize < 1.0f / s_TextFixedPointScale
+        || request.fontSize > s_TextMaxFontSize
+        || request.scriptTag == 0u
+        || request.language.empty()
+        || request.language.size() > s_TextMaxLanguageBytes
+        || (request.direction != TextDirection::LeftToRight && request.direction != TextDirection::RightToLeft)
+    )
+        return TextLayoutStatus::InvalidParameters;
+    for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
+        const u32 letter = (request.scriptTag >> (byte * s_ScriptTagBitsPerByte)) & s_ScriptTagLetterMask;
+        if(!isAsciiAlpha(letter))
+            return TextLayoutStatus::InvalidParameters;
+    }
+    for(usize i = 0u; i < request.language.size(); ++i){
+        if(!IsTextAsciiAlphaNumericOrHyphen(cast<u32>(cast<u8>(request.language[i]))))
+            return TextLayoutStatus::InvalidParameters;
+    }
+    const StringView text = request.text;
+    usize offset = 0u;
+    while(offset < text.size()){
+        u32 scalar = 0u;
+        usize byteCount = 0u;
+        if(!tryDecodeUtf8Scalar(text.substr(offset), scalar, byteCount) || scalar == 0u)
+            return TextLayoutStatus::InvalidUtf8;
+        offset += byteCount;
+        if(scalar == '\r'){
+            if(!allowLineBreaks || offset == text.size() || text[offset] != '\n')
+                return TextLayoutStatus::UnsupportedControl;
+        }
+        else if(scalar == '\n'){
+            if(!allowLineBreaks)
+                return TextLayoutStatus::UnsupportedControl;
+        }
+        else if(scalar < s_TextUnicodeSpace || (scalar >= s_TextUnicodeDelete && scalar <= s_TextUnicodeC1Last) || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator){
+            return TextLayoutStatus::UnsupportedControl;
+        }
+    }
+    return TextLayoutStatus::Success;
+}
+
+usize FindClusterEnd(in Span<RawShapedGlyph> glyphs, in usize begin){
+    usize end = begin + 1u;
+    while(end < glyphs.size() && glyphs[end].byteBegin == glyphs[begin].byteBegin)
+        ++end;
+    return end;
+}
+
+b8 ClusterHasMissingGlyph(in Span<RawShapedGlyph> glyphs, in usize begin, in usize end){
+    for(usize index = begin; index < end; ++index){
+        if(glyphs[index].glyphId == 0u)
+            return true;
+    }
+    return false;
+}
+
+b8 FitsTextCoordinate(in f64 value){
+    return isFinite(value) && value >= -s_TextMaxCoordinateF64 && value <= s_TextMaxCoordinateF64;
+}
+
+b8 IsValidTextFontSize(in f32 fontSize){
+    return isFinite(fontSize) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
+}
+
+b8 SameShapeRequest(in ShapeRequest lhs, in ShapeRequest rhs){
+    return lhs.text == rhs.text && lhs.language == rhs.language && lhs.fontSize == rhs.fontSize && lhs.scriptTag == rhs.scriptTag && lhs.direction == rhs.direction;
+}
+
+b8 ValidateShapedRunMetrics(in FontMetrics metrics, in usize glyphCount){
+    return
+        isFinite(metrics.ascender) && isFinite(metrics.descender) && isFinite(metrics.lineGap)
+        && metrics.ascender >= 0.0f && metrics.descender >= 0.0f && metrics.lineGap >= 0.0f
+        && metrics.ascender + metrics.descender > 0.0f && glyphCount <= s_TextMaxBytes
+        && FitsTextCoordinate((cast<f64>(metrics.ascender) + cast<f64>(metrics.descender)) + cast<f64>(metrics.lineGap))
+    ;
+}
+
+b8 ValidateShapedGlyph(
+    in u32 byteBegin,
+    in u32 byteEnd,
+    in Point offset,
+    in Point advance,
+    in Rect ink,
+    in GlyphCoverageBounds coverage,
+    in StringView text,
+    in TextDirection direction,
+    mut u32 inoutPreviousByteBegin
+){
+    if(
+        byteBegin >= byteEnd || !isUtf8ScalarBoundary(text, cast<usize>(byteBegin)) || !isUtf8ScalarBoundary(text, cast<usize>(byteEnd))
+        || !isFinite(advance.x) || !isFinite(advance.y) || advance.x < 0.0f || advance.y != 0.0f
+        || !isFinite(offset.x) || !isFinite(offset.y) || !HasValidUiRectDimensions(ink)
+        || !FitsTextCoordinate(cast<f64>(ink.x) + cast<f64>(ink.width))
+        || !FitsTextCoordinate(cast<f64>(ink.y) + cast<f64>(ink.height))
+    )
+        return false;
+    if(coverage.known){
+        const Rect cov = coverage.ink;
+        if(
+            !HasValidUiRectDimensions(cov)
+            || !FitsTextCoordinate(cast<f64>(cov.x) + cast<f64>(cov.width))
+            || !FitsTextCoordinate(cast<f64>(cov.y) + cast<f64>(cov.height))
+        )
+            return false;
+    }
+    if(direction == TextDirection::LeftToRight){
+        if(byteBegin < inoutPreviousByteBegin)
+            return false;
+    }
+    else{
+        if(byteBegin > inoutPreviousByteBegin)
+            return false;
+    }
+    inoutPreviousByteBegin = byteBegin;
+    return true;
+}
+
+FontMetrics MaxFontMetrics(in FontMetrics lhs, in FontMetrics rhs){
+    FontMetrics out;
+    out.ascender = max(lhs.ascender, rhs.ascender);
+    out.descender = max(lhs.descender, rhs.descender);
+    out.lineGap = max(lhs.lineGap, rhs.lineGap);
+    return out;
+}
+
+i32 ComputeTextFixedPointScale(in f32 fontSize){
+    return cast<i32>(fontSize * s_TextFixedPointScale + s_TextFixedPointRoundBiasF32);
+}
+
+GlyphCoverageBounds ComputeOutlineCoverageBounds(in i64 xMin, in i64 yMin, in i64 xMax, in i64 yMax, in f32 fontSize, in u32 unitsPerEm){
+    const f64 scale = cast<f64>(fontSize) / cast<f64>(unitsPerEm);
+    const f64 left = (cast<f64>(xMin) - s_TextOutlineBoundsMargin) * scale;
+    const f64 top = (-cast<f64>(yMax) - s_TextOutlineBoundsMargin) * scale;
+    const f64 width = ((cast<f64>(xMax) - cast<f64>(xMin)) + s_TextOutlineBoundsMarginBothSides) * scale;
+    const f64 height = ((cast<f64>(yMax) - cast<f64>(yMin)) + s_TextOutlineBoundsMarginBothSides) * scale;
+    if(
+        !isFinite(left) || !isFinite(top) || !isFinite(width) || !isFinite(height)
+        || abs(left) > s_TextMaxCoordinateF64 || abs(top) > s_TextMaxCoordinateF64
+        || width < 0.0 || height < 0.0 || width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64
+        || abs(left + width) > s_TextMaxCoordinateF64 || abs(top + height) > s_TextMaxCoordinateF64
+    )
+        return GlyphCoverageBounds();
+    const Rect ink(cast<f32>(left), cast<f32>(top), cast<f32>(width), cast<f32>(height));
+    if(!isFinite(ink.x + ink.width) || !isFinite(ink.y + ink.height))
+        return GlyphCoverageBounds();
+    return GlyphCoverageBounds(ink, true);
+}
+
+Expected<FontMetrics> TryResolveFontExtentsMetrics(in i32 ascender, in i32 descender, in i32 lineGap){
+    FontMetrics outMetrics;
+    const f32 invScale = 1.0f / s_TextFixedPointScale;
+    const f32 scaledAsc = cast<f32>(ascender) * invScale;
+    const f32 scaledDesc = (-cast<f32>(descender)) * invScale;
+    const f32 scaledGap = cast<f32>(lineGap) * invScale;
+    outMetrics.ascender = max(0.0f, scaledAsc);
+    outMetrics.descender = max(0.0f, scaledDesc);
+    outMetrics.lineGap = max(0.0f, scaledGap);
+    if(outMetrics.ascender + outMetrics.descender <= 0.0f)
+        return makeUnexpected(Failure());
+    return outMetrics;
+}
+
+Rect ResolveHbGlyphExtentsInk(in i32 xBearing, in i32 yBearing, in i32 width, in i32 height){
+    const f32 scale = 1.0f / s_TextFixedPointScale;
+    const f32 originX = cast<f32>(xBearing) * scale;
+    const f32 originY = (-cast<f32>(yBearing)) * scale;
+    const f32 endX = cast<f32>(width) * scale + originX;
+    const f32 endY = originY - cast<f32>(height) * scale;
+    const f32 minX = min(originX, endX);
+    const f32 minY = min(originY, endY);
+    const f32 deltaX = endX - originX;
+    const f32 deltaY = endY - originY;
+    return Rect(minX, minY, abs(deltaX), abs(deltaY));
+}
+
+void ResolveHbGlyphPlacement(in i32 xOffset, in i32 yOffset, in i32 xAdvance, in i32 yAdvance, mut Point outOffset, mut Point outAdvance){
+    const f32 scale = 1.0f / s_TextFixedPointScale;
+    outOffset = Point(cast<f32>(xOffset) * scale, (-cast<f32>(yOffset)) * scale);
+    outAdvance = Point(cast<f32>(xAdvance) * scale, (-cast<f32>(yAdvance)) * scale);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

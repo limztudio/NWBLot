@@ -13,6 +13,7 @@
 
 #include "asset.h"
 #include "bind.h"
+#include <impl/assets_material/cook_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>

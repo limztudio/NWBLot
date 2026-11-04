@@ -1,0 +1,421 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook_types.adhd>
+#include <impl/assets_mesh/skin_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::FbxToNwb{
+using NWB::Impl::SkinInfluence4;
+using NWB::Impl::ValidateSourceStreamIndexWithContext;
+using NWB::Impl::s_MeshMissingStreamIndex;
+using NWB::Impl::s_SkinInfluenceJointCount;
+using NWB::Impl::s_VertexRefPositionName;
+using NWB::Impl::s_VertexRefNormalName;
+using NWB::Impl::s_VertexRefTangentName;
+using NWB::Impl::s_MeshUv0FieldNameView;
+using NWB::Impl::s_VertexRefColorName;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type Vec2 = f32x2u;
+type Vec3 = f32x3u;
+type Vec4 = f32x4u;
+type MeshSkinInfluence = SkinInfluence4;
+
+const usize s_Vector2ComponentCount = 2u;
+const usize s_Vector3ComponentCount = 3u;
+const usize s_Vector4ComponentCount = 4u;
+const f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
+const StringView s_DefaultNormalModeText = "imported";
+const StringView s_SmoothNormalModeText = "smooth";
+const StringView s_RegenerateNormalModeText = "regenerate";
+const StringView s_GeneratedUvTangentModeText = "generated_uv";
+const StringView s_GeneratedFallbackTangentModeText = "generated_fallback";
+const StringView s_SkinStreamLabel = "skin";
+const usize s_DeduplicateParallelGrainSize = 4096u;
+const u32 s_PositionSkinKeySkinShiftBits = 32u;
+const StringView s_SourceVertexRefLabel = "vertex_ref";
+const f32 s_CleanFloatEpsilon = 0.00000001f;
+const i32 s_OutputFloatPrecision = 9;
+const StringView s_WriteNwbMeshContext = "Failed to write NWB mesh";
+const StringView s_WriteNwbModelContext = "Failed to write NWB model";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> NormalMode{
+    Imported,
+    Smooth,
+    Regenerate
+}
+
+[reflect]
+enum<u8> SourceTangentMode{
+    Imported,
+    GeneratedUv,
+    GeneratedFallback
+}
+
+class SourceVertexRef{
+    public u32 position = u32.max;
+    public u32 normal = u32.max;
+    public u32 tangent = u32.max;
+    public u32 uv0 = u32.max;
+    public u32 color = u32.max;
+    public u32 skin = u32.max;
+}
+
+class SourceTriangleCorner{
+    public Vec3 position;
+    public Vec3 normal;
+    public Vec4 tangent;
+    public Vec2 uv0;
+    public Vec4 color(1.0f, 1.0f, 1.0f, 1.0f);
+    public MeshSkinInfluence skin;
+    public b8 hasTangent = false;
+}
+
+class SourceMeshStreamCounts{
+    public usize positions = 0u;
+    public usize normals = 0u;
+    public usize tangents = 0u;
+    public usize uv0 = 0u;
+    public usize colors = 0u;
+    public usize skin = 0u;
+    public usize vertexRefs = 0u;
+    public usize indices = 0u;
+}
+
+class SourceMeshCanonicalizeReport{
+    public SourceMeshStreamCounts before;
+    public SourceMeshStreamCounts after;
+}
+
+class SourceTangentReport{
+    public u32 degenerateUvTriangleCount = 0u;
+    public u32 fallbackTangentVertexCount = 0u;
+    public SourceTangentMode mode = SourceTangentMode::Imported;
+}
+
+class PositionKey{
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 z = 0u;
+}
+
+class PositionNormalRecord{
+    public f32x4 value(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class AssignmentRange{
+    public usize begin = 0u;
+    public usize end = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView NormalModeText(in NormalMode normalMode){
+    switch(normalMode){
+        case NormalMode::Imported: return s_DefaultNormalModeText;
+        case NormalMode::Smooth: return s_SmoothNormalModeText;
+        case NormalMode::Regenerate: return s_RegenerateNormalModeText;
+    }
+    return "";
+}
+
+StringView SourceTangentModeText(in SourceTangentMode mode){
+    switch(mode){
+        case SourceTangentMode::Imported: return s_DefaultNormalModeText;
+        case SourceTangentMode::GeneratedUv: return s_GeneratedUvTangentModeText;
+        case SourceTangentMode::GeneratedFallback: return s_GeneratedFallbackTangentModeText;
+    }
+    return "";
+}
+
+usize HashSourceVertexRef(in SourceVertexRef value){
+    usize seed = hashValue(value.position);
+    seed = hashCombineValue(seed, value.normal);
+    seed = hashCombineValue(seed, value.tangent);
+    seed = hashCombineValue(seed, value.uv0);
+    seed = hashCombineValue(seed, value.color);
+    return hashCombineValue(seed, value.skin);
+}
+
+b8 EqualSourceVertexRef(in SourceVertexRef lhs, in SourceVertexRef rhs){
+    return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
+}
+
+usize HashPositionKey(in PositionKey key){
+    usize seed = hashValue(key.x);
+    seed = hashCombineValue(seed, key.y);
+    return hashCombineValue(seed, key.z);
+}
+
+b8 EqualPositionKey(in PositionKey lhs, in PositionKey rhs){
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+
+void AccumulateReport(in SourceMeshCanonicalizeReport item, mut SourceMeshCanonicalizeReport inOutTotal){
+    inOutTotal.before.positions += item.before.positions;
+    inOutTotal.before.normals += item.before.normals;
+    inOutTotal.before.tangents += item.before.tangents;
+    inOutTotal.before.uv0 += item.before.uv0;
+    inOutTotal.before.colors += item.before.colors;
+    inOutTotal.before.skin += item.before.skin;
+    inOutTotal.before.vertexRefs += item.before.vertexRefs;
+    inOutTotal.before.indices += item.before.indices;
+
+    inOutTotal.after.positions += item.after.positions;
+    inOutTotal.after.normals += item.after.normals;
+    inOutTotal.after.tangents += item.after.tangents;
+    inOutTotal.after.uv0 += item.after.uv0;
+    inOutTotal.after.colors += item.after.colors;
+    inOutTotal.after.skin += item.after.skin;
+    inOutTotal.after.vertexRefs += item.after.vertexRefs;
+    inOutTotal.after.indices += item.after.indices;
+}
+
+u64 PositionSkinKey(in u32 position, in u32 skin){
+    return (cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | cast<u64>(skin);
+}
+
+f32 CleanFloat(in f32 value){
+    if(abs(value) < s_CleanFloatEpsilon)
+        return 0.0f;
+    return value;
+}
+
+SourceTangentMode ResolveGeneratedSourceTangentMode(in b8 usedDefaultUvs, in u32 degenerateUvTriangleCount, in u32 fallbackTangentVertexCount){
+    if(usedDefaultUvs || degenerateUvTriangleCount != 0u || fallbackTangentVertexCount != 0u)
+        return SourceTangentMode::GeneratedFallback;
+    return SourceTangentMode::GeneratedUv;
+}
+
+b8 SourceVertexRefsHaveCompleteTangents(in Span<SourceVertexRef> vertexRefs, in usize tangentCount){
+    if(vertexRefs.empty() || tangentCount == 0u)
+        return false;
+    for(in SourceVertexRef ref : vertexRefs){
+        if(cast<usize>(ref.tangent) >= tangentCount)
+            return false;
+    }
+    return true;
+}
+
+VectorSingle ResolveImportedFbxTangent(
+    in VectorSingle normal,
+    in VectorSingle tangent,
+    in b8 hasBitangent,
+    in VectorSingle bitangent
+){
+    f32 sign = 1.0f;
+    if(hasBitangent){
+        const VectorSingle tangentSpaceBitangent = cross(normal.xyz, tangent.xyz);
+        if(dot(tangentSpaceBitangent.xyz, bitangent.xyz) < 0.0f)
+            sign = -1.0f;
+    }
+    return VectorSingle(tangent, sign);
+}
+
+b8 SourceVertexRefsHaveNoSkin(in Span<SourceVertexRef> vertexRefs){
+    for(in SourceVertexRef ref : vertexRefs){
+        if(ref.skin != s_MeshMissingStreamIndex)
+            return false;
+    }
+    return true;
+}
+
+b8 DidSourceMeshComponentRefsChange(in SourceMeshStreamCounts before, in SourceMeshStreamCounts after){
+    return
+        before.positions != after.positions
+        || before.normals != after.normals
+        || before.tangents != after.tangents
+        || before.uv0 != after.uv0
+        || before.colors != after.colors
+        || before.vertexRefs != after.vertexRefs
+    ;
+}
+
+b8 RemapRequiredSourceStreamIndex(in Span<u32> remap, in StringView streamName, mut u32 inOutIndex){
+    if(cast<usize>(inOutIndex) < remap.size()){
+        inOutIndex = remap[cast<usize>(inOutIndex)];
+        return true;
+    }
+    error("Failed to canonicalize mesh: vertex_ref {} index is out of range", streamName);
+    return false;
+}
+
+b8 RemapOptionalSourceStreamIndex(in Span<u32> remap, in StringView streamName, mut u32 inOutIndex){
+    if(inOutIndex == s_MeshMissingStreamIndex)
+        return true;
+    return RemapRequiredSourceStreamIndex(remap, streamName, inOutIndex);
+}
+
+b8 RemapSourceVertexRef(
+    in Span<u32> positions,
+    in Span<u32> normals,
+    in Span<u32> tangents,
+    in Span<u32> uv0,
+    in Span<u32> colors,
+    in Span<u32> skin,
+    mut SourceVertexRef inOutRef
+){
+    if(!RemapRequiredSourceStreamIndex(positions, s_VertexRefPositionName, inOutRef.position))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(normals, s_VertexRefNormalName, inOutRef.normal))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(tangents, s_VertexRefTangentName, inOutRef.tangent))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(uv0, s_MeshUv0FieldNameView, inOutRef.uv0))
+        return false;
+    if(!RemapRequiredSourceStreamIndex(colors, s_VertexRefColorName, inOutRef.color))
+        return false;
+    return RemapOptionalSourceStreamIndex(skin, s_SkinStreamLabel, inOutRef.skin);
+}
+
+u32 FbxFloatingHashBits(in f32 value){
+    if(value == 0.0f)
+        return 0u;
+    return bit_cast<u32>(value);
+}
+
+PositionKey MakePositionKey(in VectorSingle position){
+    PositionKey key;
+    key.x = FbxFloatingHashBits(position.x);
+    key.y = FbxFloatingHashBits(position.y);
+    key.z = FbxFloatingHashBits(position.z);
+    return key;
+}
+
+b8 LessEmittedF32(in f32 lhs, in f32 rhs){
+    return FbxFloatingHashBits(CleanFloat(lhs)) < FbxFloatingHashBits(CleanFloat(rhs));
+}
+
+b8 SameEmittedF32(in f32 lhs, in f32 rhs){
+    return FbxFloatingHashBits(CleanFloat(lhs)) == FbxFloatingHashBits(CleanFloat(rhs));
+}
+
+b8 LessEmittedVec2(in Vec2 lhs, in Vec2 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    return LessEmittedF32(lhs.y, rhs.y);
+}
+
+b8 LessEmittedVec3(in Vec3 lhs, in Vec3 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    return LessEmittedF32(lhs.z, rhs.z);
+}
+
+b8 LessEmittedVec4(in Vec4 lhs, in Vec4 rhs){
+    if(!SameEmittedF32(lhs.x, rhs.x))
+        return LessEmittedF32(lhs.x, rhs.x);
+    if(!SameEmittedF32(lhs.y, rhs.y))
+        return LessEmittedF32(lhs.y, rhs.y);
+    if(!SameEmittedF32(lhs.z, rhs.z))
+        return LessEmittedF32(lhs.z, rhs.z);
+    return LessEmittedF32(lhs.w, rhs.w);
+}
+
+b8 SameEmittedVec2(in Vec2 lhs, in Vec2 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y);
+}
+
+b8 SameEmittedVec3(in Vec3 lhs, in Vec3 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z);
+}
+
+b8 SameEmittedVec4(in Vec4 lhs, in Vec4 rhs){
+    return SameEmittedF32(lhs.x, rhs.x) && SameEmittedF32(lhs.y, rhs.y) && SameEmittedF32(lhs.z, rhs.z) && SameEmittedF32(lhs.w, rhs.w);
+}
+
+b8 ValidateSkinnedModelSourceMeshRefs(in Span<SourceVertexRef> vertexRefs, in usize skinCount){
+    if(skinCount == 0u){
+        error("Failed to write NWB model: skinned model source mesh requires skin influences");
+        return false;
+    }
+    for(in SourceVertexRef ref : vertexRefs){
+        if(!ValidateSourceStreamIndexWithContext(s_WriteNwbModelContext, s_SkinStreamLabel, ref.skin, skinCount))
+            return false;
+    }
+    return true;
+}
+
+b8 ValidatePlainMeshSourceSkin(in usize skinCount, in Span<SourceVertexRef> vertexRefs){
+    if(skinCount != 0u){
+        error("Failed to write NWB mesh: mesh asset cannot contain a source skin stream");
+        return false;
+    }
+    if(!SourceVertexRefsHaveNoSkin(vertexRefs)){
+        error("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index");
+        return false;
+    }
+    return true;
+}
+
+b8 IsFiniteSourceTriangleCornerValues(
+    in VectorSingle position,
+    in VectorSingle normal,
+    in SourceTriangleCorner corner,
+    in b8 wantsSkinning
+){
+    if(
+        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
+        || !isFinite(normal.x) || !isFinite(normal.y) || !isFinite(normal.z)
+        || !isFinite(corner.uv0.x) || !isFinite(corner.uv0.y)
+        || !isFinite(corner.color.x) || !isFinite(corner.color.y) || !isFinite(corner.color.z) || !isFinite(corner.color.w)
+    )
+        return false;
+    if(
+        corner.hasTangent
+        && (!isFinite(corner.tangent.x) || !isFinite(corner.tangent.y) || !isFinite(corner.tangent.z) || !isFinite(corner.tangent.w))
+    )
+        return false;
+    return !wantsSkinning
+        || (
+            isFinite(corner.skin.weight[0u])
+            && isFinite(corner.skin.weight[1u])
+            && isFinite(corner.skin.weight[2u])
+            && isFinite(corner.skin.weight[3u])
+        );
+}
+
+SourceMeshStreamCounts MakeSourceMeshStreamCounts(
+    in usize positions,
+    in usize normals,
+    in usize tangents,
+    in usize uv0,
+    in usize colors,
+    in usize skin,
+    in usize vertexRefs,
+    in usize indices
+){
+    SourceMeshStreamCounts counts;
+    counts.positions = positions;
+    counts.normals = normals;
+    counts.tangents = tangents;
+    counts.uv0 = uv0;
+    counts.colors = colors;
+    counts.skin = skin;
+    counts.vertexRefs = vertexRefs;
+    counts.indices = indices;
+    return counts;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

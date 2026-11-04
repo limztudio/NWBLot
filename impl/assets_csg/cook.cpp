@@ -163,14 +163,6 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<CookString> BuildDefaultCsgShapeModuleInclude(const Name shaderModule, [[maybe_unused]] CookArena& arena, ScratchArena& scratchArena){
-    if(!shaderModule)
-        return MakeUnexpected(Failure{});
-
-    const AString<ScratchArena> safeModuleName = BuildCanonicalSafeCacheName(scratchArena, shaderModule.resolvedText());
-    return TryBuildDefaultCsgShapeModuleIncludePath(shaderModule, AStringView(safeModuleName));
-}
-
 Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, const Core::Metascript::Document& doc, CookArena& cookArena, ScratchArena& scratchArena){
     using namespace __hidden_assets_csg_cook;
 
@@ -200,7 +192,8 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
         return MakeUnexpected(Failure{});
     entry.moduleInclude = *moduleInclude;
     if(entry.moduleInclude.empty()){
-        auto generatedInclude = BuildDefaultCsgShapeModuleInclude(entry.shaderModule, cookArena, scratchArena);
+        const AString<ScratchArena> safeModuleName = BuildCanonicalSafeCacheName(scratchArena, entry.shaderModule.resolvedText());
+        auto generatedInclude = TryBuildDefaultCsgShapeModuleIncludePath(entry.shaderModule, AStringView(safeModuleName));
         if(!generatedInclude){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(entry.shaderModule.resolvedText()));
             return MakeUnexpected(Failure{});

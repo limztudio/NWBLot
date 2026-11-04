@@ -126,6 +126,38 @@ b8 ValidateSkinInfluenceStream(in Span<SkinInfluence4> influences, in u32 jointC
     return true;
 }
 
+b8 IsFiniteSkinJointRow(in VectorSingle row){
+    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+}
+
+b8 IsValidSkinInverseBindMatrix(in MatrixSingle matrix){
+    if(
+        !IsFiniteSkinJointRow(matrix[0u])
+        || !IsFiniteSkinJointRow(matrix[1u])
+        || !IsFiniteSkinJointRow(matrix[2u])
+        || !IsFiniteSkinJointRow(matrix[3u])
+    )
+        return false;
+    const VectorSingle row3Diff = abs(matrix[3u] - VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
+    if(
+        row3Diff.x > s_SkinValidationEpsilon
+        || row3Diff.y > s_SkinValidationEpsilon
+        || row3Diff.z > s_SkinValidationEpsilon
+        || row3Diff.w > s_SkinValidationEpsilon
+    )
+        return false;
+    const f32 determinant = dot(matrix[0u].xyz, cross(matrix[1u].xyz, matrix[2u].xyz));
+    return isFinite(determinant) && abs(determinant) > s_SkinValidationEpsilon;
+}
+
+b8 ValidateSkinInverseBindMatrixAt(in MatrixSingle matrix, in usize index){
+    if(IsValidSkinInverseBindMatrix(matrix))
+        return true;
+
+    error("Skin::validatePayload failed: inverse bind matrix {} is not a finite invertible affine matrix", index);
+    return false;
+}
+
 b8 ValidateSkinHeaderBinary(in SkinHeaderBinary header){
     if(header.padding0 == 0u)
         return true;

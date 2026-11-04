@@ -394,6 +394,32 @@ u64 BuildShaderVariantCookKeyHash(in NameHash virtualPathHash, in u64 sourceChec
     return hash;
 }
 
+b8 ValidateShaderDoesNotUseImplicitDefine(in StringView entryName, in StringView defineName, in b8 hasDefine){
+    if(!hasDefine)
+        return true;
+
+    error("GraphicsCook: shader '{}' uses reserved implicit define '{}' as a variant define", entryName, defineName);
+    return false;
+}
+
+b8 TryAccumulateShaderDefineVariantCount(
+    in StringView entryName,
+    in StringView defineName,
+    in u64 valueCount,
+    mut u64 inOutVariantCount
+){
+    if(valueCount == 0u){
+        error("GraphicsCook: entry '{}' has define '{}' with no values", entryName, defineName);
+        return false;
+    }
+    if(inOutVariantCount > u64.max / valueCount){
+        error("GraphicsCook: variant count overflow for entry '{}'", entryName);
+        return false;
+    }
+    inOutVariantCount *= valueCount;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

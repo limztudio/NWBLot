@@ -1,0 +1,249 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font_atlas/types.adhd>
+#include <impl/ecs_ui/toolkit/paint_types.adhd>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <global/sha256.h>
+namespace NWB::Impl{
+class Font;
+};
+namespace NWB::Impl::Ui{
+template<typename TFont>
+class GlyphPageBindingRecord;
+template<typename TFont>
+class SdfAtlasPageBindingRecord;
+using GlyphPageBinding = GlyphPageBindingRecord<NWB::Impl::Font>;
+using SdfAtlasPageBinding = SdfAtlasPageBindingRecord<NWB::Impl::Font>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_GlyphAtlasPageExtent = 512u;
+const u32 s_GlyphAtlasGlyphGutter = 2u;
+const usize s_GlyphAtlasMaxPages = 16u;
+const u32 s_SdfMaxChannelCount = 4u;
+const usize s_GlyphAtlasMaxGlyphs = 4096u;
+const u32 s_GlyphAtlasNoPage = 0xffffffffu;
+const f32 s_BakedFontAtlasMinScale = 0.75f;
+const f32 s_BakedFontAtlasMaxScale = 1.5f;
+const StringView s_TextFontLifecycleCategory = "ui_font_lifecycle";
+const Name s_TextPaintCandidatesArena = "impl/ecs_ui/toolkit/text/paint_candidates";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GlyphAtlasPlacement{
+    public GlyphAtlasPlacement(){
+        this.x = 0u;
+        this.y = 0u;
+        this.rowHeight = 0u;
+    }
+
+    public GlyphAtlasPlacement(in u32 inX, in u32 inY, in u32 inRowHeight){
+        this.x = inX;
+        this.y = inY;
+        this.rowHeight = inRowHeight;
+    }
+
+    public u32 x;
+    public u32 y;
+    public u32 rowHeight;
+}
+
+class GlyphPageBindingRecord<TFont>{
+    public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height;
+    }
+
+    public b8 operator!=(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font || this.fontGeneration != rhs.fontGeneration || this.atlasIdentity != rhs.atlasIdentity || this.generation != rhs.generation || this.index != rhs.index || this.width != rhs.width || this.height != rhs.height;
+    }
+
+    public AssetRef<TFont> font;
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+class SdfAtlasPageBindingRecord<TFont>{
+    public b8 operator==(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font
+            && this.fontSha256 == rhs.fontSha256
+            && this.pixelsSha256 == rhs.pixelsSha256
+            && this.fontGeneration == rhs.fontGeneration
+            && this.atlasIdentity == rhs.atlasIdentity
+            && this.generation == rhs.generation
+            && this.index == rhs.index
+            && this.width == rhs.width
+            && this.height == rhs.height
+            && this.channelCount == rhs.channelCount
+            && this.spreadPixels == rhs.spreadPixels
+            && this.distanceEncoding == rhs.distanceEncoding;
+    }
+
+    public b8 operator!=(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font
+            || this.fontSha256 != rhs.fontSha256
+            || this.pixelsSha256 != rhs.pixelsSha256
+            || this.fontGeneration != rhs.fontGeneration
+            || this.atlasIdentity != rhs.atlasIdentity
+            || this.generation != rhs.generation
+            || this.index != rhs.index
+            || this.width != rhs.width
+            || this.height != rhs.height
+            || this.channelCount != rhs.channelCount
+            || this.spreadPixels != rhs.spreadPixels
+            || this.distanceEncoding != rhs.distanceEncoding;
+    }
+
+    public AssetRef<TFont> font;
+    public Sha256Digest fontSha256 = Sha256Digest();
+    public Sha256Digest pixelsSha256 = Sha256Digest();
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = s_SdfMaxChannelCount;
+    public u32 spreadPixels = 0u;
+    public u32 distanceEncoding = s_FontAtlasDistanceEncoding;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<GlyphAtlasPlacement> TryPlaceGlyphInAtlasPage(in u32 cursorX, in u32 cursorY, in u32 rowHeight, in u32 width, in u32 height){
+    GlyphAtlasPlacement outPlacement(cursorX, cursorY, rowHeight);
+    if(outPlacement.x + width > s_GlyphAtlasPageExtent){
+        outPlacement.x = 0u;
+        outPlacement.y += outPlacement.rowHeight;
+        outPlacement.rowHeight = 0u;
+    }
+    if(outPlacement.y + height > s_GlyphAtlasPageExtent)
+        return makeUnexpected(Failure());
+    outPlacement.rowHeight = max(outPlacement.rowHeight, height);
+    return outPlacement;
+}
+
+b8 SameGlyphPageKey<TFont>(in GlyphPageBindingRecord<TFont> first, in GlyphPageBindingRecord<TFont> second){
+    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
+}
+
+b8 SameGlyphPageVersion<TFont>(
+    in GlyphPageBindingRecord<TFont> first,
+    in Span<u8> firstPixels,
+    in GlyphPageBindingRecord<TFont> second,
+    in Span<u8> secondPixels,
+    in b8 sameInstance
+){
+    if(!SameGlyphPageKey(first, second) || first.generation != second.generation || first.width != second.width || first.height != second.height)
+        return false;
+    if(sameInstance)
+        return true;
+    if(firstPixels.size() != secondPixels.size())
+        return false;
+    for(usize index = 0u; index < firstPixels.size(); ++index){
+        if(firstPixels[index] != secondPixels[index])
+            return false;
+    }
+    return true;
+}
+
+b8 ValidGlyphPageBinding<TFont>(in GlyphPageBindingRecord<TFont> binding, in usize pixelByteCount){
+    return binding.font.valid()
+        && binding.fontGeneration != 0u
+        && binding.atlasIdentity != 0u
+        && binding.generation != 0u
+        && binding.index < s_GlyphAtlasMaxPages
+        && binding.width != 0u
+        && binding.height != 0u
+        && binding.width <= s_GlyphAtlasPageExtent
+        && binding.height <= s_GlyphAtlasPageExtent
+        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height);
+}
+
+b8 SameSdfAtlasPageKey<TFont>(in SdfAtlasPageBindingRecord<TFont> first, in SdfAtlasPageBindingRecord<TFont> second){
+    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.generation == second.generation && first.index == second.index;
+}
+
+b8 ValidSdfAtlasPageBinding<TFont>(in SdfAtlasPageBindingRecord<TFont> binding, in usize pixelByteCount){
+    return binding.font.valid()
+        && binding.fontGeneration != 0u
+        && binding.atlasIdentity != 0u
+        && binding.generation != 0u
+        && binding.index < s_FontAtlasMaxGroupCount
+        && binding.width != 0u
+        && binding.height != 0u
+        && binding.width <= s_FontAtlasMaxExtent
+        && binding.height <= s_FontAtlasMaxExtent
+        && binding.channelCount != 0u
+        && binding.channelCount <= s_SdfMaxChannelCount
+        && binding.spreadPixels >= s_FontAtlasMinSpreadPixels
+        && binding.spreadPixels <= s_FontAtlasMaxSpreadPixels
+        && binding.distanceEncoding == s_FontAtlasDistanceEncoding
+        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height) * cast<usize>(binding.channelCount);
+}
+
+SdfAtlasPageBindingRecord<TFont> MakeSdfAtlasPageGroupBinding<TFont>(
+    in AssetRef<TFont> font,
+    in Sha256Digest fontSha256,
+    in u64 fontGeneration,
+    in u64 atlasIdentity,
+    in u32 groupIndex,
+    in u32 width,
+    in u32 height,
+    in u32 channelCount,
+    in u32 spreadPixels
+){
+    SdfAtlasPageBindingRecord<TFont> binding;
+    binding.font = font;
+    binding.fontSha256 = fontSha256;
+    binding.pixelsSha256 = Sha256Digest();
+    binding.fontGeneration = fontGeneration;
+    binding.atlasIdentity = atlasIdentity;
+    binding.generation = 1u;
+    binding.index = groupIndex;
+    binding.width = width;
+    binding.height = height;
+    binding.channelCount = channelCount;
+    binding.spreadPixels = spreadPixels;
+    return binding;
+}
+
+b8 CanUseBakedFontAtlasAtPhysicalSize(in u32 bakePpem, in f32 physicalSize){
+    if(!isFinite(physicalSize) || physicalSize <= 0.0f)
+        return false;
+    const f32 ppem = cast<f32>(bakePpem);
+    return physicalSize >= ppem * s_BakedFontAtlasMinScale && physicalSize <= ppem * s_BakedFontAtlasMaxScale;
+}
+
+Rect ResolveSdfGlyphUv(in FontAtlasGlyph record, in u32 atlasWidth, in u32 atlasHeight){
+    const f32 width = cast<f32>(atlasWidth);
+    const f32 height = cast<f32>(atlasHeight);
+    return Rect(cast<f32>(record.x) / width, cast<f32>(record.y) / height, cast<f32>(record.width) / width, cast<f32>(record.height) / height);
+}
+
+Rect ResolveCoverageGlyphUv(in Rect pixels){
+    const f32 extent = cast<f32>(s_GlyphAtlasPageExtent);
+    return Rect(pixels.x / extent, pixels.y / extent, pixels.width / extent, pixels.height / extent);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

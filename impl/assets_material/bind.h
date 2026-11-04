@@ -12,7 +12,7 @@
 
 
 #include "asset.h"
-#include <impl/assets_material/cook_types.adhd.h>
+#include <impl/assets_material/bind_types.adhd.h>
 
 #include <core/alloc/global.h>
 #include <core/alloc/scratch.h>

@@ -6,7 +6,7 @@ native{
 #include <core/graphics/rhi/command.h>
 namespace NWB::Impl{
 using QueueSubmissionToken = Core::QueueSubmissionToken;
-}
+};
 }
 
 

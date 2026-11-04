@@ -258,7 +258,6 @@ f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
     return (maximum / s_SliderDefaultKeyStepDivisor) - (minimum / s_SliderDefaultKeyStepDivisor);
 }
 
-
 Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, in ControlActionKind kind){
     f64 step = 0.0;
     f64 value = currentValue;
@@ -292,8 +291,6 @@ Expected<f64> TryStepSliderValue(in f64 currentValue, in SliderOptions options, 
         return makeUnexpected(Failure());
     return value;
 }
-
-
 
 Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGesture gesture){
     const f64 normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);

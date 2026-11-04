@@ -9,7 +9,7 @@ native{
 #include <impl/assets/graphics/refraction/diagnostics_layout.h>
 namespace NWB::Impl{
 using QueueSubmissionToken = Core::QueueSubmissionToken;
-}
+};
 }
 
 

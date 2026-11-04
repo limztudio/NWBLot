@@ -20,7 +20,7 @@ using NWB::Impl::s_FontAtlasRasterModeOutline;
 using NWB::Impl::FontAtlasGlyph;
 using NWB::Impl::FontAtlasGroupCompactBounds;
 namespace FontAtlasRasterMode = NWB::Impl::FontAtlasRasterMode;
-}
+};
 }
 
 

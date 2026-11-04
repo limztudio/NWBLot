@@ -9,12 +9,12 @@ native{
 namespace NWB::Impl{
 class UiSkin;
 class Texture;
-}
+};
 namespace NWB::Impl::Ui{
 template<typename TUiSkin, typename TTexture>
 class SkinBindingRecord;
 using SkinBinding = SkinBindingRecord<NWB::Impl::UiSkin, NWB::Impl::Texture>;
-}
+};
 }
 
 

@@ -24,7 +24,7 @@ using Ui::PopupToken;
 using Ui::Rect;
 using Ui::TryHitEditWordCaretGeometry;
 using Ui::WidgetId;
-}
+};
 }
 
 

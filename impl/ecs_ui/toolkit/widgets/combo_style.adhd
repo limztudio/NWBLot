@@ -138,7 +138,6 @@ void ResolveComboFieldLayout(in Rect bounds, in Insets padding, in f32 arrowExte
     const f32 textY = bounds.y + padding.top;
     const f32 textWidth = max(0.0f, (outIcon.x - arrowGap) - textX);
     outTextClip = Rect(textX, textY, textWidth, content.height);
-
 }
 
 b8 IsValidComboDeclarationOptions(in ComboOptions options, in ComboStyle style){

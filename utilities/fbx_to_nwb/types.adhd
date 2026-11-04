@@ -23,8 +23,11 @@ using NWB::Impl::s_VertexRefNormalName;
 using NWB::Impl::s_VertexRefTangentName;
 using NWB::Impl::s_MeshUv0FieldNameView;
 using NWB::Impl::s_VertexRefColorName;
+};
 }
-}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 type Vec2 = f32x2u;

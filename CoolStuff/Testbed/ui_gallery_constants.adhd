@@ -10,7 +10,7 @@ using NWB::Impl::Ui::Color;
 using NWB::Impl::Ui::DisplayMetrics;
 using NWB::Impl::Ui::Point;
 using NWB::Impl::Ui::Rect;
-}
+};
 }
 
 

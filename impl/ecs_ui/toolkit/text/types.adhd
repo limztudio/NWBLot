@@ -10,7 +10,7 @@ native{
 #include <global/sha256.h>
 namespace NWB::Impl{
 class Font;
-}
+};
 namespace NWB::Impl::Ui{
 template<typename TFont>
 class GlyphPageBindingRecord;
@@ -18,7 +18,7 @@ template<typename TFont>
 class SdfAtlasPageBindingRecord;
 using GlyphPageBinding = GlyphPageBindingRecord<NWB::Impl::Font>;
 using SdfAtlasPageBinding = SdfAtlasPageBindingRecord<NWB::Impl::Font>;
-}
+};
 }
 
 
@@ -376,7 +376,6 @@ b8 FitsTextCoordinate(in f64 value){
 b8 IsValidTextFontSize(in f32 fontSize){
     return isFinite(fontSize) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
 }
-
 
 Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in DisplayMetrics display){
     TextRasterMetrics outMetrics;

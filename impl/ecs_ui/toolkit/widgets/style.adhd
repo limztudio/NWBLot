@@ -162,7 +162,6 @@ void ResolveCheckboxPlacement(
     outOrigin = ResolveCenteredTextOrigin(bounds, textOffsetX, measured.y);
     const f32 clipWidth = max(0.0f, bounds.width - textOffsetX);
     outTextClip = Rect(outOrigin.x, bounds.y, clipWidth, bounds.height);
-
 }
 
 void AccumulateButtonRegionMetrics(in UiSkinRegion skinRegion, mut Point inOutMinimum, mut Insets inOutPadding){

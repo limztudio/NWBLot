@@ -18,31 +18,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_gpu_sdf_resources{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 ValidPage(const SharedSdfAtlasPage& page)noexcept{
-    return page && ValidSdfAtlasPageBinding(page->binding(), page->pixels().size());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
     if(!ValidSnapshotImageCount(snapshot))
         return false;
     const auto& pages = snapshot.sdfPages();
-    if(!AllValidAndDistinct(Span<const SharedSdfAtlasPage>(pages.data(), pages.size()), [](const SharedSdfAtlasPage& current)noexcept{ return __hidden_ui_gpu_sdf_resources::ValidPage(current); }, [](const SharedSdfAtlasPage& current, const SharedSdfAtlasPage& previous)noexcept{ return SameSdfAtlasPageKey(current->binding(), previous->binding()); }))
+    if(!AllValidAndDistinct(Span<const SharedSdfAtlasPage>(pages.data(), pages.size()), [](const SharedSdfAtlasPage& current)noexcept{ return current && ValidSdfAtlasPageBinding(current->binding(), current->pixels().size()); }, [](const SharedSdfAtlasPage& current, const SharedSdfAtlasPage& previous)noexcept{ return SameSdfAtlasPageKey(current->binding(), previous->binding()); }))
         return false;
     for(const DrawCommand& command : snapshot.commands()){
         const u32 channelCount = command.sdfPageIndex < pages.size() ? pages[command.sdfPageIndex]->binding().channelCount : 0u;

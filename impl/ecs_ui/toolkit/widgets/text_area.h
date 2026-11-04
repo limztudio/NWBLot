@@ -45,7 +45,7 @@ private:
             || !SameScrollViewportPlacementGeometry(placement, m_placement)
             || step.x != m_step.x || step.y != m_step.y
         )
-            advanceRevision();
+            AdvanceNonWrappingRevision(m_revision);
         m_snapshot = next;
         m_placement = placement;
         m_step = step;
@@ -53,16 +53,12 @@ private:
         return { stateGeneration, next.model.instanceGeneration, m_revision };
     }
     void retire()noexcept{
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         m_prepared = false;
         m_snapshot = {};
         m_placement = {};
         m_step = {};
     }
-
-
-private:
-    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
 
 
 private:
@@ -109,7 +105,7 @@ public:
     [[nodiscard]] b8 scrollTo(const Point scroll)noexcept{
         if(!IsValidUiExtent(scroll))
             return false;
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         m_scrollInput.retire();
         m_visual.scroll = scroll.x;
         m_scrollY = scroll.y;
@@ -117,7 +113,7 @@ public:
         return true;
     }
     void reset()noexcept{
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         m_scrollInput.retire();
         m_visual = {};
         m_navigation.reset();
@@ -125,10 +121,6 @@ public:
         m_scrollY = 0.0f;
         m_revealCaret = true;
     }
-
-
-private:
-    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
 
 
 private:

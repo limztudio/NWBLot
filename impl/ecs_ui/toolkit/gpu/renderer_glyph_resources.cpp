@@ -19,36 +19,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_gpu_glyph_resources{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 SamePageVersion(const GlyphPage& first, const GlyphPage& second)noexcept{
-    return SameGlyphPageVersion(first.binding(), first.pixels(), second.binding(), second.pixels(), &first == &second);
-}
-
-[[nodiscard]] static b8 ValidPage(const SharedGlyphPage& page)noexcept{
-    return page && ValidGlyphPageBinding(page->binding(), page->pixels().size());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
     if(!ValidSnapshotImageCount(snapshot))
         return false;
     const auto& pages = snapshot.glyphPages();
     for(usize index = 0u; index < pages.size(); ++index){
-        if(!__hidden_ui_gpu_glyph_resources::ValidPage(pages[index]))
+        if(!pages[index] || !ValidGlyphPageBinding(pages[index]->binding(), pages[index]->pixels().size()))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
             if(SameGlyphPageKey(pages[index]->binding(), pages[previous]->binding()))
@@ -67,7 +43,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuRendererState::prepareGlyphPage(const S
         replaceIndex = index;
         if(existing->m_page->binding().generation != page->binding().generation)
             break;
-        if(!__hidden_ui_gpu_glyph_resources::SamePageVersion(*existing->m_page, *page))
+        if(!SameGlyphPageVersion(existing->m_page->binding(), existing->m_page->pixels(), page->binding(), page->pixels(), existing->m_page.get() == page.get()))
             return MakeUnexpected(Failure{});
         GpuVersion<GpuGlyphVersion> reused = existing;
         m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(index));

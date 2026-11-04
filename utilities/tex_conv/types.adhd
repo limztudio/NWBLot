@@ -171,6 +171,24 @@ b8 ValidateTexConvPlaneResolution(
     return true;
 }
 
+Expected<u8> TryQuantizeTexConvMipAlpha(in VectorSingle color){
+    if(!isFinite(color.x) || !isFinite(color.y) || !isFinite(color.z) || !isFinite(color.w)){
+        error("tex_conv: mip filtering produced non-finite values.");
+        return makeUnexpected(Failure());
+    }
+    const VectorSingle quantized = QuantizeUnorm(color);
+    return cast<u8>(quantized.w);
+}
+
+Expected<usize> TryComputeTexConvPayloadByteCount(in u64 primaryByteCount, in b8 separateAlpha){
+    usize multiplier = 1u;
+    if(separateAlpha)
+        multiplier = cast<usize>(s_SeparateAlphaPayloadMultiplier);
+    if(primaryByteCount > cast<u64>(usize.max / multiplier))
+        return makeUnexpected(Failure());
+    return cast<usize>(primaryByteCount) * multiplier;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

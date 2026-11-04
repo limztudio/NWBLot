@@ -105,7 +105,8 @@ template<typename VisitTriangle>
     if(!outputTangent)
         return MakeUnexpected(Failure{});
 
-    SIMDVectorSingle sign = s_SIMDOne;
+    b8 hasBitangent = false;
+    SIMDVectorSingle outputBitangentVec = VectorZero();
     if(mesh.vertex_bitangent.exists){
         ufbx_vec3 bitangent = ufbx_get_vertex_vec3(&mesh.vertex_bitangent, cornerIndex);
         if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
@@ -113,13 +114,12 @@ template<typename VisitTriangle>
 
         const auto outputBitangent = Vector3TryNormalize(LoadUfbxVector(bitangent));
         if(outputBitangent){
-            const SIMDVectorSingle tangentSpaceBitangent = Vector3Cross(normal, outputTangent->value);
-            const SIMDVectorSingle bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent->value);
-            sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(bitangentDot, VectorZero()));
+            hasBitangent = true;
+            outputBitangentVec = outputBitangent->value;
         }
     }
 
-    return SIMDVectorSingleResult{ VectorSelect(outputTangent->value, sign, s_SIMDMaskW) };
+    return SIMDVectorSingleResult{ ResolveImportedFbxTangent(normal, outputTangent->value, hasBitangent, outputBitangentVec) };
 }
 
 [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
@@ -198,7 +198,6 @@ b8 FbxMeshBuild::AppendInstanceMesh(
     const b8 importUvs = mesh->vertex_uv.exists;
     const b8 importColors = options.importColors && mesh->vertex_color.exists;
     const b8 importTangents = normalMode == NormalMode::Imported && mesh->vertex_tangent.exists;
-    const SIMDVectorSingle defaultColorVector = LoadFloat(defaultColor);
     const ufbx_skin_deformer* skin = nullptr;
     ::Vector<u16, Core::Alloc::ScratchArena> clusterJoints(scratchArena);
     if(wantsSkinning){
@@ -261,32 +260,27 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             }
             triangleNormals[triangleCornerIndex] = normal;
 
-            SIMDVectorSingle uv0 = VectorZero();
             if(importUvs){
                 const ufbx_vec2 sourceUv0 = ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex);
-                uv0 = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(sourceUv0.x), static_cast<f64>(sourceUv0.y), 0.0, 0.0));
+                corner.uv0 = Vec2(static_cast<f32>(sourceUv0.x), static_cast<f32>(sourceUv0.y));
                 inOutSawVertexUvs = true;
             }
             else
                 inOutUsedDefaultUvs = true;
-            StoreFloat(uv0, corner.uv0);
 
-            SIMDVectorSingle color = defaultColorVector;
             if(importColors){
                 const ufbx_vec4 sourceColor = ufbx_get_vertex_vec4(&mesh->vertex_color, cornerIndex);
-                color = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(sourceColor.x), static_cast<f64>(sourceColor.y), static_cast<f64>(sourceColor.z), static_cast<f64>(sourceColor.w)));
+                corner.color = Vec4(static_cast<f32>(sourceColor.x), static_cast<f32>(sourceColor.y), static_cast<f32>(sourceColor.z), static_cast<f32>(sourceColor.w));
                 inOutSawVertexColors = true;
             }
-            StoreFloat(color, corner.color);
+            else
+                corner.color = defaultColor;
 
-            SIMDVectorSingle tangent = VectorZero();
             if(importTangents){
                 const auto importedTangent = LoadCornerOutputTangentVector(*mesh, node->geometry_to_world, options, wantsSkinning, cornerIndex, normal);
                 corner.hasTangent = importedTangent.has_value();
-                if(importedTangent){
-                    tangent = importedTangent->value;
-                    StoreFloat(tangent, corner.tangent);
-                }
+                if(importedTangent)
+                    StoreFloat(importedTangent->value, corner.tangent);
             }
 
             if(wantsSkinning){

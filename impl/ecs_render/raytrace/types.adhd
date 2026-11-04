@@ -237,6 +237,14 @@ class RayTracingInstanceWorldBounds{
     public f32x3u maximum(0.0f, 0.0f, 0.0f);
 }
 
+class SceneBvhSahSplit{
+    public u32 axis = 0u;
+    public u32 bin = 0u;
+    public f32 loExtent = 0.0f;
+    public f32 invExtent = 0.0f;
+    public b8 valid = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -348,6 +356,166 @@ b8 IsRefractiveInstanceBoundsIsolated(in Span<RayTracingInstanceWorldBounds> ins
             return false;
     }
     return true;
+}
+
+void InflateSwShadowSceneBounds(mut VectorSingle inOutBoundsMin, mut VectorSingle inOutBoundsMax){
+    const VectorSingle extent = inOutBoundsMax - inOutBoundsMin;
+    const f32 maxExtent = max(extent.x, max(extent.y, extent.z));
+    const f32 padding = max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
+    const VectorSingle paddingVector(padding, padding, padding, 0.0f);
+    inOutBoundsMin = inOutBoundsMin - paddingVector;
+    inOutBoundsMax = inOutBoundsMax + paddingVector;
+}
+
+SceneBvhPrimitiveCalculation MakeSceneBvhPrimitiveCalculation(in VectorSingle worldMin, in VectorSingle worldMax, in u32 materialFlags){
+    SceneBvhPrimitiveCalculation bvhPrimitive;
+    bvhPrimitive.aabbMin = f32x4(worldMin);
+    bvhPrimitive.aabbMax = f32x4(worldMax);
+    bvhPrimitive.centroid = f32x4((worldMin + worldMax) * VectorSingle(0.5f));
+    bvhPrimitive.transparentOccluder = (materialFlags & cast<u32>(RtInstanceMaterialFlag::Transparent)) != 0u;
+    return bvhPrimitive;
+}
+
+SceneBvhNodeCalculation MakeSceneBvhLeafNode(in SceneBvhPrimitiveCalculation primitive, in u32 instance){
+    SceneBvhNodeCalculation node;
+    node.aabbMin = primitive.aabbMin;
+    node.aabbMax = primitive.aabbMax;
+    node.leftChild = cast<u32>(BvhNodeIndex::LeafFlag) | instance;
+    node.rightChild = 1u;
+    node.containsTransparentOccluder = primitive.transparentOccluder;
+    return node;
+}
+
+SceneBvhNodeCalculation MakeSceneBvhInternalNode(
+    in SceneBvhNodeCalculation leftNode,
+    in SceneBvhNodeCalculation rightNode,
+    in u32 leftChild,
+    in u32 rightChild
+){
+    SceneBvhNodeCalculation node;
+    node.aabbMin = f32x4(min(VectorSingle(leftNode.aabbMin), VectorSingle(rightNode.aabbMin)));
+    node.aabbMax = f32x4(max(VectorSingle(leftNode.aabbMax), VectorSingle(rightNode.aabbMax)));
+    node.leftChild = leftChild;
+    node.rightChild = rightChild;
+    node.containsTransparentOccluder = leftNode.containsTransparentOccluder || rightNode.containsTransparentOccluder;
+    return node;
+}
+
+f32 SelectSceneBvhAxisValue(in VectorSingle v, in u32 axis){
+    if(axis == 0u)
+        return v.x;
+    if(axis == 1u)
+        return v.y;
+    return v.z;
+}
+
+f32 ComputeSceneBvhAabbSurfaceArea(in VectorSingle minBounds, in VectorSingle maxBounds){
+    const VectorSingle extent = maxBounds - minBounds;
+    const VectorSingle pairProducts = extent * extent.yzxw;
+    return ((pairProducts.x + pairProducts.z) + pairProducts.y) * 2.0f;
+}
+
+SceneBvhSahSplit SelectSceneBvhSahSplit(
+    in u32 lo,
+    in u32 hi,
+    in Span<SceneBvhPrimitiveCalculation> primitiveBounds,
+    in Span<u32> instanceLeafCost,
+    in Span<u32> indices
+){
+    SceneBvhSahSplit split;
+    VectorSingle centroidMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+    VectorSingle centroidMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+    for(u32 i = lo; i < hi; ++i){
+        const VectorSingle centroid(primitiveBounds[cast<usize>(indices[cast<usize>(i)])].centroid);
+        centroidMin = min(centroidMin, centroid);
+        centroidMax = max(centroidMax, centroid);
+    }
+
+    Array<f32x4, s_SceneBvhSahBinCount> binMin;
+    Array<f32x4, s_SceneBvhSahBinCount> binMax;
+    Array<f32, s_SceneBvhSahBinCount> binCost;
+    Array<u32, s_SceneBvhSahBinCount> binCount;
+    Array<f32x4, s_SceneBvhSahBinCount> suffixMin;
+    Array<f32x4, s_SceneBvhSahBinCount> suffixMax;
+    Array<f32, s_SceneBvhSahBinCount> suffixCost;
+    Array<u32, s_SceneBvhSahBinCount> suffixCount;
+
+    f32 bestCost = s_RayTracingFiniteInfinity;
+    for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
+        const f32 loExtent = SelectSceneBvhAxisValue(centroidMin, axis);
+        const f32 extent = SelectSceneBvhAxisValue(centroidMax, axis) - loExtent;
+        if(extent <= 0.0f)
+            continue;
+        const f32 invExtent = cast<f32>(s_SceneBvhSahBinCount) / extent;
+
+        for(u32 b = 0u; b < s_SceneBvhSahBinCount; ++b){
+            const usize bIdx = cast<usize>(b);
+            binMin[bIdx] = f32x4(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+            binMax[bIdx] = f32x4(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+            binCost[bIdx] = 0.0f;
+            binCount[bIdx] = 0u;
+        }
+        for(u32 i = lo; i < hi; ++i){
+            const u32 instance = indices[cast<usize>(i)];
+            const SceneBvhPrimitiveCalculation prim = primitiveBounds[cast<usize>(instance)];
+            const f32 c = SelectSceneBvhAxisValue(VectorSingle(prim.centroid), axis);
+            u32 b = cast<u32>((c - loExtent) * invExtent);
+            if(b >= s_SceneBvhSahBinCount)
+                b = s_SceneBvhSahBinCount - 1u;
+            const usize binIdx = cast<usize>(b);
+            binMin[binIdx] = f32x4(min(VectorSingle(binMin[binIdx]), VectorSingle(prim.aabbMin)));
+            binMax[binIdx] = f32x4(max(VectorSingle(binMax[binIdx]), VectorSingle(prim.aabbMax)));
+            binCost[binIdx] += cast<f32>(instanceLeafCost[cast<usize>(instance)]);
+            ++binCount[binIdx];
+        }
+
+        VectorSingle accMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+        VectorSingle accMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+        f32 accCost = 0.0f;
+        u32 accCount = 0u;
+        for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
+            const usize idx = cast<usize>(b - 1u);
+            accMin = min(accMin, VectorSingle(binMin[idx]));
+            accMax = max(accMax, VectorSingle(binMax[idx]));
+            accCost += binCost[idx];
+            accCount += binCount[idx];
+            suffixMin[idx] = f32x4(accMin);
+            suffixMax[idx] = f32x4(accMax);
+            suffixCost[idx] = accCost;
+            suffixCount[idx] = accCount;
+        }
+
+        const f32 parentArea = ComputeSceneBvhAabbSurfaceArea(VectorSingle(suffixMin[0u]), VectorSingle(suffixMax[0u]));
+        VectorSingle leftMin(s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity, s_RayTracingFiniteInfinity);
+        VectorSingle leftMax(-s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity, -s_RayTracingFiniteInfinity);
+        f32 leftCost = 0.0f;
+        u32 leftCount = 0u;
+        for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){
+            const usize b = cast<usize>(k - 1u);
+            leftMin = min(leftMin, VectorSingle(binMin[b]));
+            leftMax = max(leftMax, VectorSingle(binMax[b]));
+            leftCost += binCost[b];
+            leftCount += binCount[b];
+
+            const usize kIdx = cast<usize>(k);
+            const u32 rightCount = suffixCount[kIdx];
+            if(leftCount == 0u || rightCount == 0u)
+                continue;
+
+            const f32 leftArea = ComputeSceneBvhAabbSurfaceArea(leftMin, leftMax);
+            const f32 rightArea = ComputeSceneBvhAabbSurfaceArea(VectorSingle(suffixMin[kIdx]), VectorSingle(suffixMax[kIdx]));
+            const f32 cost = (parentArea * s_SceneBvhSahTraversalCost + leftArea * leftCost) + rightArea * suffixCost[kIdx];
+            if(cost < bestCost){
+                bestCost = cost;
+                split.axis = axis;
+                split.bin = k;
+                split.loExtent = loExtent;
+                split.invExtent = invExtent;
+                split.valid = true;
+            }
+        }
+    }
+    return split;
 }
 
 

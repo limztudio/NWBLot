@@ -92,7 +92,6 @@ namespace RayTracingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void InflateSwShadowSceneBounds(SIMDVectorSingle& boundsMin, SIMDVectorSingle& boundsMax)noexcept;
 struct RenderableRayTracingMeshResources{
     RenderableMeshDesc resolvedMesh;
     ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;

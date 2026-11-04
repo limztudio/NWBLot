@@ -41,13 +41,13 @@ public:
         if(!m_list.scrollTo(0.0))
             TerminateInvariant();
         m_anchor = anchor;
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         return true;
     }
     void close()noexcept{
         m_popup.close();
         m_list.select(0u);
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
     }
     [[nodiscard]] b8 isOpen()const noexcept{ return m_popup.isOpen(); }
 
@@ -60,10 +60,6 @@ public:
     [[nodiscard]] const ListState& listState()const noexcept{ return m_list; }
 
     [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_popup.placement(); }
-
-
-private:
-    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
 
 
 private:

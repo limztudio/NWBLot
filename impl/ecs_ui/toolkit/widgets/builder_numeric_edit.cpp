@@ -119,10 +119,6 @@ NumericEditBoxResult Builder::floatEdit(const AStringView stableKey, FloatEditMo
     return declareNumericEdit<FloatEditFrame>(stableKey, model, state, options, ValidateFloatBounds, m_scope->m_floatEdits);
 }
 
-void Builder::snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept{
-    frame.draftStamp = draft.stamp();
-}
-
 b8 Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept{
     return
         popupAncestorsVisible() && frame.state

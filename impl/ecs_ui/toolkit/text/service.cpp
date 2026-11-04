@@ -38,8 +38,7 @@ static Atomic<u64> s_NextServiceIdentity{ 1u };
     const auto plane = TextGlyphVisibility::LoadAtlasRectangle(placed, atlas, fontSize, {});
     if(!plane)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble planeSize = VectorDoubleSwizzle<2, 3, 2, 3>(plane->value);
-    if((VectorDoubleMoveMask(VectorDoubleLessOrEqual(planeSize, VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXY) != 0u)
+    if(VectorDoubleGetZ(plane->value) <= 0.0 || VectorDoubleGetW(plane->value) <= 0.0)
         return plane;
     const FontAtlasGlyph& glyph = *atlas.glyph(placed.glyphId);
     const SdfAtlasPage& page = *atlas.page(glyph.group);
@@ -111,24 +110,13 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
     const f32 physicalSize = rasterMetrics->physicalSize;
     const f32 rasterScale = rasterMetrics->rasterScale;
     const u32 pixelSize = rasterMetrics->pixelSize;
-    const Point logical = layout.measure();
-    const Rect ink = layout.inkBounds();
-    const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
-    const SIMDVectorDouble inkEnd = VectorDoubleAdd(inkOrigin, VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
-    const SIMDVectorDouble logicalSize = VectorDoubleSet(logical.x, logical.y, 0.0, 0.0);
-    SIMDVectorDouble minimum = VectorDoubleSelect(inkOrigin, VectorDoubleZero(), VectorDoubleLess(VectorDoubleZero(), inkOrigin));
-    SIMDVectorDouble maximum = VectorDoubleSelect(inkEnd, logicalSize, VectorDoubleGreater(logicalSize, inkEnd));
+    SIMDVectorDouble bounds = ComputeInitialMeasuredTextBounds(layout.measure(), layout.inkBounds());
     for(const PlacedGlyph& glyph : layout.glyphs()){
-        SIMDVectorDouble first;
-        SIMDVectorDouble last;
         if(const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize)){
             const auto support = LoadSdfSupport(glyph, *atlas, layout.fontSize(), display);
             if(!support)
                 return MakeUnexpected(Failure{});
-            if(VectorDoubleGetZ(support->value) <= 0.0 || VectorDoubleGetW(support->value) <= 0.0)
-                continue;
-            first = VectorDoubleSelect(VectorDoubleZero(), support->value, s_DoubleSIMDMaskXY);
-            last = VectorDoubleAdd(first, VectorDoubleSwizzle<2, 3, 2, 3>(support->value));
+            ExpandMeasuredTextBoundsWithSdfSupport(support->value, bounds);
         }
         else{
             if(!glyph.face || !glyph.face->valid())
@@ -139,21 +127,10 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
                 : glyph.face->rasterBounds(glyph.glyphId, pixelSize);
             if(!raster)
                 return MakeUnexpected(Failure{});
-            if(raster->width <= 0.0f || raster->height <= 0.0f)
-                continue;
-            const SIMDVectorDouble scale = VectorDoubleReplicate(static_cast<f64>(rasterScale));
-            const SIMDVectorDouble origin = VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0);
-            const SIMDVectorDouble pixelOrigin = VectorDoubleSet(raster->x, raster->y, 0.0, 0.0);
-            const SIMDVectorDouble pixelEnd = VectorDoubleAdd(pixelOrigin, VectorDoubleSet(raster->width, raster->height, 0.0, 0.0));
-            // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
-            const SIMDVectorDouble snap = VectorDoubleDivide(VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0), VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0));
-            first = VectorDoubleSubtract(VectorDoubleAdd(origin, VectorDoubleDivide(pixelOrigin, scale)), snap);
-            last = VectorDoubleAdd(VectorDoubleAdd(origin, VectorDoubleDivide(pixelEnd, scale)), snap);
+            ExpandMeasuredTextBoundsWithRaster(glyph.position, *raster, rasterScale, display, bounds);
         }
-        minimum = VectorDoubleSelect(minimum, first, VectorDoubleLess(first, minimum));
-        maximum = VectorDoubleSelect(maximum, last, VectorDoubleGreater(last, maximum));
     }
-    return TryMakeMeasuredTextRect(VectorDoubleGetX(minimum), VectorDoubleGetY(minimum), VectorDoubleGetX(maximum), VectorDoubleGetY(maximum));
+    return TryMakeMeasuredTextRect(VectorDoubleGetX(bounds), VectorDoubleGetY(bounds), VectorDoubleGetZ(bounds), VectorDoubleGetW(bounds));
 }
 
 b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
@@ -173,7 +150,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
     const u32 pixelSize = rasterMetrics->pixelSize;
     const f32 rasterScale = rasterMetrics->rasterScale;
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
-    Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
+    Core::Alloc::ScratchArena scratchArena(s_TextPaintCandidatesArena);
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);
     candidates.reserve(layout.glyphs().size());
     // Validate every conservative candidate before raster preparation mutates the coverage cache.

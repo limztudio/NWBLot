@@ -139,12 +139,10 @@ struct AlphaTransport{
             for(u32 y = 0u; y < plane.get_height(); ++y){
                 for(u32 x = 0u; x < plane.get_width(); ++x){
                     const basisu::vec4F& color = plane(x, y);
-                    const SIMDVectorSingle colorVector = VectorSet(color[0u], color[1u], color[2u], color[3u]);
-                    if(!VectorIsFinite(colorVector, VectorComponentMask::s_XYZW)){
-                        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip filtering produced non-finite values."));
+                    const auto alphaResult = TryQuantizeTexConvMipAlpha(VectorSet(color[0u], color[1u], color[2u], color[3u]));
+                    if(!alphaResult)
                         return MakeUnexpected(Failure{});
-                    }
-                    const u8 alpha = static_cast<u8>(VectorGetW(QuantizeUnorm(colorVector)));
+                    const u8 alpha = *alphaResult;
                     if(!found){
                         firstAlpha = alpha;
                         found = true;
@@ -292,9 +290,10 @@ Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::
         return MakeUnexpected(Failure{});
 
     const b8 separateAlpha = alpha->mode == TextureAlphaMode::SeparateUastcLdr4x4;
-    if(primaryByteCount > Limit<usize>::s_Max / (separateAlpha ? s_SeparateAlphaPayloadMultiplier : 1u))
+    const auto payloadByteCountResult = TryComputeTexConvPayloadByteCount(primaryByteCount, separateAlpha);
+    if(!payloadByteCountResult)
         return MakeUnexpected(Failure{});
-    const usize payloadByteCount = static_cast<usize>(primaryByteCount) * (separateAlpha ? s_SeparateAlphaPayloadMultiplier : 1u);
+    const usize payloadByteCount = *payloadByteCountResult;
 
     PreparedTexture prepared;
     prepared.width = input.width;

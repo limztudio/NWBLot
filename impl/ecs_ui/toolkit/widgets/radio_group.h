@@ -63,13 +63,13 @@ public:
 
     [[nodiscard]] b8 matches(const RadioGroupSnapshot& value)const noexcept{ return snapshot() == value; }
     void select(const u64 key)noexcept{
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         m_inputGeneration = NextIdentity();
         m_selected = key;
         m_cursor = key;
     }
     void reset()noexcept{
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         m_inputGeneration = NextIdentity();
         m_selected = 0u;
         m_cursor = 0u;
@@ -77,10 +77,6 @@ public:
         m_sourceRevision = 0u;
         m_placement = {};
     }
-
-
-private:
-    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
 
 
 private:
@@ -182,7 +178,7 @@ public:
         RadioGroupResult candidateResult = result;
         candidateResult.valid = true;
         candidateResult.selectionChanged |= snapshot.selectedKey != selected;
-        state.advanceRevision();
+        AdvanceNonWrappingRevision(state.m_revision);
         state.m_selected = selected;
         state.m_cursor = cursor;
         state.m_sourceGeneration = candidate.sourceGeneration;
@@ -201,7 +197,7 @@ public:
         u64 cursor = state.m_cursor;
         if(!TryApplyRadioGroupControlAction(choices, options, action, token, state.m_selected, state.m_cursor, selected, cursor, result))
             return false;
-        state.advanceRevision();
+        AdvanceNonWrappingRevision(state.m_revision);
         state.m_selected = selected;
         state.m_cursor = cursor;
         return true;

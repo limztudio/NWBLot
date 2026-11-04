@@ -188,7 +188,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         }
         SIMDVectorSingle worldMin = worldBounds->minBounds;
         SIMDVectorSingle worldMax = worldBounds->maxBounds;
-        RayTracingDetail::InflateSwShadowSceneBounds(worldMin, worldMax);
+        InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, instance.worldToObject);
@@ -218,11 +218,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
         instanceMaterial.nodeSlot = m_rayTracingState.m_swShadowMeshNodeHandles[meshSlot].slot();
-        SceneBvhPrimitiveCalculation bvhPrimitive;
-        StoreFloat(worldMin, bvhPrimitive.aabbMin);
-        StoreFloat(worldMax, bvhPrimitive.aabbMax);
-        StoreFloat(VectorMultiply(VectorAdd(worldMin, worldMax), VectorReplicate(0.5f)), bvhPrimitive.centroid);
-        bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
+        const SceneBvhPrimitiveCalculation bvhPrimitive = MakeSceneBvhPrimitiveCalculation(worldMin, worldMax, instanceMaterial.flags);
 
         SIMDVectorSingle opticalMin = VectorZero();
         SIMDVectorSingle opticalMax = VectorZero();

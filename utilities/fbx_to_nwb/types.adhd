@@ -516,6 +516,21 @@ b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, mut MeshSkinInfluence i
     return true;
 }
 
+VectorSingle ResolveImportedFbxTangent(
+    in VectorSingle normal,
+    in VectorSingle tangent,
+    in b8 hasBitangent,
+    in VectorSingle bitangent
+){
+    f32 sign = 1.0f;
+    if(hasBitangent){
+        const VectorSingle tangentSpaceBitangent = cross(normal.xyz, tangent.xyz);
+        if(dot(tangentSpaceBitangent.xyz, bitangent.xyz) < 0.0f)
+            sign = -1.0f;
+    }
+    return VectorSingle(tangent, sign);
+}
+
 b8 SourceVertexRefsHaveNoSkin(in Span<SourceVertexRef> vertexRefs){
     for(in SourceVertexRef ref : vertexRefs){
         if(ref.skin != s_MeshMissingStreamIndex)

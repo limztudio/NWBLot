@@ -60,6 +60,7 @@ const f64 s_TextHalfPixel = 0.5;
 const f64 s_TextSdfMinimumFilterWidth = 0.001;
 const f64 s_TextSdfEncodedHalfRange = 128.0;
 const StringView s_TextFontLifecycleCategory = "ui_font_lifecycle";
+const Name s_TextPaintCandidatesArena = "impl/ecs_ui/toolkit/text/paint_candidates";
 const f64 s_TextOutlineBoundsMargin = 1.0;
 const f64 s_TextOutlineBoundsMarginBothSides = 2.0;
 const f32 s_TextMaxCoordinateF32 = 3.40282346638528859812e+38f;
@@ -1108,6 +1109,62 @@ TextCluster MakeTextCluster(
         cluster.trailingX = clusterLeft;
     }
     return cluster;
+}
+
+VectorDouble ComputeInitialMeasuredTextBounds(in Point logical, in Rect ink){
+    const f64 inkEndX = cast<f64>(ink.x) + cast<f64>(ink.width);
+    const f64 inkEndY = cast<f64>(ink.y) + cast<f64>(ink.height);
+    const f64 minX = min(0.0, cast<f64>(ink.x));
+    const f64 minY = min(0.0, cast<f64>(ink.y));
+    const f64 maxX = max(cast<f64>(logical.x), inkEndX);
+    const f64 maxY = max(cast<f64>(logical.y), inkEndY);
+    return VectorDouble(minX, minY, maxX, maxY);
+}
+
+void ExpandMeasuredTextBoundsWithSdfSupport(in VectorDouble support, mut VectorDouble inOutBounds){
+    if(support.z <= 0.0 || support.w <= 0.0)
+        return;
+    const f64 firstX = support.x;
+    const f64 firstY = support.y;
+    const f64 lastX = firstX + support.z;
+    const f64 lastY = firstY + support.w;
+    inOutBounds = VectorDouble(
+        min(inOutBounds.x, firstX),
+        min(inOutBounds.y, firstY),
+        max(inOutBounds.z, lastX),
+        max(inOutBounds.w, lastY)
+    );
+}
+
+void ExpandMeasuredTextBoundsWithRaster(
+    in Point glyphPosition,
+    in Rect raster,
+    in f32 rasterScale,
+    in DisplayMetrics display,
+    mut VectorDouble inOutBounds
+){
+    if(raster.width <= 0.0f || raster.height <= 0.0f)
+        return;
+    const f64 scale = cast<f64>(rasterScale);
+    const f64 originX = cast<f64>(glyphPosition.x);
+    const f64 originY = cast<f64>(glyphPosition.y);
+    const f64 pixelOriginX = cast<f64>(raster.x);
+    const f64 pixelOriginY = cast<f64>(raster.y);
+    const f64 pixelEndX = pixelOriginX + cast<f64>(raster.width);
+    const f64 pixelEndY = pixelOriginY + cast<f64>(raster.height);
+    // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
+    const f64 snapX = s_TextHalfPixel / cast<f64>(display.pixelScaleX);
+    const f64 snapY = s_TextHalfPixel / cast<f64>(display.pixelScaleY);
+    const f64 firstX = (originX + (pixelOriginX / scale)) - snapX;
+    const f64 firstY = (originY + (pixelOriginY / scale)) - snapY;
+    const f64 lastX = (originX + (pixelEndX / scale)) + snapX;
+    const f64 lastY = (originY + (pixelEndY / scale)) + snapY;
+    inOutBounds = VectorDouble(
+        min(inOutBounds.x, firstX),
+        min(inOutBounds.y, firstY),
+        max(inOutBounds.z, lastX),
+        max(inOutBounds.w, lastY)
+    );
 }
 
 

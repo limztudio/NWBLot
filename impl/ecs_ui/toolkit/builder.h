@@ -159,7 +159,6 @@ private:
     [[nodiscard]] b8 textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
     void snapshotTextArea(TextAreaFrame& frame)noexcept;
     [[nodiscard]] b8 textAreaMatches(const TextAreaFrame& frame)const noexcept;
-    void snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept;
     [[nodiscard]] b8 numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept;
     template<typename EditFrameT>
     [[nodiscard]] b8 numericEditFrameMatches(const EditFrameT& frame)const noexcept{
@@ -168,7 +167,6 @@ private:
     [[nodiscard]] b8 numericEditMatches(const Item& item)const noexcept;
     [[nodiscard]] b8 numericStateAvailable(const EditBoxState& state)const noexcept;
     [[nodiscard]] Point loadEditMinimumSize()const noexcept;
-    void resolveEditIntrinsicSize(const Item& item, Point& outSize)const noexcept;
     [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
     [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] b8 paintSelectable(const Item& item, const LayoutBox& box);

@@ -17,6 +17,7 @@ using NWB::Impl::s_FontAtlasMaxGlyphCount;
 using NWB::Impl::s_FontAtlasMaxPixelBytes;
 using NWB::Impl::s_FontAtlasRasterModeBitmap;
 using NWB::Impl::s_FontAtlasRasterModeOutline;
+using NWB::Impl::ComputeFontAtlasGlyphPlaneBounds;
 using NWB::Impl::FontAtlasGlyph;
 using NWB::Impl::FontAtlasGroupCompactBounds;
 namespace FontAtlasRasterMode = NWB::Impl::FontAtlasRasterMode;
@@ -198,6 +199,46 @@ FontAtlasRasterMode ResolveBakeFontAtlasRasterMode(in b8 outline){
     if(outline)
         return FontAtlasRasterMode::Outline;
     return FontAtlasRasterMode::Bitmap;
+}
+
+b8 ValidateBakeGlyphBitmapFootprint(
+    in u32 glyphId,
+    in b8 isGrayPixelMode,
+    in u32 width,
+    in u32 rows,
+    in u32 extent,
+    in u32 maxGroups,
+    in u64 capacity,
+    mut u64 inOutRasterBytes,
+    mut usize outByteCount
+){
+    if(!isGrayPixelMode || width + s_GlyphGuardExtent > extent || rows + s_GlyphGuardExtent > extent){
+        error("font_builder: glyph {} footprint {}x{} exceeds page {} including guards", glyphId, width + s_GlyphGuardExtent, rows + s_GlyphGuardExtent, extent);
+        return false;
+    }
+    const u64 byteCount = cast<u64>(width) * cast<u64>(rows);
+    if(byteCount > capacity - inOutRasterBytes){
+        error("font_builder: raster bytes exceed {} group capacity at glyph {}; increase extent or lower ppem", maxGroups, glyphId);
+        return false;
+    }
+    inOutRasterBytes += byteCount;
+    outByteCount = cast<usize>(byteCount);
+    return true;
+}
+
+void PopulateBakeGlyphRecord(
+    in u32 width,
+    in u32 rows,
+    in i32 bitmapLeft,
+    in i32 bitmapTop,
+    in f32 designPerPixel,
+    mut FontAtlasGlyph inOutRecord
+){
+    inOutRecord.width = width;
+    inOutRecord.height = rows;
+    inOutRecord.planeLeft = cast<f32>(bitmapLeft) * designPerPixel;
+    inOutRecord.planeTop = -cast<f32>(bitmapTop) * designPerPixel;
+    ComputeFontAtlasGlyphPlaneBounds(designPerPixel, inOutRecord);
 }
 
 

@@ -73,7 +73,7 @@ public:
     [[nodiscard]] b8 setValue(const f64 value)noexcept{
         if(!IsFinite(value))
             return false;
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         m_inputGeneration = NextIdentity();
         m_value = value;
         m_press = {};
@@ -81,8 +81,8 @@ public:
         return true;
     }
     void reset()noexcept{
-        advanceRevision();
-        advanceAdmission();
+        AdvanceNonWrappingRevision(m_revision);
+        AdvanceNonWrappingRevision(m_admissionGeneration);
         m_inputGeneration = NextIdentity();
         m_value = 0.0;
         m_minimum = 0.0;
@@ -96,11 +96,6 @@ public:
         m_admitted = false;
         m_pressMoved = false;
     }
-
-
-private:
-    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
-    void advanceAdmission()noexcept{ AdvanceNonWrappingRevision(m_admissionGeneration); }
 
 
 private:
@@ -136,8 +131,8 @@ public:
             return false;
         if(!*changed)
             return true;
-        state.advanceRevision();
-        state.advanceAdmission();
+        AdvanceNonWrappingRevision(state.m_revision);
+        AdvanceNonWrappingRevision(state.m_admissionGeneration);
         state.m_minimum = options.minimum;
         state.m_maximum = options.maximum;
         state.m_keyStep = options.keyStep;
@@ -154,7 +149,7 @@ public:
         if(!TryApplySliderControlAction(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_value, options, action, value, advanceRevision, result))
             return false;
         if(advanceRevision){
-            state.advanceRevision();
+            AdvanceNonWrappingRevision(state.m_revision);
             state.m_value = value;
         }
         return true;
@@ -166,7 +161,7 @@ public:
         if(!TrySeekSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, options, gesture, value, press, advanceRevision, result))
             return false;
         if(advanceRevision){
-            state.advanceRevision();
+            AdvanceNonWrappingRevision(state.m_revision);
             state.m_value = value;
             state.m_press = press;
             state.m_pressMoved = false;
@@ -181,7 +176,7 @@ public:
         if(!TryDragSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, state.m_press, state.m_pressMoved, options, gesture, value, press, pressMoved, advanceRevision, result))
             return false;
         if(advanceRevision){
-            state.advanceRevision();
+            AdvanceNonWrappingRevision(state.m_revision);
             state.m_value = value;
             state.m_press = press;
             state.m_pressMoved = pressMoved;

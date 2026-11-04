@@ -44,64 +44,11 @@ static constexpr TStringView s_ShutdownText = NWB_TEXT("ProjectTestbed: shutdown
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<usize> ResolveKeyIndex(const i32 key)noexcept{
-    return ::Testbed::ResolveKeyIndex(key, NWB::Core::Key::Menu);
-}
-
 [[nodiscard]] static SIMDVectorSingle ResolveFlyCameraAnglesFromRotation(const SIMDVectorSingle rotation)noexcept{
-    const SIMDVectorSingle localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    const SIMDVectorSingle forwardVector = Vector3NormalizeOr(Vector3Rotate(localForward, rotation), localForward, s_CameraMoveEpsilon);
-    const SIMDVectorSingle clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
-    SIMDVectorSingle yawRadians = VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector));
-    SIMDVectorSingle pitchRadians = VectorNegate(VectorASin(VectorSplatY(clampedForward)));
-
-    yawRadians = VectorSelect(yawRadians, VectorZero(), VectorOrInt(VectorIsNaN(yawRadians), VectorIsInfinite(yawRadians)));
-    pitchRadians = VectorSelect(VectorClamp(pitchRadians, VectorReplicate(-s_FlyCameraPitchLimitRadians), VectorReplicate(s_FlyCameraPitchLimitRadians)), VectorZero(), VectorOrInt(VectorIsNaN(pitchRadians), VectorIsInfinite(pitchRadians)));
-    return VectorSelect(VectorSelect(VectorZero(), yawRadians, s_SIMDMaskX), pitchRadians, s_SIMDMaskY);
-}
-
-static void ResolveFlyCameraInput(
-    const SIMDVectorSingle currentPosition,
-    const SIMDVectorSingle currentAngles,
-    const SIMDVectorSingle moveAxes,
-    const SIMDVectorSingle mouseDelta,
-    const f32 deltaSeconds,
-    const b8 boosted,
-    SIMDVectorSingle& outRotation,
-    SIMDVectorSingle& outPosition
-)noexcept{
-    const SIMDVectorSingle angles = VectorSelect(currentAngles, VectorZero(), VectorOrInt(VectorIsNaN(currentAngles), VectorIsInfinite(currentAngles)));
-    const SIMDVectorSingle sanitizedMouseDelta = VectorSelect(mouseDelta, VectorZero(), VectorOrInt(VectorIsNaN(mouseDelta), VectorIsInfinite(mouseDelta)));
-    const SIMDVectorSingle sanitizedAxes = VectorClamp(VectorSelect(moveAxes, VectorZero(), VectorOrInt(VectorIsNaN(moveAxes), VectorIsInfinite(moveAxes))), s_SIMDNegativeOne, s_SIMDOne);
-    const f32 safeDelta = SanitizeFlyCameraDelta(deltaSeconds);
-
-    const SIMDVectorSingle updatedAngles = VectorMultiplyAddExpression(sanitizedMouseDelta, VectorReplicate(s_FlyCameraMouseSensitivityRadiansPerPixel), angles);
-    const SIMDVectorSingle yawCandidate = VectorSplatX(updatedAngles);
-    const SIMDVectorSingle yawRadians = VectorSelect(yawCandidate, VectorZero(), VectorOrInt(VectorIsNaN(yawCandidate), VectorIsInfinite(yawCandidate)));
-    const SIMDVectorSingle pitchRadians = VectorClamp(VectorSplatY(updatedAngles), VectorReplicate(-s_FlyCameraPitchLimitRadians), VectorReplicate(s_FlyCameraPitchLimitRadians));
-    const SIMDVectorSingle rotationAngles = VectorSelect(VectorSelect(VectorZero(), pitchRadians, s_SIMDMaskX), yawRadians, s_SIMDMaskY);
-
-    outRotation = QuaternionRotationRollPitchYawFromVector(rotationAngles);
-    outPosition = Vector3IsFinite(currentPosition) ? currentPosition : VectorZero();
-
-    const SIMDVectorSingle moveLengthSqVector = Vector2LengthSq(sanitizedAxes);
-    if(Vector4Greater(moveLengthSqVector, VectorReplicate(s_CameraMoveEpsilon))){
-        const SIMDVectorSingle boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? s_SELECT_1 : s_SELECT_0));
-        const SIMDVectorSingle speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
-        const SIMDVectorSingle speedDeltaLanes = VectorMultiply(speedLanes, VectorReplicate(safeDelta));
-        const SIMDVectorSingle moveScale = VectorMultiply(speedDeltaLanes, VectorReciprocalSqrt(moveLengthSqVector));
-        if(!VectorIsFinite(moveScale, VectorComponentMask::s_XYZW))
-            return;
-
-        const SIMDVectorSingle localMove = VectorMultiply(VectorPermute<0, 4, 1, 4>(sanitizedAxes, VectorZero()), moveScale);
-        const SIMDVectorSingle worldMove = Vector3Rotate(localMove, outRotation);
-        if(!Vector3IsFinite(worldMove))
-            return;
-
-        const SIMDVectorSingle newPosition = VectorAdd(outPosition, worldMove);
-        if(Vector3IsFinite(newPosition))
-            outPosition = newPosition;
-    }
+    const SIMDVectorSingle forwardVector = ResolveFlyCameraForwardVector(rotation);
+    const SIMDVectorSingle yawRadians = VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector));
+    const SIMDVectorSingle pitchRadians = VectorNegate(VectorASin(VectorSplatY(forwardVector)));
+    return SanitizeFlyCameraAngles(VectorGetX(yawRadians), VectorGetX(pitchRadians));
 }
 
 static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const SIMDVectorSingle moveAxes, const b8 boosted, const SIMDVectorSingle mouseDelta, const f32 deltaSeconds)noexcept{
@@ -109,9 +56,9 @@ static void ApplyFlyCameraInputToMainCamera(NWB::Core::ECS::World& world, const 
     NWB_ASSERT(cameraView.valid());
 
     const SIMDVectorSingle angles = ResolveFlyCameraAnglesFromRotation(LoadFloat(cameraView.transform->rotation));
-    SIMDVectorSingle resolvedRotation;
-    SIMDVectorSingle resolvedPosition;
-    ResolveFlyCameraInput(LoadFloat(cameraView.transform->position), angles, moveAxes, mouseDelta, deltaSeconds, boosted, resolvedRotation, resolvedPosition);
+    const SIMDVectorSingle rotationAngles = ResolveFlyCameraRotationAngles(angles, mouseDelta);
+    const SIMDVectorSingle resolvedRotation = QuaternionRotationRollPitchYawFromVector(rotationAngles);
+    const SIMDVectorSingle resolvedPosition = ResolveFlyCameraPosition(LoadFloat(cameraView.transform->position), moveAxes, resolvedRotation, deltaSeconds, boosted);
     StoreFloat(resolvedRotation, cameraView.transform->rotation);
     StoreFloat(resolvedPosition, cameraView.transform->position);
 }
@@ -303,7 +250,7 @@ void Project::clearInputState()noexcept{
 }
 
 void Project::setKeyState(const i32 key, const b8 pressed)noexcept{
-    const auto keyIndex = __hidden_testbed_runtime::ResolveKeyIndex(key);
+    const auto keyIndex = ResolveKeyIndex(key, NWB::Core::Key::Menu);
     if(!keyIndex)
         return;
 
@@ -311,7 +258,7 @@ void Project::setKeyState(const i32 key, const b8 pressed)noexcept{
 }
 
 b8 Project::keyPressed(const i32 key)const noexcept{
-    const auto keyIndex = __hidden_testbed_runtime::ResolveKeyIndex(key);
+    const auto keyIndex = ResolveKeyIndex(key, NWB::Core::Key::Menu);
     if(!keyIndex)
         return false;
 

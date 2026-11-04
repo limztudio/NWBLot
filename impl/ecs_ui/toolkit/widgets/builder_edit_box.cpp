@@ -55,7 +55,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
             return true;
         if(!frame->model || frame->model->revision() != frame->revision)
             return false;
-        snapshotNumericEdit(*frame, model);
+        frame->draftStamp = model.stamp();
         frame->focused = result.focused;
         return true;
     };
@@ -85,7 +85,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    resolveEditIntrinsicSize(item, description.intrinsicSize);
+    description.intrinsicSize = ResolveEditIntrinsicSize(loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
     if(!addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -103,10 +103,6 @@ Point Builder::loadEditMinimumSize()const noexcept{
             AccumulateEditRegionMinimumSize(*skinRegion, minimum);
     }
     return minimum;
-}
-
-void Builder::resolveEditIntrinsicSize(const Item& item, Point& outSize)const noexcept{
-    outSize = ResolveEditIntrinsicSize(loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
 }
 
 b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){

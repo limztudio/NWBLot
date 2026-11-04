@@ -54,17 +54,10 @@ Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFo
             glyphs.push_back(Move(glyph));
             continue;
         }
-        if(bitmap.pixel_mode != FT_PIXEL_MODE_GRAY || bitmap.width + s_GlyphGuardExtent > options.extent || bitmap.rows + s_GlyphGuardExtent > options.extent){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} footprint {}x{} exceeds page {} including guards"), glyphId, bitmap.width + s_GlyphGuardExtent, bitmap.rows + s_GlyphGuardExtent, options.extent);
+        usize byteCount = 0u;
+        if(!ValidateBakeGlyphBitmapFootprint(glyphId, bitmap.pixel_mode == FT_PIXEL_MODE_GRAY, bitmap.width, bitmap.rows, options.extent, options.maxGroups, capacity, rasterBytes, byteCount))
             return MakeUnexpected(Failure{});
-        }
-        const u64 byteCount = static_cast<u64>(bitmap.width) * bitmap.rows;
-        if(byteCount > capacity - rasterBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: raster bytes exceed {} group capacity at glyph {}; increase extent or lower ppem"), options.maxGroups, glyphId);
-            return MakeUnexpected(Failure{});
-        }
-        rasterBytes += byteCount;
-        glyph.pixels.resize(static_cast<usize>(byteCount));
+        glyph.pixels.resize(byteCount);
         const i32 pitch = bitmap.pitch;
         const usize absolutePitch = static_cast<usize>(pitch < 0 ? -pitch : pitch);
         if(!bitmap.buffer || absolutePitch < bitmap.width){
@@ -75,11 +68,7 @@ Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFo
             const u32 sourceY = pitch < 0 ? bitmap.rows - 1u - y : y;
             NWB_MEMCPY(glyph.pixels.data() + static_cast<usize>(y) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceY) * absolutePitch, bitmap.width);
         }
-        glyph.record.width = bitmap.width;
-        glyph.record.height = bitmap.rows;
-        glyph.record.planeLeft = static_cast<f32>(face->glyph->bitmap_left) * designPerPixel;
-        glyph.record.planeTop = -static_cast<f32>(face->glyph->bitmap_top) * designPerPixel;
-        Impl::ComputeFontAtlasGlyphPlaneBounds(designPerPixel, glyph.record);
+        PopulateBakeGlyphRecord(bitmap.width, bitmap.rows, face->glyph->bitmap_left, face->glyph->bitmap_top, designPerPixel, glyph.record);
         glyphs.push_back(Move(glyph));
     }
     return glyphs;

@@ -44,7 +44,7 @@ public:
 
 public:
     void reset()noexcept{
-        advanceRevision();
+        AdvanceNonWrappingRevision(m_revision);
         m_owner = {};
         m_ownerDeclaration = 0u;
         m_anchor = {};
@@ -65,10 +65,6 @@ public:
     [[nodiscard]] b8 visible()const noexcept{ return m_visible; }
 
     [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_placement; }
-
-
-private:
-    void advanceRevision()noexcept{ AdvanceNonWrappingRevision(m_revision); }
 
 
 private:
@@ -119,7 +115,7 @@ public:
         if(!changed)
             return false;
         if(*changed)
-            state.advanceRevision();
+            AdvanceNonWrappingRevision(state.m_revision);
         return true;
     }
 };

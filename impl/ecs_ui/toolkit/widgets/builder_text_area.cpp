@@ -152,7 +152,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    resolveEditIntrinsicSize(item, description.intrinsicSize);
+    description.intrinsicSize = ResolveEditIntrinsicSize(loadEditMinimumSize(), item.editView.visualBounds().height, item.padding);
     if(!addItemNode(description, item)){
         result.valid = false;
         return result;

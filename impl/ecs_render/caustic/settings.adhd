@@ -373,6 +373,33 @@ CausticAccumulatorDecayPushConstants MakeCausticAccumulatorDecayPushConstants(
     return push;
 }
 
+void ResolveCausticLocalBounds(
+    in b8 isRuntime,
+    mut VectorSingle inOutLocalMin,
+    mut VectorSingle inOutLocalMax
+){
+    if(!isRuntime)
+        return;
+    const VectorSingle center = (inOutLocalMin + inOutLocalMax) * VectorSingle(s_CausticBoundsMidpointWeight);
+    const VectorSingle half = (inOutLocalMax - inOutLocalMin) * VectorSingle(s_CausticBoundsMidpointWeight * s_CausticRuntimeBoundsInflation);
+    inOutLocalMin = center - half;
+    inOutLocalMax = center + half;
+}
+
+NwbCausticEmissionTargetGpu MakeCausticEmissionTarget(
+    in VectorSingle worldMin,
+    in VectorSingle worldMax,
+    mut VectorSingle inOutCombinedMin,
+    mut VectorSingle inOutCombinedMax
+){
+    inOutCombinedMin = min(inOutCombinedMin, worldMin);
+    inOutCombinedMax = max(inOutCombinedMax, worldMax);
+    NwbCausticEmissionTargetGpu target;
+    target.aabbMin = f32x4(worldMin, 0.0f);
+    target.aabbMax = f32x4(worldMax, 0.0f);
+    return target;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -62,9 +62,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 IsHdrInputPath(const ScratchPath& path){
-    return PathHasListedExtension(path, s_HdrInputExtensions);
-}
 [[nodiscard]] Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, AStringView outputArgument, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 ValidateOutputPaths(const OutputPaths& outputPaths, b8 force, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<PreparedTexture> PrepareTexture(Span<const ScratchPath> inputPaths, TextureDimension::Enum dimension, b8 srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena);

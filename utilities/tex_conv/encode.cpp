@@ -90,9 +90,9 @@ Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPath
         return MakeUnexpected(Failure{});
     }
 
-    const b8 hdr = IsHdrInputPath(inputPaths.front());
+    const b8 hdr = PathHasListedExtension(inputPaths.front(), s_HdrInputExtensions);
     for(const ScratchPath& path : inputPaths){
-        if(IsHdrInputPath(path) != hdr){
+        if(PathHasListedExtension(path, s_HdrInputExtensions) != hdr){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
             return MakeUnexpected(Failure{});
         }

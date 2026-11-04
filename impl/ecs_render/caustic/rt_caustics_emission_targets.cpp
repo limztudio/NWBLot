@@ -232,26 +232,11 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::
 
         SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
         SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
-        if(meshResult->resolvedMesh.runtime){
-            // Conservative deformation inflation keeps skinned refractors in the emission domain.
-            const SIMDVectorSingle center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(s_CausticBoundsMidpointWeight));
-            const SIMDVectorSingle half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(s_CausticBoundsMidpointWeight * s_CausticRuntimeBoundsInflation));
-            localMin = VectorSubtract(center, half);
-            localMax = VectorAdd(center, half);
-        }
+        ResolveCausticLocalBounds(meshResult->resolvedMesh.runtime, localMin, localMax);
         const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
         if(!worldBounds)
             continue;
-        const SIMDVectorSingle worldMin = worldBounds->minBounds;
-        const SIMDVectorSingle worldMax = worldBounds->maxBounds;
-
-        combinedMin = VectorMin(combinedMin, worldMin);
-        combinedMax = VectorMax(combinedMax, worldMax);
-
-        NwbCausticEmissionTargetGpu target;
-        StoreFloat(VectorSetW(worldMin, 0.0f), target.aabbMin);
-        StoreFloat(VectorSetW(worldMax, 0.0f), target.aabbMax);
-        targets.push_back(target);
+        targets.push_back(MakeCausticEmissionTarget(worldBounds->minBounds, worldBounds->maxBounds, combinedMin, combinedMax));
     }
 
     const u32 targetCount = static_cast<u32>(targets.size());

@@ -58,7 +58,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         state.m_ownerDeclaration = (*widget)->declarationGeneration;
         state.m_anchorWidget = anchor->state.id;
         state.m_anchorDeclaration = anchor->state.declarationGeneration;
-        state.advanceRevision();
+        AdvanceNonWrappingRevision(state.m_revision);
     }
     const b8 boundOpen = state.isOpen();
     state.m_popup.bindParent(frame.parentToken);

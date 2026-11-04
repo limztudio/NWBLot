@@ -94,10 +94,6 @@ void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(const usize estimatedTr
     inOutContext.vertexRefs.reserve(estimatedTriangleCorners);
 }
 
-b8 FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept{
-    return SourceVertexRefsHaveCompleteTangents(Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()), mesh.tangents.size());
-}
-
 b8 FbxSourceMeshStreams::DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     inOutMesh.tangents.clear();
 

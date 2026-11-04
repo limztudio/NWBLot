@@ -170,7 +170,7 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
     SceneAsset candidate(assetArena, virtualPath());
 
     AssignAssetRefsFromHashes(Span<const NameHash>(subsystemHashes), candidate.m_subsystems);
-    SubsystemAssetRuntime::DeduplicateSubsystemRefs(candidate.m_subsystems);
+    DeduplicateSubsystemRefs(candidate.m_subsystems);
 
     AssignAssetRefsFromHashes(Span<const NameHash>(entityHashes), candidate.m_entities);
 
@@ -196,7 +196,7 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
 
 void SceneAsset::setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept{
     m_subsystems = Move(subsystems);
-    SubsystemAssetRuntime::DeduplicateSubsystemRefs(m_subsystems);
+    DeduplicateSubsystemRefs(m_subsystems);
     m_entities = Move(entities);
     m_assets = Move(assets);
 }

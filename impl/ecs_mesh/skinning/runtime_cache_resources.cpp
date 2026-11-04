@@ -59,10 +59,6 @@ namespace __hidden_runtime_cache_resources{
     return true;
 }
 
-[[nodiscard]] Name DeriveNamedRuntimeBuffer(const MeshSkinningRuntimeInstance& instance, const AStringView suffix, const AStringView label){
-    return DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
-}
-
 [[nodiscard]] b8 FinalizeRuntimeBufferUpload(
     Expected<Core::BufferHandle, BufferSetupFailure::Enum>&& buffer,
     const MeshSkinningRuntimeInstance& instance,
@@ -92,7 +88,7 @@ template<typename PayloadT>
     const b8 isIndexBuffer,
     Core::BufferHandle& outBuffer
 ){
-    const Name bufferName = DeriveNamedRuntimeBuffer(instance, suffix, label);
+    const Name bufferName = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
     if(!bufferName){
         outBuffer.reset();
         return false;
@@ -112,7 +108,7 @@ template<typename PayloadT>
     Core::Alloc::ScratchArena& scratchArena,
     Core::BufferHandle& outBuffer
 ){
-    const Name bufferName = DeriveNamedRuntimeBuffer(instance, suffix, label);
+    const Name bufferName = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
     if(!bufferName){
         outBuffer = nullptr;
         return false;

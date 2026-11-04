@@ -41,7 +41,6 @@ inline constexpr Array<AStringView, 1u> s_ExternallyPlannedMacroIncludes = { s_C
 [[nodiscard]] ShaderStageKeySet CollectMaterialClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
-[[nodiscard]] b8 AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
 [[nodiscard]] Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(AStringView entryName, const ShaderCook::DefineCombo& sourceCombo, ShaderCook::CookArena& cookArena);
 
 

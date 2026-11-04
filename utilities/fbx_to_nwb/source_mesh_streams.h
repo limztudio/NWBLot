@@ -72,7 +72,6 @@ namespace FbxSourceMeshStreams{
 
 void ReserveSourceMeshStreams(usize estimatedTriangleCorners, b8 wantsSkinning, SourceMeshStreams& outMesh);
 void ReserveSourceMeshBuildContext(usize estimatedTriangleCorners, b8 wantsSkinning, SourceMeshBuildContext& inOutContext);
-[[nodiscard]] b8 SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept;
 [[nodiscard]] b8 DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
 [[nodiscard]] b8 EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices);
 [[nodiscard]] Expected<SourceTangentReport> GenerateSourceMeshTangents(b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);

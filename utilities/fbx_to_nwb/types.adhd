@@ -12,6 +12,8 @@
 
 native{
 namespace NWB::FbxToNwb{
+using NWB::Impl::IsFiniteSkeletonJointMatrix;
+using NWB::Impl::IsFiniteSkeletonJointRow;
 using NWB::Impl::SkinInfluence4;
 using NWB::Impl::ValidateSourceStreamIndexWithContext;
 using NWB::Impl::s_MeshMissingStreamIndex;
@@ -440,6 +442,77 @@ b8 RemapSkinInfluence(in Span<u16> oldToNewJointIndices, mut MeshSkinInfluence i
         }
         inOutInfluence.joint[slot] = oldToNewJointIndices[cast<usize>(oldJointIndex)];
     }
+    return true;
+}
+
+b8 IsFiniteFbxMatrix4x4(in MatrixSingle matrix){
+    return IsFiniteSkeletonJointRow(matrix[0u])
+        && IsFiniteSkeletonJointRow(matrix[1u])
+        && IsFiniteSkeletonJointRow(matrix[2u])
+        && IsFiniteSkeletonJointRow(matrix[3u]);
+}
+
+Expected<MatrixSingle> TryInvertFbxJointMatrix(in MatrixSingle matrix){
+    if(!IsFiniteFbxMatrix4x4(matrix))
+        return makeUnexpected(Failure());
+    const f32 determinant = dot(matrix[0u].xyz, cross(matrix[1u].xyz, matrix[2u].xyz));
+    if(!isFinite(determinant) || !(abs(determinant) > s_InvertibleJointDeterminantEpsilon))
+        return makeUnexpected(Failure());
+    const MatrixSingle inverted = inverse(matrix);
+    if(!IsFiniteFbxMatrix4x4(inverted))
+        return makeUnexpected(Failure());
+    return inverted;
+}
+
+Expected<MatrixSingle> TryBuildFbxLocalBindPoseMatrix(
+    in MatrixSingle globalBindPose,
+    in b8 hasParentGlobalBindPose,
+    in MatrixSingle parentGlobalBindPose
+){
+    if(!IsFiniteFbxMatrix4x4(globalBindPose))
+        return makeUnexpected(Failure());
+    if(!hasParentGlobalBindPose)
+        return globalBindPose;
+    const Expected<MatrixSingle> parentInverse = TryInvertFbxJointMatrix(parentGlobalBindPose);
+    if(!parentInverse.has_value())
+        return makeUnexpected(Failure());
+    const MatrixSingle localBindPose = mul(parentInverse.value(), globalBindPose);
+    if(!IsFiniteFbxMatrix4x4(localBindPose))
+        return makeUnexpected(Failure());
+    return localBindPose;
+}
+
+b8 IsFiniteFbxMatrixDoubleRow(in VectorDouble row){
+    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+}
+
+b8 FiniteUfbxMatrix(in MatrixDouble matrix){
+    return IsFiniteFbxMatrixDoubleRow(matrix[0u])
+        && IsFiniteFbxMatrixDoubleRow(matrix[1u])
+        && IsFiniteFbxMatrixDoubleRow(matrix[2u]);
+}
+
+VectorSingle ConvertFbxJointRowDoubleToSingle(in VectorDouble row){
+    return VectorSingle(cast<f32>(row.x), cast<f32>(row.y), cast<f32>(row.z), cast<f32>(row.w));
+}
+
+MatrixSingle ConvertJointMatrix(in MatrixDouble matrix){
+    return MatrixSingle(
+        ConvertFbxJointRowDoubleToSingle(matrix[0u]),
+        ConvertFbxJointRowDoubleToSingle(matrix[1u]),
+        ConvertFbxJointRowDoubleToSingle(matrix[2u]),
+        VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
+    );
+}
+
+b8 TryNormalizeFbxSkinInfluenceWeights(in f64 weightSum, mut MeshSkinInfluence inOutInfluence){
+    if(!isFinite(weightSum) || weightSum <= 0.0){
+        error("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights");
+        return false;
+    }
+    const f32 normalization = cast<f32>(s_UniformScaleNumerator / weightSum);
+    const VectorSingle normalized = VectorSingle(inOutInfluence.weight) * VectorSingle(normalization);
+    inOutInfluence.weight = f32x4u(normalized);
     return true;
 }
 

@@ -149,7 +149,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
             }
             outSubsystem.subsystems.push_back(*parsedRef);
         }
-        SubsystemAssetRuntime::DeduplicateSubsystemRefs(outSubsystem.subsystems);
+        DeduplicateSubsystemRefs(outSubsystem.subsystems);
     }
 
     const usize count = outSubsystem.fieldCount();

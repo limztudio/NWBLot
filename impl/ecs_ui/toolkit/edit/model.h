@@ -121,22 +121,22 @@ public:
         m_boundaries = Move(*boundaries);
         m_anchor = m_text.size();
         m_caret = m_anchor;
-        advanceSelectionGeneration();
+        AdvanceRevision(m_selectionGeneration);
         clearHistory();
         cancelComposition();
         if(changed)
-            advanceRevision();
+            AdvanceRevision(m_revision);
         AdvanceRevision(m_externalRevision);
         return true;
     }
 
     [[nodiscard]] b8 setSelection(const usize anchor, const usize caret)noexcept{
-        if(!isBoundary(anchor) || !isBoundary(caret))
+        if(!IsEditBoundary(m_boundaries, anchor) || !IsEditBoundary(m_boundaries, caret))
             return false;
         cancelComposition();
         m_anchor = anchor;
         m_caret = caret;
-        advanceSelectionGeneration();
+        AdvanceRevision(m_selectionGeneration);
         return true;
     }
 
@@ -152,7 +152,7 @@ public:
         if(!extend)
             m_anchor = *target;
         m_caret = *target;
-        advanceSelectionGeneration();
+        AdvanceRevision(m_selectionGeneration);
         return true;
     }
 
@@ -207,9 +207,9 @@ public:
         m_boundaries = Move(*boundaries);
         m_anchor = anchor;
         m_caret = caret;
-        advanceSelectionGeneration();
+        AdvanceRevision(m_selectionGeneration);
         cancelComposition();
-        advanceRevision();
+        AdvanceRevision(m_revision);
         return true;
     }
 
@@ -240,13 +240,13 @@ public:
         m_preeditAnchor = 0u;
         m_preeditCaret = 0u;
         m_compositionActive = true;
-        advanceCompositionGeneration();
+        AdvanceRevision(m_compositionGeneration);
         return true;
     }
 
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
     [[nodiscard]] b8 updateComposition(const AStringView value, const usize anchor, const usize caret){
-        if(!CanUpdateEditComposition(m_compositionActive, value, anchor, caret, m_text.size(), m_compositionAnchor, m_compositionCaret, m_limits.maxBytes) || !validateText(value))
+        if(!CanUpdateEditComposition(m_compositionActive, value, anchor, caret, m_text.size(), m_compositionAnchor, m_compositionCaret, m_limits.maxBytes) || !ValidateEditTextForMode(value, m_textMode))
             return false;
         AString<Core::Alloc::GlobalArena> candidate(m_arena);
         if(!value.empty())
@@ -254,7 +254,7 @@ public:
         m_preedit = Move(candidate);
         m_preeditAnchor = anchor;
         m_preeditCaret = caret;
-        advanceCompositionGeneration();
+        AdvanceRevision(m_compositionGeneration);
         return true;
     }
 
@@ -266,7 +266,7 @@ public:
 
     void cancelComposition()noexcept{
         if(m_compositionActive)
-            advanceCompositionGeneration();
+            AdvanceRevision(m_compositionGeneration);
         m_preedit.clear();
         m_preeditAnchor = 0u;
         m_preeditCaret = 0u;
@@ -281,13 +281,8 @@ public:
 
 
 private:
-    [[nodiscard]] b8 isBoundary(const usize position)const noexcept{ return IsEditBoundary(m_boundaries, position); }
-    [[nodiscard]] usize previousBoundary(const usize position)const noexcept{ return PreviousEditBoundary(m_boundaries, position); }
-    [[nodiscard]] usize nextBoundary(const usize position)const noexcept{ return NextEditBoundary(m_boundaries, m_text.size(), position); }
-    [[nodiscard]] usize wordBoundary(const usize position, const b8 forward)const noexcept{ return ResolveEditWordBoundary(text(), m_boundaries, position, forward); }
-
     [[nodiscard]] b8 replaceRange(const usize begin, const usize end, const AStringView replacement){
-        if(!CanReplaceEditRange(begin, end, replacement.size(), m_text.size(), m_limits.maxBytes, m_boundaries) || !validateText(replacement))
+        if(!CanReplaceEditRange(begin, end, replacement.size(), m_text.size(), m_limits.maxBytes, m_boundaries) || !ValidateEditTextForMode(replacement, m_textMode))
             return false;
         AString<Core::Alloc::GlobalArena> candidate(m_arena);
         BuildReplacedEditString(text(), begin, end, replacement, candidate);
@@ -304,15 +299,11 @@ private:
         m_boundaries = Move(*boundaries);
         m_anchor = caret;
         m_caret = caret;
-        advanceSelectionGeneration();
+        AdvanceRevision(m_selectionGeneration);
         cancelComposition();
         if(changed)
-            advanceRevision();
+            AdvanceRevision(m_revision);
         return true;
-    }
-
-    [[nodiscard]] b8 validateText(const AStringView value)const noexcept{
-        return ValidateEditTextForMode(value, m_textMode);
     }
 
     [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(const AStringView value)const{
@@ -329,10 +320,10 @@ private:
         m_boundaries = Move(*boundaries);
         m_anchor = anchor;
         m_caret = caret;
-        advanceSelectionGeneration();
+        AdvanceRevision(m_selectionGeneration);
         m_historyCursor = static_cast<usize>(static_cast<isize>(m_historyCursor) + cursorDelta);
         cancelComposition();
-        advanceRevision();
+        AdvanceRevision(m_revision);
         return true;
     }
 
@@ -372,10 +363,6 @@ private:
         m_historyCursor = 0u;
         m_historyBytes = 0u;
     }
-
-    void advanceRevision()noexcept{ AdvanceRevision(m_revision); }
-    void advanceSelectionGeneration()noexcept{ AdvanceRevision(m_selectionGeneration); }
-    void advanceCompositionGeneration()noexcept{ AdvanceRevision(m_compositionGeneration); }
 
 
 private:

@@ -16,6 +16,8 @@
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
+#include <global/source_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,9 +33,6 @@ namespace ShaderSourceDependencies{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void SpliceSourceLines(Core::Assets::ScratchString& inOutSource)noexcept;
-void MaskSourceComments(Core::Assets::ScratchString& inOutSource)noexcept;
 
 [[nodiscard]] Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(AStringView includeName, ShaderBinaryPayload::IncludeKind::Enum kind, TStringView sourceDirectory, Span<const Path> includeDirectories, Core::Alloc::ScratchArena& scratchArena);
 
@@ -74,8 +73,8 @@ template<typename SourceArenaT, typename DependencyVectorT>
             return false;
         }
         StripUtf8Bom(sourceText);
-        ShaderSourceDependencies::SpliceSourceLines(sourceText);
-        ShaderSourceDependencies::MaskSourceComments(sourceText);
+        SpliceSourceLines(sourceText);
+        MaskCStyleSourceComments(sourceText);
 
         outDependencies.emplace_back(outDependencies.get_allocator().arena(), absolutePath);
 

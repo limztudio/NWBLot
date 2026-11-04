@@ -80,7 +80,7 @@ Expected<MeshBuildResult> BuildMesh(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
         return MakeUnexpected(Failure{});
     }
-    if(*normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(result.mesh)){
+    if(*normalMode != NormalMode::Imported || !SourceVertexRefsHaveCompleteTangents(result.mesh.vertexRefs, result.mesh.tangents.size())){
         if(!FbxSourceMeshStreams::DropSourceMeshTangents(scratchArena, result.mesh))
             return MakeUnexpected(Failure{});
         const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(usedDefaultUvs, scratchArena, result.mesh);

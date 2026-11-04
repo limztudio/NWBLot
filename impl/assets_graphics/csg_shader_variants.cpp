@@ -111,10 +111,6 @@ Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& s
     return shaderKeys.find(shaderKey) != shaderKeys.end();
 }
 
-b8 AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceVariantCount, u64& inOutVariantCount){
-    return TryAddCsgClipVariantCount(entry.name, sourceVariantCount, inOutVariantCount);
-}
-
 Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(const AStringView entryName, const ShaderCook::DefineCombo& sourceCombo, ShaderCook::CookArena& cookArena){
     if(sourceCombo.size() > Limit<usize>::s_Max - s_CsgClipAddedDefineCount){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG shader define combo size overflow for entry '{}'"), ConvertString(entryName));

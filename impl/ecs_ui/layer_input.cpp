@@ -205,7 +205,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
         *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;
     }
-    logInputRoutingOverflows(result);
+    LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
 
 void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consumed){
@@ -222,7 +222,7 @@ void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consume
     const Ui::InputRoutingResult result = m_context.input().process();
     if(result.pointerRouted)
         m_editHost.input(*normalized, previousCapture, false);
-    logInputRoutingOverflows(result);
+    LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
     if(consumed)
         *consumed = result.pointerConsumed;
 }
@@ -231,10 +231,6 @@ void UiLayerSystem::synchronizeNativeInput(){
     // Native dispatch occurs outside world system execution; use its joined boundary before reading host roots.
     m_world.taskScope().wait();
     synchronizeInput();
-}
-
-void UiLayerSystem::logInputRoutingOverflows(const Ui::InputRoutingResult& result)const{
-    LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
 
 

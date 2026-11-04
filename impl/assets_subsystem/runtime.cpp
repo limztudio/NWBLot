@@ -8,9 +8,6 @@
 #include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
 
-#include <global/checked_sum.h>
-#include <global/range_algorithms.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,10 +47,6 @@ namespace SubsystemAssetRuntime{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept{
-    ::NWB::Impl::DeduplicateSubsystemRefs(subsystems);
-}
 
 b8 ValidatePayload(const ISubsystem& subsystem){
     if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))

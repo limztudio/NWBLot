@@ -122,15 +122,6 @@ template<typename VisitTriangle>
     return SIMDVectorSingleResult{ VectorSelect(outputTangent->value, sign, s_SIMDMaskW) };
 }
 
-[[nodiscard]] static b8 IsFiniteSourceTriangleCorner(
-    const SIMDVectorSingle position,
-    const SIMDVectorSingle normal,
-    const SourceTriangleCorner& corner,
-    const b8 wantsSkinning
-)noexcept{
-    return IsFiniteSourceTriangleCornerValues(position, normal, corner, wantsSkinning);
-}
-
 [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
@@ -298,20 +289,14 @@ b8 FbxMeshBuild::AppendInstanceMesh(
                 }
             }
 
-            SIMDVectorSingle skinWeights = VectorZero();
             if(wantsSkinning){
                 const auto influence = FbxSkinDetail::LoadInfluence(*skin, clusterJoints, logicalVertex);
                 if(!influence)
                     return false;
-                UInt4 jointIds;
-                StoreInt(influence->joints, jointIds);
-                for(usize slot = 0u; slot < Impl::s_SkinInfluenceJointCount; ++slot)
-                    corner.skin.joint[slot] = static_cast<u16>(jointIds.raw[slot]);
-                skinWeights = influence->weights;
-                StoreFloat(skinWeights, corner.skin.weight);
+                corner.skin = *influence;
             }
 
-            if(!IsFiniteSourceTriangleCorner(position, normal, corner, wantsSkinning)){
+            if(!IsFiniteSourceTriangleCornerValues(position, normal, corner, wantsSkinning)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
                 return false;
             }

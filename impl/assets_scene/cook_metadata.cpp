@@ -172,7 +172,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
     auto subsystems = Core::Assets::ParseMetadataReservedAssetRefList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SceneSubsystemsField, arena, scratchArena);
     if(!subsystems)
         return MakeUnexpected(Failure{});
-    SubsystemAssetRuntime::DeduplicateSubsystemRefs(*subsystems);
+    DeduplicateSubsystemRefs(*subsystems);
     entry.subsystems = Move(*subsystems);
 
     if(const Core::Metascript::Value* entitiesValue = asset.findField(s_SceneEntitiesField)){

@@ -147,7 +147,7 @@ b8 WriteNwbAsset(
         return AssetWriterFormatDetail::WriteModelAsset(outputPath, meshName, {}, {}, scratchArena);
     }
 
-    if(!AssetWriterSkeletonDetail::ValidateSplitSkinSource(mesh, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices))
+    if(!ValidateSplitSkinSourceCounts(mesh.skin.size(), skeletonJoints.size(), skeletonBindPoseMatrices.size(), inverseBindMatrices.size()))
         return false;
 
     auto skeletonResult = AssetWriterSkeletonDetail::BuildSkeletonOutputData(skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices, scratchArena);
@@ -160,8 +160,10 @@ b8 WriteNwbAsset(
         return false;
     SourceMeshStreams& splitMesh = alignedMesh->mesh;
     UtilityVector<MeshSkinInfluence>& positionSkin = alignedMesh->skin;
-    if(!AssetWriterSkeletonDetail::RemapSkinInfluences(skeletonOutput.oldToNewJointIndices, positionSkin))
-        return false;
+    for(MeshSkinInfluence& influence : positionSkin){
+        if(!RemapSkinInfluence(skeletonOutput.oldToNewJointIndices, influence))
+            return false;
+    }
 
     const ScratchPath skeletonPath = packageDirectory / s_SkeletonSplitFileName;
     const ScratchPath skinPath = packageDirectory / s_SkinSplitFileName;

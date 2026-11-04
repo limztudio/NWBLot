@@ -533,6 +533,21 @@ b8 CsgFrameHasReceiverPassWork(in CsgFrameState csgFrameState, in CsgReceiverPas
     }
 }
 
+CsgCutterGpuData BuildCsgCutterGpuData(
+    in CsgShapeTypeId shapeType,
+    in MatrixSingle worldToShape,
+    in Span<u8> parameterBytes
+){
+    CsgCutterGpuData outCutter;
+    outCutter.shapeType = shapeType;
+    outCutter.worldToShape = f32x3x4(worldToShape);
+    const f32 scaleBound = ComputeWorldToShapeScaleBound(worldToShape);
+    if(isFinite(scaleBound) && scaleBound > 0.0f)
+        outCutter.worldToShapeScaleBound = scaleBound;
+    CopyCsgCutterInlineParameters(parameterBytes, outCutter);
+    return outCutter;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

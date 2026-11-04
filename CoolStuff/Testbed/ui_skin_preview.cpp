@@ -95,7 +95,7 @@ Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintCon
     if(!caption || !korean)
         return MakeUnexpected(Failure{});
     const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption->height, korean->height);
-    return UiWidgetGallery::LayoutBounds(context.display, ResolveSkinGalleryPreferredTop(captionHeight));
+    return ResolveWidgetGalleryLayoutBounds(context.display, ResolveSkinGalleryPreferredTop(captionHeight));
 }
 
 void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
@@ -115,7 +115,7 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     }
     const f32 captionHeight = ResolveSkinGalleryCaptionHeight(caption->height, korean->height);
     const f32 preferredTop = ResolveSkinGalleryPreferredTop(captionHeight);
-    const NWB::Impl::Ui::Rect gallery = UiWidgetGallery::LayoutBounds(context.display, preferredTop);
+    const NWB::Impl::Ui::Rect gallery = ResolveWidgetGalleryLayoutBounds(context.display, preferredTop);
     m_widgets.paint(context, gallery);
     if(gallery.y < preferredTop || originX < s_MinimumGalleryX)
         return;

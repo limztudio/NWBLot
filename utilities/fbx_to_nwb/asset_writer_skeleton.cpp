@@ -9,8 +9,6 @@
 
 #include <core/common/log.h>
 
-#include <global/simdmath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,30 +25,6 @@ namespace AssetWriterSkeletonDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept{
-    SIMDVectorSingle determinant;
-    const SIMDMatrix inverse = MatrixInverse(&determinant, matrix);
-    if(!VectorIsFinite(determinant, VectorComponentMask::s_XYZW) || !Vector4Greater(VectorAbs(determinant), VectorReplicate(s_InvertibleJointDeterminantEpsilon)) || MatrixIsNaN(inverse) || MatrixIsInfinite(inverse))
-        return MakeUnexpected(Failure{});
-    return inverse;
-}
-
-Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, const SIMDMatrix* parentGlobalBindPose)noexcept{
-    if(MatrixIsNaN(globalBindPose) || MatrixIsInfinite(globalBindPose))
-        return MakeUnexpected(Failure{});
-    if(!parentGlobalBindPose)
-        return globalBindPose;
-
-    const auto parentInverse = InvertJointMatrix(*parentGlobalBindPose);
-    if(!parentInverse)
-        return MakeUnexpected(Failure{});
-
-    const SIMDMatrix localBindPose = MatrixMultiply(*parentInverse, globalBindPose);
-    if(MatrixIsNaN(localBindPose) || MatrixIsInfinite(localBindPose))
-        return MakeUnexpected(Failure{});
-    return localBindPose;
-}
-
 b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
     if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_WriteNwbModelContext))
         return false;
@@ -60,10 +34,6 @@ b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 ValidateSplitSkinSource(const SourceMeshStreams& mesh, const Span<ufbx_node* const> skeletonJoints, const Span<const JointMatrix> skeletonBindPoseMatrices, const Span<const JointMatrix> inverseBindMatrices){
-    return ValidateSplitSkinSourceCounts(mesh.skin.size(), skeletonJoints.size(), skeletonBindPoseMatrices.size(), inverseBindMatrices.size());
-}
 
 ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
     const AStringView nodeName = node ? UfbxStringView(node->name) : AStringView{};
@@ -135,22 +105,14 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
 
     for(const usize oldJointIndex : sortedJointIndices){
         const u32 parentIndex = parentIndices[oldJointIndex];
-        const JointMatrix* parentGlobalBindPose = parentIndex != Impl::s_MeshMissingStreamIndex ? &bindPoseMatrices[parentIndex] : nullptr;
-        const SIMDMatrix globalBindPoseMatrix = LoadFloat(bindPoseMatrices[oldJointIndex]);
-        const SIMDMatrix inverseBindMatrix = LoadFloat(inverseBindMatrices[oldJointIndex]);
-        if(MatrixIsNaN(inverseBindMatrix) || MatrixIsInfinite(inverseBindMatrix)){
+        if(!Impl::IsFiniteSkeletonJointMatrix(LoadFloat(inverseBindMatrices[oldJointIndex]))){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: inverse bind matrix for joint '{}' is not finite"), ConvertString(sortNames[oldJointIndex]));
             return MakeUnexpected(Failure{});
         }
 
-        SIMDMatrix parentGlobalBindPoseMatrix{};
-        const SIMDMatrix* parentGlobalBindPoseMatrixPtr = nullptr;
-        if(parentGlobalBindPose){
-            parentGlobalBindPoseMatrix = LoadFloat(*parentGlobalBindPose);
-            parentGlobalBindPoseMatrixPtr = &parentGlobalBindPoseMatrix;
-        }
-
-        const auto localBindPoseMatrix = BuildLocalBindPoseMatrix(globalBindPoseMatrix, parentGlobalBindPoseMatrixPtr);
+        const b8 hasParent = parentIndex != Impl::s_MeshMissingStreamIndex;
+        const SIMDMatrix parentGlobalBindPose = hasParent ? LoadFloat(bindPoseMatrices[parentIndex]) : SIMDMatrix{};
+        const auto localBindPoseMatrix = TryBuildFbxLocalBindPoseMatrix(LoadFloat(bindPoseMatrices[oldJointIndex]), hasParent, parentGlobalBindPose);
         if(!localBindPoseMatrix){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), ConvertString(sortNames[oldJointIndex]));
             return MakeUnexpected(Failure{});
@@ -165,14 +127,6 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     }
 
     return outData;
-}
-
-b8 RemapSkinInfluences(const Span<const u16> oldToNewJointIndices, const Span<MeshSkinInfluence> inOutInfluences){
-    for(MeshSkinInfluence& influence : inOutInfluences){
-        if(!RemapSkinInfluence(oldToNewJointIndices, influence))
-            return false;
-    }
-    return true;
 }
 
 Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena){

@@ -153,7 +153,6 @@ namespace SubsystemAssetRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept;
 [[nodiscard]] b8 ValidatePayload(const ISubsystem& subsystem);
 [[nodiscard]] b8 LoadBinary(Span<const u8> binary, ISubsystem& outSubsystem);
 

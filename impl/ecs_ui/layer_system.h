@@ -100,7 +100,6 @@ private:
     void abandonPendingFrame(b8 resetUi = false)noexcept;
     void resetNormalizedInput();
     void resetNativeInputState()noexcept;
-    void logInputRoutingOverflows(const Ui::InputRoutingResult& result)const;
     [[nodiscard]] b8 loadFonts(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Core::Assets::AssetRef<UiSkin> basicSkin()const noexcept;
     [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept;

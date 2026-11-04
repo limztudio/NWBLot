@@ -59,17 +59,13 @@ public:
             return false;
         m_preferredX = *resolved;
         m_valid = true;
-        advanceGeneration();
+        AdvanceNonWrappingRevision(m_generation);
         return true;
     }
     void reset()noexcept{
-        advanceGeneration();
+        AdvanceNonWrappingRevision(m_generation);
         ClearEditNavigationPreferredX(m_preferredX, m_valid);
     }
-
-
-private:
-    void advanceGeneration()noexcept{ AdvanceNonWrappingRevision(m_generation); }
 
 
 private:

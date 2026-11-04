@@ -262,9 +262,9 @@ b8 __hidden_slang_compiler_workspace::WriteBomStrippedCompilerInput(
     Alloc::ScratchArena& scratchArena
 ){
     using namespace SlangCompilerWorkspace;
-    ShaderSourceDependencies::SpliceSourceLines(source);
+    SpliceSourceLines(source);
     ScratchString scanSource(AStringView(source), scratchArena);
-    ShaderSourceDependencies::MaskSourceComments(scanSource);
+    MaskCStyleSourceComments(scanSource);
     const AStringView sourceView(source.data(), source.size());
     const AStringView scanView(scanSource);
     usize includeCount = 0u;

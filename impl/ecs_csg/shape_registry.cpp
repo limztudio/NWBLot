@@ -24,17 +24,6 @@ namespace __hidden_shape_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ValidShapeTypeDesc(const CsgShapeTypeDesc& desc){
-    return ValidateCsgShapeTypeDescFields(
-        desc.name,
-        desc.shaderModule,
-        AStringView(desc.shaderModuleInclude),
-        desc.parameterByteSize,
-        desc.defaultParameterBytes.size(),
-        desc.boundsCallback != nullptr
-    );
-}
-
 [[nodiscard]] Expected<Span<const u8>> ResolveShapeParameterBytes(const CsgShapeTypeInfo& shapeType, Span<const u8> parameterBytes)noexcept{
     if(parameterBytes.empty() && !parameterBytes.data() && !shapeType.desc.defaultParameterBytes.empty())
         parameterBytes = Span<const u8>(shapeType.desc.defaultParameterBytes.data(), shapeType.desc.defaultParameterBytes.size());
@@ -94,7 +83,14 @@ Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& sha
 
 
 Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, const b8 replaceExisting){
-    if(!__hidden_shape_registry::ValidShapeTypeDesc(desc))
+    if(!ValidateCsgShapeTypeDescFields(
+        desc.name,
+        desc.shaderModule,
+        AStringView(desc.shaderModuleInclude),
+        desc.parameterByteSize,
+        desc.defaultParameterBytes.size(),
+        desc.boundsCallback != nullptr
+    ))
         return MakeUnexpected(Failure{});
 
     const Expected<CsgShapeTypeId> canonicalIdResult = TryResolveCsgShapeRegistryId(desc.name);

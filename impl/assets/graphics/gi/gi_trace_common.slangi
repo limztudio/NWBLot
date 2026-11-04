@@ -67,7 +67,7 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
         nwbSceneResolveLight(light, hit.worldPos, lightVector, lightRadiance);
         if(all(lightRadiance <= half3(0.0h)))
             continue;
-        const half ndotl = half(max(dot(facingNormal, lightVector), 0.0));
+        const half ndotl = half(max(dot(facingNormal, lightVector), 0.0h));
         irradiance += lightRadiance * ndotl;
     }
 
@@ -85,7 +85,7 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
             nwbSceneResolveLight(light, hit.worldPos, lv, lr);
             if(all(lr <= half3(0.0h)))
                 continue;
-            const half ndotl = half(max(dot(facingNormal, lv), 0.0));
+            const half ndotl = half(max(dot(facingNormal, lv), 0.0h));
             if(ndotl > bestNdotl){
                 bestNdotl = ndotl;
                 dominantLightDir = lv;

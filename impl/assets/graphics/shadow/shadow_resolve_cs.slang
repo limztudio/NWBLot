@@ -100,7 +100,7 @@ half3 nwbShadowResolveSpatialWeights(const half offset){
 half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
     // The normal-agreement weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
     const float3 tn = nwbOctDecodeNormal(float2(tapOct));
-    return half(pow(max(dot(centerNormal, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
+    return half(pow(max(dot(centerNormal, tn), 0.0h), NWB_SHADOW_RESOLVE_NORMAL_POWER));
 }
 
 // Use temporal variance only after enough history samples.

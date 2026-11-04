@@ -69,7 +69,7 @@ half3 nwbRefractionShadeSurfaceHit(const NwbMeshSurface surface, const float3 po
         float3 lightVector;
         half3 lightRadiance;
         nwbSceneResolveLight(g_NwbSceneLights[lightIndex], position, lightVector, lightRadiance);
-        radiance += lightRadiance * half(max(dot(normal, lightVector), 0.0));
+        radiance += lightRadiance * half(max(dot(normal, lightVector), 0.0h));
     }
     // Offscreen hits have no camera lighting cache and use the bounded diffuse surface approximation shared with GI.
     return radiance * surface.baseColor;

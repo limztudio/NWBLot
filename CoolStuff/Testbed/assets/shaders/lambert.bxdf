@@ -45,15 +45,15 @@ half3 nwbTestbedLambertShadeLight(NwbSceneLight light, half3 baseColor, float3 n
         return half3(0.0h);
 
     const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
-    const half ndotl = half(max(dot(normalVector, lightVector), 0.0));
+    const half ndotl = half(max(dot(normalVector, lightVector), 0.0h));
     const half keyDiffuse = ndotl * ndotl;
     const half rim = pow(max(1.0h - ndotv, 0.0h), NWB_TESTBED_LAMBERT_RIM_EXPONENT);
-    const half halfDotNormal = half(max(dot(normalVector, halfVector), 0.0));
+    const half halfDotNormal = half(max(dot(normalVector, halfVector), 0.0h));
     const half specular = pow(halfDotNormal, NWB_TESTBED_LAMBERT_SPECULAR_TIGHT_EXPONENT) * NWB_TESTBED_LAMBERT_SPECULAR_TIGHT_WEIGHT + pow(halfDotNormal, NWB_TESTBED_LAMBERT_SPECULAR_BROAD_EXPONENT) * NWB_TESTBED_LAMBERT_SPECULAR_BROAD_WEIGHT;
     const half viewSpecular = pow(ndotv, NWB_TESTBED_LAMBERT_VIEW_SPECULAR_EXPONENT) * NWB_TESTBED_LAMBERT_VIEW_SPECULAR_WEIGHT;
     const half tangentLobe = pow(half(abs(dot(tangentVector, halfVector))), NWB_TESTBED_LAMBERT_FRAME_LOBE_EXPONENT);
     const half bitangentLobe = pow(half(abs(dot(bitangentVector, halfVector))), NWB_TESTBED_LAMBERT_FRAME_LOBE_EXPONENT);
-    const half backLight = half(max(dot(-normalVector, lightVector), 0.0));
+    const half backLight = half(max(dot(-normalVector, lightVector), 0.0h));
 
     const half3 specularTint = lerp(half3(NWB_TESTBED_LAMBERT_SPECULAR_TINT_NEUTRAL), NWB_TESTBED_LAMBERT_SPECULAR_TINT_WARM, half(NWB_TESTBED_LAMBERT_SPECULAR_TINT_WARM_MIX));
     const half3 diffuse = baseColor * lightRadiance * (half(NWB_TESTBED_LAMBERT_DIFFUSE_FLOOR) + half(NWB_TESTBED_LAMBERT_DIFFUSE_KEY_WEIGHT) * keyDiffuse);
@@ -70,7 +70,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float3 tangentVector = nwbFrameOrthonormalTangent(float3(0.0, 0.0, 0.0), normalVector);
     const float3 bitangentVector = nwbSafeNormalize(cross(normalVector, tangentVector), cross(normalVector, nwbFrameFallbackTangent(normalVector)));
     const float3 viewVector = nwbSafeNormalize(surface.viewVector, float3(0.0, 0.0, 1.0));
-    const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
+    const half ndotv = half(max(dot(normalVector, viewVector), 0.0h));
 
     half3 litColor = surface.baseColor * surface.indirectIrradiance;
     const uint lightCount = nwbSceneLightCount();

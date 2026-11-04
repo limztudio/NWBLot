@@ -51,7 +51,7 @@ NwbDielectricInterface nwbDielectricTransmit(const float3 direction, const float
     const float parallel = (float(transmittedIor) * cosineIncident - float(incidentIor) * cosineTransmitted) / (float(transmittedIor) * cosineIncident + float(incidentIor) * cosineTransmitted);
     result.reflectedFraction = saturate(0.5 * (perpendicular * perpendicular + parallel * parallel));
     result.direction = nwbSafeNormalize(eta * direction + (eta * cosineIncident - cosineTransmitted) * opposingNormal, direction);
-    result.radianceTransmission = half(min((1.0 - result.reflectedFraction) * (eta * eta), NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX));
+    result.radianceTransmission = half(min((1.0h - result.reflectedFraction) * (eta * eta), NWB_DIELECTRIC_RADIANCE_TRANSMISSION_MAX));
     return result;
 }
 
@@ -61,7 +61,7 @@ half3 nwbDielectricAbsorptionCoefficient(const half3 unitSurvival){
 }
 
 half3 nwbDielectricBeerTransmission(const half3 absorption, const float distance){
-    return half3(exp(-float3(absorption) * max(distance, 0.0)));
+    return half3(exp(-float3(absorption) * max(distance, 0.0h)));
 }
 
 

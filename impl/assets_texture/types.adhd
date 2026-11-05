@@ -215,6 +215,122 @@ Expected<Span<u8>> TryGetSeparateAlphaUastcSlice(
     return payloadBytes.subspan(cast<usize>(primaryPayloadByteCount + alphaSliceOffsetBytes.value()), cast<usize>(layout.value().byteCount));
 }
 
+b8 ValidateAndComputeLdrMipUploadLayout(
+    in TextureMipLevel mip,
+    in b8 isRgba8Format,
+    mut usize outRowPitch,
+    mut usize outSliceUploadByteCount,
+    mut usize outTotalUploadByteCount
+){
+    if(!isRgba8Format){
+        if(!TryComputeTextureMipUploadPitchAndSliceBytes(mip.blockCountX, s_TextureUastcBytesPerBlock, mip.blockCountY, outRowPitch, outSliceUploadByteCount)){
+            error("TextureAssetLoader: compressed LDR mip row pitch exceeds addressable memory");
+            return false;
+        }
+    }
+    else{
+        if(!TryComputeTextureMipUploadPitchAndSliceBytes(mip.width, cast<u64>(s_TextureRgbaBytesPerTexel), mip.height, outRowPitch, outSliceUploadByteCount)){
+            error("TextureAssetLoader: RGBA8 mip row pitch exceeds addressable memory");
+            return false;
+        }
+    }
+
+    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(outSliceUploadByteCount, mip.sliceCount);
+    if(!totalUploadByteCount.has_value()){
+        error("TextureAssetLoader: texture mip upload size exceeds addressable memory");
+        return false;
+    }
+    outTotalUploadByteCount = totalUploadByteCount.value();
+    return true;
+}
+
+b8 ValidateAndComputeHdrMipUploadLayout(
+    in TextureMipLevel mip,
+    in b8 compressedOutput,
+    mut usize outRowPitch,
+    mut usize outSliceUploadByteCount,
+    mut usize outTotalUploadByteCount
+){
+    u32 rowUnits = mip.width;
+    u64 bytesPerUnit = cast<u64>(s_TextureRgba16FloatBytesPerTexel);
+    u32 rowCount = mip.height;
+    if(compressedOutput){
+        rowUnits = mip.blockCountX;
+        bytesPerUnit = s_TextureUastcBytesPerBlock;
+        rowCount = mip.blockCountY;
+    }
+    if(!TryComputeTextureMipUploadPitchAndSliceBytes(rowUnits, bytesPerUnit, rowCount, outRowPitch, outSliceUploadByteCount)){
+        error("TextureAssetLoader: HDR mip row pitch exceeds addressable memory");
+        return false;
+    }
+    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(outSliceUploadByteCount, mip.sliceCount);
+    if(!totalUploadByteCount.has_value()){
+        error("TextureAssetLoader: HDR mip upload size exceeds addressable memory");
+        return false;
+    }
+    outTotalUploadByteCount = totalUploadByteCount.value();
+    return true;
+}
+
+b8 ValidateHdrUastcTranscodeLayout(
+    in TextureMipLevel mip,
+    in PrimaryUastcSlice source,
+    in b8 compressedOutput,
+    in usize outUploadByteSize,
+    mut u32 outOutputElementCount,
+    mut u32 outOutputRowBlocksOrPixels
+){
+    const u64 texelCount = cast<u64>(mip.width) * cast<u64>(mip.height);
+    u64 outputElementCount = texelCount;
+    u64 bytesPerElement = cast<u64>(s_TextureRgba16FloatBytesPerTexel);
+    u32 rowBlocksOrPixels = mip.width;
+    if(compressedOutput){
+        outputElementCount = source.blockCount;
+        bytesPerElement = s_TextureUastcBytesPerBlock;
+        rowBlocksOrPixels = mip.blockCountX;
+    }
+    if(
+        source.bytes.size() > cast<usize>(u32.max)
+        || outputElementCount > cast<u64>(u32.max)
+        || outputElementCount * bytesPerElement != cast<u64>(outUploadByteSize)
+    ){
+        error("TextureAssetLoader: HDR UASTC slice exceeds Basis transcoder limits");
+        return false;
+    }
+    outOutputElementCount = cast<u32>(outputElementCount);
+    outOutputRowBlocksOrPixels = rowBlocksOrPixels;
+    return true;
+}
+
+b8 ValidateBc7UastcTranscodeLayout(in PrimaryUastcSlice source, in usize outUploadByteSize){
+    if(
+        source.bytes.size() > cast<usize>(u32.max)
+        || source.blockCount > cast<u64>(u32.max)
+        || source.blockCount * s_TextureUastcBytesPerBlock != cast<u64>(outUploadByteSize)
+    ){
+        error("TextureAssetLoader: BC7 UASTC slice size is invalid");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateHdrRgba16FloatAlphaMergeLayout(
+    in TextureMipLevel mip,
+    in usize outRgba16FloatByteSize,
+    mut usize outTexelCount
+){
+    const u64 texelCount = cast<u64>(mip.width) * cast<u64>(mip.height);
+    if(
+        texelCount > cast<u64>(usize.max / cast<usize>(s_TextureRgba16FloatBytesPerTexel))
+        || texelCount * cast<u64>(s_TextureRgba16FloatBytesPerTexel) != cast<u64>(outRgba16FloatByteSize)
+    ){
+        error("TextureAssetLoader: HDR RGBA16_FLOAT alpha merge layout is invalid");
+        return false;
+    }
+    outTexelCount = cast<usize>(texelCount);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -57,10 +57,12 @@ static_assert(s_TextureRgba16FloatAlphaByteOffset == static_cast<u32>(sizeof(bas
 
 [[nodiscard]] static b8 DecodeTextureSliceAsBc7(const Texture& textureAsset, const TextureMipLevel& mip, const u32 mipLevel, const u32 sliceIndex, const Span<u8> outUploadBytes){
     const auto source = TryGetPrimaryUastcSlice(textureAsset.payloadBytes(), textureAsset.primaryPayloadByteCount(), mip, sliceIndex);
-    if(!source || source->bytes.size() > Limit<u32>::s_Max || source->blockCount > Limit<u32>::s_Max || source->blockCount * s_UastcBytesPerBlock != outUploadBytes.size()){
+    if(!source){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: BC7 UASTC slice size is invalid"));
         return false;
     }
+    if(!ValidateBc7UastcTranscodeLayout(*source, outUploadBytes.size()))
+        return false;
 
     basist::basisu_lowlevel_uastc_ldr_4x4_transcoder transcoder;
     if(!transcoder.transcode_image(
@@ -175,19 +177,16 @@ template<typename StoreTexelT>
         return false;
     }
 
-    const u64 texelCount = static_cast<u64>(mip.width) * static_cast<u64>(mip.height);
-    const u64 outputElementCount = compressedOutput ? source->blockCount : texelCount;
-    const u64 bytesPerElement = compressedOutput ? s_UastcBytesPerBlock : s_TextureRgba16FloatBytesPerTexel;
-    if(source->bytes.size() > Limit<u32>::s_Max || outputElementCount > Limit<u32>::s_Max || outputElementCount * bytesPerElement != outUploadBytes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR UASTC slice exceeds Basis transcoder limits"));
+    u32 outputElementCount = 0u;
+    u32 outputRowBlocksOrPixels = 0u;
+    if(!ValidateHdrUastcTranscodeLayout(mip, *source, compressedOutput, outUploadBytes.size(), outputElementCount, outputRowBlocksOrPixels))
         return false;
-    }
 
     basist::basisu_lowlevel_uastc_hdr_4x4_transcoder transcoder;
     if(!transcoder.transcode_image(
         targetFormat,
         outUploadBytes.data(),
-        static_cast<u32>(outputElementCount),
+        outputElementCount,
         source->bytes.data(),
         static_cast<u32>(source->bytes.size()),
         mip.blockCountX,
@@ -200,7 +199,7 @@ template<typename StoreTexelT>
         0u,
         false,
         false,
-        compressedOutput ? mip.blockCountX : mip.width,
+        outputRowBlocksOrPixels,
         nullptr,
         mip.height
     )){
@@ -217,15 +216,13 @@ static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Sp
 }
 
 [[nodiscard]] static b8 MergeHdrAlpha(const Texture& textureAsset, const TextureMipLevel& mip, const u32 sliceIndex, const Span<u8> outRgba16FloatBytes){
-    const u64 texelCount = static_cast<u64>(mip.width) * static_cast<u64>(mip.height);
-    if(texelCount > Limit<usize>::s_Max / s_TextureRgba16FloatBytesPerTexel || texelCount * s_TextureRgba16FloatBytesPerTexel != outRgba16FloatBytes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR RGBA16_FLOAT alpha merge layout is invalid"));
+    usize texelCount = 0u;
+    if(!ValidateHdrRgba16FloatAlphaMergeLayout(mip, outRgba16FloatBytes.size(), texelCount))
         return false;
-    }
 
     if(textureAsset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
         const u8 alphaUnorm8 = textureAsset.alphaMode() == TextureAlphaMode::ConstantUnorm8 ? textureAsset.alphaConstantUnorm8() : static_cast<u8>(Limit<u8>::s_Max);
-        for(usize texelIndex = 0u; texelIndex < static_cast<usize>(texelCount); ++texelIndex)
+        for(usize texelIndex = 0u; texelIndex < texelCount; ++texelIndex)
             StoreHdrAlpha(texelIndex, alphaUnorm8, outRgba16FloatBytes);
         return true;
     }
@@ -281,26 +278,11 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(const Texture& te
 
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
-    if(format != Core::Format::RGBA8_UNORM){
-        if(!TryComputeTextureMipUploadPitchAndSliceBytes(mip.blockCountX, TextureFormat::s_UastcBytesPerBlock, mip.blockCountY, rowPitch, sliceUploadByteCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: compressed LDR mip row pitch exceeds addressable memory"));
-            return MakeUnexpected(Failure{});
-        }
-    }
-    else{
-        if(!TryComputeTextureMipUploadPitchAndSliceBytes(mip.width, s_TextureRgbaBytesPerTexel, mip.height, rowPitch, sliceUploadByteCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: RGBA8 mip row pitch exceeds addressable memory"));
-            return MakeUnexpected(Failure{});
-        }
-    }
-
-    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(sliceUploadByteCount, mip.sliceCount);
-    if(!totalUploadByteCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: texture mip upload size exceeds addressable memory"));
+    usize totalUploadByteCount = 0u;
+    if(!ValidateAndComputeLdrMipUploadLayout(mip, format == Core::Format::RGBA8_UNORM, rowPitch, sliceUploadByteCount, totalUploadByteCount))
         return MakeUnexpected(Failure{});
-    }
     TextureDecodedMipUpload upload(arena);
-    upload.bytes.resize(*totalUploadByteCount);
+    upload.bytes.resize(totalUploadByteCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         const Span<u8> destination(upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount, sliceUploadByteCount);
         b8 decoded = false;
@@ -325,23 +307,14 @@ Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(const Texture& te
         return MakeUnexpected(Failure{});
     }
 
-    const u32 rowUnits = compressedOutput ? mip.blockCountX : mip.width;
-    const u64 bytesPerUnit = compressedOutput ? TextureFormat::s_UastcBytesPerBlock : s_TextureRgba16FloatBytesPerTexel;
-    const u32 rowCount = compressedOutput ? mip.blockCountY : mip.height;
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
-    if(!TryComputeTextureMipUploadPitchAndSliceBytes(rowUnits, bytesPerUnit, rowCount, rowPitch, sliceUploadByteCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR mip row pitch exceeds addressable memory"));
+    usize totalUploadByteCount = 0u;
+    if(!ValidateAndComputeHdrMipUploadLayout(mip, compressedOutput, rowPitch, sliceUploadByteCount, totalUploadByteCount))
         return MakeUnexpected(Failure{});
-    }
-    const Expected<usize> totalUploadByteCount = TryComputeTextureMipUploadTotalBytes(sliceUploadByteCount, mip.sliceCount);
-    if(!totalUploadByteCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: HDR mip upload size exceeds addressable memory"));
-        return MakeUnexpected(Failure{});
-    }
 
     TextureDecodedMipUpload upload(arena);
-    upload.bytes.resize(*totalUploadByteCount);
+    upload.bytes.resize(totalUploadByteCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         const Span<u8> destination(upload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount, sliceUploadByteCount);
         if(!__hidden_texture_mip_decoder::DecodeHdrTextureSlice(textureAsset, mip, mipLevel, sliceIndex, format, destination))

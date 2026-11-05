@@ -189,9 +189,6 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
 
     Vector<u8, Core::Alloc::ScratchArena> dependencyBytes{scratchArena};
     for(const SortedDependencyItem& item : sortedDependencies){
-        result.checksum = UpdateFnv64TextExact(result.checksum, AStringView(item.canonicalPath));
-        result.checksum = UpdateFnv64(result.checksum, Span<const u8>(&ShaderBinaryPayload::s_ShaderChecksumNewlineByte, 1));
-
         dependencyBytes.clear();
         auto readBinaryFileResult = ReadBinaryFile(*item.path, dependencyBytes);
         if(!readBinaryFileResult){
@@ -203,49 +200,40 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
             }
             return MakeUnexpected(Failure{});
         }
-        if(HasUtf8Bom(dependencyBytes))
-            result.compilerInputsHaveBom = true;
-        if(!dependencyBytes.empty()){
-            result.checksum = UpdateFnv64(result.checksum, Span<const u8>(dependencyBytes.data(), dependencyBytes.size()));
-        }
-
-        result.checksum = UpdateFnv64(result.checksum, Span<const u8>(&ShaderBinaryPayload::s_ShaderChecksumZeroByte, 1));
+        ShaderBinaryPayload::AppendShaderDependencyItemChecksum(
+            AStringView(item.canonicalPath),
+            Span<const u8>(dependencyBytes.data(), dependencyBytes.size()),
+            result.checksum,
+            result.compilerInputsHaveBom
+        );
     }
 
     return result;
 }
 
 u64 ShaderCook::ComputeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, const u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena){
-    u64 checksum = s_Fnv64OffsetBasis;
-
-    const auto appendChecksumLine = [&checksum](const AStringView text)noexcept{
-        checksum = UpdateFnv64TextExact(checksum, text);
-        checksum = UpdateFnv64(checksum, Span<const u8>(&ShaderBinaryPayload::s_ShaderChecksumNewlineByte, 1));
-    };
-
-    appendChecksumLine(ShaderBinaryPayload::s_ShaderSourceChecksumVersionTag);
-    appendChecksumLine(AStringView(entry.name));
-    appendChecksumLine(entry.stage);
-    appendChecksumLine(entry.archiveStage);
-    appendChecksumLine(entry.rayQuery ? ShaderBinaryPayload::s_Spirv15RayQueryTargetProfileText : ShaderBinaryPayload::s_Spirv15TargetProfileText);
-    appendChecksumLine(ShaderBinaryPayload::ShaderOptimizationLevelText(entry.optimizationLevel));
-    appendChecksumLine(AStringView(entry.entryPoint));
-    appendChecksumLine(variantSignature);
+    u64 checksum = ShaderBinaryPayload::BeginShaderSourceChecksum(
+        AStringView(entry.name),
+        entry.stage,
+        entry.archiveStage,
+        entry.rayQuery,
+        entry.optimizationLevel,
+        AStringView(entry.entryPoint),
+        variantSignature
+    );
     if(entry.implicitDefines.size() <= 1u){
         for(const auto& [defineName, defineValue] : entry.implicitDefines){
-            appendChecksumLine(defineName);
-            appendChecksumLine(defineValue);
+            ShaderBinaryPayload::AppendShaderChecksumLine(defineName, checksum);
+            ShaderBinaryPayload::AppendShaderChecksumLine(defineValue, checksum);
         }
     }
     else{
         for(const auto& entryDefine : SortedDefineEntries(entry.implicitDefines, scratchArena)){
-            appendChecksumLine(*entryDefine.key);
-            appendChecksumLine(*entryDefine.value);
+            ShaderBinaryPayload::AppendShaderChecksumLine(*entryDefine.key, checksum);
+            ShaderBinaryPayload::AppendShaderChecksumLine(*entryDefine.value, checksum);
         }
     }
-    Fnv64AppendValue(checksum, dependencyChecksum);
-    Fnv64AppendValue(checksum, compilerFingerprint);
-    return checksum;
+    return ShaderBinaryPayload::FinalizeShaderSourceChecksum(dependencyChecksum, compilerFingerprint, checksum);
 }
 
 

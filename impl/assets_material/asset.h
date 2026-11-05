@@ -89,7 +89,10 @@ public:
 
 public:
     b8 loadBinary(Span<const u8> binary);
-    [[nodiscard]] b8 validatePayload(TStringView failureContext = NWB_TEXT("Material::validatePayload"))const;
+    [[nodiscard]] b8 validatePayload(
+        TStringView failureContext = NWB_TEXT("Material::validatePayload"),
+        AStringView failureContextText = s_MaterialValidatePayloadContextText
+    )const;
 
 
 public:

@@ -7,6 +7,7 @@
 
 #include "global.h"
 
+#include <utilities/fbx_to_nwb/mesh_stream_operations.adhd.h>
 #include <impl/assets_mesh/cook_types.adhd.h>
 #include <impl/assets_mesh/payload_types.adhd.h>
 #include <impl/assets_skeleton/joint_types.adhd.h>
@@ -191,4 +192,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

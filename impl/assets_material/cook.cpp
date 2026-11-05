@@ -46,18 +46,13 @@ static b8 SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry, c
 
 
 Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Core::Assets::AssetArena& arena){
-    if(materialEntry.materialInterface.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing required material interface"), ConvertString(AStringView(materialEntry.virtualPath)));
+    if(!ValidateMaterialCookEntryRequiredFields(
+        AStringView(materialEntry.virtualPath),
+        AStringView(materialEntry.materialInterface),
+        materialEntry.typedLayoutHash,
+        AStringView(materialEntry.shaderVariant)
+    ))
         return MakeUnexpected(Failure{});
-    }
-    if(materialEntry.typedLayoutHash == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: interface material '{}' is missing typed layout data"), ConvertString(AStringView(materialEntry.virtualPath)));
-        return MakeUnexpected(Failure{});
-    }
-    if(materialEntry.shaderVariant.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has empty shader variant"), ConvertString(AStringView(materialEntry.virtualPath)));
-        return MakeUnexpected(Failure{});
-    }
 
     const auto virtualPath = Name::FromText(AStringView(materialEntry.virtualPath));
     if(!virtualPath){
@@ -111,7 +106,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         return false;
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.validatePayload(s_SerializeFailureContext))
+    if(!material.validatePayload(s_SerializeFailureContext, s_MaterialSerializeContextText))
         return false;
     usize reserveBytes = sizeof(u32);
     b8 canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
@@ -209,4 +204,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

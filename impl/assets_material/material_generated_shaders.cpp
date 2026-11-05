@@ -207,21 +207,15 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     for(MaterialCookEntry& entry : materialEntries){
         const b8 hasExplicitShaders = !entry.stageShaders.empty();
         const b8 hasSurface = !entry.surfaceSource.empty();
-        if(hasExplicitShaders){
-            if(hasSurface){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' declares both 'surface' and 'shaders'; declare exactly one"), ConvertString(AStringView(entry.virtualPath)));
-                return MakeUnexpected(Failure{});
-            }
+        if(!ValidateMaterialGeneratedPixelShaderEntry(
+            AStringView(entry.virtualPath),
+            hasExplicitShaders,
+            hasSurface,
+            AStringView(entry.materialInterface)
+        ))
+            return MakeUnexpected(Failure{});
+        if(hasExplicitShaders)
             continue;
-        }
-        if(!hasSurface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' declares neither 'surface' nor 'shaders'"), ConvertString(AStringView(entry.virtualPath)));
-            return MakeUnexpected(Failure{});
-        }
-        if(entry.materialInterface.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' needs an interface to generate its pixel shader"), ConvertString(AStringView(entry.virtualPath)));
-            return MakeUnexpected(Failure{});
-        }
 
         // Engine authoring + .bind + surface hook; mesh stage is shared.
         ScratchString generatedSource(scratchArena);
@@ -329,4 +323,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

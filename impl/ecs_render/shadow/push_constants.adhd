@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/shadow/push_constants_types.adhd>
+#include <impl/ecs_render/shadow/push_constants_temporal.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,122 +165,6 @@ ShadowCombinedWaveletPushConstants MakeShadowCombinedWaveletPushConstants(
     return push;
 }
 
-ShadowCombinedTemporalPushConstants MakeShadowCombinedTemporalPushConstants(
-    in MatrixSingle prevWorldToClip,
-    in u32 receiverFactor,
-    in u32 lightSlotCount,
-    in b8 historyValid,
-    in u32 geometryCurrSlot,
-    in u32 geometryPrevSlot,
-    in u32 worldPositionSlot,
-    in u32 opaqueSoftTraceSlot,
-    in u32 opaqueHistoryInSlot,
-    in u32 opaqueMomentsInSlot,
-    in u32 opaqueHistoryOutSlot,
-    in u32 opaqueMomentsOutSlot,
-    in u32 transparentSoftTraceSlot,
-    in u32 transparentHistoryInSlot,
-    in u32 transparentMomentsInSlot,
-    in u32 transparentHistoryOutSlot,
-    in u32 transparentMomentsOutSlot
-){
-    ShadowCombinedTemporalPushConstants push;
-    push.prevWorldToClip = f32x4x4(prevWorldToClip);
-    push.receiverFactor = receiverFactor;
-    push.lightSlotCount = lightSlotCount;
-    if(historyValid)
-        push.historyValid = 1u;
-    push.geometryCurrSlot = geometryCurrSlot;
-    push.geometryPrevSlot = geometryPrevSlot;
-    push.worldPositionSlot = worldPositionSlot;
-    push.opaqueSoftTraceSlot = opaqueSoftTraceSlot;
-    push.opaqueHistoryInSlot = opaqueHistoryInSlot;
-    push.opaqueMomentsInSlot = opaqueMomentsInSlot;
-    push.opaqueHistoryOutSlot = opaqueHistoryOutSlot;
-    push.opaqueMomentsOutSlot = opaqueMomentsOutSlot;
-    push.transparentSoftTraceSlot = transparentSoftTraceSlot;
-    push.transparentHistoryInSlot = transparentHistoryInSlot;
-    push.transparentMomentsInSlot = transparentMomentsInSlot;
-    push.transparentHistoryOutSlot = transparentHistoryOutSlot;
-    push.transparentMomentsOutSlot = transparentMomentsOutSlot;
-    return push;
-}
-
-ShadowReprojectMergePushConstants MakeShadowReprojectMergePushConstants(
-    in Span<f32> prevWorldToClip,
-    in u32 width,
-    in u32 height,
-    in u32 halfWidth,
-    in u32 halfHeight,
-    in u32 lightSlotCount,
-    in u32 historyValid,
-    in u32 softTraceSlot,
-    in u32 historyInSlot,
-    in u32 momentsInSlot,
-    in u32 geometryCurrSlot,
-    in u32 geometryPrevSlot,
-    in u32 worldPositionSlot,
-    in u32 historyOutputStorageSlot,
-    in u32 momentsOutputStorageSlot,
-    in u32 receiverFactor
-){
-    ShadowReprojectMergePushConstants push;
-    for(usize i = 0u; i < 16u && i < prevWorldToClip.size(); ++i)
-        push.prevWorldToClip[i] = prevWorldToClip[i];
-    push.width = width;
-    push.height = height;
-    push.halfWidth = halfWidth;
-    push.halfHeight = halfHeight;
-    push.lightSlotStart = 0u;
-    push.lightSlotCount = lightSlotCount;
-    push.historyValid = historyValid;
-    push.softTraceSlot = softTraceSlot;
-    push.historyInSlot = historyInSlot;
-    push.momentsInSlot = momentsInSlot;
-    push.geometryCurrSlot = geometryCurrSlot;
-    push.geometryPrevSlot = geometryPrevSlot;
-    push.worldPositionSlot = worldPositionSlot;
-    push.historyOutputStorageSlot = historyOutputStorageSlot;
-    push.momentsOutputStorageSlot = momentsOutputStorageSlot;
-    push.receiverFactor = receiverFactor;
-    return push;
-}
-
-SoftwareTransparentSamplingPush MakeSoftwareTransparentSamplingPush(
-    in Span<f32> prevWorldToClip,
-    in u32 width,
-    in u32 height,
-    in u32 instanceCount,
-    in u32 frameIndex,
-    in u32 softSampleCount,
-    in u32 deferredResourcesHeapSlot,
-    in u32 materialContextSlotsHeapSlot,
-    in u32 transparentSoftHalfStorageSlot,
-    in b8 historyValid,
-    in u32 geometryCurrSlot,
-    in u32 geometryPrevSlot,
-    in u32 momentsInSlot,
-    in u32 receiverFactor
-){
-    SoftwareTransparentSamplingPush push;
-    push.width = width;
-    push.height = height;
-    push.instanceCount = instanceCount;
-    push.frameIndex = frameIndex;
-    push.softSampleCount = softSampleCount;
-    push.deferredResourcesHeapSlot = deferredResourcesHeapSlot;
-    push.materialContextSlotsHeapSlot = materialContextSlotsHeapSlot;
-    push.transparentSoftHalfStorageSlot = transparentSoftHalfStorageSlot;
-    if(historyValid)
-        push.historyValid = 1u;
-    push.geometryCurrSlot = geometryCurrSlot;
-    push.geometryPrevSlot = geometryPrevSlot;
-    push.momentsInSlot = momentsInSlot;
-    for(usize i = 0u; i < 16u && i < prevWorldToClip.size(); ++i)
-        push.prevWorldToClip[i] = prevWorldToClip[i];
-    push.receiverFactor = receiverFactor;
-    return push;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

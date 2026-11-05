@@ -8,7 +8,7 @@
 #include <impl/ecs_render/caustic/settings.adhd.h>
 #include <impl/ecs_render/gi/quality_settings.adhd.h>
 #include <impl/ecs_render/material/material_instance.h>
-#include <impl/ecs_render/reflection/history_planning.adhd.h>
+#include <impl/ecs_render/reflection/frame_parameters.adhd.h>
 #include <impl/ecs_render/refraction/types.adhd.h>
 #include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/shadow/light_space_plan.adhd.h>
@@ -101,4 +101,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

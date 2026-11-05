@@ -128,5 +128,134 @@ b8 ValidateMaterialBinaryAvboitShaderRef(in StringView passLabel, in b8 isValidR
     return false;
 }
 
+b8 LogAndValidateMaterialTypedLayout(
+    in u64 layoutHash,
+    in Span<MaterialTypedLayoutBlock> blocks,
+    in Span<MaterialTypedLayoutField> fields,
+    in Span<u8> blockBytes,
+    in StringView failureContext
+){
+    usize failureIndex = 0u;
+    const MaterialTypedLayoutValidationStatus status = ValidateMaterialTypedLayout(layoutHash, blocks, fields, blockBytes.size(), failureIndex);
+    switch(status){
+        case MaterialTypedLayoutValidationStatus::Valid:
+            return true;
+        case MaterialTypedLayoutValidationStatus::EmptyLayout:
+            error("{} failed: typed layout is empty", failureContext);
+            return false;
+        case MaterialTypedLayoutValidationStatus::ZeroHash:
+            error("{} failed: typed layout has zero hash", failureContext);
+            return false;
+        case MaterialTypedLayoutValidationStatus::MissingBlocksOrFields:
+            error("{} failed: typed layout blocks and fields must both be present", failureContext);
+            return false;
+        case MaterialTypedLayoutValidationStatus::EmptyBlockName:
+            error("{} failed: typed layout block {} has empty name", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::InvalidBlockClass:
+            error("{} failed: typed layout block {} has invalid class {}", failureContext, failureIndex, cast<u32>(blocks[failureIndex].blockClass));
+            return false;
+        case MaterialTypedLayoutValidationStatus::NonContiguousFieldRange:
+            error("{} failed: typed layout block {} has non-contiguous field range", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::FieldRangeExceedsCount:
+            error("{} failed: typed layout block {} field range exceeds field count", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::EmptyFieldName:
+            error("{} failed: typed layout field {} has empty name", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::InvalidFieldType:
+            error("{} failed: typed layout field {} has invalid type {}", failureContext, failureIndex, cast<u32>(fields[failureIndex].fieldType));
+            return false;
+        case MaterialTypedLayoutValidationStatus::FieldAlignmentOverflow:
+            error("{} failed: typed layout field {} alignment overflows", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::MisalignedFieldOffset:
+            error("{} failed: typed layout field {} has misaligned offset", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::FieldByteSizeOverflow:
+            error("{} failed: typed layout field {} byte size overflows", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::BlockByteSizeOverflow:
+            error("{} failed: typed layout block {} byte size overflows", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::BlockByteSizeMismatch:
+            error("{} failed: typed layout block {} byte size does not match its fields", failureContext, failureIndex);
+            return false;
+        case MaterialTypedLayoutValidationStatus::UnownedFields:
+            error("{} failed: typed layout has unowned fields", failureContext);
+            return false;
+        case MaterialTypedLayoutValidationStatus::LayoutHashMismatch:
+            error("{} failed: typed layout hash mismatch", failureContext);
+            return false;
+        case MaterialTypedLayoutValidationStatus::TotalBlockByteSizeOverflow:
+            error("{} failed: typed block byte size overflows", failureContext);
+            return false;
+        case MaterialTypedLayoutValidationStatus::TotalBlockByteCountMismatch:
+            error("{} failed: typed block byte count does not match typed layout", failureContext);
+            return false;
+        default:
+            return false;
+    }
+}
+
+b8 ValidateMaterialPayloadData(
+    in u32 stageShaderCount,
+    in Name materialInterface,
+    in StringView shaderVariant,
+    in b8 transparent,
+    in AssetRef<PixelShader> avboitAccumulatePixelShader,
+    in AssetRef<PixelShader> avboitOccupancyPixelShader,
+    in AssetRef<PixelShader> avboitExtinctionPixelShader,
+    in u64 typedLayoutHash,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in Span<u8> typedBlockBytes,
+    in Span<MaterialResourceReference> resourceReferences,
+    in StringView failureContext
+){
+    if(stageShaderCount == 0u){
+        error("{} failed: material has no shader stages", failureContext);
+        return false;
+    }
+    if(materialInterface == s_NameNone){
+        error("{} failed: material interface is required", failureContext);
+        return false;
+    }
+    if(shaderVariant.empty()){
+        error("{} failed: shader variant is empty", failureContext);
+        return false;
+    }
+    if(!HasValidMaterialAvboitPixelShaderContract(transparent, avboitAccumulatePixelShader, avboitOccupancyPixelShader, avboitExtinctionPixelShader)){
+        error("{} failed: AVBOIT pixel shaders must be present if and only if the material is transparent", failureContext);
+        return false;
+    }
+    if(typedLayoutHash == 0u){
+        error("{} failed: interface material is missing typed layout data", failureContext);
+        return false;
+    }
+    const usize maxU32 = cast<usize>(u32.max);
+    if(typedLayoutBlocks.size() > maxU32 || typedLayoutFields.size() > maxU32){
+        error("{} failed: typed layout count exceeds u32 range", failureContext);
+        return false;
+    }
+    if(typedBlockBytes.size() > maxU32){
+        error("{} failed: typed block byte count exceeds u32 range", failureContext);
+        return false;
+    }
+    if(resourceReferences.size() > maxU32){
+        error("{} failed: material resource reference count exceeds u32 range", failureContext);
+        return false;
+    }
+    if(!LogAndValidateMaterialTypedLayout(typedLayoutHash, typedLayoutBlocks, typedLayoutFields, typedBlockBytes, failureContext))
+        return false;
+    if(!ValidateMaterialResourceReferences(typedLayoutBlocks, typedLayoutFields, resourceReferences)){
+        error("{} failed: material resource references do not match typed layout", failureContext);
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -7,7 +7,7 @@
 
 #include "../assets_font/asset.h"
 #include <impl/assets_font_atlas/types.adhd.h>
-#include <impl/assets_font_atlas/glyph_validation.adhd.h>
+#include <impl/assets_font_atlas/binary_glyph_reader.adhd.h>
 #include <impl/assets_font_atlas/positioning_validation.adhd.h>
 
 #include <core/alloc/scratch.h>
@@ -98,4 +98,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

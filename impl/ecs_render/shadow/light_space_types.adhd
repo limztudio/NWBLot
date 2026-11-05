@@ -1,0 +1,118 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/light_space_settings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class LightSpaceViewGpu{
+    public Array<f32x4, 4u> worldToClipRows;
+    public f32x4 originOrDirection(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 depthRange(0.0f, 0.0f, 0.0f, 0.0f);
+    public Array<u32, 4u> map;
+    public Array<u32, 4u> light;
+}
+
+class LightSpaceLightRequest{
+    public u32 lightIndex = 0u;
+    public u32 shadowSlot = 0u;
+    public u8 type = s_LightSpaceLightTypeDirectional;
+    public b8 eligible = true;
+}
+
+class LightSpacePlan{
+    public Array<LightSpaceViewGpu, s_LightSpaceMaxViews> views;
+    public u64 eventByteSize = 0u;
+    public u64 countByteSize = 0u;
+    public u64 depthByteSize = 0u;
+    public u64 viewByteSize = 0u;
+    public u64 drawArgumentByteSize = 0u;
+    public u64 totalByteSize = 0u;
+    public u32 lightCount = 0u;
+    public u32 viewCount = 0u;
+    public u32 textureResolution = 0u;
+    public u32 totalPixels = 0u;
+}
+
+[serialize]
+class LightSpaceCsgInstanceGpu{
+    public f32x3x4 worldToObject(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    public u32 runtimeBoundsSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    public u32 primitiveCount = 0u;
+    public u32 meshRootSlot = s_LightSpaceInvalidGpuDescriptorSlot;
+    public u32 padding = 0u;
+    public f32x4 localMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localMax(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class LightSpaceCsgContextHeader{
+    public u32 instanceCount = 0u;
+    public u32 rangeByteOffset = 0u;
+    public u32 cutterByteOffset = 0u;
+    public u32 cutterCount = 0u;
+    public u32 instanceByteOffset = 0u;
+    public u32 activeReceiverByteOffset = 0u;
+    public u32 activeReceiverCount = 0u;
+    public u32 rayFailureFlags = 0u;
+}
+
+[serialize]
+class LightSpaceShadowPush{
+    public u32 viewSlot = 0u;
+    public u32 viewIndex = 0u;
+    public u32 materialContextSlot = 0u;
+    public u32 countsSlot = 0u;
+    public u32 eventsSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 instanceIndex = 0u;
+    public u32 instanceCount = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 frameIndex = 0u;
+    public u32 sampleCount = 0u;
+    public u32 deferredResourcesSlot = 0u;
+    public u32 outputSlot = 0u;
+    public u32 sceneRootSlot = 0u;
+    public u32 viewCount = 0u;
+    public u32 csgContextSlot = 0u;
+    public u32 csgOpaqueDepthSlot = 0u;
+    public u32 csgFlags = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+    public u32 captureDrawCount = 0u;
+    public u32 casterDrawOffset = 0u;
+    public u32 meshletDescSlot = 0u;
+    public u32 meshletBoundsSlot = 0u;
+    public u32 meshletCount = 0u;
+    public u32 receiverViewSlot = 0u;
+    public u32 receiverCsgSampleStateSlot = 0u;
+}
+
+class LightSpaceShadowStorageCapacity{
+    public u64 countBytes = 0u;
+    public u64 eventBytes = 0u;
+    public u64 viewBytes = 0u;
+    public u64 drawArgumentBytes = 0u;
+    public u32 textureResolution = 0u;
+    public u32 arrayLayers = 0u;
+}
+
+// Frozen prepared soft-transparent route shared by the split resource declarations and the split task chain.
+class SoftShadowSplitRoute{
+    public b8 hardwareShadowSupported = false;
+    public b8 hardwareCsgShadow = false;
+    public b8 csgShadow = false;
+    public b8 traceGeometryStatesGraphOwned = false;
+    public b8 combinedSoftUpsample = false;
+    public b8 combinedSoftWavelet = false;
+    public b8 combinedSoftTemporal = false;
+    public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 
-#include <impl/ecs_csg/deform_clip_plan.adhd.h>
+#include <impl/ecs_csg/deform_wall_clip.adhd.h>
 #include <impl/ecs_csg/shape_registry.h>
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
@@ -29,12 +29,6 @@ using CsgDeformVertexVector = Vector<CsgDeformVertex, ArenaT>;
 template<typename ArenaT>
 using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
 
-struct CsgDeformEdgeSplitKeyHash{
-    [[nodiscard]] usize operator()(const u64 key)const noexcept{ return CsgDeformEdgeKeyHash(key); }
-};
-
-using CsgDeformEdgeSplitMap = HashMap<u64, u32, Core::Alloc::ScratchArena, CsgDeformEdgeSplitKeyHash, EqualTo<u64>>;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -46,7 +40,6 @@ namespace CsgDeformWallBuilder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<u32> SplitEdgeVertex(u32 first, u32 second, f32 firstDistance, f32 secondDistance, CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits);
 // Keep side is distance >= 0; caller snaps |distance| <= boundaryEpsilon to zero first.
 [[nodiscard]] Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
     Core::Alloc::ScratchArena& scratchArena,
@@ -73,4 +66,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

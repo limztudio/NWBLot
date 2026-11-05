@@ -94,53 +94,12 @@ void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(const usize estimatedTr
     inOutContext.vertexRefs.reserve(estimatedTriangleCorners);
 }
 
-b8 FbxSourceMeshStreams::DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
-    inOutMesh.tangents.clear();
-
-    SourceVertexRefIndexMap compactLookup(scratchArena);
-    compactLookup.reserve(inOutMesh.vertexRefs.size());
-    UtilityVector<SourceVertexRef> compactVertexRefs;
-    compactVertexRefs.reserve(inOutMesh.vertexRefs.size());
-    UtilityScratchVector<u32> vertexRefRemap(scratchArena);
-    vertexRefRemap.reserve(inOutMesh.vertexRefs.size());
-
-    for(SourceVertexRef ref : inOutMesh.vertexRefs){
-        ref.tangent = Impl::s_MeshMissingStreamIndex;
-
-        auto found = compactLookup.find(ref);
-        if(found != compactLookup.end()){
-            vertexRefRemap.push_back(found.value());
-            continue;
-        }
-
-        const u32 compactIndex = static_cast<u32>(compactVertexRefs.size());
-        compactVertexRefs.push_back(ref);
-        const auto inserted = compactLookup.emplace(ref, compactIndex);
-        if(!inserted.second){
-            NWB_ASSERT(false);
-            return false;
-        }
-        vertexRefRemap.push_back(compactIndex);
-    }
-
-    for(u32& index : inOutMesh.indices){
-        NWB_ASSERT(index < vertexRefRemap.size());
-        index = vertexRefRemap[index];
-    }
-    inOutMesh.vertexRefs = Move(compactVertexRefs);
-    return true;
+b8 FbxSourceMeshStreams::DropSourceMeshTangents(Core::Alloc::ScratchArena&, SourceMeshStreams& inOutMesh){
+    return DropSourceMeshTangentsStreams(inOutMesh.tangents, inOutMesh.vertexRefs, inOutMesh.indices);
 }
 
 b8 FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){
-    if(mesh.max_face_triangles > Limit<usize>::s_Max / Impl::s_MeshletTriangleIndexCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
-        return false;
-    }
-
-    const usize triangleIndexCapacity = static_cast<usize>(mesh.max_face_triangles) * Impl::s_MeshletTriangleIndexCount;
-    if(inOutTriangleIndices.size() < triangleIndexCapacity)
-        inOutTriangleIndices.resize(triangleIndexCapacity);
-    return true;
+    return EnsureTriangleIndexScratchCapacityCount(mesh.max_face_triangles, inOutTriangleIndices);
 }
 
 Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
@@ -267,4 +226,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

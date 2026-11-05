@@ -32,70 +32,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAsse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 LogAndValidateMaterialTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes, const TStringView failureContext){
-    usize failureIndex = 0u;
-    const MaterialTypedLayoutValidationStatus::Enum status = ValidateMaterialTypedLayout(layoutHash, blocks, fields, blockBytes.size(), failureIndex);
-    switch(status){
-    case MaterialTypedLayoutValidationStatus::Valid:
-        return true;
-    case MaterialTypedLayoutValidationStatus::EmptyLayout:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout is empty"), failureContext);
-        return false;
-    case MaterialTypedLayoutValidationStatus::ZeroHash:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout has zero hash"), failureContext);
-        return false;
-    case MaterialTypedLayoutValidationStatus::MissingBlocksOrFields:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout blocks and fields must both be present"), failureContext);
-        return false;
-    case MaterialTypedLayoutValidationStatus::EmptyBlockName:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has empty name"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::InvalidBlockClass:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has invalid class {}"), failureContext, failureIndex, static_cast<u32>(blocks[failureIndex].blockClass));
-        return false;
-    case MaterialTypedLayoutValidationStatus::NonContiguousFieldRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has non-contiguous field range"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::FieldRangeExceedsCount:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} field range exceeds field count"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::EmptyFieldName:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has empty name"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::InvalidFieldType:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has invalid type {}"), failureContext, failureIndex, static_cast<u32>(fields[failureIndex].fieldType));
-        return false;
-    case MaterialTypedLayoutValidationStatus::FieldAlignmentOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} alignment overflows"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::MisalignedFieldOffset:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has misaligned offset"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::FieldByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} byte size overflows"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::BlockByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size overflows"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::BlockByteSizeMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size does not match its fields"), failureContext, failureIndex);
-        return false;
-    case MaterialTypedLayoutValidationStatus::UnownedFields:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout has unowned fields"), failureContext);
-        return false;
-    case MaterialTypedLayoutValidationStatus::LayoutHashMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout hash mismatch"), failureContext);
-        return false;
-    case MaterialTypedLayoutValidationStatus::TotalBlockByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte size overflows"), failureContext);
-        return false;
-    case MaterialTypedLayoutValidationStatus::TotalBlockByteCountMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte count does not match typed layout"), failureContext);
-        return false;
-    }
-    return false;
-}
-
 struct MaterialTypedLayoutPayload final{
     u64 layoutHash = 0u;
     Material::TypedLayoutBlockVector blocks;
@@ -208,7 +144,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
         payload.resourceReferences.push_back(*resourceReference);
     }
 
-    if(!LogAndValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, s_MaterialLoadBinaryContext))
+    if(!LogAndValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, s_MaterialLoadBinaryContextText))
         return MakeUnexpected(Failure{});
     if(!ValidateMaterialResourceReferences(payload.blocks, payload.fields, payload.resourceReferences)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));
@@ -392,7 +328,7 @@ b8 Material::loadBinary(const Span<const u8> binary){
     if(!extinctionShader)
         return false;
     candidate.m_avboitExtinctionPixelShader = *extinctionShader;
-    if(!candidate.validatePayload(__hidden_assets_material_runtime::s_MaterialLoadBinaryContext))
+    if(!candidate.validatePayload(__hidden_assets_material_runtime::s_MaterialLoadBinaryContext, s_MaterialLoadBinaryContextText))
         return false;
 
     if(cursor != binary.size()){
@@ -404,48 +340,24 @@ b8 Material::loadBinary(const Span<const u8> binary){
     return true;
 }
 
-b8 Material::validatePayload(const TStringView failureContext)const{
+b8 Material::validatePayload(const TStringView failureContext, const AStringView failureContextText)const{
     if(!checkVirtualPath(failureContext))
         return false;
-    if(m_stageShaderCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material has no shader stages"), failureContext);
-        return false;
-    }
-    if(!m_materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material interface is required"), failureContext);
-        return false;
-    }
-    if(m_shaderVariant.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: shader variant is empty"), failureContext);
-        return false;
-    }
-    if(!HasValidMaterialAvboitPixelShaderContract(m_transparent, m_avboitAccumulatePixelShader, m_avboitOccupancyPixelShader, m_avboitExtinctionPixelShader)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: AVBOIT pixel shaders must be present if and only if the material is transparent"), failureContext);
-        return false;
-    }
-    if(m_typedLayoutHash == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: interface material is missing typed layout data"), failureContext);
-        return false;
-    }
-    if(m_typedLayoutBlocks.size() > Limit<u32>::s_Max || m_typedLayoutFields.size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout count exceeds u32 range"), failureContext);
-        return false;
-    }
-    if(m_typedBlockBytes.size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte count exceeds u32 range"), failureContext);
-        return false;
-    }
-    if(m_resourceReferences.size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material resource reference count exceeds u32 range"), failureContext);
-        return false;
-    }
-    if(!__hidden_assets_material_runtime::LogAndValidateMaterialTypedLayout(m_typedLayoutHash, m_typedLayoutBlocks, m_typedLayoutFields, m_typedBlockBytes, failureContext))
-        return false;
-    if(!ValidateMaterialResourceReferences(m_typedLayoutBlocks, m_typedLayoutFields, m_resourceReferences)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: material resource references do not match typed layout"), failureContext);
-        return false;
-    }
-    return true;
+    return ValidateMaterialPayloadData(
+        m_stageShaderCount,
+        m_materialInterface,
+        AStringView(m_shaderVariant),
+        m_transparent,
+        m_avboitAccumulatePixelShader,
+        m_avboitOccupancyPixelShader,
+        m_avboitExtinctionPixelShader,
+        m_typedLayoutHash,
+        m_typedLayoutBlocks,
+        m_typedLayoutFields,
+        m_typedBlockBytes,
+        m_resourceReferences,
+        failureContextText
+    );
 }
 
 void Material::setTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes){
@@ -483,4 +395,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

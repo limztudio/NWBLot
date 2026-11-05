@@ -22,6 +22,9 @@ const u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
 const u32 s_MaterialLayoutFieldFirstTypeId = cast<u32>(MaterialLayoutFieldType::b8);
 const u32 s_MaterialParameterFirstValueTypeId = cast<u32>(MaterialParameterValueType::b8);
 const StringView s_MaterialTypedLayoutHashHeader = "NWB_MATERIAL_TYPED_LAYOUT_V1";
+const StringView s_MaterialLoadBinaryContextText = "Material::loadBinary";
+const StringView s_MaterialValidatePayloadContextText = "Material::validatePayload";
+const StringView s_MaterialSerializeContextText = "MaterialAssetCodec::serialize";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -187,102 +190,6 @@ class MaterialResourceReferenceBinary{
     public NameHash resourceNameHash;
     public u32 resourceKind = 0u;
     public u32 constantByteOffset = 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
-    return blockClass == MaterialBlockClass::MaterialConstant || blockClass == MaterialBlockClass::MaterialMutable;
-}
-
-b8 IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
-    return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
-}
-
-b8 IsValidSerializedMaterialResourceReference(in MaterialResourceKind resourceKind, in Name resourceName){
-    return resourceName != s_NameNone && IsValidMaterialResourceKind(resourceKind);
-}
-
-b8 IsValidMaterialLayoutFieldType(in MaterialLayoutFieldType fieldType){
-    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::Sampler);
-}
-
-b8 IsMaterialLayoutNumericFieldType(in MaterialLayoutFieldType fieldType){
-    return cast<u32>(fieldType) >= cast<u32>(MaterialLayoutFieldType::b8) && cast<u32>(fieldType) <= cast<u32>(MaterialLayoutFieldType::f32x4);
-}
-
-b8 IsMaterialLayoutResourceFieldType(in MaterialLayoutFieldType fieldType){
-    return fieldType == MaterialLayoutFieldType::SampledImage2D || fieldType == MaterialLayoutFieldType::Sampler;
-}
-
-MaterialResourceKind MaterialLayoutFieldResourceKind(in MaterialLayoutFieldType fieldType){
-    switch(fieldType){
-        case MaterialLayoutFieldType::SampledImage2D:
-            return MaterialResourceKind::SampledImage2D;
-        case MaterialLayoutFieldType::Sampler:
-            return MaterialResourceKind::Sampler;
-        default:
-            return MaterialResourceKind::None;
-    }
-}
-
-u32 MaterialLayoutFieldComponentCount(in MaterialLayoutFieldType fieldType){
-    if(!IsMaterialLayoutNumericFieldType(fieldType))
-        return 0u;
-
-    return ((cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) % s_MaterialLayoutFieldComponentsPerValueType) + 1u;
-}
-
-MaterialParameterValueType MaterialLayoutFieldValueType(in MaterialLayoutFieldType fieldType){
-    if(!IsMaterialLayoutNumericFieldType(fieldType))
-        return MaterialParameterValueType::None;
-
-    const u32 valueTypeOffset = (cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType;
-    return cast<MaterialParameterValueType>(s_MaterialParameterFirstValueTypeId + valueTypeOffset);
-}
-
-u32 MaterialParameterValueTypeByteSize(in MaterialParameterValueType valueType){
-    switch(valueType){
-        case MaterialParameterValueType::b8:
-        case MaterialParameterValueType::i8:
-        case MaterialParameterValueType::u8:
-            return 1u;
-        case MaterialParameterValueType::i16:
-        case MaterialParameterValueType::u16:
-        case MaterialParameterValueType::f16:
-            return 2u;
-        case MaterialParameterValueType::i32:
-        case MaterialParameterValueType::u32:
-        case MaterialParameterValueType::f32:
-            return 4u;
-        default:
-            return 0u;
-    }
-}
-
-u32 MaterialLayoutFieldByteSize(in MaterialLayoutFieldType fieldType){
-    if(IsMaterialLayoutResourceFieldType(fieldType))
-        return 4u;
-
-    return MaterialLayoutFieldComponentCount(fieldType) * MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
-}
-
-u32 MaterialLayoutFieldAlignment(in MaterialLayoutFieldType fieldType){
-    if(IsMaterialLayoutResourceFieldType(fieldType))
-        return 4u;
-
-    return MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
-}
-
-Expected<u32> TryAlignMaterialLayoutFieldOffset(in u32 byteOffset, in MaterialLayoutFieldType fieldType){
-    const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
-    return alignU32PowerOfTwoChecked(byteOffset, alignment);
-}
-
-Expected<u32> TryAlignMaterialLayoutBlockByteSize(in u32 byteSize){
-    return alignU32PowerOfTwoChecked(byteSize, s_MaterialTypedWordBytes);
 }
 
 

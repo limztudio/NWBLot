@@ -106,5 +106,51 @@ u32 PackMaterialFlags(in b8 transparent, in b8 twoSided, in b8 refractive){
     return materialFlags;
 }
 
+b8 ValidateMaterialCookEntryRequiredFields(
+    in StringView virtualPath,
+    in StringView materialInterface,
+    in u64 typedLayoutHash,
+    in StringView shaderVariant
+){
+    if(materialInterface.empty()){
+        error("Material cook: material '{}' is missing required material interface", virtualPath);
+        return false;
+    }
+    if(typedLayoutHash == 0u){
+        error("Material cook: interface material '{}' is missing typed layout data", virtualPath);
+        return false;
+    }
+    if(shaderVariant.empty()){
+        error("Material cook: material '{}' has empty shader variant", virtualPath);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateMaterialGeneratedPixelShaderEntry(
+    in StringView virtualPath,
+    in b8 hasExplicitShaders,
+    in b8 hasSurface,
+    in StringView materialInterface
+){
+    if(hasExplicitShaders){
+        if(hasSurface){
+            error("Material cook: material '{}' declares both 'surface' and 'shaders'; declare exactly one", virtualPath);
+            return false;
+        }
+        return true;
+    }
+    if(!hasSurface){
+        error("Material cook: material '{}' declares neither 'surface' nor 'shaders'", virtualPath);
+        return false;
+    }
+    if(materialInterface.empty()){
+        error("Material cook: material '{}' needs an interface to generate its pixel shader", virtualPath);
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

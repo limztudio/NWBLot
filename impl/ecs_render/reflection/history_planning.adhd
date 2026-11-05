@@ -115,57 +115,6 @@ ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPla
     return result;
 }
 
-void PopulateReflectionFrameSettingsParameters(in ReflectionSettings settings, mut ReflectionFrameParameters outParameters){
-    outParameters.traceMode = cast<u32>(settings.traceMode);
-    outParameters.samplingSeed = settings.samplingSeed;
-    outParameters.maxOpticalQueries = settings.maxOpticalQueries;
-    outParameters.debugView = cast<u32>(settings.debugView);
-    outParameters.maxRayDistance = settings.maxRayDistance;
-    outParameters.distanceFadeStart = settings.distanceFadeStart;
-    outParameters.roughnessCutoff = settings.roughnessCutoff;
-    outParameters.environmentTopR = settings.environmentTop.x;
-    outParameters.environmentTopG = settings.environmentTop.y;
-    outParameters.environmentTopB = settings.environmentTop.z;
-    outParameters.environmentBottomR = settings.environmentBottom.x;
-    outParameters.environmentBottomG = settings.environmentBottom.y;
-    outParameters.environmentBottomB = settings.environmentBottom.z;
-    outParameters.screenMaxSteps = settings.screenMaxSteps;
-    outParameters.screenThickness = settings.screenThickness;
-    outParameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
-    outParameters.screenEdgeFade = settings.screenEdgeFade;
-    if(settings.diagnosticsEnabled)
-        outParameters.diagnosticsEnabled = 1u;
-    else
-        outParameters.diagnosticsEnabled = 0u;
-}
-
-ReflectionFrameParameters ResolveReflectionUploadFrameParameters(
-    in ReflectionFrameParameters baseParameters,
-    in ReflectionHistoryPlan historyPlan,
-    in ReflectionFeedbackPlan feedbackPlan,
-    in b8 feedbackReserved,
-    in b8 hardwarePreparationReady
-){
-    ReflectionFrameParameters parameters = baseParameters;
-    if(!hardwarePreparationReady)
-        parameters.hardwareEnabled = 0u;
-    b8 hardwareReady = parameters.hardwareEnabled != 0u;
-    ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(historyPlan, hardwareReady);
-    ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(feedbackPlan, hardwareReady);
-    parameters.feedbackFlags = 0u;
-    parameters.feedbackProbeIndex = feedback.probeIndex;
-    if(feedbackReserved && feedback.eligible){
-        parameters.feedbackFlags = s_ReflectionFeedbackWriteEnabled;
-        if(feedback.reused)
-            parameters.feedbackFlags |= s_ReflectionFeedbackPreviousValid;
-    }
-    parameters.sampleIndex = history.sampleIndex;
-    ReflectionSampleBase sampleBase = ComputeReflectionSampleBase(parameters.sampleIndex);
-    parameters.sampleBaseX = sampleBase.x;
-    parameters.sampleBaseY = sampleBase.y;
-    return parameters;
-}
-
 b8 CanReserveReflectionHistoryPlan(
     in u16 deviceGeneration,
     in u64 reservedSequence,
@@ -225,64 +174,6 @@ void ApplyReflectionStatisticsHistoryOutcome(
     inOutMetadata.historyResetReason = history.resetReason;
 }
 
-void PopulateReflectionPreparedFrameParameters(
-    in u32 width,
-    in u32 height,
-    in u32 queueCapacity,
-    in u32 opaqueOutputSlot,
-    in u32 glassOutputSlot,
-    in u32 opaqueRadianceSlot,
-    in u32 glassRadianceSlot,
-    in u32 queueSlot,
-    in u32 counterSlot,
-    in u32 argsSlot,
-    in u32 depthPyramidSlot,
-    in u32 depthMipCount,
-    mut ReflectionFrameParameters outParameters
-){
-    outParameters.width = width;
-    outParameters.height = height;
-    outParameters.queueCapacity = queueCapacity;
-    outParameters.opaqueOutputSlot = opaqueOutputSlot;
-    outParameters.glassOutputSlot = glassOutputSlot;
-    outParameters.opaqueRadianceSlot = opaqueRadianceSlot;
-    outParameters.glassRadianceSlot = glassRadianceSlot;
-    outParameters.queueSlot = queueSlot;
-    outParameters.counterSlot = counterSlot;
-    outParameters.argsSlot = argsSlot;
-    outParameters.depthPyramidSlot = depthPyramidSlot;
-    outParameters.depthMipCount = depthMipCount;
-}
-
-ReflectionStatistics MakeReflectionStatisticsMetadata(
-    in ReflectionSettings settings,
-    in ReflectionFrameParameters parameters,
-    in u32 frameIndex,
-    in u64 graphicsFrameIndex,
-    in b8 hasCsgTraceContextBuffer,
-    in b8 opticalTransport,
-    in b8 hardwareRequested,
-    in b8 hardwareAvailable
-){
-    ReflectionStatistics metadata;
-    metadata.frameIndex = frameIndex;
-    metadata.feedbackRequested = settings.screenFeedbackEnabled;
-    metadata.schedulingCounterValid = settings.diagnosticsEnabled;
-    metadata.graphicsFrameIndex = graphicsFrameIndex;
-    metadata.samplingSeed = settings.samplingSeed;
-    metadata.width = parameters.width;
-    metadata.height = parameters.height;
-    metadata.requestedHardwareBudget = settings.maxHardwareRaysPerFrame;
-    metadata.maxOpticalQueries = settings.maxOpticalQueries;
-    metadata.csgHardwareEnabled = parameters.hardwareEnabled != 0u && hasCsgTraceContextBuffer;
-    metadata.opticalTransportEnabled = parameters.hardwareEnabled != 0u && opticalTransport;
-    metadata.effectiveHardwareBudget = parameters.maxHardwareRays;
-    metadata.queueCapacity = parameters.queueCapacity;
-    metadata.traceMode = settings.traceMode;
-    metadata.hardwareRequested = hardwareRequested;
-    metadata.hardwareAvailable = hardwareAvailable;
-    return metadata;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

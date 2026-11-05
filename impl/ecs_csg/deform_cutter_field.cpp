@@ -4,7 +4,7 @@
 
 #include "deform_cutter_field.h"
 
-#include <global/simd/vector.h>
+#include <impl/ecs_csg/deform_wall_clip.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,52 +23,18 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistan
     const CsgShapeRegistry* shapeRegistry,
     Vector<f32, Core::Alloc::ScratchArena>& outDistances
 ){
-    CsgShapeInlineParameters inlineParameters = MakeCsgShapeInlineParameters(LoadFloat(shape.parameter0), LoadFloat(shape.parameter1));
-    CsgShapeSignedDistanceCallback registryDistanceCallback = nullptr;
-    CsgBuiltInShapeKind::Enum builtInKind = CsgBuiltInShapeKind::Plane;
-
+    u32 registryParameterByteSize = 0u;
+    Optional<InplaceFunction<0u, Expected<f32>(const SIMDVectorSingle, const CsgShapeInlineParameters&)>> registryDistanceCallback;
     if(shapeRegistry){
         const auto shapeType = shapeRegistry->findShapeType(shape.shapeType);
         if(shapeType && shapeType->desc.signedDistanceCallback){
-            const auto packedParameterBytes = PackCsgShapeDefaultParameterBytes(shapeType->desc.parameterByteSize, inlineParameters);
-            if(!packedParameterBytes)
-                return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-            inlineParameters = ReadCsgShapeInlineParameters(Span<const u8>(packedParameterBytes->data(), packedParameterBytes->size()));
+            registryParameterByteSize = shapeType->desc.parameterByteSize;
             registryDistanceCallback = shapeType->desc.signedDistanceCallback;
         }
     }
-
-    if(!registryDistanceCallback){
-        const auto resolvedBuiltInKind = TryResolveBuiltInCsgShapeKind(shape.shapeType);
-        if(!resolvedBuiltInKind)
-            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-        builtInKind = *resolvedBuiltInKind;
-    }
-
-    const usize vertexCount = vertices.size();
-    outDistances.clear();
-    outDistances.resize(vertexCount, s_KeepDistanceZero);
-
-    const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
-    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        const CsgDeformVertex& vertex = vertices[vertexIndex];
-        const SIMDVectorSingle shapePosition = TransformCsgDeformVertexPosition(vertex, worldToShape);
-
-        f32 distance = 0.0f;
-        if(registryDistanceCallback){
-            const auto evaluated = registryDistanceCallback(shapePosition, inlineParameters);
-            if(!evaluated)
-                return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
-            distance = *evaluated;
-        }
-        else
-            distance = EvaluateBuiltInCsgShapeSignedDistance(builtInKind, shapePosition, inlineParameters);
-
-        const auto snapped = TrySnapCsgDeformSignedDistance(distance, boundaryEpsilon);
-        if(!snapped)
-            return MakeUnexpected(snapped.error());
-        outDistances[vertexIndex] = *snapped;
-    }
+    const auto computed = ComputeCsgDeformShapeDistances(shape, vertices, boundaryEpsilon, registryParameterByteSize, registryDistanceCallback, outDistances);
+    if(!computed)
+        return MakeUnexpected(computed.error());
     return {};
 }
 
@@ -80,4 +46,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

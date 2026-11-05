@@ -105,14 +105,6 @@ template<typename Value>
     return outRemap;
 }
 
-[[nodiscard]] b8 RemapComponentRefs(const Span<const u32> positions, const Span<const u32> normals, const Span<const u32> tangents, const Span<const u32> uv0, const Span<const u32> colors, const Span<const u32> skin, SourceMeshStreams& inOutMesh){
-    for(SourceVertexRef& ref : inOutMesh.vertexRefs){
-        if(!RemapSourceVertexRef(positions, normals, tangents, uv0, colors, skin, ref))
-            return false;
-    }
-    return true;
-}
-
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     if(inOutMesh.positions.size() != skinInfluences.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
@@ -144,7 +136,7 @@ template<typename Value>
     if(!colorRemap)
         return MakeUnexpected(Failure{});
 
-    if(!RemapComponentRefs(positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, skinRemap, inOutMesh))
+    if(!RemapSourceVertexRefs(positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, skinRemap, inOutMesh.vertexRefs))
         return MakeUnexpected(Failure{});
 
     report.after = CountSourceMeshStreams(inOutMesh);
@@ -207,7 +199,7 @@ Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(Core::CpuTa
     const auto skinRemap = __hidden_mesh_refresh::DeduplicateStream(s_SkinStreamLabel, cpuScheduler, scratchArena, inOutMesh.skin);
     if(!skinRemap)
         return MakeUnexpected(Failure{});
-    if(!__hidden_mesh_refresh::RemapComponentRefs(*positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, *skinRemap, inOutMesh))
+    if(!RemapSourceVertexRefs(*positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, *skinRemap, inOutMesh.vertexRefs))
         return MakeUnexpected(Failure{});
 
     report.after = CountSourceMeshStreams(inOutMesh);

@@ -119,7 +119,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     return outData;
 }
 
-Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena){
+Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena&){
     PositionAlignedSkinnedMesh result;
     SourceMeshStreams& outMesh = result.mesh;
     UtilityVector<MeshSkinInfluence>& outPositionSkin = result.skin;
@@ -132,39 +132,8 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
     outMesh.uv0 = sourceMesh.uv0;
     outMesh.colors = sourceMesh.colors;
     outMesh.indices = sourceMesh.indices;
-    outMesh.vertexRefs.reserve(sourceMesh.vertexRefs.size());
-    outMesh.positions.reserve(sourceMesh.vertexRefs.size());
-    outPositionSkin.reserve(sourceMesh.vertexRefs.size());
-
-    UtilityScratchMap<u64, u32> positionSkinLookup(scratchArena);
-    positionSkinLookup.reserve(sourceMesh.vertexRefs.size());
-    for(const SourceVertexRef& sourceRef : sourceMesh.vertexRefs){
-        const u64 key = PositionSkinKey(sourceRef.position, sourceRef.skin);
-        u32 positionIndex = 0u;
-        const auto foundPosition = positionSkinLookup.find(key);
-        if(foundPosition != positionSkinLookup.end())
-            positionIndex = foundPosition.value();
-        else{
-            if(outMesh.positions.size() > static_cast<usize>(Limit<u32>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: split skinned mesh has too many positions"));
-                return MakeUnexpected(Failure{});
-            }
-
-            positionIndex = static_cast<u32>(outMesh.positions.size());
-            outMesh.positions.push_back(sourceMesh.positions[sourceRef.position]);
-            outPositionSkin.push_back(sourceMesh.skin[sourceRef.skin]);
-            const auto inserted = positionSkinLookup.emplace(key, positionIndex);
-            if(!inserted.second){
-                NWB_ASSERT(false);
-                return MakeUnexpected(Failure{});
-            }
-        }
-
-        SourceVertexRef ref = sourceRef;
-        ref.position = positionIndex;
-        ref.skin = Impl::s_MeshMissingStreamIndex;
-        outMesh.vertexRefs.push_back(ref);
-    }
+    if(!BuildPositionAlignedSkinnedMeshStreams(sourceMesh.positions, sourceMesh.skin, sourceMesh.vertexRefs, outMesh.positions, outPositionSkin, outMesh.vertexRefs))
+        return MakeUnexpected(Failure{});
 
     return result;
 }
@@ -183,4 +152,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

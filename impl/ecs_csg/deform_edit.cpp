@@ -77,7 +77,7 @@ Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
         if(postCutReason != CsgDeformViabilityReason::Ok)
             return MakeUnexpected(MakeCsgDeformFailure(postCutReason, stats));
         if(options.fillCaps){
-            const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, scratchEdges, outVertices, outTriangles);
+            const auto cutCaps = FillCsgDeformCutCaps(scratchEdges, outVertices, outTriangles);
             if(!cutCaps)
                 return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::CapLoopFailed, stats));
             capTriangles += *cutCaps;
@@ -121,4 +121,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

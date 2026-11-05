@@ -339,7 +339,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
     const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
-    u64 gatheredMaterialContentHash = hwMaterialContextHash;
     const b8 canReuseHwMaterialContext =
         staticScene
         && !m_rayTracingState.m_sceneHasTransparentOccluder
@@ -370,21 +369,23 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     // Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
     if(!m_hardwareOpticalScene.prepare(opticalScene) || !m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
         return false;
-    Fnv64AppendValue(gatheredMaterialContentHash, opticalScene.contentHash());
-    if(csg.hasCsg)
-        Fnv64AppendValue(gatheredMaterialContentHash, csg.identity);
-    m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };
+    m_preparedSceneContentStamp = BuildSwSceneContentStamp(
+        tlasStaticSceneHash,
+        hwMaterialContextHash,
+        opticalScene.contentHash(),
+        csg.hasCsg,
+        csg.identity,
+        staticScene,
+        contentComplete
+    );
     if(csg.hasCsg){
-        u64 captureIdentity = gatheredMaterialContentHash;
+        u64 captureIdentity = m_preparedSceneContentStamp.material;
         Fnv64AppendValue(captureIdentity, tlasStaticSceneHash);
         Fnv64AppendValue(captureIdentity, csg.identity);
         for(const auto& buffer : m_lightSpaceShadow.m_sceneBuffers)
             Fnv64AppendValue(captureIdentity, buffer.get());
-        for(const auto& caster : m_lightSpaceShadow.m_casters){
-            Fnv64AppendValue(captureIdentity, caster.meshletCount);
-            Fnv64AppendValue(captureIdentity, caster.meshletDescSlot);
-            Fnv64AppendValue(captureIdentity, caster.meshletBoundsSlot);
-        }
+        for(const auto& caster : m_lightSpaceShadow.m_casters)
+            UpdateHwLightSpaceCasterCaptureHash(caster.meshletCount, caster.meshletDescSlot, caster.meshletBoundsSlot, captureIdentity);
         b8 captureTrusted = staticScene && contentComplete;
         if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
             captureIdentity = BuildLightSpaceCsgCaptureIdentity(m_lightSpaceShadow.m_csg, instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes, m_preparedShadowTraceMaterialSampledTextures);

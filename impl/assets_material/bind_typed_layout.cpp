@@ -129,41 +129,22 @@ static b8 BuildMaterialBindTypedLayoutParameterLookup(const AStringView contextL
         for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
             const usize fieldIndex = static_cast<usize>(block.fieldBegin) + fieldOffset;
             NWB_ASSERT(fieldIndex < inOutLayout.typedLayoutFields.size());
-            if(fieldIndex > Limit<u32>::s_Max){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' instance '{}' " "field range exceeds layout for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance.name), ConvertString(contextLabel));
-                return false;
-            }
-
             const MaterialBindField& bindField = bindStruct.fields[fieldOffset];
             const MaterialTypedLayoutField& field = inOutLayout.typedLayoutFields[fieldIndex];
             NWB_ASSERT(Name::FromText(AStringView(bindField.name)) == field.fieldName);
-            if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' " "byte offset exceeds u32 for '{}'")
-                    , ConvertString(bindEntry.virtualPath)
-                    , ConvertString(bindStruct.name)
-                    , ConvertString(bindField.name)
-                    , ConvertString(contextLabel)
-                );
+            if(!TryInsertMaterialBindTypedLayoutParameterLookupEntry(
+                AStringView(bindEntry.virtualPath),
+                contextLabel,
+                AStringView(instance.name),
+                AStringView(bindStruct.name),
+                AStringView(bindField.name),
+                blockEntry,
+                block,
+                fieldIndex,
+                field,
+                inOutLayout.parameterLookup
+            ))
                 return false;
-            }
-            // Resource fields live in constant blocks, whose total size the builder already bounded to u32.
-            NWB_ASSERT(!IsMaterialLayoutResourceFieldType(field.fieldType) || field.offset <= Limit<u32>::s_Max - blockEntry.constantByteBegin);
-
-            const Expected<ACompactString> parameterName = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name));
-            if(!parameterName){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity"), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(contextLabel));
-                return false;
-            }
-
-            MaterialBindTypedLayoutParameterLookupEntry entry;
-            entry.fieldIndex = static_cast<u32>(fieldIndex);
-            entry.byteOffset = blockEntry.byteBegin + field.offset;
-            entry.constantByteOffset = blockEntry.constantByteBegin + field.offset;
-            entry.blockName = block.blockName;
-            if(!inOutLayout.parameterLookup.emplace(*parameterName, entry).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate parameter '{}' in '{}'"), ConvertString(parameterName->view()), ConvertString(contextLabel));
-                return false;
-            }
         }
     }
 
@@ -256,91 +237,33 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
         block.byteSize = 0u;
 
         for(const MaterialBindField& bindField : bindStruct->fields){
-            const Expected<MaterialLayoutFieldType::Enum> fieldTypeResult = TryParseMaterialLayoutFieldTypeText(AStringView(bindField.type));
-            if(!fieldTypeResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' has " "unsupported type '{}' for '{}'")
-                    , ConvertString(bindEntry.virtualPath)
-                    , ConvertString(instance->name)
-                    , ConvertString(bindField.name)
-                    , ConvertString(bindField.type)
-                    , ConvertString(contextName.resolvedText())
-                );
-                return MakeUnexpected(Failure{});
-            }
-            const MaterialLayoutFieldType::Enum fieldType = *fieldTypeResult;
-            if(IsMaterialLayoutResourceFieldType(fieldType) && blockClass != MaterialBlockClass::MaterialConstant){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' must use material-constant storage for '{}'"), ConvertString(instance->name), ConvertString(bindField.name), ConvertString(contextName.resolvedText()));
-                return MakeUnexpected(Failure{});
-            }
-
-            const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
-            const Expected<u32> fieldOffset = TryAlignMaterialLayoutFieldOffset(block.byteSize, fieldType);
-            if(fieldByteSize == 0u || !fieldOffset || *fieldOffset > Limit<u32>::s_Max - fieldByteSize){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' block '{}' exceeds " "u32 byte size for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
-                return MakeUnexpected(Failure{});
-            }
-
-            MaterialTypedLayoutField field;
-            const auto fieldName = Name::FromText(AStringView(bindField.name));
-            if(!fieldName || !*fieldName){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' has invalid field '{}.{}' for '{}'")
-                    , ConvertString(bindEntry.virtualPath)
-                    , ConvertString(instance->name)
-                    , ConvertString(bindField.name)
-                    , ConvertString(contextName.resolvedText())
-                );
-                return MakeUnexpected(Failure{});
-            }
-            field.fieldName = *fieldName;
-            field.fieldType = fieldType;
-            field.offset = *fieldOffset;
-            const auto defaultValue = TryBuildMaterialTypedLayoutDefaultValue(
+            if(!TryAppendMaterialBindTypedLayoutField(
+                AStringView(bindEntry.virtualPath),
                 contextName,
                 AStringView(instance->name),
                 AStringView(bindField.name),
                 AStringView(bindField.type),
                 bindField.defaultArgument(),
-                fieldType
-            );
-            if(!defaultValue)
+                blockClass,
+                blockByteBegin,
+                block.byteSize,
+                layout.typedLayoutFields,
+                layout.typedBlockBytes
+            ))
                 return MakeUnexpected(Failure{});
-            field.defaultValue = *defaultValue;
-            if(static_cast<usize>(field.offset) > Limit<usize>::s_Max - blockByteBegin){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' could " "not append alignment padding for '{}'")
-                    , ConvertString(bindEntry.virtualPath)
-                    , ConvertString(instance->name)
-                    , ConvertString(bindField.name)
-                    , ConvertString(contextName.resolvedText())
-                );
-                return MakeUnexpected(Failure{});
-            }
-            PadMaterialTypedLayoutBytesTo(blockByteBegin + field.offset, layout.typedBlockBytes);
-            AppendMaterialTypedLayoutFieldBytes(fieldType, field.defaultValue, layout.typedBlockBytes);
-
-            layout.typedLayoutFields.push_back(field);
-            block.byteSize = *fieldOffset + fieldByteSize;
         }
 
-        const Expected<u32> alignedBlockByteSize = TryAlignMaterialLayoutBlockByteSize(block.byteSize);
-        if(!alignedBlockByteSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' block '{}' exceeds " "u32 byte size for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
+        if(!TryFinalizeMaterialBindTypedLayoutBlock(
+            AStringView(bindEntry.virtualPath),
+            contextName,
+            AStringView(instance->name),
+            blockByteBegin,
+            block,
+            constantTypedByteSize,
+            layout.typedLayoutBlocks,
+            layout.typedBlockBytes
+        ))
             return MakeUnexpected(Failure{});
-        }
-        block.byteSize = *alignedBlockByteSize;
-        if(static_cast<usize>(block.byteSize) > Limit<usize>::s_Max - blockByteBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' block '{}' could " "not append alignment padding for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance->name), ConvertString(contextName.resolvedText()));
-            return MakeUnexpected(Failure{});
-        }
-        PadMaterialTypedLayoutBytesTo(blockByteBegin + block.byteSize, layout.typedBlockBytes);
-
-        layout.typedLayoutBlocks.push_back(block);
-        if(blockClass == MaterialBlockClass::MaterialConstant){
-            if(block.byteSize > Limit<u32>::s_Max - constantTypedByteSize){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' constant storage exceeds u32 byte size for '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(contextName.resolvedText()));
-                return MakeUnexpected(Failure{});
-            }
-            constantTypedByteSize += block.byteSize;
-        }
     }
 
     layout.layoutHash = ComputeMaterialTypedLayoutHash(layout.typedLayoutBlocks, layout.typedLayoutFields);

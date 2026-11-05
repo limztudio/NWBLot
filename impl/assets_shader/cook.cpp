@@ -399,22 +399,7 @@ b8 ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>& 
 
 
 b8 ShaderAssetSerialization::Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary){
-    const Core::Assets::AssetBytes& bytecode = shader.bytecode();
-    switch(ShaderBinaryPayload::EncodeAssetPayload(AStringView(shader.entryPoint()), bytecode, outBinary)){
-    case ShaderBinaryPayload::AssetPayloadEncodeFailure::None:
-        break;
-    case ShaderBinaryPayload::AssetPayloadEncodeFailure::InvalidEntryPoint:
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader entry point is empty or too long"));
-        return false;
-    case ShaderBinaryPayload::AssetPayloadEncodeFailure::InvalidBytecode:
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V bytecode"));
-        return false;
-    case ShaderBinaryPayload::AssetPayloadEncodeFailure::OutputSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader payload size overflow"));
-        return false;
-    }
-
-    return true;
+    return ShaderBinaryPayload::SerializeShaderAssetPayload(AStringView(shader.entryPoint()), shader.bytecode(), outBinary);
 }
 
 

@@ -39,28 +39,6 @@ NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ShaderBinaryPayload::AssetPayloadView, ShaderBinaryPayload::AssetPayloadDecodeFailure::Enum> ShaderBinaryPayload::DecodeAssetPayload(const Span<const u8> payload)noexcept{
-    usize cursor = 0u;
-    const auto magic = ReadPOD<u32>(payload, cursor);
-    const auto version = ReadPOD<u32>(payload, cursor);
-    if(!magic || !version || *magic != s_AssetPayloadMagic)
-        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidHeader);
-    if(*version != s_AssetPayloadVersion)
-        return MakeUnexpected(AssetPayloadDecodeFailure::UnsupportedVersion);
-    const auto entryPoint = ReadString(payload, cursor);
-    if(!entryPoint || entryPoint->empty())
-        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidEntryPoint);
-
-    const BinaryByteView bytecode{ payload.data() + cursor, payload.size() - cursor };
-    if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
-        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidBytecode);
-    return AssetPayloadView{ *entryPoint, bytecode };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 IShader::~IShader()noexcept = default;
 
 

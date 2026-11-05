@@ -97,6 +97,73 @@ void ReportShaderAssetPayloadDecodeFailure(in AssetPayloadDecodeFailure failure)
     }
 }
 
+AssetPayloadEncodeFailure EncodeAssetPayload(
+    in StringView entryPoint,
+    in Span<u8> bytecode,
+    mut Vector<u8> outPayload
+){
+    if(entryPoint.empty() || entryPoint.size() > s_MaxShaderEntryPointBytes)
+        return AssetPayloadEncodeFailure::InvalidEntryPoint;
+    if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
+        return AssetPayloadEncodeFailure::InvalidBytecode;
+
+    const Expected<usize> payloadBytes = TryComputeShaderAssetPayloadByteCount(entryPoint.size(), bytecode.size());
+    if(!payloadBytes.has_value())
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
+
+    outPayload.clear();
+    outPayload.reserve(payloadBytes.value());
+    AppendU32LittleEndian(outPayload, s_AssetPayloadMagic);
+    AppendU32LittleEndian(outPayload, s_AssetPayloadVersion);
+    if(!AppendString(outPayload, entryPoint))
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
+    for(in u8 byte : bytecode)
+        outPayload.push_back(byte);
+    return AssetPayloadEncodeFailure::None;
+}
+
+b8 SerializeShaderAssetPayload(
+    in StringView entryPoint,
+    in Span<u8> bytecode,
+    mut Vector<u8> outBinary
+){
+    switch(EncodeAssetPayload(entryPoint, bytecode, outBinary)){
+    case AssetPayloadEncodeFailure::None:
+        return true;
+    case AssetPayloadEncodeFailure::InvalidEntryPoint:
+        error("ShaderAssetCodec::serialize failed: shader entry point is empty or too long");
+        return false;
+    case AssetPayloadEncodeFailure::InvalidBytecode:
+        error("ShaderAssetCodec::serialize failed: invalid SPIR-V bytecode");
+        return false;
+    case AssetPayloadEncodeFailure::OutputSizeOverflow:
+        error("ShaderAssetCodec::serialize failed: shader payload size overflow");
+        return false;
+    }
+    return false;
+}
+
+Expected<AssetPayloadView, AssetPayloadDecodeFailure> DecodeAssetPayload(in Span<u8> payload){
+    usize cursor = 0u;
+    const Expected<u32> magic = ReadU32LittleEndian(payload, cursor);
+    const Expected<u32> version = ReadU32LittleEndian(payload, cursor);
+    if(!magic.has_value() || !version.has_value() || magic.value() != s_AssetPayloadMagic)
+        return makeUnexpected(AssetPayloadDecodeFailure::InvalidHeader);
+    if(version.value() != s_AssetPayloadVersion)
+        return makeUnexpected(AssetPayloadDecodeFailure::UnsupportedVersion);
+    const Expected<StringView> entryPoint = ReadString(payload, cursor);
+    if(!entryPoint.has_value() || entryPoint.value().empty())
+        return makeUnexpected(AssetPayloadDecodeFailure::InvalidEntryPoint);
+
+    const Span<u8> bytecode = payload.subspan(cursor, payload.size() - cursor);
+    if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
+        return makeUnexpected(AssetPayloadDecodeFailure::InvalidBytecode);
+    AssetPayloadView outView;
+    outView.entryPoint = entryPoint.value();
+    outView.bytecode = bytecode;
+    return outView;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

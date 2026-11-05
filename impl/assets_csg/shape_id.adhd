@@ -74,6 +74,44 @@ b8 IsBeforeCsgShapeCookName(in Name lhs, in Name rhs){
     return lhs.resolvedText() < rhs.resolvedText();
 }
 
+void AppendCsgShapeDecimalU32(in u32 value, mut String inOutText){
+    if(value == 0u){
+        inOutText.push_back('0');
+        return;
+    }
+    FixedVector<u8, 10u> digits;
+    u32 remaining = value;
+    while(remaining > 0u){
+        digits.push_back(cast<u8>(remaining % 10u));
+        remaining = remaining / 10u;
+    }
+    for(usize index = digits.size(); index > 0u; --index)
+        inOutText.push_back(cast<i8>(48u + cast<u32>(digits[index - 1u])));
+}
+
+void BeginCsgShapeModuleIncludeSource(mut String outSource){
+    outSource.clear();
+    outSource.append(s_CsgModuleSourceHeader);
+}
+
+void AppendCsgShapeModuleEvalInclude(
+    in CsgShapeTypeId shapeTypeId,
+    in StringView evalInclude,
+    mut String inOutSource
+){
+    inOutSource.append(s_CsgDefineDirective);
+    inOutSource.append(s_CsgEvalShapeIdDefineName);
+    inOutSource.push_back(' ');
+    AppendCsgShapeDecimalU32(shapeTypeId, inOutSource);
+    inOutSource.append(s_CsgUnsignedLiteralLineEnd);
+    inOutSource.append(s_CsgIncludeDirective);
+    inOutSource.append(evalInclude);
+    inOutSource.append(s_CsgIncludeDirectiveEnd);
+    inOutSource.append(s_CsgUndefDirective);
+    inOutSource.append(s_CsgEvalShapeIdDefineName);
+    inOutSource.append(s_CsgUndefDirectiveEnd);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

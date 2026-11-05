@@ -94,37 +94,22 @@ using Core::Assets::ScratchString;
     return true;
 }
 
-[[nodiscard]] static b8 WriteModuleInclude(const Span<const CsgShapeCookEntry> csgShapeEntries, const Name shaderModule, const AStringView moduleInclude, const Path& includeRoot, ScratchString& scratchSource){
-    scratchSource.clear();
-    scratchSource += s_CsgModuleSourceHeader;
+[[nodiscard]] static b8 WriteModuleInclude(const Span<const CsgShapeCookEntry> csgShapeEntries, const Name shaderModule, const AStringView moduleInclude, const Path& includeRoot, ScratchArena& scratchArena, CookString& source){
+    BeginCsgShapeModuleIncludeSource(source);
 
     for(const CsgShapeCookEntry& entry : csgShapeEntries){
         if(entry.shaderModule != shaderModule)
             continue;
-
-        Array<char, s_DecimalTextBufferBytes> shapeTypeIdText{};
-        const AStringView shapeTypeIdView = FormatDecimal(entry.shapeTypeId, shapeTypeIdText);
-
-        scratchSource += s_CsgDefineDirective;
-        scratchSource += s_CsgEvalShapeIdDefineName;
-        scratchSource += ' ';
-        scratchSource += shapeTypeIdView;
-        scratchSource += s_CsgUnsignedLiteralLineEnd;
-        scratchSource += s_CsgIncludeDirective;
-        scratchSource += entry.evalInclude;
-        scratchSource += s_CsgIncludeDirectiveEnd;
-        scratchSource += s_CsgUndefDirective;
-        scratchSource += s_CsgEvalShapeIdDefineName;
-        scratchSource += s_CsgUndefDirectiveEnd;
+        AppendCsgShapeModuleEvalInclude(entry.shapeTypeId, AStringView(entry.evalInclude), source);
     }
 
-    const ::Path<ScratchArena> outputPath = ::Path<ScratchArena>(scratchSource.get_allocator().arena(), includeRoot) / moduleInclude;
+    const ::Path<ScratchArena> outputPath = ::Path<ScratchArena>(scratchArena, includeRoot) / moduleInclude;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
         return false;
     }
-    if(!WriteTextFile(outputPath, AStringView(scratchSource))){
+    if(!WriteTextFile(outputPath, AStringView(source))){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
@@ -329,13 +314,13 @@ Expected<Path> EmitCsgShapeModuleIncludes(const Path& cacheDirectory, const AStr
     HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> emittedModules(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     emittedModules.reserve(csgShapeEntries.size());
 
-    ScratchString scratchSource(scratchArena);
-    scratchSource.reserve(moduleSourceCapacity);
+    CookString source(csgShapeEntries[0u].evalInclude.get_allocator().arena());
+    source.reserve(moduleSourceCapacity);
     for(const CsgShapeCookEntry& moduleEntry : csgShapeEntries){
         if(!emittedModules.insert(moduleEntry.shaderModule.hash()).second)
             continue;
 
-        if(!WriteModuleInclude(csgShapeEntries, moduleEntry.shaderModule, moduleEntry.moduleInclude, includeRoot, scratchSource))
+        if(!WriteModuleInclude(csgShapeEntries, moduleEntry.shaderModule, moduleEntry.moduleInclude, includeRoot, scratchArena, source))
             return MakeUnexpected(Failure{});
     }
 

@@ -21,11 +21,14 @@ namespace RayTracingSoftwareBvhDetail{
 
 
 void AppendTlasInstanceStaticCacheInput(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept{
-    Fnv64AppendValue(inOutHash, instance.transform);
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceID));
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceMask));
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceContributionToHitGroupIndex));
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.flags));
+    UpdateTlasInstanceStaticCacheInputHash(
+        LoadFloat(instance.transform),
+        static_cast<u32>(instance.instanceID),
+        static_cast<u32>(instance.instanceMask),
+        static_cast<u32>(instance.instanceContributionToHitGroupIndex),
+        static_cast<u32>(instance.flags),
+        inOutHash
+    );
     Fnv64AppendValue(inOutHash, instance.bottomLevelAS);
 }
 

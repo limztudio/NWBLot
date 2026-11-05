@@ -24,48 +24,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ShaderBinaryPayload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-template<typename PayloadContainer>
-[[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(const AStringView entryPoint, const Span<const u8> bytecode, PayloadContainer& outPayload){
-    if(entryPoint.empty() || entryPoint.size() > s_MaxShaderEntryPointBytes)
-        return AssetPayloadEncodeFailure::InvalidEntryPoint;
-    if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
-        return AssetPayloadEncodeFailure::InvalidBytecode;
-
-    const Expected<usize> payloadBytes = TryComputeShaderAssetPayloadByteCount(entryPoint.size(), bytecode.size());
-    if(!payloadBytes)
-        return AssetPayloadEncodeFailure::OutputSizeOverflow;
-
-    outPayload.clear();
-    ReserveAppendBytesIfSupported(outPayload, *payloadBytes);
-    AppendPOD(outPayload, s_AssetPayloadMagic);
-    AppendPOD(outPayload, s_AssetPayloadVersion);
-    if(!AppendString(outPayload, entryPoint))
-        return AssetPayloadEncodeFailure::OutputSizeOverflow;
-    AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
-    return AssetPayloadEncodeFailure::None;
-}
-#endif
-
-// The result borrows the serialized payload, which must outlive both views.
-[[nodiscard]] Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(Span<const u8> payload)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 interface IShader : Core::Assets::IAsset{
 public:
     virtual ~IShader()noexcept override = 0;

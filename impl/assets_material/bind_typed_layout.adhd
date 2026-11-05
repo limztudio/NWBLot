@@ -316,5 +316,167 @@ b8 ApplyMaterialBindTypedLayoutParametersToStorage(
     return true;
 }
 
+b8 TryInsertMaterialBindTypedLayoutParameterLookupEntry(
+    in StringView interfacePath,
+    in StringView contextLabel,
+    in StringView instanceName,
+    in StringView structName,
+    in StringView fieldName,
+    in MaterialBindTypedLayoutBlockLookupEntry blockEntry,
+    in MaterialTypedLayoutBlock block,
+    in usize fieldIndex,
+    in MaterialTypedLayoutField field,
+    mut HashMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry> inOutParameterLookup
+){
+    if(fieldIndex > cast<usize>(u32.max)){
+        error("Material bind typed layout: interface '{}' instance '{}' field range exceeds layout for '{}'", interfacePath, instanceName, contextLabel);
+        return false;
+    }
+    if(field.offset > u32.max - blockEntry.byteBegin){
+        error(
+            "Material bind typed layout: interface '{}' field '{}.{}' byte offset exceeds u32 for '{}'",
+            interfacePath,
+            structName,
+            fieldName,
+            contextLabel
+        );
+        return false;
+    }
+    assert(!IsMaterialLayoutResourceFieldType(field.fieldType) || field.offset <= u32.max - blockEntry.constantByteBegin);
+
+    const Expected<CompactString> parameterName = BuildMaterialBindParameterKey(instanceName, fieldName);
+    if(!parameterName.has_value()){
+        error("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity", instanceName, fieldName, contextLabel);
+        return false;
+    }
+
+    MaterialBindTypedLayoutParameterLookupEntry entry;
+    entry.fieldIndex = cast<u32>(fieldIndex);
+    entry.byteOffset = blockEntry.byteBegin + field.offset;
+    entry.constantByteOffset = blockEntry.constantByteBegin + field.offset;
+    entry.blockName = block.blockName;
+    if(inOutParameterLookup.contains(parameterName.value())){
+        error("Material bind typed layout: duplicate parameter '{}' in '{}'", parameterName.value().view(), contextLabel);
+        return false;
+    }
+    inOutParameterLookup.try_emplace(parameterName.value(), entry);
+    return true;
+}
+
+b8 TryAppendMaterialBindTypedLayoutField(
+    in StringView interfacePath,
+    in Name contextName,
+    in StringView instanceName,
+    in StringView fieldName,
+    in StringView fieldTypeText,
+    in StringView defaultArgument,
+    in MaterialBlockClass blockClass,
+    in usize blockByteBegin,
+    mut u32 inOutBlockByteSize,
+    mut Vector<MaterialTypedLayoutField> inOutFields,
+    mut Vector<u8> inOutBlockBytes
+){
+    const Expected<MaterialLayoutFieldType> fieldTypeResult = TryParseMaterialLayoutFieldTypeText(fieldTypeText);
+    if(!fieldTypeResult.has_value()){
+        error(
+            "Material bind typed layout: interface '{}' field '{}.{}' has unsupported type '{}' for '{}'",
+            interfacePath,
+            instanceName,
+            fieldName,
+            fieldTypeText,
+            contextName.resolvedText()
+        );
+        return false;
+    }
+    const MaterialLayoutFieldType fieldType = fieldTypeResult.value();
+    if(IsMaterialLayoutResourceFieldType(fieldType) && blockClass != MaterialBlockClass::MaterialConstant){
+        error("Material bind typed layout: resource field '{}.{}' must use material-constant storage for '{}'", instanceName, fieldName, contextName.resolvedText());
+        return false;
+    }
+
+    const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
+    const Expected<u32> fieldOffset = TryAlignMaterialLayoutFieldOffset(inOutBlockByteSize, fieldType);
+    if(fieldByteSize == 0u || !fieldOffset.has_value() || fieldOffset.value() > u32.max - fieldByteSize){
+        error("Material bind typed layout: interface '{}' block '{}' exceeds u32 byte size for '{}'", interfacePath, instanceName, contextName.resolvedText());
+        return false;
+    }
+
+    MaterialTypedLayoutField field;
+    const Expected<Name> parsedFieldName = TryParseMaterialBindName(fieldName);
+    if(!parsedFieldName.has_value()){
+        error(
+            "Material bind typed layout: interface '{}' has invalid field '{}.{}' for '{}'",
+            interfacePath,
+            instanceName,
+            fieldName,
+            contextName.resolvedText()
+        );
+        return false;
+    }
+    field.fieldName = parsedFieldName.value();
+    field.fieldType = fieldType;
+    field.offset = fieldOffset.value();
+    const Expected<u32x4u> defaultValue = TryBuildMaterialTypedLayoutDefaultValue(
+        contextName,
+        instanceName,
+        fieldName,
+        fieldTypeText,
+        defaultArgument,
+        fieldType
+    );
+    if(!defaultValue.has_value())
+        return false;
+    field.defaultValue = defaultValue.value();
+    if(cast<usize>(field.offset) > usize.max - blockByteBegin){
+        error(
+            "Material bind typed layout: interface '{}' field '{}.{}' could not append alignment padding for '{}'",
+            interfacePath,
+            instanceName,
+            fieldName,
+            contextName.resolvedText()
+        );
+        return false;
+    }
+    PadMaterialTypedLayoutBytesTo(blockByteBegin + cast<usize>(field.offset), inOutBlockBytes);
+    AppendMaterialTypedLayoutFieldBytes(fieldType, field.defaultValue, inOutBlockBytes);
+
+    inOutFields.push_back(field);
+    inOutBlockByteSize = fieldOffset.value() + fieldByteSize;
+    return true;
+}
+
+b8 TryFinalizeMaterialBindTypedLayoutBlock(
+    in StringView interfacePath,
+    in Name contextName,
+    in StringView instanceName,
+    in usize blockByteBegin,
+    mut MaterialTypedLayoutBlock inOutBlock,
+    mut u32 inOutConstantTypedByteSize,
+    mut Vector<MaterialTypedLayoutBlock> inOutBlocks,
+    mut Vector<u8> inOutBlockBytes
+){
+    const Expected<u32> alignedBlockByteSize = TryAlignMaterialLayoutBlockByteSize(inOutBlock.byteSize);
+    if(!alignedBlockByteSize.has_value()){
+        error("Material bind typed layout: interface '{}' block '{}' exceeds u32 byte size for '{}'", interfacePath, instanceName, contextName.resolvedText());
+        return false;
+    }
+    inOutBlock.byteSize = alignedBlockByteSize.value();
+    if(cast<usize>(inOutBlock.byteSize) > usize.max - blockByteBegin){
+        error("Material bind typed layout: interface '{}' block '{}' could not append alignment padding for '{}'", interfacePath, instanceName, contextName.resolvedText());
+        return false;
+    }
+    PadMaterialTypedLayoutBytesTo(blockByteBegin + cast<usize>(inOutBlock.byteSize), inOutBlockBytes);
+
+    inOutBlocks.push_back(inOutBlock);
+    if(inOutBlock.blockClass == MaterialBlockClass::MaterialConstant){
+        if(inOutBlock.byteSize > u32.max - inOutConstantTypedByteSize){
+            error("Material bind typed layout: interface '{}' constant storage exceeds u32 byte size for '{}'", interfacePath, instanceName, contextName.resolvedText());
+            return false;
+        }
+        inOutConstantTypedByteSize += inOutBlock.byteSize;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

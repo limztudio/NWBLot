@@ -252,13 +252,16 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletLocalBoundsBuffer.get());
         Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletDescHeapHandle.value);
         Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletLocalBoundsHeapHandle.value);
-        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletPrimitiveIndexCount);
-        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.runtimeMeshVersion);
-        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.runtimeGeometryContentRevision);
-        Fnv64AppendValue(captureSceneIdentity, instanceMaterial);
-        Fnv64AppendValue(captureSceneIdentity, shadowInstance.translation.w);
-        Fnv64AppendValue(captureSceneIdentity, shadowInstance.geometryHeapSlots);
-        Fnv64AppendValue(captureSceneIdentity, opticalScene.instances.back());
+        UpdateSwSceneCaptureInstanceHash(
+            meshResult->meshResources.meshletPrimitiveIndexCount,
+            meshResult->meshResources.runtimeMeshVersion,
+            meshResult->meshResources.runtimeGeometryContentRevision,
+            instanceMaterial,
+            shadowInstance.translation.w,
+            shadowInstance.geometryHeapSlots,
+            opticalScene.instances.back(),
+            captureSceneIdentity
+        );
         if((meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeGeometryContentRevision == 0u)
             captureSceneTrusted = false;
         AppendLightSpaceSceneBuffers(meshResult->meshResources, m_lightSpaceShadow.m_csg.gathering, m_lightSpaceShadow.m_sceneBuffers);
@@ -401,16 +404,18 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         clearPreparedSceneSwBvhTraversal();
     if(!m_softwareOpticalScene.prepare(opticalScene) || !m_softwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
         return false;
-    u64 opticalMaterialContentHash = swMaterialContextHash;
-    Fnv64AppendValue(opticalMaterialContentHash, opticalScene.contentHash());
-    if(csg.hasCsg)
-        Fnv64AppendValue(opticalMaterialContentHash, csg.identity);
-    m_preparedSceneContentStamp = { sceneStaticHash, opticalMaterialContentHash, staticScene && contentComplete };
-    RayTracingSceneContentStamp samplingStamp = m_preparedSceneContentStamp;
+    m_preparedSceneContentStamp = BuildSwSceneContentStamp(
+        sceneStaticHash,
+        swMaterialContextHash,
+        opticalScene.contentHash(),
+        csg.hasCsg,
+        csg.identity,
+        staticScene,
+        contentComplete
+    );
     // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
-    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(samplingStamp);
-    Fnv64AppendValue(captureSceneIdentity, instanceCount);
-    Fnv64AppendBuffer(captureSceneIdentity, shadowMaterialTypedBytes);
+    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(m_preparedSceneContentStamp);
+    AppendSwSceneCaptureTypedMaterialBytesHash(instanceCount, shadowMaterialTypedBytes, captureSceneIdentity);
     for(const auto& texture : m_preparedShadowTraceMaterialSampledTextures)
         Fnv64AppendValue(captureSceneIdentity, texture.get());
     m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());

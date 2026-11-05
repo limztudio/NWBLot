@@ -71,7 +71,7 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         return false;
 
     const Core::SamplerDesc& description = sampler.description();
-    const SamplerBinaryHeader header = MakeSamplerBinaryHeader(
+    SerializeSamplerBinaryPayload(
         description.borderColor.r,
         description.borderColor.g,
         description.borderColor.b,
@@ -84,12 +84,9 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         static_cast<u32>(description.addressU),
         static_cast<u32>(description.addressV),
         static_cast<u32>(description.addressW),
-        static_cast<u32>(description.reductionType)
+        static_cast<u32>(description.reductionType),
+        outBinary
     );
-
-    outBinary.clear();
-    outBinary.reserve(sizeof(header));
-    AppendPOD(outBinary, header);
     return true;
 }
 

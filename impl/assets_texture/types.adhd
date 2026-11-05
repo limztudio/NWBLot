@@ -18,6 +18,14 @@ const u32 s_TextureRgba16FloatComponentCount = 4u;
 const u32 s_TextureRgba16FloatBytesPerTexel = 8u;
 const u32 s_TextureRgba16FloatAlphaByteOffset = 6u;
 const u64 s_TextureUastcBytesPerBlock = 16u;
+const u32 s_TextureBinaryMagic = 0x54455831u; // TEX1
+const u32 s_TextureBinaryVersion = 4u;
+const usize s_TextureHeaderBinaryBytes = 44u;
+const usize s_TextureMipLevelBinaryBytes = 40u;
+const u32 s_TextureAlphaInfoModeMask = 0x000000FFu;
+const u32 s_TextureAlphaInfoConstantShift = 8u;
+const u32 s_TextureAlphaInfoConstantMask = 0x0000FF00u;
+const u32 s_TextureAlphaInfoReservedMask = 0xFFFF0000u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -80,6 +80,7 @@ const u64 s_PreparedFontMaxPixelBytes = 128ul * 1024ul * 1024ul;
 const u64 s_PreparedFontMaxFileBytes = cast<u64>(s_PreparedFontHeaderBytes) + cast<u64>(s_PreparedFontMaxGroupCount) * cast<u64>(s_PreparedFontGroupHeaderBytes) + cast<u64>(s_FontMaxSourceBytes) + s_PreparedFontMaxPixelBytes;
 const u32 s_FontBinaryMagic = 0x464f4e31u; // FON1
 const u32 s_FontBinaryVersion = 1u;
+const usize s_FontBinaryHeaderBytes = 24u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

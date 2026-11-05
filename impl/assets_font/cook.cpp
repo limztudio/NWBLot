@@ -53,11 +53,7 @@ b8 FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!font.validatePayload())
         return false;
 
-    const FontBinaryHeader header = MakeFontBinaryHeader(font.faceIndex(), static_cast<u64>(font.fontBytes().size()));
-    outBinary.clear();
-    outBinary.reserve(sizeof(header) + font.fontBytes().size());
-    AppendPOD(outBinary, header);
-    outBinary.insert(outBinary.end(), font.fontBytes().begin(), font.fontBytes().end());
+    SerializeFontBinaryPayload(font.faceIndex(), font.fontBytes(), outBinary);
     return true;
 }
 

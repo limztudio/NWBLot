@@ -87,44 +87,19 @@ b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     const Texture& texture = static_cast<const Texture&>(asset);
     if(!texture.validatePayload())
         return false;
-    if(texture.mipLevels().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetCodec::serialize failed: mip count exceeds cooked payload limits"));
-        return false;
-    }
 
-    usize reserveBytes = sizeof(TextureBinaryPayload::HeaderBinary);
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, texture.mipLevels().size(), sizeof(TextureBinaryPayload::MipLevelBinary)) || !AddBinaryReserveBytes(reserveBytes, texture.payloadBytes().size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetCodec::serialize failed: cooked payload size overflows"));
-        return false;
-    }
-
-    outBinary.clear();
-    outBinary.reserve(reserveBytes);
-
-    TextureBinaryPayload::HeaderBinary header;
-    header.dimension = static_cast<u32>(texture.dimension());
-    header.width = texture.width();
-    header.height = texture.height();
-    header.depth = texture.depth();
-    header.mipCount = static_cast<u32>(texture.mipLevels().size());
-    header.alphaInfo = static_cast<u32>(texture.alphaMode()) | (static_cast<u32>(texture.alphaConstantUnorm8()) << TextureBinaryPayload::s_AlphaInfoConstantShift);
-    header.payloadFormat = static_cast<u32>(texture.payloadFormat());
-    header.payloadByteCount = static_cast<u64>(texture.payloadBytes().size());
-    AppendPOD(outBinary, header);
-    for(const TextureMipLevel& mip : texture.mipLevels()){
-        TextureBinaryPayload::MipLevelBinary binaryMip;
-        binaryMip.width = mip.width;
-        binaryMip.height = mip.height;
-        binaryMip.sliceCount = mip.sliceCount;
-        binaryMip.blockCountX = mip.blockCountX;
-        binaryMip.blockCountY = mip.blockCountY;
-        binaryMip.offsetBytes = mip.offsetBytes;
-        binaryMip.sizeBytes = mip.sizeBytes;
-        AppendPOD(outBinary, binaryMip);
-    }
-
-    AppendBytesNoReserveUnchecked(outBinary, texture.payloadBytes().data(), texture.payloadBytes().size());
-    return true;
+    return SerializeTextureBinaryPayload(
+        static_cast<u8>(texture.dimension()),
+        texture.width(),
+        texture.height(),
+        texture.depth(),
+        static_cast<u8>(texture.alphaMode()),
+        texture.alphaConstantUnorm8(),
+        static_cast<u8>(texture.payloadFormat()),
+        texture.mipLevels(),
+        texture.payloadBytes(),
+        outBinary
+    );
 }
 
 

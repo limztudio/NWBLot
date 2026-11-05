@@ -228,6 +228,15 @@ Expected<u64, StringView> ValidatePreparedFontSerializeInputs(
     return expectedPayloadBytes.value();
 }
 
+void SerializeFontBinaryPayload(in u32 faceIndex, in Span<u8> fontBytes, mut Vector<u8> outBinary){
+    const FontBinaryHeader header = MakeFontBinaryHeader(faceIndex, cast<u64>(fontBytes.size()));
+    outBinary.clear();
+    outBinary.reserve(s_FontBinaryHeaderBytes + fontBytes.size());
+    AppendPOD(outBinary, header);
+    for(in u8 byteValue : fontBytes)
+        outBinary.push_back(byteValue);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

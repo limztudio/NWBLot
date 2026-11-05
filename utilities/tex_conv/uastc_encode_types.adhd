@@ -1,0 +1,162 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/tex_conv/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <global/texture_payload.h>
+
+namespace NWB::TexConv{
+using TextureAlphaModeEnum = TextureAlphaMode::Enum;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class VolumeMipZSlabRange{
+    public u64 intervalBegin = 0u;
+    public u64 intervalEnd = 0u;
+    public u32 first = 0u;
+    public u32 end = 0u;
+}
+
+class TexConvAlphaTransport{
+    public TextureAlphaModeEnum mode = cast<TextureAlphaModeEnum>(0u);
+    public u8 constantUnorm8 = 255u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VolumeMipZSlabRange ComputeVolumeMipZSlabRange(in u32 z, in u32 sourceDepth, in u32 targetDepth){
+    VolumeMipZSlabRange range;
+    range.intervalBegin = cast<u64>(z) * cast<u64>(sourceDepth);
+    range.intervalEnd = cast<u64>(z + 1u) * cast<u64>(sourceDepth);
+    range.first = cast<u32>(range.intervalBegin / cast<u64>(targetDepth));
+    range.end = cast<u32>(divideUp(range.intervalEnd, cast<u64>(targetDepth)));
+    return range;
+}
+
+f32 ComputeVolumeMipZSlabOverlap(in VolumeMipZSlabRange range, in u32 sourceZ, in u32 targetDepth){
+    const u64 slabBegin = cast<u64>(sourceZ) * cast<u64>(targetDepth);
+    const u64 slabEnd = cast<u64>(sourceZ + 1u) * cast<u64>(targetDepth);
+    return cast<f32>(min(range.intervalEnd, slabEnd) - max(range.intervalBegin, slabBegin));
+}
+
+Expected<u8> TryQuantizeTexConvMipAlpha(in VectorSingle color){
+    if(!isFinite(color.x) || !isFinite(color.y) || !isFinite(color.z) || !isFinite(color.w)){
+        error("tex_conv: mip filtering produced non-finite values.");
+        return makeUnexpected(Failure());
+    }
+    const VectorSingle quantized = QuantizeUnorm(color);
+    return cast<u8>(quantized.w);
+}
+
+Expected<usize> TryComputeTexConvPayloadByteCount(in u64 primaryByteCount, in b8 separateAlpha){
+    usize multiplier = 1u;
+    if(separateAlpha)
+        multiplier = cast<usize>(s_SeparateAlphaPayloadMultiplier);
+    if(primaryByteCount > cast<u64>(usize.max / multiplier))
+        return makeUnexpected(Failure());
+    return cast<usize>(primaryByteCount) * multiplier;
+}
+
+VectorSingle AccumulateVolumeMipZSlabTexel(
+    in VolumeMipZSlabRange range,
+    in u32 sourceZ,
+    in u32 targetDepth,
+    in VectorSingle color,
+    in VectorSingle currentSum
+){
+    const f32 overlap = ComputeVolumeMipZSlabOverlap(range, sourceZ, targetDepth);
+    return currentSum + color * overlap;
+}
+
+Array<u8, 4u> QuantizeTexConvUnormBytes(
+    in VectorSingle color,
+    in b8 alphaOnly,
+    in u8 opaqueAlphaUnorm8
+){
+    const VectorSingle quantized = QuantizeUnorm(color);
+    Array<u8, 4u> outBytes;
+    if(alphaOnly){
+        const u8 alpha = cast<u8>(quantized.w);
+        outBytes[0u] = alpha;
+        outBytes[1u] = alpha;
+        outBytes[2u] = alpha;
+        outBytes[3u] = opaqueAlphaUnorm8;
+        return outBytes;
+    }
+    outBytes[0u] = cast<u8>(quantized.x);
+    outBytes[1u] = cast<u8>(quantized.y);
+    outBytes[2u] = cast<u8>(quantized.z);
+    outBytes[3u] = cast<u8>(quantized.w);
+    return outBytes;
+}
+
+b8 IsValidTexConvEncodedSliceDesc(
+    in u32 sourceFileIndex,
+    in u32 mipIndex,
+    in u32 origWidth,
+    in u32 origHeight,
+    in u32 numBlocksX,
+    in u32 numBlocksY,
+    in usize sliceByteCount,
+    in u32 expectedSliceCount,
+    in u32 expectedWidth,
+    in u32 expectedHeight,
+    in u32 expectedBlockCountX,
+    in u32 expectedBlockCountY,
+    in u64 expectedPlaneByteCount,
+    in usize currentSliceEntry
+){
+    return sourceFileIndex < expectedSliceCount
+        && mipIndex == 0u
+        && origWidth == expectedWidth
+        && origHeight == expectedHeight
+        && numBlocksX == expectedBlockCountX
+        && numBlocksY == expectedBlockCountY
+        && currentSliceEntry == s_InvalidSlice
+        && cast<u64>(sliceByteCount) == expectedPlaneByteCount;
+}
+
+Expected<TexConvAlphaTransport> TryResolveTexConvAlphaTransport(
+    in b8 found,
+    in b8 opaque,
+    in b8 isUastcLdr4x4,
+    in b8 constant,
+    in u8 firstAlpha,
+    in u8 opaqueAlphaUnorm8,
+    in TextureAlphaModeEnum opaqueMode,
+    in TextureAlphaModeEnum embeddedLdrMode,
+    in TextureAlphaModeEnum constantUnorm8Mode,
+    in TextureAlphaModeEnum separateUastcLdr4x4Mode
+){
+    if(!found)
+        return makeUnexpected(Failure());
+    TexConvAlphaTransport transport;
+    transport.mode = opaqueMode;
+    transport.constantUnorm8 = opaqueAlphaUnorm8;
+    if(opaque)
+        transport.mode = opaqueMode;
+    else if(isUastcLdr4x4)
+        transport.mode = embeddedLdrMode;
+    else if(constant){
+        transport.mode = constantUnorm8Mode;
+        transport.constantUnorm8 = firstAlpha;
+    }
+    else
+        transport.mode = separateUastcLdr4x4Mode;
+    return transport;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -29,11 +29,6 @@ namespace __hidden_encode_uastc{
 using FloatMipChain = basisu::vector<FloatPlanes>;
 using EncodedMip = TextureFormat::MipLevelLayout;
 
-struct AlphaTransport{
-    TextureAlphaMode::Enum mode = TextureAlphaMode::Opaque;
-    u8 constantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,8 +122,7 @@ struct AlphaTransport{
     return target;
 }
 
-[[nodiscard]] static Expected<AlphaTransport> DeriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
-    AlphaTransport transport;
+[[nodiscard]] static Expected<TexConvAlphaTransport> DeriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
     b8 found = false;
     b8 constant = true;
     b8 opaque = true;
@@ -153,19 +147,18 @@ struct AlphaTransport{
             }
         }
     }
-    if(!found)
-        return MakeUnexpected(Failure{});
-    if(opaque)
-        transport.mode = TextureAlphaMode::Opaque;
-    else if(format == TexturePayloadFormat::UastcLdr4x4)
-        transport.mode = TextureAlphaMode::EmbeddedLdr;
-    else if(constant){
-        transport.mode = TextureAlphaMode::ConstantUnorm8;
-        transport.constantUnorm8 = firstAlpha;
-    }
-    else
-        transport.mode = TextureAlphaMode::SeparateUastcLdr4x4;
-    return transport;
+    return TryResolveTexConvAlphaTransport(
+        found,
+        opaque,
+        format == TexturePayloadFormat::UastcLdr4x4,
+        constant,
+        firstAlpha,
+        TextureFormat::s_OpaqueAlphaUnorm8,
+        TextureAlphaMode::Opaque,
+        TextureAlphaMode::EmbeddedLdr,
+        TextureAlphaMode::ConstantUnorm8,
+        TextureAlphaMode::SeparateUastcLdr4x4
+    );
 }
 
 [[nodiscard]] static b8 AppendEncodedMip(const basisu::basisu_backend_output& output, const EncodedMip& mip, const basist::basis_tex_format format, Core::Alloc::ScratchArena& scratchArena, Vector<u8>& bytes){
@@ -335,4 +328,3 @@ NWB_TEX_CONV_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

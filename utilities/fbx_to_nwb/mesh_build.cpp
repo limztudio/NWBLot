@@ -51,10 +51,6 @@ template<typename VisitTriangle>
     return true;
 }
 
-[[nodiscard]] static SIMDVectorSingle LoadUfbxVector(const ufbx_vec3 value)noexcept{
-    return ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(value.x), static_cast<f64>(value.y), static_cast<f64>(value.z), 0.0));
-}
-
 [[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 position = {};
     if(options.bakeTransforms){

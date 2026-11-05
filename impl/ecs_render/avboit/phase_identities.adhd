@@ -1,0 +1,151 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_AvboitExtinctionGeometryIdentity = "render.avboit.extinction.material_geometry";
+const StringView s_AvboitExtinctionGeometryLabel = "AVBOIT Extinction Material Geometry";
+const Name s_AvboitExtinctionSampledIdentity = "render.avboit.extinction.material_sampled_textures";
+const StringView s_AvboitExtinctionSampledLabel = "AVBOIT Extinction Material Sampled Textures";
+const Name s_AvboitAccumulationGeometryIdentity = "render.avboit.accumulation.material_geometry";
+const StringView s_AvboitAccumulationGeometryLabel = "AVBOIT Accumulation Material Geometry";
+const Name s_AvboitAccumulationSampledIdentity = "render.avboit.accumulation.material_sampled_textures";
+const StringView s_AvboitAccumulationSampledLabel = "AVBOIT Accumulation Material Sampled Textures";
+const Name s_AvboitOccupancyGeometryIdentity = "render.avboit.occupancy.material_geometry";
+const StringView s_AvboitOccupancyGeometryLabel = "AVBOIT Occupancy Material Geometry";
+const Name s_AvboitOccupancySampledIdentity = "render.avboit.occupancy.material_sampled_textures";
+const StringView s_AvboitOccupancySampledLabel = "AVBOIT Occupancy Material Sampled Textures";
+const Name s_AvboitExtinctionInstanceUploadIdentity = "render.avboit.extinction.material_instances_upload";
+const StringView s_AvboitExtinctionInstanceUploadLabel = "AVBOIT Extinction Material Instances Upload";
+const Name s_AvboitExtinctionTypedUploadIdentity = "render.avboit.extinction.material_typed_upload";
+const StringView s_AvboitExtinctionTypedUploadLabel = "AVBOIT Extinction Material Typed Upload";
+const Name s_AvboitExtinctionReceiverUploadIdentity = "render.avboit.extinction.csg_receiver_ranges_upload";
+const StringView s_AvboitExtinctionReceiverUploadLabel = "AVBOIT Extinction CSG Receiver Ranges Upload";
+const Name s_AvboitExtinctionCutterUploadIdentity = "render.avboit.extinction.csg_cutters_upload";
+const StringView s_AvboitExtinctionCutterUploadLabel = "AVBOIT Extinction CSG Cutters Upload";
+const Name s_AvboitExtinctionClipUploadIdentity = "render.avboit.extinction.csg_clip_context_slots_upload";
+const StringView s_AvboitExtinctionClipUploadLabel = "AVBOIT Extinction CSG Clip Context Slots Upload";
+const Name s_AvboitAccumulationInstanceUploadIdentity = "render.avboit.accumulation.material_instances_upload";
+const StringView s_AvboitAccumulationInstanceUploadLabel = "AVBOIT Accumulation Material Instances Upload";
+const Name s_AvboitAccumulationTypedUploadIdentity = "render.avboit.accumulation.material_typed_upload";
+const StringView s_AvboitAccumulationTypedUploadLabel = "AVBOIT Accumulation Material Typed Upload";
+const Name s_AvboitAccumulationReceiverUploadIdentity = "render.avboit.accumulation.csg_receiver_ranges_upload";
+const StringView s_AvboitAccumulationReceiverUploadLabel = "AVBOIT Accumulation CSG Receiver Ranges Upload";
+const Name s_AvboitAccumulationCutterUploadIdentity = "render.avboit.accumulation.csg_cutters_upload";
+const StringView s_AvboitAccumulationCutterUploadLabel = "AVBOIT Accumulation CSG Cutters Upload";
+const Name s_AvboitAccumulationClipUploadIdentity = "render.avboit.accumulation.csg_clip_context_slots_upload";
+const StringView s_AvboitAccumulationClipUploadLabel = "AVBOIT Accumulation CSG Clip Context Slots Upload";
+const Name s_AvboitOccupancyInstanceUploadIdentity = "render.avboit.occupancy.material_instances_upload";
+const StringView s_AvboitOccupancyInstanceUploadLabel = "AVBOIT Occupancy Material Instances Upload";
+const Name s_AvboitOccupancyTypedUploadIdentity = "render.avboit.occupancy.material_typed_upload";
+const StringView s_AvboitOccupancyTypedUploadLabel = "AVBOIT Occupancy Material Typed Upload";
+const Name s_AvboitOccupancyReceiverUploadIdentity = "render.avboit.occupancy.csg_receiver_ranges_upload";
+const StringView s_AvboitOccupancyReceiverUploadLabel = "AVBOIT Occupancy CSG Receiver Ranges Upload";
+const Name s_AvboitOccupancyCutterUploadIdentity = "render.avboit.occupancy.csg_cutters_upload";
+const StringView s_AvboitOccupancyCutterUploadLabel = "AVBOIT Occupancy CSG Cutters Upload";
+const Name s_AvboitOccupancyClipUploadIdentity = "render.avboit.occupancy.csg_clip_context_slots_upload";
+const StringView s_AvboitOccupancyClipUploadLabel = "AVBOIT Occupancy CSG Clip Context Slots Upload";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> AvboitGeometryPhase{
+    Occupancy = 0u,
+    Extinction = 1u,
+    Accumulation = 2u
+}
+
+class AvboitGeometryPhaseIdentities{
+    public Name geometryIdentity = s_NameNone;
+    public StringView geometryLabel = "";
+    public Name sampledIdentity = s_NameNone;
+    public StringView sampledLabel = "";
+}
+
+class AvboitMaterialUploadIdentities{
+    public Name instanceIdentity = s_NameNone;
+    public StringView instanceLabel = "";
+    public Name typedIdentity = s_NameNone;
+    public StringView typedLabel = "";
+    public Name receiverIdentity = s_NameNone;
+    public StringView receiverLabel = "";
+    public Name cutterIdentity = s_NameNone;
+    public StringView cutterLabel = "";
+    public Name clipIdentity = s_NameNone;
+    public StringView clipLabel = "";
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AvboitGeometryPhaseIdentities ResolveAvboitGeometryPhaseIdentities(in AvboitGeometryPhase phase){
+    AvboitGeometryPhaseIdentities identities;
+    switch(phase){
+    case AvboitGeometryPhase::Extinction:
+        identities.geometryIdentity = s_AvboitExtinctionGeometryIdentity;
+        identities.geometryLabel = s_AvboitExtinctionGeometryLabel;
+        identities.sampledIdentity = s_AvboitExtinctionSampledIdentity;
+        identities.sampledLabel = s_AvboitExtinctionSampledLabel;
+        return identities;
+    case AvboitGeometryPhase::Accumulation:
+        identities.geometryIdentity = s_AvboitAccumulationGeometryIdentity;
+        identities.geometryLabel = s_AvboitAccumulationGeometryLabel;
+        identities.sampledIdentity = s_AvboitAccumulationSampledIdentity;
+        identities.sampledLabel = s_AvboitAccumulationSampledLabel;
+        return identities;
+    case AvboitGeometryPhase::Occupancy:
+    default:
+        identities.geometryIdentity = s_AvboitOccupancyGeometryIdentity;
+        identities.geometryLabel = s_AvboitOccupancyGeometryLabel;
+        identities.sampledIdentity = s_AvboitOccupancySampledIdentity;
+        identities.sampledLabel = s_AvboitOccupancySampledLabel;
+        return identities;
+    }
+}
+
+AvboitMaterialUploadIdentities ResolveAvboitMaterialUploadIdentities(in AvboitGeometryPhase phase){
+    AvboitMaterialUploadIdentities identities;
+    switch(phase){
+    case AvboitGeometryPhase::Extinction:
+        identities.instanceIdentity = s_AvboitExtinctionInstanceUploadIdentity;
+        identities.instanceLabel = s_AvboitExtinctionInstanceUploadLabel;
+        identities.typedIdentity = s_AvboitExtinctionTypedUploadIdentity;
+        identities.typedLabel = s_AvboitExtinctionTypedUploadLabel;
+        identities.receiverIdentity = s_AvboitExtinctionReceiverUploadIdentity;
+        identities.receiverLabel = s_AvboitExtinctionReceiverUploadLabel;
+        identities.cutterIdentity = s_AvboitExtinctionCutterUploadIdentity;
+        identities.cutterLabel = s_AvboitExtinctionCutterUploadLabel;
+        identities.clipIdentity = s_AvboitExtinctionClipUploadIdentity;
+        identities.clipLabel = s_AvboitExtinctionClipUploadLabel;
+        return identities;
+    case AvboitGeometryPhase::Accumulation:
+        identities.instanceIdentity = s_AvboitAccumulationInstanceUploadIdentity;
+        identities.instanceLabel = s_AvboitAccumulationInstanceUploadLabel;
+        identities.typedIdentity = s_AvboitAccumulationTypedUploadIdentity;
+        identities.typedLabel = s_AvboitAccumulationTypedUploadLabel;
+        identities.receiverIdentity = s_AvboitAccumulationReceiverUploadIdentity;
+        identities.receiverLabel = s_AvboitAccumulationReceiverUploadLabel;
+        identities.cutterIdentity = s_AvboitAccumulationCutterUploadIdentity;
+        identities.cutterLabel = s_AvboitAccumulationCutterUploadLabel;
+        identities.clipIdentity = s_AvboitAccumulationClipUploadIdentity;
+        identities.clipLabel = s_AvboitAccumulationClipUploadLabel;
+        return identities;
+    case AvboitGeometryPhase::Occupancy:
+    default:
+        identities.instanceIdentity = s_AvboitOccupancyInstanceUploadIdentity;
+        identities.instanceLabel = s_AvboitOccupancyInstanceUploadLabel;
+        identities.typedIdentity = s_AvboitOccupancyTypedUploadIdentity;
+        identities.typedLabel = s_AvboitOccupancyTypedUploadLabel;
+        identities.receiverIdentity = s_AvboitOccupancyReceiverUploadIdentity;
+        identities.receiverLabel = s_AvboitOccupancyReceiverUploadLabel;
+        identities.cutterIdentity = s_AvboitOccupancyCutterUploadIdentity;
+        identities.cutterLabel = s_AvboitOccupancyCutterUploadLabel;
+        identities.clipIdentity = s_AvboitOccupancyClipUploadIdentity;
+        identities.clipLabel = s_AvboitOccupancyClipUploadLabel;
+        return identities;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

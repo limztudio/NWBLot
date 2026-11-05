@@ -24,14 +24,6 @@ namespace FbxSkinDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDMatrixDouble LoadUfbxMatrix(const ufbx_matrix& matrix)noexcept{
-    return MakeUfbxMatrixDouble(
-        static_cast<f64>(matrix.m00), static_cast<f64>(matrix.m01), static_cast<f64>(matrix.m02), static_cast<f64>(matrix.m03),
-        static_cast<f64>(matrix.m10), static_cast<f64>(matrix.m11), static_cast<f64>(matrix.m12), static_cast<f64>(matrix.m13),
-        static_cast<f64>(matrix.m20), static_cast<f64>(matrix.m21), static_cast<f64>(matrix.m22), static_cast<f64>(matrix.m23)
-    );
-}
-
 Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, const ufbx_skin_deformer& skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& inOutContext){
     ::Vector<u16, Core::Alloc::ScratchArena> outClusterJoints(scratchArena);
     const Expected<usize> reservedJointCountResult = ValidateFbxSkinClusterCount(skin.clusters.count, inOutContext.joints.size());
@@ -155,4 +147,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

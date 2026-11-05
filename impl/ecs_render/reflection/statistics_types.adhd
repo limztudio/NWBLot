@@ -1,0 +1,155 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/graphics/rhi/command.h>
+namespace NWB::Impl{
+using QueueSubmissionToken = Core::QueueSubmissionToken;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> ReflectionTraceMode{
+    Disabled,
+    ScreenSpace,
+    Hardware,
+    Hybrid
+}
+
+[reflect]
+enum<u8> ReflectionDebugView{
+    None,
+    TraceSource,
+    Confidence
+}
+
+enum<u8> ReflectionFeedbackResetReason{
+    None,
+    FirstObservation,
+    ResourcesChanged,
+    SettingsChanged,
+    SceneChanged,
+    ViewChanged,
+    Disabled,
+    UntrustedScene,
+    HardwareChanged,
+    InvalidAcceptance
+}
+
+enum<u8> ReflectionHistoryResetReason{
+    None,
+    FirstSample,
+    SceneChanged,
+    ViewChanged,
+    SettingsChanged,
+    HardwareChanged,
+    UntrustedScene,
+    Disabled,
+    ResourcesChanged
+}
+
+// Unavailable or unstamped inputs disable temporal reuse; versions alone prove nothing.
+class ReflectionSceneContentStamp{
+    public ReflectionSceneContentStamp(){
+        this.geometry = 0u;
+        this.material = 0u;
+        this.lighting = 0u;
+        this.view = 0u;
+        this.trusted = false;
+    }
+
+    public ReflectionSceneContentStamp(in u64 inGeometry, in u64 inMaterial, in u64 inLighting, in u64 inView, in b8 inTrusted){
+        this.geometry = inGeometry;
+        this.material = inMaterial;
+        this.lighting = inLighting;
+        this.view = inView;
+        this.trusted = inTrusted;
+    }
+
+    public b8 matchesScene(in ReflectionSceneContentStamp other)const{
+        return this.geometry == other.geometry && this.material == other.material && this.lighting == other.lighting && this.trusted == other.trusted;
+    }
+
+    public u64 geometry;
+    public u64 material;
+    public u64 lighting;
+    public u64 view;
+    public b8 trusted;
+}
+
+// A completed accepted reflection copy, regardless of later presentation outcome.
+class ReflectionStatistics{
+    public u64 sequence = 0u;
+    public u64 generation = 0u;
+    public u64 graphicsFrameIndex = 0u;
+    public u64 historyEpoch = 0u;
+    public u64 historyStartGraphicsFrame = 0u;
+    // Enabled is writer eligibility; reused is the CPU previous-valid flag.
+    public u64 feedbackSequence = 0u;
+    public u64 feedbackEpoch = 0u;
+    public u64 feedbackStartGraphicsFrame = 0u;
+    // Actual hierarchy loads; may exceed u32 at large extents.
+    public u64 screenIterations = 0u;
+    public QueueSubmissionToken acceptedToken = QueueSubmissionToken();
+    public u32 frameIndex = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 requestedHardwareBudget = 0u;
+    public u32 effectiveHardwareBudget = 0u;
+    public u32 queueCapacity = 0u;
+    public u32 maxOpticalQueries = 0u;
+    public u32 historySampleCount = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 samplingSeed = 0u;
+    public u32 feedbackProbeIndex = 0u;
+    public u32 candidates = 0u;
+    public u32 hardwareRays = 0u;
+    // Admitted rays conservatively proven to need no optical continuation; diagnostic only.
+    public u32 exteriorEligibleRays = 0u;
+    public u32 hardwareHits = 0u;
+    public u32 opaquePixels = 0u;
+    public u32 glassPixels = 0u;
+    public u32 fallbackPixels = 0u;
+    public u32 screenAttempts = 0u;
+    // Only screen hits meeting the confidence threshold are accepted.
+    public u32 screenHits = 0u;
+    // Reserved traversal units enforce the path limit; physical queries count issued hardware operations.
+    public u32 queryBudgetUnits = 0u;
+    public u32 physicalQueries = 0u;
+    public u32 bootstrapEvents = 0u;
+    public u32 transparentPaths = 0u;
+    public u32 unsupportedPaths = 0u;
+    public u32 limitedPaths = 0u;
+    public u32 ambiguousPaths = 0u;
+    public u32 tirEvents = 0u;
+    public u32 mediumOverflowPaths = 0u;
+    public u32 potentialReceivers = 0u;
+    public u32 screenReturns = 0u;
+    public u32 feedbackBypassedPixels = 0u;
+    public u32 feedbackProbeTiles = 0u;
+    public u32 screenLimitMisses = 0u;
+    public ReflectionTraceMode traceMode = ReflectionTraceMode::Disabled;
+    public ReflectionHistoryResetReason historyResetReason = ReflectionHistoryResetReason::None;
+    public ReflectionFeedbackResetReason feedbackResetReason = ReflectionFeedbackResetReason::None;
+    public b8 hardwareRequested = false;
+    public b8 hardwareAvailable = false;
+    public b8 hardwareReady = false;
+    public b8 csgHardwareEnabled = false;
+    public b8 opticalTransportEnabled = false;
+    public b8 historyEligible = false;
+    public b8 historyReused = false;
+    public b8 historyReset = false;
+    public b8 feedbackRequested = false;
+    public b8 feedbackEnabled = false;
+    public b8 feedbackReused = false;
+    public b8 feedbackReset = false;
+    public b8 schedulingCounterValid = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

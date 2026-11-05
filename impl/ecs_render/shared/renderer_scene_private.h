@@ -58,23 +58,19 @@ namespace ECSRenderDetail{
 
     for(usize i = 0u; i < gatheredCount; ++i){
         const NWB::Impl::Scene::SceneLight& src = sceneLights[i];
-        SceneLightGpuData& dst = outLights[i];
-        const SIMDVectorSingle srcPos = LoadFloat(src.position);
-        const SIMDVectorSingle srcDir = LoadFloat(src.direction);
-        const SIMDVectorSingle srcColorIntensity = LoadFloat(src.colorIntensity);
-        dst = MakeSceneLightGpuData(
-            srcPos,
-            srcDir,
-            srcColorIntensity,
+        outLights[i] = BuildUnassignedSceneLightGpuData(
+            LoadFloat(src.position),
+            LoadFloat(src.direction),
+            LoadFloat(src.colorIntensity),
             src.range,
             static_cast<f32>(src.type),
-            s_ShadowSlotUnassigned,
             src.enableCaustics ? s_ShadowSlotUnassigned : s_CausticSlotDisabled,
             src.angularRadius,
-            src.sourceRadius
+            src.sourceRadius,
+            cameraPositionData,
+            outCausticImportance[i],
+            shadowImportance[i]
         );
-        outCausticImportance[i] = SceneLightRadiantImportance(srcColorIntensity);
-        shadowImportance[i] = ShadowSlotImportance(srcColorIntensity, LoadFloat(dst.params), srcPos, cameraPositionData);
     }
 
     // Importance-ranked shadow slots: most important lights get the pool (slot -> params.z; rest stay lit).

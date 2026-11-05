@@ -88,6 +88,51 @@ void PopulateReflectionPreparedFrameParameters(
     outParameters.depthMipCount = depthMipCount;
 }
 
+void PopulateReflectionSnapshotFrameParameters(
+    in ReflectionSettings settings,
+    in b8 sceneValidAndHasHardwarePipeline,
+    in u32 opaqueSpecularSlot,
+    in u32 glassSpecularSlot,
+    in u32 historySampleIndex,
+    in u32 currentOpaqueOutputSlot,
+    in u32 currentOpaqueSampledSlot,
+    in u32 spatialOpaqueSampledSlot,
+    in b8 spatialEnabled,
+    in u32 deferredResourcesSlot,
+    in u32 viewSlot,
+    in u32 sceneMaterialContextSlot,
+    in u32 feedbackProbeIndex,
+    in u32 feedbackReadSlot,
+    in u32 feedbackWriteSlot,
+    mut ReflectionFrameParameters inOutParameters
+){
+    PopulateReflectionFrameSettingsParameters(settings, inOutParameters);
+    const b8 hardwareRequested = settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid;
+    if(sceneValidAndHasHardwarePipeline && hardwareRequested)
+        inOutParameters.hardwareEnabled = 1u;
+    else
+        inOutParameters.hardwareEnabled = 0u;
+    inOutParameters.opaqueSpecularSlot = opaqueSpecularSlot;
+    inOutParameters.glassSpecularSlot = glassSpecularSlot;
+    inOutParameters.maxHardwareRays = min(settings.maxHardwareRaysPerFrame, inOutParameters.queueCapacity);
+    inOutParameters.sampleIndex = historySampleIndex;
+    inOutParameters.opaqueOutputSlot = currentOpaqueOutputSlot;
+    if(spatialEnabled)
+        inOutParameters.opaqueRadianceSlot = spatialOpaqueSampledSlot;
+    else
+        inOutParameters.opaqueRadianceSlot = currentOpaqueSampledSlot;
+    inOutParameters.deferredResourcesSlot = deferredResourcesSlot;
+    inOutParameters.viewSlot = viewSlot;
+    if(inOutParameters.hardwareEnabled != 0u)
+        inOutParameters.materialContextSlot = sceneMaterialContextSlot;
+    else
+        inOutParameters.materialContextSlot = 0u;
+    inOutParameters.feedbackFlags = 0u;
+    inOutParameters.feedbackProbeIndex = feedbackProbeIndex;
+    inOutParameters.feedbackReadSlot = feedbackReadSlot;
+    inOutParameters.feedbackWriteSlot = feedbackWriteSlot;
+}
+
 ReflectionStatistics MakeReflectionStatisticsMetadata(
     in ReflectionSettings settings,
     in ReflectionFrameParameters parameters,

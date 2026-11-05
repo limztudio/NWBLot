@@ -43,6 +43,35 @@ f32 ShadowSlotImportance(in VectorSingle colorIntensity, in VectorSingle params,
     return radiantImportance * min(coverageSquared, 1.0f);
 }
 
+SceneLightGpuData BuildUnassignedSceneLightGpuData(
+    in VectorSingle position,
+    in VectorSingle direction,
+    in VectorSingle colorIntensity,
+    in f32 range,
+    in f32 lightType,
+    in f32 causticSlot,
+    in f32 angularRadius,
+    in f32 sourceRadius,
+    in VectorSingle cameraPosition,
+    mut f32 outCausticImportance,
+    mut f32 outShadowImportance
+){
+    const SceneLightGpuData dst = MakeSceneLightGpuData(
+        position,
+        direction,
+        colorIntensity,
+        range,
+        lightType,
+        s_ShadowSlotUnassigned,
+        causticSlot,
+        angularRadius,
+        sourceRadius
+    );
+    outCausticImportance = SceneLightRadiantImportance(colorIntensity);
+    outShadowImportance = ShadowSlotImportance(colorIntensity, VectorSingle(dst.params), position, cameraPosition);
+    return dst;
+}
+
 u32 SelectNextShadowSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f32> shadowImportance){
     const u32 lightCount = cast<u32>(lights.size());
     f32 bestImportance = -1.0f;

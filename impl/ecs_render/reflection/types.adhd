@@ -169,5 +169,66 @@ class ReflectionDepthPyramidMip{
     public u32 height = 0u;
 }
 
+Name ResolveReflectionDepthReduceTaskName(in u32 mipIndex){
+    switch(mipIndex){
+    case 0u: return Name("render.reflection.depth_reduce_0");
+    case 1u: return Name("render.reflection.depth_reduce_1");
+    case 2u: return Name("render.reflection.depth_reduce_2");
+    case 3u: return Name("render.reflection.depth_reduce_3");
+    case 4u: return Name("render.reflection.depth_reduce_4");
+    case 5u: return Name("render.reflection.depth_reduce_5");
+    case 6u: return Name("render.reflection.depth_reduce_6");
+    case 7u: return Name("render.reflection.depth_reduce_7");
+    case 8u: return Name("render.reflection.depth_reduce_8");
+    case 9u: return Name("render.reflection.depth_reduce_9");
+    case 10u: return Name("render.reflection.depth_reduce_10");
+    case 11u: return Name("render.reflection.depth_reduce_11");
+    case 12u: return Name("render.reflection.depth_reduce_12");
+    case 13u: return Name("render.reflection.depth_reduce_13");
+    case 14u: return Name("render.reflection.depth_reduce_14");
+    case 15u: return Name("render.reflection.depth_reduce_15");
+    case 16u: return Name("render.reflection.depth_reduce_16");
+    case 17u: return Name("render.reflection.depth_reduce_17");
+    case 18u: return Name("render.reflection.depth_reduce_18");
+    case 19u: return Name("render.reflection.depth_reduce_19");
+    case 20u: return Name("render.reflection.depth_reduce_20");
+    case 21u: return Name("render.reflection.depth_reduce_21");
+    case 22u: return Name("render.reflection.depth_reduce_22");
+    case 23u: return Name("render.reflection.depth_reduce_23");
+    case 24u: return Name("render.reflection.depth_reduce_24");
+    case 25u: return Name("render.reflection.depth_reduce_25");
+    case 26u: return Name("render.reflection.depth_reduce_26");
+    case 27u: return Name("render.reflection.depth_reduce_27");
+    case 28u: return Name("render.reflection.depth_reduce_28");
+    case 29u: return Name("render.reflection.depth_reduce_29");
+    case 30u: return Name("render.reflection.depth_reduce_30");
+    case 31u: return Name("render.reflection.depth_reduce_31");
+    default: return s_NameNone;
+    }
+}
+
+u32 BuildReflectionDepthPyramidMips(
+    in u32 width,
+    in u32 height,
+    mut Array<ReflectionDepthPyramidMip, s_ReflectionMaxDepthMips> outMips
+){
+    u32 mipCount = 0u;
+    u32 mipWidth = width;
+    u32 mipHeight = height;
+    while(mipCount < s_ReflectionMaxDepthMips){
+        ReflectionDepthPyramidMip mip;
+        mip.taskIdentity = ResolveReflectionDepthReduceTaskName(mipCount);
+        mip.width = mipWidth;
+        mip.height = mipHeight;
+        outMips[cast<usize>(mipCount)] = mip;
+        ++mipCount;
+        if(mipWidth == 1u && mipHeight == 1u)
+            break;
+        mipWidth = max(mipWidth / 2u, 1u);
+        mipHeight = max(mipHeight / 2u, 1u);
+    }
+    return mipCount;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

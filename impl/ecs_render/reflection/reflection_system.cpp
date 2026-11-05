@@ -167,24 +167,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
     else
         m_resources.frameParameters.reset();
     ReflectionDepthPyramidSnapshot& depthPyramid = m_resources.depthPyramid;
-    u32 mipWidth = width;
-    u32 mipHeight = height;
-    do{
-        ReflectionDepthPyramidMip& mip = depthPyramid.mips[depthPyramid.mipCount++];
-        const auto taskIdentity = StringFormat(m_arena, "render.reflection.depth_reduce_{}", depthPyramid.mipCount - 1u);
-        const auto taskName = ToName(taskIdentity);
-        if(!taskName || !*taskName){
-            releaseTargets();
-            return false;
-        }
-        mip.taskIdentity = **taskName;
-        mip.width = mipWidth;
-        mip.height = mipHeight;
-        if(mipWidth == 1u && mipHeight == 1u)
-            break;
-        mipWidth = Max(mipWidth / 2u, 1u);
-        mipHeight = Max(mipHeight / 2u, 1u);
-    }while(depthPyramid.mipCount < s_ReflectionMaxDepthMips);
+    depthPyramid.mipCount = BuildReflectionDepthPyramidMips(width, height, depthPyramid.mips);
     constexpr Core::FormatSupport::Mask s_DepthSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
     Core::Format::Enum depthFormat = Core::Format::RG32_FLOAT;
     if((device.queryFormatSupport(depthFormat) & s_DepthSupport) != s_DepthSupport)
@@ -314,29 +297,31 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         return {};
     snapshot.opaqueRadiance = snapshot.postprocess.current.texture;
     ReflectionFrameParameters& parameters = snapshot.parameters;
-    PopulateReflectionFrameSettingsParameters(settings, parameters);
     const b8 hardwareRequested = settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid;
-    parameters.hardwareEnabled = scene.valid() && snapshot.hardwarePipeline && hardwareRequested ? 1u : 0u;
-    parameters.opaqueSpecularSlot = targets.bindless.gbufferSpecularRoughness.slot();
-    parameters.glassSpecularSlot = targets.bindless.refractionSpecularRoughness.slot();
-    parameters.maxHardwareRays = Min(settings.maxHardwareRaysPerFrame, parameters.queueCapacity);
+    PopulateReflectionSnapshotFrameParameters(
+        settings,
+        scene.valid() && snapshot.hardwarePipeline != nullptr,
+        targets.bindless.gbufferSpecularRoughness.slot(),
+        targets.bindless.refractionSpecularRoughness.slot(),
+        snapshot.postprocess.history.sampleIndex,
+        snapshot.postprocess.current.storageSlot,
+        snapshot.postprocess.current.sampledSlot,
+        snapshot.postprocess.spatial.sampledSlot,
+        snapshot.postprocess.spatialEnabled,
+        targets.bindless.slotsBufferDescriptor.slot(),
+        view.heapHandle.slot(),
+        scene.materialContextSlotsHeapSlot,
+        snapshot.feedback.plan.probeIndex,
+        snapshot.feedback.previous.valid() ? snapshot.feedback.previous.descriptor.slot() : 0u,
+        snapshot.feedback.current.valid() ? snapshot.feedback.current.descriptor.slot() : 0u,
+        parameters
+    );
     if(parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u && scene.csgTraceContextBuffer){
         const u32 argumentCount = ResolveReflectionIndirectArgumentCount(parameters.maxHardwareRays, true);
         if(!m_csgBuildArgsPipeline || snapshot.indirectArgs->getCreationDescription().byteSize < static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes)
             return {};
         snapshot.buildArgsPipeline = m_csgBuildArgsPipeline;
     }
-    parameters.sampleIndex = snapshot.postprocess.history.sampleIndex;
-    parameters.opaqueOutputSlot = snapshot.postprocess.current.storageSlot;
-    parameters.opaqueRadianceSlot = snapshot.postprocess.spatialEnabled ? snapshot.postprocess.spatial.sampledSlot : snapshot.postprocess.current.sampledSlot;
-    parameters.deferredResourcesSlot = targets.bindless.slotsBufferDescriptor.slot();
-    parameters.viewSlot = view.heapHandle.slot();
-    parameters.materialContextSlot = parameters.hardwareEnabled != 0u ? scene.materialContextSlotsHeapSlot : 0u;
-    // Bank access needs a resolved outcome plus a reservation.
-    parameters.feedbackFlags = 0u;
-    parameters.feedbackProbeIndex = snapshot.feedback.plan.probeIndex;
-    parameters.feedbackReadSlot = snapshot.feedback.previous.valid() ? snapshot.feedback.previous.descriptor.slot() : 0u;
-    parameters.feedbackWriteSlot = snapshot.feedback.current.valid() ? snapshot.feedback.current.descriptor.slot() : 0u;
     snapshot.postprocess.deferredResourcesSlot = parameters.deferredResourcesSlot;
     snapshot.postprocess.opaqueSpecularSlot = parameters.opaqueSpecularSlot;
     snapshot.postprocess.viewSlot = parameters.viewSlot;

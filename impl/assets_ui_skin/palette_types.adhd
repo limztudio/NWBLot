@@ -1,0 +1,221 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_UiSkinMaxRegionCount = 4096u;
+const f32 s_UiSkinPaletteRgbMax = 16.0f;
+const f32 s_UiSkinDefaultFontSize = 16.0f;
+const f32 s_UiSkinMinDefaultFontSizeScale = 64.0f;
+const f32 s_UiSkinMinDefaultFontSize = 1.0f / s_UiSkinMinDefaultFontSizeScale;
+const f32 s_UiSkinMaxDefaultFontSize = 2048.0f;
+const u32 s_UiSkinBinaryMagic = 0x55495331u; // UIS1
+const u32 s_UiSkinBinaryVersion = 3u;
+const u32 s_UiSkinPaletteColorCount = 17u;
+const Name s_WindowResizeRegionName = "window.resize";
+const Name s_WhiteRegionName = "white";
+const StringView s_UiSkinDrawModeSprite = "sprite";
+const StringView s_UiSkinDrawModeNineSlice = "nine_slice";
+const UiSkinColor s_DefaultTextNormalColor(0.92f, 0.94f, 0.98f, 1.0f);
+const UiSkinColor s_DefaultTextDisabledColor(0.48f, 0.5f, 0.55f, 1.0f);
+const UiSkinColor s_DefaultTextTooltipColor(1.0f, 1.0f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultEditBackgroundColor(0.08f, 0.1f, 0.14f, 1.0f);
+const UiSkinColor s_DefaultEditSelectionColor(0.2f, 0.4f, 0.78f, 0.75f);
+const UiSkinColor s_DefaultEditInactiveSelectionColor(0.28f, 0.31f, 0.38f, 0.55f);
+const UiSkinColor s_DefaultEditCaretColor(0.95f, 0.97f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultEditPreeditColor(0.5f, 0.72f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultScrollbarTrackColor(0.08f, 0.1f, 0.14f, 1.0f);
+const UiSkinColor s_DefaultScrollbarThumbColor(0.35f, 0.4f, 0.48f, 1.0f);
+const UiSkinColor s_DefaultScrollbarDisabledColor(0.25f, 0.28f, 0.32f, 1.0f);
+const UiSkinColor s_DefaultPopupBackdropColor(0.0f, 0.0f, 0.0f, 0.4f);
+const UiSkinColor s_DefaultControlHoverTintColor(1.08f, 1.08f, 1.08f, 1.0f);
+const UiSkinColor s_DefaultControlPressedTintColor(0.85f, 0.85f, 0.85f, 1.0f);
+const UiSkinColor s_DefaultControlDisabledTintColor(0.55f, 0.55f, 0.55f, 0.6f);
+const UiSkinColor s_DefaultProgressTrackTintColor(1.0f, 1.0f, 1.0f, 1.0f);
+const UiSkinColor s_DefaultProgressFillTintColor(1.0f, 1.0f, 1.0f, 1.0f);
+const u64 s_UiSkinLinearLookupRegionLimit = 128u;
+const StringView s_UiSkinDiagnosticPrefix = "UI skin meta";
+const StringView s_UiSkinNameField = "name";
+const StringView s_UiSkinRectField = "rect";
+const StringView s_UiSkinDrawModeField = "draw_mode";
+const StringView s_UiSkinSliceField = "slice";
+const StringView s_UiSkinPaddingField = "padding";
+const StringView s_UiSkinMinimumSizeField = "minimum_size";
+const StringView s_UiSkinColorsField = "colors";
+const StringView s_UiSkinRgbaField = "rgba";
+const StringView s_UiSkinTypographyField = "typography";
+const StringView s_UiSkinDefaultFontSizeField = "default_font_size";
+const StringView s_UiSkinTextureField = "texture";
+const StringView s_UiSkinAtlasExtentField = "atlas_extent";
+const StringView s_UiSkinReferenceDensityField = "reference_density";
+const StringView s_UiSkinToolkitContractField = "toolkit_contract";
+const StringView s_UiSkinRegionsField = "regions";
+const StringView s_UiSkinWidgetsContract = "widgets";
+const StringView s_UiSkinDrawModeHint = "must be 'sprite' or 'nine_slice'";
+const u64 s_UiSkinRectComponentCount = 4u;
+const u64 s_UiSkinSliceComponentCount = 4u;
+const u64 s_UiSkinPaddingComponentCount = 4u;
+const u64 s_UiSkinMinimumSizeComponentCount = 2u;
+const u64 s_UiSkinAtlasExtentComponentCount = 2u;
+const u64 s_UiSkinRgbaComponentCount = 4u;
+const u64 s_UiSkinAlphaComponentIndex = 3u;
+const f32 s_UiSkinPaletteChannelMin = 0.0f;
+const f32 s_UiSkinPaletteAlphaMax = 1.0f;
+const usize s_UiSkinRequiredRegionCount = 30u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> UiSkinDrawMode{
+    Sprite = 0u,
+    NineSlice
+}
+
+[reflect]
+enum<u8> UiSkinColorRole{
+    TextNormal,
+    TextDisabled,
+    TextTooltip,
+    EditBackground,
+    EditSelection,
+    EditInactiveSelection,
+    EditCaret,
+    EditPreedit,
+    ScrollbarTrack,
+    ScrollbarThumb,
+    ScrollbarDisabled,
+    PopupBackdrop,
+    ControlHoverTint,
+    ControlPressedTint,
+    ControlDisabledTint,
+    ProgressTrackTint,
+    ProgressFillTint,
+    kCount
+}
+
+// Atlas rectangles and slice borders use top-left-origin pixels; padding and minimum sizes use logical units.
+[reflect]
+class UiSkinRect{
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+[reflect]
+class UiSkinSliceInsets{
+    public u32 left = 0u;
+    public u32 top = 0u;
+    public u32 right = 0u;
+    public u32 bottom = 0u;
+}
+
+[reflect]
+class UiSkinInsets{
+    public f32 left = 0.0f;
+    public f32 top = 0.0f;
+    public f32 right = 0.0f;
+    public f32 bottom = 0.0f;
+}
+
+[reflect]
+class UiSkinRegion{
+    public Name name = s_NameNone;
+    public UiSkinRect rectangle;
+    public UiSkinSliceInsets sliceInsets;
+    public UiSkinInsets padding;
+    public f32 minimumWidth = 0.0f;
+    public f32 minimumHeight = 0.0f;
+    public UiSkinDrawMode drawMode = UiSkinDrawMode::Sprite;
+}
+
+[serialize, reflect]
+class UiSkinColor{
+    public f32 r = 0.0f;
+    public f32 g = 0.0f;
+    public f32 b = 0.0f;
+    public f32 a = 0.0f;
+}
+
+[serialize, reflect]
+class UiSkinTypography{
+    public f32 defaultFontSize = s_UiSkinDefaultFontSize;
+}
+
+[serialize]
+class UiSkinHeaderBinary{
+    public u32 magic = s_UiSkinBinaryMagic;
+    public u32 version = s_UiSkinBinaryVersion;
+    public NameHash textureNameHash;
+    public u32 atlasWidth = 0u;
+    public u32 atlasHeight = 0u;
+    public f32 referenceDensity = 1.0f;
+    public u32 regionCount = 0u;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
+}
+
+[serialize]
+class UiSkinRegionBinary{
+    public NameHash nameHash;
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 sliceLeft = 0u;
+    public u32 sliceTop = 0u;
+    public u32 sliceRight = 0u;
+    public u32 sliceBottom = 0u;
+    public f32 paddingLeft = 0.0f;
+    public f32 paddingTop = 0.0f;
+    public f32 paddingRight = 0.0f;
+    public f32 paddingBottom = 0.0f;
+    public f32 minimumWidth = 0.0f;
+    public f32 minimumHeight = 0.0f;
+    public u32 drawMode = 0u;
+    public u32 reserved = 0u;
+}
+
+[reflect]
+class UiSkinPalette{
+    public UiSkinPalette(){
+        this.colors[0u] = s_DefaultTextNormalColor;
+        this.colors[1u] = s_DefaultTextDisabledColor;
+        this.colors[2u] = s_DefaultTextTooltipColor;
+        this.colors[3u] = s_DefaultEditBackgroundColor;
+        this.colors[4u] = s_DefaultEditSelectionColor;
+        this.colors[5u] = s_DefaultEditInactiveSelectionColor;
+        this.colors[6u] = s_DefaultEditCaretColor;
+        this.colors[7u] = s_DefaultEditPreeditColor;
+        this.colors[8u] = s_DefaultScrollbarTrackColor;
+        this.colors[9u] = s_DefaultScrollbarThumbColor;
+        this.colors[10u] = s_DefaultScrollbarDisabledColor;
+        this.colors[11u] = s_DefaultPopupBackdropColor;
+        this.colors[12u] = s_DefaultControlHoverTintColor;
+        this.colors[13u] = s_DefaultControlPressedTintColor;
+        this.colors[14u] = s_DefaultControlDisabledTintColor;
+        this.colors[15u] = s_DefaultProgressTrackTintColor;
+        this.colors[16u] = s_DefaultProgressFillTintColor;
+    }
+
+    public Array<UiSkinColor, s_UiSkinPaletteColorCount> colors;
+}
+
+class UiSkinRequiredRegion{
+    public UiSkinRequiredRegion(){
+        this.name = s_NameNone;
+        this.text = "";
+    }
+
+    public UiSkinRequiredRegion(in Name _name, in StringView _text){
+        this.name = _name;
+        this.text = _text;
+    }
+
+    public Name name;
+    public StringView text;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

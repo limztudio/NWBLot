@@ -106,18 +106,7 @@ Point Builder::loadEditMinimumSize()const noexcept{
 }
 
 b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){
-    if(!state.matchesStamp(model.stamp(), result.focused))
-        state.caretElapsed = 0.0;
-    else
-        state.caretElapsed = AdvanceCaretPhase(state.caretElapsed, static_cast<f64>(m_deltaSeconds));
-    if(state.modelGeneration != model.instanceGeneration())
-        state.scroll = 0.0f;
-    state.modelGeneration = model.instanceGeneration();
-    state.revision = model.revision();
-    state.selectionGeneration = model.selectionGeneration();
-    state.anchor = model.anchor();
-    state.caret = model.caret();
-    state.focused = result.focused;
+    state.updateFromModel(model.stamp(), result.focused, m_deltaSeconds);
 
     item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly, state.caretElapsed < s_CaretVisiblePhaseEnd };
     item.editFlags.preeditCaretVisible = result.preeditCaretVisible;

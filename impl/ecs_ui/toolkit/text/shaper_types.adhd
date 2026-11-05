@@ -327,5 +327,38 @@ void ResolveHbGlyphPlacement(in i32 xOffset, in i32 yOffset, in i32 xAdvance, in
     outAdvance = Point(cast<f32>(xAdvance) * scale, (-cast<f32>(yAdvance)) * scale);
 }
 
+void AppendOrMergeTextFontSpan(in TextFontSpan span, mut Vector<TextFontSpan> inOutSpans){
+    if(!inOutSpans.empty() && inOutSpans[inOutSpans.size() - 1u].fontIndex == span.fontIndex){
+        const usize lastIndex = inOutSpans.size() - 1u;
+        inOutSpans[lastIndex].glyphEnd = span.glyphEnd;
+        inOutSpans[lastIndex].byteBegin = min(inOutSpans[lastIndex].byteBegin, span.byteBegin);
+        inOutSpans[lastIndex].byteEnd = max(inOutSpans[lastIndex].byteEnd, span.byteEnd);
+    }
+    else
+        inOutSpans.push_back(span);
+}
+
+b8 IsValidHbShapedGlyphClusterStep(
+    in u32 cluster,
+    in u32 previousCluster,
+    in u32 byteBegin,
+    in u32 byteEnd,
+    in i32 xAdvance,
+    in u32 index,
+    in TextDirection direction
+){
+    if(cluster < byteBegin || cluster >= byteEnd || xAdvance < 0)
+        return false;
+    if(index == 0u)
+        return true;
+    if(direction == TextDirection::LeftToRight)
+        return cluster >= previousCluster;
+    return cluster <= previousCluster;
+}
+
+Rect MakeRasterGlyphBoundsRect(in i32 bitmapLeft, in i32 bitmapTop, in u32 width, in u32 rows){
+    return Rect(cast<f32>(bitmapLeft), -cast<f32>(bitmapTop), cast<f32>(width), cast<f32>(rows));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

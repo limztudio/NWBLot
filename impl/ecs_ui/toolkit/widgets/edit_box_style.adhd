@@ -108,6 +108,21 @@ class EditBoxState{
             && this.focused == expectedFocused;
     }
 
+    public void updateFromModel(in TextAreaModelStamp stamp, in b8 expectedFocused, in f32 deltaSeconds){
+        if(!this.matchesStamp(stamp, expectedFocused))
+            this.caretElapsed = 0.0;
+        else
+            this.caretElapsed = AdvanceCaretPhase(this.caretElapsed, cast<f64>(deltaSeconds));
+        if(this.modelGeneration != stamp.instanceGeneration)
+            this.scroll = 0.0f;
+        this.modelGeneration = stamp.instanceGeneration;
+        this.revision = stamp.revision;
+        this.selectionGeneration = stamp.selectionGeneration;
+        this.anchor = stamp.anchor;
+        this.caret = stamp.caret;
+        this.focused = expectedFocused;
+    }
+
     public f64 caretElapsed = 0.0;
     public u64 modelGeneration = 0u;
     public u64 revision = 0u;

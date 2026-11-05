@@ -1,0 +1,192 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/text/shaper_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_TextCarriageReturnLineFeedBytes = 2u;
+const f64 s_TextRasterMarginPixels = 2.0;
+const f64 s_TextHalfPixel = 0.5;
+const f64 s_TextSdfMinimumFilterWidth = 0.001;
+const f64 s_TextSdfEncodedHalfRange = 128.0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> TextCaretEdge{
+    Leading,
+    Trailing,
+}
+
+enum<u8> TextGlyphIntersection{
+    Invalid,
+    Invisible,
+    Visible,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextCluster{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u32 firstGlyph = 0u;
+    public u32 glyphCount = 0u;
+    public u32 lineIndex = 0u;
+    public f32 leadingX = 0.0f;
+    public f32 trailingX = 0.0f;
+}
+
+class TextLine{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u32 breakEnd = 0u;
+    public u32 firstGlyph = 0u;
+    public u32 glyphCount = 0u;
+    public u32 firstCluster = 0u;
+    public u32 clusterCount = 0u;
+    public f32 top = 0.0f;
+    public f32 baseline = 0.0f;
+    public f32 height = 0.0f;
+    public f32 advance = 0.0f;
+}
+
+class TextHit{
+    public u32 byteOffset = 0u;
+}
+
+class TextRasterMetrics{
+    public f32 physicalSize = 0.0f;
+    public f32 rasterPpem = 0.0f;
+    public f32 rasterScale = 0.0f;
+    public u32 pixelSize = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in DisplayMetrics display){
+    TextRasterMetrics outMetrics;
+    if(!IsValidTextFontSize(fontSize) || !isFinite(display.pixelScaleX) || !isFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
+        return makeUnexpected(Failure());
+    const f32 physicalSize = fontSize * max(display.pixelScaleX, display.pixelScaleY);
+    const f32 rasterPpem = ceil(physicalSize);
+    if(!isFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
+        return makeUnexpected(Failure());
+    outMetrics.physicalSize = physicalSize;
+    outMetrics.rasterPpem = rasterPpem;
+    outMetrics.rasterScale = rasterPpem / fontSize;
+    outMetrics.pixelSize = cast<u32>(rasterPpem);
+    return outMetrics;
+}
+
+Expected<Rect> TryMakeMeasuredTextRect(in f64 left, in f64 top, in f64 right, in f64 bottom){
+    if(
+        !isFinite(left) || !isFinite(top) || !isFinite(right) || !isFinite(bottom)
+        || left < -s_TextMaxCoordinateF64 || top < -s_TextMaxCoordinateF64
+        || right > s_TextMaxCoordinateF64 || bottom > s_TextMaxCoordinateF64
+        || right < left || bottom < top
+    )
+        return makeUnexpected(Failure());
+    const f32 x = roundF64ToF32Bound(left, false);
+    const f32 y = roundF64ToF32Bound(top, false);
+    const f64 width = cast<f64>(roundF64ToF32Bound(right, true)) - cast<f64>(x);
+    const f64 height = cast<f64>(roundF64ToF32Bound(bottom, true)) - cast<f64>(y);
+    if(width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64)
+        return makeUnexpected(Failure());
+    const f32 roundedWidth = roundF64ToF32Bound(width, true);
+    const f32 roundedHeight = roundF64ToF32Bound(height, true);
+    if(
+        !isFinite(roundedWidth) || roundedWidth < 0.0f
+        || !isFinite(roundedHeight) || roundedHeight < 0.0f
+        || !isFinite(x + roundedWidth) || !isFinite(y + roundedHeight)
+    )
+        return makeUnexpected(Failure());
+    return Rect(x, y, roundedWidth, roundedHeight);
+}
+
+TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters, in Point point){
+    TextHit hit;
+    if(lines.empty() || !isFinite(point.x) || !isFinite(point.y))
+        return hit;
+    usize lineIndex = lines.size() - 1u;
+    for(usize index = 0u; index < lines.size(); ++index){
+        if(point.y < lines[index].top + lines[index].height){
+            lineIndex = index;
+            break;
+        }
+    }
+    const TextLine line = lines[lineIndex];
+    hit.byteOffset = line.byteBegin;
+    if(line.clusterCount == 0u)
+        return hit;
+    f32 nearest = s_TextMaxCoordinateF32;
+    for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
+        const TextCluster cluster = clusters[cast<usize>(index)];
+        const f32 leadingDistance = abs(point.x - cluster.leadingX);
+        const f32 trailingDistance = abs(point.x - cluster.trailingX);
+        if(leadingDistance <= nearest){
+            nearest = leadingDistance;
+            hit.byteOffset = cluster.byteBegin;
+        }
+        if(trailingDistance < nearest){
+            nearest = trailingDistance;
+            hit.byteOffset = cluster.byteEnd;
+        }
+    }
+    return hit;
+}
+
+Expected<Rect> TryResolveTextCaretRect(in Span<TextLine> lines, in Span<TextCluster> clusters, in TextDirection direction, in u32 byteOffset, in TextCaretEdge edge){
+    if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
+        return makeUnexpected(Failure());
+    b8 hasAlternate = false;
+    TextCluster alternate;
+    for(usize i = 0u; i < clusters.size(); ++i){
+        const TextCluster cluster = clusters[i];
+        b8 matched = false;
+        if(edge == TextCaretEdge::Leading)
+            matched = cluster.byteBegin == byteOffset;
+        else
+            matched = cluster.byteEnd == byteOffset;
+        if(matched){
+            const TextLine line = lines[cast<usize>(cluster.lineIndex)];
+            f32 x = cluster.trailingX;
+            if(edge == TextCaretEdge::Leading)
+                x = cluster.leadingX;
+            return Rect(x, line.top, 0.0f, line.height);
+        }
+        if(cluster.byteBegin == byteOffset || cluster.byteEnd == byteOffset){
+            alternate = cluster;
+            hasAlternate = true;
+        }
+    }
+    if(hasAlternate){
+        const TextLine line = lines[cast<usize>(alternate.lineIndex)];
+        f32 x = alternate.trailingX;
+        if(alternate.byteBegin == byteOffset)
+            x = alternate.leadingX;
+        return Rect(x, line.top, 0.0f, line.height);
+    }
+    for(usize i = 0u; i < lines.size(); ++i){
+        const TextLine line = lines[i];
+        if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
+            const b8 atBegin = byteOffset == line.byteBegin;
+            f32 x = line.advance;
+            if(atBegin == (direction == TextDirection::LeftToRight))
+                x = 0.0f;
+            return Rect(x, line.top, 0.0f, line.height);
+        }
+    }
+    return makeUnexpected(Failure());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

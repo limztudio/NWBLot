@@ -1,0 +1,118 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_mesh/skinning/runtime_cache_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateMeshSkinningInfluenceRecord(
+    in u64 handleValue,
+    in usize vertexIndex,
+    in u32 skeletonJointCount,
+    in SkinInfluence4 sourceSkin
+){
+    if(!ValidSkinInfluenceWeights(VectorSingle(sourceSkin.weight)) || !SkinInfluenceFitsSkeleton(sourceSkin, skeletonJointCount)){
+        error("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid", handleValue, vertexIndex);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSkinJointPaletteInputs(
+    in u64 handleValue,
+    in u32 skeletonJointCount,
+    in usize skinCount,
+    in usize sourceJointCount,
+    in usize inverseBindMatrixCount,
+    in u32 skinningMode
+){
+    if(!ValidSkeletonSkinningMode(skinningMode)){
+        error("MeshSkinningSystem: runtime mesh '{}' skinning mode {} is invalid", handleValue, skinningMode);
+        return false;
+    }
+    assert(skeletonJointCount > 0u && skeletonJointCount <= cast<u32>(u16.max) + 1u && skinCount <= cast<usize>(u32.max));
+    if(sourceJointCount > cast<usize>(u32.max)){
+        error("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid", handleValue);
+        return false;
+    }
+    if(!ValidInverseBindMatrixCount(inverseBindMatrixCount, skeletonJointCount)){
+        error("MeshSkinningSystem: runtime mesh '{}' inverse bind matrix count is invalid", handleValue);
+        return false;
+    }
+    if(sourceJointCount < cast<usize>(skeletonJointCount)){
+        error(
+            "MeshSkinningSystem: runtime mesh '{}' joint palette count {} is smaller than skeleton joint count {}"
+            , handleValue
+            , sourceJointCount
+            , skeletonJointCount
+        );
+        return false;
+    }
+    if(inverseBindMatrixCount != 0u && sourceJointCount != inverseBindMatrixCount){
+        error(
+            "MeshSkinningSystem: runtime mesh '{}' joint palette count {} differs from inverse bind matrix count {}"
+            , handleValue
+            , sourceJointCount
+            , inverseBindMatrixCount
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateMeshSkinningRuntimeResourceCounts(in u64 handleValue, in usize skinSize, in u32 skeletonJointCount){
+    const b8 hasSkinPayload = skinSize != 0u;
+    if(skinSize > cast<usize>(u32.max) || (hasSkinPayload && (skeletonJointCount == 0u || skeletonJointCount > cast<u32>(u16.max) + 1u))){
+        error("MeshSkinningSystem: runtime mesh '{}' has invalid skin resource counts", handleValue);
+        return false;
+    }
+    return true;
+}
+
+Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
+    in u64 handleValue,
+    in usize jointIndex,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in b8 hasInverseBindMatrices,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in b8 useDualQuaternionPayload
+){
+    MatrixSingle inverseBindMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    if(hasInverseBindMatrices)
+        inverseBindMatrix = MatrixSingle(inverseBindMatrices[jointIndex]);
+    const Expected<MatrixSingle> jointMatrix = TryResolveSkinningJointMatrix(
+        MatrixSingle(sourceJoints[jointIndex]),
+        hasInverseBindMatrices,
+        inverseBindMatrix,
+        s_SkinValidationEpsilon
+    );
+    if(!jointMatrix.has_value()){
+        error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix", handleValue, jointIndex);
+        return makeUnexpected(Failure());
+    }
+    if(!useDualQuaternionPayload)
+        return SkeletonJointMatrix(jointMatrix.value());
+
+    const MatrixSingle resolvedMatrix = jointMatrix.value();
+    SkeletonJointMatrix storedJointMatrix(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    b8 builtDualQuaternion = false;
+    native(in resolvedMatrix, mut storedJointMatrix, mut builtDualQuaternion){
+        const auto dualQuaternion = ::MatrixTryBuildRigidDualQuaternion(resolvedMatrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
+        if(dualQuaternion){
+            ::StoreFloat(dualQuaternion->real, storedJointMatrix.rows[0]);
+            ::StoreFloat(dualQuaternion->dual, storedJointMatrix.rows[1]);
+            builtDualQuaternion = true;
+        }
+    }
+    if(!builtDualQuaternion){
+        error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build", handleValue, jointIndex);
+        return makeUnexpected(Failure());
+    }
+    return storedJointMatrix;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -249,20 +249,5 @@ MeshBinaryHeader MakeMeshBinaryHeader(
     return outHeader;
 }
 
-u32 PackMeshletCone(in VectorSingle axis, in f32 cutoff){
-    if(cutoff <= 0.0f)
-        return 0u;
-
-    const u32 packedAxis = PackMeshletConeOct16(axis);
-    return PackMeshletConeFromAxisAndCutoff(
-        packedAxis,
-        ConservativePackedMeshletConeCutoff(axis, cutoff, UnpackMeshletConeOct16Axis(packedAxis))
-    );
-}
-
-u32 PackMeshletCone(in VectorSingle axis, in VectorSingle cutoff){
-    return PackMeshletCone(axis, cutoff.x);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,267 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_csg/shape_types.adhd>
+#include <impl/ecs_render/avboit/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_RtInvalidSlot = 0xffffffffu;
+const usize s_SmallInlineIndexCapacity = 32u;
+const usize s_PromotedInlineIndexCapacity = s_SmallInlineIndexCapacity * 4u;
+// Shared-output emulation alternates one generate and one raster phase per draw.
+// Keep supported range in contract; domains stay independent of RendererFramePipeline.
+const usize s_SharedComputeEmulationPhasesPerDraw = 2u;
+const usize s_SharedComputeEmulationMinimumDrawCount = 2u;
+const usize s_SharedComputeEmulationMaximumDrawCount = 5u;
+const usize s_SharedComputeEmulationMaximumPhaseCount = s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+const Name s_PrepareArena = "impl/ecs_render/prepare";
+const Name s_RenderArena = "impl/ecs_render/render";
+const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
+const u32 s_FullscreenTriangleVertexCount = 3u;
+const u32 s_EmulatedVertexStride = 64u;
+const StringView s_AvboitDepthWarpName = "render.avboit.depth_warp";
+const StringView s_AvboitDepthWarpLabel = "AVBOIT Depth Warp";
+const StringView s_AvboitExtinctionName = "render.avboit.extinction";
+const StringView s_AvboitExtinctionLabel = "AVBOIT Extinction";
+const StringView s_AvboitIntegrationLabel = "AVBOIT Integration";
+const StringView s_TransparentCsgIntervalsLabel = "Transparent CSG Intervals";
+const StringView s_ShadowVisibilityLabel = "Shadow Visibility";
+const StringView s_DeferredLightingLabel = "Deferred Lighting";
+const StringView s_DeferredCompositeLabel = "Deferred Composite";
+const StringView s_DeferredPresentLabel = "Deferred Present";
+const f32 s_LightTypeDirectionalMax = 0.5f;
+const f32 s_LightTypePointMax = 1.5f;
+const u32 s_StatisticsReadbackSlotCount = 3u;
+const u32 s_GpuTimingQueriesPerRange = 2u;
+const u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
+const u32 s_GpuTimingRefractionTileScopeQueryBudget = 32u;
+const u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
+const StringView s_UnknownStageLabel = "Unknown";
+const StringView s_GraphicsQueueLabel = "Graphics";
+const StringView s_ComputeQueueLabel = "Compute";
+const StringView s_TransferQueueLabel = "Transfer";
+const StringView s_InternalRouteLabel = "Internal";
+const StringView s_ExternalImportRouteLabel = "ExternalImport";
+const StringView s_ExternalExportRouteLabel = "ExternalExport";
+const StringView s_ExclusiveSharingLabel = "Exclusive";
+const StringView s_AsyncComputeSharingLabel = "AsyncCompute";
+const StringView s_GraphicsAndAsyncComputeSharingLabel = "GraphicsAndAsyncCompute";
+const StringView s_GraphicsAndTransferSharingLabel = "GraphicsAndTransfer";
+const StringView s_AsyncComputeAndTransferSharingLabel = "AsyncComputeAndTransfer";
+const StringView s_GraphicsAsyncComputeAndTransferSharingLabel = "GraphicsAsyncComputeAndTransfer";
+const StringView s_RendererFrameTitle = "Renderer Frame";
+const f64 s_MillisecondsPerSecondTelemetry = 1000.0;
+const f64 s_PercentScaleTelemetry = 100.0;
+const usize s_OpaqueDrawResourceUseCount = 8u;
+const usize s_NoOpaqueDrawResourceUseCount = 6u;
+const usize s_GbufferMaterialResourceSetUseCapacity = 4u;
+const usize s_NormalizeResourceUseCapacity = 9u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> RendererTaskTimingFeedbackCollectionAction{
+    None = 0u,
+    Enable = 1u,
+    Disable = 2u,
+    kCount = 3u
+}
+
+[reflect]
+enum<u8> SharedComputeEmulationPhase{
+    Generate = 0u,
+    Raster = 1u
+}
+
+// Ray tracing gathers emission targets before Deferred ranks lights. The root module brokers this contract between them.
+class RayTracingLightingClassificationInput{
+    public u32 refractiveInstanceCount = 0u;
+}
+
+class RayTracingLightingClassification{
+    public u32 causticLightCount = 0u;
+    public u32 softShadowSlotMask = 0u;
+}
+
+// Eleven std140 uint4 lanes of ordinary-pass heap slots.
+[serialize]
+class DeferredBindlessResourceSlots{
+    public u32 gbufferBaseColor = 0u;
+    public u32 gbufferNormal = 0u;
+    public u32 gbufferWorldPosition = 0u;
+    public u32 gbufferDepth = 0u;
+
+    public u32 shadowVisibility = 0u;
+    public u32 causticIrradiance = 0u;
+    public u32 surfelIrradiance = 0u;
+    public u32 sampler = 0u;
+
+    public u32 opaqueColor = 0u;
+    public u32 avboitAccumColor = 0u;
+    public u32 avboitAccumExtinction = 0u;
+    public u32 opaqueColorStorage = 0u;
+
+    public u32 avboitTransmittance = 0u;
+    public u32 avboitLinearSampler = 0u;
+    public u32 sceneShading = 0u;
+    public u32 lightList = 0u;
+
+    public u32 avboitCoverage = 0u;
+    public u32 avboitDepthWarp = 0u;
+    public u32 avboitControl = 0u;
+    public u32 avboitExtinction = 0u;
+
+    public u32 avboitExtinctionOverflow = 0u;
+    public u32 avboitTransmittanceStorage = 0u;
+    // Compute composite output sampled by the Graphics presentation blit.
+    public u32 compositeColor = 0u;
+    public u32 compositeColorStorage = 0u;
+
+    // CSG typed Texture2DArray aliases use the global StorageImage heap.
+    public u32 csgCapBackNormal = 0u;
+    public u32 csgIntervalDepth = 0u;
+    public u32 csgIntervalId = 0u;
+    public u32 csgReceiverEventData = 0u;
+
+    public u32 csgReceiverEventCount = 0u;
+    public u32 csgReceiverSpanData = 0u;
+    public u32 csgReceiverSpanCount = 0u;
+    public u32 csgRemovedIntervalDepth = 0u;
+
+    public u32 csgRemovedIntervalCapNormal = 0u;
+    public u32 csgRemovedIntervalData = 0u;
+    public u32 csgRemovedIntervalCount = 0u;
+    public u32 csgPadding = 0u;
+
+    public u32 refractionDepth = 0u;
+    public u32 refractionNormalIor = 0u;
+    public u32 refractionTintCoverage = 0u;
+    public u32 refractionResolveStorage = 0u;
+    public u32 refractionResolve = 0u;
+    public u32 avboitForegroundColor = 0u;
+    public u32 avboitForegroundExtinction = 0u;
+    public u32 refractionInstance = 0u;
+}
+
+class StatisticsReservationKey{
+    public StatisticsReservationKey(){
+        this.sequence = 0u;
+        this.generation = 0u;
+        this.slot = 0u;
+    }
+
+    public StatisticsReservationKey(in u64 inSequence, in u64 inGeneration, in u32 inSlot){
+        this.sequence = inSequence;
+        this.generation = inGeneration;
+        this.slot = inSlot;
+    }
+
+    public b8 valid()const{
+        return this.sequence != 0u && this.generation != 0u;
+    }
+
+    public u64 sequence;
+    public u64 generation;
+    public u32 slot;
+}
+
+// Summarizes one owner-serialized ledger drain at the compiler boundary.
+class RendererTaskTimingFeedbackDrainResult{
+    public usize acceptedAssignmentCount = 0u;
+    public usize recordedSampleCount = 0u;
+    public usize retiredSampleCount = 0u;
+    public usize rejectedAssignmentCount = 0u;
+    public usize rejectedSampleCount = 0u;
+}
+
+[serialize]
+class MeshFrameHeapSlots{
+    public u32 instance = 0u;
+    public u32 materialTyped = 0u;
+    public u32 view = 0u;
+    // Emulation writable vertex buffer; mesh-shader draws leave this lane zero.
+    public u32 generatedVertex = 0u;
+}
+
+[serialize]
+class ShaderDrivenPushConstants{
+    public u32 meshletCount = 0u;
+    public u32 instanceIndex = 0u;
+    public u32 materialConstantByteOffset = 0u;
+    public u32 dispatchFlags = 0u;
+    public f32x4 viewportRect(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 scissorRect(0.0f, 0.0f, 0.0f, 0.0f);
+    public MeshFrameHeapSlots frameHeapSlots;
+}
+
+[serialize]
+class TransparentDrawPushConstants{
+    public ShaderDrivenPushConstants mesh;
+    public RendererAvboitPushConstants avboit;
+}
+
+[serialize]
+class EmulatedVertex{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f16x4u normal;
+    public f16x4u tangent;
+    public f32x2u uv0(0.0f, 0.0f);
+    public f16x4u color;
+    public f32x4 worldPosition(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class SceneShadingGpuData{
+    // xyz = camera world position, w = active light count.
+    public f32x4 cameraPositionLightCount(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class SceneLightGpuData{
+    // xyz = world position (point/spot), w = spot inner cone cosine.
+    public f32x4 position(0.0f, 0.0f, 0.0f, 1.0f);
+    // directional: toward-light; spot: emission axis. w = spot outer cone cosine.
+    public f32x4 direction(0.0f, 0.0f, -1.0f, 1.0f);
+    // xyz = color, w = intensity.
+    public f32x4 colorIntensity(1.0f, 1.0f, 1.0f, 1.0f);
+    // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
+    public f32x4 params(0.0f, 0.0f, -1.0f, -1.0f);
+    // Soft-shadow source size: x = angular radius, y = punctual radius; z/w reserved.
+    public f32x4 params2(0.00465f, 0.05f, 0.0f, 0.0f);
+}
+
+// Only the compute producer reads this tail; raster and custom geometry use the base mesh push ABI.
+[serialize]
+class MeshComputePushConstants{
+    public ShaderDrivenPushConstants mesh;
+    public u32 generatedIndexByteOffset = 0u;
+    public Array<u32, 3u> reserved;
+}
+
+// Immutable frame facts for graph declaration; queue assignment stays a compiler result.
+class RendererFrameGraphFeatures{
+    public b8 frameLaggedAsyncLightingEnabled = false;
+    public b8 laggedLightingHistoryReady = false;
+    public b8 laggedLightingHistoryReadReady = false;
+    // A prior history-copy tail still reads live targets; next writers must wait for it.
+    public b8 laggedLightingHistoryWriterWaitPending = false;
+    public b8 hasTransparentRenderers = false;
+    public b8 hardwareCaustics = false;
+}
+
+class SceneShadingBufferUploads{
+    public Array<SceneLightGpuData, 64u> lightData;
+    public SceneShadingGpuData sceneShadingState;
+    public RayTracingLightingClassification lightingClassification;
+    public u32 lightCount = 0u;
+    public b8 lightUploadRequired = false;
+    public b8 sceneShadingUploadRequired = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,6 @@
 
 #include <core/common/log.h>
 
-#include <global/simd/vector_arithmetic.h>
 #include <global/scope_exit.h>
 
 #include <ft2build.h>
@@ -280,14 +279,9 @@ b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pain
     const hb_glyph_info_t* infos = hb_buffer_get_glyph_infos(&nativeBuffer, &count);
     const hb_glyph_position_t* positions = hb_buffer_get_glyph_positions(&nativeBuffer, nullptr);
     for(u32 index = 0u; index < count; ++index){
-        if(infos[index].cluster < byteBegin || infos[index].cluster >= byteEnd || positions[index].x_advance < 0)
+        const u32 previousCluster = index != 0u ? infos[index - 1u].cluster : 0u;
+        if(!IsValidHbShapedGlyphClusterStep(infos[index].cluster, previousCluster, byteBegin, byteEnd, positions[index].x_advance, index, request.direction))
             return false;
-        if(index != 0u){
-            const b8 increasing = infos[index].cluster >= infos[index - 1u].cluster;
-            const b8 decreasing = infos[index].cluster <= infos[index - 1u].cluster;
-            if(request.direction == TextDirection::LeftToRight ? !increasing : !decreasing)
-                return false;
-        }
     }
     output.clear();
     output.reserve(count);
@@ -329,8 +323,7 @@ Expected<Rect> FontFace::rasterBounds(const u32 glyphId, const u32 pixelSize){
         NWB_LOGGER_ERROR(NWB_TEXT("UI glyph measurement requires a grayscale outline"));
         return MakeUnexpected(Failure{});
     }
-    const SIMDVectorSingle bounds = VectorXorInt(VectorSet(static_cast<f32>(slot->bitmap_left), static_cast<f32>(slot->bitmap_top), static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows)), s_SIMDFlipY);
-    return Rect{ VectorGetX(bounds), VectorGetY(bounds), VectorGetZ(bounds), VectorGetW(bounds) };
+    return MakeRasterGlyphBoundsRect(slot->bitmap_left, slot->bitmap_top, bitmap.width, bitmap.rows);
 }
 
 b8 FontFace::rasterize(u32 glyphId, u32 pixelSize, GlyphBitmap& output){

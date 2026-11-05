@@ -4,8 +4,6 @@
 
 #include "shaper.h"
 
-#include <global/simd/vector_arithmetic.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,14 +87,7 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
             if(span.fontIndex == m_fonts.size())
                 return MakeUnexpected(TextLayoutStatus::MissingGlyph);
         }
-        if(!m_spans.empty() && m_spans.back().fontIndex == span.fontIndex){
-            TextFontSpan& previous = m_spans.back();
-            previous.glyphEnd = span.glyphEnd;
-            previous.byteBegin = Min(previous.byteBegin, span.byteBegin);
-            previous.byteEnd = Max(previous.byteEnd, span.byteEnd);
-        }
-        else
-            m_spans.push_back(span);
+        AppendOrMergeTextFontSpan(span, m_spans);
         begin = end;
     }
     for(const TextFontSpan& span : m_spans){

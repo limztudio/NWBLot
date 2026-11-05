@@ -1,0 +1,156 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/material/instance_typed_ranges.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_CsgEnabledDefineName = "NWB_CSG_ENABLED";
+const StringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
+const StringView s_CsgIntervalSampleEnabledDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
+const StringView s_CsgIntervalSampleEnabledDefineAssignment = "NWB_CSG_INTERVAL_SAMPLE_ENABLED=1";
+const StringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
+const usize s_MaxCsgClipShaderVariantDefineAssignments = 3u;
+const f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
+const u32 s_MeshDispatchFlagScissorCull = 1u << 0u;
+const u32 s_MeshDispatchFlagMeshletFrustumCull = 1u << 1u;
+const u32 s_MeshDispatchFlagMeshletConeCull = 1u << 2u;
+const u32 s_MeshDispatchFlagCsgMeshletFullyRemovedCull = 1u << 3u;
+const u32 s_MeshDispatchFlagMask = 0x0000FFFFu;
+const u32 s_MeshDispatchShadingModelShift = 16u;
+const u32 s_MeshDispatchShadingModelMask = 0x0000FFFFu;
+const usize s_ModuleAssignmentPunctuationSize = 3u;
+const usize s_ObjectGeometryVertexAttributeCount = 5u;
+const usize s_DecodeExtraResourceUseCount = 3u;
+const Name s_InstanceBufferName = "ecs_render/instance_data";
+const Name s_MaterialTypedBufferName = "ecs_render/material_typed_data";
+const Name s_InvalidAvboitPixelShaderDebugName = "ECSRender_InvalidAvboitPixelShader";
+const Name s_AvboitOccupancyPsDebugName = "ECSRender_AvboitOccupancyPS";
+const Name s_AvboitExtinctionPsDebugName = "ECSRender_AvboitExtinctionPS";
+const Name s_AvboitAccumulatePsDebugName = "ECSRender_AvboitAccumulatePS";
+const Name s_AvboitRefractionCapturePsDebugName = "ECSRender_AvboitRefractionCapturePS";
+const Name s_InvalidPassPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
+const Name s_RendererPsDebugName = "ECSRender_RendererPS";
+const Name s_CsgReceiverSurfacePsDebugName = "ECSRender_CsgReceiverSurfacePS";
+const Name s_RendererMeshDebugName = "ECSRender_RendererMesh";
+const Name s_RendererCsDebugName = "ECSRender_RendererCS";
+const Name s_ObjectGeometryDecodeDebugName = "ECSRender_ObjectGeometryDecode";
+const Name s_ObjectGeometryVsDebugName = "ECSRender_ObjectGeometryVS";
+const Name s_VertexAttributePositionName = "POSITION";
+const Name s_VertexAttributeNormalName = "NORMAL";
+const Name s_VertexAttributeTangentName = "TANGENT";
+const Name s_VertexAttributeTexCoordName = "TEXCOORD";
+const Name s_VertexAttributeColorName = "COLOR";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> MaterialPipelinePass{
+    Opaque,
+    CsgReceiverSurface,
+    AvboitOccupancy,
+    AvboitExtinction,
+    AvboitAccumulate,
+    AvboitRefractionCapture
+}
+
+enum<u8> RenderPath{
+    MeshShader,
+    VertexIndexed,
+    ComputeEmulation
+}
+
+enum<u8> MaterialPipelineCsgMode{
+    None,
+    ClipOnly
+}
+
+enum<u8> RendererResourceLookupMode{
+    CreateMissing = 0u,
+    PreparedOnly = 1u
+}
+
+enum<u8> SampledTextureImportFailure{
+    GraphUnavailable = 0u,
+    MissingIdentity = 1u,
+    ImportFailed = 2u
+}
+
+class MaterialPipelineCsgBindingUse{
+    public b8 clip = false;
+    public b8 avboitClip = false;
+}
+
+class ShaderVariantDefineAssignment{
+    public ShaderVariantDefineAssignment(){
+        this.name = "";
+        this.assignment = "";
+    }
+
+    public ShaderVariantDefineAssignment(in StringView nameIn, in StringView assignmentIn){
+        this.name = nameIn;
+        this.assignment = assignmentIn;
+    }
+
+    public StringView name;
+    public StringView assignment;
+}
+
+// Buffer identity alone does not describe which regions a retained draw generates and consumes.
+class GeneratedGeometryOutputLayout{
+    public b8 matches(in u32 indexByteOffset, in b8 indexed)const{
+        return this.indexByteOffset == indexByteOffset && this.indexed == indexed;
+    }
+
+    public u32 indexByteOffset = 0u;
+    public b8 indexed = false;
+}
+
+// Retain the selected draw metadata so recording rejects changed packet inputs before generating into the shared output.
+class GeneratedGeometryEquivalenceKey{
+    public b8 matches(
+        in Name drawMeshKey,
+        in Name drawMaterial,
+        in MaterialPipelinePass drawPass,
+        in MaterialPipelineCsgMode drawCsgMode,
+        in u32 drawInstanceIndex,
+        in u32 drawMaterialConstantByteOffset,
+        in u32 drawShadingModelId,
+        in b8 outputHeapValid,
+        in u32 drawOutputHeapSlot,
+        in u32 drawEmulationIndexByteOffset,
+        in b8 drawIndexedGeometryOutput
+    )const{
+        return
+            drawMeshKey == this.meshKey
+            && drawMaterial == this.material
+            && drawPass == this.pass
+            && drawCsgMode == MaterialPipelineCsgMode::None
+            && drawInstanceIndex == this.instanceIndex
+            && drawMaterialConstantByteOffset == this.materialConstantByteOffset
+            && drawShadingModelId == this.shadingModelId
+            && outputHeapValid
+            && drawOutputHeapSlot == this.outputHeapSlot
+            && drawEmulationIndexByteOffset == this.emulationIndexByteOffset
+            && drawIndexedGeometryOutput == this.indexedGeometryOutput
+        ;
+    }
+
+    public Name meshKey = s_NameNone;
+    public Name material = s_NameNone;
+    public u32 instanceIndex = 0u;
+    public u32 materialConstantByteOffset = 0u;
+    public u32 shadingModelId = 0u;
+    public u32 outputHeapSlot = 0u;
+    public u32 emulationIndexByteOffset = 0u;
+    public MaterialPipelinePass pass = MaterialPipelinePass::Opaque;
+    public b8 indexedGeometryOutput = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

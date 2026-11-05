@@ -278,5 +278,20 @@ VectorSingle UnpackMeshletConeOct16Axis(in u32 conePacked){
     return VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
 }
 
+u32 PackMeshletCone(in VectorSingle axis, in f32 cutoff){
+    if(cutoff <= 0.0f)
+        return 0u;
+
+    const u32 packedAxis = PackMeshletConeOct16(axis);
+    return PackMeshletConeFromAxisAndCutoff(
+        packedAxis,
+        ConservativePackedMeshletConeCutoff(axis, cutoff, UnpackMeshletConeOct16Axis(packedAxis))
+    );
+}
+
+u32 PackMeshletCone(in VectorSingle axis, in VectorSingle cutoff){
+    return PackMeshletCone(axis, cutoff.x);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

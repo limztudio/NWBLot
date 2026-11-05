@@ -6,7 +6,7 @@
 
 
 #include "scroll.h"
-#include <impl/ecs_ui/toolkit/widgets/list_style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/list_navigation.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
 #include <global/atomic_identity.h>

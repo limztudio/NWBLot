@@ -43,12 +43,7 @@ b8 PreparedSceneBvhUpload::capture(
     if(nodeCount == 0u || instanceCount == 0u || !validStorage)
         return false;
 
-    const usize nodeByteCount = nodeCount * sizeof(NwbBvhNodeGpu);
-    const usize instanceByteCount = instanceCount * sizeof(SceneSwBvhInstanceGpu);
-    m_nodeBytes.resize(nodeByteCount);
-    m_instanceBytes.resize(instanceByteCount);
-    NWB_MEMCPY(m_nodeBytes.data(), m_nodeBytes.size(), nodes.data(), nodeByteCount);
-    NWB_MEMCPY(m_instanceBytes.data(), m_instanceBytes.size(), instances.data(), instanceByteCount);
+    CaptureSceneBvhUploadBytes(nodes, instances, m_nodeBytes, m_instanceBytes);
     m_nodeBuffer = state.m_sceneBvhNodeBuffer;
     m_instanceBuffer = state.m_sceneInstanceBuffer;
     m_nodeHeapHandle = state.m_sceneBvhNodeHeapHandle;
@@ -111,21 +106,23 @@ Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const Re
     if(!m_ready)
         return result;
 
-    if(!storageMatches(state) || !StorageReady(state, m_nodeCount, m_instanceCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage"));
+    if(!ValidatePreparedSceneBvhRetainState(
+        storageMatches(state),
+        StorageReady(state, m_nodeCount, m_instanceCount),
+        m_uploadRequired,
+        m_static,
+        state.m_sceneSwBvhStaticSceneHashValid,
+        state.m_sceneSwBvhStaticSceneHash,
+        m_staticSceneHash,
+        state.m_sceneBvhInstanceCount,
+        m_instanceCount,
+        m_nodeBytes.size(),
+        m_nodeCount,
+        m_instanceBytes.size()
+    ))
         return MakeUnexpected(Failure{});
-    }
-    if(!m_uploadRequired){
-        if(!m_static || !state.m_sceneSwBvhStaticSceneHashValid || state.m_sceneSwBvhStaticSceneHash != m_staticSceneHash || state.m_sceneBvhInstanceCount != m_instanceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH cache identity is no longer accepted"));
-            return MakeUnexpected(Failure{});
-        }
+    if(!m_uploadRequired)
         return result;
-    }
-    if(m_nodeBytes.empty() || m_instanceBytes.empty() || m_nodeBytes.size() != m_nodeCount * sizeof(NwbBvhNodeGpu) || m_instanceBytes.size() != m_instanceCount * sizeof(SceneSwBvhInstanceGpu)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH payload is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
 
     const auto nodeResult = graph.copyUploadData(m_nodeBytes.data(), m_nodeBytes.size(), alignof(NwbBvhNodeGpu));
     const auto instanceResult = graph.copyUploadData(m_instanceBytes.data(), m_instanceBytes.size(), alignof(SceneSwBvhInstanceGpu));
@@ -137,16 +134,14 @@ Expected<PreparedSceneBvhUploads> PreparedSceneBvhUpload::retainUploads(const Re
 }
 
 b8 PreparedSceneBvhUpload::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
-    if(!m_ready || !m_uploadRequired)
-        return false;
-
-    if(m_static){
-        state.m_sceneSwBvhStaticSceneHash = m_staticSceneHash;
-        state.m_sceneSwBvhStaticSceneHashValid = true;
-    }
-    else
-        state.m_sceneSwBvhStaticSceneHashValid = false;
-    return true;
+    return PublishAcceptedSceneBvhUpload(
+        m_ready,
+        m_uploadRequired,
+        m_static,
+        m_staticSceneHash,
+        state.m_sceneSwBvhStaticSceneHash,
+        state.m_sceneSwBvhStaticSceneHashValid
+    );
 }
 
 b8 PreparedSceneBvhUpload::storageMatches(const RendererRayTracingState& state)const noexcept{
@@ -161,7 +156,15 @@ b8 PreparedSceneBvhUpload::storageMatches(const RendererRayTracingState& state)c
 }
 
 b8 PreparedSceneBvhUpload::snapshotAccepted(const RendererRayTracingState& state)const noexcept{
-    return m_uploadRequired || (m_static && state.m_sceneSwBvhStaticSceneHashValid && state.m_sceneSwBvhStaticSceneHash == m_staticSceneHash && state.m_sceneBvhInstanceCount == m_instanceCount);
+    return IsPreparedSceneBvhSnapshotAccepted(
+        m_uploadRequired,
+        m_static,
+        state.m_sceneSwBvhStaticSceneHashValid,
+        state.m_sceneSwBvhStaticSceneHash,
+        m_staticSceneHash,
+        state.m_sceneBvhInstanceCount,
+        m_instanceCount
+    );
 }
 
 

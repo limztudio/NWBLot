@@ -54,15 +54,15 @@ b8 PreparedShadowMaterialContext::capture(
     )
         return false;
 
-    const usize instanceMaterialByteCount = instanceMaterialCount * sizeof(NwbRtInstanceMaterialGpu);
-    const usize instanceByteCount = instanceCount * sizeof(InstanceGpuData);
     clear();
-    m_instanceMaterialBytes.resize(instanceMaterialByteCount);
-    m_instanceBytes.resize(instanceByteCount);
-    m_materialTypedBytes.resize(materialTypedByteCount);
-    NWB_MEMCPY(m_instanceMaterialBytes.data(), m_instanceMaterialBytes.size(), instanceMaterials.data(), instanceMaterialByteCount);
-    NWB_MEMCPY(m_instanceBytes.data(), m_instanceBytes.size(), instances.data(), instanceByteCount);
-    NWB_MEMCPY(m_materialTypedBytes.data(), m_materialTypedBytes.size(), materialTypedBytes.data(), materialTypedByteCount);
+    CaptureShadowMaterialContextBytes(
+        instanceMaterials,
+        instances,
+        materialTypedBytes,
+        m_instanceMaterialBytes,
+        m_instanceBytes,
+        m_materialTypedBytes
+    );
     captureStorage(state, hash, instanceMaterialCount, instanceCount, materialTypedByteCount);
     m_route = route;
     m_static = staticScene;
@@ -116,48 +116,32 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
     if(!m_ready)
         return result;
 
-    if(
-        m_route == PreparedShadowMaterialContextRoute::None
-        || m_instanceMaterialCount == 0u
-        || m_instanceCount == 0u
-        || m_materialTypedUploadBytes == 0u
-        || !storageMatches(state)
-        || state.m_shadowInstanceMaterialCapacity != m_instanceMaterialCapacity
-        || state.m_shadowInstanceCapacity != m_instanceCapacity
-        || state.m_shadowMaterialTypedCapacity != m_materialTypedCapacity
-        || !StorageReady(state, m_instanceMaterialCount, m_instanceCount, m_materialTypedUploadBytes)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen shadow material-context identity no longer matches preflight storage"));
+    if(!ValidatePreparedShadowMaterialContextRetainState(
+        m_route,
+        m_instanceMaterialCount,
+        m_instanceCount,
+        m_materialTypedUploadBytes,
+        storageMatches(state),
+        state.m_shadowInstanceMaterialCapacity,
+        m_instanceMaterialCapacity,
+        state.m_shadowInstanceCapacity,
+        m_instanceCapacity,
+        state.m_shadowMaterialTypedCapacity,
+        m_materialTypedCapacity,
+        StorageReady(state, m_instanceMaterialCount, m_instanceCount, m_materialTypedUploadBytes),
+        m_uploadRequired,
+        m_static,
+        state.m_swShadowMaterialContextHashValid,
+        state.m_swShadowMaterialContextHash,
+        m_hash,
+        state.m_sceneBvhInstanceCount,
+        m_instanceMaterialBytes.size(),
+        m_instanceBytes.size(),
+        m_materialTypedBytes.size()
+    ))
         return MakeUnexpected(Failure{});
-    }
-    if(!m_uploadRequired){
-        if(
-            m_route != PreparedShadowMaterialContextRoute::Software
-            || !m_static
-            || !state.m_swShadowMaterialContextHashValid
-            || state.m_swShadowMaterialContextHash != m_hash
-            || state.m_sceneBvhInstanceCount != m_instanceMaterialCount
-            || state.m_sceneBvhInstanceCount != m_instanceCount
-            || !m_instanceMaterialBytes.empty()
-            || !m_instanceBytes.empty()
-            || !m_materialTypedBytes.empty()
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software material-context cache identity is no longer accepted"));
-            return MakeUnexpected(Failure{});
-        }
+    if(!m_uploadRequired)
         return result;
-    }
-    if(
-        m_instanceMaterialBytes.empty()
-        || m_instanceBytes.empty()
-        || m_materialTypedBytes.empty()
-        || m_instanceMaterialBytes.size() != m_instanceMaterialCount * sizeof(NwbRtInstanceMaterialGpu)
-        || m_instanceBytes.size() != m_instanceCount * sizeof(InstanceGpuData)
-        || m_materialTypedBytes.size() != m_materialTypedUploadBytes
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen shadow material-context payload is incomplete"));
-        return MakeUnexpected(Failure{});
-    }
 
     const auto instanceMaterialResult = graph.copyUploadData(m_instanceMaterialBytes.data(), m_instanceMaterialBytes.size(), alignof(NwbRtInstanceMaterialGpu));
     const auto instanceResult = graph.copyUploadData(m_instanceBytes.data(), m_instanceBytes.size(), alignof(InstanceGpuData));
@@ -171,20 +155,17 @@ Expected<PreparedShadowMaterialContextUploads> PreparedShadowMaterialContext::re
 }
 
 b8 PreparedShadowMaterialContext::publishAcceptedUpload(RendererRayTracingState& state)const noexcept{
-    if(!m_ready || !m_uploadRequired)
-        return false;
-
-    if(m_route == PreparedShadowMaterialContextRoute::Hardware){
-        state.m_hwShadowMaterialContextHash = m_hash;
-        state.m_hwShadowMaterialContextHashValid = m_static;
-        state.m_swShadowMaterialContextHashValid = false;
-    }
-    else if(m_route == PreparedShadowMaterialContextRoute::Software){
-        state.m_swShadowMaterialContextHash = m_hash;
-        state.m_swShadowMaterialContextHashValid = m_static;
-        state.m_hwShadowMaterialContextHashValid = false;
-    }
-    return true;
+    return PublishAcceptedShadowMaterialContextUpload(
+        m_ready,
+        m_uploadRequired,
+        m_route,
+        m_hash,
+        m_static,
+        state.m_hwShadowMaterialContextHash,
+        state.m_hwShadowMaterialContextHashValid,
+        state.m_swShadowMaterialContextHash,
+        state.m_swShadowMaterialContextHashValid
+    );
 }
 
 b8 PreparedShadowMaterialContext::storageMatches(const RendererRayTracingState& state)const noexcept{
@@ -199,11 +180,19 @@ b8 PreparedShadowMaterialContext::storageMatches(const RendererRayTracingState& 
 }
 
 b8 PreparedShadowMaterialContext::softwareSnapshotCovers(const usize sceneInstanceCount)const noexcept{
-    return m_ready && m_route == PreparedShadowMaterialContextRoute::Software && m_instanceMaterialCount == sceneInstanceCount && m_instanceCount == sceneInstanceCount;
+    return IsPreparedShadowMaterialSoftwareSnapshotCovers(m_ready, m_route, m_instanceMaterialCount, m_instanceCount, sceneInstanceCount);
 }
 
 b8 PreparedShadowMaterialContext::softwareSnapshotAccepted(const RendererRayTracingState& state)const noexcept{
-    return m_uploadRequired || (m_static && state.m_swShadowMaterialContextHashValid && state.m_swShadowMaterialContextHash == m_hash && state.m_sceneBvhInstanceCount == m_instanceCount);
+    return IsPreparedShadowMaterialSoftwareSnapshotAccepted(
+        m_uploadRequired,
+        m_static,
+        state.m_swShadowMaterialContextHashValid,
+        state.m_swShadowMaterialContextHash,
+        m_hash,
+        state.m_sceneBvhInstanceCount,
+        m_instanceCount
+    );
 }
 
 void PreparedShadowMaterialContext::captureStorage(const RendererRayTracingState& state, const u64 hash, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{

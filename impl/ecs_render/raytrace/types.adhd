@@ -175,5 +175,94 @@ void InflateSwShadowSceneBounds(mut VectorSingle inOutBoundsMin, mut VectorSingl
     inOutBoundsMax = inOutBoundsMax + paddingVector;
 }
 
+const usize s_SceneSwBvhInstanceGpuByteSize = 64u;
+
+void CaptureSceneBvhUploadBytes(
+    in Span<NwbBvhNodeGpu> nodes,
+    in Span<SceneSwBvhInstanceGpu> instances,
+    mut Vector<u8> outNodeBytes,
+    mut Vector<u8> outInstanceBytes
+){
+    outNodeBytes.clear();
+    outNodeBytes.reserve(nodes.size() * s_NwbBvhNodeGpuByteSize);
+    for(in NwbBvhNodeGpu node : nodes)
+        AppendPOD(outNodeBytes, node);
+
+    outInstanceBytes.clear();
+    outInstanceBytes.reserve(instances.size() * s_SceneSwBvhInstanceGpuByteSize);
+    for(in SceneSwBvhInstanceGpu instance : instances)
+        AppendPOD(outInstanceBytes, instance);
+}
+
+b8 PublishAcceptedSceneBvhUpload(
+    in b8 ready,
+    in b8 uploadRequired,
+    in b8 staticScene,
+    in u64 staticSceneHash,
+    mut u64 inOutStaticSceneHash,
+    mut b8 inOutStaticSceneHashValid
+){
+    if(!ready || !uploadRequired)
+        return false;
+
+    if(staticScene){
+        inOutStaticSceneHash = staticSceneHash;
+        inOutStaticSceneHashValid = true;
+    }
+    else
+        inOutStaticSceneHashValid = false;
+    return true;
+}
+
+b8 IsPreparedSceneBvhSnapshotAccepted(
+    in b8 uploadRequired,
+    in b8 staticScene,
+    in b8 staticSceneHashValid,
+    in u64 currentStaticSceneHash,
+    in u64 expectedStaticSceneHash,
+    in usize currentInstanceCount,
+    in usize expectedInstanceCount
+){
+    return uploadRequired
+        || (staticScene && staticSceneHashValid && currentStaticSceneHash == expectedStaticSceneHash && currentInstanceCount == expectedInstanceCount);
+}
+
+b8 ValidatePreparedSceneBvhRetainState(
+    in b8 storageMatches,
+    in b8 storageReady,
+    in b8 uploadRequired,
+    in b8 staticScene,
+    in b8 staticSceneHashValid,
+    in u64 currentStaticSceneHash,
+    in u64 expectedStaticSceneHash,
+    in usize currentInstanceCount,
+    in usize expectedInstanceCount,
+    in usize nodeByteCount,
+    in usize expectedNodeCount,
+    in usize instanceByteCount
+){
+    if(!storageMatches || !storageReady){
+        error("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage");
+        return false;
+    }
+    if(!uploadRequired){
+        if(!staticScene || !staticSceneHashValid || currentStaticSceneHash != expectedStaticSceneHash || currentInstanceCount != expectedInstanceCount){
+            error("RendererSystem: frozen software scene-BVH cache identity is no longer accepted");
+            return false;
+        }
+        return true;
+    }
+    if(
+        nodeByteCount == 0u
+        || instanceByteCount == 0u
+        || nodeByteCount != expectedNodeCount * s_NwbBvhNodeGpuByteSize
+        || instanceByteCount != expectedInstanceCount * s_SceneSwBvhInstanceGpuByteSize
+    ){
+        error("RendererSystem: frozen software scene-BVH payload is incomplete");
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

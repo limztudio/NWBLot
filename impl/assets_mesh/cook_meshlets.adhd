@@ -205,6 +205,38 @@ void PrecomputeMeshletTriangleStreams(
     }
 }
 
+b8 ValidateAndPrecomputeMeshletTriangleStreams(
+    in StringView metaKind,
+    in StringView filePathText,
+    in Span<u32> indices,
+    in Span<MeshVertexRef> vertexRefs,
+    in Span<f32x3u> positions,
+    mut Vector<MeshletTriangleData> outTriangles,
+    mut Vector<MeshletTriangleCalculation> outTriangleCalculations,
+    mut Vector<u32> outPositionTriangleOffsets,
+    mut Vector<u32> outPositionTriangles,
+    mut Vector<u8> outVisitedTriangles
+){
+    const usize triangleCount = indices.size() / cast<usize>(s_MeshletTriangleIndexCount);
+    if(triangleCount > cast<usize>(u32.max)){
+        error("{} meta '{}': meshlet triangle count exceeds u32 limits", metaKind, filePathText);
+        return false;
+    }
+
+    PrecomputeMeshletTriangleStreams(
+        indices,
+        vertexRefs,
+        positions,
+        triangleCount,
+        outTriangles,
+        outTriangleCalculations,
+        outPositionTriangleOffsets,
+        outPositionTriangles,
+        outVisitedTriangles
+    );
+    return true;
+}
+
 void ClearMeshletFrontier(mut Vector<u32> inOutFrontier, mut Vector<u8> inOutInFrontier){
     for(in u32 triangleIndex : inOutFrontier)
         inOutInFrontier[cast<usize>(triangleIndex)] = 0u;

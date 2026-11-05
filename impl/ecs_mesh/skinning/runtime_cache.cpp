@@ -73,27 +73,24 @@ void MeshSkinningRuntimeCache::clear()noexcept{
 }
 
 const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const noexcept{
-    const auto foundEntity = m_handleToEntity.find(handle.value);
-    if(foundEntity == m_handleToEntity.end() || !foundEntity.value().valid())
+    const Expected<Core::ECS::EntityID> foundEntity = TryFindRuntimeMeshEntityByHandle(m_handleToEntity, handle.value);
+    if(!foundEntity)
         return nullptr;
 
-    const auto foundInstance = m_instances.find(foundEntity.value());
+    const auto foundInstance = m_instances.find(*foundEntity);
     if(foundInstance == m_instances.end())
         return nullptr;
     return &foundInstance.value();
 }
 
 Expected<RuntimeMeshHandle> MeshSkinningRuntimeCache::allocateHandle(){
-    while(m_nextHandleValue != 0u){
-        RuntimeMeshHandle handle;
-        handle.value = m_nextHandleValue;
-        ++m_nextHandleValue;
-        if(m_handleToEntity.find(handle.value) == m_handleToEntity.end())
-            return handle;
-    }
+    const Expected<u64> handleValue = TryAllocateRuntimeMeshHandleValue(m_handleToEntity, m_nextHandleValue);
+    if(!handleValue)
+        return MakeUnexpected(Failure{});
 
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh handle space exhausted"));
-    return MakeUnexpected(Failure{});
+    RuntimeMeshHandle handle;
+    handle.value = *handleValue;
+    return handle;
 }
 
 void MeshSkinningRuntimeCache::releaseRuntimeMesh(const Core::ECS::EntityID entity)noexcept{

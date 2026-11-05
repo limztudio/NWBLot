@@ -85,6 +85,33 @@ b8 ValidateRuntimeMeshUploadPayloadStreams(
     return true;
 }
 
+Expected<u64> TryAllocateRuntimeMeshHandleValue(
+    in HashMap<u64, EntityID> handleToEntity,
+    mut u64 inOutNextHandleValue
+){
+    while(inOutNextHandleValue != 0u){
+        const u64 candidate = inOutNextHandleValue;
+        ++inOutNextHandleValue;
+        if(!handleToEntity.contains(candidate))
+            return candidate;
+    }
+
+    error("MeshSkinningRuntimeCache: runtime mesh handle space exhausted");
+    return makeUnexpected(Failure());
+}
+
+Expected<EntityID> TryFindRuntimeMeshEntityByHandle(
+    in HashMap<u64, EntityID> handleToEntity,
+    in u64 handleValue
+){
+    if(!handleToEntity.contains(handleValue))
+        return makeUnexpected(Failure());
+    const EntityID entity = handleToEntity.at(handleValue);
+    if(!entity.valid())
+        return makeUnexpected(Failure());
+    return entity;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

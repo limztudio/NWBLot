@@ -164,16 +164,7 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!mesh.validatePayload(scratchArena))
         return false;
 
-    usize reserveBytes = sizeof(MeshBinaryHeader);
-    if(!MeshAssetBinaryPayload::AddMeshBaseReserveBytes(mesh, reserveBytes) || !CanStoreValueCount(outBinary, reserveBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshAssetCodec::serialize failed: mesh payload byte size overflows"));
-        return false;
-    }
-
-    outBinary.clear();
-    outBinary.reserve(reserveBytes);
-
-    AppendMeshBinaryStreams(
+    return SerializeMeshAssetBinary(
         mesh.positionStream(),
         mesh.normalStream(),
         mesh.tangentStream(),
@@ -188,7 +179,6 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
         mesh.solidTriangleWords(),
         outBinary
     );
-    return true;
 }
 
 

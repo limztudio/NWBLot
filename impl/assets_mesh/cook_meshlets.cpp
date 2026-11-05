@@ -101,19 +101,6 @@ b8 MeshCookMeshlets::GrowMeshletFromFrontier(
 
 
 b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& entry){
-    entry.meshlets.clear();
-    entry.meshletBounds.clear();
-    entry.meshletPositionStreamRefs.clear();
-    entry.meshletAttributeStreamRefs.clear();
-    entry.meshletLocalVertexRefs.clear();
-    entry.meshletPrimitiveIndices.clear();
-    entry.meshlets.reserve(DivideUpWrapping(indices.size() / s_MeshletTriangleIndexCount, s_MeshMaxMeshletTriangles));
-    entry.meshletBounds.reserve(entry.meshlets.capacity());
-    entry.meshletPositionStreamRefs.reserve(indices.size());
-    entry.meshletAttributeStreamRefs.reserve(indices.size());
-    entry.meshletLocalVertexRefs.reserve(indices.size());
-    entry.meshletPrimitiveIndices.reserve(indices.size());
-
     auto precomputed = MeshletTriangleGeometry::PrecomputeMeshletTriangleData(nwbFilePath, metaKind, indices, entry, scratchArena);
     if(!precomputed)
         return false;
@@ -127,11 +114,21 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
     Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena> parallelCandidates(scratchArena);
     Core::Assets::AssetVector<u32> frontier(assetArena);
     Core::Assets::AssetVector<u8> frontierFlags(assetArena);
-    localSourceVertexRefs.reserve(s_MeshMaxMeshletVertices);
-    localTriangleIndices.reserve(s_MeshMaxMeshletTriangles);
+    PrepareMeshletBuildOutputStreams(
+        indices.size(),
+        trianglePrecompute.triangles.size(),
+        entry.meshlets,
+        entry.meshletBounds,
+        entry.meshletPositionStreamRefs,
+        entry.meshletAttributeStreamRefs,
+        entry.meshletLocalVertexRefs,
+        entry.meshletPrimitiveIndices,
+        localSourceVertexRefs,
+        localTriangleIndices,
+        frontier,
+        frontierFlags
+    );
     parallelCandidates.reserve((static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription);
-    frontier.reserve(trianglePrecompute.triangles.size());
-    frontierFlags.resize(trianglePrecompute.triangles.size(), 0u);
 
     MeshletScoreState scoreState;
 

@@ -22,6 +22,44 @@ void ResetMeshletBuilderState(
     ResetMeshletScoreState(outScoreState);
 }
 
+void PrepareMeshletBuildOutputStreams(
+    in usize indexCount,
+    in usize triangleCount,
+    mut Vector<MeshletDesc> outMeshlets,
+    mut Vector<MeshletBounds> outMeshletBounds,
+    mut Vector<MeshletPositionStreamRef> outPositionStreamRefs,
+    mut Vector<MeshletAttributeStreamRef> outAttributeStreamRefs,
+    mut Vector<MeshletLocalVertexRef> outLocalVertexRefs,
+    mut Vector<u8> outPrimitiveIndices,
+    mut Vector<u32> outLocalSourceVertexRefs,
+    mut Vector<u32> outLocalTriangleIndices,
+    mut Vector<u32> outFrontier,
+    mut Vector<u8> outFrontierFlags
+){
+    const usize estimatedMeshlets = divideUp(indexCount / cast<usize>(s_MeshletTriangleIndexCount), cast<usize>(s_MeshMaxMeshletTriangles));
+    outMeshlets.clear();
+    outMeshletBounds.clear();
+    outPositionStreamRefs.clear();
+    outAttributeStreamRefs.clear();
+    outLocalVertexRefs.clear();
+    outPrimitiveIndices.clear();
+    outMeshlets.reserve(estimatedMeshlets);
+    outMeshletBounds.reserve(estimatedMeshlets);
+    outPositionStreamRefs.reserve(indexCount);
+    outAttributeStreamRefs.reserve(indexCount);
+    outLocalVertexRefs.reserve(indexCount);
+    outPrimitiveIndices.reserve(indexCount);
+
+    outLocalSourceVertexRefs.clear();
+    outLocalTriangleIndices.clear();
+    outLocalSourceVertexRefs.reserve(cast<usize>(s_MeshMaxMeshletVertices));
+    outLocalTriangleIndices.reserve(cast<usize>(s_MeshMaxMeshletTriangles));
+    outFrontier.clear();
+    outFrontier.reserve(triangleCount);
+    outFrontierFlags.clear();
+    outFrontierFlags.resize(triangleCount, 0u);
+}
+
 b8 AddMeshletTriangleToBuilder(
     in StringView metaKind,
     in StringView filePathText,

@@ -58,26 +58,22 @@ namespace MeshletTriangleGeometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const MeshCookEntry& entry, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] inline Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, [[maybe_unused]] const TStringView metaKind, const Span<const u32> indices, const MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
     MeshletTrianglePrecompute data(entry.positions.get_allocator().arena());
-
-    const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
-    if(triangleCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits"), metaKind, PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
-
-    PrecomputeMeshletTriangleStreams(
+    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
+    if(!ValidateAndPrecomputeMeshletTriangleStreams(
+        s_MeshMetaKindText,
+        AStringView(filePathText),
         indices,
         entry.vertexRefs,
         entry.positions,
-        triangleCount,
         data.triangles,
         data.triangleCalculations,
         data.positionTriangleOffsets,
         data.positionTriangleIndices,
         data.visitedTriangles
-    );
+    ))
+        return MakeUnexpected(Failure{});
     return data;
 }
 

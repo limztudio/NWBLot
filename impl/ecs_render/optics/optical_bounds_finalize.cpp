@@ -110,17 +110,25 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
     snapshot->boundsBuffers.reserve(gather.runtimeBounds.size());
     u32 previousIndex = 0u;
     for(const auto& bounds : gather.runtimeBounds){
-        if(
-            !bounds.buffer || !bounds.descriptor.valid() || bounds.instanceIndex >= snapshot->instanceCount
-            || bounds.descriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-            || (!snapshot->inputs.empty() && bounds.instanceIndex <= previousIndex)
-            || bounds.buffer->getDeviceGeneration() != device.getDeviceGeneration()
-            || bounds.buffer->getCreationDescription().byteSize < NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE
-            || (gather.instances[bounds.instanceIndex].flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) == 0u
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: invalid accepted runtime bounds binding"));
+        const b8 hasBuffer = static_cast<b8>(bounds.buffer);
+        const u64 bufferDeviceGen = hasBuffer ? bounds.buffer->getDeviceGeneration() : 0u;
+        const u64 bufferByteSize = hasBuffer ? bounds.buffer->getCreationDescription().byteSize : 0u;
+        const u32 instanceFlags = bounds.instanceIndex < snapshot->instanceCount ? gather.instances[bounds.instanceIndex].flags : 0u;
+        if(!ValidateRayTracingOpticalRuntimeBoundsBinding(
+            hasBuffer,
+            bounds.descriptor.valid(),
+            bounds.instanceIndex,
+            snapshot->instanceCount,
+            bounds.descriptor.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer,
+            !snapshot->inputs.empty(),
+            previousIndex,
+            bufferDeviceGen,
+            device.getDeviceGeneration(),
+            bufferByteSize,
+            NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE,
+            instanceFlags
+        ))
             return MakeUnexpected(Failure{});
-        }
         previousIndex = bounds.instanceIndex;
         snapshot->inputs.push_back(MakeRayTracingOpticalRuntimeInputGpu(LoadFloat(bounds.objectToWorld), bounds.descriptor.slot(), bounds.instanceIndex));
         snapshot->boundsBuffers.push_back(bounds.buffer);

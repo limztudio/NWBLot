@@ -107,11 +107,12 @@ b8 RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& 
             m_uploads.push_back(upload);
         }
         else{
-            upload->bytes.resize(byteCount);
-            NWB_MEMCPY(upload->bytes.data(), upload->bytes.size(), &gather.header, sizeof(gather.header));
-            if(instanceBytes != 0u)
-                NWB_MEMCPY(upload->bytes.data() + sizeof(gather.header), instanceBytes, gather.instances.data(), instanceBytes);
-            upload->instanceCount = static_cast<u32>(gather.instances.size());
+            SerializeRayTracingOpticalSceneGatherBytes(
+                gather.header,
+                Span<const RayTracingOpticalInstanceGpu>(gather.instances.data(), gather.instances.size()),
+                upload->bytes,
+                upload->instanceCount
+            );
         }
         m_resources.upload = Move(upload);
     }

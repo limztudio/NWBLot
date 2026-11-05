@@ -18,13 +18,13 @@ NWB_IMPL_BEGIN
 
 RayTracingOpticalSceneUpload::RayTracingOpticalSceneUpload(Core::Alloc::GlobalArena& arena, const RayTracingOpticalSceneGather& gather)
     : bytes(arena)
-    , instanceCount(static_cast<u32>(gather.instances.size()))
 {
-    const usize instanceBytes = gather.instances.size() * sizeof(RayTracingOpticalInstanceGpu);
-    bytes.resize(sizeof(gather.header) + instanceBytes);
-    NWB_MEMCPY(bytes.data(), bytes.size(), &gather.header, sizeof(gather.header));
-    if(instanceBytes != 0u)
-        NWB_MEMCPY(bytes.data() + sizeof(gather.header), instanceBytes, gather.instances.data(), instanceBytes);
+    SerializeRayTracingOpticalSceneGatherBytes(
+        gather.header,
+        Span<const RayTracingOpticalInstanceGpu>(gather.instances.data(), gather.instances.size()),
+        bytes,
+        instanceCount
+    );
 }
 
 

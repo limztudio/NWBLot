@@ -35,9 +35,7 @@ b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
 
     Vector<NameHash, Core::Alloc::ScratchArena> componentHashes(scratchArena);
-    componentHashes.reserve(entity.components().size());
-    for(const EntityAsset::ComponentRef& item : entity.components())
-        componentHashes.push_back(item.name().hash());
+    CollectAssetRefHashes(Span<const EntityAsset::ComponentRef>(entity.components()), componentHashes);
 
     usize reserveBytes = sizeof(EntityHeaderBinary);
     const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, componentHashes);
@@ -77,20 +75,9 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     Vector<NameHash, Core::Alloc::ScratchArena> entityHashes(scratchArena);
     Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
 
-    subsystemHashes.reserve(scene.subsystems().size());
-    for(const SceneAsset::SubsystemRef& item : scene.subsystems())
-        subsystemHashes.push_back(item.name().hash());
-
-    entityHashes.reserve(scene.entities().size());
-    for(const SceneAsset::EntityRef& item : scene.entities())
-        entityHashes.push_back(item.name().hash());
-
-    assetEntries.reserve(scene.assets().size());
-    for(const auto& [nickname, item] : scene.assets())
-        assetEntries.push_back(SceneAssetEntryBinary(nickname.hash(), item.name().hash()));
-    Sort(assetEntries.begin(), assetEntries.end(), [](const SceneAssetEntryBinary& lhs, const SceneAssetEntryBinary& rhs)noexcept{
-        return LessNameHash(lhs.nicknameHash, rhs.nicknameHash);
-    });
+    CollectAssetRefHashes(Span<const SceneAsset::SubsystemRef>(scene.subsystems()), subsystemHashes);
+    CollectAssetRefHashes(Span<const SceneAsset::EntityRef>(scene.entities()), entityHashes);
+    CollectSortedSceneAssetEntries(scene.assets(), assetEntries);
 
     usize reserveBytes = sizeof(SceneHeaderBinary);
     const b8 canReserve =

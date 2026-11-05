@@ -25,22 +25,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 ResolveCausticLights(const Span<const f32> causticImportance, const u32 refractiveInstanceCount, const Span<SceneLightGpuData> lights)noexcept{
-    const u32 lightCount = static_cast<u32>(lights.size());
-    if(refractiveInstanceCount == 0u || lightCount == 0u || causticImportance.size() < lightCount)
-        return 0u;
-
-    // Importance-ranked caustic slots (mirrors shadow selection). Highest eligible light per slot; points never qualify.
-    u32 assignedCount = 0u;
-    for(u32 slot = 0u; slot < NWB_SCENE_CAUSTIC_SLOT_COUNT; ++slot){
-        const u32 bestIndex = SelectNextCausticSlotLightIndex(Span<const SceneLightGpuData>(lights.data(), lightCount), causticImportance);
-        if(bestIndex >= lightCount)
-            break;
-        lights[bestIndex].params.w = static_cast<f32>(slot);
-        ++assignedCount;
-    }
-
-    return assignedCount;
+u32 ResolveCausticLights(const Span<const f32> causticImportance, const u32 refractiveInstanceCount, Span<SceneLightGpuData> lights)noexcept{
+    return AssignCausticLightSlots(causticImportance, refractiveInstanceCount, lights);
 }
 
 
@@ -217,13 +203,7 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::
         const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(*meshSystemPtr, m_meshSystem, entity);
         if(!meshResult)
             continue;
-        if(renderer.opticalBoundaryMode != OpticalBoundaryMode::ClosedNested && renderer.opticalBoundaryMode != OpticalBoundaryMode::ClosedPriority){
-            if(m_unsupportedCausticVolumeCount == 0u)
-                m_firstUnsupportedCausticVolumeEntity = entity.id;
-            ++m_unsupportedCausticVolumeCount;
-            Fnv64AppendValue(m_unsupportedCausticVolumeHash, entity.id);
-            Fnv64AppendValue(m_unsupportedCausticVolumeHash, renderer.opticalBoundaryMode);
-        }
+        RecordUnsupportedCausticVolume(entity.id, renderer.opticalBoundaryMode, m_firstUnsupportedCausticVolumeEntity, m_unsupportedCausticVolumeCount, m_unsupportedCausticVolumeHash);
         if(!meshResult->meshResources.csgLocalBounds.valid())
             continue;
 

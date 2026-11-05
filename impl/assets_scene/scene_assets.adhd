@@ -8,6 +8,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <core/alloc/scratch.h>
+
+namespace NWB::Impl{
+using SceneScratchArena = Core::Alloc::ScratchArena;
+using SceneScratchNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena>;
+using SceneScratchNameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
+using SceneScratchAssetEntryBinaryVector = Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena>;
+
+[[nodiscard]] inline constexpr b8 LessSceneAssetEntryBinary(const SceneAssetEntryBinary& lhs, const SceneAssetEntryBinary& rhs)noexcept{
+    return LessNameHash(lhs.nicknameHash, rhs.nicknameHash);
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [serialize]
 class ProjectHeaderBinary{
     public u32 magic = s_ProjectMagic;
@@ -29,12 +48,6 @@ class SceneHeaderBinary{
     public u64 subsystemCount = 0u;
     public u64 entityCount = 0u;
     public u64 assetCount = 0u;
-}
-
-[serialize]
-class SceneAssetEntryBinary{
-    public NameHash nicknameHash;
-    public NameHash assetHash;
 }
 
 
@@ -180,6 +193,61 @@ b8 ValidateSceneAssetSubsystemCount(in usize subsystemCount){
 b8 IsValidSceneAssetNicknameText(in StringView nicknameView){
     const StringView trimmed = trimView(nicknameView);
     return !trimmed.empty() && nicknameView == trimmed;
+}
+
+b8 ValidateUniqueAssetRefs<TAsset>(
+    in Span<AssetRef<TAsset>> references,
+    in StringView contextPrefix,
+    in StringView contextLabel,
+    mut SceneScratchArena scratchArena
+){
+    SceneScratchNameHashSet seen(0u, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
+    seen.reserve(references.size());
+    for(usize i = 0u; i < references.size(); ++i){
+        const AssetRef<TAsset> entry = references[i];
+        if(!entry.valid()){
+            error("{} failed: {} entry {} is empty", contextPrefix, contextLabel, i);
+            return false;
+        }
+        const NameHash hash = entry.name().hash();
+        if(seen.contains(hash)){
+            error("{} failed: duplicate {} entry at index {}", contextPrefix, contextLabel, i);
+            return false;
+        }
+        seen.insert(hash);
+    }
+    return true;
+}
+
+b8 ValidateSceneAssetMap<TAsset>(in HashMap<Name, AssetRef<TAsset>> assets){
+    for(in auto entry : assets){
+        if(!ValidateSceneAssetMapEntry(entry.first, entry.second.valid()))
+            return false;
+    }
+    return true;
+}
+
+void CollectAssetRefHashes<TAsset>(
+    in Span<AssetRef<TAsset>> references,
+    mut SceneScratchNameHashVector outHashes
+){
+    outHashes.clear();
+    outHashes.reserve(references.size());
+    for(in AssetRef<TAsset> item : references)
+        outHashes.push_back(item.name().hash());
+}
+
+void CollectSortedSceneAssetEntries<TAsset>(
+    in HashMap<Name, AssetRef<TAsset>> assets,
+    mut SceneScratchAssetEntryBinaryVector outEntries
+){
+    outEntries.clear();
+    outEntries.reserve(assets.size());
+    for(in auto entry : assets)
+        outEntries.push_back(SceneAssetEntryBinary(entry.first.hash(), entry.second.name().hash()));
+    native(mut outEntries){
+        Sort(outEntries.begin(), outEntries.end(), LessSceneAssetEntryBinary);
+    }
 }
 
 

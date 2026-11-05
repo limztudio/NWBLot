@@ -23,25 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(const AStringView parameterName){
-    const Expected<usize> dotIndex = TryFindMaterialParameterNameDotIndex(parameterName);
-    if(!dotIndex)
-        return MakeUnexpected(Failure{});
-
-    const auto name = Name::FromText(parameterName);
-    const auto blockName = Name::FromText(parameterName.substr(0u, *dotIndex));
-    const auto fieldName = Name::FromText(parameterName.substr(*dotIndex + 1u));
-    if(!name || !blockName || !fieldName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), ConvertString(parameterName));
-        return MakeUnexpected(Failure{});
-    }
-    MaterialInstanceParameterNames result;
-    result.parameterName = *name;
-    result.blockName = *blockName;
-    result.fieldName = *fieldName;
-    return result;
-}
-
 template<typename TElement>
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const Span<const TElement> elements)noexcept{
     return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(elements.data()), elements.size() * sizeof(TElement)));
@@ -106,20 +87,6 @@ public:
 
     NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
     return nullptr;
-}
-
-[[nodiscard]] inline b8 SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
-    if(!ValidateMaterialInstanceNumericFieldType(fieldType, parameterNameText))
-        return false;
-    if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))
-        return false;
-
-    const auto names = SplitMaterialInstanceParameterName(parameterNameText);
-    if(!names)
-        return false;
-
-    const MaterialInstanceParameter parameter = BuildMaterialInstanceParameter(*names, fieldType, value);
-    return StoreMaterialMutableParameter(component, parameter, parameterNameText);
 }
 
 [[nodiscard]] inline b8 SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){

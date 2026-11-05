@@ -23,6 +23,7 @@ const StringView s_SoftwareCausticEmissionTargetsName = "render.software_caustic
 const StringView s_CausticEmissionTargetsLabel = "Caustic Emission Targets";
 const f32 s_CausticSlotDisabled = -2.0f;
 const f32 s_CausticSlotEnabledThreshold = -1.5f;
+const u32 s_SceneCausticSlotCount = 4u;
 // Base grid sides that MakeCausticPhotonBudget accepts.
 const u32 s_CausticReducedBaseGridSide = 128u;
 const u32 s_CausticFullBaseGridSide = 512u;

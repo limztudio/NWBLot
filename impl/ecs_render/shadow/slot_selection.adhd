@@ -10,6 +10,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+namespace NWB::Impl{
+using MutableSceneLightGpuDataSpan = Span<SceneLightGpuData>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const f32 s_ShadowSlotUnassigned = -1.0f;
 const f32 s_DirectionalShadowImportanceBoost = 4.0f;
 const f32 s_ShadowImportanceDistanceSquaredEpsilon = 0.0001f;
@@ -47,6 +57,33 @@ u32 SelectNextShadowSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f3
         }
     }
     return bestIndex;
+}
+
+void AssignShadowSlotLights(
+    in Span<f32> shadowImportance,
+    in u32 lightCount,
+    mut MutableSceneLightGpuDataSpan outLights
+){
+    u32 slotCount = s_SceneShadowSlotCount;
+    if(lightCount < slotCount)
+        slotCount = lightCount;
+    for(u32 slot = 0u; slot < slotCount; ++slot){
+        f32 bestImportance = -1.0f;
+        u32 bestIndex = lightCount;
+        for(u32 i = 0u; i < lightCount && i < cast<u32>(shadowImportance.size()); ++i){
+            const SceneLightGpuData light = outLights[cast<usize>(i)];
+            if(light.params.z >= 0.0f)
+                continue;
+            const f32 importance = shadowImportance[cast<usize>(i)];
+            if(importance > bestImportance){
+                bestImportance = importance;
+                bestIndex = i;
+            }
+        }
+        if(bestIndex >= lightCount)
+            break;
+        outLights[cast<usize>(bestIndex)].params.z = cast<f32>(slot);
+    }
 }
 
 u32 ResolveSoftShadowSlotMask(in Span<SceneLightGpuData> lights){

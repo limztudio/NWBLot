@@ -80,13 +80,8 @@ namespace ECSRenderDetail{
     // Importance-ranked shadow slots: most important lights get the pool (slot -> params.z; rest stay lit).
     // Selection over <= NWB_SCENE_MAX_LIGHTS lights stays cheap.
     const u32 lightCount = static_cast<u32>(gatheredCount);
-    const u32 slotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
-    for(u32 slot = 0u; slot < slotCount; ++slot){
-        const u32 bestIndex = SelectNextShadowSlotLightIndex(Span<const SceneLightGpuData>(outLights.data(), lightCount), Span<const f32>(shadowImportance.data(), lightCount));
-        if(bestIndex >= lightCount)
-            break;
-        outLights[bestIndex].params.z = static_cast<f32>(slot);
-    }
+    Span<SceneLightGpuData> mutableLights = outLights;
+    AssignShadowSlotLights(Span<const f32>(shadowImportance.data(), lightCount), lightCount, mutableLights);
 
     return static_cast<u32>(gatheredCount);
 }

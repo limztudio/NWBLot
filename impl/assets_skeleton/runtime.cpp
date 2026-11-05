@@ -40,20 +40,9 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAsse
 b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
-    if(!ValidateSkeletonJointCounts(m_joints.size(), m_jointIndices.size()))
-        return false;
 
     Vector<u8, Core::Alloc::ScratchArena> namedJoints(scratchArena);
-    namedJoints.resize(m_joints.size(), 0u);
-    for(const auto& jointLookup : m_jointIndices){
-        const Name jointName = jointLookup.first;
-        const u32 jointIndex = jointLookup.second;
-        u8 dummyFlag = 0u;
-        u8& flagRef = jointIndex < m_joints.size() ? namedJoints[jointIndex] : dummyFlag;
-        if(!ValidateSkeletonJointLookupEntry(jointName, jointIndex, m_joints.size(), flagRef))
-            return false;
-    }
-    return ValidateSkeletonJointsArray(m_joints);
+    return ValidateSkeletonPayloadData(m_joints, m_jointIndices, namedJoints);
 }
 
 b8 Skeleton::loadBinary(const Span<const u8> binary){

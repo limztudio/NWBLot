@@ -182,17 +182,9 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
     Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
 
-    skeletonObjectBinaries.reserve(model.skeletonObjects().size());
-    for(const ModelSkeletonObject& object : model.skeletonObjects())
-        skeletonObjectBinaries.push_back(PackModelSkeletonObjectBinary(object));
-
-    staticMeshObjectBinaries.reserve(model.staticMeshObjects().size());
-    for(const ModelStaticMeshObject& object : model.staticMeshObjects())
-        staticMeshObjectBinaries.push_back(PackModelStaticMeshObjectBinary(object));
-
-    skinnedMeshObjectBinaries.reserve(model.skinnedMeshObjects().size());
-    for(const ModelSkinnedMeshObject& object : model.skinnedMeshObjects())
-        skinnedMeshObjectBinaries.push_back(PackModelSkinnedMeshObjectBinary(object));
+    PackModelSkeletonObjectBinaries(model.skeletonObjects(), skeletonObjectBinaries);
+    PackModelStaticMeshObjectBinaries(model.staticMeshObjects(), staticMeshObjectBinaries);
+    PackModelSkinnedMeshObjectBinaries(model.skinnedMeshObjects(), skinnedMeshObjectBinaries);
 
     usize reserveBytes = sizeof(ModelHeaderBinary);
     const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skeletonObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, staticMeshObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, skinnedMeshObjectBinaries);

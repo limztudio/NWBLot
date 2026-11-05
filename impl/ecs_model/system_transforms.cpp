@@ -24,7 +24,7 @@ namespace __hidden_model_system_transforms{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, const Span<ModelAttachmentJointQuery> queries){
+static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena>& queries){
     const usize queryCount = queries.size();
     const Span<const ModelAttachmentJointQuery> constQueries(queries.data(), queryCount);
     usize groupBegin = 0u;
@@ -33,13 +33,8 @@ static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, C
         const usize groupEnd = FindModelAttachmentJointQueryGroupEnd(parentOrder, constQueries, groupBegin);
 
         const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
-        if(pose && TryBuildStoredJointPaletteVectorFromSkeletonPose(*pose, jointPalette)){
-            const Span<const SkeletonJointMatrix> paletteSpan(jointPalette.data(), jointPalette.size());
-            for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
-                if(!TryResolveModelAttachmentJointQuery(paletteSpan, queries[ResolveModelAttachmentQueryIndex(parentOrder, queryIndex)]))
-                    break;
-            }
-        }
+        if(pose && TryBuildStoredJointPaletteVectorFromSkeletonPose(*pose, jointPalette))
+            ResolveModelAttachmentJointQueryGroup(parentOrder, Span<const SkeletonJointMatrix>(jointPalette.data(), jointPalette.size()), groupBegin, groupEnd, queries);
         groupBegin = groupEnd;
     }
 }
@@ -91,13 +86,13 @@ void ModelSystem::updateStaticMeshAttachments(){
                 sharedParent = false;
             jointQueries.push_back(MakeModelAttachmentJointQuery(attachment.parentEntity, attachment.parentJointIndex));
         });
-        const Span<ModelAttachmentJointQuery> queries(jointQueries.data(), jointQueries.size());
+        const Span<const ModelAttachmentJointQuery> queries(jointQueries.data(), jointQueries.size());
         if(sharedParent)
-            __hidden_model_system_transforms::ResolveAttachmentJointQueries({}, m_world, m_scratchJoints, queries);
+            __hidden_model_system_transforms::ResolveAttachmentJointQueries({}, m_world, m_scratchJoints, jointQueries);
         else{
             Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
             BuildSortedModelAttachmentParentOrder(queries, parentOrder);
-            __hidden_model_system_transforms::ResolveAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), m_world, m_scratchJoints, queries);
+            __hidden_model_system_transforms::ResolveAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), m_world, m_scratchJoints, jointQueries);
         }
     }
 

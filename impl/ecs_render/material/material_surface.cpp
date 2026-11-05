@@ -135,17 +135,6 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     return samplerResource->samplerHeapHandle.slot();
 }
 
-static void WriteMaterialInstanceOverrideBytes(
-    const MaterialInstanceParameter& parameter,
-    const u32 fieldByteSize,
-    const u32 byteOffset,
-    const Span<u8> inOutMutableTypedBytes
-){
-    NWB_ASSERT(fieldByteSize != 0u);
-    const NotNull<const u8*> valueBytes = MakeNotNull(static_cast<const u8*>(static_cast<const void*>(parameter.value.raw)));
-    NWB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes.get(), fieldByteSize);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -156,25 +145,16 @@ static void WriteMaterialInstanceOverrideBytes(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, const Span<u8> inOutMutableTypedBytes){
-    if(!ValidateMaterialInstanceOverrideInterface(entity.id, materialInstance.materialInterface, materialInfo.materialName, materialInfo.materialInterface))
-        return false;
-
-    for(const MaterialInstanceParameter& parameter : materialInstance.overrides){
-        const Expected<u32> fieldByteOffset = ResolveMaterialInstanceOverrideByteOffset(
-            entity.id,
-            materialInfo.materialName,
-            materialInfo.typedLayoutBlocks,
-            materialInfo.typedLayoutFields,
-            parameter,
-            inOutMutableTypedBytes.size()
-        );
-        if(!fieldByteOffset)
-            return false;
-        __hidden_material_surface::WriteMaterialInstanceOverrideBytes(parameter, MaterialLayoutFieldByteSize(parameter.fieldType), *fieldByteOffset, inOutMutableTypedBytes);
-    }
-
-    return true;
+b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, Span<u8> inOutMutableTypedBytes){
+    return ApplyMaterialInstanceOverridesToBytes(
+        entity.id,
+        materialInfo.materialName,
+        materialInfo.materialInterface,
+        materialInfo.typedLayoutBlocks,
+        materialInfo.typedLayoutFields,
+        materialInstance,
+        inOutMutableTypedBytes
+    );
 }
 
 
@@ -317,9 +297,7 @@ b8 RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceInfo
             return false;
         }
 
-        const u32 resolvedHeapSlot = *heapSlot;
-        NWB_ASSERT(resourceReference.constantByteOffset <= materialInfo.constantTypedBytes.size() && sizeof(resolvedHeapSlot) <= materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset);
-        NWB_MEMCPY(materialInfo.constantTypedBytes.data() + resourceReference.constantByteOffset, materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset, &resolvedHeapSlot, sizeof(resolvedHeapSlot));
+        PatchMaterialConstantResourceSlot(resourceReference.constantByteOffset, *heapSlot, materialInfo.constantTypedBytes);
     }
 
     materialInfo.resourceReferencesResolved = true;

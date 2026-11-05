@@ -27,9 +27,6 @@ namespace __hidden_model_runtime{
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ModelAssetCodecAutoRegistrar, ModelAssetCodec);
 
 
-using ObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -43,69 +40,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Model::validatePayload")))
         return false;
 
-    const Expected<usize> objectCountResult = ResolveModelObjectCount(m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size());
-    if(!objectCountResult)
-        return false;
-    const usize objectCount = *objectCountResult;
-    Optional<__hidden_model_runtime::ObjectNameMap> objectNames;
-    // One object is necessarily unique and a mesh cannot have a separate skeleton parent in that model.
-    // Larger models build the complete name index once, preserving validation order across all object kinds.
-    if(objectCount > 1u){
-        // Construct the final bucket array at the map's default 0.5 load factor so scratch storage never needs a reserve-time rehash.
-        objectNames.emplace(objectCount * 2u, scratchArena);
-        const auto indexObjects = [&objectNames](const auto& objects, const u8 flags){
-            for(const auto& object : objects){
-                const auto inserted = objectNames->try_emplace(object.name, flags);
-                if(!inserted.second)
-                    MarkDuplicateModelObjectNameFlags(inserted.first.value());
-            }
-        };
-        indexObjects(m_skeletonObjects, s_ModelSkeletonObjectNameFlag);
-        indexObjects(m_staticMeshObjects, 0u);
-        indexObjects(m_skinnedMeshObjects, 0u);
-    }
-    const auto nameIsUnique = [&objectNames](const Name name)noexcept{
-        return !objectNames || !IsModelObjectFlaggedDuplicate(objectNames->at(name));
-    };
-
-    for(usize i = 0u; i < m_skeletonObjects.size(); ++i){
-        const ModelSkeletonObject& object = m_skeletonObjects[i];
-        if(!ValidateModelSkeletonObject(object, i, nameIsUnique(object.name)))
-            return false;
-    }
-
-    for(usize i = 0u; i < m_staticMeshObjects.size(); ++i){
-        const ModelStaticMeshObject& object = m_staticMeshObjects[i];
-        b8 foundParent = false;
-        u8 parentFlags = 0u;
-        if(object.parentObject && objectNames){
-            const auto parent = objectNames->find(object.parentObject);
-            foundParent = parent != objectNames->end();
-            if(foundParent)
-                parentFlags = parent.value();
-        }
-        b8 parentExists = false;
-        b8 parentIsSkeleton = false;
-        ResolveModelStaticMeshParentState(object.name, object.parentObject, foundParent, parentFlags, parentExists, parentIsSkeleton);
-        if(!ValidateModelStaticMeshObject(object, i, nameIsUnique(object.name), parentExists, parentIsSkeleton))
-            return false;
-    }
-
-    for(usize i = 0u; i < m_skinnedMeshObjects.size(); ++i){
-        const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
-        b8 foundParent = false;
-        u8 parentFlags = 0u;
-        if(objectNames){
-            const auto parent = objectNames->find(object.skeletonObject);
-            foundParent = parent != objectNames->end();
-            if(foundParent)
-                parentFlags = parent.value();
-        }
-        if(!ValidateModelSkinnedMeshObject(object, i, nameIsUnique(object.name), ResolveModelSkinnedMeshTargetState(foundParent, parentFlags)))
-            return false;
-    }
-
-    return true;
+    return ValidateModelPayloadObjects(m_skeletonObjects, m_staticMeshObjects, m_skinnedMeshObjects, scratchArena);
 }
 
 b8 Model::loadBinary(const Span<const u8> binary){

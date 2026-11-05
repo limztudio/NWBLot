@@ -3,6 +3,17 @@
 
 
 #include <impl/ecs_render/caustic/push_constants.adhd>
+#include <impl/ecs_render/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::Impl{
+using MutableSceneLightGpuDataSpan = Span<SceneLightGpuData>;
+};
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +45,43 @@ u32 SelectNextCausticSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f
         }
     }
     return bestIndex;
+}
+
+u32 AssignCausticLightSlots(
+    in Span<f32> causticImportance,
+    in u32 refractiveInstanceCount,
+    mut MutableSceneLightGpuDataSpan lights
+){
+    const u32 lightCount = cast<u32>(lights.size());
+    if(refractiveInstanceCount == 0u || lightCount == 0u || causticImportance.size() < cast<usize>(lightCount))
+        return 0u;
+
+    // Importance-ranked caustic slots (mirrors shadow selection). Highest eligible light per slot; points never qualify.
+    u32 assignedCount = 0u;
+    for(u32 slot = 0u; slot < s_SceneCausticSlotCount; ++slot){
+        f32 bestImportance = -1.0f;
+        u32 bestIndex = lightCount;
+        for(u32 i = 0u; i < lightCount && i < cast<u32>(causticImportance.size()); ++i){
+            const SceneLightGpuData light = lights[cast<usize>(i)];
+            if(light.params.w >= 0.0f)
+                continue;
+            if(!CausticLightEnabled(light))
+                continue;
+            if(!CausticLightEligible(light))
+                continue;
+            const f32 importance = causticImportance[cast<usize>(i)];
+            if(importance > bestImportance){
+                bestImportance = importance;
+                bestIndex = i;
+            }
+        }
+        if(bestIndex >= lightCount)
+            break;
+        lights[cast<usize>(bestIndex)].params.w = cast<f32>(slot);
+        ++assignedCount;
+    }
+
+    return assignedCount;
 }
 
 b8 ValidateCausticQualitySettings(in CausticQualitySettings settings){
@@ -234,6 +282,22 @@ NwbCausticEmissionTargetGpu MakeCausticEmissionTarget(
     target.aabbMin = f32x4(worldMin, 0.0f);
     target.aabbMax = f32x4(worldMax, 0.0f);
     return target;
+}
+
+void RecordUnsupportedCausticVolume(
+    in u32 entityId,
+    in OpticalBoundaryMode boundaryMode,
+    mut u32 inOutFirstEntity,
+    mut u32 inOutCount,
+    mut u64 inOutHash
+){
+    if(boundaryMode == OpticalBoundaryMode::ClosedNested || boundaryMode == OpticalBoundaryMode::ClosedPriority)
+        return;
+    if(inOutCount == 0u)
+        inOutFirstEntity = entityId;
+    ++inOutCount;
+    inOutHash = updateFnv64U32(inOutHash, entityId);
+    inOutHash = updateFnv64Byte(inOutHash, cast<u8>(boundaryMode));
 }
 
 

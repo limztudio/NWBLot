@@ -28,32 +28,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_EntityAssetCodecAutoRegistrar, EntityAssetCod
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ProjectAssetCodecAutoRegistrar, ProjectAssetCodec);
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SceneAssetCodecAutoRegistrar, SceneAssetCodec);
 
-template<typename TAsset>
-[[nodiscard]] static b8 ValidateUniqueAssetRefs(const Span<const Core::Assets::AssetRef<TAsset>> references, const TStringView contextPrefix, const TStringView contextLabel, Core::Alloc::ScratchArena& scratchArena){
-    SceneScratchNameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-    seen.reserve(references.size());
-    for(usize i = 0u; i < references.size(); ++i){
-        const Core::Assets::AssetRef<TAsset>& entry = references[i];
-        if(!entry.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: {} entry {} is empty"), contextPrefix, contextLabel, i);
-            return false;
-        }
-        if(!seen.insert(entry.name().hash()).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: duplicate {} entry at index {}"), contextPrefix, contextLabel, i);
-            return false;
-        }
-    }
-    return true;
-}
-
-[[nodiscard]] static b8 ValidateAssetMap(const SceneAsset::AssetMap& assets){
-    for(const auto& [nickname, assetRef] : assets){
-        if(!ValidateSceneAssetMapEntry(nickname, assetRef.valid()))
-            return false;
-    }
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -69,7 +43,7 @@ b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         return false;
     if(!ValidateEntityAssetComponentCount(m_components.size()))
         return false;
-    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const ComponentRef>(m_components), NWB_TEXT("EntityAsset::validatePayload"), NWB_TEXT("component"), scratchArena))
+    if(!ValidateUniqueAssetRefs(Span<const ComponentRef>(m_components), "EntityAsset::validatePayload", "component", scratchArena))
         return false;
     return true;
 }
@@ -134,11 +108,11 @@ b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
         return false;
     if(!ValidateSceneAssetSubsystemCount(m_subsystems.size()))
         return false;
-    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), NWB_TEXT("SceneAsset::validatePayload"), NWB_TEXT("subsystem"), scratchArena))
+    if(!ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), "SceneAsset::validatePayload", "subsystem", scratchArena))
         return false;
-    if(!__hidden_scene_runtime::ValidateUniqueAssetRefs(Span<const EntityRef>(m_entities), NWB_TEXT("SceneAsset::validatePayload"), NWB_TEXT("entity"), scratchArena))
+    if(!ValidateUniqueAssetRefs(Span<const EntityRef>(m_entities), "SceneAsset::validatePayload", "entity", scratchArena))
         return false;
-    if(!__hidden_scene_runtime::ValidateAssetMap(m_assets))
+    if(!ValidateSceneAssetMap(m_assets))
         return false;
     return true;
 }

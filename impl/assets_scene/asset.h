@@ -59,7 +59,6 @@ inline constexpr TStringView s_SceneEntitiesPayloadLabel = NWB_TEXT("scene entit
 inline constexpr TStringView s_SceneAssetsPayloadLabel = NWB_TEXT("scene referenced assets");
 
 inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_DefaultProjectVirtualPathText);
-using SceneScratchNameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -146,6 +146,12 @@ b8 ValidateLightComponentAssetPayload(in LightComponent component, in Name virtu
     return false;
 }
 
+[serialize]
+class SceneAssetEntryBinary{
+    public NameHash nicknameHash;
+    public NameHash assetHash;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

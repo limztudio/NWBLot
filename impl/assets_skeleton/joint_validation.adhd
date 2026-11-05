@@ -1,0 +1,152 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_skeleton/joint_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::Impl{
+using ScratchSkeletonByteVector = Vector<u8, Core::Alloc::ScratchArena>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidSkeletonHeaderBinary(in SkeletonHeaderBinary header){
+    return header.padding0 == 0u && header.jointCount <= 0xFFFFFFFFul;
+}
+
+b8 IsAllowedSkeletonMetadataField(in StringView fieldName){
+    return fieldName == s_SkeletonJointsField;
+}
+
+b8 IsAllowedSkeletonJointMetadataField(in StringView fieldName){
+    return fieldName == s_SkeletonNameField
+        || fieldName == s_SkeletonParentField
+        || fieldName == s_SkeletonLocalBindPoseField
+    ;
+}
+
+b8 IsValidSkeletonJointCount(in usize jointCount){
+    return jointCount > 0u && jointCount <= 0xFFFFFFFFul;
+}
+
+b8 IsValidSkeletonJointParentIndex(in SkeletonJoint joint, in usize jointIndex){
+    return joint.parentIndex == s_SkeletonInvalidJointIndex || cast<usize>(joint.parentIndex) < jointIndex;
+}
+
+b8 IsValidSkeletonJointBinaryPadding(in SkeletonJointBinary jointBinary){
+    return jointBinary.padding0 == 0u && jointBinary.padding1[0u] == 0u && jointBinary.padding1[1u] == 0u;
+}
+
+b8 ValidateSkeletonJointCounts(in usize jointCount, in usize lookupCount){
+    if(!IsValidSkeletonJointCount(jointCount)){
+        error("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32");
+        return false;
+    }
+    if(lookupCount != jointCount){
+        error("Skeleton::validatePayload failed: joint lookup count does not match joint count");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSkeletonJointsArray(in Span<SkeletonJoint> joints){
+    for(usize i = 0u; i < joints.size(); ++i){
+        const SkeletonJoint joint = joints[i];
+        if(!IsFiniteSkeletonJointMatrix(MatrixSingle(joint.localBindPose))){
+            error("Skeleton::validatePayload failed: joint {} has non-finite local bind pose", i);
+            return false;
+        }
+        if(!IsValidSkeletonJointParentIndex(joint, i)){
+            error("Skeleton::validatePayload failed: joint {} has invalid parent {}", i, joint.parentIndex);
+            return false;
+        }
+    }
+    return true;
+}
+
+b8 ValidateSkeletonJointLookupEntry(in Name jointName, in u32 jointIndex, in usize jointCount, mut u8 inOutNamedJointFlag){
+    if(jointName == s_NameNone){
+        error("Skeleton::validatePayload failed: joint lookup contains an empty name");
+        return false;
+    }
+    if(cast<usize>(jointIndex) >= jointCount){
+        error("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}", jointName.resolvedText(), jointIndex);
+        return false;
+    }
+    if(inOutNamedJointFlag != 0u){
+        error("Skeleton::validatePayload failed: joint {} has multiple names", jointIndex);
+        return false;
+    }
+    inOutNamedJointFlag = 1u;
+    return true;
+}
+
+b8 ValidateSkeletonPayloadData(
+    in Span<SkeletonJoint> joints,
+    in HashMap<Name, u32> jointIndices,
+    mut ScratchSkeletonByteVector namedJoints
+){
+    if(!ValidateSkeletonJointCounts(joints.size(), jointIndices.size()))
+        return false;
+
+    namedJoints.clear();
+    namedJoints.resize(joints.size(), 0u);
+    for(in auto jointLookup : jointIndices){
+        const Name jointName = jointLookup.first;
+        const u32 jointIndex = jointLookup.second;
+        u8 dummyFlag = 0u;
+        if(cast<usize>(jointIndex) < joints.size()){
+            if(!ValidateSkeletonJointLookupEntry(jointName, jointIndex, joints.size(), namedJoints[cast<usize>(jointIndex)]))
+                return false;
+        }
+        else{
+            if(!ValidateSkeletonJointLookupEntry(jointName, jointIndex, joints.size(), dummyFlag))
+                return false;
+        }
+    }
+    return ValidateSkeletonJointsArray(joints);
+}
+
+b8 ValidateSkeletonHeaderBinary(in SkeletonHeaderBinary header){
+    if(IsValidSkeletonHeaderBinary(header))
+        return true;
+
+    error("Skeleton::loadBinary failed: reserved header fields or joint count are invalid");
+    return false;
+}
+
+b8 ValidateSkeletonJointBinaryPadding(in SkeletonJointBinary jointBinary){
+    if(IsValidSkeletonJointBinaryPadding(jointBinary))
+        return true;
+
+    error("Skeleton::loadBinary failed: reserved joint fields must be zero");
+    return false;
+}
+
+b8 AppendUnpackedSkeletonJointBinary(
+    in SkeletonJointBinary jointBinary,
+    mut Vector<SkeletonJoint> inOutJoints,
+    mut HashMap<Name, u32> inOutJointIndices
+){
+    if(!ValidateSkeletonJointBinaryPadding(jointBinary))
+        return false;
+    const Name jointName(jointBinary.nameHash);
+    if(inOutJointIndices.contains(jointName)){
+        error("Skeleton::loadBinary failed: duplicate joint '{}'", jointName.resolvedText());
+        return false;
+    }
+    inOutJointIndices.try_emplace(jointName, cast<u32>(inOutJoints.size()));
+    inOutJoints.push_back(UnpackSkeletonJointBinary(jointBinary));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

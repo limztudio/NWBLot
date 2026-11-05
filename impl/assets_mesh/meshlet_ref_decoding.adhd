@@ -8,6 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <core/alloc/scratch.h>
+
+namespace NWB::Impl{
+using ScratchMeshletU32Vector = Vector<u32, Core::Alloc::ScratchArena>;
+using ScratchMeshletAttribGpuVector = Vector<AttribGpu, Core::Alloc::ScratchArena>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<usize> TryComputeMeshletRefDeltaByteCount(in u32 refCount, in MeshletRefDeltaWidth width){
     if(!MeshletRefDeltaWidthValid(width))
         return makeUnexpected(Failure());
@@ -220,6 +233,85 @@ b8 TryDecodeMeshletTriangleCornerAttribute(
         return false;
     outAttribute.normal = normalStream[cast<usize>(attributeRef.value().normal)];
     outAttribute.uv0 = uv0Stream[cast<usize>(attributeRef.value().uv0)];
+    return true;
+}
+
+b8 DecodeMeshletTriangleIndicesInto(
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<u8> positionRefDeltas,
+    in Span<u8> primitiveIndices,
+    in usize positionCount,
+    mut ScratchMeshletU32Vector outIndices
+){
+    const usize localVertexRefCount = localVertexRefs.size();
+    const usize primitiveIndexCount = primitiveIndices.size();
+
+    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
+        const MeshletDesc meshlet = meshlets[meshletIndex];
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+
+        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
+            const usize primitiveBase = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * cast<usize>(s_MeshletTriangleIndexCount);
+
+            for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
+                const usize primitiveByte = primitiveBase + cast<usize>(corner);
+                if(primitiveByte >= primitiveIndexCount)
+                    return false;
+
+                const u32 localVertexIndex = cast<u32>(primitiveIndices[primitiveByte]);
+                const usize localVertexRefIndex = cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertexIndex);
+                if(localVertexRefIndex >= localVertexRefCount)
+                    return false;
+
+                u32 decodedIndex = 0u;
+                if(!TryDecodeMeshletTriangleCornerPosition(positionRefDeltas, meshlet, localVertexRefs[localVertexRefIndex], positionCount, decodedIndex))
+                    return false;
+                outIndices[primitiveByte] = decodedIndex;
+            }
+        }
+    }
+
+    return true;
+}
+
+b8 DecodeMeshletTriangleAttributesInto(
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<u8> attributeRefDeltas,
+    in Span<u8> primitiveIndices,
+    in Span<f16x4u> normalStream,
+    in Span<f32x2u> uv0Stream,
+    mut ScratchMeshletAttribGpuVector outAttributes
+){
+    const usize localVertexRefCount = localVertexRefs.size();
+    const usize primitiveIndexCount = primitiveIndices.size();
+
+    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
+        const MeshletDesc meshlet = meshlets[meshletIndex];
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+
+        for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
+            const usize primitiveBase = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * cast<usize>(s_MeshletTriangleIndexCount);
+
+            for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
+                const usize primitiveByte = primitiveBase + cast<usize>(corner);
+                if(primitiveByte >= primitiveIndexCount)
+                    return false;
+
+                const u32 localVertexIndex = cast<u32>(primitiveIndices[primitiveByte]);
+                const usize localVertexRefIndex = cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertexIndex);
+                if(localVertexRefIndex >= localVertexRefCount)
+                    return false;
+
+                AttribGpu decodedAttribute;
+                if(!TryDecodeMeshletTriangleCornerAttribute(attributeRefDeltas, meshlet, localVertexRefs[localVertexRefIndex], normalStream, uv0Stream, decodedAttribute))
+                    return false;
+                outAttributes[primitiveByte] = decodedAttribute;
+            }
+        }
+    }
+
     return true;
 }
 

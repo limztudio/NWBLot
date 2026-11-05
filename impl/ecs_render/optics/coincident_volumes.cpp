@@ -21,39 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_coincident_volumes{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Candidate = CoincidentOpticalVolumeCandidate;
-using CandidatePointer = NotNull<const Candidate*>;
-
-struct CandidateHasher{
-public:
-    usize operator()(const CandidatePointer candidate)const noexcept{
-        return HashCoincidentOpticalVolumeCandidate(*candidate);
-    }
-};
-
-struct CandidateEqual{
-public:
-    b8 operator()(const CandidatePointer lhs, const CandidatePointer rhs)const noexcept{
-        return EqualCoincidentOpticalVolumeCandidates(*lhs, *rhs);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena){
     auto rendererView = world.view<RendererComponent>();
     const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
@@ -109,36 +76,8 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
     select(candidates, scratchArena);
 }
 
-void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena){
-    reset();
-    const usize candidateCount = candidates.size();
-    if(candidateCount < s_MinCoincidentCandidateCount)
-        return;
-
-    using namespace __hidden_coincident_volumes;
-    using RepresentativeMap = HashMap<CandidatePointer, CandidatePointer, Core::Alloc::ScratchArena, CandidateHasher, CandidateEqual>;
-    RepresentativeMap representatives(0u, CandidateHasher{}, CandidateEqual{}, scratchArena);
-    representatives.reserve(candidateCount);
-    // Inspect membership each frame; components may change without structural mutation.
-    for(usize index = 0u; index < candidateCount; ++index){
-        const Candidate& candidate = candidates[index];
-        if(!ValidCoincidentOpticalVolumeCandidate(candidate))
-            continue;
-        const CandidatePointer current(&candidate);
-        auto [entry, inserted] = representatives.emplace(current, current);
-        if(inserted)
-            continue;
-
-        const Candidate& previous = *entry.value();
-        const b8 replace = CoincidentOpticalVolumeCandidateOutranks(candidate, previous);
-        const Core::ECS::EntityID suppressed = replace ? previous.entity : candidate.entity;
-        if(replace)
-            entry.value() = current;
-        if(!m_suppressed.insert(suppressed).second){
-            NWB_ASSERT(false);
-            continue;
-        }
-    }
+void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVolumeCandidate> candidates, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena){
+    SelectSuppressedCoincidentOpticalVolumes(candidates, m_suppressed);
 }
 
 

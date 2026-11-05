@@ -132,9 +132,7 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     }
 
     Vector<NameHash, Core::Alloc::ScratchArena> jointNameHashes(scratchArena);
-    jointNameHashes.resize(skeleton.joints().size());
-    for(const auto& jointLookup : skeleton.jointIndices())
-        jointNameHashes[jointLookup.second] = jointLookup.first.hash();
+    CollectSkeletonJointNameHashes(skeleton.joints().size(), skeleton.jointIndices(), jointNameHashes);
 
     outBinary.clear();
     outBinary.reserve(reserveBytes);

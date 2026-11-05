@@ -168,6 +168,125 @@ b8 LightSpaceShadowStorageFits(in LightSpacePlan plan, in LightSpaceShadowStorag
     ;
 }
 
+void LogNewLightSpaceCsgRayFailures(in u32 failureFlags, mut u32 inOutReportedFailures){
+    const u32 newFailures = failureFlags & ~inOutReportedFailures;
+    inOutReportedFailures |= failureFlags;
+    if((newFailures & s_LightSpaceCsgRayFailureUnsupported) != 0u)
+        warning("RendererSystem: CSG direct-shadow traversal rejected unsupported receiver or cutter geometry; conservative occlusion retained");
+    if((newFailures & s_LightSpaceCsgRayFailureCapacity) != 0u)
+        warning("RendererSystem: CSG direct-shadow traversal exceeded closed-crossing or BVH stack capacity (flags=2); conservative occlusion retained");
+    if((newFailures & s_LightSpaceCsgRayFailureTopology) != 0u)
+        warning("RendererSystem: CSG direct-shadow traversal rejected incomplete or invalid solid topology; conservative occlusion retained");
+    if((newFailures & s_LightSpaceCsgRayFailureOpenCapacity) != 0u)
+        warning("RendererSystem: CSG direct-shadow traversal exceeded open-surface capacity (flags=16); conservative occlusion retained");
+}
+
+b8 HasAnyLightSpaceCsgActiveLight(in b8 hasCsg, in Span<SceneLightGpuData> lights){
+    if(!hasCsg)
+        return false;
+    for(in SceneLightGpuData light : lights){
+        if(light.params.z >= 0.0f)
+            return true;
+    }
+    return false;
+}
+
+Expected<LightSpacePlan> TryBuildLightSpacePlanForSceneLights(
+    in SoftwareShadowSettings baseSettings,
+    in Span<SceneLightGpuData> lights,
+    in u64 maxStorageBufferRange,
+    in u32 drawCount,
+    in b8 hasCsg,
+    in usize csgContextBytes
+){
+    const usize lightCount = lights.size();
+    if(lightCount > cast<usize>(s_SceneMaxLights))
+        return makeUnexpected(Failure());
+
+    Array<LightSpaceLightRequest, s_SceneShadowSlotCount> requests;
+    usize requestCount = 0u;
+    for(u32 index = 0u; index < cast<u32>(lightCount); ++index){
+        const SceneLightGpuData light = lights[cast<usize>(index)];
+        if(light.params.z < 0.0f || light.params.z >= cast<f32>(s_SceneShadowSlotCount))
+            continue;
+        if(requestCount == requests.size())
+            return makeUnexpected(Failure());
+        LightSpaceLightRequest request;
+        request.lightIndex = index;
+        request.shadowSlot = cast<u32>(light.params.z);
+        request.type = ResolveLightSpaceLightRequestType(light.params.y, hasCsg);
+        request.eligible = true;
+        requests[requestCount] = request;
+        ++requestCount;
+    }
+
+    SoftwareShadowSettings settings = baseSettings;
+    if(hasCsg){
+        settings.backend = SoftwareShadowBackend::Automatic;
+        const u64 requiredCsgBytes = cast<u64>(csgContextBytes) + 4ull;
+        if(settings.memoryBudgetBytes <= requiredCsgBytes)
+            return makeUnexpected(Failure());
+        settings.memoryBudgetBytes -= requiredCsgBytes;
+    }
+
+    const Span<LightSpaceLightRequest> allRequests = requests;
+    const Expected<LightSpacePlan> plan = TryBuildLightSpacePlan(
+        settings,
+        allRequests.subspan(0u, requestCount),
+        maxStorageBufferRange,
+        drawCount,
+        hasCsg
+    );
+    if(!plan.has_value() || plan.value().viewCount == 0u)
+        return makeUnexpected(Failure());
+    return plan.value();
+}
+
+u64 UpdateFnv64Float4LittleEndian(in u64 hash, in VectorSingle value){
+    u64 outHash = updateFnv64U32(hash, bit_cast<u32>(value.x));
+    outHash = updateFnv64U32(outHash, bit_cast<u32>(value.y));
+    outHash = updateFnv64U32(outHash, bit_cast<u32>(value.z));
+    outHash = updateFnv64U32(outHash, bit_cast<u32>(value.w));
+    return outHash;
+}
+
+LightSpaceCaptureIdentity BuildLightSpaceCaptureIdentity(
+    in u64 sceneIdentity,
+    in b8 sceneTrusted,
+    in Span<SceneLightGpuData> lights,
+    in u32 width,
+    in u32 height,
+    in LightSpacePlan plan
+){
+    LightSpaceCaptureIdentity identity;
+    identity.scene = sceneIdentity;
+    identity.trusted = sceneTrusted;
+    identity.lighting = s_Fnv64OffsetBasis;
+    const u32 lightCount = cast<u32>(lights.size());
+    identity.lighting = updateFnv64U32(identity.lighting, lightCount);
+    for(in SceneLightGpuData light : lights){
+        identity.lighting = UpdateFnv64Float4LittleEndian(identity.lighting, VectorSingle(light.position));
+        identity.lighting = UpdateFnv64Float4LittleEndian(identity.lighting, VectorSingle(light.direction));
+        identity.lighting = UpdateFnv64Float4LittleEndian(identity.lighting, VectorSingle(light.colorIntensity));
+        identity.lighting = UpdateFnv64Float4LittleEndian(identity.lighting, VectorSingle(light.params));
+        identity.lighting = UpdateFnv64Float4LittleEndian(identity.lighting, VectorSingle(light.params2));
+    }
+    identity.layout = s_Fnv64OffsetBasis;
+    identity.layout = updateFnv64U32(identity.layout, width);
+    identity.layout = updateFnv64U32(identity.layout, height);
+    identity.layout = updateFnv64U32(identity.layout, plan.lightCount);
+    identity.layout = updateFnv64U32(identity.layout, plan.viewCount);
+    identity.layout = updateFnv64U32(identity.layout, plan.textureResolution);
+    identity.layout = updateFnv64U64(identity.layout, plan.drawArgumentByteSize);
+    for(u32 view = 0u; view < plan.viewCount; ++view){
+        for(usize lane = 0u; lane < 4u; ++lane)
+            identity.layout = updateFnv64U32(identity.layout, plan.views[cast<usize>(view)].map[lane]);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            identity.layout = updateFnv64U32(identity.layout, plan.views[cast<usize>(view)].light[lane]);
+    }
+    return identity;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

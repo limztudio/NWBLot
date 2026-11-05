@@ -182,5 +182,91 @@ b8 ValidateSharedMeshPayload(
     ;
 }
 
+b8 HasIncompleteMeshGeometryPayload(
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<u8> positionRefDeltas,
+    in Span<u8> attributeRefDeltas,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<u8> meshletPrimitiveIndices,
+    in Span<u32> solidTriangleWords
+){
+    return
+        positions.empty()
+        || normals.empty()
+        || tangents.empty()
+        || uv0.empty()
+        || colors.empty()
+        || meshlets.empty()
+        || meshletBounds.empty()
+        || positionRefDeltas.empty()
+        || attributeRefDeltas.empty()
+        || localVertexRefs.empty()
+        || meshletPrimitiveIndices.empty()
+        || solidTriangleWords.size() != cast<usize>(ComputeMeshSolidTriangleWordCount(meshletPrimitiveIndices.size()))
+    ;
+}
+
+b8 ValidateMeshAssetPayload(
+    in Name virtualPath,
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<u8> positionRefDeltas,
+    in Span<u8> attributeRefDeltas,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in Span<u8> meshletPrimitiveIndices,
+    in Span<u32> solidTriangleWords
+){
+    const StringView meshPathText = ResolveMeshVirtualPathText(virtualPath);
+
+    if(HasIncompleteMeshGeometryPayload(
+        positions,
+        normals,
+        tangents,
+        uv0,
+        colors,
+        meshlets,
+        meshletBounds,
+        positionRefDeltas,
+        attributeRefDeltas,
+        localVertexRefs,
+        meshletPrimitiveIndices,
+        solidTriangleWords
+    )){
+        error("Mesh::validatePayload failed: mesh '{}' has incomplete payload", meshPathText);
+        return false;
+    }
+    if(!HasValidMeshSolidTriangleTailPadding(meshletPrimitiveIndices.size(), solidTriangleWords.back())){
+        error("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding", meshPathText);
+        return false;
+    }
+
+    return ValidateSharedMeshPayload(
+        positions,
+        normals,
+        tangents,
+        uv0,
+        colors,
+        positionRefDeltas,
+        attributeRefDeltas,
+        localVertexRefs,
+        meshlets,
+        meshletBounds,
+        meshletPrimitiveIndices,
+        s_MeshValidatePayloadContextText,
+        meshPathText
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

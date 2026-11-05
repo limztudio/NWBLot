@@ -7,7 +7,7 @@
 
 #include "../global.h"
 
-#include <impl/assets_skeleton/joint_types.adhd.h>
+#include <impl/assets_skeleton/joint_validation.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/module.h>

@@ -69,35 +69,21 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
 }
 
 b8 Mesh::validatePayload([[maybe_unused]] Core::Alloc::ScratchArena& scratchArena)const{
-    const AStringView meshPathText = ResolveMeshVirtualPathText(virtualPath());
-
-    if(hasIncompleteGeometryPayload()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload"), ConvertString(meshPathText));
-        return false;
-    }
-    if(!HasValidMeshSolidTriangleTailPadding(meshletPrimitiveIndices().size(), solidTriangleWords().back())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has invalid solid triangle padding"), ConvertString(meshPathText));
-        return false;
-    }
-
-    if(!ValidateSharedMeshPayload(
+    return ValidateMeshAssetPayload(
+        virtualPath(),
         m_positionStream,
         m_normalStream,
         m_tangentStream,
         m_uv0Stream,
         m_colorStream,
+        m_meshlets,
+        m_meshletBounds,
         m_meshletPositionRefDeltas,
         m_meshletAttributeRefDeltas,
         m_meshletLocalVertexRefs,
-        m_meshlets,
-        m_meshletBounds,
         m_meshletPrimitiveIndices,
-        s_MeshValidatePayloadContextText,
-        meshPathText
-    ))
-        return false;
-
-    return true;
+        m_solidTriangleWords
+    );
 }
 
 void Mesh::setPayload(
@@ -129,20 +115,20 @@ void Mesh::setPayload(
 }
 
 b8 Mesh::hasIncompleteGeometryPayload()const noexcept{
-    return
-        m_positionStream.empty()
-        || m_normalStream.empty()
-        || m_tangentStream.empty()
-        || m_uv0Stream.empty()
-        || m_colorStream.empty()
-        || m_meshlets.empty()
-        || m_meshletBounds.empty()
-        || m_meshletPositionRefDeltas.empty()
-        || m_meshletAttributeRefDeltas.empty()
-        || m_meshletLocalVertexRefs.empty()
-        || m_meshletPrimitiveIndices.empty()
-        || m_solidTriangleWords.size() != static_cast<usize>(ComputeMeshSolidTriangleWordCount(m_meshletPrimitiveIndices.size()))
-    ;
+    return HasIncompleteMeshGeometryPayload(
+        m_positionStream,
+        m_normalStream,
+        m_tangentStream,
+        m_uv0Stream,
+        m_colorStream,
+        m_meshlets,
+        m_meshletBounds,
+        m_meshletPositionRefDeltas,
+        m_meshletAttributeRefDeltas,
+        m_meshletLocalVertexRefs,
+        m_meshletPrimitiveIndices,
+        m_solidTriangleWords
+    );
 }
 
 
@@ -228,13 +214,8 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(
     const usize positionCount,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    const usize primitiveIndexCount = primitiveIndices.size();
-
-    Vector<u32, Core::Alloc::ScratchArena> outIndices(primitiveIndexCount, scratchArena);
-
-    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> b8 {
-        return TryDecodeMeshletTriangleCornerPosition(positionRefDeltas, meshlet, localVertexRef, positionCount, outIndices[primitiveByte]);
-    }))
+    Vector<u32, Core::Alloc::ScratchArena> outIndices(primitiveIndices.size(), scratchArena);
+    if(!DecodeMeshletTriangleIndicesInto(meshlets, localVertexRefs, positionRefDeltas, primitiveIndices, positionCount, outIndices))
         return MakeUnexpected(Failure{});
     return outIndices;
 }
@@ -248,14 +229,8 @@ Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttri
     const Span<const Float2U> uv0Stream,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    const usize primitiveIndexCount = primitiveIndices.size();
-
-    Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndexCount, scratchArena);
-
-    if(!ForEachMeshletTriangleCorner(meshlets, localVertexRefs, primitiveIndices, [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef)noexcept -> b8 {
-            return TryDecodeMeshletTriangleCornerAttribute(attributeRefDeltas, meshlet, localVertexRef, normalStream, uv0Stream, outAttributes[primitiveByte]);
-        }
-    ))
+    Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndices.size(), scratchArena);
+    if(!DecodeMeshletTriangleAttributesInto(meshlets, localVertexRefs, attributeRefDeltas, primitiveIndices, normalStream, uv0Stream, outAttributes))
         return MakeUnexpected(Failure{});
     return outAttributes;
 }

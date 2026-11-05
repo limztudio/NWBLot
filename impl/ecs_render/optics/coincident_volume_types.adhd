@@ -164,5 +164,61 @@ CoincidentOpticalVolumeCandidate MakeCoincidentOpticalVolumeCandidate(
     return candidate;
 }
 
+class CoincidentOpticalVolumeKey{
+    public in CoincidentOpticalVolumeCandidate candidate;
+
+
+    public CoincidentOpticalVolumeKey(in CoincidentOpticalVolumeCandidate inCandidate){
+        this.candidate = inCandidate;
+    }
+
+
+    public b8 operator==(in CoincidentOpticalVolumeKey rhs)const{
+        return EqualCoincidentOpticalVolumeCandidates(this.candidate, rhs.candidate);
+    }
+
+    public usize hash()const{
+        return HashCoincidentOpticalVolumeCandidate(this.candidate);
+    }
+}
+
+void SelectSuppressedCoincidentOpticalVolumes(
+    in Span<CoincidentOpticalVolumeCandidate> candidates,
+    mut HashSet<EntityID> outSuppressed
+){
+    outSuppressed.clear();
+    const usize candidateCount = candidates.size();
+    if(candidateCount < s_MinCoincidentCandidateCount)
+        return;
+
+    HashMap<CoincidentOpticalVolumeKey, usize> representatives;
+    representatives.reserve(candidateCount);
+    // Inspect membership each frame; components may change without structural mutation.
+    for(usize index = 0u; index < candidateCount; ++index){
+        if(!ValidCoincidentOpticalVolumeCandidate(candidates[index]))
+            continue;
+        const CoincidentOpticalVolumeKey key(candidates[index]);
+        if(!representatives.contains(key)){
+            representatives.insert_or_assign(key, index);
+            continue;
+        }
+
+        const usize previousIndex = representatives[key];
+        const CoincidentOpticalVolumeCandidate previous = candidates[previousIndex];
+        const CoincidentOpticalVolumeCandidate candidate = candidates[index];
+        const b8 replace = CoincidentOpticalVolumeCandidateOutranks(candidate, previous);
+        EntityID suppressed = candidate.entity;
+        if(replace){
+            suppressed = previous.entity;
+            representatives.insert_or_assign(key, index);
+        }
+        if(outSuppressed.contains(suppressed)){
+            assert(false);
+            continue;
+        }
+        outSuppressed.insert(suppressed);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

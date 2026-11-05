@@ -10,6 +10,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+namespace NWB::Impl{
+using MutableByteSpan = Span<u8>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const usize s_MaterialInstanceVectorComponentCount = 4u;
 
 
@@ -125,6 +135,58 @@ b8 ValidateMaterialInstanceNumericFieldType(in MaterialLayoutFieldType fieldType
 
     error("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type", parameterNameText);
     return false;
+}
+
+Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(in StringView parameterName){
+    const Expected<usize> dotIndex = TryFindMaterialParameterNameDotIndex(parameterName);
+    if(!dotIndex.has_value())
+        return makeUnexpected(Failure());
+
+    const usize dotPos = dotIndex.value();
+    Name resolvedParameterName = s_NameNone;
+    Name resolvedBlockName = s_NameNone;
+    Name resolvedFieldName = s_NameNone;
+    b8 validNames = false;
+    native(in parameterName, in dotPos, mut resolvedParameterName, mut resolvedBlockName, mut resolvedFieldName, mut validNames){
+        const auto name = Name::FromText(parameterName);
+        const auto blockName = Name::FromText(parameterName.substr(0u, dotPos));
+        const auto fieldName = Name::FromText(parameterName.substr(dotPos + 1u));
+        if(name && blockName && fieldName){
+            resolvedParameterName = *name;
+            resolvedBlockName = *blockName;
+            resolvedFieldName = *fieldName;
+            validNames = true;
+        }
+    }
+    if(!validNames){
+        error("MaterialInstanceComponent: parameter '{}' contains an embedded null", parameterName);
+        return makeUnexpected(Failure());
+    }
+    MaterialInstanceParameterNames result;
+    result.parameterName = resolvedParameterName;
+    result.blockName = resolvedBlockName;
+    result.fieldName = resolvedFieldName;
+    return result;
+}
+
+b8 SetMaterialMutableParameter(
+    mut MaterialInstanceComponent component,
+    in Name materialInterface,
+    in StringView parameterNameText,
+    in MaterialLayoutFieldType fieldType,
+    in u32x4u value
+){
+    if(!ValidateMaterialInstanceNumericFieldType(fieldType, parameterNameText))
+        return false;
+    if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))
+        return false;
+
+    const Expected<MaterialInstanceParameterNames> names = SplitMaterialInstanceParameterName(parameterNameText);
+    if(!names.has_value())
+        return false;
+
+    const MaterialInstanceParameter parameter = BuildMaterialInstanceParameter(names.value(), fieldType, value);
+    return StoreMaterialMutableParameter(component, parameter, parameterNameText);
 }
 
 Expected<MaterialInstanceOverrideField> TryFindMaterialInstanceOverrideField(
@@ -253,6 +315,85 @@ Expected<u32> ResolveMaterialInstanceOverrideByteOffset(
         return makeUnexpected(Failure());
     }
     return fieldByteOffset;
+}
+
+Array<u8, 16> UnpackMaterialInstanceParameterBytes(in u32x4u value){
+    Array<u8, 16> out;
+    Array<u32, 4> lanes;
+    lanes[0u] = value.x;
+    lanes[1u] = value.y;
+    lanes[2u] = value.z;
+    lanes[3u] = value.w;
+    for(usize laneIndex = 0u; laneIndex < 4u; ++laneIndex){
+        const u32 lane = lanes[laneIndex];
+        const usize base = laneIndex * 4u;
+        out[base + 0u] = cast<u8>(lane & 0xFFu);
+        out[base + 1u] = cast<u8>((lane >> 8u) & 0xFFu);
+        out[base + 2u] = cast<u8>((lane >> 16u) & 0xFFu);
+        out[base + 3u] = cast<u8>((lane >> 24u) & 0xFFu);
+    }
+    return out;
+}
+
+void WriteMaterialInstanceOverrideBytes(
+    in MaterialInstanceParameter parameter,
+    in u32 fieldByteSize,
+    in u32 byteOffset,
+    mut MutableByteSpan inOutMutableTypedBytes
+){
+    assert(fieldByteSize != 0u && fieldByteSize <= 16u);
+    const Array<u8, 16> valueBytes = UnpackMaterialInstanceParameterBytes(parameter.value);
+    const usize baseOffset = cast<usize>(byteOffset);
+    const usize byteCount = cast<usize>(fieldByteSize);
+    for(usize byteIndex = 0u; byteIndex < byteCount; ++byteIndex)
+        inOutMutableTypedBytes[baseOffset + byteIndex] = valueBytes[byteIndex];
+}
+
+b8 ApplyMaterialInstanceOverridesToBytes(
+    in u32 entityId,
+    in Name materialName,
+    in Name materialInterface,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in MaterialInstanceComponent materialInstance,
+    mut MutableByteSpan inOutMutableTypedBytes
+){
+    if(!ValidateMaterialInstanceOverrideInterface(entityId, materialInstance.materialInterface, materialName, materialInterface))
+        return false;
+
+    for(in MaterialInstanceParameter parameter : materialInstance.overrides){
+        const Expected<u32> fieldByteOffset = ResolveMaterialInstanceOverrideByteOffset(
+            entityId,
+            materialName,
+            typedLayoutBlocks,
+            typedLayoutFields,
+            parameter,
+            inOutMutableTypedBytes.size()
+        );
+        if(!fieldByteOffset.has_value())
+            return false;
+        WriteMaterialInstanceOverrideBytes(
+            parameter,
+            MaterialLayoutFieldByteSize(parameter.fieldType),
+            fieldByteOffset.value(),
+            inOutMutableTypedBytes
+        );
+    }
+
+    return true;
+}
+
+void PatchMaterialConstantResourceSlot(
+    in u32 constantByteOffset,
+    in u32 resolvedHeapSlot,
+    mut Vector<u8> inOutConstantTypedBytes
+){
+    assert(cast<usize>(constantByteOffset) <= inOutConstantTypedBytes.size() && 4u <= inOutConstantTypedBytes.size() - cast<usize>(constantByteOffset));
+    const usize offset = cast<usize>(constantByteOffset);
+    inOutConstantTypedBytes[offset + 0u] = cast<u8>(resolvedHeapSlot & 0xFFu);
+    inOutConstantTypedBytes[offset + 1u] = cast<u8>((resolvedHeapSlot >> 8u) & 0xFFu);
+    inOutConstantTypedBytes[offset + 2u] = cast<u8>((resolvedHeapSlot >> 16u) & 0xFFu);
+    inOutConstantTypedBytes[offset + 3u] = cast<u8>((resolvedHeapSlot >> 24u) & 0xFFu);
 }
 
 

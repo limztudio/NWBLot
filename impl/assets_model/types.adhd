@@ -8,6 +8,47 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+namespace NWB::Impl{
+using ScratchArena = Core::Alloc::ScratchArena;
+using ScratchModelSkeletonObjectBinaryVector = Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena>;
+using ScratchModelStaticMeshObjectBinaryVector = Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena>;
+using ScratchModelSkinnedMeshObjectBinaryVector = Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena>;
+using ScratchModelObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PackModelSkeletonObjectBinaries(
+    in Span<ModelSkeletonObject> objects,
+    mut ScratchModelSkeletonObjectBinaryVector outBinaries
+){
+    outBinaries.reserve(objects.size());
+    for(in ModelSkeletonObject object : objects)
+        outBinaries.push_back(PackModelSkeletonObjectBinary(object));
+}
+
+void PackModelStaticMeshObjectBinaries(
+    in Span<ModelStaticMeshObject> objects,
+    mut ScratchModelStaticMeshObjectBinaryVector outBinaries
+){
+    outBinaries.reserve(objects.size());
+    for(in ModelStaticMeshObject object : objects)
+        outBinaries.push_back(PackModelStaticMeshObjectBinary(object));
+}
+
+void PackModelSkinnedMeshObjectBinaries(
+    in Span<ModelSkinnedMeshObject> objects,
+    mut ScratchModelSkinnedMeshObjectBinaryVector outBinaries
+){
+    outBinaries.reserve(objects.size());
+    for(in ModelSkinnedMeshObject object : objects)
+        outBinaries.push_back(PackModelSkinnedMeshObjectBinary(object));
+}
+
 b8 IsAllowedModelMetadataField(in StringView fieldName){
     return
         fieldName == s_ModelSkeletonsField
@@ -214,6 +255,103 @@ b8 ValidateModelSkinnedMeshObject(
         error("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object", index);
         return false;
     }
+    return true;
+}
+
+void IndexModelObjectName(
+    in Name objectName,
+    in u8 flags,
+    mut ScratchModelObjectNameMap objectNames
+){
+    if(objectNames.contains(objectName))
+        MarkDuplicateModelObjectNameFlags(objectNames[objectName]);
+    else
+        objectNames[objectName] = flags;
+}
+
+b8 ValidateSingleModelPayloadObject(
+    in Span<ModelSkeletonObject> skeletonObjects,
+    in Span<ModelStaticMeshObject> staticMeshObjects,
+    in Span<ModelSkinnedMeshObject> skinnedMeshObjects
+){
+    if(!skeletonObjects.empty())
+        return ValidateModelSkeletonObject(skeletonObjects[0u], 0u, true);
+
+    if(!staticMeshObjects.empty()){
+        const ModelStaticMeshObject object = staticMeshObjects[0u];
+        b8 parentExists = false;
+        b8 parentIsSkeleton = false;
+        ResolveModelStaticMeshParentState(object.name, object.parentObject, false, 0u, parentExists, parentIsSkeleton);
+        return ValidateModelStaticMeshObject(object, 0u, true, parentExists, parentIsSkeleton);
+    }
+
+    return ValidateModelSkinnedMeshObject(skinnedMeshObjects[0u], 0u, true, false);
+}
+
+b8 ValidateModelPayloadObjects(
+    in Span<ModelSkeletonObject> skeletonObjects,
+    in Span<ModelStaticMeshObject> staticMeshObjects,
+    in Span<ModelSkinnedMeshObject> skinnedMeshObjects,
+    mut ScratchArena scratchArena
+){
+    const Expected<usize> objectCountResult = ResolveModelObjectCount(
+        skeletonObjects.size(),
+        staticMeshObjects.size(),
+        skinnedMeshObjects.size()
+    );
+    if(!objectCountResult.has_value())
+        return false;
+    const usize objectCount = objectCountResult.value();
+
+    // One object is necessarily unique and a mesh cannot have a separate skeleton parent in that model.
+    if(objectCount == 1u)
+        return ValidateSingleModelPayloadObject(skeletonObjects, staticMeshObjects, skinnedMeshObjects);
+
+    // Construct the final bucket array at the map's default 0.5 load factor so scratch storage never needs a reserve-time rehash.
+    ScratchModelObjectNameMap objectNames(objectCount * 2u, scratchArena);
+    for(in ModelSkeletonObject object : skeletonObjects)
+        IndexModelObjectName(object.name, s_ModelSkeletonObjectNameFlag, objectNames);
+    for(in ModelStaticMeshObject object : staticMeshObjects)
+        IndexModelObjectName(object.name, 0u, objectNames);
+    for(in ModelSkinnedMeshObject object : skinnedMeshObjects)
+        IndexModelObjectName(object.name, 0u, objectNames);
+
+    for(usize i = 0u; i < skeletonObjects.size(); ++i){
+        const ModelSkeletonObject object = skeletonObjects[i];
+        const b8 nameIsUnique = !IsModelObjectFlaggedDuplicate(objectNames[object.name]);
+        if(!ValidateModelSkeletonObject(object, i, nameIsUnique))
+            return false;
+    }
+
+    for(usize i = 0u; i < staticMeshObjects.size(); ++i){
+        const ModelStaticMeshObject object = staticMeshObjects[i];
+        b8 foundParent = false;
+        u8 parentFlags = 0u;
+        if(object.parentObject != s_NameNone && objectNames.contains(object.parentObject)){
+            foundParent = true;
+            parentFlags = objectNames[object.parentObject];
+        }
+        b8 parentExists = false;
+        b8 parentIsSkeleton = false;
+        ResolveModelStaticMeshParentState(object.name, object.parentObject, foundParent, parentFlags, parentExists, parentIsSkeleton);
+        const b8 nameIsUnique = !IsModelObjectFlaggedDuplicate(objectNames[object.name]);
+        if(!ValidateModelStaticMeshObject(object, i, nameIsUnique, parentExists, parentIsSkeleton))
+            return false;
+    }
+
+    for(usize i = 0u; i < skinnedMeshObjects.size(); ++i){
+        const ModelSkinnedMeshObject object = skinnedMeshObjects[i];
+        b8 foundParent = false;
+        u8 parentFlags = 0u;
+        if(objectNames.contains(object.skeletonObject)){
+            foundParent = true;
+            parentFlags = objectNames[object.skeletonObject];
+        }
+        const b8 nameIsUnique = !IsModelObjectFlaggedDuplicate(objectNames[object.name]);
+        if(!ValidateModelSkinnedMeshObject(object, i, nameIsUnique, ResolveModelSkinnedMeshTargetState(foundParent, parentFlags)))
+            return false;
+    }
+
     return true;
 }
 

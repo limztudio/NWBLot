@@ -60,6 +60,19 @@ b8 TryResolveModelAttachmentJointQuery(in Span<SkeletonJointMatrix> jointPalette
     return true;
 }
 
+void ResolveModelAttachmentJointQueryGroup(
+    in Span<usize> parentOrder,
+    in Span<SkeletonJointMatrix> jointPalette,
+    in usize groupBegin,
+    in usize groupEnd,
+    mut Vector<ModelAttachmentJointQuery> inoutQueries
+){
+    for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
+        if(!TryResolveModelAttachmentJointQuery(jointPalette, inoutQueries[ResolveModelAttachmentQueryIndex(parentOrder, queryIndex)]))
+            break;
+    }
+}
+
 b8 ValidateModelStaticMeshParentEntity(in Name objectName, in Name parentObjectName, in b8 parentEntityValid, in b8 parentIsSkeleton){
     if(!parentEntityValid){
         error("ModelSystem: static mesh object '{}' targets missing parent object '{}'", objectName.resolvedText(), parentObjectName.resolvedText());

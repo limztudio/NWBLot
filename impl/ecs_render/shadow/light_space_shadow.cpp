@@ -87,16 +87,7 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
                 if(mappedFailures){
                     const u32 failureFlags = *MakeNotNull(static_cast<const u32*>(*mappedFailures));
                     device.unmapBuffer(*diagnostics.readback);
-                    const u32 newFailures = failureFlags & ~diagnostics.reportedFailures;
-                    diagnostics.reportedFailures |= failureFlags;
-                    if((newFailures & NWB_CSG_RAY_FAILURE_UNSUPPORTED) != 0u)
-                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal rejected unsupported receiver or cutter geometry; conservative occlusion retained"));
-                    if((newFailures & NWB_CSG_RAY_FAILURE_CAPACITY) != 0u)
-                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal exceeded closed-crossing or BVH stack capacity (flags=2); conservative occlusion retained"));
-                    if((newFailures & NWB_CSG_RAY_FAILURE_TOPOLOGY) != 0u)
-                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal rejected incomplete or invalid solid topology; conservative occlusion retained"));
-                    if((newFailures & NWB_CSG_RAY_FAILURE_OPEN_CAPACITY) != 0u)
-                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal exceeded open-surface capacity (flags=16); conservative occlusion retained"));
+                    LogNewLightSpaceCsgRayFailures(failureFlags, diagnostics.reportedFailures);
                     diagnostics.submission = {};
                 }
             }
@@ -110,9 +101,9 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     Array<SceneLightGpuData, NWB_SCENE_MAX_LIGHTS> lights{};
     Array<f32, NWB_SCENE_MAX_LIGHTS> causticImportance{};
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, lights, causticImportance);
-    for(u32 index = 0u; index < lightCount; ++index)
-        state.m_csgRequired = state.m_csgRequired || (state.m_csg.snapshot.hasCsg && lights[index].params.z >= 0.f);
-    const auto planResult = buildLightSpaceShadowPlan(Span<const SceneLightGpuData>(lights.data(), lightCount));
+    const Span<const SceneLightGpuData> activeLights(lights.data(), lightCount);
+    state.m_csgRequired = HasAnyLightSpaceCsgActiveLight(state.m_csg.snapshot.hasCsg, activeLights);
+    const auto planResult = buildLightSpaceShadowPlan(activeLights);
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
@@ -129,30 +120,17 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
         || state.m_casters.empty() || lightCount > NWB_SCENE_MAX_LIGHTS
     )
         return MakeUnexpected(Failure{});
-    Array<LightSpaceLightRequest, NWB_SCENE_SHADOW_SLOT_COUNT> requests;
-    usize requestCount = 0u;
-    for(u32 index = 0u; index < static_cast<u32>(lightCount); ++index){
-        const auto& light = lights[index];
-        if(light.params.z < 0.f || light.params.z >= static_cast<f32>(NWB_SCENE_SHADOW_SLOT_COUNT))
-            continue;
-        if(requestCount == requests.size())
-            return MakeUnexpected(Failure{});
-        requests[requestCount++] = { index, static_cast<u32>(light.params.z), ResolveLightSpaceLightRequestType(light.params.y, state.m_csg.snapshot.hasCsg), true };
-    }
-    SoftwareShadowSettings settings = state.m_settings;
-    if(state.m_csg.snapshot.hasCsg){
-        settings.backend = SoftwareShadowBackend::Automatic;
-        if(settings.memoryBudgetBytes <= state.m_csg.bytes.size() + sizeof(u32))
-            return MakeUnexpected(Failure{});
-        settings.memoryBudgetBytes -= state.m_csg.bytes.size() + sizeof(u32);
-    }
     const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
     if(!drawCount)
         return MakeUnexpected(drawCount.error());
-    Expected<LightSpacePlan> plan = TryBuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests.data(), requestCount), m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg);
-    if(!plan || plan->viewCount == 0u)
-        return MakeUnexpected(Failure{});
-    return Move(*plan);
+    return TryBuildLightSpacePlanForSceneLights(
+        state.m_settings,
+        lights,
+        m_graphics.getDevice().getMaxStorageBufferRange(),
+        *drawCount,
+        state.m_csg.snapshot.hasCsg,
+        state.m_csg.bytes.size()
+    );
 }
 
 // Graph declaration can change the admitted light list, but never creates or grows its GPU resources.
@@ -188,30 +166,14 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const SceneLi
             return;
     }
     DeferredFrameTargets& targets = *m_shadowVisibilityPreparedTargets;
-    LightSpaceCaptureIdentity identity;
-    identity.scene = state.m_captureSceneIdentity;
-    identity.trusted = state.m_captureSceneTrusted;
-    identity.lighting = s_Fnv64OffsetBasis;
-    const u32 lightCount = static_cast<u32>(lights.size());
-    Fnv64AppendValue(identity.lighting, lightCount);
-    for(const SceneLightGpuData& light : lights){
-        Fnv64AppendValue(identity.lighting, light.position);
-        Fnv64AppendValue(identity.lighting, light.direction);
-        Fnv64AppendValue(identity.lighting, light.colorIntensity);
-        Fnv64AppendValue(identity.lighting, light.params);
-        Fnv64AppendValue(identity.lighting, light.params2);
-    }
-    identity.layout = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(identity.layout, targets.width);
-    Fnv64AppendValue(identity.layout, targets.height);
-    Fnv64AppendValue(identity.layout, plan.lightCount);
-    Fnv64AppendValue(identity.layout, plan.viewCount);
-    Fnv64AppendValue(identity.layout, plan.textureResolution);
-    Fnv64AppendValue(identity.layout, plan.drawArgumentByteSize);
-    for(u32 view = 0u; view < plan.viewCount; ++view){
-        Fnv64AppendValue(identity.layout, plan.views[view].map);
-        Fnv64AppendValue(identity.layout, plan.views[view].light);
-    }
+    const LightSpaceCaptureIdentity identity = BuildLightSpaceCaptureIdentity(
+        state.m_captureSceneIdentity,
+        state.m_captureSceneTrusted,
+        lights,
+        targets.width,
+        targets.height,
+        plan
+    );
     snapshot.captureTicket = state.m_captureHistory.prepare(identity, state.m_settings.captureCadence);
     snapshot.captureHistory = &state.m_captureHistory;
     // Reuse retains the fitted views, CSG context and converted crossings together; current templates must not overwrite them.

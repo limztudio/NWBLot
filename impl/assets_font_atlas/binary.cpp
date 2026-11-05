@@ -54,50 +54,32 @@ namespace __hidden_font_atlas_binary{
     u64 pixelBytes = 0u;
     for(u32 index = 0u; index < header.groupCount; ++index){
         FontAtlasGroup group(arena);
-        const auto width = ReadU32LittleEndian(bytes, cursor);
-        if(!width)
-            return MakeUnexpected(width.error());
-        group.width = *width;
-        const auto height = ReadU32LittleEndian(bytes, cursor);
-        if(!height)
-            return MakeUnexpected(height.error());
-        group.height = *height;
-        const auto channelCount = ReadU32LittleEndian(bytes, cursor);
-        if(!channelCount)
-            return MakeUnexpected(channelCount.error());
-        group.channelCount = *channelCount;
-        const auto byteCount = ReadU32LittleEndian(bytes, cursor);
-        if(!byteCount)
-            return MakeUnexpected(byteCount.error());
+        u32 byteCount = 0u;
+        if(!TryReadFontAtlasGroupHeader(bytes, cursor, group.width, group.height, group.channelCount, byteCount))
+            return MakeUnexpected(Failure{});
         if(!ReadBytes(bytes, sizeof(group.sha256.bytes), cursor, group.sha256.bytes))
             return MakeUnexpected(Failure{});
-        if(!ValidateFontAtlasBinaryGroupChunk(group.width, group.height, group.channelCount, *byteCount, pixelBytes, cursor, bytes.size()))
+        if(!ValidateFontAtlasBinaryGroupChunk(group.width, group.height, group.channelCount, byteCount, pixelBytes, cursor, bytes.size()))
             return MakeUnexpected(Failure{});
-        group.pixels.resize(*byteCount);
-        if(!ReadBytes(bytes, *byteCount, cursor, group.pixels.data()))
+        if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, group.pixels))
             return MakeUnexpected(Failure{});
-        pixelBytes += *byteCount;
+        pixelBytes += byteCount;
         payload.groups.push_back(Move(group));
     }
     payload.positioningTables.reserve(header.tableCount);
     u64 tableBytes = 0u;
     for(u32 index = 0u; index < header.tableCount; ++index){
         FontAtlasPositioningTable table(arena);
-        const auto tag = ReadU32LittleEndian(bytes, cursor);
-        if(!tag)
-            return MakeUnexpected(tag.error());
-        table.tag = *tag;
-        const auto byteCount = ReadU32LittleEndian(bytes, cursor);
-        if(!byteCount)
-            return MakeUnexpected(byteCount.error());
+        u32 byteCount = 0u;
+        if(!TryReadFontAtlasTableHeader(bytes, cursor, table.tag, byteCount))
+            return MakeUnexpected(Failure{});
         if(!ReadBytes(bytes, sizeof(table.sha256.bytes), cursor, table.sha256.bytes))
             return MakeUnexpected(Failure{});
-        if(!ValidateFontAtlasBinaryTableChunk(*byteCount, tableBytes, cursor, bytes.size()))
+        if(!ValidateFontAtlasBinaryTableChunk(byteCount, tableBytes, cursor, bytes.size()))
             return MakeUnexpected(Failure{});
-        table.bytes.resize(*byteCount);
-        if(!ReadBytes(bytes, *byteCount, cursor, table.bytes.data()))
+        if(!ReadFontAtlasBytesInto(bytes, byteCount, cursor, table.bytes))
             return MakeUnexpected(Failure{});
-        tableBytes += *byteCount;
+        tableBytes += byteCount;
         payload.positioningTables.push_back(Move(table));
     }
     if(cursor != bytes.size() || !ValidateFontAtlasPayload(payload, scratchArena))
@@ -148,20 +130,10 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
         binary
     );
     AppendFontAtlasGlyphsBinary(payload.glyphs, binary);
-    for(const FontAtlasGroup& group : payload.groups){
-        AppendU32LittleEndian(binary, group.width);
-        AppendU32LittleEndian(binary, group.height);
-        AppendU32LittleEndian(binary, group.channelCount);
-        AppendU32LittleEndian(binary, static_cast<u32>(group.pixels.size()));
-        binary.insert(binary.end(), group.sha256.bytes, group.sha256.bytes + sizeof(group.sha256.bytes));
-        binary.insert(binary.end(), group.pixels.begin(), group.pixels.end());
-    }
-    for(const FontAtlasPositioningTable& table : payload.positioningTables){
-        AppendU32LittleEndian(binary, table.tag);
-        AppendU32LittleEndian(binary, static_cast<u32>(table.bytes.size()));
-        binary.insert(binary.end(), table.sha256.bytes, table.sha256.bytes + sizeof(table.sha256.bytes));
-        binary.insert(binary.end(), table.bytes.begin(), table.bytes.end());
-    }
+    for(const FontAtlasGroup& group : payload.groups)
+        AppendFontAtlasGroupChunk(group.width, group.height, group.channelCount, Span<const u8>(group.sha256.bytes, sizeof(group.sha256.bytes)), group.pixels, binary);
+    for(const FontAtlasPositioningTable& table : payload.positioningTables)
+        AppendFontAtlasTableChunk(table.tag, Span<const u8>(table.sha256.bytes, sizeof(table.sha256.bytes)), table.bytes, binary);
     return binary;
 }
 

@@ -38,24 +38,8 @@ NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, Skin
 
 
 b8 Skin::loadBinary(const Span<const u8> binary){
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinHeaderBinary>(binary, s_SkinBinaryMagic, s_SkinLoadBinaryContext, s_SkinAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const SkinHeaderBinary& header = *headerResult;
-
-    if(!ValidateSkinHeaderBinary(header))
-        return false;
     Skin candidate(m_influences.get_allocator().arena(), virtualPath());
-    candidate.m_mesh.virtualPath = Name(header.meshNameHash);
-    candidate.m_skeleton.virtualPath = Name(header.skeletonNameHash);
-
-    if(!Core::Assets::ReadVectorPayload(binary, header.influenceCount, s_SkinLoadBinaryContext, s_SkinInfluencesPayloadLabel, cursor, candidate.m_influences))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.inverseBindMatrixCount, s_SkinLoadBinaryContext, s_SkinInverseBindMatricesPayloadLabel, cursor, candidate.m_inverseBindMatrices))
-        return false;
-
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SkinLoadBinaryContext) || !candidate.validatePayload())
+    if(!DeserializeSkinAssetBinary(binary, candidate.m_mesh.virtualPath, candidate.m_skeleton.virtualPath, candidate.m_influences, candidate.m_inverseBindMatrices) || !candidate.validatePayload())
         return false;
     *this = Move(candidate);
     return true;

@@ -37,25 +37,13 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!skin.validatePayload())
         return false;
 
-    usize reserveBytes = sizeof(SkinHeaderBinary);
-    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skin.influences()) && AddBinaryVectorReserveBytes(reserveBytes, skin.inverseBindMatrices());
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    const SkinHeaderBinary header = MakeSkinHeaderBinary(
+    return SerializeSkinAssetBinary(
         skin.mesh().name().hash(),
         skin.skeleton().name().hash(),
-        skin.influences().size(),
-        skin.inverseBindMatrices().size()
+        skin.influences(),
+        skin.inverseBindMatrices(),
+        outBinary
     );
-    AppendPOD(outBinary, header);
-
-    return
-        Core::Assets::AppendVectorPayload(skin.influences(), s_SkinSerializeContext, s_SkinInfluencesPayloadLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(skin.inverseBindMatrices(), s_SkinSerializeContext, s_SkinInverseBindMatricesPayloadLabel, outBinary)
-    ;
 }
 
 
@@ -103,21 +91,8 @@ using namespace Core::Metascript;
 }
 
 [[nodiscard]] b8 ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry){
-    if(entry.inverseBindMatrices.size() > static_cast<usize>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices count exceeds u16 joint index range"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    const u32 jointCount = static_cast<u32>(entry.inverseBindMatrices.size());
-    for(usize influenceIndex = 0u; influenceIndex < entry.influences.size(); ++influenceIndex){
-        const Expected<usize> componentIndex = TryFindOutOfRangeSkinInfluenceJoint(entry.influences[influenceIndex], jointCount);
-        if(!componentIndex)
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range"), PathToString<tchar>(nwbFilePath), influenceIndex, *componentIndex);
-        return false;
-    }
-    return true;
+    const Core::Assets::AssetString nwbFilePathText = PathToString(entry.influences.get_allocator().arena(), nwbFilePath);
+    return ValidateSkinCookInfluenceJointIndices(AStringView(nwbFilePathText), entry.inverseBindMatrices.size(), entry.influences);
 }
 
 

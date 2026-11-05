@@ -134,5 +134,81 @@ class TextFontSpan{
     public u32 byteEnd;
 }
 
+class ShapedGlyphRecord<TFace>{
+    public ShapedGlyphRecord(){
+        this.glyphId = 0u;
+        this.byteBegin = 0u;
+        this.byteEnd = 0u;
+    }
+
+    public ShapedGlyphRecord(
+        in TFace inFace,
+        in u32 inGlyphId,
+        in u32 inByteBegin,
+        in u32 inByteEnd,
+        in Point inOffset,
+        in Point inAdvance,
+        in Rect inInk
+    ){
+        this.face = inFace;
+        this.glyphId = inGlyphId;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+        this.offset = inOffset;
+        this.advance = inAdvance;
+        this.ink = inInk;
+    }
+
+    public ShapedGlyphRecord(
+        in TFace inFace,
+        in u32 inGlyphId,
+        in u32 inByteBegin,
+        in u32 inByteEnd,
+        in Point inOffset,
+        in Point inAdvance,
+        in Rect inInk,
+        in GlyphCoverageBounds inCoverage
+    ){
+        this.face = inFace;
+        this.glyphId = inGlyphId;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+        this.offset = inOffset;
+        this.advance = inAdvance;
+        this.ink = inInk;
+        this.coverage = inCoverage;
+    }
+
+    public TFace face;
+    public u32 glyphId;
+    public u32 byteBegin;
+    public u32 byteEnd;
+    public Point offset;
+    public Point advance;
+    public Rect ink;
+    public GlyphCoverageBounds coverage;
+}
+
+class PlacedGlyphRecord<TFace>{
+    public TFace face;
+    public u32 glyphId = 0u;
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public Point position;
+    // Shaping ink is relative to the glyph baseline origin; an empty rectangle is conservatively unknown at paint time.
+    public Rect ink;
+    public GlyphCoverageBounds coverage;
+}
+
+class AtlasGlyphRecord<TFace>{
+    public TFace face;
+    public u32 glyphId = 0u;
+    public u32 pixelSize = 0u;
+    public u32 pageIndex = s_GlyphAtlasNoPage;
+    public Rect pixels;
+    public i32 bearingX = 0;
+    public i32 bearingY = 0;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

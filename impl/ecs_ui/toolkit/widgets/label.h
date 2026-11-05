@@ -29,25 +29,7 @@ public:
 
 public:
     [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request){
-        const ShapeRequest current{
-            StringView(m_text.data(), m_text.size()),
-            StringView(m_language.data(), m_language.size()),
-            m_fontSize,
-            m_scriptTag,
-            m_direction,
-        };
-        if(SameShapeRequest(request, current))
-            return TextLayoutStatus::Success;
-        const TextLayoutStatus::Enum status = ValidateTextRequest(request, true);
-        if(status != TextLayoutStatus::Success)
-            return status;
-        m_dirty = true;
-        m_text.assign(request.text.data(), request.text.size());
-        m_language.assign(request.language.data(), request.language.size());
-        m_fontSize = request.fontSize;
-        m_scriptTag = request.scriptTag;
-        m_direction = request.direction;
-        return TextLayoutStatus::Success;
+        return SetLabelTextRequest(request, m_text, m_language, m_fontSize, m_scriptTag, m_direction, m_dirty);
     }
 
     [[nodiscard]] Expected<Rect> measure(TextService& text, const DisplayMetrics& display){

@@ -17,16 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PlacedGlyph{
-    SharedFontFace face;
-    u32 glyphId = 0u;
-    u32 byteBegin = 0u;
-    u32 byteEnd = 0u;
-    Point position;
-    // Shaping ink is relative to the glyph baseline origin; an empty rectangle is conservatively unknown at paint time.
-    Rect ink{};
-    GlyphCoverageBounds coverage{};
-};
+using PlacedGlyph = PlacedGlyphRecord<SharedFontFace>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

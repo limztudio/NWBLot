@@ -20,33 +20,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_text_layout{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 ValidateRun(const ShapedRun& run, const StringView text, const TextDirection::Enum direction)noexcept{
-    if(!ValidateShapedRunMetrics(run.metrics, run.glyphs.size()))
-        return false;
-    u32 previous = direction == TextDirection::LeftToRight ? 0u : static_cast<u32>(text.size());
-    for(const ShapedGlyph& glyph : run.glyphs){
-        if(!ValidateShapedGlyph(glyph.byteBegin, glyph.byteEnd, glyph.offset, glyph.advance, glyph.ink, glyph.coverage, text, direction, previous))
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const ShapeRequest& request){
     const TextLayoutStatus::Enum validation = ValidateTextRequest(request, true);
     if(validation != TextLayoutStatus::Success)
@@ -72,64 +45,23 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         if(!shapedRun)
             return MakeUnexpected(shapedRun.error());
         const ShapedRun& run = *shapedRun;
-        if(!__hidden_ui_text_layout::ValidateRun(run, lineRequest.text, request.direction))
-            return MakeUnexpected(TextLayoutStatus::FontFailure);
-        const auto lineResult = TryBuildInitialTextLine(
+        const TextLayoutStatus::Enum lineStatus = PlaceShapedLineInto<SharedFontFace>(
             byteBegin,
             byteEnd,
             breakEnd,
-            result.m_glyphs.size(),
-            run.glyphs.size(),
-            result.m_clusters.size(),
-            result.m_measure.y,
-            run.metrics
+            run.metrics,
+            run.glyphs,
+            lineRequest.text,
+            request.direction,
+            result.m_glyphs,
+            result.m_clusters,
+            result.m_lines,
+            result.m_measure,
+            inkBounds,
+            hasInk
         );
-        if(!lineResult)
-            return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-        TextLine line = *lineResult;
-        usize first = 0u;
-        f32 pen = 0.0f;
-        while(first < run.glyphs.size()){
-            usize end = first + 1u;
-            while(end < run.glyphs.size() && run.glyphs[end].byteBegin == run.glyphs[first].byteBegin)
-                ++end;
-            const f32 clusterLeft = pen;
-            const u32 firstGlyph = static_cast<u32>(result.m_glyphs.size());
-            for(usize index = first; index < end; ++index){
-                const ShapedGlyph& glyph = run.glyphs[index];
-                const auto position = TryAdvanceTextGlyphPosition(
-                    line.baseline,
-                    glyph.offset,
-                    glyph.advance,
-                    glyph.ink,
-                    glyph.coverage,
-                    pen,
-                    inkBounds,
-                    hasInk
-                );
-                if(!position)
-                    return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-                result.m_glyphs.push_back({ glyph.face, glyph.glyphId, line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, *position, glyph.ink, glyph.coverage });
-            }
-            result.m_clusters.push_back(MakeTextCluster(
-                line.byteBegin,
-                run.glyphs[first].byteBegin,
-                run.glyphs[first].byteEnd,
-                firstGlyph,
-                static_cast<u32>(end - first),
-                static_cast<u32>(result.m_lines.size()),
-                request.direction,
-                clusterLeft,
-                pen
-            ));
-            first = end;
-        }
-        if(!IsFinite(pen) || !IsFinite(line.top + line.height))
-            return MakeUnexpected(TextLayoutStatus::InvalidParameters);
-        line.advance = pen;
-        line.clusterCount = static_cast<u32>(result.m_clusters.size()) - line.firstCluster;
-        result.m_lines.push_back(line);
-        result.m_measure = { Max(result.m_measure.x, pen), result.m_measure.y + line.height };
+        if(lineStatus != TextLayoutStatus::Success)
+            return MakeUnexpected(lineStatus);
         if(breakEnd == byteEnd)
             break;
         byteBegin = breakEnd;

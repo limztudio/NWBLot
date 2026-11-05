@@ -164,5 +164,118 @@ void ExpandMeasuredTextBoundsWithRaster(
     );
 }
 
+TextLayoutStatus PlaceShapedLineInto<TFace>(
+    in usize byteBegin,
+    in usize byteEnd,
+    in usize breakEnd,
+    in FontMetrics runMetrics,
+    in Span<ShapedGlyphRecord<TFace>> runGlyphs,
+    in StringView lineText,
+    in TextDirection direction,
+    mut Vector<PlacedGlyphRecord<TFace>> inOutGlyphs,
+    mut Vector<TextCluster> inOutClusters,
+    mut Vector<TextLine> inOutLines,
+    mut Point inOutMeasure,
+    mut VectorDouble inOutInkBounds,
+    mut b8 inOutHasInk
+){
+    if(!ValidateShapedRun(runMetrics, runGlyphs, lineText, direction))
+        return TextLayoutStatus::FontFailure;
+    const Expected<TextLine> lineResult = TryBuildInitialTextLine(
+        byteBegin,
+        byteEnd,
+        breakEnd,
+        inOutGlyphs.size(),
+        runGlyphs.size(),
+        inOutClusters.size(),
+        inOutMeasure.y,
+        runMetrics
+    );
+    if(!lineResult.has_value())
+        return TextLayoutStatus::InvalidParameters;
+    TextLine line = lineResult.value();
+    usize first = 0u;
+    f32 pen = 0.0f;
+    while(first < runGlyphs.size()){
+        usize end = first + 1u;
+        while(end < runGlyphs.size() && runGlyphs[end].byteBegin == runGlyphs[first].byteBegin)
+            ++end;
+        const f32 clusterLeft = pen;
+        const u32 firstGlyph = cast<u32>(inOutGlyphs.size());
+        for(usize index = first; index < end; ++index){
+            const ShapedGlyphRecord<TFace> glyph = runGlyphs[index];
+            const Expected<Point> position = TryAdvanceTextGlyphPosition(
+                line.baseline,
+                glyph.offset,
+                glyph.advance,
+                glyph.ink,
+                glyph.coverage,
+                pen,
+                inOutInkBounds,
+                inOutHasInk
+            );
+            if(!position.has_value())
+                return TextLayoutStatus::InvalidParameters;
+            PlacedGlyphRecord<TFace> placed;
+            placed.face = glyph.face;
+            placed.glyphId = glyph.glyphId;
+            placed.byteBegin = line.byteBegin + glyph.byteBegin;
+            placed.byteEnd = line.byteBegin + glyph.byteEnd;
+            placed.position = position.value();
+            placed.ink = glyph.ink;
+            placed.coverage = glyph.coverage;
+            inOutGlyphs.push_back(placed);
+        }
+        inOutClusters.push_back(MakeTextCluster(
+            line.byteBegin,
+            runGlyphs[first].byteBegin,
+            runGlyphs[first].byteEnd,
+            firstGlyph,
+            cast<u32>(end - first),
+            cast<u32>(inOutLines.size()),
+            direction,
+            clusterLeft,
+            pen
+        ));
+        first = end;
+    }
+    if(!isFinite(pen) || !isFinite(line.top + line.height))
+        return TextLayoutStatus::InvalidParameters;
+    line.advance = pen;
+    line.clusterCount = cast<u32>(inOutClusters.size()) - line.firstCluster;
+    inOutLines.push_back(line);
+    inOutMeasure = Point(max(inOutMeasure.x, pen), inOutMeasure.y + line.height);
+    return TextLayoutStatus::Success;
+}
+
+TextLayoutStatus SetLabelTextRequest(
+    in ShapeRequest request,
+    mut String inOutText,
+    mut String inOutLanguage,
+    mut f32 inOutFontSize,
+    mut u32 inOutScriptTag,
+    mut TextDirection inOutDirection,
+    mut b8 inOutDirty
+){
+    ShapeRequest current;
+    current.text = inOutText;
+    current.language = inOutLanguage;
+    current.fontSize = inOutFontSize;
+    current.scriptTag = inOutScriptTag;
+    current.direction = inOutDirection;
+    if(SameShapeRequest(request, current))
+        return TextLayoutStatus::Success;
+    const TextLayoutStatus status = ValidateTextRequest(request, true);
+    if(status != TextLayoutStatus::Success)
+        return status;
+    inOutDirty = true;
+    inOutText.assign(request.text);
+    inOutLanguage.assign(request.language);
+    inOutFontSize = request.fontSize;
+    inOutScriptTag = request.scriptTag;
+    inOutDirection = request.direction;
+    return TextLayoutStatus::Success;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

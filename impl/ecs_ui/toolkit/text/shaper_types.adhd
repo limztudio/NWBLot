@@ -230,5 +230,45 @@ Rect MakeRasterGlyphBoundsRect(in i32 bitmapLeft, in i32 bitmapTop, in u32 width
     return Rect(cast<f32>(bitmapLeft), -cast<f32>(bitmapTop), cast<f32>(width), cast<f32>(rows));
 }
 
+void AppendRawShapedGlyphs<TFace>(
+    in TFace face,
+    in Span<RawShapedGlyph> glyphs,
+    in usize begin,
+    in usize end,
+    mut Vector<ShapedGlyphRecord<TFace>> inOutGlyphs
+){
+    for(usize index = begin; index < end; ++index){
+        const RawShapedGlyph glyph = glyphs[index];
+        ShapedGlyphRecord<TFace> shaped;
+        shaped.face = face;
+        shaped.glyphId = glyph.glyphId;
+        shaped.byteBegin = glyph.byteBegin;
+        shaped.byteEnd = glyph.byteEnd;
+        shaped.offset = glyph.offset;
+        shaped.advance = glyph.advance;
+        shaped.ink = glyph.ink;
+        shaped.coverage = glyph.coverage;
+        inOutGlyphs.push_back(shaped);
+    }
+}
+
+b8 ValidateShapedRun<TFace>(
+    in FontMetrics metrics,
+    in Span<ShapedGlyphRecord<TFace>> glyphs,
+    in StringView text,
+    in TextDirection direction
+){
+    if(!ValidateShapedRunMetrics(metrics, glyphs.size()))
+        return false;
+    u32 previous = 0u;
+    if(direction != TextDirection::LeftToRight)
+        previous = cast<u32>(text.size());
+    for(in ShapedGlyphRecord<TFace> glyph : glyphs){
+        if(!ValidateShapedGlyph(glyph.byteBegin, glyph.byteEnd, glyph.offset, glyph.advance, glyph.ink, glyph.coverage, text, direction, previous))
+            return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

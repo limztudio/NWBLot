@@ -14,29 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_text_shaper{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void Append(const SharedFontFace& face, const Span<const RawShapedGlyph> glyphs, usize begin, usize end, ShapedRun& run){
-    for(usize index = begin; index < end; ++index){
-        const RawShapedGlyph& glyph = glyphs[index];
-        run.glyphs.push_back({ face, glyph.glyphId, glyph.byteBegin, glyph.byteEnd, glyph.offset, glyph.advance, glyph.ink, glyph.coverage });
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const Span<const FontSource> sources){
     const usize count = sources.size();
     if(count == 0u || count > s_TextMaxFontSources)
@@ -93,7 +70,7 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
     for(const TextFontSpan& span : m_spans){
         const SharedFontFace& face = m_fonts[span.fontIndex];
         if(span.fontIndex == 0u)
-            __hidden_ui_text_shaper::Append(face, m_primary, span.glyphBegin, span.glyphEnd, run);
+            AppendRawShapedGlyphs(face, m_primary, span.glyphBegin, span.glyphEnd, run.glyphs);
         else{
             if(!face->shape(request, span.byteBegin, span.byteEnd, m_fallback))
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
@@ -103,7 +80,7 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
             if(!metrics)
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
             run.metrics = MaxFontMetrics(run.metrics, *metrics);
-            __hidden_ui_text_shaper::Append(face, m_fallback, 0u, m_fallback.size(), run);
+            AppendRawShapedGlyphs(face, m_fallback, 0u, m_fallback.size(), run.glyphs);
         }
     }
     return run;

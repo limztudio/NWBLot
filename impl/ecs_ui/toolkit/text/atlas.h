@@ -21,15 +21,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AtlasGlyph{
-    SharedFontFace face;
-    u32 glyphId = 0u;
-    u32 pixelSize = 0u;
-    u32 pageIndex = s_GlyphAtlasNoPage;
-    Rect pixels;
-    i32 bearingX = 0;
-    i32 bearingY = 0;
-};
+using AtlasGlyph = AtlasGlyphRecord<SharedFontFace>;
 
 struct AtlasPage{
     SharedFontFace face;

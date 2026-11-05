@@ -17,16 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ShapedGlyph{
-    SharedFontFace face;
-    u32 glyphId = 0u;
-    u32 byteBegin = 0u;
-    u32 byteEnd = 0u;
-    Point offset;
-    Point advance;
-    Rect ink;
-    GlyphCoverageBounds coverage{};
-};
+using ShapedGlyph = ShapedGlyphRecord<SharedFontFace>;
 
 struct ShapedRun{
     PaintVector<ShapedGlyph> glyphs;

@@ -358,5 +358,94 @@ Expected<usize> TryHitTestEditBoxView(
     return HitEditCaretGeometry(lines, stops, Point(point.x - placement.textOrigin.x, point.y - placement.textOrigin.y));
 }
 
+Expected<Rect> TryResolveEditCaretRectWhenReady(
+    in b8 ready,
+    in StringView text,
+    in Span<TextLine> lines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in usize byte
+){
+    if(!ready)
+        return makeUnexpected(Failure());
+    return ResolveEditCaretRect(text, lines, clusters, boundaries, byte);
+}
+
+Expected<usize> TryHitTestEditCaretGeometryWhenReady(
+    in b8 ready,
+    in Span<EditCaretLine> lines,
+    in Span<EditBoxCaretStop> stops,
+    in Point localPoint
+){
+    if(!ready)
+        return makeUnexpected(Failure());
+    return HitEditCaretGeometry(lines, stops, localPoint);
+}
+
+Expected<usize> TryResolveEditCaretVerticalTargetWhenReady(
+    in b8 ready,
+    in StringView text,
+    in Span<TextLine> lines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in Span<EditBoxCaretStop> stops,
+    in usize displayCaret,
+    in b8 down,
+    in f32 preferredX
+){
+    if(!ready)
+        return makeUnexpected(Failure());
+    return ResolveEditCaretVerticalTarget(text, lines, clusters, boundaries, caretLines, stops, displayCaret, down, preferredX);
+}
+
+Expected<Rect> TryResolveEditCaretRangeOnLineWhenReady(
+    in b8 ready,
+    in StringView text,
+    in Span<TextLine> lines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in EditBoxRange range,
+    in u32 lineIndex,
+    in f32 breakWidth
+){
+    if(!ready)
+        return makeUnexpected(Failure());
+    return ResolveEditCaretRangeOnLine(text, lines, clusters, boundaries, caretLines, range, lineIndex, breakWidth);
+}
+
+Expected<EditNavigationResult> TryResolveTextAreaNavigationTarget(
+    in b8 geometryReady,
+    in b8 page,
+    in EditNavigationDirection direction,
+    in EditNavigationSnapshot preferred,
+    in f32 viewportHeight,
+    in usize modelCaret,
+    in usize displayCaret,
+    in StringView utf8Text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in Span<EditBoxCaretStop> stops
+){
+    const Expected<Rect> caret = TryResolveEditCaretRectWhenReady(geometryReady, utf8Text, textLines, clusters, boundaries, displayCaret);
+    if(!caret.has_value())
+        return makeUnexpected(Failure());
+    const Expected<f32> preferredX = TryResolveTextAreaPreferredX(preferred, caret.value());
+    if(!preferredX.has_value())
+        return makeUnexpected(Failure());
+    const b8 down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
+    Expected<usize> resolved = makeUnexpected(Failure());
+    if(page)
+        resolved = ResolveEditCaretPageTarget(caretLines, stops, modelCaret, caret.value(), down, preferredX.value(), viewportHeight);
+    else
+        resolved = TryResolveEditCaretVerticalTargetWhenReady(geometryReady, utf8Text, textLines, clusters, boundaries, caretLines, stops, displayCaret, down, preferredX.value());
+    if(!resolved.has_value())
+        return makeUnexpected(resolved.error());
+    return EditNavigationResult(resolved.value(), preferredX.value());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -52,19 +52,21 @@ public:
         if(!current() || !model.matchesStamp(expected) || model.composition().active || !m_state.navigation().matches(preferred))
             return MakeUnexpected(Failure{});
         const EditCaretGeometry& geometry = view.caretGeometry();
-        const auto caret = geometry.caretRect(view.displayCaret());
-        if(!caret)
-            return MakeUnexpected(Failure{});
-        const auto preferredX = TryResolveTextAreaPreferredX(preferred, *caret);
-        if(!preferredX)
-            return MakeUnexpected(Failure{});
-        const b8 down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
-        const auto resolved = *page
-            ? ResolveEditCaretPageTarget(geometry.lines(), geometry.caretStops(), model.caret(), *caret, down, *preferredX, viewportHeight)
-            : geometry.verticalTarget(view.displayCaret(), down, *preferredX);
-        if(!resolved)
-            return MakeUnexpected(resolved.error());
-        return EditNavigationResult{ *resolved, *preferredX };
+        return TryResolveTextAreaNavigationTarget(
+            geometry.ready(),
+            *page,
+            direction,
+            preferred,
+            viewportHeight,
+            model.caret(),
+            view.displayCaret(),
+            geometry.layout().utf8(),
+            geometry.layout().lines(),
+            geometry.layout().clusters(),
+            geometry.boundaries(),
+            geometry.lines(),
+            geometry.caretStops()
+        );
     }
 
 

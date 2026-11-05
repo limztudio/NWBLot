@@ -70,25 +70,17 @@ public:
     }
     // Native preedit can address scalar edges inside graphemes; rectangles are local and have zero width.
     [[nodiscard]] Expected<Rect> caretRect(const usize displayByte)const noexcept{
-        if(!m_ready)
-            return MakeUnexpected(Failure{});
-        return ResolveEditCaretRect(m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, displayByte);
+        return TryResolveEditCaretRectWhenReady(m_ready, m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, displayByte);
     }
     [[nodiscard]] Expected<usize> hitTest(const Point localPoint)const noexcept{
-        if(!m_ready)
-            return MakeUnexpected(Failure{});
-        return HitEditCaretGeometry(m_lines, m_stops, localPoint);
+        return TryHitTestEditCaretGeometryWhenReady(m_ready, m_lines, m_stops, localPoint);
     }
     [[nodiscard]] Expected<usize> verticalTarget(const usize displayCaret, const b8 down, const f32 preferredX)const noexcept{
-        if(!m_ready)
-            return MakeUnexpected(Failure{});
-        return ResolveEditCaretVerticalTarget(m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, m_lines, m_stops, displayCaret, down, preferredX);
+        return TryResolveEditCaretVerticalTargetWhenReady(m_ready, m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, m_lines, m_stops, displayCaret, down, preferredX);
     }
     // A valid nonintersecting range yields an empty rectangle. Selected LF bytes use the supplied trailing cap.
     [[nodiscard]] Expected<Rect> rangeOnLine(const EditBoxRange range, const u32 lineIndex, const f32 breakWidth)const noexcept{
-        if(!m_ready)
-            return MakeUnexpected(Failure{});
-        return ResolveEditCaretRangeOnLine(m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, m_lines, range, lineIndex, breakWidth);
+        return TryResolveEditCaretRangeOnLineWhenReady(m_ready, m_layout.utf8(), m_layout.lines(), m_layout.clusters(), m_boundaries, m_lines, range, lineIndex, breakWidth);
     }
 
     [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }

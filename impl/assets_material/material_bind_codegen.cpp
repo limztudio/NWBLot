@@ -42,28 +42,6 @@ static Expected<ScratchString> BuildMaterialBindIncludeVirtualPathImpl(const Mat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendMaterialBindGeneratedSeparator(const u32 newlineCount, CookString& inOutSource){
-    for(u32 i = 0u; i < s_MaterialBindGeneratedSeparatorChunkRepeatCount; ++i)
-        inOutSource += s_MaterialBindSeparatorChunk;
-    for(u32 i = 0u; i < newlineCount; ++i)
-        inOutSource += '\n';
-}
-
-static void AppendU32Slang(const u32 value, CookString& inOutText){
-    Array<char, s_DecimalTextBufferBytes> digits{};
-    inOutText += FormatDecimal(static_cast<usize>(value), digits);
-    inOutText += 'u';
-}
-
-static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
-    inOutText += s_MaterialBindUint2Open;
-    AppendHexU32UnsignedLiteral(static_cast<u32>(value & s_MaterialBindU64LowWordMask), inOutText);
-    inOutText += s_MaterialBindUint2Separator;
-    AppendHexU32UnsignedLiteral(static_cast<u32>(value >> s_MaterialBindU64HighWordBitShift), inOutText);
-    inOutText += s_MaterialBindCloseParen;
-}
-
-
 static ScratchString BuildMaterialBindIncludeGuard(const AStringView includePath, ScratchArena& arena){
     ScratchString guard(s_MaterialBindIncludeGuardPrefix, arena);
     AppendAsciiUpperIdentifier(AStringView(includePath), s_MaterialBindFallbackUpperIdentifier.data(), guard);
@@ -83,33 +61,19 @@ static b8 RegisterGeneratedMaterialBindSymbol(const AStringView includePath, con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 AppendMaterialBindConstantPrefix(const AStringView includePath, const AStringView symbol, const AStringView type, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSymbols, CookString& inOutSource){
+static b8 AppendMaterialBindU32Constant(const AStringView includePath, const AStringView symbol, const u32 value, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSymbols, CookString& inOutSource){
     if(!RegisterGeneratedMaterialBindSymbol(includePath, symbol, scratchArena, inOutSymbols))
         return false;
 
-    inOutSource += s_MaterialBindStaticConstPrefix;
-    inOutSource += type;
-    inOutSource += ' ';
-    inOutSource += symbol;
-    inOutSource += s_MaterialBindConstantAssign;
-    return true;
-}
-
-static b8 AppendMaterialBindU32Constant(const AStringView includePath, const AStringView symbol, const u32 value, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSymbols, CookString& inOutSource){
-    if(!AppendMaterialBindConstantPrefix(includePath, symbol, s_MaterialBindUIntTypeName, scratchArena, inOutSymbols, inOutSource))
-        return false;
-
-    AppendU32Slang(value, inOutSource);
-    inOutSource += s_MaterialBindStatementEnd;
+    AppendMaterialBindU32ConstantStatement(symbol, value, inOutSource);
     return true;
 }
 
 static b8 AppendMaterialBindU64Constant(const AStringView includePath, const AStringView symbol, const u64 value, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSymbols, CookString& inOutSource){
-    if(!AppendMaterialBindConstantPrefix(includePath, symbol, s_MaterialBindUInt2TypeName, scratchArena, inOutSymbols, inOutSource))
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, symbol, scratchArena, inOutSymbols))
         return false;
 
-    AppendU64AsUint2Slang(value, inOutSource);
-    inOutSource += s_MaterialBindStatementEnd;
+    AppendMaterialBindU64ConstantStatement(symbol, value, inOutSource);
     return true;
 }
 
@@ -228,44 +192,11 @@ static b8 AppendMaterialBindFieldConstants(
     if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, scratchArena, inOutSymbols, inOutSource))
         return false;
 
-    if(!AppendMaterialBindConstantPrefix(includePath, defaultSymbol, AStringView(field.type), scratchArena, inOutSymbols, inOutSource))
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, defaultSymbol, scratchArena, inOutSymbols))
         return false;
 
-    inOutSource += defaultAttribute;
-    inOutSource += s_MaterialBindStatementEnd;
+    AppendMaterialBindDefaultConstantStatement(defaultSymbol, AStringView(field.type), defaultAttribute, inOutSource);
     return true;
-}
-
-static void AppendMaterialBindFieldAccessor(const MaterialBindField& field, const AStringView byteOffsetSymbol, const AStringView functionName, const AStringView loadFunctionName, CookString& inOutSource){
-    inOutSource += field.type;
-    inOutSource += ' ';
-    inOutSource += functionName;
-    inOutSource += s_MaterialBindAccessorInstanceParameter;
-    inOutSource += s_GeneratedReturnPrefix;
-    inOutSource += loadFunctionName;
-    inOutSource += s_MaterialBindLoadInstanceArgPrefix;
-    inOutSource += byteOffsetSymbol;
-    inOutSource += s_MaterialBindCallStatementEnd;
-    inOutSource += s_GeneratedFunctionEnd;
-}
-
-
-// Opaque resources load directly from patched constant slots; generated aggregate structs must not copy handles.
-static void AppendMaterialBindResourceFieldAccessor(const MaterialLayoutFieldType::Enum fieldType, const AStringView byteOffsetSymbol, const AStringView functionName, CookString& inOutSource){
-    const AStringView slangTypeName = MaterialBindResourceSlangTypeName(fieldType);
-    const AStringView heapAccessorName = MaterialBindResourceHeapAccessorName(fieldType);
-    NWB_ASSERT(!slangTypeName.empty() && !heapAccessorName.empty());
-
-    inOutSource += slangTypeName;
-    inOutSource += ' ';
-    inOutSource += functionName;
-    inOutSource += s_MaterialBindAccessorInstanceParameter;
-    inOutSource += s_GeneratedReturnPrefix;
-    inOutSource += heapAccessorName;
-    inOutSource += s_MaterialBindResourceLoadConstantUIntPrefix;
-    inOutSource += byteOffsetSymbol;
-    inOutSource += s_MaterialBindNestedCallStatementEnd;
-    inOutSource += s_GeneratedFunctionEnd;
 }
 
 static b8 AppendMaterialBindGeneratedInstance(
@@ -318,7 +249,7 @@ static b8 AppendMaterialBindGeneratedInstance(
         const ScratchString defaultSymbol = BuildMaterialBindGeneratedSymbol({ AStringView(instance.name), AStringView(field.name) }, s_MaterialBindDefaultSymbolSuffix, scratchArena);
         if(!AppendMaterialBindFieldConstants(includePath, instance, field, keySymbol, defaultSymbol, scratchArena, inOutSymbols, inOutSource))
             return false;
-        AppendMaterialBindFieldAccessor(field, byteOffsetSymbol, functionName, AStringView(loadFunctionName), inOutSource);
+        AppendMaterialBindFieldAccessor(AStringView(field.type), byteOffsetSymbol, functionName, AStringView(loadFunctionName), inOutSource);
         inOutSource += '\n';
     }
 
@@ -326,26 +257,15 @@ static b8 AppendMaterialBindGeneratedInstance(
     if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(blockFunctionName), scratchArena, inOutSymbols))
         return false;
 
-    inOutSource += bindStruct.name;
-    inOutSource += ' ';
-    inOutSource += blockFunctionName;
-    inOutSource += s_MaterialBindAccessorInstanceParameter;
-    inOutSource += s_MaterialBindIndent;
-    inOutSource += bindStruct.name;
-    inOutSource += s_MaterialBindBlockValueDeclSuffix;
+    AppendMaterialBindBlockAccessorHeader(AStringView(bindStruct.name), AStringView(blockFunctionName), inOutSource);
     for(const MaterialBindField& field : bindStruct.fields){
         if(TryParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value())
             continue;
 
         const ScratchString functionName = BuildMaterialBindAccessorName({ AStringView(instance.name), AStringView(field.name) }, scratchArena);
-        inOutSource += s_MaterialBindBlockValueMemberPrefix;
-        inOutSource += field.name;
-        inOutSource += s_MaterialBindConstantAssign;
-        inOutSource += functionName;
-        inOutSource += s_MaterialBindInstanceCallEnd;
+        AppendMaterialBindBlockAccessorFieldAssign(AStringView(field.name), AStringView(functionName), inOutSource);
     }
-    inOutSource += s_MaterialBindReturnBlockValueLine;
-    inOutSource += s_GeneratedFunctionEnd;
+    AppendMaterialBindBlockAccessorFooter(inOutSource);
 
     return true;
 }
@@ -381,24 +301,7 @@ Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEn
 
     ScratchHashSet<ScratchString> generatedSymbols{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
 
-    source += s_MaterialBindGeneratedHeaderLine;
-    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, source);
-    source += s_GeneratedIfndefDirective;
-    source += includeGuard;
-    source += s_GeneratedNewlineDefineDirective;
-    source += includeGuard;
-    source += s_GeneratedIncludeGuardEnd;
-    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, source);
-    source += s_MaterialBindIfndefTypedBindingLine;
-    source += s_MaterialBindRequirementError;
-    source += s_GeneratedEndifBlock;
-    source += s_MaterialBindIfndefTypedBindingRequiredValueLine;
-    source += s_MaterialBindRequirementError;
-    source += s_GeneratedEndifBlock;
-    source += s_MaterialBindTypedBindingMismatchIfLine;
-    source += s_MaterialBindTypedBindingMismatchError;
-    source += s_GeneratedEndifBlockBeforeSeparator;
-    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, source);
+    AppendMaterialBindIncludeHeader(AStringView(includeGuard), source);
 
     if(!AppendMaterialBindLayoutConstants(AStringView(includePath), entry, *interfaceName, layout, scratchArena, generatedSymbols, source))
         return MakeUnexpected(Failure{});
@@ -422,20 +325,14 @@ Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEn
         if(!RegisterGeneratedMaterialBindSymbol(AStringView(includePath), AStringView(bindStruct.name), scratchArena, generatedSymbols))
             return MakeUnexpected(Failure{});
 
-        source += s_MaterialBindStructKeywordPrefix;
-        source += bindStruct.name;
-        source += s_MaterialBindStructOpenBrace;
+        AppendMaterialBindStructHeader(AStringView(bindStruct.name), source);
         for(const MaterialBindField& field : bindStruct.fields){
             if(TryParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value())
                 continue;
 
-            source += s_MaterialBindIndent;
-            source += field.type;
-            source += ' ';
-            source += field.name;
-            source += s_MaterialBindStatementEnd;
+            AppendMaterialBindStructField(AStringView(field.type), AStringView(field.name), source);
         }
-        source += s_MaterialBindStructCloseBrace;
+        AppendMaterialBindStructFooter(source);
     }
 
     for(const MaterialBindInstance& instance : entry.instances){
@@ -444,10 +341,7 @@ Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEn
             return MakeUnexpected(Failure{});
     }
 
-    source += "\n";
-    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, source);
-    source += s_GeneratedEndifBlockBeforeSeparator;
-    AppendMaterialBindGeneratedSeparator(1u, source);
+    AppendMaterialBindIncludeFooter(source);
     return source;
 }
 

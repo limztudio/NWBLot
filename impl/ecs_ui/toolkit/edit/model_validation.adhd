@@ -129,5 +129,462 @@ b8 CanRecordEditHistory(in usize maxHistoryRecords, in usize maxHistoryBytes, in
     return maxHistoryRecords != 0u && cost <= maxHistoryBytes;
 }
 
+class EditHistoryRecord{
+    public String before;
+    public String after;
+    public usize beforeAnchor = 0u;
+    public usize beforeCaret = 0u;
+    public usize afterAnchor = 0u;
+    public usize afterCaret = 0u;
+};
+
+void CancelEditModelComposition(
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration
+){
+    if(inOutCompositionActive)
+        ++inOutCompositionGeneration;
+    inOutPreedit.clear();
+    outPreeditAnchor = 0u;
+    outPreeditCaret = 0u;
+    outCompositionAnchor = 0u;
+    outCompositionCaret = 0u;
+    inOutCompositionActive = false;
+}
+
+void ClearEditModelHistory(
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize outHistoryCursor,
+    mut usize outHistoryBytes
+){
+    inOutHistory.clear();
+    outHistoryCursor = 0u;
+    outHistoryBytes = 0u;
+}
+
+void RecordEditModelHistory(
+    in StringView before,
+    in usize beforeAnchor,
+    in usize beforeCaret,
+    in StringView after,
+    in usize afterAnchor,
+    in usize afterCaret,
+    in usize maxHistoryRecords,
+    in usize maxHistoryBytes,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize inOutHistoryCursor,
+    mut usize inOutHistoryBytes
+){
+    const usize cost = before.size() + after.size();
+    if(!CanRecordEditHistory(maxHistoryRecords, maxHistoryBytes, cost)){
+        ClearEditModelHistory(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
+        return;
+    }
+    EditHistoryRecord candidate;
+    if(!before.empty())
+        candidate.before.assign(before);
+    if(!after.empty())
+        candidate.after.assign(after);
+    candidate.beforeAnchor = beforeAnchor;
+    candidate.beforeCaret = beforeCaret;
+    candidate.afterAnchor = afterAnchor;
+    candidate.afterCaret = afterCaret;
+    while(inOutHistory.size() > inOutHistoryCursor){
+        const EditHistoryRecord discarded = inOutHistory.back();
+        inOutHistoryBytes -= discarded.before.size() + discarded.after.size();
+        inOutHistory.pop_back();
+    }
+    while(!inOutHistory.empty() && (inOutHistory.size() >= maxHistoryRecords || inOutHistoryBytes > maxHistoryBytes - cost)){
+        const EditHistoryRecord discarded = inOutHistory.front();
+        inOutHistoryBytes -= discarded.before.size() + discarded.after.size();
+        for(usize moveIndex = 1u; moveIndex < inOutHistory.size(); ++moveIndex)
+            inOutHistory[moveIndex - 1u] = inOutHistory[moveIndex];
+        inOutHistory.pop_back();
+        --inOutHistoryCursor;
+    }
+    inOutHistory.push_back(candidate);
+    inOutHistoryBytes += cost;
+    inOutHistoryCursor = inOutHistory.size();
+}
+
+void CommitEditModelSetText(
+    in StringView value,
+    in Span<usize> newBoundaries,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize outAnchor,
+    mut usize outCaret,
+    mut u64 inOutSelectionGeneration,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize outHistoryCursor,
+    mut usize outHistoryBytes,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision,
+    mut u64 inOutExternalRevision
+){
+    String candidate;
+    if(!value.empty())
+        candidate.assign(value);
+    const b8 changed = StringView(candidate) != StringView(inOutText);
+    inOutText.assign(candidate);
+    inOutBoundaries.clear();
+    for(usize i = 0u; i < newBoundaries.size(); ++i)
+        inOutBoundaries.push_back(newBoundaries[i]);
+    outAnchor = inOutText.size();
+    outCaret = outAnchor;
+    ++inOutSelectionGeneration;
+    ClearEditModelHistory(inOutHistory, outHistoryCursor, outHistoryBytes);
+    CancelEditModelComposition(
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+    if(changed)
+        ++inOutRevision;
+    ++inOutExternalRevision;
+}
+
+b8 ApplyEditModelSetSelection(
+    in Span<usize> boundaries,
+    in usize anchor,
+    in usize caret,
+    mut usize outAnchor,
+    mut usize outCaret,
+    mut u64 inOutSelectionGeneration,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration
+){
+    if(!IsEditBoundary(boundaries, anchor) || !IsEditBoundary(boundaries, caret))
+        return false;
+    CancelEditModelComposition(
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+    outAnchor = anchor;
+    outCaret = caret;
+    ++inOutSelectionGeneration;
+    return true;
+}
+
+b8 ApplyEditModelMove(
+    in StringView text,
+    in Span<usize> boundaries,
+    in EditTextMode textMode,
+    in EditMove movement,
+    in b8 extend,
+    mut usize inOutAnchor,
+    mut usize inOutCaret,
+    mut u64 inOutSelectionGeneration,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration
+){
+    const Expected<usize> target = TryResolveEditMoveTarget(text, boundaries, textMode, inOutAnchor, inOutCaret, movement, extend);
+    if(!target.has_value())
+        return false;
+    CancelEditModelComposition(
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+    if(!extend)
+        inOutAnchor = target.value();
+    inOutCaret = target.value();
+    ++inOutSelectionGeneration;
+    return true;
+}
+
+b8 ApplyEditModelBeginComposition(
+    in usize anchor,
+    in usize caret,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration
+){
+    if(inOutCompositionActive)
+        return true;
+    outCompositionAnchor = anchor;
+    outCompositionCaret = caret;
+    inOutPreedit.clear();
+    outPreeditAnchor = 0u;
+    outPreeditCaret = 0u;
+    inOutCompositionActive = true;
+    ++inOutCompositionGeneration;
+    return true;
+}
+
+b8 ApplyEditModelUpdateComposition(
+    in b8 compositionActive,
+    in StringView value,
+    in usize anchor,
+    in usize caret,
+    in usize textSize,
+    in usize compositionAnchor,
+    in usize compositionCaret,
+    in usize maxBytes,
+    in EditTextMode textMode,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut u64 inOutCompositionGeneration
+){
+    if(!CanUpdateEditComposition(compositionActive, value, anchor, caret, textSize, compositionAnchor, compositionCaret, maxBytes) || !ValidateEditTextForMode(value, textMode))
+        return false;
+    String candidate;
+    if(!value.empty())
+        candidate.assign(value);
+    inOutPreedit.assign(candidate);
+    outPreeditAnchor = anchor;
+    outPreeditCaret = caret;
+    ++inOutCompositionGeneration;
+    return true;
+}
+
+b8 CommitEditModelEraseAroundSelection(
+    in StringView candidate,
+    in Span<usize> newBoundaries,
+    in usize beforeBytes,
+    in usize maxHistoryRecords,
+    in usize maxHistoryBytes,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize inOutAnchor,
+    mut usize inOutCaret,
+    mut u64 inOutSelectionGeneration,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize inOutHistoryCursor,
+    mut usize inOutHistoryBytes,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision
+){
+    const usize anchor = inOutAnchor - beforeBytes;
+    const usize caret = inOutCaret - beforeBytes;
+    if(!IsEditBoundary(newBoundaries, anchor) || !IsEditBoundary(newBoundaries, caret))
+        return false;
+    RecordEditModelHistory(
+        StringView(inOutText),
+        inOutAnchor,
+        inOutCaret,
+        candidate,
+        anchor,
+        caret,
+        maxHistoryRecords,
+        maxHistoryBytes,
+        inOutHistory,
+        inOutHistoryCursor,
+        inOutHistoryBytes
+    );
+    inOutText.assign(candidate);
+    inOutBoundaries.clear();
+    for(usize i = 0u; i < newBoundaries.size(); ++i)
+        inOutBoundaries.push_back(newBoundaries[i]);
+    inOutAnchor = anchor;
+    inOutCaret = caret;
+    ++inOutSelectionGeneration;
+    CancelEditModelComposition(
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+    ++inOutRevision;
+    return true;
+}
+
+void CommitEditModelReplaceRange(
+    in StringView candidate,
+    in Span<usize> newBoundaries,
+    in usize begin,
+    in usize replacementSize,
+    in usize maxHistoryRecords,
+    in usize maxHistoryBytes,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize inOutAnchor,
+    mut usize inOutCaret,
+    mut u64 inOutSelectionGeneration,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize inOutHistoryCursor,
+    mut usize inOutHistoryBytes,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision
+){
+    const usize caret = ResolveReplacedEditCaret(newBoundaries, begin, replacementSize);
+    const b8 changed = candidate != StringView(inOutText);
+    if(changed){
+        RecordEditModelHistory(
+            StringView(inOutText),
+            inOutAnchor,
+            inOutCaret,
+            candidate,
+            caret,
+            caret,
+            maxHistoryRecords,
+            maxHistoryBytes,
+            inOutHistory,
+            inOutHistoryCursor,
+            inOutHistoryBytes
+        );
+    }
+    inOutText.assign(candidate);
+    inOutBoundaries.clear();
+    for(usize i = 0u; i < newBoundaries.size(); ++i)
+        inOutBoundaries.push_back(newBoundaries[i]);
+    inOutAnchor = caret;
+    inOutCaret = caret;
+    ++inOutSelectionGeneration;
+    CancelEditModelComposition(
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+    if(changed)
+        ++inOutRevision;
+}
+
+void CommitEditModelRestoreHistoryState(
+    in StringView value,
+    in Span<usize> newBoundaries,
+    in usize anchor,
+    in usize caret,
+    in isize cursorDelta,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize outAnchor,
+    mut usize outCaret,
+    mut u64 inOutSelectionGeneration,
+    mut usize inOutHistoryCursor,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision
+){
+    inOutText.assign(value);
+    inOutBoundaries.clear();
+    for(usize i = 0u; i < newBoundaries.size(); ++i)
+        inOutBoundaries.push_back(newBoundaries[i]);
+    outAnchor = anchor;
+    outCaret = caret;
+    ++inOutSelectionGeneration;
+    inOutHistoryCursor = cast<usize>(cast<isize>(inOutHistoryCursor) + cursorDelta);
+    CancelEditModelComposition(
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+    ++inOutRevision;
+}
+
+void CaptureEditModelSurrounding(
+    in StringView text,
+    in TextAreaModelStamp stamp,
+    mut String outExpectedText,
+    mut TextAreaModelStamp outExpectedStamp,
+    mut u64 outExpectedRevision,
+    mut u64 outExpectedExternalRevision
+){
+    outExpectedText.assign(text);
+    outExpectedStamp = stamp;
+    outExpectedRevision = stamp.revision;
+    outExpectedExternalRevision = stamp.externalRevision;
+}
+
+void CaptureEditModelSnapshot(
+    in StringView text,
+    in TextAreaModelStamp stamp,
+    in EditCompositionView composition,
+    mut String outExpectedText,
+    mut String outExpectedPreedit,
+    mut EditCompositionView outExpectedComposition,
+    mut TextAreaModelStamp outExpectedStamp,
+    mut u64 outExpectedRevision,
+    mut u64 outExpectedExternalRevision
+){
+    CaptureEditModelSurrounding(text, stamp, outExpectedText, outExpectedStamp, outExpectedRevision, outExpectedExternalRevision);
+    outExpectedComposition = composition;
+    outExpectedPreedit.assign(composition.text);
+    outExpectedComposition.text = "";
+}
+
+void ClearEditModelSnapshot(
+    mut String outExpectedText,
+    mut String outExpectedPreedit,
+    mut EditCompositionView outExpectedComposition,
+    mut TextAreaModelStamp outExpectedStamp,
+    mut u64 outExpectedRevision,
+    mut u64 outExpectedExternalRevision
+){
+    outExpectedText.clear();
+    outExpectedPreedit.clear();
+    outExpectedComposition = EditCompositionView();
+    outExpectedStamp = TextAreaModelStamp();
+    outExpectedRevision = 0u;
+    outExpectedExternalRevision = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

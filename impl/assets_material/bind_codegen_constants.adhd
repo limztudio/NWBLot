@@ -114,6 +114,170 @@ class MaterialBindTypedLayoutParameterLookupEntry{
     public u32 constantByteOffset = 0u;
 }
 
+void AppendDecimalU32(in u32 value, mut String inOutText){
+    if(value == 0u){
+        inOutText.push_back('0');
+        return;
+    }
+    FixedVector<u8, 10u> digits;
+    u32 remaining = value;
+    while(remaining > 0u){
+        digits.push_back(cast<u8>(remaining % 10u));
+        remaining = remaining / 10u;
+    }
+    for(usize index = digits.size(); index > 0u; --index)
+        inOutText.push_back(cast<i8>(48u + cast<u32>(digits[index - 1u])));
+}
+
+void AppendHexU32UnsignedLiteralText(in u32 value, mut String inOutText){
+    inOutText.append("0x");
+    for(u32 nibbleIndex = 0u; nibbleIndex < 8u; ++nibbleIndex){
+        const u32 shift = (7u - nibbleIndex) * 4u;
+        const u32 nibble = (value >> shift) & 0xFu;
+        u32 ch = 0u;
+        if(nibble < 10u)
+            ch = 48u + nibble;
+        else
+            ch = 97u + (nibble - 10u);
+        inOutText.push_back(cast<i8>(ch));
+    }
+    inOutText.push_back('u');
+}
+
+void AppendMaterialBindGeneratedSeparator(in u32 newlineCount, mut String inOutSource){
+    for(u32 i = 0u; i < s_MaterialBindGeneratedSeparatorChunkRepeatCount; ++i)
+        inOutSource.append(s_MaterialBindSeparatorChunk);
+    for(u32 i = 0u; i < newlineCount; ++i)
+        inOutSource.push_back('\n');
+}
+
+void AppendU32Slang(in u32 value, mut String inOutText){
+    AppendDecimalU32(value, inOutText);
+    inOutText.push_back('u');
+}
+
+void AppendU64AsUint2Slang(in u64 value, mut String inOutText){
+    inOutText.append(s_MaterialBindUint2Open);
+    AppendHexU32UnsignedLiteralText(cast<u32>(value & s_MaterialBindU64LowWordMask), inOutText);
+    inOutText.append(s_MaterialBindUint2Separator);
+    AppendHexU32UnsignedLiteralText(cast<u32>(value >> s_MaterialBindU64HighWordBitShift), inOutText);
+    inOutText.append(s_MaterialBindCloseParen);
+}
+
+void AppendMaterialBindConstantAssignmentPrefix(in StringView symbol, in StringView type, mut String inOutSource){
+    inOutSource.append(s_MaterialBindStaticConstPrefix);
+    inOutSource.append(type);
+    inOutSource.push_back(' ');
+    inOutSource.append(symbol);
+    inOutSource.append(s_MaterialBindConstantAssign);
+}
+
+void AppendMaterialBindU32ConstantStatement(in StringView symbol, in u32 value, mut String inOutSource){
+    AppendMaterialBindConstantAssignmentPrefix(symbol, s_MaterialBindUIntTypeName, inOutSource);
+    AppendU32Slang(value, inOutSource);
+    inOutSource.append(s_MaterialBindStatementEnd);
+}
+
+void AppendMaterialBindU64ConstantStatement(in StringView symbol, in u64 value, mut String inOutSource){
+    AppendMaterialBindConstantAssignmentPrefix(symbol, s_MaterialBindUInt2TypeName, inOutSource);
+    AppendU64AsUint2Slang(value, inOutSource);
+    inOutSource.append(s_MaterialBindStatementEnd);
+}
+
+void AppendMaterialBindDefaultConstantStatement(in StringView symbol, in StringView type, in StringView defaultAttribute, mut String inOutSource){
+    AppendMaterialBindConstantAssignmentPrefix(symbol, type, inOutSource);
+    inOutSource.append(defaultAttribute);
+    inOutSource.append(s_MaterialBindStatementEnd);
+}
+
+void AppendMaterialBindFieldAccessor(
+    in StringView fieldType,
+    in StringView byteOffsetSymbol,
+    in StringView functionName,
+    in StringView loadFunctionName,
+    mut String inOutSource
+){
+    inOutSource.append(fieldType);
+    inOutSource.push_back(' ');
+    inOutSource.append(functionName);
+    inOutSource.append(s_MaterialBindAccessorInstanceParameter);
+    inOutSource.append(s_GeneratedReturnPrefix);
+    inOutSource.append(loadFunctionName);
+    inOutSource.append(s_MaterialBindLoadInstanceArgPrefix);
+    inOutSource.append(byteOffsetSymbol);
+    inOutSource.append(s_MaterialBindCallStatementEnd);
+    inOutSource.append(s_GeneratedFunctionEnd);
+}
+
+void AppendMaterialBindIncludeHeader(in StringView includeGuard, mut String inOutSource){
+    inOutSource.append(s_MaterialBindGeneratedHeaderLine);
+    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, inOutSource);
+    inOutSource.append(s_GeneratedIfndefDirective);
+    inOutSource.append(includeGuard);
+    inOutSource.append(s_GeneratedNewlineDefineDirective);
+    inOutSource.append(includeGuard);
+    inOutSource.append(s_GeneratedIncludeGuardEnd);
+    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, inOutSource);
+    inOutSource.append(s_MaterialBindIfndefTypedBindingLine);
+    inOutSource.append(s_MaterialBindRequirementError);
+    inOutSource.append(s_GeneratedEndifBlock);
+    inOutSource.append(s_MaterialBindIfndefTypedBindingRequiredValueLine);
+    inOutSource.append(s_MaterialBindRequirementError);
+    inOutSource.append(s_GeneratedEndifBlock);
+    inOutSource.append(s_MaterialBindTypedBindingMismatchIfLine);
+    inOutSource.append(s_MaterialBindTypedBindingMismatchError);
+    inOutSource.append(s_GeneratedEndifBlockBeforeSeparator);
+    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, inOutSource);
+}
+
+void AppendMaterialBindStructHeader(in StringView structName, mut String inOutSource){
+    inOutSource.append(s_MaterialBindStructKeywordPrefix);
+    inOutSource.append(structName);
+    inOutSource.append(s_MaterialBindStructOpenBrace);
+}
+
+void AppendMaterialBindStructField(in StringView fieldType, in StringView fieldName, mut String inOutSource){
+    inOutSource.append(s_MaterialBindIndent);
+    inOutSource.append(fieldType);
+    inOutSource.push_back(' ');
+    inOutSource.append(fieldName);
+    inOutSource.append(s_MaterialBindStatementEnd);
+}
+
+void AppendMaterialBindStructFooter(mut String inOutSource){
+    inOutSource.append(s_MaterialBindStructCloseBrace);
+}
+
+void AppendMaterialBindBlockAccessorHeader(in StringView structName, in StringView blockFunctionName, mut String inOutSource){
+    inOutSource.append(structName);
+    inOutSource.push_back(' ');
+    inOutSource.append(blockFunctionName);
+    inOutSource.append(s_MaterialBindAccessorInstanceParameter);
+    inOutSource.append(s_MaterialBindIndent);
+    inOutSource.append(structName);
+    inOutSource.append(s_MaterialBindBlockValueDeclSuffix);
+}
+
+void AppendMaterialBindBlockAccessorFieldAssign(in StringView fieldName, in StringView functionName, mut String inOutSource){
+    inOutSource.append(s_MaterialBindBlockValueMemberPrefix);
+    inOutSource.append(fieldName);
+    inOutSource.append(s_MaterialBindConstantAssign);
+    inOutSource.append(functionName);
+    inOutSource.append(s_MaterialBindInstanceCallEnd);
+}
+
+void AppendMaterialBindBlockAccessorFooter(mut String inOutSource){
+    inOutSource.append(s_MaterialBindReturnBlockValueLine);
+    inOutSource.append(s_GeneratedFunctionEnd);
+}
+
+void AppendMaterialBindIncludeFooter(mut String inOutSource){
+    inOutSource.push_back('\n');
+    AppendMaterialBindGeneratedSeparator(s_MaterialBindGeneratedSeparatorNewlineCount, inOutSource);
+    inOutSource.append(s_GeneratedEndifBlockBeforeSeparator);
+    AppendMaterialBindGeneratedSeparator(1u, inOutSource);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

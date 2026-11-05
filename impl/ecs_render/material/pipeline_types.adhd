@@ -259,5 +259,72 @@ Name ResolveAvboitPixelShaderDebugName(in MaterialPipelinePass pass){
     }
 }
 
+String BuildCsgProjectEvaluatorModuleAssignmentText(in StringView moduleInclude){
+    String assignment = "";
+    if(moduleInclude.empty())
+        return assignment;
+
+    assignment.reserve(s_CsgProjectEvaluatorModuleDefineName.size() + moduleInclude.size() + s_ModuleAssignmentPunctuationSize);
+    assignment += s_CsgProjectEvaluatorModuleDefineName;
+    assignment += "=\"";
+    assignment += moduleInclude;
+    assignment.push_back('"');
+    return assignment;
+}
+
+Expected<String> TryBuildCsgShaderVariantText(
+    in StringView baseVariant,
+    in StringView defaultVariant,
+    in StringView projectEvaluatorModuleAssignment
+){
+    FixedVector<ShaderVariantDefineAssignment, s_MaxCsgClipShaderVariantDefineAssignments> defineAssignments;
+    defineAssignments.push_back(ShaderVariantDefineAssignment(s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment));
+    defineAssignments.push_back(ShaderVariantDefineAssignment(s_CsgIntervalSampleEnabledDefineName, s_CsgIntervalSampleEnabledDefineAssignment));
+    if(!projectEvaluatorModuleAssignment.empty())
+        defineAssignments.push_back(ShaderVariantDefineAssignment(s_CsgProjectEvaluatorModuleDefineName, projectEvaluatorModuleAssignment));
+
+    return TryBuildCsgClipShaderVariantText(baseVariant, defaultVariant, defineAssignments);
+}
+
+class MaterialPipelineAvboitPixelShaderSelection{
+    public AssetRef<PixelShader> materialShader;
+    public Name debugName = s_InvalidAvboitPixelShaderDebugName;
+
+    public b8 materialDriven()const{
+        return this.materialShader.valid();
+    }
+
+    public Name shaderName()const{
+        if(this.materialDriven())
+            return this.materialShader.name();
+        return s_NameNone;
+    }
+}
+
+MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(
+    in MaterialPipelinePass pass,
+    in AssetRef<PixelShader> avboitOccupancyPixelShader,
+    in AssetRef<PixelShader> avboitExtinctionPixelShader,
+    in AssetRef<PixelShader> avboitAccumulatePixelShader
+){
+    MaterialPipelineAvboitPixelShaderSelection selection;
+    selection.debugName = ResolveAvboitPixelShaderDebugName(pass);
+    switch(pass){
+    case MaterialPipelinePass::AvboitOccupancy:
+        selection.materialShader = avboitOccupancyPixelShader;
+        break;
+    case MaterialPipelinePass::AvboitExtinction:
+        selection.materialShader = avboitExtinctionPixelShader;
+        break;
+    case MaterialPipelinePass::AvboitAccumulate:
+    case MaterialPipelinePass::AvboitRefractionCapture:
+        selection.materialShader = avboitAccumulatePixelShader;
+        break;
+    default:
+        break;
+    }
+    return selection;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

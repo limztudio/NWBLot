@@ -27,21 +27,7 @@ NWB_IMPL_UI_BEGIN
 // UTF8 byte selections always lie on Unicode 17 extended grapheme boundaries; preedit stays separate from committed text.
 class EditModel final : NoCopy{
 private:
-    struct HistoryRecord{
-        AString<Core::Alloc::GlobalArena> before;
-        AString<Core::Alloc::GlobalArena> after;
-        usize beforeAnchor = 0u;
-        usize beforeCaret = 0u;
-        usize afterAnchor = 0u;
-        usize afterCaret = 0u;
-
-
-    public:
-        explicit HistoryRecord(Core::Alloc::GlobalArena& arena)noexcept
-            : before(arena)
-            , after(arena)
-        {}
-    };
+    using HistoryRecord = EditHistoryRecord;
 
 
 private:
@@ -113,31 +99,46 @@ public:
         auto boundaries = buildBoundaries(value);
         if(!boundaries)
             return false;
-        AString<Core::Alloc::GlobalArena> candidate(m_arena);
-        if(!value.empty())
-            candidate.assign(value.data(), value.size());
-        const b8 changed = value != text();
-        m_text = Move(candidate);
-        m_boundaries = Move(*boundaries);
-        m_anchor = m_text.size();
-        m_caret = m_anchor;
-        AdvanceRevision(m_selectionGeneration);
-        clearHistory();
-        cancelComposition();
-        if(changed)
-            AdvanceRevision(m_revision);
-        AdvanceRevision(m_externalRevision);
+        CommitEditModelSetText(
+            value,
+            *boundaries,
+            m_text,
+            m_boundaries,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_history,
+            m_historyCursor,
+            m_historyBytes,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration,
+            m_revision,
+            m_externalRevision
+        );
         return true;
     }
 
     [[nodiscard]] b8 setSelection(const usize anchor, const usize caret)noexcept{
-        if(!IsEditBoundary(m_boundaries, anchor) || !IsEditBoundary(m_boundaries, caret))
-            return false;
-        cancelComposition();
-        m_anchor = anchor;
-        m_caret = caret;
-        AdvanceRevision(m_selectionGeneration);
-        return true;
+        return ApplyEditModelSetSelection(
+            m_boundaries,
+            anchor,
+            caret,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration
+        );
     }
 
     [[nodiscard]] b8 selectAll()noexcept{ return setSelection(0u, m_text.size()); }
@@ -145,15 +146,23 @@ public:
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] b8 move(const EditMove::Enum movement, const b8 extend = false)noexcept{
-        const auto target = TryResolveEditMoveTarget(text(), m_boundaries, m_textMode, m_anchor, m_caret, movement, extend);
-        if(!target)
-            return false;
-        cancelComposition();
-        if(!extend)
-            m_anchor = *target;
-        m_caret = *target;
-        AdvanceRevision(m_selectionGeneration);
-        return true;
+        return ApplyEditModelMove(
+            text(),
+            m_boundaries,
+            m_textMode,
+            movement,
+            extend,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration
+        );
     }
 
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
@@ -197,20 +206,29 @@ public:
         auto boundaries = buildBoundaries(after);
         if(!boundaries)
             return false;
-        const usize anchor = m_anchor - beforeBytes;
-        const usize caret = m_caret - beforeBytes;
-        if(!IsEditBoundary(*boundaries, anchor) || !IsEditBoundary(*boundaries, caret))
-            return false;
-
-        recordHistory(text(), m_anchor, m_caret, after, anchor, caret);
-        m_text = Move(candidate);
-        m_boundaries = Move(*boundaries);
-        m_anchor = anchor;
-        m_caret = caret;
-        AdvanceRevision(m_selectionGeneration);
-        cancelComposition();
-        AdvanceRevision(m_revision);
-        return true;
+        return CommitEditModelEraseAroundSelection(
+            after,
+            *boundaries,
+            beforeBytes,
+            m_limits.maxHistoryRecords,
+            m_limits.maxHistoryBytes,
+            m_text,
+            m_boundaries,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_history,
+            m_historyCursor,
+            m_historyBytes,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration,
+            m_revision
+        );
     }
 
     [[nodiscard]] b8 undo(){
@@ -232,30 +250,36 @@ public:
     [[nodiscard]] b8 canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
 
     [[nodiscard]] b8 beginComposition()noexcept{
-        if(m_compositionActive)
-            return true;
-        m_compositionAnchor = m_anchor;
-        m_compositionCaret = m_caret;
-        m_preedit.clear();
-        m_preeditAnchor = 0u;
-        m_preeditCaret = 0u;
-        m_compositionActive = true;
-        AdvanceRevision(m_compositionGeneration);
-        return true;
+        return ApplyEditModelBeginComposition(
+            m_anchor,
+            m_caret,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration
+        );
     }
 
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
     [[nodiscard]] b8 updateComposition(const AStringView value, const usize anchor, const usize caret){
-        if(!CanUpdateEditComposition(m_compositionActive, value, anchor, caret, m_text.size(), m_compositionAnchor, m_compositionCaret, m_limits.maxBytes) || !ValidateEditTextForMode(value, m_textMode))
-            return false;
-        AString<Core::Alloc::GlobalArena> candidate(m_arena);
-        if(!value.empty())
-            candidate.assign(value.data(), value.size());
-        m_preedit = Move(candidate);
-        m_preeditAnchor = anchor;
-        m_preeditCaret = caret;
-        AdvanceRevision(m_compositionGeneration);
-        return true;
+        return ApplyEditModelUpdateComposition(
+            m_compositionActive,
+            value,
+            anchor,
+            caret,
+            m_text.size(),
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_limits.maxBytes,
+            m_textMode,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionGeneration
+        );
     }
 
     [[nodiscard]] b8 commitComposition(const AStringView value){
@@ -265,14 +289,15 @@ public:
     }
 
     void cancelComposition()noexcept{
-        if(m_compositionActive)
-            AdvanceRevision(m_compositionGeneration);
-        m_preedit.clear();
-        m_preeditAnchor = 0u;
-        m_preeditCaret = 0u;
-        m_compositionAnchor = 0u;
-        m_compositionCaret = 0u;
-        m_compositionActive = false;
+        CancelEditModelComposition(
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration
+        );
     }
 
     [[nodiscard]] EditCompositionView composition()const noexcept{
@@ -286,23 +311,35 @@ private:
             return false;
         AString<Core::Alloc::GlobalArena> candidate(m_arena);
         BuildReplacedEditString(text(), begin, end, replacement, candidate);
-        auto boundaries = buildBoundaries({ candidate.data(), candidate.size() });
+        const AStringView after(candidate.data(), candidate.size());
+        auto boundaries = buildBoundaries(after);
         if(!boundaries)
             return false;
         // Inserted combining marks and neighboring emoji may merge clusters; keep the caret at a valid following edge.
-        const usize caret = ResolveReplacedEditCaret(*boundaries, begin, replacement.size());
-        const AStringView after(candidate.data(), candidate.size());
-        const b8 changed = after != text();
-        if(changed)
-            recordHistory(text(), m_anchor, m_caret, after, caret, caret);
-        m_text = Move(candidate);
-        m_boundaries = Move(*boundaries);
-        m_anchor = caret;
-        m_caret = caret;
-        AdvanceRevision(m_selectionGeneration);
-        cancelComposition();
-        if(changed)
-            AdvanceRevision(m_revision);
+        CommitEditModelReplaceRange(
+            after,
+            *boundaries,
+            begin,
+            replacement.size(),
+            m_limits.maxHistoryRecords,
+            m_limits.maxHistoryBytes,
+            m_text,
+            m_boundaries,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_history,
+            m_historyCursor,
+            m_historyBytes,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration,
+            m_revision
+        );
         return true;
     }
 
@@ -316,52 +353,28 @@ private:
         auto boundaries = buildBoundaries(value);
         if(!boundaries)
             return false;
-        m_text.assign(value.data(), value.size());
-        m_boundaries = Move(*boundaries);
-        m_anchor = anchor;
-        m_caret = caret;
-        AdvanceRevision(m_selectionGeneration);
-        m_historyCursor = static_cast<usize>(static_cast<isize>(m_historyCursor) + cursorDelta);
-        cancelComposition();
-        AdvanceRevision(m_revision);
+        CommitEditModelRestoreHistoryState(
+            value,
+            *boundaries,
+            anchor,
+            caret,
+            cursorDelta,
+            m_text,
+            m_boundaries,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_historyCursor,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration,
+            m_revision
+        );
         return true;
-    }
-
-    void recordHistory(const AStringView before, const usize beforeAnchor, const usize beforeCaret, const AStringView after, const usize afterAnchor, const usize afterCaret){
-        const usize cost = before.size() + after.size();
-        if(!CanRecordEditHistory(m_limits.maxHistoryRecords, m_limits.maxHistoryBytes, cost)){
-            clearHistory();
-            return;
-        }
-        HistoryRecord candidate(m_arena);
-        if(!before.empty())
-            candidate.before.assign(before.data(), before.size());
-        if(!after.empty())
-            candidate.after.assign(after.data(), after.size());
-        candidate.beforeAnchor = beforeAnchor;
-        candidate.beforeCaret = beforeCaret;
-        candidate.afterAnchor = afterAnchor;
-        candidate.afterCaret = afterCaret;
-        while(m_history.size() > m_historyCursor){
-            const HistoryRecord& discarded = m_history.back();
-            m_historyBytes -= discarded.before.size() + discarded.after.size();
-            m_history.pop_back();
-        }
-        while(!m_history.empty() && (m_history.size() >= m_limits.maxHistoryRecords || m_historyBytes > m_limits.maxHistoryBytes - cost)){
-            const HistoryRecord& discarded = m_history.front();
-            m_historyBytes -= discarded.before.size() + discarded.after.size();
-            m_history.erase(m_history.begin());
-            --m_historyCursor;
-        }
-        m_history.push_back(Move(candidate));
-        m_historyBytes += cost;
-        m_historyCursor = m_history.size();
-    }
-
-    void clearHistory()noexcept{
-        m_history.clear();
-        m_historyCursor = 0u;
-        m_historyBytes = 0u;
     }
 
 

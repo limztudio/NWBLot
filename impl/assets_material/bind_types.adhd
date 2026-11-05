@@ -230,5 +230,25 @@ String BuildMaterialBindFieldLookupFunctionName(in MaterialLayoutFieldType field
     return functionName;
 }
 
+void AppendMaterialBindResourceFieldAccessor(
+    in MaterialLayoutFieldType fieldType,
+    in StringView byteOffsetSymbol,
+    in StringView functionName,
+    mut String inOutSource
+){
+    const StringView slangTypeName = MaterialBindResourceSlangTypeName(fieldType);
+    const StringView heapAccessorName = MaterialBindResourceHeapAccessorName(fieldType);
+    inOutSource.append(slangTypeName);
+    inOutSource.push_back(' ');
+    inOutSource.append(functionName);
+    inOutSource.append(s_MaterialBindAccessorInstanceParameter);
+    inOutSource.append(s_GeneratedReturnPrefix);
+    inOutSource.append(heapAccessorName);
+    inOutSource.append(s_MaterialBindResourceLoadConstantUIntPrefix);
+    inOutSource.append(byteOffsetSymbol);
+    inOutSource.append(s_MaterialBindNestedCallStatementEnd);
+    inOutSource.append(s_GeneratedFunctionEnd);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

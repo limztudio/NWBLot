@@ -34,24 +34,37 @@ public:
         return MatchesEditModelSnapshot(model.stamp(), model.text(), model.composition(), m_expectedStamp, AStringView(m_expectedText), m_expectedComposition, AStringView(m_expectedPreedit));
     }
     void captureSurrounding(const EditModel& model){
-        m_expectedText.assign(model.text().data(), model.text().size());
-        m_expectedStamp = model.stamp();
-        m_expectedRevision = m_expectedStamp.revision;
-        m_expectedExternalRevision = m_expectedStamp.externalRevision;
+        CaptureEditModelSurrounding(
+            model.text(),
+            model.stamp(),
+            m_expectedText,
+            m_expectedStamp,
+            m_expectedRevision,
+            m_expectedExternalRevision
+        );
     }
     void capture(const EditModel& model){
-        captureSurrounding(model);
-        m_expectedComposition = model.composition();
-        m_expectedPreedit.assign(m_expectedComposition.text.data(), m_expectedComposition.text.size());
-        m_expectedComposition.text = {};
+        CaptureEditModelSnapshot(
+            model.text(),
+            model.stamp(),
+            model.composition(),
+            m_expectedText,
+            m_expectedPreedit,
+            m_expectedComposition,
+            m_expectedStamp,
+            m_expectedRevision,
+            m_expectedExternalRevision
+        );
     }
     void clear()noexcept{
-        m_expectedText.clear();
-        m_expectedPreedit.clear();
-        m_expectedComposition = {};
-        m_expectedStamp = {};
-        m_expectedRevision = 0u;
-        m_expectedExternalRevision = 0u;
+        ClearEditModelSnapshot(
+            m_expectedText,
+            m_expectedPreedit,
+            m_expectedComposition,
+            m_expectedStamp,
+            m_expectedRevision,
+            m_expectedExternalRevision
+        );
     }
 
 

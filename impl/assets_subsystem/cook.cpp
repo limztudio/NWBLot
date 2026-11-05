@@ -59,30 +59,7 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
             assetHashes.push_back(subsystem.fieldValue(i, elementIndex).hash());
     }
 
-    usize reserveBytes = sizeof(SubsystemHeaderBinary);
-    const b8 canReserve =
-        AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, fieldCounts)
-        && AddBinaryVectorReserveBytes(reserveBytes, assetHashes)
-    ;
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    const SubsystemHeaderBinary header = MakeSubsystemHeaderBinary(
-        subsystem.assetType().hash(),
-        static_cast<u64>(subsystemHashes.size()),
-        static_cast<u64>(fieldCounts.size()),
-        static_cast<u64>(assetHashes.size())
-    );
-    AppendPOD(outBinary, header);
-
-    return
-        Core::Assets::AppendVectorPayload(subsystemHashes, s_SubsystemSerializeContext, s_SubsystemDepsPayloadLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(fieldCounts, s_SubsystemSerializeContext, s_SubsystemFieldCountsPayloadLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(assetHashes, s_SubsystemSerializeContext, s_SubsystemAssetsPayloadLabel, outBinary)
-    ;
+    return SerializeSubsystemBinaryStreams(subsystem.assetType().hash(), subsystemHashes, fieldCounts, assetHashes, outBinary);
 }
 
 

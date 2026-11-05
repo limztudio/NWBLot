@@ -89,31 +89,18 @@ b8 ValidatePayload(const ISubsystem& subsystem){
 
 b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     Core::Alloc::ScratchArena scratchArena(s_SubsystemLoadBinaryArena);
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemHeaderBinary>(binary, s_SubsystemMagic, s_SubsystemLoadBinaryContext, s_SubsystemAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const SubsystemHeaderBinary& header = *headerResult;
     const usize expectedFieldCount = outSubsystem.fieldCount();
-    if(!ValidateSubsystemHeaderBinary(header, outSubsystem.assetType(), expectedFieldCount))
-        return false;
-
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, s_SubsystemLoadBinaryContext, s_SubsystemDepsPayloadLabel, cursor, subsystemHashes))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.fieldCount, s_SubsystemLoadBinaryContext, s_SubsystemFieldCountsPayloadLabel, cursor, fieldCounts))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, s_SubsystemLoadBinaryContext, s_SubsystemAssetsPayloadLabel, cursor, assetHashes))
-        return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SubsystemLoadBinaryContext))
-        return false;
-
-    if(!UnpackSubsystemRefHashes(Span<const NameHash>(subsystemHashes), outSubsystem.subsystems))
-        return false;
-
-    if(!ValidateSubsystemFieldElementCountSum(Span<const u64>(fieldCounts), header.assetCount))
+    if(!ReadSubsystemBinaryStreams(
+        binary,
+        outSubsystem.assetType(),
+        expectedFieldCount,
+        subsystemHashes,
+        fieldCounts,
+        assetHashes
+    ) || !UnpackSubsystemRefHashes(Span<const NameHash>(subsystemHashes), outSubsystem.subsystems))
         return false;
 
     usize hashOffset = 0u;

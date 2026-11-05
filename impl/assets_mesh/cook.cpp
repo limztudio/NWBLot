@@ -155,44 +155,6 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MeshAssetBinaryPayload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 AppendMeshAttributeStreams(const Mesh& mesh, const TStringView failureContext, Core::Assets::AssetBytes& outBinary){
-    return
-        Core::Assets::AppendVectorPayload(mesh.positionStream(), failureContext, s_PositionsStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.normalStream(), failureContext, s_NormalsStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.tangentStream(), failureContext, s_TangentsStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.uv0Stream(), failureContext, s_Uv0StreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.colorStream(), failureContext, s_ColorsStreamLabel, outBinary)
-    ;
-}
-
-[[nodiscard]] b8 AppendMeshletStreams(const Mesh& mesh, const TStringView failureContext, Core::Assets::AssetBytes& outBinary){
-    return
-        Core::Assets::AppendVectorPayload(mesh.meshlets(), failureContext, s_MeshletsStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.meshletBounds(), failureContext, s_MeshletBoundsStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.meshletPositionRefDeltas(), failureContext, s_MeshletPositionRefDeltasStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.meshletAttributeRefDeltas(), failureContext, s_MeshletAttributeRefDeltasStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.meshletLocalVertexRefs(), failureContext, s_MeshletLocalVertexRefsStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.meshletPrimitiveIndices(), failureContext, s_MeshletPrimitiveIndicesStreamLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(mesh.solidTriangleWords(), failureContext, s_SolidTriangleWordsStreamLabel, outBinary)
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, MeshBinaryPayload::s_MeshSerializeContext))
         return false;
@@ -203,31 +165,30 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
         return false;
 
     usize reserveBytes = sizeof(MeshBinaryHeader);
-    const b8 canReserve = MeshAssetBinaryPayload::AddMeshBaseReserveBytes(mesh, reserveBytes);
+    if(!MeshAssetBinaryPayload::AddMeshBaseReserveBytes(mesh, reserveBytes) || !CanStoreValueCount(outBinary, reserveBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshAssetCodec::serialize failed: mesh payload byte size overflows"));
+        return false;
+    }
 
     outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
+    outBinary.reserve(reserveBytes);
 
-    const MeshBinaryHeader header = MakeMeshBinaryHeader(
-        mesh.positionStream().size(),
-        mesh.normalStream().size(),
-        mesh.tangentStream().size(),
-        mesh.uv0Stream().size(),
-        mesh.colorStream().size(),
-        mesh.meshlets().size(),
-        mesh.meshletBounds().size(),
-        mesh.meshletPositionRefDeltas().size(),
-        mesh.meshletAttributeRefDeltas().size(),
-        mesh.meshletLocalVertexRefs().size(),
-        mesh.meshletPrimitiveIndices().size()
+    AppendMeshBinaryStreams(
+        mesh.positionStream(),
+        mesh.normalStream(),
+        mesh.tangentStream(),
+        mesh.uv0Stream(),
+        mesh.colorStream(),
+        mesh.meshlets(),
+        mesh.meshletBounds(),
+        mesh.meshletPositionRefDeltas(),
+        mesh.meshletAttributeRefDeltas(),
+        mesh.meshletLocalVertexRefs(),
+        mesh.meshletPrimitiveIndices(),
+        mesh.solidTriangleWords(),
+        outBinary
     );
-    AppendPOD(outBinary, header);
-
-    const TStringView serializeFailureContext = MeshBinaryPayload::s_MeshSerializeContext;
-    if(!MeshAssetBinaryPayload::AppendMeshAttributeStreams(mesh, serializeFailureContext, outBinary))
-        return false;
-    return MeshAssetBinaryPayload::AppendMeshletStreams(mesh, serializeFailureContext, outBinary);
+    return true;
 }
 
 

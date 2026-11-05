@@ -268,5 +268,60 @@ b8 ValidateMeshAssetPayload(
     );
 }
 
+void AppendMeshBinaryStreams(
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<u8> meshletPositionRefDeltas,
+    in Span<u8> meshletAttributeRefDeltas,
+    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+    in Span<u8> meshletPrimitiveIndices,
+    in Span<u32> solidTriangleWords,
+    mut Vector<u8> outBinary
+){
+    const MeshBinaryHeader header = MakeMeshBinaryHeader(
+        positions.size(),
+        normals.size(),
+        tangents.size(),
+        uv0.size(),
+        colors.size(),
+        meshlets.size(),
+        meshletBounds.size(),
+        meshletPositionRefDeltas.size(),
+        meshletAttributeRefDeltas.size(),
+        meshletLocalVertexRefs.size(),
+        meshletPrimitiveIndices.size()
+    );
+    AppendPOD(outBinary, header);
+    for(in f32x3u v : positions)
+        AppendPOD(outBinary, v);
+    for(in f16x4u v : normals)
+        AppendPOD(outBinary, v);
+    for(in f16x4u v : tangents)
+        AppendPOD(outBinary, v);
+    for(in f32x2u v : uv0)
+        AppendPOD(outBinary, v);
+    for(in f16x4u v : colors)
+        AppendPOD(outBinary, v);
+    for(in MeshletDesc v : meshlets)
+        AppendPOD(outBinary, v);
+    for(in MeshletBounds v : meshletBounds)
+        AppendPOD(outBinary, v);
+    for(in u8 v : meshletPositionRefDeltas)
+        outBinary.push_back(v);
+    for(in u8 v : meshletAttributeRefDeltas)
+        outBinary.push_back(v);
+    for(in MeshletLocalVertexRef v : meshletLocalVertexRefs)
+        AppendPOD(outBinary, v);
+    for(in u8 v : meshletPrimitiveIndices)
+        outBinary.push_back(v);
+    for(in u32 v : solidTriangleWords)
+        AppendPOD(outBinary, v);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

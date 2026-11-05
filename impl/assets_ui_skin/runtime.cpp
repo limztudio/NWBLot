@@ -47,24 +47,19 @@ static_assert(sizeof(UiSkinTypography) == s_UiSkinTypographyBytes, "UiSkinTypogr
 
 
 b8 UiSkin::loadBinary(const Span<const u8> binary){
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinHeaderBinary>(binary, s_UiSkinBinaryMagic, s_UiSkinLoadBinaryContext, s_UiSkinAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const UiSkinHeaderBinary& header = *headerResult;
-    if(!ValidateUiSkinHeaderBinary(header, binary.size() - cursor, sizeof(UiSkinRegionBinary)))
-        return false;
-
     UiSkin candidate(m_regions.get_allocator().arena(), virtualPath());
-    candidate.m_texture.virtualPath = Name(header.textureNameHash);
-    candidate.m_atlasWidth = header.atlasWidth;
-    candidate.m_atlasHeight = header.atlasHeight;
-    candidate.m_referenceDensity = header.referenceDensity;
-    if(!ReadUiSkinRegionsPaletteAndTypography(binary, header.regionCount, cursor, candidate.m_regions, candidate.m_palette, candidate.m_typography))
+    if(!DeserializeUiSkinBinaryPayload(
+        binary,
+        candidate.m_texture,
+        candidate.m_atlasWidth,
+        candidate.m_atlasHeight,
+        candidate.m_referenceDensity,
+        candidate.m_regions,
+        candidate.m_regionIndex,
+        candidate.m_palette,
+        candidate.m_typography
+    ))
         return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_UiSkinLoadBinaryContext))
-        return false;
-    candidate.rebuildRegionIndex();
     if(!candidate.validatePayload())
         return false;
 
@@ -106,13 +101,20 @@ void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, 
     RegionVector candidate(m_regions.get_allocator().arena());
     candidate = Move(regions);
     m_regions = Move(candidate);
-    rebuildRegionIndex();
-    m_texture = texture;
-    m_atlasWidth = width;
-    m_atlasHeight = height;
-    m_referenceDensity = referenceDensity;
-    m_palette = {};
-    m_typography = {};
+    ResetUiSkinAtlasFields(
+        texture,
+        width,
+        height,
+        referenceDensity,
+        m_regions,
+        m_regionIndex,
+        m_texture,
+        m_atlasWidth,
+        m_atlasHeight,
+        m_referenceDensity,
+        m_palette,
+        m_typography
+    );
 }
 
 const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{

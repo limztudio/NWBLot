@@ -152,6 +152,49 @@ class SceneAssetEntryBinary{
     public NameHash assetHash;
 }
 
+const usize s_ComponentHeaderBinaryBytes = 80u;
+
+void PackComponentAssetEnvelope(
+    in NameHash componentTypeHash,
+    in Span<u8> payload,
+    mut Vector<u8> outBinary
+){
+    const ComponentHeaderBinary header = MakeComponentHeaderBinary(componentTypeHash, cast<u64>(payload.size()));
+    outBinary.clear();
+    outBinary.reserve(s_ComponentHeaderBinaryBytes + payload.size());
+    AppendPOD(outBinary, header);
+    for(in u8 b : payload)
+        outBinary.push_back(b);
+}
+
+Expected<Span<u8>> UnpackComponentAssetEnvelope(
+    in Span<u8> binary,
+    in Name assetType
+){
+    usize cursor = 0u;
+    const Expected<ComponentHeaderBinary> headerResult = ReadPOD<ComponentHeaderBinary>(binary, cursor);
+    if(!headerResult.has_value()){
+        error("IComponent::loadBinary failed: malformed header");
+        return makeUnexpected(Failure());
+    }
+    const ComponentHeaderBinary header = headerResult.value();
+    if(header.magic != s_ComponentMagic){
+        error("IComponent::loadBinary failed: invalid component asset format; recook required");
+        return makeUnexpected(Failure());
+    }
+    if(!ValidateComponentHeaderBinary(header, assetType, binary.size() - cursor))
+        return makeUnexpected(Failure());
+
+    const usize payloadByteCount = cast<usize>(header.payloadByteCount);
+    const Span<u8> payload = binary.subspan(cursor, payloadByteCount);
+    cursor += payloadByteCount;
+    if(cursor != binary.size()){
+        error("IComponent::loadBinary failed: trailing bytes detected");
+        return makeUnexpected(Failure());
+    }
+    return payload;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

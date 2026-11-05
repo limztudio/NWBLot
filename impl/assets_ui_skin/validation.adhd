@@ -351,5 +351,67 @@ b8 SerializeUiSkinBinaryPayload(
     return true;
 }
 
+b8 DeserializeUiSkinBinaryPayload(
+    in Span<u8> binary,
+    mut AssetRef<Texture> outTexture,
+    mut u32 outAtlasWidth,
+    mut u32 outAtlasHeight,
+    mut f32 outReferenceDensity,
+    mut Vector<UiSkinRegion> outRegions,
+    mut Vector<u32> outRegionIndex,
+    mut UiSkinPalette outPalette,
+    mut UiSkinTypography outTypography
+){
+    usize cursor = 0u;
+    const Expected<UiSkinHeaderBinary> headerResult = ReadPOD<UiSkinHeaderBinary>(binary, cursor);
+    if(!headerResult.has_value()){
+        error("UiSkin::loadBinary failed: malformed header");
+        return false;
+    }
+    const UiSkinHeaderBinary header = headerResult.value();
+    if(header.magic != s_UiSkinBinaryMagic){
+        error("UiSkin::loadBinary failed: invalid UI skin asset format; recook required");
+        return false;
+    }
+    if(!ValidateUiSkinHeaderBinary(header, binary.size() - cursor, s_UiSkinRegionBinaryBytes))
+        return false;
+
+    outTexture.virtualPath = Name(header.textureNameHash);
+    outAtlasWidth = header.atlasWidth;
+    outAtlasHeight = header.atlasHeight;
+    outReferenceDensity = header.referenceDensity;
+    if(!ReadUiSkinRegionsPaletteAndTypography(binary, header.regionCount, cursor, outRegions, outPalette, outTypography))
+        return false;
+    if(cursor != binary.size()){
+        error("UiSkin::loadBinary failed: trailing bytes detected");
+        return false;
+    }
+    RebuildUiSkinRegionIndex(outRegions, outRegionIndex);
+    return true;
+}
+
+void ResetUiSkinAtlasFields(
+    in AssetRef<Texture> texture,
+    in u32 width,
+    in u32 height,
+    in f32 referenceDensity,
+    in Span<UiSkinRegion> regions,
+    mut Vector<u32> outRegionIndex,
+    mut AssetRef<Texture> outTexture,
+    mut u32 outAtlasWidth,
+    mut u32 outAtlasHeight,
+    mut f32 outReferenceDensity,
+    mut UiSkinPalette outPalette,
+    mut UiSkinTypography outTypography
+){
+    RebuildUiSkinRegionIndex(regions, outRegionIndex);
+    outTexture = texture;
+    outAtlasWidth = width;
+    outAtlasHeight = height;
+    outReferenceDensity = referenceDensity;
+    outPalette = UiSkinPalette();
+    outTypography = UiSkinTypography();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

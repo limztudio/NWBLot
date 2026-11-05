@@ -114,13 +114,7 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
     if(!component.serializeComponentPayload(payload))
         return false;
 
-    const ComponentHeaderBinary header = MakeComponentHeaderBinary(component.assetType().hash(), static_cast<u64>(payload.size()));
-
-    outBinary.clear();
-    outBinary.reserve(sizeof(header) + payload.size());
-    AppendPOD(outBinary, header);
-    if(!payload.empty())
-        outBinary.insert(outBinary.end(), payload.begin(), payload.end());
+    PackComponentAssetEnvelope(component.assetType().hash(), payload, outBinary);
     return true;
 }
 

@@ -56,20 +56,10 @@ namespace ComponentAssetRuntime{
 
 
 b8 LoadBinary(const Span<const u8> binary, IComponent& outComponent){
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(binary, s_ComponentMagic, s_ComponentLoadBinaryContext, s_ComponentAssetKindLabel, cursor);
-    if(!headerResult)
+    const auto payload = UnpackComponentAssetEnvelope(binary, outComponent.assetType());
+    if(!payload)
         return false;
-    const ComponentHeaderBinary& header = *headerResult;
-    if(!ValidateComponentHeaderBinary(header, outComponent.assetType(), binary.size() - cursor))
-        return false;
-
-    const usize payloadByteCount = static_cast<usize>(header.payloadByteCount);
-    const Span<const u8> payload = binary.subspan(cursor, payloadByteCount);
-    cursor += payloadByteCount;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ComponentLoadBinaryContext))
-        return false;
-    if(!outComponent.loadComponentPayload(payload))
+    if(!outComponent.loadComponentPayload(*payload))
         return false;
     return outComponent.validatePayload();
 }

@@ -1,0 +1,198 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "router_pointer.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TryRouteRouterContextMenuCommand(
+    in InputEvent event,
+    in HitTarget focused,
+    in b8 alreadyPressed,
+    mut CommandSource inOutSource
+){
+    if(event.command != InputCommand::ContextMenu || !focused.contextMenu)
+        return false;
+    if(!alreadyPressed && !event.repeat){
+        inOutSource.contextArmed = true;
+        inOutSource.contextPosition = Point(focused.rectangle.x, focused.rectangle.y + focused.rectangle.height);
+    }
+    return true;
+}
+
+void EraseRouterDeviceInputs(
+    in u64 device,
+    mut Vector<PointerSource> pointerSources,
+    mut Vector<PointerBinding> pointerBindings,
+    mut Vector<CommandSource> commandSources,
+    mut Vector<BoundSource> boundSources,
+    mut Vector<InputEvent> events
+){
+    usize keptPointerSources = 0u;
+    for(usize index = 0u; index < pointerSources.size(); ++index){
+        if(pointerSources[index].source.device != device){
+            if(keptPointerSources != index)
+                pointerSources[keptPointerSources] = pointerSources[index];
+            ++keptPointerSources;
+        }
+    }
+    pointerSources.resize(keptPointerSources);
+    usize keptPointerBindings = 0u;
+    for(usize index = 0u; index < pointerBindings.size(); ++index){
+        if(pointerBindings[index].source.device != device){
+            if(keptPointerBindings != index)
+                pointerBindings[keptPointerBindings] = pointerBindings[index];
+            ++keptPointerBindings;
+        }
+    }
+    pointerBindings.resize(keptPointerBindings);
+    usize keptCommandSources = 0u;
+    for(usize index = 0u; index < commandSources.size(); ++index){
+        if(commandSources[index].source.device != device){
+            if(keptCommandSources != index)
+                commandSources[keptCommandSources] = commandSources[index];
+            ++keptCommandSources;
+        }
+    }
+    commandSources.resize(keptCommandSources);
+    usize keptBoundSources = 0u;
+    for(usize index = 0u; index < boundSources.size(); ++index){
+        if(boundSources[index].source.device != device){
+            if(keptBoundSources != index)
+                boundSources[keptBoundSources] = boundSources[index];
+            ++keptBoundSources;
+        }
+    }
+    boundSources.resize(keptBoundSources);
+    usize keptEvents = 0u;
+    for(usize index = 0u; index < events.size(); ++index){
+        const InputEvent event = events[index];
+        if(!event.source.valid() || event.source.device != device){
+            if(keptEvents != index)
+                events[keptEvents] = event;
+            ++keptEvents;
+        }
+    }
+    events.resize(keptEvents);
+}
+
+b8 IsCurrentRouterCommandFocus(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in b8 windowFocused,
+    in WidgetId focus,
+    in u64 focusDeclaration,
+    in CommandSource source
+){
+    const TargetOwner owner = source.focusOwner;
+    if(!windowFocused || !source.consumed || !owner.target.valid() || focus != owner.target || focusDeclaration != owner.declarationGeneration)
+        return false;
+    const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, owner.target, owner.declarationGeneration);
+    if(!focusedIndex.has_value())
+        return false;
+    const HitTarget focused = targets[focusedIndex.value()];
+    return
+        focused.focusable
+        && IsRouterTargetInteractive(targets, lookup, popups, focused)
+        && focused.popup == owner.popup
+        && focused.control == owner.control
+    ;
+}
+
+Expected<usize> FindRouterCommandSourceIndex(in Span<CommandSource> commandSources, in InputSource source){
+    for(usize index = 0u; index < commandSources.size(); ++index){
+        if(commandSources[index].source == source)
+            return index;
+    }
+    return makeUnexpected(Failure());
+}
+
+b8 CanRouterEditCommand(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in Span<CommandSource> commandSources,
+    in b8 windowFocused,
+    in WidgetId focus,
+    in u64 focusDeclaration,
+    in InputEvent event
+){
+    if(event.type != InputEventType::CommandDown || !event.edit)
+        return false;
+    const Expected<usize> sourceIndex = FindRouterCommandSourceIndex(commandSources, event.source);
+    if(!sourceIndex.has_value())
+        return false;
+    const CommandSource source = commandSources[sourceIndex.value()];
+    if(!IsCurrentRouterCommandFocus(targets, lookup, popups, windowFocused, focus, focusDeclaration, source))
+        return false;
+    const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, source.focusOwner.target, source.focusOwner.declarationGeneration);
+    if(!focusedIndex.has_value() || !targets[focusedIndex.value()].textEditable)
+        return false;
+    return !source.delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && IsCurrentRouterControlCommandOwner(targets, lookup, popups, source));
+}
+
+b8 CanRouterSubmitCommand(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in Span<CommandSource> commandSources,
+    in b8 windowFocused,
+    in WidgetId focus,
+    in u64 focusDeclaration,
+    in InputEvent event
+){
+    if(event.type != InputEventType::CommandUp || !event.edit || (event.command != InputCommand::Accept && event.command != InputCommand::Submit))
+        return false;
+    const Expected<usize> sourceIndex = FindRouterCommandSourceIndex(commandSources, event.source);
+    if(!sourceIndex.has_value())
+        return false;
+    const CommandSource source = commandSources[sourceIndex.value()];
+    if(!source.submitArmed || !IsCurrentRouterCommandFocus(targets, lookup, popups, windowFocused, focus, focusDeclaration, source))
+        return false;
+    const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, source.focusOwner.target, source.focusOwner.declarationGeneration);
+    if(!focusedIndex.has_value() || !targets[focusedIndex.value()].textEditable)
+        return false;
+    return !source.delegated || IsCurrentRouterControlCommandOwner(targets, lookup, popups, source);
+}
+
+void CancelRouterSubmitCommands(in WidgetId id, mut Vector<CommandSource> commandSources){
+    for(usize index = 0u; index < commandSources.size(); ++index){
+        if(commandSources[index].focusOwner.target == id)
+            commandSources[index].submitArmed = false;
+    }
+}
+
+void CancelRouterCommandPresses(mut Vector<CommandSource> commandSources){
+    for(usize index = 0u; index < commandSources.size(); ++index){
+        CommandSource source = commandSources[index];
+        source.submitArmed = false;
+        source.contextArmed = false;
+        commandSources[index] = source;
+    }
+}
+
+void ReconcileRouterCommandPresses(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in b8 windowFocused,
+    in WidgetId focus,
+    in u64 focusDeclaration,
+    mut Vector<CommandSource> commandSources
+){
+    for(usize index = 0u; index < commandSources.size(); ++index){
+        CommandSource source = commandSources[index];
+        if(!IsCurrentRouterCommandFocus(targets, lookup, popups, windowFocused, focus, focusDeclaration, source)){
+            source.submitArmed = false;
+            source.contextArmed = false;
+            commandSources[index] = source;
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

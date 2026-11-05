@@ -1,0 +1,92 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook_meshlet_metrics.adhd>
+#include <impl/assets_mesh/cook_solid_topology.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_MeshMetaText = "Mesh meta";
+const usize s_IndexedLabelBracketReserve = 2u;
+const StringView s_MeshIndicesFieldNameView = "indices";
+const StringView s_MeshVertexRefsFieldNameView = "vertex_refs";
+const StringView s_MeshPositionsFieldNameView = "positions";
+const StringView s_MeshNormalsFieldNameView = "normals";
+const StringView s_MeshTangentsFieldNameView = "tangents";
+const StringView s_MeshUv0FieldNameView = "uv0";
+const StringView s_MeshColorsFieldNameView = "colors";
+const usize s_VertexRefComponentCount = 5u;
+const usize s_ComponentLabelExtraCharCount = 2u;
+const StringView s_SkinMetaDiagnosticPrefix = "Skin meta";
+const StringView s_SkinMetaMeshField = "mesh";
+const StringView s_SkinMetaSkeletonField = "skeleton";
+const StringView s_SkinInfluencesField = "influences";
+const StringView s_SkinInverseBindMatricesField = "inverse_bind_matrices";
+const StringView s_SkinJointsField = "joints";
+const StringView s_SkinWeightsField = "weights";
+const StringView s_SkinMetaKind = "Skin";
+const StringView s_SkinInfluenceDiagnosticPrefix = "Skin influence";
+const StringView s_SkinIntegerListValueKind = "integer";
+const StringView s_SkinNumericListValueKind = "numeric";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> MetadataF32ValueFailure{
+    NotNumeric,
+    NonFinite,
+    OutOfRange
+}
+
+[reflect]
+enum<u8> MetadataU32ValueFailure{
+    NotNumeric,
+    NonIntegerOrNegative,
+    OutOfRange
+}
+
+[reflect]
+enum<u8> SkinInfluenceWeightFailure{
+    NegativeWeight,
+    ZeroTotalWeight,
+    InvalidNormalized
+}
+
+[reflect]
+enum<u8> SourceIndexStreamFailure{
+    None,
+    EmptyOrNotMultipleOfThree,
+    IndexOutOfRange
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<f32, MetadataF32ValueFailure> ValidateMetadataFiniteF32Number(in b8 isNumeric, in f64 numericValue){
+    if(!isNumeric)
+        return makeUnexpected(MetadataF32ValueFailure::NotNumeric);
+    if(!isFinite(numericValue))
+        return makeUnexpected(MetadataF32ValueFailure::NonFinite);
+    if(numericValue < cast<f64>(f32.min) || numericValue > cast<f64>(f32.max))
+        return makeUnexpected(MetadataF32ValueFailure::OutOfRange);
+    return cast<f32>(numericValue);
+}
+
+Expected<u32, MetadataU32ValueFailure> ValidateMetadataU32Number(in b8 isNumeric, in f64 numericValue){
+    if(!isNumeric)
+        return makeUnexpected(MetadataU32ValueFailure::NotNumeric);
+    if(!isFinite(numericValue) || numericValue < 0.0 || numericValue != floor(numericValue))
+        return makeUnexpected(MetadataU32ValueFailure::NonIntegerOrNegative);
+    if(numericValue > cast<f64>(u32.max))
+        return makeUnexpected(MetadataU32ValueFailure::OutOfRange);
+    return cast<u32>(numericValue);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,7 @@
 
 
 #include "../global.h"
-#include <impl/assets_material/layout_validation.adhd.h>
+#include <impl/assets_material/binary_validation.adhd.h>
 
 #include <core/assets/module.h>
 #include <core/assets/ref.h>
@@ -200,4 +200,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

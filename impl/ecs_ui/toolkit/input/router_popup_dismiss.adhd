@@ -1,0 +1,235 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "router_popup.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void InstallRouterPopups(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in b8 windowFocused,
+    in u64 focusLossGeneration,
+    in u64 expectedFocusLossGeneration,
+    mut Vector<PopupDismissal> popupDismissals,
+    mut Vector<PopupRecord> stagedPopups,
+    mut Vector<PopupRecord> popups,
+    mut Vector<CommandSource> commandSources,
+    mut WidgetId inOutFocus,
+    mut u64 inOutFocusDeclaration,
+    mut ControlToken inOutFocusControl
+){
+    usize keptDismissals = 0u;
+    for(usize index = 0u; index < popupDismissals.size(); ++index){
+        b8 retained = false;
+        for(in PopupRecord record : stagedPopups)
+            retained = retained || (record.scope.token == popupDismissals[index].token);
+        if(retained){
+            if(keptDismissals != index)
+                popupDismissals[keptDismissals] = popupDismissals[index];
+            ++keptDismissals;
+        }
+    }
+    popupDismissals.resize(keptDismissals);
+    PopupToken previousTop;
+    if(!popups.empty())
+        previousTop = popups.back().scope.token;
+    PopupToken nextTop;
+    if(!stagedPopups.empty())
+        nextTop = stagedPopups.back().scope.token;
+    WidgetId candidateFocus = inOutFocus;
+    u64 candidateDeclaration = inOutFocusDeclaration;
+    if(!popups.empty()){
+        candidateFocus = popups[0u].restoreFocus;
+        candidateDeclaration = popups[0u].restoreDeclaration;
+    }
+    PopupToken candidatePopup;
+    const b8 lostFocus = !windowFocused || (expectedFocusLossGeneration != u64.max && expectedFocusLossGeneration != focusLossGeneration);
+    if(!IsEligibleRouterPopupRestoreTarget(targets, lookup, candidateFocus, candidateDeclaration, candidatePopup)){
+        candidateFocus = WidgetId();
+        candidateDeclaration = 0u;
+    }
+    for(usize stagedIndex = 0u; stagedIndex < stagedPopups.size(); ++stagedIndex){
+        PopupRecord staged = stagedPopups[stagedIndex];
+        for(in PopupRecord previous : popups){
+            if(previous.scope.token == staged.scope.token){
+                staged.closing = previous.closing;
+                break;
+            }
+        }
+        for(usize ancestorIndex = 0u; ancestorIndex < stagedPopups.size(); ++ancestorIndex){
+            const PopupRecord ancestor = stagedPopups[ancestorIndex];
+            if(ancestor.scope.token == staged.scope.parent && ancestor.closing)
+                staged.closing = true;
+        }
+        if(lostFocus){
+            if(!staged.closing && popupDismissals.size() < s_InputMaxPopups){
+                PopupDismissal dismissal;
+                dismissal.token = staged.scope.token;
+                dismissal.reason = PopupDismissReason::FocusLost;
+                popupDismissals.push_back(dismissal);
+            }
+            staged.closing = true;
+            candidateFocus = WidgetId();
+            candidateDeclaration = 0u;
+        }
+        staged.restoreFocus = candidateFocus;
+        staged.restoreDeclaration = candidateDeclaration;
+        if(lostFocus)
+            staged.restorePopup = PopupToken();
+        else
+            staged.restorePopup = candidatePopup;
+        stagedPopups[stagedIndex] = staged;
+        candidateFocus = WidgetId();
+        candidateDeclaration = 0u;
+        candidatePopup = staged.scope.token;
+        if(staged.closing)
+            continue;
+        if(candidatePopup == previousTop){
+            if(IsEligibleRouterPopupRestoreTarget(targets, lookup, inOutFocus, inOutFocusDeclaration, candidatePopup)){
+                candidateFocus = inOutFocus;
+                candidateDeclaration = inOutFocusDeclaration;
+            }
+            continue;
+        }
+        for(in PopupRecord previous : popups){
+            if(previous.restorePopup == candidatePopup && IsEligibleRouterPopupRestoreTarget(targets, lookup, previous.restoreFocus, previous.restoreDeclaration, candidatePopup)){
+                candidateFocus = previous.restoreFocus;
+                candidateDeclaration = previous.restoreDeclaration;
+                break;
+            }
+        }
+        if(!candidateFocus.valid() && staged.scope.autofocus){
+            for(in HitTarget target : targets){
+                if(
+                    target.popup == candidatePopup && target.enabled && target.focusable
+                    && HasVisibleUiRectIntersection(target.rectangle, target.clip)
+                ){
+                    candidateFocus = target.id;
+                    candidateDeclaration = target.declarationGeneration;
+                    break;
+                }
+            }
+        }
+    }
+    popups.clear();
+    for(in PopupRecord staged : stagedPopups)
+        popups.push_back(staged);
+    stagedPopups.clear();
+    if(previousTop != nextTop){
+        RetireRouterCommandFocus(commandSources);
+        inOutFocus = candidateFocus;
+        inOutFocusDeclaration = candidateDeclaration;
+        const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
+        if(targetIndex.has_value())
+            inOutFocusControl = targets[targetIndex.value()].control;
+        else
+            inOutFocusControl = ControlToken();
+    }
+}
+
+void SpliceRetiredRouterPopupRestoreRecord(
+    in Span<PopupRecord> popups,
+    in Array<b8, s_InputMaxPopups> removed,
+    mut PopupRecord inOutRecord
+){
+    for(usize depth = 0u; depth < s_InputMaxPopups; ++depth){
+        b8 foundParent = false;
+        for(usize index = 0u; index < popups.size(); ++index){
+            if(removed[index] && inOutRecord.restorePopup == popups[index].scope.token){
+                const PopupRecord ancestor = popups[index];
+                inOutRecord.restoreFocus = ancestor.restoreFocus;
+                inOutRecord.restoreDeclaration = ancestor.restoreDeclaration;
+                inOutRecord.restorePopup = ancestor.restorePopup;
+                foundParent = true;
+                break;
+            }
+        }
+        if(!foundParent)
+            break;
+    }
+}
+
+b8 TryRetireRouterPopupSubtree(
+    in WidgetId id,
+    mut Vector<PopupRecord> popups,
+    mut Vector<HitTarget> targets,
+    mut Vector<PopupDismissal> popupDismissals,
+    mut b8 outTopRemoved,
+    mut PopupRecord outRestore
+){
+    outTopRemoved = false;
+    outRestore = PopupRecord();
+    Array<b8, s_InputMaxPopups> removed;
+    b8 found = false;
+    for(usize index = 0u; index < popups.size(); ++index){
+        b8 isRemoved = popups[index].scope.token.widget == id;
+        for(usize ancestor = 0u; ancestor < index && !isRemoved; ++ancestor)
+            isRemoved = removed[ancestor] && popups[index].scope.parent == popups[ancestor].scope.token;
+        removed[index] = isRemoved;
+        found = found || isRemoved;
+    }
+    if(!found)
+        return false;
+    outTopRemoved = removed[popups.size() - 1u];
+    outRestore = popups.back();
+    if(outTopRemoved)
+        SpliceRetiredRouterPopupRestoreRecord(popups, removed, outRestore);
+    for(usize index = 0u; index < popups.size(); ++index){
+        if(!removed[index]){
+            PopupRecord record = popups[index];
+            SpliceRetiredRouterPopupRestoreRecord(popups, removed, record);
+            popups[index] = record;
+        }
+    }
+    usize keptTargets = 0u;
+    for(usize index = 0u; index < targets.size(); ++index){
+        const PopupToken targetPopup = targets[index].popup;
+        b8 removeTarget = false;
+        for(usize popup = 0u; popup < popups.size(); ++popup){
+            if(removed[popup] && targetPopup == popups[popup].scope.token){
+                removeTarget = true;
+                break;
+            }
+        }
+        if(!removeTarget){
+            if(keptTargets != index)
+                targets[keptTargets] = targets[index];
+            ++keptTargets;
+        }
+    }
+    targets.resize(keptTargets);
+    usize keptDismissals = 0u;
+    for(usize index = 0u; index < popupDismissals.size(); ++index){
+        const PopupToken dismissalPopup = popupDismissals[index].token;
+        b8 removeDismissal = false;
+        for(usize popup = 0u; popup < popups.size(); ++popup){
+            if(removed[popup] && dismissalPopup == popups[popup].scope.token){
+                removeDismissal = true;
+                break;
+            }
+        }
+        if(!removeDismissal){
+            if(keptDismissals != index)
+                popupDismissals[keptDismissals] = popupDismissals[index];
+            ++keptDismissals;
+        }
+    }
+    popupDismissals.resize(keptDismissals);
+    usize keptPopups = 0u;
+    for(usize index = 0u; index < popups.size(); ++index){
+        if(!removed[index]){
+            if(keptPopups != index)
+                popups[keptPopups] = popups[index];
+            ++keptPopups;
+        }
+    }
+    popups.resize(keptPopups);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

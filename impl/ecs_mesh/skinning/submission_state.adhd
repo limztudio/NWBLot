@@ -2,103 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/joint_palette_validation.adhd>
+#include <impl/ecs_mesh/skinning/push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const usize s_RuntimeRequiredStorageDescriptorCount = 15u;
-const usize s_RuntimeStorageDescriptorCount = 18u;
-const usize s_MeshSkinningResourceBufferCount = 19u;
-const usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
-const usize s_SkinningDeformationUseCapacity = 13u;
-const usize s_SkinningPostDispatchUseCapacity = 11u;
-const usize s_SkinningLocalBoundsUseCapacity = 3u;
-const usize s_SkinningFinalizerUseCapacity = 6u;
-const usize s_SkinningPromotedIndexCapacityFactor = 4u;
-const usize s_SkinningLiveStateInlineBufferCount = 32u;
-const b8 s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
-const b8 s_RuntimeSkinningMeshletConeCullingEnabled = false;
-const u32 s_PerRuntimeMeshTimingQueries = 128u;
-const Name s_PrepareRuntimeArena = "impl/ecs_mesh/skinning_prepare";
-const Name s_FrameUploadArena = "impl/ecs_mesh/skinning_frame_upload";
-const Name s_SerialMergeDomain = "mesh_skinning.serial";
-const Name s_SkinningComputeShaderName = "ECSMeshSkinning_SkinningCS";
-const Name s_MeshletBoundsComputeShaderName = "ECSMeshSkinning_MeshletBoundsCS";
-const Name s_LocalBoundsComputeShaderName = "ECSMeshSkinning_LocalBoundsCS";
-const Name s_RepackNormalsComputeShaderName = "ECSMeshSkinning_RepackNormalsCS";
-const Name s_GraphBoundsPipelineName = "mesh_skinning.graph_bounds_pipeline";
-const Name s_GraphLocalBoundsPipelineName = "mesh_skinning.graph_local_bounds_pipeline";
-const Name s_GraphSkinningPipelineName = "mesh_skinning.graph_skinning_pipeline";
-const Name s_GraphRepackPipelineName = "mesh_skinning.graph_repack_pipeline";
-const Name s_FrameDeformationTaskName = "mesh_skinning.frame_deformation";
-const Name s_FrameBoundsRepackTaskName = "mesh_skinning.frame_bounds_repack";
-const Name s_FrameLocalBoundsTaskName = "mesh_skinning.frame_local_bounds";
-const Name s_FrameFinalizeStatesTaskName = "mesh_skinning.frame_finalize_states";
-const StringView s_FrameDeformationTaskLabel = "Runtime Skinning Deformation";
-const StringView s_FrameBoundsRepackTaskLabel = "Runtime Skinning Bounds and Repack";
-const StringView s_FrameLocalBoundsTaskLabel = "Runtime Skinning Local Bounds";
-const StringView s_FrameFinalizeStatesTaskLabel = "Runtime Skinning Finalize States";
-const StringView s_BindlessSlotsLabel = "Skinning Bindless Slots";
-const StringView s_RestPositionsLabel = "Runtime Rest Positions";
-const StringView s_RestNormalsLabel = "Runtime Rest Normals";
-const StringView s_RestTangentsLabel = "Runtime Rest Tangents";
-const StringView s_SkinnedPositionsLabel = "Runtime Skinned Positions";
-const StringView s_SkinnedNormalsLabel = "Runtime Skinned Normals";
-const StringView s_SkinnedTangentsLabel = "Runtime Skinned Tangents";
-const StringView s_MeshletDescriptorsLabel = "Runtime Meshlet Descriptors";
-const StringView s_MeshletPositionDeltasLabel = "Runtime Meshlet Position Deltas";
-const StringView s_MeshletLocalVertexRefsLabel = "Runtime Meshlet Local Vertex Refs";
-const StringView s_MeshletPrimitiveIndicesLabel = "Runtime Meshlet Primitive Indices";
-const StringView s_MeshletBoundsLabel = "Runtime Meshlet Bounds";
-const StringView s_MeshletLocalBoundsLabel = "Runtime Meshlet Local Bounds";
-const StringView s_LocalBoundsLabel = "Runtime Local Bounds";
-const StringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet Attribute Deltas";
-const StringView s_AttributeSkinsLabel = "Runtime Attribute Skins";
-const StringView s_SkinningInfluencesLabel = "Skinning Influences";
-const StringView s_SkinningJointPaletteLabel = "Skinning Joint Palette";
-const StringView s_RayTraceAttributesLabel = "Runtime Ray Trace Attributes";
-const StringView s_BoundsPipelineLabel = "Skinning Bounds Pipeline";
-const StringView s_LocalBoundsPipelineLabel = "Skinning Local Bounds Pipeline";
-const StringView s_SkinningPipelineLabel = "Skinning Compute Pipeline";
-const StringView s_RepackPipelineLabel = "Skinning Repack Pipeline";
-const StringView s_BindlessSlotsUploadLabel = "Skinning Bindless Slots Upload";
-const StringView s_RestToSkinnedCopyLabel = "Skinning Rest-to-Skinned Copy";
-const StringView s_JointPaletteUploadLabel = "Skinning Joint Palette Upload";
-const StringView s_SkinBufferSuffix = "mesh_skinning_skin";
-const StringView s_JointPaletteBufferSuffix = "mesh_skinning_joints";
-const StringView s_BindlessSlotsBufferSuffix = "mesh_skinning_bindless_slots";
-const StringView s_BindlessSlotsUploadSuffix = "mesh_skinning_bindless_slots_upload";
-const StringView s_RestToSkinnedCopySuffix = "mesh_skinning_rest_to_skinned_copy";
-const StringView s_JointPaletteUploadSuffix = "mesh_skinning_joint_palette_upload";
-const usize s_MaxSkeletonJointMatrixSpanCount = usize.max / 48u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-enum<u8> RuntimeStorageDescriptorSlot{
-    RestPosition = 0u,
-    SkinnedPosition,
-    RestNormal,
-    SkinnedNormal,
-    RestTangent,
-    SkinnedTangent,
-    MeshletDesc,
-    PositionRefDeltas,
-    AttributeRefDeltas,
-    AttributeSkins,
-    LocalVertexRefs,
-    PrimitiveIndices,
-    MeshletBounds,
-    MeshletLocalBounds,
-    LocalBounds,
-    SkinInfluences,
-    JointPalette,
-    AttributeBuffer,
-    kCount
-}
 
 // Captures CPU state true only when the producing command list was accepted.
 [serialize, reflect]
@@ -106,72 +14,6 @@ class MeshSkinningSubmissionCommit{
     public u32 editRevision = 0u;
     public b8 bindlessResourceSlotsUploadRecorded = false;
     public RuntimeMeshDirtyFlag handledDirtyFlags = RuntimeMeshDirtyFlag::None;
-}
-
-// Mirrors bindless resources: five uint4 lanes; handles are StorageBuffer registrations.
-[serialize, reflect]
-class MeshSkinningBindlessResourceSlots{
-    public b8 operator==(in MeshSkinningBindlessResourceSlots rhs)const{
-        return
-            this.restPosition == rhs.restPosition
-            && this.skinnedPosition == rhs.skinnedPosition
-            && this.restNormal == rhs.restNormal
-            && this.skinnedNormal == rhs.skinnedNormal
-            && this.restTangent == rhs.restTangent
-            && this.skinnedTangent == rhs.skinnedTangent
-            && this.meshletDesc == rhs.meshletDesc
-            && this.positionRefDeltas == rhs.positionRefDeltas
-            && this.attributeRefDeltas == rhs.attributeRefDeltas
-            && this.attributeSkins == rhs.attributeSkins
-            && this.skinInfluences == rhs.skinInfluences
-            && this.jointPalette == rhs.jointPalette
-            && this.localVertexRefs == rhs.localVertexRefs
-            && this.primitiveIndices == rhs.primitiveIndices
-            && this.meshletBounds == rhs.meshletBounds
-            && this.attributeBuffer == rhs.attributeBuffer
-            && this.meshletLocalBounds == rhs.meshletLocalBounds
-            && this.localBounds == rhs.localBounds
-            && this.reserved0 == rhs.reserved0
-            && this.reserved1 == rhs.reserved1
-        ;
-    }
-
-    public u32 restPosition = 0u;
-    public u32 skinnedPosition = 0u;
-    public u32 restNormal = 0u;
-    public u32 skinnedNormal = 0u;
-    public u32 restTangent = 0u;
-    public u32 skinnedTangent = 0u;
-    public u32 meshletDesc = 0u;
-    public u32 positionRefDeltas = 0u;
-    public u32 attributeRefDeltas = 0u;
-    public u32 attributeSkins = 0u;
-    public u32 skinInfluences = 0u;
-    public u32 jointPalette = 0u;
-    public u32 localVertexRefs = 0u;
-    public u32 primitiveIndices = 0u;
-    public u32 meshletBounds = 0u;
-    public u32 attributeBuffer = 0u;
-    public u32 meshletLocalBounds = 0u;
-    public u32 localBounds = 0u;
-    public u32 reserved0 = 0u;
-    public u32 reserved1 = 0u;
-}
-
-[serialize, reflect]
-class MeshSkinningPushConstants{
-    public u32 meshletCount = 0u;
-    public u32 skinCount = 0u;
-    public u32 jointCount = 0u;
-    public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
-    // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
-    public u32 bindlessResourceSlots = 0u;
-}
-
-[serialize, reflect]
-class MeshletBoundsPushConstants{
-    public u32 meshletCount = 0u;
-    public u32 bindlessResourceSlots = 0u;
 }
 
 

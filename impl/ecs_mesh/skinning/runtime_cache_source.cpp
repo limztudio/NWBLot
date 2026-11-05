@@ -35,84 +35,30 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
-    const auto bounds = TryBuildRuntimeMeshLocalBounds(instance.sourceName, instance.restPositions);
-    if(!bounds){
-        instance.localBounds = RuntimeMeshLocalBounds{};
-        return false;
-    }
-    instance.localBounds = *bounds;
-    return true;
-}
-
 [[nodiscard]] b8 BuildRuntimeZippedPayload(const Mesh& mesh, const Span<const SkinInfluence4> skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
-    const auto totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
-    if(!totalCounts)
-        return false;
-    const usize positionRefCount = totalCounts->positionRefCount;
-    const usize attributeRefCount = totalCounts->attributeRefCount;
-
-    instance.restPositions.clear();
-    instance.restNormals.clear();
-    instance.restTangents.clear();
-    instance.meshlets.clear();
     instance.meshletPositionRefDeltas.clear();
     instance.meshletAttributeRefDeltas.clear();
     instance.attributeSkins.clear();
-    instance.meshlets.reserve(mesh.meshlets().size());
-    instance.restPositions.reserve(positionRefCount);
-    instance.restNormals.reserve(attributeRefCount);
-    instance.restTangents.reserve(attributeRefCount);
-    runtimePositionRefs.reserve(positionRefCount);
-    runtimeAttributeRefs.reserve(attributeRefCount);
-
-    for(usize meshletIndex = 0u; meshletIndex < mesh.meshlets().size(); ++meshletIndex){
-        const MeshletDesc& sourceMeshlet = mesh.meshlets()[meshletIndex];
-        MeshletDesc runtimeMeshlet = sourceMeshlet;
-        runtimeMeshlet.positionRefOffset = static_cast<u32>(runtimePositionRefs.size());
-        runtimeMeshlet.attributeRefOffset = static_cast<u32>(runtimeAttributeRefs.size());
-        instance.meshlets.push_back(runtimeMeshlet);
-
-        for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(sourceMeshlet); ++localPositionIndex){
-            const Expected<MeshletPositionStreamRef> sourceRef = TryDecodeSourceMeshletPositionRef(
-                mesh.meshletPositionRefDeltas(),
-                sourceMeshlet,
-                meshletIndex,
-                localPositionIndex,
-                mesh.positionStream().size(),
-                skinStream.size()
-            );
-            if(!sourceRef)
-                return false;
-
-            const MeshletPositionStreamRef runtimeRef = MakeRuntimeMeshletPositionStreamRef(*sourceRef, runtimePositionRefs.size());
-            instance.restPositions.push_back(mesh.positionStream()[sourceRef->position]);
-            runtimePositionRefs.push_back(runtimeRef);
-        }
-
-        for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(sourceMeshlet); ++localAttributeIndex){
-            const Expected<MeshletAttributeStreamRef> sourceRef = TryDecodeSourceMeshletAttributeRef(
-                mesh.meshletAttributeRefDeltas(),
-                sourceMeshlet,
-                meshletIndex,
-                localAttributeIndex,
-                mesh.normalStream().size(),
-                mesh.tangentStream().size(),
-                mesh.uv0Stream().size(),
-                mesh.colorStream().size()
-            );
-            if(!sourceRef)
-                return false;
-
-            instance.restNormals.push_back(mesh.normalStream()[sourceRef->normal]);
-            instance.restTangents.push_back(mesh.tangentStream()[sourceRef->tangent]);
-
-            const MeshletAttributeStreamRef runtimeRef = MakeRuntimeMeshletAttributeStreamRef(*sourceRef, runtimeAttributeRefs.size());
-            runtimeAttributeRefs.push_back(runtimeRef);
-        }
-    }
+    if(!TryDecodeRuntimeZippedMeshletStreams(
+        mesh.meshlets(),
+        mesh.meshletPositionRefDeltas(),
+        mesh.meshletAttributeRefDeltas(),
+        mesh.positionStream(),
+        mesh.normalStream(),
+        mesh.tangentStream(),
+        mesh.uv0Stream().size(),
+        mesh.colorStream().size(),
+        skinStream.size(),
+        instance.restPositions,
+        instance.restNormals,
+        instance.restTangents,
+        instance.meshlets,
+        runtimePositionRefs,
+        runtimeAttributeRefs
+    ))
+        return false;
 
     if(!MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
         instance.meshlets,
@@ -140,7 +86,7 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 
     instance.meshletPositionRefCount = static_cast<u32>(runtimePositionRefs.size());
     instance.meshletAttributeRefCount = static_cast<u32>(runtimeAttributeRefs.size());
-    return BuildRuntimeLocalBounds(instance);
+    return BuildRuntimeMeshLocalBounds(instance.sourceName, instance.restPositions, instance.localBounds);
 }
 
 
@@ -286,4 +232,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

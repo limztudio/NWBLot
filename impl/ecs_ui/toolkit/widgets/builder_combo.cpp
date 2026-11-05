@@ -101,22 +101,10 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     item.enabled = options.enabled;
     item.combo = static_cast<u32>(m_scope->m_combos.size());
     Point minimumSize{};
-    const Array<Name, 5> names{ frame.style.normal, frame.style.hover, frame.style.open, frame.style.focused, frame.style.disabled };
-    for(const auto& name : names){
-        const UiSkinRegion* skinRegion = region(name, frame.style.fallback);
-        if(!skinRegion){
-            m_context.fail();
-            return {};
-        }
-        minimumSize = { Max(minimumSize.x, skinRegion->minimumWidth), Max(minimumSize.y, skinRegion->minimumHeight) };
-    }
-    item.padding = resolveRegionsPadding(frame.style.padding, names, frame.style.fallback);
-    const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
-    if(!arrow){
+    if(!m_skin || !TryResolveComboStyleFieldMetrics(*m_skin, frame.style, minimumSize, item.padding, frame.arrowExtent)){
         m_context.fail();
         return {};
     }
-    frame.arrowExtent = ResolveUiSkinSquareExtent(frame.style.arrowExtent, *arrow);
     const b8 selected = state.selectedKey() != 0u;
     const auto index = selected ? source.indexOf(state.selectedKey()) : Expected<u64>{ 0u };
     if(selected && (!index || *index >= frame.rowCount || source.key(*index) != state.selectedKey() || !source.enabled(*index))){

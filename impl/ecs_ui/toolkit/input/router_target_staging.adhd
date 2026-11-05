@@ -9,6 +9,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 LessTargetLookup(in TargetLookup lhs, in TargetLookup rhs){
+    return lhs.value < rhs.value;
+}
+
+void RebuildRouterTargetLookup(in Span<HitTarget> targets, mut Vector<TargetLookup> outLookup){
+    outLookup.clear();
+    for(usize index = 0u; index < targets.size(); ++index){
+        TargetLookup entry;
+        entry.value = targets[index].id.value;
+        entry.index = cast<u32>(index);
+        outLookup.push_back(entry);
+    }
+    native(mut outLookup){
+        ::Sort(outLookup.begin(), outLookup.end(), LessTargetLookup);
+    }
+}
+
 b8 StageRouterHitTargets(
     in Span<HitTarget> targets,
     in Span<PopupRecord> stagedPopups,
@@ -30,6 +47,9 @@ b8 StageRouterHitTargets(
         entry.value = target.id.value;
         entry.index = cast<u32>(index);
         stagedLookup.push_back(entry);
+    }
+    native(mut stagedLookup){
+        ::Sort(stagedLookup.begin(), stagedLookup.end(), LessTargetLookup);
     }
     return true;
 }

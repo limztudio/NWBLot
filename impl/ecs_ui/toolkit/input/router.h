@@ -142,9 +142,6 @@ public:
             return false;
         if(!TryStageRouterPopups(popups, m_popups, m_stagedPopups) || !StageRouterHitTargets(targets, m_stagedPopups, m_stagedTargets, m_stagedLookup))
             return false;
-        Sort(m_stagedLookup.begin(), m_stagedLookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
-            return lhs.value < rhs.value;
-        });
         if(!ValidateSortedStagedRouterTargetsAndPopups(m_stagedTargets, m_stagedLookup, m_stagedPopups))
             return false;
         m_targets.swap(m_stagedTargets);
@@ -598,12 +595,7 @@ private:
         reconcileTargets();
     }
     void rebuildLookup(){
-        m_lookup.clear();
-        for(usize index = 0u; index < m_targets.size(); ++index)
-            m_lookup.push_back(TargetLookup{ m_targets[index].id.value, static_cast<u32>(index) });
-        Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
-            return lhs.value < rhs.value;
-        });
+        RebuildRouterTargetLookup(m_targets, m_lookup);
     }
     void reconcileTargets()noexcept{
         ReconcileRouterFocusCaptureAndActions(

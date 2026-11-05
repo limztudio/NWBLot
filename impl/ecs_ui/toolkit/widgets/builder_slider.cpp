@@ -65,34 +65,10 @@ b8 Builder::slider(const AStringView stableKey, SliderState& state, const Slider
 }
 
 b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
-    if(!sliderMatches(frame) || !m_skin || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
+    if(!sliderMatches(frame) || !m_skin)
         return false;
-    const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);
-    const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.thumbFallback);
-    if(!track || !normal)
+    if(!TryResolveSliderStyleMetrics(*m_skin, frame.m_options, frame.m_style, frame.m_metrics))
         return false;
-    const f32 referenceDensity = m_skin->referenceDensity();
-    const auto trackMinimum = TryResolveSkinRegionMinimumSize(*track, referenceDensity);
-    if(!trackMinimum)
-        return false;
-    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum->y);
-    const Array<const UiSkinRegion*, 4> thumbs{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
-    for(const UiSkinRegion* thumb : thumbs){
-        if(!thumb)
-            continue;
-        const auto minimum = TryResolveSkinRegionMinimumSize(*thumb, referenceDensity);
-        if(!minimum)
-            return false;
-        frame.m_style.thumbExtent = { Max(frame.m_style.thumbExtent.x, minimum->x), Max(frame.m_style.thumbExtent.y, minimum->y) };
-    }
-    const auto metrics = MeasureSlider(frame.m_options, frame.m_style);
-    if(!metrics)
-        return false;
-    frame.m_metrics = *metrics;
-    const auto contentWidth = TryResolveSliderTrackContentWidth(frame.m_metrics, trackMinimum->x);
-    if(!contentWidth)
-        return false;
-    frame.m_metrics.contentSize.x = *contentWidth;
     return sliderMatches(frame);
 }
 
@@ -101,19 +77,20 @@ void Builder::publishSliderResults(const b8 valid)noexcept{
     for(const auto& frame : m_scope->m_sliders){
         SliderResult result;
         if(valid && frame.m_result.valid && sliderMatches(frame)){
-            result = frame.m_result;
-            result.focused = frame.m_interactive && input.focus() == frame.m_widget.id;
-            result.dragging = false;
-            if(frame.m_interactive && input.primaryDown()){
-                const auto track = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
-                const auto thumb = TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb);
-                if(!track || !thumb){
-                    m_context.fail();
-                    frame.m_state.m_result = {};
-                    continue;
-                }
-                result.dragging = input.capture() == *track || input.capture() == *thumb;
+            const auto finalized = TryFinalizeSliderFrameResult(
+                frame.m_result,
+                frame.m_widget.id,
+                frame.m_interactive,
+                input.focus(),
+                input.primaryDown(),
+                input.capture()
+            );
+            if(!finalized){
+                m_context.fail();
+                frame.m_state.m_result = {};
+                continue;
             }
+            result = *finalized;
         }
         frame.m_state.m_result = result;
     }

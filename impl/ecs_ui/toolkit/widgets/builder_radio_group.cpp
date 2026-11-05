@@ -201,27 +201,8 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
         maximumLabel.y = Max(maximumLabel.y, textBounds->height);
         frame.m_labels.push_back({ Move(*label), *textBounds });
     }
-    const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.fallback);
-    const UiSkinRegion* checked = region(frame.m_style.checked, frame.m_style.checkedFallback);
-    const UiSkinRegion* mark = region(frame.m_style.mark, frame.m_style.markFallback);
-    if(!normal || !checked || !mark || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
+    if(!m_skin || !TryResolveRadioGroupStyleMetrics(*m_skin, frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))
         return false;
-    const Array<const UiSkinRegion*, 5u> states = { normal, checked, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
-    const f32 referenceDensity = m_skin->referenceDensity();
-    f32 indicatorExtent = frame.m_style.indicatorExtent;
-    for(const UiSkinRegion* skinRegion : states){
-        if(!skinRegion)
-            continue;
-        const auto minimum = TryResolveSkinRegionMinimumSize(*skinRegion, referenceDensity);
-        if(!minimum)
-            return false;
-        indicatorExtent = Max(indicatorExtent, Max(minimum->x, minimum->y));
-    }
-    frame.m_style.indicatorExtent = indicatorExtent;
-    const auto metrics = MeasureRadioGroup(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
-    if(!metrics)
-        return false;
-    frame.m_metrics = *metrics;
     return radioGroupMatches(frame);
 }
 

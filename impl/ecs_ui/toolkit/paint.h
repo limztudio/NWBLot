@@ -108,26 +108,25 @@ public:
         NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
         NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
         NWB_ASSERT(IsFinite(skin.referenceDensity()));
-        NWB_ASSERT(IsFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
-        NWB_ASSERT(IsFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
-        NWB_ASSERT(IsFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
-        NWB_ASSERT(IsFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
         m_snapshot.m_generation = generation;
         m_snapshot.m_displayMetrics = metrics;
         m_snapshot.m_skinBinding = { skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
-        m_snapshot.m_vertices.clear();
-        m_snapshot.m_indices.clear();
-        m_snapshot.m_commands.clear();
         m_snapshot.m_glyphPages.clear();
         m_snapshot.m_sdfPages.clear();
         m_snapshot.m_textureImages.clear();
-        m_regions.assign(skin.regions().begin(), skin.regions().end());
-        m_clips.clear();
-        m_clips.push_back({ 0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight });
-        m_overlayDepth = 0u;
-        m_layer = 0u;
-        m_commandsOrdered = true;
-        m_recording = true;
+        BeginPaintBuilderRecording(
+            metrics,
+            skin.regions(),
+            m_snapshot.m_vertices,
+            m_snapshot.m_indices,
+            m_snapshot.m_commands,
+            m_regions,
+            m_clips,
+            m_overlayDepth,
+            m_layer,
+            m_commandsOrdered,
+            m_recording
+        );
     }
     void reserve(const usize quadCount, const usize clipDepth = s_PaintDefaultClipDepth){
         ReservePaintSnapshot(quadCount, clipDepth, m_snapshot.m_vertices, m_snapshot.m_indices, m_snapshot.m_commands, m_clips);
@@ -344,14 +343,7 @@ public:
         return true;
     }
     [[nodiscard]] DrawSnapshot freeze(){
-        NWB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayDepth == 0u);
-        if(!m_commandsOrdered){
-            Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
-                return IsPaintDrawCommandBefore(lhs, rhs);
-            });
-        }
-        m_recording = false;
-        m_clips.clear();
+        FinalizePaintBuilderRecording(m_commandsOrdered, m_overlayDepth, m_snapshot.m_commands, m_clips, m_recording);
         return Move(m_snapshot);
     }
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }

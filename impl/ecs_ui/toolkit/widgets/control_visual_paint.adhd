@@ -465,5 +465,160 @@ b8 PaintTextAreaScrollbarsVisual(
     return painted && popped;
 }
 
+b8 TryResolveComboStyleFieldMetrics(
+    in UiSkin skin,
+    in ComboStyle style,
+    mut Point outMinimumSize,
+    mut Insets outPadding,
+    mut f32 outArrowExtent
+){
+    Point minimumSize;
+    Array<Name, 5> names;
+    names[0u] = style.normal;
+    names[1u] = style.hover;
+    names[2u] = style.open;
+    names[3u] = style.focused;
+    names[4u] = style.disabled;
+    for(in Name name : names){
+        const Expected<UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, name, style.fallback);
+        if(!skinRegion.has_value())
+            return false;
+        minimumSize = Point(max(minimumSize.x, skinRegion.value().minimumWidth), max(minimumSize.y, skinRegion.value().minimumHeight));
+    }
+    const Expected<UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, style.arrow, style.arrowFallback);
+    if(!arrow.has_value())
+        return false;
+    outMinimumSize = minimumSize;
+    outPadding = ResolveSkinRegionsMaxPadding(skin, style.padding, names, style.fallback);
+    outArrowExtent = ResolveUiSkinSquareExtent(style.arrowExtent, arrow.value());
+    return true;
+}
+
+b8 AccumulateOptionalRadioIndicatorMinimum(
+    in UiSkin skin,
+    in Name regionName,
+    in f32 referenceDensity,
+    mut f32 inOutIndicatorExtent
+){
+    UiSkinRegion skinRegion;
+    if(!skin.tryFindRegion(regionName, skinRegion))
+        return true;
+    const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(skinRegion, referenceDensity);
+    if(!minimum.has_value())
+        return false;
+    inOutIndicatorExtent = max(inOutIndicatorExtent, max(minimum.value().x, minimum.value().y));
+    return true;
+}
+
+b8 TryResolveRadioGroupStyleMetrics(
+    in UiSkin skin,
+    in u32 choiceCount,
+    in Point maximumLabel,
+    in RadioGroupOptions options,
+    mut RadioGroupStyle inOutStyle,
+    mut RadioGroupMetrics outMetrics
+){
+    const Expected<UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.fallback);
+    const Expected<UiSkinRegion> checked = TryResolveSelectableStateRegion(skin, inOutStyle.checked, inOutStyle.checkedFallback);
+    const Expected<UiSkinRegion> mark = TryResolveSelectableStateRegion(skin, inOutStyle.mark, inOutStyle.markFallback);
+    const f32 referenceDensity = skin.referenceDensity();
+    if(!normal.has_value() || !checked.has_value() || !mark.has_value() || !isFinite(referenceDensity) || referenceDensity <= 0.0f)
+        return false;
+    const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
+    const Expected<Point> checkedMinimum = TryResolveSkinRegionMinimumSize(checked.value(), referenceDensity);
+    if(!normalMinimum.has_value() || !checkedMinimum.has_value())
+        return false;
+    f32 indicatorExtent = inOutStyle.indicatorExtent;
+    indicatorExtent = max(indicatorExtent, max(normalMinimum.value().x, normalMinimum.value().y));
+    indicatorExtent = max(indicatorExtent, max(checkedMinimum.value().x, checkedMinimum.value().y));
+    if(
+        !AccumulateOptionalRadioIndicatorMinimum(skin, inOutStyle.hover, referenceDensity, indicatorExtent)
+        || !AccumulateOptionalRadioIndicatorMinimum(skin, inOutStyle.pressed, referenceDensity, indicatorExtent)
+        || !AccumulateOptionalRadioIndicatorMinimum(skin, inOutStyle.disabled, referenceDensity, indicatorExtent)
+    )
+        return false;
+    inOutStyle.indicatorExtent = indicatorExtent;
+    const Expected<RadioGroupMetrics> metrics = MeasureRadioGroup(choiceCount, maximumLabel, options, inOutStyle);
+    if(!metrics.has_value())
+        return false;
+    outMetrics = metrics.value();
+    return true;
+}
+
+b8 AccumulateOptionalSliderThumbMinimum(
+    in UiSkin skin,
+    in Name regionName,
+    in f32 referenceDensity,
+    mut Point inOutThumbExtent
+){
+    UiSkinRegion thumb;
+    if(!skin.tryFindRegion(regionName, thumb))
+        return true;
+    const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(thumb, referenceDensity);
+    if(!minimum.has_value())
+        return false;
+    inOutThumbExtent = Point(max(inOutThumbExtent.x, minimum.value().x), max(inOutThumbExtent.y, minimum.value().y));
+    return true;
+}
+
+b8 TryResolveSliderStyleMetrics(
+    in UiSkin skin,
+    in SliderOptions options,
+    mut SliderStyle inOutStyle,
+    mut SliderMetrics outMetrics
+){
+    const f32 referenceDensity = skin.referenceDensity();
+    if(!isFinite(referenceDensity) || referenceDensity <= 0.0f)
+        return false;
+    const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
+    const Expected<UiSkinRegion> normal = TryResolveSelectableStateRegion(skin, inOutStyle.normal, inOutStyle.thumbFallback);
+    if(!track.has_value() || !normal.has_value())
+        return false;
+    const Expected<Point> trackMinimum = TryResolveSkinRegionMinimumSize(track.value(), referenceDensity);
+    const Expected<Point> normalMinimum = TryResolveSkinRegionMinimumSize(normal.value(), referenceDensity);
+    if(!trackMinimum.has_value() || !normalMinimum.has_value())
+        return false;
+    inOutStyle.trackHeight = max(inOutStyle.trackHeight, trackMinimum.value().y);
+    Point thumbExtent = Point(max(inOutStyle.thumbExtent.x, normalMinimum.value().x), max(inOutStyle.thumbExtent.y, normalMinimum.value().y));
+    if(
+        !AccumulateOptionalSliderThumbMinimum(skin, inOutStyle.hover, referenceDensity, thumbExtent)
+        || !AccumulateOptionalSliderThumbMinimum(skin, inOutStyle.pressed, referenceDensity, thumbExtent)
+        || !AccumulateOptionalSliderThumbMinimum(skin, inOutStyle.disabled, referenceDensity, thumbExtent)
+    )
+        return false;
+    inOutStyle.thumbExtent = thumbExtent;
+    const Expected<SliderMetrics> metrics = MeasureSlider(options, inOutStyle);
+    if(!metrics.has_value())
+        return false;
+    SliderMetrics resolvedMetrics = metrics.value();
+    const Expected<f32> contentWidth = TryResolveSliderTrackContentWidth(resolvedMetrics, trackMinimum.value().x);
+    if(!contentWidth.has_value())
+        return false;
+    resolvedMetrics.contentSize.x = contentWidth.value();
+    outMetrics = resolvedMetrics;
+    return true;
+}
+
+Expected<SliderResult> TryFinalizeSliderFrameResult(
+    in SliderResult frameResult,
+    in WidgetId widgetId,
+    in b8 interactive,
+    in WidgetId focusedId,
+    in b8 primaryDown,
+    in WidgetId captureId
+){
+    SliderResult result = frameResult;
+    result.focused = interactive && focusedId == widgetId;
+    result.dragging = false;
+    if(interactive && primaryDown){
+        const Expected<WidgetId> track = TryMakeWidgetId(widgetId, s_WidgetPartTrack);
+        const Expected<WidgetId> thumb = TryMakeWidgetId(widgetId, s_WidgetPartThumb);
+        if(!track.has_value() || !thumb.has_value())
+            return makeUnexpected(Failure());
+        result.dragging = captureId == track.value() || captureId == thumb.value();
+    }
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

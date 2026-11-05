@@ -158,5 +158,54 @@ b8 IsPaintImageInvisible(in Rect rectangle, in Rect clip, in Color tint){
         || !HasVisibleUiRectIntersection(rectangle, clip);
 }
 
+void BeginPaintBuilderRecording(
+    in DisplayMetrics metrics,
+    in Span<UiSkinRegion> skinRegions,
+    mut Vector<Vertex> outVertices,
+    mut Vector<u32> outIndices,
+    mut Vector<DrawCommand> outCommands,
+    mut Vector<UiSkinRegion> outRegions,
+    mut Vector<Rect> outClips,
+    mut usize outOverlayDepth,
+    mut u32 outLayer,
+    mut b8 outCommandsOrdered,
+    mut b8 outRecording
+){
+    assert(isFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
+    assert(isFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
+    assert(isFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
+    assert(isFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
+    outVertices.clear();
+    outIndices.clear();
+    outCommands.clear();
+    outRegions.clear();
+    outRegions.reserve(skinRegions.size());
+    for(in UiSkinRegion region : skinRegions)
+        outRegions.push_back(region);
+    outClips.clear();
+    outClips.push_back(Rect(0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight));
+    outOverlayDepth = 0u;
+    outLayer = 0u;
+    outCommandsOrdered = true;
+    outRecording = true;
+}
+
+void FinalizePaintBuilderRecording(
+    in b8 commandsOrdered,
+    in usize overlayDepth,
+    mut Vector<DrawCommand> inOutCommands,
+    mut Vector<Rect> inOutClips,
+    mut b8 inOutRecording
+){
+    assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
+    if(!commandsOrdered){
+        native(mut inOutCommands){
+            ::Sort(inOutCommands.begin(), inOutCommands.end(), IsPaintDrawCommandBefore);
+        }
+    }
+    inOutRecording = false;
+    inOutClips.clear();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

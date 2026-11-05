@@ -123,6 +123,89 @@ DeferredLightingPushConstants ResolveDeferredLightingPushConstants(
     return pushConstants;
 }
 
+const usize s_SceneShadingGpuDataBytes = 16u;
+const usize s_SceneLightGpuDataBytes = 80u;
+const usize s_SceneLightGpuBufferBytes = 1280u;
+
+b8 IsSceneLightUploadRequired(
+    in b8 valid,
+    in u32 storedLightCount,
+    in Span<u8> storedLightBytes,
+    in Span<SceneLightGpuData> lights
+){
+    const u32 lightCount = cast<u32>(lights.size());
+    const usize lightByteCount = lights.size() * s_SceneLightGpuDataBytes;
+    assert(lightByteCount <= storedLightBytes.size());
+    b8 lightDataUnchanged = false;
+    if(valid && storedLightCount == lightCount){
+        if(lightByteCount == 0u)
+            lightDataUnchanged = true;
+        else{
+            native(in storedLightBytes, in lights, in lightByteCount, mut lightDataUnchanged){
+                lightDataUnchanged = NWB_MEMCMP(storedLightBytes.data(), lights.data(), lightByteCount) == 0;
+            }
+        }
+    }
+    return !lightDataUnchanged && lightByteCount != 0u;
+}
+
+b8 IsSceneShadingUploadRequired(
+    in b8 valid,
+    in Span<u8> storedShadingBytes,
+    in SceneShadingGpuData sceneShadingState
+){
+    if(!valid || storedShadingBytes.size() != s_SceneShadingGpuDataBytes)
+        return true;
+    b8 matches = false;
+    native(in storedShadingBytes, in sceneShadingState, mut matches){
+        matches = NWB_MEMCMP(storedShadingBytes.data(), &sceneShadingState, sizeof(sceneShadingState)) == 0;
+    }
+    return !matches;
+}
+
+void ConfirmSceneShadingBufferUploads(
+    in Span<SceneLightGpuData> lights,
+    in b8 lightUploadRequired,
+    in SceneShadingGpuData sceneShadingState,
+    in b8 sceneShadingUploadRequired,
+    mut Array<u8, 5120u> inOutLightGpuData,
+    mut u32 inOutLightGpuDataCount,
+    mut b8 inOutLightGpuDataValid,
+    mut Array<u8, 16u> inOutSceneShadingGpuData,
+    mut b8 inOutSceneShadingGpuDataValid
+){
+    const u32 lightCount = cast<u32>(lights.size());
+    const usize lightByteCount = lights.size() * s_SceneLightGpuDataBytes;
+    if(lightUploadRequired || lightCount == 0u){
+        if(lightByteCount != 0u){
+            native(in lights, in lightByteCount, mut inOutLightGpuData){
+                NWB_MEMCPY(inOutLightGpuData.data(), inOutLightGpuData.size(), lights.data(), lightByteCount);
+            }
+        }
+        inOutLightGpuDataCount = lightCount;
+        inOutLightGpuDataValid = true;
+    }
+    if(sceneShadingUploadRequired){
+        native(in sceneShadingState, mut inOutSceneShadingGpuData){
+            NWB_MEMCPY(inOutSceneShadingGpuData.data(), inOutSceneShadingGpuData.size(), &sceneShadingState, sizeof(sceneShadingState));
+        }
+        inOutSceneShadingGpuDataValid = true;
+    }
+}
+
+DeferredBindlessResourceSlots BuildLaggedLightingHistorySlots(
+    in DeferredBindlessResourceSlots baseSlots,
+    in u32 shadowVisibilitySlot,
+    in u32 causticIrradianceSlot,
+    in u32 surfelIrradianceSlot
+){
+    DeferredBindlessResourceSlots slots = baseSlots;
+    slots.shadowVisibility = shadowVisibilitySlot;
+    slots.causticIrradiance = causticIrradianceSlot;
+    slots.surfelIrradiance = surfelIrradianceSlot;
+    return slots;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

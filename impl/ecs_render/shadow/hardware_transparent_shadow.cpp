@@ -58,15 +58,19 @@ b8 RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredF
         }
     }
 
-    const u64 halfWidth = DivideUp(static_cast<u64>(targets.width), static_cast<u64>(targets.shadowReceiverFactor));
-    const u64 halfHeight = DivideUp(static_cast<u64>(targets.height), static_cast<u64>(targets.shadowReceiverFactor));
-    const u64 pixels = halfWidth * halfHeight;
-    if(pixels == 0u || pixels > Limit<u32>::s_Max / NWB_HW_TRANSPARENT_WORDS_PER_RAY){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware transparent-shadow scratch extent is invalid"));
+    u32 pixels = 0u;
+    Array<u64, 3u> sizes{};
+    if(!ValidateHardwareTransparentShadowScratchExtent(
+        targets.width,
+        targets.height,
+        targets.shadowReceiverFactor,
+        NWB_HW_TRANSPARENT_WORDS_PER_RAY,
+        NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS,
+        pixels,
+        sizes
+    ))
         return false;
-    }
     if(pixels > state.m_pixelsCapacity){
-        const Array<u64, 3u> sizes = { pixels * NWB_HW_TRANSPARENT_WORDS_PER_RAY * sizeof(u32), pixels * sizeof(u32), NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS * sizeof(u32), };
         const Array<Name, 3u> names = { Name("hardware_shadow_crossings"), Name("hardware_shadow_overflow_list"), Name("hardware_shadow_overflow_args"), };
         Array<Core::BufferHandle, s_HwTransparentScratchBufferCount> buffers{};
         Array<Core::GpuDescriptorHandle, s_HwTransparentScratchBufferCount> descriptors{};

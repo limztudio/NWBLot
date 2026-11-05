@@ -144,10 +144,12 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         return false;
     }
 
-    history.slots = targets.bindless.slots;
-    history.slots.shadowVisibility = history.shadowVisibilityDescriptor.slot();
-    history.slots.causticIrradiance = history.causticIrradianceDescriptor.slot();
-    history.slots.surfelIrradiance = history.surfelIrradianceDescriptor.slot();
+    history.slots = BuildLaggedLightingHistorySlots(
+        targets.bindless.slots,
+        history.shadowVisibilityDescriptor.slot(),
+        history.causticIrradianceDescriptor.slot(),
+        history.surfelIrradianceDescriptor.slot()
+    );
 
     Core::BufferDesc slotsBufferDesc;
     slotsBufferDesc

@@ -183,37 +183,40 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const SceneLi
         state.m_captureBuffers.assign(state.m_sceneBuffers.begin(), state.m_sceneBuffers.end());
         state.m_captureTextures.assign(state.m_sceneTextures.begin(), state.m_sceneTextures.end());
     }
-    snapshot.push.viewSlot = snapshot.viewsDescriptor.slot();
-    snapshot.push.materialContextSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-    snapshot.push.countsSlot = snapshot.countsDescriptor.slot();
-    snapshot.push.eventsSlot = snapshot.eventsDescriptor.slot();
-    snapshot.push.depthSlot = snapshot.depthDescriptor.slot();
-    snapshot.push.instanceCount = static_cast<u32>(state.m_casters.size());
-    snapshot.push.captureDrawCount = *drawCount;
-    snapshot.push.width = targets.width;
-    snapshot.push.receiverFactor = targets.shadowReceiverFactor;
-    snapshot.push.height = targets.height;
-    snapshot.push.deferredResourcesSlot = targets.bindless.slotsBufferDescriptor.slot();
-    snapshot.push.sceneRootSlot = m_shadowVisibilityHardwareSupported ? 0u : m_preparedSceneBvh.nodeHeapHandle().slot();
-    snapshot.push.csgFlags = state.m_csg.snapshot.hasCsg ? NWB_CSG_SHADOW_FLAG_ENABLED | (m_shadowVisibilityHardwareSupported ? NWB_CSG_SHADOW_FLAG_HW_COMPOSE : 0u) : 0u;
-    snapshot.csgTlasDescriptor = m_shadowVisibilityHardwareSupported ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();
+    b8 hasOrdinaryTransparent = false;
     if(state.m_csg.snapshot.hasCsg){
-        b8 hasOrdinaryTransparent = false;
         for(const LightSpaceShadowCaster& caster : state.m_casters)
             hasOrdinaryTransparent = hasOrdinaryTransparent || (caster.transparent && !caster.csg);
-        if(!hasOrdinaryTransparent)
-            snapshot.push.csgFlags |= NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT;
-        snapshot.push.csgContextSlot = snapshot.csgContextDescriptor.slot();
-        snapshot.push.csgOpaqueDepthSlot = snapshot.csgOpaqueDepthDescriptor.slot();
     }
+    snapshot.csgTlasDescriptor = m_shadowVisibilityHardwareSupported ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();
+    PopulatePreparedLightSpaceShadowPush(
+        snapshot.viewsDescriptor.slot(),
+        m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
+        snapshot.countsDescriptor.slot(),
+        snapshot.eventsDescriptor.slot(),
+        snapshot.depthDescriptor.slot(),
+        static_cast<u32>(state.m_casters.size()),
+        *drawCount,
+        targets.width,
+        targets.shadowReceiverFactor,
+        targets.height,
+        targets.bindless.slotsBufferDescriptor.slot(),
+        m_shadowVisibilityHardwareSupported ? 0u : m_preparedSceneBvh.nodeHeapHandle().slot(),
+        state.m_csg.snapshot.hasCsg,
+        m_shadowVisibilityHardwareSupported,
+        hasOrdinaryTransparent,
+        snapshot.csgContextDescriptor.slot(),
+        snapshot.csgOpaqueDepthDescriptor.slot(),
+        plan.viewCount,
+        snapshot.drawArgumentsDescriptor.slot(),
+        snapshot.push
+    );
     auto& diagnostics = state.m_diagnostics;
     snapshot.diagnostics = state.m_csg.snapshot.hasCsg ? &diagnostics : nullptr;
     if(state.m_csg.snapshot.hasCsg && diagnostics.readback && !diagnostics.submission.valid() && (diagnostics.acceptedFrame == 0u || diagnostics.frameIndex - diagnostics.acceptedFrame >= s_LightSpaceDiagnosticInterval)){
         snapshot.diagnosticReadback = diagnostics.readback;
         snapshot.diagnosticFrame = diagnostics.frameIndex;
     }
-    snapshot.push.viewCount = plan.viewCount;
-    snapshot.push.outputSlot = snapshot.drawArgumentsDescriptor.slot();
     snapshot.casters = state.m_casters;
     snapshot.ready = true;
 }

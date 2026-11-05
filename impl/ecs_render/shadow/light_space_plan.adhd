@@ -543,6 +543,54 @@ void LogLightSpaceCsgUnsupportedLimitationsIfNeeded(
     }
 }
 
+void PopulatePreparedLightSpaceShadowPush(
+    in u32 viewSlot,
+    in u32 materialContextSlot,
+    in u32 countsSlot,
+    in u32 eventsSlot,
+    in u32 depthSlot,
+    in u32 instanceCount,
+    in u32 captureDrawCount,
+    in u32 width,
+    in u32 receiverFactor,
+    in u32 height,
+    in u32 deferredResourcesSlot,
+    in u32 sceneRootSlot,
+    in b8 hasCsg,
+    in b8 hardwareSupported,
+    in b8 hasOrdinaryTransparent,
+    in u32 csgContextSlot,
+    in u32 csgOpaqueDepthSlot,
+    in u32 viewCount,
+    in u32 outputSlot,
+    mut LightSpaceShadowPush outPush
+){
+    outPush.viewSlot = viewSlot;
+    outPush.materialContextSlot = materialContextSlot;
+    outPush.countsSlot = countsSlot;
+    outPush.eventsSlot = eventsSlot;
+    outPush.depthSlot = depthSlot;
+    outPush.instanceCount = instanceCount;
+    outPush.captureDrawCount = captureDrawCount;
+    outPush.width = width;
+    outPush.receiverFactor = receiverFactor;
+    outPush.height = height;
+    outPush.deferredResourcesSlot = deferredResourcesSlot;
+    outPush.sceneRootSlot = sceneRootSlot;
+    outPush.csgFlags = 0u;
+    if(hasCsg){
+        outPush.csgFlags = s_LightSpaceCsgShadowFlagEnabled;
+        if(hardwareSupported)
+            outPush.csgFlags |= s_LightSpaceCsgShadowFlagHwCompose;
+        if(!hasOrdinaryTransparent)
+            outPush.csgFlags |= s_LightSpaceCsgShadowFlagNoOrdinaryTransparent;
+        outPush.csgContextSlot = csgContextSlot;
+        outPush.csgOpaqueDepthSlot = csgOpaqueDepthSlot;
+    }
+    outPush.viewCount = viewCount;
+    outPush.outputSlot = outputSlot;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

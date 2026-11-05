@@ -38,6 +38,29 @@ HardwareTransparentShadowPushConstants ResolveHardwareTransparentShadowPushConst
     return push;
 }
 
+b8 ValidateHardwareTransparentShadowScratchExtent(
+    in u32 width,
+    in u32 height,
+    in u32 receiverFactor,
+    in u64 wordsPerRay,
+    in u64 overflowArgsWords,
+    mut u32 outPixels,
+    mut Array<u64, 3u> outSizes
+){
+    const u64 halfWidth = divideUp(cast<u64>(width), cast<u64>(receiverFactor));
+    const u64 halfHeight = divideUp(cast<u64>(height), cast<u64>(receiverFactor));
+    const u64 pixels = halfWidth * halfHeight;
+    if(pixels == 0u || pixels > cast<u64>(u32.max) / wordsPerRay){
+        error("RendererSystem: hardware transparent-shadow scratch extent is invalid");
+        return false;
+    }
+    outPixels = cast<u32>(pixels);
+    outSizes[0u] = pixels * wordsPerRay * 4ull;
+    outSizes[1u] = pixels * 4ull;
+    outSizes[2u] = overflowArgsWords * 4ull;
+    return true;
+}
+
 SwShadowHeapPushConstants MakeSwShadowHeapPushConstants(
     in u32 instanceCount,
     in u32 deferredResourcesHeapSlot,

@@ -167,11 +167,12 @@ public:
         state.setPipeline(snapshot.pipeline.get());
         commandList.setComputeState(state);
         snapshot.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *snapshot.pipeline);
-        SoftwareSceneRefitPushConstants push;
-        push.nodeCount = snapshot.nodeCount;
-        push.sceneNodeSlot = snapshot.sceneDescriptor.slot();
-        push.instanceInputSlot = snapshot.inputDescriptor.slot();
-        push.instanceCount = static_cast<u32>(snapshot.inputs.size());
+        const SoftwareSceneRefitPushConstants push = MakeSoftwareSceneRefitPushConstants(
+            snapshot.nodeCount,
+            snapshot.sceneDescriptor.slot(),
+            snapshot.inputDescriptor.slot(),
+            static_cast<u32>(snapshot.inputs.size())
+        );
         commandList.setPushConstants(&push, sizeof(push));
         commandList.dispatch(1u, 1u, 1u);
         return true;

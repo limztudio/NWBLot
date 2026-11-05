@@ -123,6 +123,9 @@ u8 ResolveLightSpaceLightRequestType(in f32 lightTypeParam, in b8 hasCsg){
 }
 
 LightSpaceCsgInstanceGpu BuildLightSpaceCsgInstanceGpu(
+    in MatrixSingle worldToObject,
+    in VectorSingle localMin,
+    in VectorSingle localMax,
     in u32 meshletPrimitiveIndexCount,
     in b8 hasRuntimeBounds,
     in u32 runtimeBoundsSlot,
@@ -131,12 +134,200 @@ LightSpaceCsgInstanceGpu BuildLightSpaceCsgInstanceGpu(
     in u32 swBvhNodeSlot
 ){
     LightSpaceCsgInstanceGpu instance;
+    instance.worldToObject = f32x3x4(worldToObject);
     instance.primitiveCount = meshletPrimitiveIndexCount / s_LightSpaceTriangleCornerCount;
     if(hasRuntimeBounds)
         instance.runtimeBoundsSlot = runtimeBoundsSlot;
     if(!hardware && hasSwBvhNode)
         instance.meshRootSlot = swBvhNodeSlot;
+    instance.localMin = f32x4(localMin);
+    instance.localMax = f32x4(localMax);
     return instance;
+}
+
+void UpdateLightSpaceCsgReceiverCaptureGeometryIdentity(
+    in EntityID entity,
+    in b8 transparent,
+    in Name meshName,
+    in u64 positionBufferId,
+    in u64 triangleIndexBufferId,
+    in u64 attributeBufferId,
+    in u32 meshletCount,
+    in u64 meshletDescBufferId,
+    in u64 meshletLocalBoundsBufferId,
+    in u32 meshletDescHeapHandle,
+    in u32 meshletLocalBoundsHeapHandle,
+    in u64 runtimeLocalBoundsBufferId,
+    in u32 runtimeLocalBoundsHeapHandle,
+    in u64 swBvhNodeBufferId,
+    in u32 swBvhNodeHeapHandle,
+    in u32 meshletPrimitiveIndexCount,
+    in u64 runtimeMeshVersion,
+    in u64 runtimeGeometryContentRevision,
+    in b8 runtimeMesh,
+    mut u64 inOutCaptureGeometryIdentity,
+    mut b8 inOutCaptureGeometryTrusted
+){
+    u64 hash = updateFnv64U32(inOutCaptureGeometryIdentity, entity.id);
+    hash = UpdateFnv64BoolValue(hash, transparent);
+    hash = updateFnv64NameHash(hash, meshName.hash());
+    hash = updateFnv64U64(hash, positionBufferId);
+    hash = updateFnv64U64(hash, triangleIndexBufferId);
+    hash = updateFnv64U64(hash, attributeBufferId);
+    hash = updateFnv64U32(hash, meshletCount);
+    hash = updateFnv64U64(hash, meshletDescBufferId);
+    hash = updateFnv64U64(hash, meshletLocalBoundsBufferId);
+    hash = updateFnv64U32(hash, meshletDescHeapHandle);
+    hash = updateFnv64U32(hash, meshletLocalBoundsHeapHandle);
+    hash = updateFnv64U64(hash, runtimeLocalBoundsBufferId);
+    hash = updateFnv64U32(hash, runtimeLocalBoundsHeapHandle);
+    hash = updateFnv64U64(hash, swBvhNodeBufferId);
+    hash = updateFnv64U32(hash, swBvhNodeHeapHandle);
+    hash = updateFnv64U32(hash, meshletPrimitiveIndexCount);
+    hash = updateFnv64U64(hash, runtimeMeshVersion);
+    hash = updateFnv64U64(hash, runtimeGeometryContentRevision);
+    hash = UpdateFnv64BoolValue(hash, runtimeMesh);
+    inOutCaptureGeometryIdentity = hash;
+    if(runtimeMesh && runtimeGeometryContentRevision == 0u)
+        inOutCaptureGeometryTrusted = false;
+}
+
+void AppendLightSpaceCsgU32(in u32 value, mut Vector<u8> outBinary){
+    outBinary.push_back(cast<u8>(value & 0xffu));
+    outBinary.push_back(cast<u8>((value >> 8u) & 0xffu));
+    outBinary.push_back(cast<u8>((value >> 16u) & 0xffu));
+    outBinary.push_back(cast<u8>((value >> 24u) & 0xffu));
+}
+
+void AppendLightSpaceCsgF32(in f32 value, mut Vector<u8> outBinary){
+    AppendLightSpaceCsgU32(bit_cast<u32>(value), outBinary);
+}
+
+void AppendLightSpaceCsgVector4(in VectorSingle value, mut Vector<u8> outBinary){
+    AppendLightSpaceCsgF32(value.x, outBinary);
+    AppendLightSpaceCsgF32(value.y, outBinary);
+    AppendLightSpaceCsgF32(value.z, outBinary);
+    AppendLightSpaceCsgF32(value.w, outBinary);
+}
+
+void AppendLightSpaceCsgMatrix34(in MatrixSingle value, mut Vector<u8> outBinary){
+    AppendLightSpaceCsgVector4(value[0u], outBinary);
+    AppendLightSpaceCsgVector4(value[1u], outBinary);
+    AppendLightSpaceCsgVector4(value[2u], outBinary);
+}
+
+void AppendLightSpaceCsgHeader(in LightSpaceCsgContextHeader header, mut Vector<u8> outBinary){
+    AppendLightSpaceCsgU32(header.instanceCount, outBinary);
+    AppendLightSpaceCsgU32(header.rangeByteOffset, outBinary);
+    AppendLightSpaceCsgU32(header.cutterByteOffset, outBinary);
+    AppendLightSpaceCsgU32(header.cutterCount, outBinary);
+    AppendLightSpaceCsgU32(header.instanceByteOffset, outBinary);
+    AppendLightSpaceCsgU32(header.activeReceiverByteOffset, outBinary);
+    AppendLightSpaceCsgU32(header.activeReceiverCount, outBinary);
+    AppendLightSpaceCsgU32(header.rayFailureFlags, outBinary);
+}
+
+void AppendLightSpaceCsgReceiverRange(in CsgShadowReceiverRangeGpu range, in u32 solidTriangleWordOffset, mut Vector<u8> outBinary){
+    AppendLightSpaceCsgU32(range.firstCutter, outBinary);
+    AppendLightSpaceCsgU32(range.cutterCount, outBinary);
+    AppendLightSpaceCsgU32(range.flags, outBinary);
+    AppendLightSpaceCsgU32(solidTriangleWordOffset, outBinary);
+}
+
+void AppendLightSpaceCsgCutter(in CsgCutterGpuData cutter, mut Vector<u8> outBinary){
+    AppendLightSpaceCsgU32(cutter.shapeType, outBinary);
+    AppendLightSpaceCsgF32(cutter.worldToShapeScaleBound, outBinary);
+    AppendLightSpaceCsgU32(cutter.padding0, outBinary);
+    AppendLightSpaceCsgU32(cutter.padding1, outBinary);
+    AppendLightSpaceCsgMatrix34(MatrixSingle(cutter.worldToShape), outBinary);
+    AppendLightSpaceCsgVector4(VectorSingle(cutter.parameter0), outBinary);
+    AppendLightSpaceCsgVector4(VectorSingle(cutter.parameter1), outBinary);
+}
+
+void AppendLightSpaceCsgInstance(in LightSpaceCsgInstanceGpu instance, mut Vector<u8> outBinary){
+    AppendLightSpaceCsgMatrix34(MatrixSingle(instance.worldToObject), outBinary);
+    AppendLightSpaceCsgU32(instance.runtimeBoundsSlot, outBinary);
+    AppendLightSpaceCsgU32(instance.primitiveCount, outBinary);
+    AppendLightSpaceCsgU32(instance.meshRootSlot, outBinary);
+    AppendLightSpaceCsgU32(instance.padding, outBinary);
+    AppendLightSpaceCsgVector4(VectorSingle(instance.localMin), outBinary);
+    AppendLightSpaceCsgVector4(VectorSingle(instance.localMax), outBinary);
+}
+
+b8 PackLightSpaceCsgContextBytes(
+    in Span<CsgShadowReceiverRangeGpu> receiverRanges,
+    in Span<CsgCutterGpuData> cutters,
+    in Span<LightSpaceCsgInstanceGpu> instances,
+    in Span<Span<u32>> solidTriangleMasks,
+    mut Vector<u8> outBytes
+){
+    if(receiverRanges.size() != instances.size() || solidTriangleMasks.size() != instances.size())
+        return false;
+
+    const usize rangeBytes = receiverRanges.size() * 16u;
+    const usize cutterBytes = cutters.size() * 96u;
+    const usize instanceBytes = instances.size() * 96u;
+    u32 activeReceiverCount = 0u;
+    for(in CsgShadowReceiverRangeGpu range : receiverRanges){
+        if((range.flags & s_CsgRayReceiverActive) != 0u)
+            ++activeReceiverCount;
+    }
+    const usize activeReceiverBytes = cast<usize>(activeReceiverCount) * 4u;
+    const usize activeReceiverOffset = cast<usize>(s_LightSpaceCsgRayContextBytes) + rangeBytes + cutterBytes + instanceBytes;
+    usize totalBytes = activeReceiverOffset + activeReceiverBytes;
+    if(totalBytes > cast<usize>(u32.max))
+        return false;
+    const usize membershipOffset = totalBytes;
+    for(usize index = 0u; index < instances.size(); ++index){
+        if((receiverRanges[index].flags & s_CsgRayReceiverActive) == 0u)
+            continue;
+        const Span<u32> words = solidTriangleMasks[index];
+        const u32 requiredWords = divideUpWrappingU32(instances[index].primitiveCount, 32u);
+        const usize wordBytes = words.size() * 4u;
+        if(words.size() != cast<usize>(requiredWords) || words.empty() || wordBytes > cast<usize>(u32.max) - totalBytes){
+            error("RendererSystem: CSG receiver has no valid cooked solid topology or exceeds ray context capacity");
+            return false;
+        }
+        totalBytes += wordBytes;
+    }
+
+    outBytes.clear();
+    outBytes.reserve(totalBytes);
+    const LightSpaceCsgContextHeader header = BuildLightSpaceCsgContextHeader(
+        instances.size(),
+        rangeBytes,
+        cutterBytes,
+        cutters.size(),
+        activeReceiverOffset,
+        activeReceiverCount
+    );
+    AppendLightSpaceCsgHeader(header, outBytes);
+
+    usize maskOffset = membershipOffset;
+    for(usize index = 0u; index < receiverRanges.size(); ++index){
+        const CsgShadowReceiverRangeGpu range = receiverRanges[index];
+        u32 wordOffset = range.solidTriangleWordOffset;
+        if((range.flags & s_CsgRayReceiverActive) != 0u){
+            wordOffset = cast<u32>(maskOffset);
+            maskOffset += solidTriangleMasks[index].size() * 4u;
+        }
+        AppendLightSpaceCsgReceiverRange(range, wordOffset, outBytes);
+    }
+    for(in CsgCutterGpuData cutter : cutters)
+        AppendLightSpaceCsgCutter(cutter, outBytes);
+    for(in LightSpaceCsgInstanceGpu instance : instances)
+        AppendLightSpaceCsgInstance(instance, outBytes);
+    for(u32 index = 0u; index < cast<u32>(receiverRanges.size()); ++index){
+        if((receiverRanges[cast<usize>(index)].flags & s_CsgRayReceiverActive) != 0u)
+            AppendLightSpaceCsgU32(index, outBytes);
+    }
+    for(usize index = 0u; index < receiverRanges.size(); ++index){
+        if((receiverRanges[index].flags & s_CsgRayReceiverActive) == 0u)
+            continue;
+        for(in u32 word : solidTriangleMasks[index])
+            AppendLightSpaceCsgU32(word, outBytes);
+    }
+    return true;
 }
 
 LightSpaceCsgContextHeader BuildLightSpaceCsgContextHeader(

@@ -150,15 +150,7 @@ Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawI
         receiverDrawState,
         receiverWorldBounds,
         [&](const __hidden_csg_clip_resolve::CsgResolvedClipCutter& resolvedCutter)noexcept{
-            if(resolvedCutter.shapeType.desc.shaderModule){
-                if(!info.evaluatorVariant)
-                    info.evaluatorVariant = resolvedCutter.shapeType.desc.shaderModule;
-                else if(info.evaluatorVariant != resolvedCutter.shapeType.desc.shaderModule)
-                    return false;
-            }
-            if(info.cutterCount < Limit<u32>::s_Max)
-                ++info.cutterCount;
-            return true;
+            return TryAccumulateCsgReceiverClipDrawInfo(resolvedCutter.shapeType.desc.shaderModule, info);
         }
     );
     if(!resolved)
@@ -220,25 +212,24 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
                 return false;
             NWB_ASSERT(resolvedCutter.parameterBytes.size() == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
             NWB_ASSERT(resolvedCutter.parameterBytes.empty() || resolvedCutter.parameterBytes.data());
-            const CsgCutterGpuData cutterGpuData = BuildCsgCutterGpuData(resolvedCutter.shapeType.id, LoadFloat(resolvedCutter.worldToShape), resolvedCutter.parameterBytes);
-
-            if(meshViewReady && resolvedCutter.workBounds.valid)
-                receiverWorkRegion.expandWorldBounds(worldToClipSimd, LoadFloat(resolvedCutter.workBounds.minBounds), LoadFloat(resolvedCutter.workBounds.maxBounds), frameWidth, frameHeight);
-            else
-                receiverWorkRegion.expandFull();
-
+            const CsgCutterGpuData cutterGpuData = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(
+                resolvedCutter.shapeType.id,
+                LoadFloat(resolvedCutter.worldToShape),
+                resolvedCutter.parameterBytes,
+                resolvedCutter.workBounds,
+                meshViewReady,
+                worldToClipSimd,
+                frameWidth,
+                frameHeight,
+                receiverWorkRegion
+            );
             csgFrameData.cutters.push_back(cutterGpuData);
             ++range.cutterCount;
             return true;
         }
     );
 
-    const CsgWorkRect receiverRect = receiverWorkRegion.resolveRect(frameWidth, frameHeight);
-    range.screenWorkRect = UInt4(static_cast<u32>(receiverRect.minX), static_cast<u32>(receiverRect.minY), static_cast<u32>(receiverRect.maxX), static_cast<u32>(receiverRect.maxY));
-    if(receiverWorkRegion.fullFrame)
-        csgFrameData.workRegion.expandFull();
-    else if(receiverWorkRegion.bounded())
-        csgFrameData.workRegion.expandClamped(receiverRect.minX, receiverRect.maxX, receiverRect.minY, receiverRect.maxY, frameWidth, frameHeight);
+    FinalizeCsgReceiverRangeWorkRegion(receiverWorkRegion, frameWidth, frameHeight, range, csgFrameData.workRegion);
     if(!appended || range.cutterCount == 0u)
         return MakeUnexpected(Failure{});
     return range;

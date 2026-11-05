@@ -23,10 +23,13 @@ const u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
 const u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
 const usize s_BvhSortInitialCapacity = 1024u;
 const u32 s_BvhSortModeLocalTile = 0u;
+const u32 s_BvhSortModeGlobal = 1u;
+const u32 s_BvhSortModeGlobalTail = 2u;
 const usize s_BvhBuildInitialCapacity = 1024u;
 // Maximum per-mesh software BVH size; oversized meshes are skipped.
 const u32 s_BvhMaxPrimitivesPerMesh = 262144u;
 const u32 s_BvhBuildModeFull = 0u;
+const u32 s_BvhBuildModeRefit = 1u;
 const u32 s_BvhSortGroupSize = 256u;
 
 
@@ -165,6 +168,90 @@ u32 ResolveBvhPaddedSortCount(in u32 primitiveCount){
     while(paddedCount < primitiveCount)
         paddedCount <<= 1u;
     return paddedCount;
+}
+
+BvhSortPushConstants MakeBvhSortPushConstants(
+    in u32 elementCount,
+    in u32 compareDistance,
+    in u32 sequenceSize,
+    in u32 mode,
+    in u32 keysHeapSlot,
+    in u32 payloadHeapSlot
+){
+    BvhSortPushConstants pushConstants;
+    pushConstants.elementCount = elementCount;
+    pushConstants.compareDistance = compareDistance;
+    pushConstants.sequenceSize = sequenceSize;
+    pushConstants.mode = mode;
+    pushConstants.keysHeapSlot = keysHeapSlot;
+    pushConstants.payloadHeapSlot = payloadHeapSlot;
+    return pushConstants;
+}
+
+BvhBuildPushConstants MakeBvhBuildPushConstants(
+    in u32 primitiveCount,
+    in u32 positionHeapSlot,
+    in u32 triangleIndexHeapSlot,
+    in u32 keysHeapSlot,
+    in u32 payloadHeapSlot,
+    in u32 nodeHeapSlot,
+    in u32 parentHeapSlot,
+    in u32 visitCounterHeapSlot,
+    in VectorSingle aabbMin,
+    in VectorSingle aabbMax
+){
+    BvhBuildPushConstants pushConstants;
+    pushConstants.primitiveCount = primitiveCount;
+    pushConstants.internalCount = primitiveCount - 1u;
+    pushConstants.refitMode = s_BvhBuildModeFull;
+    pushConstants.positionHeapSlot = positionHeapSlot;
+    pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
+    pushConstants.keysHeapSlot = keysHeapSlot;
+    pushConstants.payloadHeapSlot = payloadHeapSlot;
+    pushConstants.nodeHeapSlot = nodeHeapSlot;
+    pushConstants.parentHeapSlot = parentHeapSlot;
+    pushConstants.visitCounterHeapSlot = visitCounterHeapSlot;
+    pushConstants.aabbMin = f32x3u(aabbMin);
+    pushConstants.aabbMax = f32x3u(aabbMax);
+    return pushConstants;
+}
+
+BvhBuildPushConstants MakeBvhRefitPushConstants(
+    in u32 primitiveCount,
+    in u32 positionHeapSlot,
+    in u32 triangleIndexHeapSlot,
+    in u32 keysHeapSlot,
+    in u32 payloadHeapSlot,
+    in u32 nodeHeapSlot,
+    in u32 parentHeapSlot,
+    in u32 visitCounterHeapSlot
+){
+    BvhBuildPushConstants pushConstants;
+    pushConstants.primitiveCount = primitiveCount;
+    pushConstants.internalCount = primitiveCount - 1u;
+    pushConstants.refitMode = s_BvhBuildModeRefit;
+    pushConstants.positionHeapSlot = positionHeapSlot;
+    pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
+    pushConstants.keysHeapSlot = keysHeapSlot;
+    pushConstants.payloadHeapSlot = payloadHeapSlot;
+    pushConstants.nodeHeapSlot = nodeHeapSlot;
+    pushConstants.parentHeapSlot = parentHeapSlot;
+    pushConstants.visitCounterHeapSlot = visitCounterHeapSlot;
+    return pushConstants;
+}
+
+SoftwareSceneRefitPushConstants MakeSoftwareSceneRefitPushConstants(
+    in u32 nodeCount,
+    in u32 sceneNodeSlot,
+    in u32 instanceInputSlot,
+    in u32 instanceCount
+){
+    SoftwareSceneRefitPushConstants push;
+    push.nodeCount = nodeCount;
+    push.sceneNodeSlot = sceneNodeSlot;
+    push.instanceInputSlot = instanceInputSlot;
+    push.instanceCount = instanceCount;
+    return push;
 }
 
 

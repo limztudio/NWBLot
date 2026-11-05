@@ -216,5 +216,56 @@ CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromTransform(
     return worldBounds;
 }
 
+b8 TryAccumulateCsgReceiverClipDrawInfo(in Name shaderModule, mut CsgReceiverClipDrawInfo inOutInfo){
+    if(shaderModule != s_NameNone){
+        if(inOutInfo.evaluatorVariant == s_NameNone)
+            inOutInfo.evaluatorVariant = shaderModule;
+        else if(inOutInfo.evaluatorVariant != shaderModule)
+            return false;
+    }
+    if(inOutInfo.cutterCount < u32.max)
+        ++inOutInfo.cutterCount;
+    return true;
+}
+
+CsgCutterGpuData BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(
+    in CsgShapeTypeId shapeType,
+    in MatrixSingle worldToShape,
+    in Span<u8> parameterBytes,
+    in CsgClipWorkBounds workBounds,
+    in b8 meshViewReady,
+    in MatrixSingle worldToClip,
+    in u32 frameWidth,
+    in u32 frameHeight,
+    mut CsgFrameWorkRegion inOutReceiverWorkRegion
+){
+    const CsgCutterGpuData cutterGpuData = BuildCsgCutterGpuData(shapeType, worldToShape, parameterBytes);
+    if(meshViewReady && workBounds.valid)
+        inOutReceiverWorkRegion.expandWorldBounds(worldToClip, VectorSingle(workBounds.minBounds), VectorSingle(workBounds.maxBounds), frameWidth, frameHeight);
+    else
+        inOutReceiverWorkRegion.expandFull();
+    return cutterGpuData;
+}
+
+void FinalizeCsgReceiverRangeWorkRegion(
+    in CsgFrameWorkRegion receiverWorkRegion,
+    in u32 frameWidth,
+    in u32 frameHeight,
+    mut CsgReceiverRangeGpuData inOutRange,
+    mut CsgFrameWorkRegion inOutFrameWorkRegion
+){
+    const CsgWorkRect receiverRect = receiverWorkRegion.resolveRect(frameWidth, frameHeight);
+    inOutRange.screenWorkRect = u32x4(
+        cast<u32>(receiverRect.minX),
+        cast<u32>(receiverRect.minY),
+        cast<u32>(receiverRect.maxX),
+        cast<u32>(receiverRect.maxY)
+    );
+    if(receiverWorkRegion.fullFrame)
+        inOutFrameWorkRegion.expandFull();
+    else if(receiverWorkRegion.bounded())
+        inOutFrameWorkRegion.expandClamped(receiverRect.minX, receiverRect.maxX, receiverRect.minY, receiverRect.maxY, frameWidth, frameHeight);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -165,6 +165,97 @@ ShadowCombinedWaveletPushConstants MakeShadowCombinedWaveletPushConstants(
     return push;
 }
 
+ShadowRqPushConstants MakeShadowRqPushConstants(
+    in u32 frameIndex,
+    in u32 worldPositionSlot,
+    in u32 normalSlot,
+    in u32 depthSlot,
+    in u32 deferredResourcesHeapSlot,
+    in u32 visibilityStorageSlot
+){
+    ShadowRqPushConstants push;
+    push.frameIndex = frameIndex;
+    push.worldPositionSlot = worldPositionSlot;
+    push.normalSlot = normalSlot;
+    push.depthSlot = depthSlot;
+    push.deferredResourcesHeapSlot = deferredResourcesHeapSlot;
+    push.visibilityStorageSlot = visibilityStorageSlot;
+    return push;
+}
+
+ShadowRqSoftPushConstants MakeShadowRqSoftPushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 frameIndex,
+    in u32 worldPositionSlot,
+    in u32 normalSlot,
+    in u32 depthSlot,
+    in u32 deferredResourcesHeapSlot,
+    in u32 visibilityStorageSlot,
+    in u32 softSampleCount,
+    in u32 receiverFactor
+){
+    ShadowRqSoftPushConstants push;
+    push.width = width;
+    push.height = height;
+    push.frameIndex = frameIndex;
+    push.worldPositionSlot = worldPositionSlot;
+    push.normalSlot = normalSlot;
+    push.depthSlot = depthSlot;
+    push.deferredResourcesHeapSlot = deferredResourcesHeapSlot;
+    push.visibilityStorageSlot = visibilityStorageSlot;
+    push.softSampleCount = softSampleCount;
+    push.receiverFactor = receiverFactor;
+    return push;
+}
+
+ShadowResolvePushConstants MakeShadowResolvePassPushConstants(
+    in u32 receiverFactor,
+    in u32 width,
+    in u32 height,
+    in u32 halfWidth,
+    in u32 halfHeight,
+    in u32 stepWidth,
+    in ShadowResolveStage stage,
+    in u32 lightSlotStart,
+    in u32 lightSlotCount,
+    in b8 temporalMomentsValid,
+    in SoftShadowUpsampleFold fold,
+    in u32 geometrySlot,
+    in u32 depthSlot,
+    in u32 worldPositionSlot,
+    in u32 normalSlot,
+    in u32 inputColorSlot,
+    in u32 momentsSlot,
+    in u32 outputStorageSlot,
+    in u32 visibilityStorageSlot,
+    in u32 sceneShadingSlot
+){
+    ShadowResolvePushConstants push;
+    push.receiverFactor = receiverFactor;
+    push.width = width;
+    push.height = height;
+    push.halfWidth = halfWidth;
+    push.halfHeight = halfHeight;
+    push.stepWidth = stepWidth;
+    push.stage = cast<u32>(stage);
+    push.lightSlotStart = lightSlotStart;
+    push.lightSlotCount = lightSlotCount;
+    if(temporalMomentsValid)
+        push.momentsValid = 1u;
+    push.upsampleFold = cast<u32>(fold);
+    push.geometrySlot = geometrySlot;
+    push.depthSlot = depthSlot;
+    push.worldPositionSlot = worldPositionSlot;
+    push.normalSlot = normalSlot;
+    push.inputColorSlot = inputColorSlot;
+    push.momentsSlot = momentsSlot;
+    push.outputStorageSlot = outputStorageSlot;
+    push.visibilityStorageSlot = visibilityStorageSlot;
+    push.sceneShadingSlot = sceneShadingSlot;
+    return push;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -430,10 +430,10 @@ b8 RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 
     commandList.commitBarriers();
 
     const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
+    const u32 keysHeapSlot = m_rayTracingState.m_bvhSortKeysHeapHandle.slot();
+    const u32 payloadHeapSlot = m_rayTracingState.m_bvhSortPayloadHeapHandle.slot();
 
-    const auto dispatchSort = [this, &commandList](BvhSortPushConstants pushConstants, const u32 groups){
-        pushConstants.keysHeapSlot = m_rayTracingState.m_bvhSortKeysHeapHandle.slot();
-        pushConstants.payloadHeapSlot = m_rayTracingState.m_bvhSortPayloadHeapHandle.slot();
+    const auto dispatchSort = [this, &commandList](const BvhSortPushConstants& pushConstants, const u32 groups){
         Core::ComputeState computeState;
         computeState.setPipeline(m_rayTracingState.m_bvhSortPipeline.get());
         commandList.setComputeState(computeState);
@@ -448,9 +448,7 @@ b8 RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 
     };
 
     {
-        BvhSortPushConstants pushConstants;
-        pushConstants.elementCount = elementCount;
-        pushConstants.mode = NWB_BVH_SORT_MODE_LOCAL_TILE;
+        const BvhSortPushConstants pushConstants = MakeBvhSortPushConstants(elementCount, 0u, 0u, NWB_BVH_SORT_MODE_LOCAL_TILE, keysHeapSlot, payloadHeapSlot);
         dispatchSort(pushConstants, groupCount);
         bvhSortBarrier();
     }
@@ -458,19 +456,12 @@ b8 RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 
     // Merge inter-tile globally and intra-tile in groupshared tails.
     for(u32 sequenceSize = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE) << 1u; sequenceSize <= paddedCount; sequenceSize <<= 1u){
         for(u32 compareDistance = sequenceSize >> 1u; compareDistance >= static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE); compareDistance >>= 1u){
-            BvhSortPushConstants pushConstants;
-            pushConstants.elementCount = elementCount;
-            pushConstants.compareDistance = compareDistance;
-            pushConstants.sequenceSize = sequenceSize;
-            pushConstants.mode = NWB_BVH_SORT_MODE_GLOBAL;
+            const BvhSortPushConstants pushConstants = MakeBvhSortPushConstants(elementCount, compareDistance, sequenceSize, NWB_BVH_SORT_MODE_GLOBAL, keysHeapSlot, payloadHeapSlot);
             dispatchSort(pushConstants, groupCount);
             bvhSortBarrier();
         }
 
-        BvhSortPushConstants tailPushConstants;
-        tailPushConstants.elementCount = elementCount;
-        tailPushConstants.sequenceSize = sequenceSize;
-        tailPushConstants.mode = NWB_BVH_SORT_MODE_GLOBAL_TAIL;
+        const BvhSortPushConstants tailPushConstants = MakeBvhSortPushConstants(elementCount, 0u, sequenceSize, NWB_BVH_SORT_MODE_GLOBAL_TAIL, keysHeapSlot, payloadHeapSlot);
         dispatchSort(tailPushConstants, groupCount);
         bvhSortBarrier();
     }

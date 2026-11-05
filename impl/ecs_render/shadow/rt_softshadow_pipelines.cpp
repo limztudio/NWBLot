@@ -197,27 +197,28 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
         }
         commandList.commitBarriers();
 
-        ShadowResolvePushConstants push;
-        push.receiverFactor = targets.shadowReceiverFactor;
-        push.width = targets.width;
-        push.height = targets.height;
-        push.halfWidth = halfWidth;
-        push.halfHeight = halfHeight;
-        push.stepWidth = stepWidth;
-        push.stage = static_cast<u32>(stage);
-        push.lightSlotStart = slotStart;
-        push.lightSlotCount = slotCount;
-        push.momentsValid = dispatch.temporalMomentsValid ? 1u : 0u;
-        push.upsampleFold = static_cast<u32>(dispatch.fold);
-        push.geometrySlot = bindless.shadowSoftGeometry.slot();
-        push.depthSlot = bindless.gbufferDepth.slot();
-        push.worldPositionSlot = bindless.gbufferWorldPosition.slot();
-        push.normalSlot = bindless.gbufferNormal.slot();
-        push.inputColorSlot = resources.inputColor;
-        push.momentsSlot = resources.moments;
-        push.outputStorageSlot = resources.outputStorage;
-        push.visibilityStorageSlot = dispatch.visibilityStorage;
-        push.sceneShadingSlot = dispatch.sceneShading;
+        const ShadowResolvePushConstants push = MakeShadowResolvePassPushConstants(
+            targets.shadowReceiverFactor,
+            targets.width,
+            targets.height,
+            halfWidth,
+            halfHeight,
+            stepWidth,
+            stage,
+            slotStart,
+            slotCount,
+            dispatch.temporalMomentsValid,
+            dispatch.fold,
+            bindless.shadowSoftGeometry.slot(),
+            bindless.gbufferDepth.slot(),
+            bindless.gbufferWorldPosition.slot(),
+            bindless.gbufferNormal.slot(),
+            resources.inputColor,
+            resources.moments,
+            resources.outputStorage,
+            dispatch.visibilityStorage,
+            dispatch.sceneShading
+        );
 
         Core::ComputePipeline& pipeline = stage == ShadowResolveStage::Upsample ? *dispatch.upsamplePipeline : *dispatch.waveletPipeline;
         Core::ComputeState state;

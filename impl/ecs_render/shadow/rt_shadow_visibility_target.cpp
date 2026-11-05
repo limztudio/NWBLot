@@ -232,17 +232,18 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
             commandList.setComputeState(softState);
             heap.bindCompute(commandList, *m_rayTracingState.m_shadowSoftPipeline.get(), m_rayTracingState.m_tlasHeapHandle);
 
-            ShadowRqSoftPushConstants softPush;
-            softPush.width = targets.width;
-            softPush.receiverFactor = targets.shadowReceiverFactor;
-            softPush.height = targets.height;
-            softPush.frameIndex = frameIndex;
-            softPush.softSampleCount = softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP;
-            softPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-            softPush.normalSlot = targets.bindless.gbufferNormal.slot();
-            softPush.depthSlot = targets.bindless.gbufferDepth.slot();
-            softPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-            softPush.visibilityStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
+            const ShadowRqSoftPushConstants softPush = MakeShadowRqSoftPushConstants(
+                targets.width,
+                targets.height,
+                frameIndex,
+                targets.bindless.gbufferWorldPosition.slot(),
+                targets.bindless.gbufferNormal.slot(),
+                targets.bindless.gbufferDepth.slot(),
+                targets.bindless.slotsBufferDescriptor.slot(),
+                targets.bindless.shadowSoftHalfAStorage.slot(),
+                softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP,
+                targets.shadowReceiverFactor
+            );
             commandList.setPushConstants(&softPush, sizeof(softPush));
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
         }
@@ -277,14 +278,16 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
         shadowState.setPipeline(m_rayTracingState.m_shadowPipeline.get());
         commandList.setComputeState(shadowState);
         heap.bindCompute(commandList, *m_rayTracingState.m_shadowPipeline.get(), m_rayTracingState.m_tlasHeapHandle);
-        ShadowRqPushConstants shadowPush;
-        shadowPush.frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
-        producedFrameIndex = shadowPush.frameIndex;
-        shadowPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        shadowPush.normalSlot = targets.bindless.gbufferNormal.slot();
-        shadowPush.depthSlot = targets.bindless.gbufferDepth.slot();
-        shadowPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        shadowPush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
+        const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
+        producedFrameIndex = frameIndex;
+        const ShadowRqPushConstants shadowPush = MakeShadowRqPushConstants(
+            frameIndex,
+            targets.bindless.gbufferWorldPosition.slot(),
+            targets.bindless.gbufferNormal.slot(),
+            targets.bindless.gbufferDepth.slot(),
+            targets.bindless.slotsBufferDescriptor.slot(),
+            targets.bindless.shadowVisibilityStorage.slot()
+        );
         commandList.setPushConstants(&shadowPush, sizeof(shadowPush));
         commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)), 1u);
     }

@@ -77,27 +77,29 @@ void AppendLightSpaceCsgReceiver(
 ){
     if(!state.gathering)
         return;
-    Fnv64AppendValue(state.captureGeometryIdentity, entity.id);
-    Fnv64AppendBool(state.captureGeometryIdentity, transparent);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshName.hash());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.positionBuffer.get());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.triangleIndexBuffer.get());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.attributeBuffer.get());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletCount);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletDescBuffer.get());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletLocalBoundsBuffer.get());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletDescHeapHandle.value);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletLocalBoundsHeapHandle.value);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeLocalBoundsBuffer.get());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeLocalBoundsHeapHandle);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.swBvhNodeBuffer.get());
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.swBvhNodeHeapHandle);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletPrimitiveIndexCount);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeMeshVersion);
-    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeGeometryContentRevision);
-    Fnv64AppendBool(state.captureGeometryIdentity, mesh.runtimeMesh);
-    if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision == 0u)
-        state.captureGeometryTrusted = false;
+    UpdateLightSpaceCsgReceiverCaptureGeometryIdentity(
+        entity,
+        transparent,
+        mesh.meshName,
+        reinterpret_cast<u64>(mesh.positionBuffer.get()),
+        reinterpret_cast<u64>(mesh.triangleIndexBuffer.get()),
+        reinterpret_cast<u64>(mesh.attributeBuffer.get()),
+        mesh.meshletCount,
+        reinterpret_cast<u64>(mesh.meshletDescBuffer.get()),
+        reinterpret_cast<u64>(mesh.meshletLocalBoundsBuffer.get()),
+        mesh.meshletDescHeapHandle.value,
+        mesh.meshletLocalBoundsHeapHandle.value,
+        reinterpret_cast<u64>(mesh.runtimeLocalBoundsBuffer.get()),
+        mesh.runtimeLocalBoundsHeapHandle.value,
+        reinterpret_cast<u64>(mesh.swBvhNodeBuffer.get()),
+        mesh.swBvhNodeHeapHandle.value,
+        mesh.meshletPrimitiveIndexCount,
+        mesh.runtimeMeshVersion,
+        mesh.runtimeGeometryContentRevision,
+        mesh.runtimeMesh,
+        state.captureGeometryIdentity,
+        state.captureGeometryTrusted
+    );
 
     CsgShadowReceiverInput receiver;
     receiver.entity = entity;
@@ -120,18 +122,17 @@ void AppendLightSpaceCsgReceiver(
     const b8 hasRuntimeBounds = mesh.runtimeLocalBoundsBuffer && mesh.runtimeLocalBoundsHeapHandle.valid();
     if(hasRuntimeBounds)
         state.dynamicBounds.push_back(mesh.runtimeLocalBoundsBuffer);
-    LightSpaceCsgInstanceGpu instance = BuildLightSpaceCsgInstanceGpu(
+    state.instances.push_back(BuildLightSpaceCsgInstanceGpu(
+        worldToObject,
+        localMin,
+        localMax,
         mesh.meshletPrimitiveIndexCount,
         hasRuntimeBounds,
         hasRuntimeBounds ? mesh.runtimeLocalBoundsHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot,
         state.hardware,
         mesh.swBvhNodeHeapHandle.valid(),
         mesh.swBvhNodeHeapHandle.valid() ? mesh.swBvhNodeHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot
-    );
-    StoreFloat(worldToObject, instance.worldToObject);
-    StoreFloat(localMin, instance.localMin);
-    StoreFloat(localMax, instance.localMax);
-    state.instances.push_back(instance);
+    ));
     state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
 }
 
@@ -144,64 +145,16 @@ b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgStat
         return false;
     if(!state.snapshot.hasCsg)
         return true;
-    if(state.snapshot.receiverRanges.size() != state.instances.size())
-        return false;
-    if(state.solidTriangleMasks.size() != state.instances.size())
-        return false;
-    const usize rangeBytes = state.snapshot.receiverRanges.size() * sizeof(CsgShadowReceiverRangeGpu);
-    const usize cutterBytes = state.snapshot.cutters.size() * sizeof(CsgCutterGpuData);
-    const usize instanceBytes = state.instances.size() * sizeof(LightSpaceCsgInstanceGpu);
-    u32 activeReceiverCount = 0u;
-    for(const auto& range : state.snapshot.receiverRanges)
-        if((range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u)
-            ++activeReceiverCount;
-    const usize activeReceiverBytes = static_cast<usize>(activeReceiverCount) * sizeof(u32);
-    const usize activeReceiverOffset = NWB_CSG_RAY_CONTEXT_BYTES + rangeBytes + cutterBytes + instanceBytes;
-    usize totalBytes = activeReceiverOffset + activeReceiverBytes;
-    if(totalBytes > Limit<u32>::s_Max)
-        return false;
-    const usize membershipOffset = totalBytes;
+    static_assert(sizeof(LightSpaceCsgContextHeader) == NWB_CSG_RAY_CONTEXT_BYTES);
     static_assert(sizeof(u32) == NWB_CSG_RAY_MEMBERSHIP_WORD_BYTES);
-    for(usize index = 0u; index < state.instances.size(); ++index){
-        if((state.snapshot.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
-            continue;
-        const Span<const u32> words = state.solidTriangleMasks[index];
-        const usize requiredWords = DivideUpWrapping(static_cast<usize>(state.instances[index].primitiveCount), NWB_CSG_RAY_MEMBERSHIP_WORD_BITS);
-        if(words.size() != requiredWords || words.empty() || words.size_bytes() > Limit<u32>::s_Max - totalBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG receiver has no valid cooked solid topology or exceeds ray context capacity"));
-            return false;
-        }
-        totalBytes += words.size_bytes();
-    }
-    state.bytes.resize(totalBytes);
-    const LightSpaceCsgContextHeader header = BuildLightSpaceCsgContextHeader(
-        state.instances.size(),
-        rangeBytes,
-        cutterBytes,
-        state.snapshot.cutters.size(),
-        activeReceiverOffset,
-        activeReceiverCount
-    );
-    static_assert(sizeof(header) == NWB_CSG_RAY_CONTEXT_BYTES);
-    NWB_MEMCPY(state.bytes.data(), state.bytes.size(), &header, sizeof(header));
-    NWB_MEMCPY(state.bytes.data() + NWB_CSG_RAY_CONTEXT_BYTES, rangeBytes, state.snapshot.receiverRanges.data(), rangeBytes);
-    if(cutterBytes != 0u)
-        NWB_MEMCPY(state.bytes.data() + NWB_CSG_RAY_CONTEXT_BYTES + rangeBytes, cutterBytes, state.snapshot.cutters.data(), cutterBytes);
-    NWB_MEMCPY(state.bytes.data() + NWB_CSG_RAY_CONTEXT_BYTES + rangeBytes + cutterBytes, instanceBytes, state.instances.data(), instanceBytes);
-    usize activeOffset = activeReceiverOffset;
-    usize maskOffset = membershipOffset;
-    for(u32 index = 0u; index < static_cast<u32>(state.snapshot.receiverRanges.size()); ++index){
-        if((state.snapshot.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
-            continue;
-        NWB_MEMCPY(state.bytes.data() + activeOffset, sizeof(index), &index, sizeof(index));
-        activeOffset += sizeof(index);
-        const Span<const u32> words = state.solidTriangleMasks[index];
-        const u32 offset = static_cast<u32>(maskOffset);
-        const usize rangeOffset = NWB_CSG_RAY_CONTEXT_BYTES + index * sizeof(CsgShadowReceiverRangeGpu) + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
-        NWB_MEMCPY(state.bytes.data() + rangeOffset, sizeof(offset), &offset, sizeof(offset));
-        NWB_MEMCPY(state.bytes.data() + maskOffset, words.size_bytes(), words.data(), words.size_bytes());
-        maskOffset += words.size_bytes();
-    }
+    if(!PackLightSpaceCsgContextBytes(
+        Span<const CsgShadowReceiverRangeGpu>(state.snapshot.receiverRanges.data(), state.snapshot.receiverRanges.size()),
+        Span<const CsgCutterGpuData>(state.snapshot.cutters.data(), state.snapshot.cutters.size()),
+        Span<const LightSpaceCsgInstanceGpu>(state.instances.data(), state.instances.size()),
+        Span<const Span<const u32>>(state.solidTriangleMasks.data(), state.solidTriangleMasks.size()),
+        state.bytes
+    ))
+        return false;
     UpdateLightSpaceCsgInstancesIdentity(
         Span<const LightSpaceCsgInstanceGpu>(state.instances.data(), state.instances.size()),
         state.snapshot.identity

@@ -182,18 +182,18 @@ b8 RendererRayTracingSystem::buildMeshSwBvhPrepared(
     const NotNull<Core::Buffer*> meshNodeBuffer(nodeBuffer.get());
     const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
 
-    BvhBuildPushConstants pushConstants;
-    pushConstants.primitiveCount = primitiveCount;
-    pushConstants.internalCount = primitiveCount - 1u;
-    pushConstants.positionHeapSlot = positionHeapSlot;
-    pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
-    pushConstants.keysHeapSlot = m_rayTracingState.m_bvhSortKeysHeapHandle.slot();
-    pushConstants.payloadHeapSlot = m_rayTracingState.m_bvhSortPayloadHeapHandle.slot();
-    pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
-    pushConstants.parentHeapSlot = parentHeapHandle.slot();
-    pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
-    pushConstants.aabbMin = Float3U(aabbMin.x, aabbMin.y, aabbMin.z);
-    pushConstants.aabbMax = Float3U(aabbMax.x, aabbMax.y, aabbMax.z);
+    const BvhBuildPushConstants pushConstants = MakeBvhBuildPushConstants(
+        primitiveCount,
+        positionHeapSlot,
+        triangleIndexHeapSlot,
+        m_rayTracingState.m_bvhSortKeysHeapHandle.slot(),
+        m_rayTracingState.m_bvhSortPayloadHeapHandle.slot(),
+        nodeHeapHandle.slot(),
+        parentHeapHandle.slot(),
+        m_rayTracingState.m_bvhVisitCounterHeapHandle.slot(),
+        LoadFloatInt(aabbMin),
+        LoadFloatInt(aabbMax)
+    );
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);
@@ -260,17 +260,16 @@ b8 RendererRayTracingSystem::refitMeshSwBvhPrepared(
     const NotNull<Core::Buffer*> meshParentBuffer(parentBuffer.get());
     const NotNull<Core::Buffer*> visitCounterBuffer(m_rayTracingState.m_bvhVisitCounterBuffer.get());
 
-    BvhBuildPushConstants pushConstants;
-    pushConstants.primitiveCount = primitiveCount;
-    pushConstants.internalCount = primitiveCount - 1u;
-    pushConstants.refitMode = NWB_BVH_BUILD_MODE_REFIT;
-    pushConstants.positionHeapSlot = positionHeapSlot;
-    pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
-    pushConstants.keysHeapSlot = m_rayTracingState.m_bvhSortKeysHeapHandle.slot();
-    pushConstants.payloadHeapSlot = m_rayTracingState.m_bvhSortPayloadHeapHandle.slot();
-    pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
-    pushConstants.parentHeapSlot = parentHeapHandle.slot();
-    pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
+    const BvhBuildPushConstants pushConstants = MakeBvhRefitPushConstants(
+        primitiveCount,
+        positionHeapSlot,
+        triangleIndexHeapSlot,
+        m_rayTracingState.m_bvhSortKeysHeapHandle.slot(),
+        m_rayTracingState.m_bvhSortPayloadHeapHandle.slot(),
+        nodeHeapHandle.slot(),
+        parentHeapHandle.slot(),
+        m_rayTracingState.m_bvhVisitCounterHeapHandle.slot()
+    );
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer.get(), true);

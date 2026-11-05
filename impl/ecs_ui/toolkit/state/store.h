@@ -41,35 +41,23 @@ public:
 
 public:
     [[nodiscard]] Expected<NotNull<WidgetState*>> touch(const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
-        if(!ValidateWidgetStateTouchRequest(id, root, kind, frameGeneration))
-            return MakeUnexpected(Failure{});
-        const usize index = findIndex(id);
-        if(index != m_entries.size()){
-            WidgetState& entry = m_entries[index];
-            if(!CanTouchExistingWidgetState(entry, root, frameGeneration))
-                return MakeUnexpected(Failure{});
-            if(entry.kind != kind){
-                if(m_nextDeclarationGeneration == Limit<u64>::s_Max)
-                    TerminateInvariant();
-                entry.declarationGeneration = m_nextDeclarationGeneration;
-                ++m_nextDeclarationGeneration;
-                entry.kind = kind;
-            }
-            entry.lastSeenFrame = frameGeneration;
-            return MakeNotNull(&entry);
-        }
-        if(m_entries.size() >= s_WidgetStateRetainedCapacity)
-            return MakeUnexpected(Failure{});
-        if(m_nextDeclarationGeneration == Limit<u64>::s_Max)
+        b8 invariantFailed = false;
+        const Expected<usize> index = TryTouchWidgetStateEntry(
+            id,
+            root,
+            kind,
+            frameGeneration,
+            m_entries,
+            m_index,
+            m_nextDeclarationGeneration,
+            m_indexDirty,
+            invariantFailed
+        );
+        if(invariantFailed)
             TerminateInvariant();
-        const usize newIndex = m_entries.size();
-        m_entries.push_back({ id, root, m_nextDeclarationGeneration, frameGeneration, kind });
-        if(!m_index.emplace(id.value, newIndex).second){
-            m_entries.pop_back();
-            TerminateInvariant();
-        }
-        ++m_nextDeclarationGeneration;
-        return MakeNotNull(&m_entries.back());
+        if(!index)
+            return MakeUnexpected(Failure{});
+        return MakeNotNull(&m_entries[*index]);
     }
 
     [[nodiscard]] WidgetState* find(const WidgetId id)noexcept{
@@ -85,33 +73,17 @@ public:
     [[nodiscard]] const PaintVector<WidgetState>& entries()const noexcept{ return m_entries; }
 
     void erase(const usize index)noexcept{
-        if(index >= m_entries.size())
-            return;
-        m_entries.erase(m_entries.begin() + index);
-        // Context retires states in batches; rebuild shifted indices on the next lookup.
-        m_indexDirty = true;
+        EraseWidgetStateEntryAt(index, m_entries, m_indexDirty);
     }
 
 
 private:
     [[nodiscard]] usize findIndex(const WidgetId id)const noexcept{
-        if(m_indexDirty)
-            rebuildIndex();
-        const auto found = m_index.find(id.value);
-        if(found == m_index.end())
-            return m_entries.size();
-        const usize index = found.value();
-        NWB_ASSERT(index < m_entries.size() && m_entries[index].id == id);
-        return index;
-    }
-
-    void rebuildIndex()const noexcept{
-        m_index.clear();
-        for(usize index = 0u; index < m_entries.size(); ++index){
-            if(!m_index.emplace(m_entries[index].id.value, index).second)
-                TerminateInvariant();
-        }
-        m_indexDirty = false;
+        b8 invariantFailed = false;
+        const Expected<usize> index = FindWidgetStateEntryIndex(m_entries, id, m_index, m_indexDirty, invariantFailed);
+        if(invariantFailed)
+            TerminateInvariant();
+        return index.value_or(m_entries.size());
     }
 
 

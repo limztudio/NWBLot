@@ -1,0 +1,119 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd>
+#include <impl/ecs_ui/toolkit/widgets/selectable_paint.adhd>
+
+native{
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<UiSkinRegion> TryResolveEditBoxBackgroundRegion(in UiSkin skin, in EditBoxStyle style, in EditBoxPaintFlags flags){
+    const Name preferred = ResolvePreferredEditBoxBackgroundName(style, flags);
+    UiSkinRegion outRegion;
+    if(skin.tryFindRegion(preferred, outRegion))
+        return outRegion;
+    if(skin.tryFindRegion(style.normal, outRegion))
+        return outRegion;
+    if(skin.tryFindRegion(style.fallback, outRegion))
+        return outRegion;
+    return makeUnexpected(Failure());
+}
+
+b8 ValidateEditCaretClusterGlyphs(in Span<TextCluster> clusters, in Span<PlacedGlyph> glyphs){
+    usize nextGlyph = 0u;
+    for(in TextCluster cluster : clusters){
+        for(u32 i = 0u; i < cluster.glyphCount; ++i){
+            const PlacedGlyph glyph = glyphs[nextGlyph];
+            ++nextGlyph;
+            if(!IsValidEditCaretClusterGlyph(glyph.byteBegin, glyph.byteEnd, glyph.position, cluster))
+                return false;
+        }
+    }
+    return true;
+}
+
+b8 PaintEditBoxViewVisual(
+    mut TextService text,
+    mut PaintBuilder paint,
+    in UiSkin skin,
+    in TextLayout layout,
+    in StringView utf8Text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in EditBoxRange selectionRange,
+    in EditBoxRange preeditRange,
+    in b8 composing,
+    in EditBoxPlacement placement,
+    in EditBoxStyle style,
+    in EditBoxPaintFlags flags
+){
+    if(!IsValidEditBoxPaintStyle(style))
+        return false;
+    paint.pushClip(placement.frameClip);
+    b8 painted = true;
+    const Expected<UiSkinRegion> background = TryResolveEditBoxBackgroundRegion(skin, style, flags);
+    if(background.has_value())
+        painted = paint.drawRegion(background.value().name, placement.bounds);
+    else
+        paint.fillRect(placement.bounds, style.background);
+    if(painted && flags.focused && flags.enabled && skin.hasRegion(style.focus))
+        painted = paint.drawRegion(style.focus, placement.bounds);
+    paint.pushClip(placement.clip);
+    if(painted){
+        Color selectionColor = style.inactiveSelection;
+        if(flags.focused && flags.enabled)
+            selectionColor = style.selection;
+        if(selectionRange.begin == selectionRange.end)
+            painted = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, 0u, placement.caret.width).has_value();
+        else{
+            for(u32 line = 0u; line < cast<u32>(caretLines.size()); ++line){
+                const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, line, placement.caret.width);
+                if(!segmentResult.has_value()){
+                    painted = false;
+                    break;
+                }
+                Rect segment = segmentResult.value();
+                if(segment.width > 0.0f){
+                    OffsetEditBoxSegmentOrigin(placement.textOrigin, segment);
+                    paint.fillRect(segment, selectionColor);
+                }
+            }
+        }
+        Color activeTextColor = style.disabledText;
+        if(flags.enabled)
+            activeTextColor = style.text;
+        painted = painted && text.paint(paint, layout, placement.textOrigin, activeTextColor);
+    }
+    if(painted && composing && flags.focused && flags.enabled){
+        for(u32 line = 0u; line < cast<u32>(caretLines.size()); ++line){
+            const Expected<Rect> segmentResult = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, preeditRange, line, placement.caret.width);
+            if(!segmentResult.has_value()){
+                painted = false;
+                break;
+            }
+            Rect segment = segmentResult.value();
+            if(segment.width > 0.0f){
+                PlaceEditPreeditUnderline(placement.textOrigin, placement.caret.width, segment);
+                paint.fillRect(segment, style.preedit);
+            }
+        }
+    }
+    if(painted && ShouldPaintEditBoxCaret(flags, composing))
+        paint.fillRect(placement.caret, style.caret);
+    const b8 contentPopped = paint.popClip();
+    const b8 framePopped = paint.popClip();
+    return painted && contentPopped && framePopped;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

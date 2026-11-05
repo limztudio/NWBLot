@@ -126,40 +126,36 @@ b8 Builder::applyTextAreaScrollInput(const Item& item, const TextAreaFrame& fram
 
 b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token){
     const b8 enabled = item.editOptions.enabled;
-    m_paint.pushClip(clip);
-    b8 painted = true;
-    for(u32 axis = 0u; axis < s_ScrollAxisCount && painted; ++axis){
-        const b8 horizontal = axis == 0u;
-        const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
-        if(!bar.visible)
-            continue;
-        const auto thumbId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb);
-        if(!thumbId){
-            painted = false;
-            break;
-        }
-        const b8 hovered = m_context.input().hover() == *thumbId;
-        const b8 pressed = m_context.input().capture() == *thumbId;
-        const Name thumbName = ResolveScrollbarThumbRegionName(item.scrollbarStyle, enabled, pressed, hovered);
-        const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback);
-        const UiSkinRegion* thumb = region(thumbName, item.scrollbarStyle.thumbFallback);
-        if(track)
-            painted = m_paint.drawRegion(track->name, bar.track);
-        else
-            m_paint.fillRect(bar.track, item.scrollbarStyle.trackColor);
-        if(painted && thumb)
-            painted = m_paint.drawRegion(thumb->name, bar.thumb);
-        else if(painted)
-            m_paint.fillRect(bar.thumb, enabled ? item.scrollbarStyle.thumbColor : item.scrollbarStyle.disabledColor);
+    b8 horizontalHovered = false;
+    b8 horizontalPressed = false;
+    if(placement.horizontal.visible){
+        const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollHorizontalThumb);
+        if(!thumbId)
+            return false;
+        horizontalHovered = m_context.input().hover() == *thumbId;
+        horizontalPressed = m_context.input().capture() == *thumbId;
     }
-    if(painted && placement.corner.width > 0.0f && placement.corner.height > 0.0f){
-        if(const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback))
-            painted = m_paint.drawRegion(track->name, placement.corner);
-        else
-            m_paint.fillRect(placement.corner, item.scrollbarStyle.trackColor);
+    b8 verticalHovered = false;
+    b8 verticalPressed = false;
+    if(placement.vertical.visible){
+        const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb);
+        if(!thumbId)
+            return false;
+        verticalHovered = m_context.input().hover() == *thumbId;
+        verticalPressed = m_context.input().capture() == *thumbId;
     }
-    const b8 popped = m_paint.popClip();
-    if(!painted || !popped)
+    if(!PaintTextAreaScrollbarsVisual(
+        m_paint,
+        *m_skin,
+        item.scrollbarStyle,
+        placement,
+        clip,
+        enabled,
+        horizontalHovered,
+        horizontalPressed,
+        verticalHovered,
+        verticalPressed
+    ))
         return false;
     if(!enabled)
         return true;

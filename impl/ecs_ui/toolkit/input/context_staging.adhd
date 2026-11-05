@@ -204,5 +204,69 @@ b8 TryClaimSmallContextState(
     return true;
 }
 
+b8 TryClaimContextState(
+    in WidgetKind kind,
+    in u64 instanceGeneration,
+    mut Array<ContextStateClaim, s_SmallStateClaims> inOutSmallStateClaims,
+    mut HashSet<ContextStateClaim> inOutStateClaims,
+    mut usize inOutStateClaimCount
+){
+    if(instanceGeneration == 0u || inOutStateClaimCount == s_InputMaxTargets)
+        return false;
+    ContextStateClaim claim;
+    claim.instanceGeneration = instanceGeneration;
+    claim.kind = kind;
+    if(inOutStateClaimCount < s_SmallStateClaims)
+        return TryClaimSmallContextState(claim, inOutSmallStateClaims, inOutStateClaimCount);
+    if(inOutStateClaimCount == s_SmallStateClaims){
+        // Small frames never clear or allocate the retained hash storage from an earlier large frame.
+        inOutStateClaims.clear();
+        if(inOutStateClaims.bucket_count() == 0u)
+            inOutStateClaims.reserve(s_SmallStateClaims * 2u);
+        for(usize index = 0u; index < s_SmallStateClaims; ++index)
+            inOutStateClaims.insert(inOutSmallStateClaims[index]);
+    }
+    if(inOutStateClaims.contains(claim))
+        return false;
+    inOutStateClaims.insert(claim);
+    ++inOutStateClaimCount;
+    return true;
+}
+
+void PrepareRetainedContextRoots(
+    in Span<WidgetRoot> roots,
+    mut HashSet<WidgetRoot> inOutRetainedRoots,
+    mut usize inOutRetainedRootCapacity
+){
+    inOutRetainedRoots.clear();
+    if(roots.size() > inOutRetainedRootCapacity){
+        inOutRetainedRoots.reserve(roots.size());
+        inOutRetainedRootCapacity = roots.size();
+    }
+    for(in WidgetRoot root : roots)
+        inOutRetainedRoots.insert(root);
+}
+
+void PruneUnretainedContextTargetsAndPopups(
+    in HashSet<WidgetRoot> retainedRoots,
+    mut Vector<ContextOwnedTarget> inOutTargets,
+    mut Vector<ContextOwnedPopup> inOutPopups
+){
+    for(usize index = inOutTargets.size(); index > 0u; --index){
+        if(!retainedRoots.contains(inOutTargets[index - 1u].root)){
+            for(usize i = index - 1u; i + 1u < inOutTargets.size(); ++i)
+                inOutTargets[i] = inOutTargets[i + 1u];
+            inOutTargets.pop_back();
+        }
+    }
+    for(usize index = inOutPopups.size(); index > 0u; --index){
+        if(!retainedRoots.contains(inOutPopups[index - 1u].root)){
+            for(usize i = index - 1u; i + 1u < inOutPopups.size(); ++i)
+                inOutPopups[i] = inOutPopups[i + 1u];
+            inOutPopups.pop_back();
+        }
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 #include <impl/ecs_ui/toolkit/widgets/window_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/slider_gesture.adhd>
 #include <impl/ecs_ui/toolkit/widgets/radio_group_placement.adhd>
-#include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
 
 native{
@@ -385,6 +385,84 @@ b8 PaintTooltipOverlay(
     const b8 popped = paint.popClip();
     const b8 ended = paint.endOverlay();
     return painted && contentPopped && popped && ended;
+}
+
+b8 PaintListScrollbarVisual(
+    mut PaintBuilder paint,
+    in UiSkin skin,
+    in ListStyle style,
+    in ScrollPlacement placement,
+    in Rect clip,
+    in b8 hover
+){
+    Name preferredThumb = style.thumb;
+    if(hover)
+        preferredThumb = style.thumbHover;
+    const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, style.track, style.trackFallback);
+    const Expected<UiSkinRegion> thumb = TryResolveSelectableStateRegion(skin, preferredThumb, style.thumbFallback);
+    if(!track.has_value() || !thumb.has_value())
+        return false;
+    paint.pushClip(clip);
+    const b8 trackPainted = paint.drawRegion(track.value().name, placement.track);
+    const b8 thumbPainted = trackPainted && paint.drawRegion(thumb.value().name, placement.thumb);
+    const b8 trackPopped = paint.popClip();
+    return thumbPainted && trackPopped;
+}
+
+b8 PaintTextAreaScrollbarAxisVisual(
+    mut PaintBuilder paint,
+    in UiSkin skin,
+    in ScrollbarStyle scrollbarStyle,
+    in ScrollbarPlacement bar,
+    in b8 enabled,
+    in b8 hovered,
+    in b8 pressed
+){
+    if(!bar.visible)
+        return true;
+    const Name thumbName = ResolveScrollbarThumbRegionName(scrollbarStyle, enabled, pressed, hovered);
+    const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, scrollbarStyle.track, scrollbarStyle.trackFallback);
+    const Expected<UiSkinRegion> thumb = TryResolveSelectableStateRegion(skin, thumbName, scrollbarStyle.thumbFallback);
+    b8 painted = true;
+    if(track.has_value())
+        painted = paint.drawRegion(track.value().name, bar.track);
+    else
+        paint.fillRect(bar.track, scrollbarStyle.trackColor);
+    if(painted && thumb.has_value())
+        painted = paint.drawRegion(thumb.value().name, bar.thumb);
+    else if(painted){
+        Color thumbColor = scrollbarStyle.disabledColor;
+        if(enabled)
+            thumbColor = scrollbarStyle.thumbColor;
+        paint.fillRect(bar.thumb, thumbColor);
+    }
+    return painted;
+}
+
+b8 PaintTextAreaScrollbarsVisual(
+    mut PaintBuilder paint,
+    in UiSkin skin,
+    in ScrollbarStyle scrollbarStyle,
+    in ScrollViewportPlacement placement,
+    in Rect clip,
+    in b8 enabled,
+    in b8 horizontalHovered,
+    in b8 horizontalPressed,
+    in b8 verticalHovered,
+    in b8 verticalPressed
+){
+    paint.pushClip(clip);
+    b8 painted = PaintTextAreaScrollbarAxisVisual(paint, skin, scrollbarStyle, placement.horizontal, enabled, horizontalHovered, horizontalPressed)
+        && PaintTextAreaScrollbarAxisVisual(paint, skin, scrollbarStyle, placement.vertical, enabled, verticalHovered, verticalPressed);
+    if(painted && placement.corner.width > 0.0f && placement.corner.height > 0.0f){
+        const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, scrollbarStyle.track, scrollbarStyle.trackFallback);
+        if(track.has_value())
+            painted = paint.drawRegion(track.value().name, placement.corner);
+        else
+            paint.fillRect(placement.corner, scrollbarStyle.trackColor);
+    }
+    const b8 popped = paint.popClip();
+    return painted && popped;
 }
 
 

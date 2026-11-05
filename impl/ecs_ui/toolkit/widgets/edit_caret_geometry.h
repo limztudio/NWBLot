@@ -8,7 +8,7 @@
 #include <impl/ecs_ui/toolkit/edit/model.h>
 #include <impl/ecs_ui/toolkit/edit/grapheme.h>
 #include <impl/ecs_ui/toolkit/text/layout.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_caret_stops.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_visual_paint.adhd.h>
 
 #include <global/not_null.h>
 
@@ -47,14 +47,8 @@ public:
     [[nodiscard]] b8 adoptLayout(TextLayout&& layout, const StringView expectedText, const Span<const EditCaretMapping> mapping, const usize committedBytes, const EditTextMode::Enum mode){
         if(!ValidateEditCaretAdoptionRequest(layout.utf8(), layout.fontSize(), layout.lines(), layout.clusters(), layout.glyphs().size(), layout.measure(), layout.inkBounds(), expectedText, mapping, committedBytes, mode))
             return false;
-        usize nextGlyph = 0u;
-        for(const TextCluster& cluster : layout.clusters()){
-            for(u32 i = 0u; i < cluster.glyphCount; ++i, ++nextGlyph){
-                const PlacedGlyph& glyph = layout.glyphs()[nextGlyph];
-                if(!IsValidEditCaretClusterGlyph(glyph.byteBegin, glyph.byteEnd, glyph.position, cluster))
-                    return false;
-            }
-        }
+        if(!ValidateEditCaretClusterGlyphs(layout.clusters(), layout.glyphs()))
+            return false;
         auto boundaries = GraphemeSegmentation::Build(*m_arena, expectedText, mode == EditTextMode::SingleLine);
         if(!boundaries)
             return false;
@@ -94,6 +88,8 @@ public:
     }
 
     [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
+
+    [[nodiscard]] const EditBoundaryVector& boundaries()const noexcept{ return m_boundaries; }
 
     [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const noexcept{ return m_stops; }
 

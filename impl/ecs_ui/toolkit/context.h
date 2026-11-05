@@ -23,18 +23,8 @@ NWB_IMPL_UI_BEGIN
 // One CPU owner coordinates declarations, input and the exact matching frozen frame's layout publication.
 class Context final : NoCopy{
 private:
-    struct StateClaimHash{
-        [[nodiscard]] usize operator()(const ContextStateClaim& claim)const noexcept{ return ContextStateClaimHash(claim); }
-    };
-
-    struct RootHash{
-        [[nodiscard]] usize operator()(const WidgetRoot& root)const noexcept{ return HashCombineValue(HashValue(root.value), root.generation); }
-    };
-
-
-private:
-    using StateClaims = HashSet<ContextStateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<ContextStateClaim>>;
-    using RootSet = HashSet<WidgetRoot, Core::Alloc::GlobalArena, RootHash, EqualTo<WidgetRoot>>;
+    using StateClaims = HashSet<ContextStateClaim, Core::Alloc::GlobalArena, Hasher<ContextStateClaim>, EqualTo<ContextStateClaim>>;
+    using RootSet = HashSet<WidgetRoot, Core::Alloc::GlobalArena, Hasher<WidgetRoot>, EqualTo<WidgetRoot>>;
 
 
 public:
@@ -129,30 +119,10 @@ public:
     }
     // A state instance may own only one control of a given kind in a frame, even across balanced roots/scopes.
     [[nodiscard]] b8 claimState(const WidgetState& owner, const u64 instanceGeneration){
-        if(m_failed || !currentDeclaration(owner) || instanceGeneration == 0u || m_stateClaimCount == s_InputMaxTargets){
+        if(m_failed || !currentDeclaration(owner) || !TryClaimContextState(owner.kind, instanceGeneration, m_smallStateClaims, m_stateClaims, m_stateClaimCount)){
             fail();
             return false;
         }
-        const ContextStateClaim claim{ instanceGeneration, owner.kind };
-        if(m_stateClaimCount < s_SmallStateClaims){
-            if(!TryClaimSmallContextState(claim, m_smallStateClaims, m_stateClaimCount)){
-                fail();
-                return false;
-            }
-            return true;
-        }
-        if(m_stateClaimCount == s_SmallStateClaims){
-            // Small frames never clear or allocate the retained hash storage from an earlier large frame.
-            m_stateClaims.clear();
-            if(m_stateClaims.bucket_count() == 0u)
-                m_stateClaims.reserve(s_SmallStateClaims * 2u);
-            m_stateClaims.insert(m_smallStateClaims.begin(), m_smallStateClaims.end());
-        }
-        if(!m_stateClaims.emplace(claim).second){
-            fail();
-            return false;
-        }
-        ++m_stateClaimCount;
         return true;
     }
     [[nodiscard]] b8 addTarget(const WidgetState& state, HitTarget target){
@@ -316,12 +286,7 @@ public:
     void retainRoots(const Span<const WidgetRoot> roots){
         if(m_states.entries().empty() && m_targets.empty() && m_popups.empty())
             return;
-        m_retainedRoots.clear();
-        if(roots.size() > m_retainedRootCapacity){
-            m_retainedRoots.reserve(roots.size());
-            m_retainedRootCapacity = roots.size();
-        }
-        m_retainedRoots.insert(roots.begin(), roots.end());
+        PrepareRetainedContextRoots(roots, m_retainedRoots, m_retainedRootCapacity);
         for(usize index = m_states.entries().size(); index > 0u; --index){
             const auto& state = m_states.entries()[index - 1u];
             if(!m_retainedRoots.contains(state.root)){
@@ -329,14 +294,7 @@ public:
                 m_states.erase(index - 1u);
             }
         }
-        for(usize index = m_targets.size(); index > 0u; --index){
-            if(!m_retainedRoots.contains(m_targets[index - 1u].root))
-                m_targets.erase(m_targets.begin() + index - 1u);
-        }
-        for(usize index = m_popups.size(); index > 0u; --index){
-            if(!m_retainedRoots.contains(m_popups[index - 1u].root))
-                m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
-        }
+        PruneUnretainedContextTargetsAndPopups(m_retainedRoots, m_targets, m_popups);
     }
     void fail()noexcept{ m_failed = true; }
 

@@ -162,19 +162,11 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
     // Paint owns its glyph pages now; keep no shaped rows alive through later sibling lists.
     frame.rows.clear();
     if(placement.scrollbarVisible){
-        const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
         const auto thumbId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollbar);
         if(!thumbId)
             return false;
         const b8 hover = m_context.input().hover() == *thumbId;
-        const UiSkinRegion* thumb = region(hover ? frame.style.thumbHover : frame.style.thumb, frame.style.thumbFallback);
-        if(!track || !thumb)
-            return false;
-        m_paint.pushClip(clip);
-        const b8 trackPainted = m_paint.drawRegion(track->name, placement.track);
-        const b8 thumbPainted = trackPainted && m_paint.drawRegion(thumb->name, placement.thumb);
-        const b8 trackPopped = m_paint.popClip();
-        if(!thumbPainted || !trackPopped)
+        if(!PaintListScrollbarVisual(m_paint, *m_skin, frame.style, placement, clip, hover))
             return false;
         if(item.enabled){
             HitTarget target;

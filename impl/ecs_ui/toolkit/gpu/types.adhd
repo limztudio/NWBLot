@@ -93,6 +93,95 @@ void ExpandGpuSdfPagePixels(
     }
 }
 
+usize ComputeGpuGrowingBufferCapacity(
+    in usize currentCapacity,
+    in usize requiredCount,
+    in usize initialCapacity,
+    in usize elementBytes
+){
+    usize capacity = initialCapacity;
+    if(currentCapacity > initialCapacity)
+        capacity = currentCapacity;
+    if(capacity == 0u)
+        capacity = 1u;
+    while(capacity < requiredCount){
+        if(capacity > usize.max / 2u){
+            capacity = requiredCount;
+            break;
+        }
+        capacity *= 2u;
+    }
+    if(capacity > usize.max / elementBytes)
+        capacity = requiredCount;
+    return capacity;
+}
+
+b8 IsValidGpuSnapshotBufferCounts(
+    in usize vertexCount,
+    in usize indexCount,
+    in usize vertexStride,
+    in usize indexStride
+){
+    return vertexCount != 0u
+        && indexCount != 0u
+        && vertexCount <= usize.max / vertexStride
+        && indexCount <= usize.max / indexStride;
+}
+
+b8 IsValidGpuTextureImageResourceDesc(
+    in b8 isNormalizedOrFloat,
+    in b8 hasDepth,
+    in b8 hasStencil,
+    in b8 hasAnyChannel,
+    in b8 isSampledImageClass,
+    in b8 readinessTokenValid,
+    in b8 readinessHasPhysicalQueue,
+    in b8 isTexture2D,
+    in u32 descDepth,
+    in u32 descArraySize,
+    in u32 descSampleCount,
+    in b8 formatMatches,
+    in u32 descWidth,
+    in u32 textureWidth,
+    in u32 descHeight,
+    in u32 textureHeight,
+    in u32 descMipLevels,
+    in usize textureMipCount
+){
+    return isNormalizedOrFloat
+        && !hasDepth
+        && !hasStencil
+        && hasAnyChannel
+        && isSampledImageClass
+        && readinessTokenValid
+        && readinessHasPhysicalQueue
+        && isTexture2D
+        && descDepth == 1u
+        && descArraySize == 1u
+        && descSampleCount == 1u
+        && formatMatches
+        && descWidth == textureWidth
+        && descHeight == textureHeight
+        && cast<usize>(descMipLevels) == textureMipCount;
+}
+
+void AssignGpuPaintMaterialPushConstants(
+    in PaintMaterial material,
+    in u32 textureSlot,
+    in u32 sdfChannel,
+    in u32 sdfSpreadPixels,
+    in u32 sdfDistanceEncoding,
+    mut GpuPaintPushConstants inOutPush
+){
+    inOutPush.material = cast<u32>(material);
+    inOutPush.textureSlot = textureSlot;
+    if(material == PaintMaterial::SdfGlyph){
+        inOutPush.sdfChannel = sdfChannel;
+        inOutPush.sdfSpreadPixels = sdfSpreadPixels;
+        inOutPush.sdfDistanceEncoding = sdfDistanceEncoding;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

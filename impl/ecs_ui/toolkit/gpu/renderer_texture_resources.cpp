@@ -38,21 +38,28 @@ static constexpr TStringView s_ImageLoadContext = NWB_TEXT("UI Texture Image");
     if(resource.format == Core::Format::UNKNOWN || resource.format >= Core::Format::Count)
         return false;
     const Core::FormatInfo& format = Core::GetFormatInfo(resource.format);
-    if(
-        (format.kind != Core::FormatKind::Normalized && format.kind != Core::FormatKind::Float)
-        || format.hasDepth || format.hasStencil || !(format.hasRed || format.hasGreen || format.hasBlue || format.hasAlpha)
-        || resource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
-        || !resource.readinessToken.valid() || !resource.readinessToken.hasPhysicalQueueIdentity()
-    )
-        return false;
     const Core::TextureDesc& description = resource.texture->getCreationDescription();
     const Texture& texture = version.m_source->texture();
-    return
-        description.dimension == Core::TextureDimension::Texture2D && description.depth == 1u
-        && description.arraySize == 1u && description.sampleCount == 1u && description.format == resource.format
-        && description.width == texture.width() && description.height == texture.height()
-        && description.mipLevels == texture.mipLevels().size()
-    ;
+    return IsValidGpuTextureImageResourceDesc(
+        format.kind == Core::FormatKind::Normalized || format.kind == Core::FormatKind::Float,
+        format.hasDepth,
+        format.hasStencil,
+        format.hasRed || format.hasGreen || format.hasBlue || format.hasAlpha,
+        resource.sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage,
+        resource.readinessToken.valid(),
+        resource.readinessToken.hasPhysicalQueueIdentity(),
+        description.dimension == Core::TextureDimension::Texture2D,
+        description.depth,
+        description.arraySize,
+        description.sampleCount,
+        description.format == resource.format,
+        description.width,
+        texture.width(),
+        description.height,
+        texture.height(),
+        description.mipLevels,
+        texture.mipLevels().size()
+    );
 }
 
 

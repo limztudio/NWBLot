@@ -119,9 +119,7 @@ template<typename TElement>
 ){
     if(inOutCapacity >= requiredCount)
         return true;
-    usize capacity = NextGrowingCapacity(inOutCapacity, requiredCount, initialCapacity);
-    if(capacity > Limit<usize>::s_Max / sizeof(TElement))
-        capacity = requiredCount;
+    const usize capacity = ComputeGpuGrowingBufferCapacity(inOutCapacity, requiredCount, initialCapacity, sizeof(TElement));
     Core::BufferDesc description;
     description.setByteSize(static_cast<u64>(capacity * sizeof(TElement))).setIsVertexBuffer(isVertexBuffer).setIsIndexBuffer(!isVertexBuffer)
         .setDebugName(debugName).enableAutomaticStateTracking(Core::ResourceStates::Common)
@@ -385,7 +383,7 @@ b8 GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snap
     const usize indexCount = snapshot.indices().size();
     if(vertexCount == 0u && indexCount == 0u)
         return true;
-    if(vertexCount == 0u || indexCount == 0u || vertexCount > Limit<usize>::s_Max / sizeof(Vertex) || indexCount > Limit<usize>::s_Max / sizeof(u32))
+    if(!IsValidGpuSnapshotBufferCounts(vertexCount, indexCount, sizeof(Vertex), sizeof(u32)))
         return false;
     Core::Device& device = m_graphics.getDevice();
     return __hidden_ui_gpu_resources::EnsureGeometryBuffer<Vertex>(device, vertexCount, s_GpuInitialVertexCapacity, s_GpuVertexBufferName, true, slot.vertices, slot.vertexCapacity)

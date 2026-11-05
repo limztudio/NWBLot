@@ -90,10 +90,8 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
         if(glyph.drawable == 0u)
             continue;
         const FontAtlasGroup& group = payload.groups[glyph.group];
-        if(!IsValidFontAtlasGlyphGroupRect(glyph, group.width, group.height, group.channelCount, payload.guardTexels)){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} exceeds guarded page bounds"), index);
+        if(!ValidateFontAtlasGlyphGroupRect(glyph, index, group.width, group.height, group.channelCount, payload.guardTexels))
             return false;
-        }
     }
     if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload))
         return false;

@@ -8,6 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+namespace NWB::Impl{
+using ScratchSkeletonJointMatrixVector = Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 ValidateMeshSkinningInfluenceRecord(
     in u64 handleValue,
     in usize vertexIndex,
@@ -112,6 +122,100 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
         return makeUnexpected(Failure());
     }
     return storedJointMatrix;
+}
+
+b8 BuildSkinJointPaletteToGlobalVector(
+    in u64 handleValue,
+    in u32 skeletonJointCount,
+    in usize skinCount,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in u32 skinningMode,
+    mut Vector<SkeletonJointMatrix> outJointPalette
+){
+    outJointPalette.clear();
+
+    if(skinCount == 0u || sourceJoints.empty())
+        return true;
+    if(!ValidateSkinJointPaletteInputs(
+        handleValue,
+        skeletonJointCount,
+        skinCount,
+        sourceJoints.size(),
+        inverseBindMatrices.size(),
+        skinningMode
+    ))
+        return false;
+
+    const usize jointCount = sourceJoints.size();
+    const b8 useDualQuaternionPayload = skinningMode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
+    const b8 hasInverseBindMatrices = !inverseBindMatrices.empty();
+    outJointPalette.reserve(jointCount);
+
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
+            handleValue,
+            jointIndex,
+            sourceJoints,
+            hasInverseBindMatrices,
+            inverseBindMatrices,
+            useDualQuaternionPayload
+        );
+        if(!storedJointMatrix.has_value()){
+            outJointPalette.clear();
+            return false;
+        }
+        outJointPalette.push_back(storedJointMatrix.value());
+    }
+
+    return true;
+}
+
+b8 BuildSkinJointPaletteToScratchVector(
+    in u64 handleValue,
+    in u32 skeletonJointCount,
+    in usize skinCount,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in u32 skinningMode,
+    mut ScratchSkeletonJointMatrixVector outJointPalette
+){
+    outJointPalette.clear();
+
+    if(skinCount == 0u || sourceJoints.empty())
+        return true;
+    if(!ValidateSkinJointPaletteInputs(
+        handleValue,
+        skeletonJointCount,
+        skinCount,
+        sourceJoints.size(),
+        inverseBindMatrices.size(),
+        skinningMode
+    ))
+        return false;
+
+    const usize jointCount = sourceJoints.size();
+    const b8 useDualQuaternionPayload = skinningMode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
+    const b8 hasInverseBindMatrices = !inverseBindMatrices.empty();
+    outJointPalette.reserve(jointCount);
+
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
+            handleValue,
+            jointIndex,
+            sourceJoints,
+            hasInverseBindMatrices,
+            inverseBindMatrices,
+            useDualQuaternionPayload
+        );
+        if(!storedJointMatrix.has_value()){
+            outJointPalette.clear();
+            return false;
+        }
+        outJointPalette.push_back(storedJointMatrix.value());
+    }
+
+    return true;
 }
 
 

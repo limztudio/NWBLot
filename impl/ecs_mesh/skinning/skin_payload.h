@@ -96,44 +96,38 @@ namespace MeshSkinningPayload{
     return Span<const SkeletonJointMatrix>(payload.jointMatrices.data(), jointCount);
 }
 
-template<typename JointPaletteVector>
-[[nodiscard]] b8 BuildSkinJointPalette(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> sourceJoints, const u32 skinningMode, JointPaletteVector& outJointPalette){
-    outJointPalette.clear();
-
-    if(instance.skin.empty() || sourceJoints.empty())
-        return true;
-    if(!ValidateSkinJointPaletteInputs(
+[[nodiscard]] inline b8 BuildSkinJointPalette(
+    const MeshSkinningRuntimeInstance& instance,
+    const Span<const SkeletonJointMatrix> sourceJoints,
+    const u32 skinningMode,
+    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& outJointPalette
+){
+    return BuildSkinJointPaletteToGlobalVector(
         instance.handle.value,
         instance.skeletonJointCount,
         instance.skin.size(),
-        sourceJoints.size(),
-        instance.inverseBindMatrices.size(),
-        skinningMode
-    ))
-        return false;
+        sourceJoints,
+        instance.inverseBindMatrices,
+        skinningMode,
+        outJointPalette
+    );
+}
 
-    const usize jointCount = sourceJoints.size();
-    const b8 useDualQuaternionPayload = skinningMode == SkeletonSkinningMode::DualQuaternion;
-    const b8 hasInverseBindMatrices = !instance.inverseBindMatrices.empty();
-    outJointPalette.reserve(jointCount);
-
-    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
-            instance.handle.value,
-            jointIndex,
-            sourceJoints,
-            hasInverseBindMatrices,
-            instance.inverseBindMatrices,
-            useDualQuaternionPayload
-        );
-        if(!storedJointMatrix){
-            outJointPalette.clear();
-            return false;
-        }
-        outJointPalette.push_back(*storedJointMatrix);
-    }
-
-    return true;
+[[nodiscard]] inline b8 BuildSkinJointPalette(
+    const MeshSkinningRuntimeInstance& instance,
+    const Span<const SkeletonJointMatrix> sourceJoints,
+    const u32 skinningMode,
+    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>& outJointPalette
+){
+    return BuildSkinJointPaletteToScratchVector(
+        instance.handle.value,
+        instance.skeletonJointCount,
+        instance.skin.size(),
+        sourceJoints,
+        instance.inverseBindMatrices,
+        skinningMode,
+        outJointPalette
+    );
 }
 
 

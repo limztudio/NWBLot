@@ -169,6 +169,51 @@ b8 TryDecodeRuntimeZippedMeshletStreams(
     return true;
 }
 
+b8 ResolveRuntimeZippedAttributeSkins(
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletPositionStreamRef> positionRefs,
+    in Span<MeshletLocalVertexRef> localVertexRefs,
+    in usize attributeCount,
+    mut Vector<u32> outAttributeSkins
+){
+    outAttributeSkins.clear();
+    outAttributeSkins.resize(attributeCount, s_MeshMissingStreamIndex);
+
+    usize meshletPositionBase = 0u;
+    usize meshletAttributeBase = 0u;
+    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
+        const MeshletDesc meshlet = meshlets[meshletIndex];
+        const u32 vertexCount = MeshletVertexCount(meshlet);
+        for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
+            const MeshletLocalVertexRef localVertexRef = localVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertexIndex)];
+            const usize attributeIndex = meshletAttributeBase + cast<usize>(localVertexRef.localAttribute);
+            const u32 skinIndex = positionRefs[meshletPositionBase + cast<usize>(localVertexRef.localDeformedPosition)].skin;
+
+            const u32 attributeSkin = outAttributeSkins[attributeIndex];
+            if(attributeSkin == s_MeshMissingStreamIndex){
+                outAttributeSkins[attributeIndex] = skinIndex;
+                continue;
+            }
+            if(attributeSkin == skinIndex)
+                continue;
+            error("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities", meshletIndex);
+            return false;
+        }
+
+        meshletPositionBase += cast<usize>(MeshletPositionCount(meshlet));
+        meshletAttributeBase += cast<usize>(MeshletAttributeCount(meshlet));
+    }
+
+    for(usize attributeIndex = 0u; attributeIndex < outAttributeSkins.size(); ++attributeIndex){
+        if(outAttributeSkins[attributeIndex] != s_MeshMissingStreamIndex)
+            continue;
+        error("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced", attributeIndex);
+        return false;
+    }
+
+    return true;
+}
+
 Expected<RuntimeMeshLocalBounds> TryBuildRuntimeMeshLocalBounds(in Name sourceName, in Span<f32x3u> restPositions){
     if(restPositions.empty()){
         error("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds", sourceName.resolvedText());

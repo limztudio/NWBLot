@@ -23,25 +23,24 @@ b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const b8 focused = input.focus() == item.state.id;
     const b8 hovered = input.hover() == item.state.id;
-    const Name name = ResolveComboFieldRegionName(frame.style, item.enabled, frame.open, focused, hovered);
-    const UiSkinRegion* field = region(name, frame.style.fallback);
-    const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
-    if(!field || !arrow)
-        return false;
     const Rect clip = visibleClip(box.clip);
-    m_paint.pushClip(clip);
-    const b8 fieldPainted = m_paint.drawRegion(field->name, box.rectangle);
-    Rect icon;
-    Rect textClip;
-    ResolveComboFieldLayout(box.rectangle, item.padding, frame.arrowExtent, frame.style.arrowGap, icon, textClip);
-    const b8 arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon, item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha });
-    m_paint.pushClip(textClip);
-    const Point origin = ResolveCenteredTextOrigin(textClip, 0.0f, item.textBounds);
-    const b8 textPainted = arrowPainted && m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
-    const b8 textPopped = m_paint.popClip();
-    const b8 focusPainted = textPainted && (!focused || !item.enabled || !m_skin->findRegion(item.style.focus) || m_paint.drawRegion(item.style.focus, box.rectangle));
-    const b8 popped = m_paint.popClip();
-    if(!focusPainted || !textPopped || !popped || !comboMatches(frame))
+    if(!PaintComboFieldVisual(
+        m_paint,
+        m_text,
+        *m_skin,
+        frame.style,
+        item.style,
+        item.text,
+        item.textBounds,
+        item.padding,
+        frame.arrowExtent,
+        box.rectangle,
+        clip,
+        item.enabled,
+        frame.open,
+        focused,
+        hovered
+    ) || !comboMatches(frame))
         return false;
     HitTarget target;
     target.rectangle = box.rectangle;

@@ -95,14 +95,9 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
 }
 
 Point Builder::loadEditMinimumSize()const noexcept{
-    Point minimum{ s_StyleMinimumFieldWidth, 0.0f };
-    const Array<Name, 4> names{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
-    for(const auto& name : names){
-        const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
-        if(skinRegion)
-            AccumulateEditRegionMinimumSize(*skinRegion, minimum);
-    }
-    return minimum;
+    if(!m_skin)
+        return Point{ s_StyleMinimumFieldWidth, 0.0f };
+    return LoadEditStyleMinimumSize(*m_skin, m_editStyle);
 }
 
 b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){
@@ -115,10 +110,7 @@ b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBo
         return false;
     }
     item.editState = &state;
-
-    const Array<Name, 4> names{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
-    const Name& fallback = m_skin && m_skin->findRegion(m_editStyle.normal) ? m_editStyle.normal : m_editStyle.fallback;
-    item.padding = resolveRegionsPadding(item.editStyle.padding, names, fallback);
+    item.padding = m_skin ? ResolveEditStylePadding(*m_skin, item.editStyle) : item.editStyle.padding;
     return true;
 }
 

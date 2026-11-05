@@ -60,19 +60,11 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
     ))
         return false;
 
-    if(!MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
+    if(!ResolveRuntimeZippedAttributeSkins(
         instance.meshlets,
         runtimePositionRefs,
         instance.meshletLocalVertexRefs,
         runtimeAttributeRefs.size(),
-        [](const usize meshletIndex, [[maybe_unused]] const usize attributeIndex, [[maybe_unused]] const u32 previousSkin, [[maybe_unused]] const u32 skinIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities"), meshletIndex);
-            return false;
-        },
-        [](const usize attributeIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced"), attributeIndex);
-            return false;
-        },
         instance.attributeSkins
     ))
         return false;

@@ -23,6 +23,7 @@
 #include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
 #include "widgets/combo.h"
 #include <impl/ecs_ui/toolkit/widgets/combo_style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_paint.adhd.h>
 #include "widgets/search_combo.h"
 #include "widgets/tooltip.h"
 #include "widgets/context_menu.h"

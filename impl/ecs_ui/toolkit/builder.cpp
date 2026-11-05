@@ -257,18 +257,13 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
         intrinsicSize = ResolvePaddedIntrinsicSize(textSize, item.padding, minimum);
     }
     else if(kind == WidgetKind::Checkbox){
-        const Array<Name, 4> names{ m_style.checkbox, m_style.checkboxHover, m_style.checkboxChecked, m_style.checkboxDisabled };
-        f32 checkboxExtent = m_style.checkboxExtent;
-        if(!region(m_style.checkbox, m_style.checkbox)){
+        const auto checkboxExtent = ResolveCheckboxStyleExtent(*m_skin, m_style);
+        if(!checkboxExtent){
             m_context.fail();
             return MakeUnexpected(Failure{});
         }
-        for(const auto& name : names){
-            const UiSkinRegion& skinRegion = *MakeNotNull(region(name, m_style.checkbox));
-            checkboxExtent = ResolveUiSkinSquareExtent(checkboxExtent, skinRegion);
-        }
-        intrinsicSize = ResolveCheckboxIntrinsicSize(textSize, checkboxExtent, m_style.gap);
-        item.checkboxExtent = checkboxExtent;
+        intrinsicSize = ResolveCheckboxIntrinsicSize(textSize, *checkboxExtent, m_style.gap);
+        item.checkboxExtent = *checkboxExtent;
     }
     LayoutNodeDesc description;
     description.width = options.width;
@@ -298,22 +293,15 @@ const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)
 }
 
 Insets Builder::resolveRegionsPadding(const Insets& initial, const Span<const Name> names, const Name& fallback)const noexcept{
-    Insets result = initial;
-    for(const Name& name : names){
-        if(const UiSkinRegion* skinRegion = region(name, fallback))
-            result = MaxUiPadding(result, skinRegion->padding);
-    }
-    return result;
+    if(!m_skin)
+        return initial;
+    return ResolveSkinRegionsMaxPadding(*m_skin, initial, names, fallback);
 }
 
 void Builder::loadButtonMetrics(Point& size, Insets& padding)const noexcept{
-    const Array<Name, 4> names{ m_style.button, m_style.buttonHover, m_style.buttonPressed, m_style.buttonDisabled };
-    for(const auto& name : names){
-        const UiSkinRegion* skinRegion = region(name, m_style.button);
-        if(!skinRegion)
-            continue;
-        AccumulateButtonRegionMetrics(*skinRegion, size, padding);
-    }
+    if(!m_skin)
+        return;
+    LoadButtonStyleMetrics(*m_skin, m_style, size, padding);
 }
 
 

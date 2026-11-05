@@ -103,13 +103,8 @@ namespace __hidden_font_atlas_binary{
     if(!IsValidFontAtlasBinaryCounts(*glyphCount, payload.sourceGlyphCount, *groupCount, *tableCount, *raster, cursor, bytes.size()))
         return MakeUnexpected(Failure{});
     payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
-    payload.glyphs.resize(*glyphCount);
-    for(FontAtlasGlyph& glyph : payload.glyphs){
-        const auto decoded = TryReadFontAtlasGlyph(bytes, cursor);
-        if(!decoded)
-            return MakeUnexpected(decoded.error());
-        glyph = *decoded;
-    }
+    if(!TryReadFontAtlasGlyphs(bytes, *glyphCount, cursor, payload.glyphs))
+        return MakeUnexpected(Failure{});
     payload.groups.reserve(*groupCount);
     u64 pixelBytes = 0u;
     for(u32 index = 0u; index < *groupCount; ++index){
@@ -211,21 +206,7 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     AppendU32LittleEndian(binary, static_cast<u32>(payload.glyphs.size()));
     AppendU32LittleEndian(binary, static_cast<u32>(payload.groups.size()));
     AppendU32LittleEndian(binary, static_cast<u32>(payload.positioningTables.size()));
-    for(const FontAtlasGlyph& glyph : payload.glyphs){
-        AppendU32LittleEndian(binary, glyph.glyphId);
-        AppendU32LittleEndian(binary, glyph.group);
-        AppendU32LittleEndian(binary, glyph.channel);
-        AppendU32LittleEndian(binary, glyph.x);
-        AppendU32LittleEndian(binary, glyph.y);
-        AppendU32LittleEndian(binary, glyph.width);
-        AppendU32LittleEndian(binary, glyph.height);
-        AppendF32LittleEndian(binary, glyph.planeLeft);
-        AppendF32LittleEndian(binary, glyph.planeTop);
-        AppendF32LittleEndian(binary, glyph.planeRight);
-        AppendF32LittleEndian(binary, glyph.planeBottom);
-        AppendF32LittleEndian(binary, glyph.advanceUnits);
-        AppendU32LittleEndian(binary, glyph.drawable);
-    }
+    AppendFontAtlasGlyphsBinary(payload.glyphs, binary);
     for(const FontAtlasGroup& group : payload.groups){
         AppendU32LittleEndian(binary, group.width);
         AppendU32LittleEndian(binary, group.height);

@@ -100,34 +100,7 @@ static Expected<ScratchVector<NotNull<const MaterialBindInstance*>>> BuildSorted
 
 
 static b8 BuildMaterialBindTypedLayoutBlockLookup(const AStringView contextLabel, MaterialBindTypedLayout& inOutLayout){
-    inOutLayout.blockLookup.clear();
-    inOutLayout.blockLookup.reserve(inOutLayout.typedLayoutBlocks.size());
-
-    usize blockByteBegin = 0u;
-    u32 constantByteBegin = 0u;
-    for(usize blockIndex = 0u; blockIndex < inOutLayout.typedLayoutBlocks.size(); ++blockIndex){
-        const MaterialTypedLayoutBlock& block = inOutLayout.typedLayoutBlocks[blockIndex];
-        NWB_ASSERT(blockIndex < Limit<u32>::s_Max);
-        if(blockByteBegin > Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: block byte offset exceeds u32 for '{}'"), ConvertString(contextLabel));
-            return false;
-        }
-
-        const MaterialBindTypedLayoutBlockLookupEntry entry{ static_cast<u32>(blockIndex), static_cast<u32>(blockByteBegin), constantByteBegin };
-        if(!inOutLayout.blockLookup.emplace(block.blockName, entry).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate block in '{}'"), ConvertString(contextLabel));
-            return false;
-        }
-        NWB_ASSERT(static_cast<usize>(block.byteSize) <= Limit<usize>::s_Max - blockByteBegin);
-
-        blockByteBegin += block.byteSize;
-        if(block.blockClass == MaterialBlockClass::MaterialConstant){
-            NWB_ASSERT(block.byteSize <= Limit<u32>::s_Max - constantByteBegin);
-            constantByteBegin += block.byteSize;
-        }
-    }
-
-    return true;
+    return BuildMaterialBindTypedLayoutBlockLookup(contextLabel, inOutLayout.typedLayoutBlocks, inOutLayout.blockLookup);
 }
 
 
@@ -209,52 +182,17 @@ b8 ApplyMaterialBindTypedLayoutParameterValue(
     Material::ResourceReferenceVector& outResourceReferences,
     Material::TypedBlockByteVector& inOutBlockBytes
 ){
-    const auto parameterIt = layout.parameterLookup.find(parameterName);
-    if(parameterIt == layout.parameterLookup.end()){
-        AStringView interfacePath = "<unknown>";
-        if(layout.bindEntry)
-            interfacePath = AStringView(layout.bindEntry->virtualPath);
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: typed parameter '{}' is not declared " "by interface '{}' for '{}'"), ConvertString(parameterName.view()), ConvertString(interfacePath), ConvertString(materialName.resolvedText()));
-        return false;
-    }
-    const MaterialBindTypedLayoutParameterLookupEntry& parameterEntry = parameterIt.value();
-    NWB_ASSERT(parameterEntry.fieldIndex < layout.typedLayoutFields.size());
-
-    const MaterialTypedLayoutField& field = layout.typedLayoutFields[parameterEntry.fieldIndex];
-    if(IsMaterialLayoutResourceFieldType(field.fieldType)){
-        const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(field.fieldType);
-        const AStringView resourcePath = TrimView(parameterValue);
-        const auto resourceName = Name::FromText(resourcePath);
-        NWB_ASSERT(parameterEntry.blockName && field.fieldName);
-        if(!resourceName || !*resourceName || !IsSupportedMaterialResourceReference(resourceKind, resourcePath)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource parameter '{}' for '{}' must be an engine or project asset path"), ConvertString(parameterName.view()), ConvertString(materialName.resolvedText()));
-            return false;
-        }
-
-        MaterialResourceReference resourceReference;
-        resourceReference.blockName = parameterEntry.blockName;
-        resourceReference.fieldName = field.fieldName;
-        resourceReference.resourceKind = resourceKind;
-        resourceReference.constantByteOffset = parameterEntry.constantByteOffset;
-        if(!TryAssignMaterialResourceReferenceAsset(resourceKind, *resourceName, resourceReference)){
-            NWB_ASSERT(false);
-            return false;
-        }
-        outResourceReferences.push_back(resourceReference);
-        return true;
-    }
-
-    const auto typedValue = TryParseMaterialTypedLayoutParameterValue(materialName, parameterName.view(), parameterValue, field);
-    if(!typedValue)
-        return false;
-
-    if(!WriteMaterialTypedLayoutFieldBytes(parameterEntry.byteOffset, field.fieldType, *typedValue, inOutBlockBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' write exceeds packed layout bytes for '{}'"), ConvertString(parameterName.view()), ConvertString(materialName.resolvedText()));
-        return false;
-    }
-
-    return true;
+    const AStringView interfacePath = layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView("<unknown>");
+    return ApplyMaterialBindTypedLayoutParameterValueToStorage(
+        interfacePath,
+        layout.parameterLookup,
+        layout.typedLayoutFields,
+        materialName,
+        parameterName,
+        parameterValue,
+        outResourceReferences,
+        inOutBlockBytes
+    );
 }
 
 
@@ -453,17 +391,16 @@ Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLa
 }
 
 b8 ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layout, const Name& materialName, const MaterialBindParameterMap& parameters, Material::TypedBlockByteVector& inOutBlockBytes, Material::ResourceReferenceVector& outResourceReferences){
-    outResourceReferences.clear();
-    for(const auto& [parameterName, parameterValue] : parameters){
-        if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(layout, materialName, parameterName, parameterValue, outResourceReferences, inOutBlockBytes))
-            return false;
-    }
-
-    Sort(outResourceReferences.begin(), outResourceReferences.end(), [](const MaterialResourceReference& lhs, const MaterialResourceReference& rhs)noexcept{
-        return lhs.constantByteOffset < rhs.constantByteOffset;
-    });
-
-    return true;
+    const AStringView interfacePath = layout.bindEntry ? AStringView(layout.bindEntry->virtualPath) : AStringView("<unknown>");
+    return ApplyMaterialBindTypedLayoutParametersToStorage(
+        interfacePath,
+        layout.parameterLookup,
+        layout.typedLayoutFields,
+        materialName,
+        parameters,
+        inOutBlockBytes,
+        outResourceReferences
+    );
 }
 
 

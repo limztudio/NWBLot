@@ -96,19 +96,9 @@ b8 Builder::paintTooltips(){
         const Point measured{ textBounds->width, textBounds->height };
         const PopupOptions options = BuildTooltipPopupOptions(box->rectangle, measured, padding, *background, frame.options);
         const auto placement = PlacePopup(options, m_paint.displayMetrics());
-        if(!placement || !m_paint.beginOverlay(frame.layer))
+        if(!placement)
             return false;
-        m_paint.pushClip(placement->bounds);
-        const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-        const Rect content = InsetUiRectBounds(placement->bounds, padding);
-        m_paint.pushClip(content);
-        b8 painted = false;
-        if(backgroundPainted)
-            painted = m_text.paint(m_paint, frame.text, { content.x - textBounds->x, content.y - textBounds->y }, frame.style.text);
-        const b8 contentPopped = m_paint.popClip();
-        const b8 popped = m_paint.popClip();
-        const b8 ended = m_paint.endOverlay();
-        if(!painted || !contentPopped || !popped || !ended || frame.state->revision() != frame.revision)
+        if(!PaintTooltipOverlay(m_paint, m_text, frame.layer, background->name, placement->bounds, padding, frame.text, *textBounds, frame.style.text) || frame.state->revision() != frame.revision)
             return false;
         frame.state->m_placement = *placement;
     }

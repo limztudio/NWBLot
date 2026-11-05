@@ -56,21 +56,8 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
         return false;
     const b8 hover = interactive && input.hover() == *thumbId;
     const b8 pressed = interactive && input.primaryDown() && (input.capture() == *trackId || input.capture() == *thumbId);
-    const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);
-    const UiSkinRegion* thumb = m_skin->findRegion(ResolveSliderThumbPreferredName(frame.m_style, interactive, pressed, hover));
-    if(!thumb)
-        thumb = region(frame.m_style.normal, frame.m_style.thumbFallback);
-    if(!track || !thumb)
-        return false;
-    const Color tint = ResolveSliderThumbTint(frame.m_style, interactive, pressed, hover);
-    m_paint.pushClip(placement->clip);
-    b8 painted = m_paint.drawRegion(track->name, placement->track, interactive ? Color{} : frame.m_style.disabledTint);
-    if(painted)
-        painted = m_paint.drawRegion(thumb->name, placement->thumb, tint);
-    if(painted && interactive && input.focus() == item.state.id && m_skin->findRegion(frame.m_style.focus))
-        painted = m_paint.drawRegion(frame.m_style.focus, placement->bounds);
-    const b8 popped = m_paint.popClip();
-    if(!painted || !popped || !sliderMatches(frame))
+    const b8 focused = input.focus() == item.state.id;
+    if(!PaintSliderVisual(m_paint, *m_skin, frame.m_style, *placement, interactive, pressed, hover, focused) || !sliderMatches(frame))
         return false;
     HitTarget host;
     host.rectangle = placement->bounds;

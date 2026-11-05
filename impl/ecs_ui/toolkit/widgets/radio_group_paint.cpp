@@ -52,32 +52,24 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         const b8 checked = frame.m_snapshot.selectedKey == row.key;
         const b8 hover = input.hover() == *part;
         const b8 pressed = input.pressed(*part) || (frame.m_snapshot.cursorKey == row.key && input.pressed(item.state.id));
-        Name preferred;
-        Name fallback;
-        ResolveRadioGroupIndicatorNames(frame.m_style, checked, enabled, pressed, hover, preferred, fallback);
-        const UiSkinRegion* indicator = region(preferred, fallback);
-        if(!indicator)
-            indicator = region(frame.m_style.normal, frame.m_style.fallback);
-        if(!indicator || !mark)
-            return false;
-        const Color tint = ResolveRadioGroupChoiceTint(frame.m_style, enabled, pressed, hover);
-        const Rect& textBounds = frame.m_labels[index].bounds;
-        m_paint.pushClip(row.clip);
-        b8 painted = m_paint.drawRegion(indicator->name, row.indicator, tint);
-        if(painted && checked)
-            painted = m_paint.drawRegion(mark->name, row.mark, tint);
         const b8 focused = enabled && input.focus() == item.state.id && frame.m_snapshot.cursorKey == row.key;
-        if(painted && focused && m_skin->findRegion(frame.m_style.focus))
-            painted = m_paint.drawRegion(frame.m_style.focus, row.rectangle);
-        const TextLayout& label = frame.m_labels[index].text;
-        const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + frame.m_metrics.gap);
-        const Point origin = ResolveCenteredTextOrigin(row.rectangle, horizontalOffset, textBounds);
-        m_paint.pushClip(row.textClip);
-        if(painted)
-            painted = m_text.paint(m_paint, label, origin, enabled ? frame.m_widgetStyle.text : frame.m_widgetStyle.disabledText);
-        const b8 textPopped = m_paint.popClip();
-        const b8 rowPopped = m_paint.popClip();
-        if(!painted || !textPopped || !rowPopped)
+        if(!mark || !PaintRadioGroupChoiceRow(
+            m_paint,
+            m_text,
+            *m_skin,
+            frame.m_style,
+            frame.m_widgetStyle,
+            frame.m_metrics,
+            row,
+            frame.m_labels[index].text,
+            frame.m_labels[index].bounds,
+            mark->name,
+            enabled,
+            checked,
+            pressed,
+            hover,
+            focused
+        ))
             return false;
         if(item.enabled){
             HitTarget target;

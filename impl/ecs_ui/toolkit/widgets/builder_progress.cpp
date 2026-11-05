@@ -67,14 +67,7 @@ b8 Builder::paintProgress(const Item& item, const LayoutBox& box){
     const auto placement = PlaceProgress(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction);
     if(!placement)
         return false;
-    m_paint.pushClip(placement->clip);
-    b8 painted = m_paint.drawRegion(frame.style.track, placement->bounds, frame.style.trackTint);
-    if(painted && placement->fillReveal.width > 0.0f && placement->fillReveal.height > 0.0f){
-        m_paint.pushClip(placement->fillReveal);
-        painted = m_paint.drawRegion(frame.style.fill, placement->fillCanvas, frame.style.fillTint);
-        const b8 popped = m_paint.popClip();
-        painted = painted && popped;
-    }
+    const b8 painted = PaintProgressBarRegions(m_paint, frame.style, *placement);
     return finishClipPaint(item, placement->bounds, placement->clip, painted);
 }
 

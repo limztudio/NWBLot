@@ -114,6 +114,59 @@ Expected<FontAtlasGlyph> TryReadFontAtlasGlyph(in Span<u8> bytes, mut usize curs
     return glyph;
 }
 
+b8 TryReadFontAtlasGlyphs(
+    in Span<u8> bytes,
+    in u32 glyphCount,
+    mut usize cursor,
+    mut Vector<FontAtlasGlyph> outGlyphs
+){
+    outGlyphs.clear();
+    outGlyphs.resize(cast<usize>(glyphCount));
+    for(usize index = 0u; index < cast<usize>(glyphCount); ++index){
+        const Expected<FontAtlasGlyph> decoded = TryReadFontAtlasGlyph(bytes, cursor);
+        if(!decoded.has_value())
+            return false;
+        outGlyphs[index] = decoded.value();
+    }
+    return true;
+}
+
+void AppendFontAtlasGlyphBinary(in FontAtlasGlyph glyph, mut Vector<u8> outBinary){
+    AppendU32LittleEndian(outBinary, glyph.glyphId);
+    AppendU32LittleEndian(outBinary, glyph.group);
+    AppendU32LittleEndian(outBinary, glyph.channel);
+    AppendU32LittleEndian(outBinary, glyph.x);
+    AppendU32LittleEndian(outBinary, glyph.y);
+    AppendU32LittleEndian(outBinary, glyph.width);
+    AppendU32LittleEndian(outBinary, glyph.height);
+    AppendF32LittleEndian(outBinary, glyph.planeLeft);
+    AppendF32LittleEndian(outBinary, glyph.planeTop);
+    AppendF32LittleEndian(outBinary, glyph.planeRight);
+    AppendF32LittleEndian(outBinary, glyph.planeBottom);
+    AppendF32LittleEndian(outBinary, glyph.advanceUnits);
+    AppendU32LittleEndian(outBinary, glyph.drawable);
+}
+
+void AppendFontAtlasGlyphsBinary(in Span<FontAtlasGlyph> glyphs, mut Vector<u8> outBinary){
+    for(in FontAtlasGlyph glyph : glyphs)
+        AppendFontAtlasGlyphBinary(glyph, outBinary);
+}
+
+b8 ValidateFontAtlasGlyphGroupRect(
+    in FontAtlasGlyph glyph,
+    in usize index,
+    in u32 groupWidth,
+    in u32 groupHeight,
+    in u32 groupChannelCount,
+    in u32 guardTexels
+){
+    if(IsValidFontAtlasGlyphGroupRect(glyph, groupWidth, groupHeight, groupChannelCount, guardTexels))
+        return true;
+
+    error("FontAtlas validation failed: glyph {} exceeds guarded page bounds", index);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

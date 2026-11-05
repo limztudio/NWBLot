@@ -168,18 +168,12 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
         if(!PaintListScrollbarVisual(m_paint, *m_skin, frame.style, placement, clip, hover))
             return false;
         if(item.enabled){
-            HitTarget target;
-            target.rectangle = placement.track;
-            target.clip = clip;
-            target.control = frame.token;
+            const HitTarget trackTarget = MakeListScrollbarTrackHitTarget(placement, clip, frame.token);
             const auto trackId = TryMakeWidgetId(item.state.id, s_WidgetPartTrack);
-            if(!trackId || !m_context.addPartTarget(item.state, *trackId, target))
+            if(!trackId || !m_context.addPartTarget(item.state, *trackId, trackTarget))
                 return false;
-            target.rectangle = placement.thumb;
-            target.pointerGesture = placement.track.height > placement.thumb.height;
-            target.gestureReference = placement.track;
-            target.gestureMaximum = placement.maxOffset;
-            if(!m_context.addPartTarget(item.state, *thumbId, target))
+            const HitTarget thumbTarget = MakeListScrollbarThumbHitTarget(placement, clip, frame.token);
+            if(!m_context.addPartTarget(item.state, *thumbId, thumbTarget))
                 return false;
         }
     }

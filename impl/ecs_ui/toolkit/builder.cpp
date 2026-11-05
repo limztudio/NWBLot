@@ -48,12 +48,7 @@ b8 Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const La
     m_scope->m_panelStyle = m_style;
     m_scope->m_panelState = **state;
     m_scope->m_bounds = bounds;
-    LayoutNodeDesc description;
-    description.direction = direction;
-    description.width = { LayoutSizePolicy::Fixed, bounds.width };
-    description.height = { LayoutSizePolicy::Fixed, bounds.height };
-    description.padding = { panel->padding.left, panel->padding.top, panel->padding.right, panel->padding.bottom };
-    description.gap = m_style.gap;
+    const LayoutNodeDesc description = MakePanelRootLayoutNodeDesc(bounds, direction, panel->padding, m_style.gap);
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
     if(!admittedNode || !m_context.pushScope(stableKey)){
@@ -193,12 +188,7 @@ b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::E
         m_context.fail();
         return false;
     }
-    LayoutNodeDesc description;
-    description.direction = direction;
-    description.width = options.width;
-    description.height = options.height;
-    description.padding = options.padding;
-    description.gap = options.gap;
+    const LayoutNodeDesc description = MakeContainerLayoutNodeDesc(direction, options);
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode || !m_context.pushScope(stableKey)){

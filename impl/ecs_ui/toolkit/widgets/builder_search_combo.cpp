@@ -96,12 +96,13 @@ b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     Rect nextContentRect = content.rectangle;
     LayoutBox box = content;
     box.rectangle = ResolveComboQueryBoxAndAdvanceContent(measuredHeight, frame.queryHeight, frame.queryGap, nextContentRect);
-    HitTarget navigation;
-    if(frame.options.enabled && !item.editView.composing()){
-        navigation.commandOwner = frame.rows.id;
-        navigation.commandOwnerDeclarationGeneration = frame.rows.declarationGeneration;
-        navigation.commandControl = frame.listToken;
-    }
+    const HitTarget navigation = MakeComboQueryNavigationTarget(
+        frame.options.enabled,
+        item.editView.composing(),
+        frame.rows.id,
+        frame.rows.declarationGeneration,
+        frame.listToken
+    );
     if(!paintEditBox(item, box, &navigation))
         return false;
     content.rectangle = nextContentRect;

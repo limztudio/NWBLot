@@ -160,40 +160,34 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;
-        const f32 trackExtent = horizontal ? bar.track.width : bar.track.height;
-        const f32 thumbExtent = horizontal ? bar.thumb.width : bar.thumb.height;
         Rect beforeRect;
         Rect afterRect;
         ResolveScrollbarBeforeAfterRects(bar, horizontal, beforeRect, afterRect);
-        HitTarget target;
-        target.clip = clip;
-        target.control = token;
-        target.activatable = true;
-        target.value = horizontal ? s_TextAreaScrollHorizontalBefore : s_TextAreaScrollVerticalBefore;
-        target.rectangle = beforeRect;
+        const HitTarget beforeTarget = MakeScrollbarTrackActionHitTarget(
+            beforeRect,
+            clip,
+            token,
+            horizontal ? s_TextAreaScrollHorizontalBefore : s_TextAreaScrollVerticalBefore
+        );
         const auto beforeId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalBefore : s_WidgetPartScrollVerticalBefore);
-        if(!beforeId || !m_context.addPartTarget(item.state, *beforeId, target))
+        if(!beforeId || !m_context.addPartTarget(item.state, *beforeId, beforeTarget))
             return false;
-        target.value = horizontal ? s_TextAreaScrollHorizontalAfter : s_TextAreaScrollVerticalAfter;
-        target.rectangle = afterRect;
+        const HitTarget afterTarget = MakeScrollbarTrackActionHitTarget(
+            afterRect,
+            clip,
+            token,
+            horizontal ? s_TextAreaScrollHorizontalAfter : s_TextAreaScrollVerticalAfter
+        );
         const auto afterId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalAfter : s_WidgetPartScrollVerticalAfter);
-        if(!afterId || !m_context.addPartTarget(item.state, *afterId, target))
+        if(!afterId || !m_context.addPartTarget(item.state, *afterId, afterTarget))
             return false;
-        target.rectangle = bar.thumb;
-        target.activatable = false;
-        target.value = 0u;
-        target.pointerGesture = trackExtent > thumbExtent;
-        target.gestureReference = bar.track;
-        target.gestureMaximum = bar.maximum;
+        const HitTarget thumbTarget = MakeScrollbarThumbHitTarget(bar, clip, token, horizontal);
         const auto thumbId = TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb);
-        if(!thumbId || !m_context.addPartTarget(item.state, *thumbId, target))
+        if(!thumbId || !m_context.addPartTarget(item.state, *thumbId, thumbTarget))
             return false;
     }
     if(placement.corner.width > 0.0f && placement.corner.height > 0.0f){
-        HitTarget target;
-        target.rectangle = placement.corner;
-        target.clip = clip;
-        target.control = token;
+        const HitTarget target = MakeScrollbarCornerHitTarget(placement.corner, clip, token);
         const auto cornerId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollCorner);
         if(!cornerId || !m_context.addPartTarget(item.state, *cornerId, target))
             return false;

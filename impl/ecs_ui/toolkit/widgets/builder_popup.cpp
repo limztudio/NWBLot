@@ -228,11 +228,7 @@ b8 Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& to
     const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!placement)
         return false;
-    PopupScope scope;
-    scope.token = token;
-    scope.parent = m_context.popupToken();
-    scope.bounds = placement->bounds;
-    scope.viewport = placement->viewport;
+    const PopupScope scope = MakeBasicPopupScope(token, m_context.popupToken(), *placement);
     return m_context.registerPopupScope(widget, scope);
 }
 

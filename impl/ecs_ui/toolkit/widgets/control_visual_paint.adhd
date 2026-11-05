@@ -1003,5 +1003,156 @@ HitTarget MakeWindowResizeHitTarget(in Rect corner, in Rect clip, in Rect window
     return target;
 }
 
+HitTarget MakeScrollbarTrackActionHitTarget(
+    in Rect rectangle,
+    in Rect clip,
+    in ControlToken token,
+    in u32 actionValue
+){
+    HitTarget target;
+    target.rectangle = rectangle;
+    target.clip = clip;
+    target.control = token;
+    target.activatable = true;
+    target.value = cast<u64>(actionValue);
+    return target;
+}
+
+HitTarget MakeScrollbarThumbHitTarget(
+    in ScrollbarPlacement bar,
+    in Rect clip,
+    in ControlToken token,
+    in b8 horizontal
+){
+    f32 trackExtent = bar.track.height;
+    f32 thumbExtent = bar.thumb.height;
+    if(horizontal){
+        trackExtent = bar.track.width;
+        thumbExtent = bar.thumb.width;
+    }
+    HitTarget target;
+    target.rectangle = bar.thumb;
+    target.clip = clip;
+    target.control = token;
+    target.activatable = false;
+    target.value = 0u;
+    target.pointerGesture = trackExtent > thumbExtent;
+    target.gestureReference = bar.track;
+    target.gestureMaximum = bar.maximum;
+    return target;
+}
+
+HitTarget MakeScrollbarCornerHitTarget(
+    in Rect corner,
+    in Rect clip,
+    in ControlToken token
+){
+    HitTarget target;
+    target.rectangle = corner;
+    target.clip = clip;
+    target.control = token;
+    return target;
+}
+
+HitTarget MakeListScrollbarTrackHitTarget(
+    in ScrollPlacement placement,
+    in Rect clip,
+    in ControlToken token
+){
+    HitTarget target;
+    target.rectangle = placement.track;
+    target.clip = clip;
+    target.control = token;
+    return target;
+}
+
+HitTarget MakeListScrollbarThumbHitTarget(
+    in ScrollPlacement placement,
+    in Rect clip,
+    in ControlToken token
+){
+    HitTarget target;
+    target.rectangle = placement.thumb;
+    target.clip = clip;
+    target.control = token;
+    target.pointerGesture = placement.track.height > placement.thumb.height;
+    target.gestureReference = placement.track;
+    target.gestureMaximum = placement.maxOffset;
+    return target;
+}
+
+PopupScope MakeBasicPopupScope(
+    in PopupToken token,
+    in PopupToken parent,
+    in PopupPlacement placement
+){
+    PopupScope scope;
+    scope.token = token;
+    scope.parent = parent;
+    scope.bounds = placement.bounds;
+    scope.viewport = placement.viewport;
+    return scope;
+}
+
+HitTarget MakeComboQueryNavigationTarget(
+    in b8 enabled,
+    in b8 composing,
+    in WidgetId commandOwner,
+    in u64 commandOwnerDeclarationGeneration,
+    in ControlToken commandControl
+){
+    HitTarget navigation;
+    if(enabled && !composing){
+        navigation.commandOwner = commandOwner;
+        navigation.commandOwnerDeclarationGeneration = commandOwnerDeclarationGeneration;
+        navigation.commandControl = commandControl;
+    }
+    return navigation;
+}
+
+LayoutNodeDesc MakePanelRootLayoutNodeDesc(
+    in Rect bounds,
+    in LayoutDirection direction,
+    in UiSkinInsets panelPadding,
+    in f32 gap
+){
+    LayoutNodeDesc description;
+    description.direction = direction;
+    description.width = LayoutSize(LayoutSizePolicy::Fixed, bounds.width);
+    description.height = LayoutSize(LayoutSizePolicy::Fixed, bounds.height);
+    description.padding = Insets(panelPadding.left, panelPadding.top, panelPadding.right, panelPadding.bottom);
+    description.gap = gap;
+    return description;
+}
+
+LayoutNodeDesc MakeContainerLayoutNodeDesc(
+    in LayoutDirection direction,
+    in ContainerOptions options
+){
+    LayoutNodeDesc description;
+    description.direction = direction;
+    description.width = options.width;
+    description.height = options.height;
+    description.padding = options.padding;
+    description.gap = options.gap;
+    return description;
+}
+
+b8 DidContextMenuBindingChange(
+    in WidgetId widgetId,
+    in u64 widgetDeclarationGeneration,
+    in WidgetId anchorId,
+    in u64 anchorDeclarationGeneration,
+    in WidgetId stateOwner,
+    in u64 stateOwnerDeclaration,
+    in WidgetId stateAnchorWidget,
+    in u64 stateAnchorDeclaration
+){
+    return stateOwner != widgetId
+        || stateOwnerDeclaration != widgetDeclarationGeneration
+        || stateAnchorWidget != anchorId
+        || stateAnchorDeclaration != anchorDeclarationGeneration;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

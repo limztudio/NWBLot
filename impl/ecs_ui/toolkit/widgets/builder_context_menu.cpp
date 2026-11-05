@@ -51,7 +51,16 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     frame.options = options;
     frame.options.enabled = options.enabled && anchor->enabled;
     const b8 previouslyOpen = state.isOpen();
-    if(state.m_owner != (*widget)->id || state.m_ownerDeclaration != (*widget)->declarationGeneration || state.m_anchorWidget != anchor->state.id || state.m_anchorDeclaration != anchor->state.declarationGeneration){
+    if(DidContextMenuBindingChange(
+        (*widget)->id,
+        (*widget)->declarationGeneration,
+        anchor->state.id,
+        anchor->state.declarationGeneration,
+        state.m_owner,
+        state.m_ownerDeclaration,
+        state.m_anchorWidget,
+        state.m_anchorDeclaration
+    )){
         if(state.m_owner.valid())
             state.close();
         state.m_owner = (*widget)->id;
@@ -246,11 +255,7 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!placement)
         return false;
-    PopupScope scope;
-    scope.token = frame.popupToken;
-    scope.parent = frame.parentToken;
-    scope.bounds = placement->bounds;
-    scope.viewport = placement->viewport;
+    const PopupScope scope = MakeBasicPopupScope(frame.popupToken, frame.parentToken, *placement);
     if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){

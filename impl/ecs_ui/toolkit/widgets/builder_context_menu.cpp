@@ -263,9 +263,7 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     m_paint.pushClip(placement->bounds);
     const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
     const b8 popped = m_paint.popClip();
-    HitTarget barrier;
-    barrier.rectangle = placement->bounds;
-    barrier.clip = placement->viewport;
+    const HitTarget barrier = MakeBarrierHitTarget(placement->bounds, placement->viewport);
     b8 painted = backgroundPainted && popped && m_context.addTarget(frame.popup, barrier);
     if(painted){
         Item item(m_arena);

@@ -144,19 +144,18 @@ b8 Builder::paintList(const Item& item, const LayoutBox& box){
     const b8 popped = m_paint.popClip();
     if(!painted || !popped)
         return false;
-    HitTarget host;
-    host.rectangle = box.rectangle;
-    host.clip = clip;
-    host.enabled = item.enabled;
-    host.focusable = item.enabled;
-    host.contextMenu = item.contextMenu;
-    host.control = frame.token;
-    host.navigable = item.enabled;
-    host.scrollable = item.enabled;
-    host.scrollStep = static_cast<f64>(frame.rowHeight) * static_cast<f64>(frame.options.wheelRows);
-    host.pageRows = ComputeListHostPageRows(placement.viewport.height, frame.rowHeight, frame.rowCount);
-    host.gestureMaximum = placement.maxOffset;
-    host.focusOnCommit = frame.focusOnCommit;
+    const HitTarget host = MakeListHostHitTarget(
+        box.rectangle,
+        clip,
+        item.enabled,
+        item.contextMenu,
+        frame.token,
+        frame.rowHeight,
+        frame.options.wheelRows,
+        placement,
+        frame.rowCount,
+        frame.focusOnCommit
+    );
     if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement))
         return false;
     // Paint owns its glyph pages now; keep no shaped rows alive through later sibling lists.
@@ -210,13 +209,7 @@ b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const Scroll
         if(!PaintSelectable(m_paint, m_text, *m_skin, row.text, row.textBounds, frame.style.row.padding, *rectangle, placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText))
             return false;
         if(item.enabled){
-            HitTarget target;
-            target.rectangle = *rectangle;
-            target.clip = placement.contentClip;
-            target.enabled = enabled;
-            target.activatable = enabled;
-            target.control = frame.token;
-            target.value = key;
+            const HitTarget target = MakeListRowHitTarget(*rectangle, placement.contentClip, enabled, frame.token, key);
             if(!m_context.addPartTarget(item.state, *part, target))
                 return false;
         }

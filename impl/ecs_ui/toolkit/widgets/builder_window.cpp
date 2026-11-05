@@ -24,13 +24,9 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
     }
     reset();
     m_scope->m_window.style = m_style;
-    const UiSkinRegion* frame = region(m_style.window, m_style.window);
-    const UiSkinRegion* header = region(m_style.windowTitle, m_style.windowTitle);
-    const UiSkinRegion* collapse = region(m_style.windowCollapse, m_style.windowCollapse);
-    const UiSkinRegion* resize = region(m_style.windowResize, m_style.windowResize);
     const auto window = m_context.declare(stableKey, WidgetKind::Window);
     const ShapeRequest request = textShapeRequest(title, m_style.fontSize);
-    if(!frame || !header || (options.collapsible && !collapse) || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window){
+    if(!window){
         m_context.fail();
         return false;
     }
@@ -41,17 +37,11 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
     }
     m_scope->m_window.title = Move(*titleLayout);
     const auto titleBounds = m_text.measure(m_scope->m_window.title, m_paint.displayMetrics());
-    if(!titleBounds){
+    if(!titleBounds || !TryResolveWindowChromeMetrics(*m_skin, m_style, options, { titleBounds->width, titleBounds->height }, m_scope->m_window.metrics)){
         m_context.fail();
         return false;
     }
     m_scope->m_window.titleBounds = *titleBounds;
-    const auto metrics = MeasureWindow(*frame, *header, collapse ? *collapse : UiSkinRegion{}, resize ? *resize : UiSkinRegion{}, m_style, options, { titleBounds->width, titleBounds->height }, m_skin->referenceDensity());
-    if(!metrics){
-        m_context.fail();
-        return false;
-    }
-    m_scope->m_window.metrics = *metrics;
     m_scope->m_panelState = **window;
     m_scope->m_window.state = &state;
     m_scope->m_window.options = options;
@@ -129,9 +119,15 @@ b8 Builder::endWindow(){
         arranged = m_scope->m_layout.arrange(viewport);
         const LayoutBox* root = m_scope->m_layout.box(0u);
         if(arranged && root){
-            ApplyWindowFirstUseContentBounds(m_scope->m_window.options, m_scope->m_window.metrics, root->rectangle, m_scope->m_window.firstUse, state);
-            arranged = TryConstrainWindow(display, m_scope->m_window.metrics.titleHeight, state);
-            m_scope->m_bounds = ResolveWindowContentBounds(state, m_scope->m_window.metrics);
+            arranged = TryFinalizeWindowFirstUseArrangement(
+                m_scope->m_window.options,
+                m_scope->m_window.metrics,
+                root->rectangle,
+                m_scope->m_window.firstUse,
+                display,
+                state,
+                m_scope->m_bounds
+            );
             if(arranged)
                 arranged = m_scope->m_layout.arrange(m_scope->m_bounds);
         }

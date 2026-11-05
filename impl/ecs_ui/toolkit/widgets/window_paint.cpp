@@ -22,9 +22,7 @@ b8 Builder::paintWindow(){
     m_paint.pushClip(clip);
     const b8 painted = m_paint.drawRegion(style.window, bounds);
     const b8 popped = m_paint.popClip();
-    HitTarget barrier;
-    barrier.rectangle = bounds;
-    barrier.clip = clip;
+    const HitTarget barrier = MakeBarrierHitTarget(bounds, clip);
     if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier) || !paintWindowTitle())
         return false;
     if(state.collapsed)
@@ -58,19 +56,11 @@ b8 Builder::paintWindowTitle(){
         header,
         clip
     );
-    HitTarget title;
-    title.rectangle = header;
-    title.clip = clip;
-    title.gestureReference = state.bounds;
-    title.pointerGesture = m_scope->m_window.options.movable;
+    const HitTarget title = MakeWindowTitleHitTarget(header, clip, state.bounds, m_scope->m_window.options.movable);
     if(!painted || !m_context.addTarget(m_scope->m_window.titleState, title))
         return false;
     if(m_scope->m_window.options.collapsible){
-        HitTarget collapse;
-        collapse.rectangle = ResolveWindowCollapseBounds(state, metrics);
-        collapse.clip = clip;
-        collapse.focusable = true;
-        collapse.activatable = true;
+        const HitTarget collapse = MakeWindowCollapseHitTarget(state, metrics, clip);
         return m_context.addTarget(m_scope->m_window.collapseState, collapse);
     }
     return true;
@@ -84,11 +74,7 @@ b8 Builder::paintWindowResize(){
     const Rect corner = ResolveWindowResizeBounds(state, m_scope->m_window.metrics);
     const Rect clip = visibleClip(ResolveVisibleWindowBounds(state, m_scope->m_window.metrics));
     const b8 painted = PaintWindowResizeCorner(m_paint, *m_skin, style, corner, clip);
-    HitTarget target;
-    target.rectangle = corner;
-    target.clip = clip;
-    target.gestureReference = state.bounds;
-    target.pointerGesture = true;
+    const HitTarget target = MakeWindowResizeHitTarget(corner, clip, state.bounds);
     return painted && m_context.addTarget(m_scope->m_window.resizeState, target);
 }
 

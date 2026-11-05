@@ -59,34 +59,14 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     const b8 focused = input.focus() == item.state.id;
     if(!PaintSliderVisual(m_paint, *m_skin, frame.m_style, *placement, interactive, pressed, hover, focused) || !sliderMatches(frame))
         return false;
-    HitTarget host;
-    host.rectangle = placement->bounds;
-    host.clip = placement->clip;
-    host.enabled = interactive;
-    host.focusable = interactive;
-    host.navigable = interactive;
-    host.horizontalNavigation = interactive;
-    host.contextMenu = item.contextMenu;
-    host.control = frame.m_token;
-    host.focusOnCommit = frame.m_focusOnCommit;
+    const HitTarget host = MakeSliderHostHitTarget(*placement, interactive, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
     if(!m_context.addTarget(item.state, host))
         return false;
     if(interactive){
-        HitTarget trackTarget;
-        trackTarget.rectangle = placement->track;
-        trackTarget.clip = placement->clip;
-        trackTarget.pointerGesture = true;
-        trackTarget.gestureReference = placement->centerTravel;
-        trackTarget.control = frame.m_token;
+        const HitTarget trackTarget = MakeSliderTrackHitTarget(*placement, frame.m_token);
         if(!m_context.addPartTarget(item.state, *trackId, trackTarget))
             return false;
-        HitTarget thumbTarget;
-        thumbTarget.rectangle = placement->thumb;
-        thumbTarget.clip = placement->clip;
-        thumbTarget.pointerGesture = true;
-        thumbTarget.gestureReference = placement->travelBounds;
-        thumbTarget.control = frame.m_token;
-        thumbTarget.value = BitCast<u64>(frame.m_state.value());
+        const HitTarget thumbTarget = MakeSliderThumbHitTarget(*placement, frame.m_token, frame.m_state.value());
         if(!m_context.addPartTarget(item.state, *thumbId, thumbTarget))
             return false;
     }

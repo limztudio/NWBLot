@@ -45,14 +45,7 @@ b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const Pop
         m_context.fail();
         return false;
     }
-    PopupScope scope;
-    scope.token = token;
-    scope.parent = m_context.popupToken();
-    scope.bounds = placement->bounds;
-    scope.viewport = placement->viewport;
-    scope.dismissOutside = options.dismissOutside;
-    scope.dismissCancel = options.dismissCancel;
-    scope.autofocus = options.autofocus;
+    const PopupScope scope = MakePopupFrameScope(token, m_context.popupToken(), *placement, options);
     NotNull<BuilderScopeFrame*> next = m_scope;
     if(!nested)
         reset();
@@ -74,12 +67,12 @@ b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const Pop
     m_scope->m_panelState = declaration;
     m_scope->m_popupPaintStyle = m_popupStyle;
     m_scope->m_bounds = placement->bounds;
-    LayoutNodeDesc description;
-    description.direction = LayoutDirection::Column;
-    description.width = { LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
-    description.height = { LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
-    description.padding = MaxUiPadding(m_scope->m_popupPaintStyle.padding, background->padding);
-    description.gap = m_style.gap;
+    const LayoutNodeDesc description = MakePopupRootLayoutNodeDesc(
+        m_scope->m_bounds,
+        m_scope->m_popupPaintStyle.padding,
+        background->padding,
+        m_style.gap
+    );
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
     if(!admittedNode){
@@ -257,9 +250,7 @@ b8 Builder::paintPopup(){
     m_paint.pushClip(m_scope->m_popupPlacement.viewport);
     const b8 painted = m_paint.drawRegion(background->name, panel->rectangle);
     const b8 popped = m_paint.popClip();
-    HitTarget barrier;
-    barrier.rectangle = panel->rectangle;
-    barrier.clip = m_scope->m_popupPlacement.viewport;
+    const HitTarget barrier = MakeBarrierHitTarget(panel->rectangle, m_scope->m_popupPlacement.viewport);
     if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
         return false;
     return paintItems();

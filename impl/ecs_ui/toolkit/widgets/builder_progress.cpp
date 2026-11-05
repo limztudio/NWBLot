@@ -33,20 +33,10 @@ b8 Builder::progress(const AStringView stableKey, const f64 fraction, const Prog
     frame.fraction = fraction;
     frame.options = options;
     frame.style = m_progressStyle;
-    const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
-    const UiSkinRegion* fill = region(frame.style.fill, frame.style.fillFallback);
-    if(!IsFinite(fraction) || !track || !fill){
+    if(!TryResolveProgressStyleMetrics(*m_skin, fraction, options, frame.style, frame.metrics)){
         m_context.fail();
         return false;
     }
-    const auto metrics = MeasureProgress(options, frame.style, *track, *fill, m_skin->referenceDensity());
-    if(!metrics){
-        m_context.fail();
-        return false;
-    }
-    frame.metrics = *metrics;
-    frame.style.track = track->name;
-    frame.style.fill = fill->name;
     Item item(m_arena);
     item.state = **widget;
     item.progress = static_cast<u32>(m_scope->m_progress.size());

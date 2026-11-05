@@ -10,6 +10,7 @@
 #include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
 #include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd>
 
 native{
 #include <impl/assets_ui_skin/asset.h>
@@ -646,6 +647,360 @@ void ApplyBuilderSkinStyles(
     ApplySkinPaletteToRadioGroupStyle(palette, inOutRadioGroupStyle);
     ApplySkinPaletteToSliderStyle(palette, inOutSliderStyle);
     ApplySkinPaletteToProgressStyle(palette, inOutProgressStyle);
+}
+
+b8 TryResolveProgressStyleMetrics(
+    in UiSkin skin,
+    in f64 fraction,
+    in ProgressOptions options,
+    mut ProgressStyle inOutStyle,
+    mut ProgressMetrics outMetrics
+){
+    if(!isFinite(fraction))
+        return false;
+    const Expected<UiSkinRegion> track = TryResolveSelectableStateRegion(skin, inOutStyle.track, inOutStyle.trackFallback);
+    const Expected<UiSkinRegion> fill = TryResolveSelectableStateRegion(skin, inOutStyle.fill, inOutStyle.fillFallback);
+    if(!track.has_value() || !fill.has_value())
+        return false;
+    const Expected<ProgressMetrics> metrics = MeasureProgress(options, inOutStyle, track.value(), fill.value(), skin.referenceDensity());
+    if(!metrics.has_value())
+        return false;
+    inOutStyle.track = track.value().name;
+    inOutStyle.fill = fill.value().name;
+    outMetrics = metrics.value();
+    return true;
+}
+
+b8 TryResolveImageRegionMetrics(
+    in UiSkin skin,
+    in Name regionName,
+    in ImageOptions options,
+    mut ImageMetrics outMetrics,
+    mut Name outRegion
+){
+    UiSkinRegion skinRegion;
+    if(!skin.tryFindRegion(regionName, skinRegion))
+        return false;
+    const Expected<ImageMetrics> metrics = MeasureImage(options, skinRegion, skin.referenceDensity());
+    if(!metrics.has_value())
+        return false;
+    outMetrics = metrics.value();
+    outRegion = skinRegion.name;
+    return true;
+}
+
+b8 TryResolveWindowChromeMetrics(
+    in UiSkin skin,
+    in WidgetStyle style,
+    in WindowOptions options,
+    in Point titleExtent,
+    mut WindowMetrics outMetrics
+){
+    UiSkinRegion frame;
+    UiSkinRegion header;
+    if(!skin.tryFindRegion(style.window, frame) || !skin.tryFindRegion(style.windowTitle, header))
+        return false;
+    UiSkinRegion collapse;
+    const b8 hasCollapse = skin.tryFindRegion(style.windowCollapse, collapse);
+    if(options.collapsible && !hasCollapse)
+        return false;
+    UiSkinRegion resize;
+    const b8 hasResize = skin.tryFindRegion(style.windowResize, resize);
+    if(options.resizable && !hasResize && !skin.hasRegion(style.white))
+        return false;
+    const Expected<WindowMetrics> metrics = MeasureWindow(frame, header, collapse, resize, style, options, titleExtent, skin.referenceDensity());
+    if(!metrics.has_value())
+        return false;
+    outMetrics = metrics.value();
+    return true;
+}
+
+b8 TryFinalizeWindowFirstUseArrangement(
+    in WindowOptions options,
+    in WindowMetrics metrics,
+    in Rect rootRectangle,
+    in b8 firstUse,
+    in DisplayMetrics display,
+    mut WindowState inOutState,
+    mut Rect outBounds
+){
+    ApplyWindowFirstUseContentBounds(options, metrics, rootRectangle, firstUse, inOutState);
+    const b8 constrained = TryConstrainWindow(display, metrics.titleHeight, inOutState);
+    outBounds = ResolveWindowContentBounds(inOutState, metrics);
+    return constrained;
+}
+
+HitTarget MakeBarrierHitTarget(in Rect rectangle, in Rect clip){
+    HitTarget target;
+    target.rectangle = rectangle;
+    target.clip = clip;
+    return target;
+}
+
+HitTarget MakeAnnotatedClipHitTarget(in Rect bounds, in Rect clip, in b8 contextMenu){
+    HitTarget target;
+    target.rectangle = bounds;
+    target.clip = clip;
+    target.focusable = false;
+    target.activatable = false;
+    target.contextMenu = contextMenu;
+    return target;
+}
+
+HitTarget MakeBasicControlHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in b8 interactive, in b8 contextMenu){
+    HitTarget target;
+    target.rectangle = rectangle;
+    target.clip = clip;
+    target.enabled = enabled;
+    target.focusable = enabled && interactive;
+    target.activatable = enabled && interactive;
+    target.contextMenu = contextMenu;
+    return target;
+}
+
+HitTarget MakeEditBoxHitTarget(in HitTarget baseTarget, in Rect rectangle, in Rect clip, in b8 enabled, in b8 contextMenu){
+    HitTarget target = baseTarget;
+    target.rectangle = rectangle;
+    target.clip = clip;
+    target.enabled = enabled;
+    target.focusable = enabled;
+    target.textEditable = enabled;
+    target.contextMenu = contextMenu;
+    return target;
+}
+
+HitTarget MakeTextAreaHitTarget(
+    in Rect rectangle,
+    in Rect clip,
+    in b8 enabled,
+    in b8 contextMenu,
+    in ControlToken token,
+    in Point step,
+    in ScrollViewportPlacement scrollbars
+){
+    HitTarget target;
+    target.rectangle = rectangle;
+    target.clip = clip;
+    target.enabled = enabled;
+    target.focusable = enabled;
+    target.textEditable = enabled;
+    target.contextMenu = contextMenu;
+    target.control = token;
+    target.scrollable = enabled;
+    target.scrollStep = cast<f64>(step.y);
+    target.scrollStepX = cast<f64>(step.x);
+    target.gestureMaximum = scrollbars.vertical.maximum;
+    target.gestureMaximumX = scrollbars.horizontal.maximum;
+    return target;
+}
+
+HitTarget MakeComboFieldHitTarget(
+    in Rect rectangle,
+    in Rect clip,
+    in b8 enabled,
+    in b8 contextMenu,
+    in ControlToken token,
+    in b8 focusOnCommit
+){
+    HitTarget target;
+    target.rectangle = rectangle;
+    target.clip = clip;
+    target.enabled = enabled;
+    target.focusable = enabled;
+    target.activatable = enabled;
+    target.contextMenu = contextMenu;
+    target.navigable = enabled;
+    target.control = token;
+    target.focusOnCommit = focusOnCommit;
+    return target;
+}
+
+PopupScope MakeComboPopupScope(
+    in PopupToken token,
+    in PopupToken parent,
+    in PopupPlacement placement,
+    in WidgetId focusAnchor,
+    in u64 focusAnchorDeclarationGeneration
+){
+    PopupScope scope;
+    scope.token = token;
+    scope.parent = parent;
+    scope.bounds = placement.bounds;
+    scope.viewport = placement.viewport;
+    scope.dismissFocusTraversal = true;
+    scope.focusAnchor = focusAnchor;
+    scope.focusAnchorDeclarationGeneration = focusAnchorDeclarationGeneration;
+    return scope;
+}
+
+PopupScope MakePopupFrameScope(
+    in PopupToken token,
+    in PopupToken parent,
+    in PopupPlacement placement,
+    in PopupOptions options
+){
+    PopupScope scope;
+    scope.token = token;
+    scope.parent = parent;
+    scope.bounds = placement.bounds;
+    scope.viewport = placement.viewport;
+    scope.dismissOutside = options.dismissOutside;
+    scope.dismissCancel = options.dismissCancel;
+    scope.autofocus = options.autofocus;
+    return scope;
+}
+
+LayoutNodeDesc MakePopupRootLayoutNodeDesc(
+    in Rect bounds,
+    in Insets popupPadding,
+    in UiSkinInsets backgroundPadding,
+    in f32 gap
+){
+    LayoutNodeDesc description;
+    description.direction = LayoutDirection::Column;
+    description.width = LayoutSize(LayoutSizePolicy::Fixed, bounds.width);
+    description.height = LayoutSize(LayoutSizePolicy::Fixed, bounds.height);
+    description.padding = MaxUiPadding(popupPadding, backgroundPadding);
+    description.gap = gap;
+    return description;
+}
+
+HitTarget MakeListHostHitTarget(
+    in Rect rectangle,
+    in Rect clip,
+    in b8 enabled,
+    in b8 contextMenu,
+    in ControlToken token,
+    in f32 rowHeight,
+    in f32 wheelRows,
+    in ScrollPlacement placement,
+    in u64 rowCount,
+    in b8 focusOnCommit
+){
+    HitTarget host;
+    host.rectangle = rectangle;
+    host.clip = clip;
+    host.enabled = enabled;
+    host.focusable = enabled;
+    host.contextMenu = contextMenu;
+    host.control = token;
+    host.navigable = enabled;
+    host.scrollable = enabled;
+    host.scrollStep = cast<f64>(rowHeight) * cast<f64>(wheelRows);
+    host.pageRows = ComputeListHostPageRows(placement.viewport.height, rowHeight, rowCount);
+    host.gestureMaximum = placement.maxOffset;
+    host.focusOnCommit = focusOnCommit;
+    return host;
+}
+
+HitTarget MakeListRowHitTarget(in Rect rectangle, in Rect clip, in b8 enabled, in ControlToken token, in u64 key){
+    HitTarget target;
+    target.rectangle = rectangle;
+    target.clip = clip;
+    target.enabled = enabled;
+    target.activatable = enabled;
+    target.control = token;
+    target.value = key;
+    return target;
+}
+
+HitTarget MakeRadioGroupHostHitTarget(
+    in RadioGroupPlacement placement,
+    in b8 enabled,
+    in b8 contextMenu,
+    in ControlToken token,
+    in b8 focusOnCommit
+){
+    HitTarget host;
+    host.rectangle = placement.bounds;
+    host.clip = placement.clip;
+    host.enabled = enabled;
+    host.focusable = enabled;
+    host.navigable = enabled;
+    host.horizontalNavigation = enabled;
+    host.contextMenu = contextMenu;
+    host.control = token;
+    host.focusOnCommit = focusOnCommit;
+    return host;
+}
+
+HitTarget MakeRadioGroupChoiceHitTarget(in RadioGroupChoicePlacement row, in b8 enabled, in ControlToken token){
+    HitTarget target;
+    target.rectangle = row.rectangle;
+    target.clip = row.clip;
+    target.enabled = enabled;
+    target.activatable = enabled;
+    target.control = token;
+    target.value = row.key;
+    return target;
+}
+
+HitTarget MakeSliderHostHitTarget(
+    in SliderPlacement placement,
+    in b8 interactive,
+    in b8 contextMenu,
+    in ControlToken token,
+    in b8 focusOnCommit
+){
+    HitTarget host;
+    host.rectangle = placement.bounds;
+    host.clip = placement.clip;
+    host.enabled = interactive;
+    host.focusable = interactive;
+    host.navigable = interactive;
+    host.horizontalNavigation = interactive;
+    host.contextMenu = contextMenu;
+    host.control = token;
+    host.focusOnCommit = focusOnCommit;
+    return host;
+}
+
+HitTarget MakeSliderTrackHitTarget(in SliderPlacement placement, in ControlToken token){
+    HitTarget trackTarget;
+    trackTarget.rectangle = placement.track;
+    trackTarget.clip = placement.clip;
+    trackTarget.pointerGesture = true;
+    trackTarget.gestureReference = placement.centerTravel;
+    trackTarget.control = token;
+    return trackTarget;
+}
+
+HitTarget MakeSliderThumbHitTarget(in SliderPlacement placement, in ControlToken token, in f64 value){
+    HitTarget thumbTarget;
+    thumbTarget.rectangle = placement.thumb;
+    thumbTarget.clip = placement.clip;
+    thumbTarget.pointerGesture = true;
+    thumbTarget.gestureReference = placement.travelBounds;
+    thumbTarget.control = token;
+    thumbTarget.value = BitCast<u64>(value);
+    return thumbTarget;
+}
+
+HitTarget MakeWindowTitleHitTarget(in Rect header, in Rect clip, in Rect windowBounds, in b8 movable){
+    HitTarget title;
+    title.rectangle = header;
+    title.clip = clip;
+    title.gestureReference = windowBounds;
+    title.pointerGesture = movable;
+    return title;
+}
+
+HitTarget MakeWindowCollapseHitTarget(in WindowState state, in WindowMetrics metrics, in Rect clip){
+    HitTarget collapse;
+    collapse.rectangle = ResolveWindowCollapseBounds(state, metrics);
+    collapse.clip = clip;
+    collapse.focusable = true;
+    collapse.activatable = true;
+    return collapse;
+}
+
+HitTarget MakeWindowResizeHitTarget(in Rect corner, in Rect clip, in Rect windowBounds){
+    HitTarget target;
+    target.rectangle = corner;
+    target.clip = clip;
+    target.gestureReference = windowBounds;
+    target.pointerGesture = true;
+    return target;
 }
 
 

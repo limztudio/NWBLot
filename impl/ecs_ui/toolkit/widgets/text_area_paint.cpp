@@ -49,19 +49,15 @@ b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
     state.m_visual.placement = placement;
     state.m_visual.scroll = placement.scroll;
     state.m_scrollY = placement.scrollY;
-    HitTarget target;
-    target.rectangle = box.rectangle;
-    target.clip = visibleClip(box.clip);
-    target.enabled = item.editOptions.enabled;
-    target.focusable = item.editOptions.enabled;
-    target.textEditable = item.editOptions.enabled;
-    target.contextMenu = item.contextMenu;
-    target.control = token;
-    target.scrollable = item.editOptions.enabled;
-    target.scrollStep = step.y;
-    target.scrollStepX = step.x;
-    target.gestureMaximum = state.scrollbars().vertical.maximum;
-    target.gestureMaximumX = state.scrollbars().horizontal.maximum;
+    const HitTarget target = MakeTextAreaHitTarget(
+        box.rectangle,
+        visibleClip(box.clip),
+        item.editOptions.enabled,
+        item.contextMenu,
+        token,
+        step,
+        state.scrollbars()
+    );
     if(!m_context.addTarget(item.state, target) || !paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
         return false;
     const b8 published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);

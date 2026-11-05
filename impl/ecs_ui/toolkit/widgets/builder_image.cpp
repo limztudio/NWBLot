@@ -26,20 +26,12 @@ b8 Builder::image(const AStringView stableKey, const Name& regionName, const Ima
     m_declaring = true;
     ScopeExit finish([this]()noexcept{ m_declaring = false; });
     const auto widget = m_context.declare(stableKey, WidgetKind::Image);
-    const UiSkinRegion* skinRegion = m_skin->findRegion(regionName);
     ImageFrame frame;
     frame.options = options;
-    if(!widget || !skinRegion){
+    if(!widget || !TryResolveImageRegionMetrics(*m_skin, regionName, options, frame.metrics, frame.region)){
         m_context.fail();
         return false;
     }
-    const auto metrics = MeasureImage(options, *skinRegion, m_skin->referenceDensity());
-    if(!metrics){
-        m_context.fail();
-        return false;
-    }
-    frame.metrics = *metrics;
-    frame.region = skinRegion->name;
     return publishImageFrame(**widget, Move(frame));
 }
 

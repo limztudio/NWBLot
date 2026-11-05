@@ -42,16 +42,7 @@ b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
         hovered
     ) || !comboMatches(frame))
         return false;
-    HitTarget target;
-    target.rectangle = box.rectangle;
-    target.clip = clip;
-    target.enabled = item.enabled;
-    target.focusable = item.enabled;
-    target.activatable = item.enabled;
-    target.contextMenu = item.contextMenu;
-    target.navigable = item.enabled;
-    target.control = frame.token;
-    target.focusOnCommit = frame.focusOnCommit;
+    const HitTarget target = MakeComboFieldHitTarget(box.rectangle, clip, item.enabled, item.contextMenu, frame.token, frame.focusOnCommit);
     if(!m_context.addTarget(item.state, target))
         return false;
     frame.state->m_bounds = box.rectangle;
@@ -94,14 +85,13 @@ b8 Builder::paintComboPopup(ComboFrame& frame){
     if(!placement)
         return false;
     const Insets padding = MaxUiPadding(frame.popupStyle.padding, background->padding);
-    PopupScope scope;
-    scope.token = frame.popupToken;
-    scope.parent = frame.parentToken;
-    scope.bounds = placement->bounds;
-    scope.viewport = placement->viewport;
-    scope.dismissFocusTraversal = true;
-    scope.focusAnchor = frame.state->m_owner;
-    scope.focusAnchorDeclarationGeneration = frame.state->m_ownerDeclaration;
+    const PopupScope scope = MakeComboPopupScope(
+        frame.popupToken,
+        frame.parentToken,
+        *placement,
+        frame.state->m_owner,
+        frame.state->m_ownerDeclaration
+    );
     if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){
@@ -113,9 +103,7 @@ b8 Builder::paintComboPopup(ComboFrame& frame){
     m_paint.pushClip(placement->viewport);
     const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
     const b8 clipPopped = m_paint.popClip();
-    HitTarget barrier;
-    barrier.rectangle = placement->bounds;
-    barrier.clip = placement->viewport;
+    const HitTarget barrier = MakeBarrierHitTarget(placement->bounds, placement->viewport);
     b8 painted = backgroundPainted && clipPopped && m_context.addTarget(frame.popup, barrier);
     if(painted){
         Item listItem(m_arena);

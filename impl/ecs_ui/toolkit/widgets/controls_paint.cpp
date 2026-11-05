@@ -21,9 +21,7 @@ b8 Builder::paintPanel(){
     m_paint.pushClip(visibleClip(panel->clip));
     const b8 painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
     const b8 popped = m_paint.popClip();
-    HitTarget barrier;
-    barrier.rectangle = panel->rectangle;
-    barrier.clip = visibleClip(panel->clip);
+    const HitTarget barrier = MakeBarrierHitTarget(panel->rectangle, visibleClip(panel->clip));
     if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
         return false;
     return paintItems();
@@ -86,14 +84,8 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
     if(item.state.kind == WidgetKind::Separator)
         return true;
     if(interactive || item.annotated){
-        HitTarget target;
-        target.rectangle = box.rectangle;
-        target.clip = clip;
         // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
-        target.enabled = item.enabled;
-        target.focusable = item.enabled && interactive;
-        target.activatable = item.enabled && interactive;
-        target.contextMenu = item.contextMenu;
+        const HitTarget target = MakeBasicControlHitTarget(box.rectangle, clip, item.enabled, interactive, item.contextMenu);
         return m_context.addTarget(item.state, target);
     }
     return true;
@@ -105,13 +97,7 @@ b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const Rect clip = visibleClip(box.clip);
     if(!PaintSelectable(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
         return false;
-    HitTarget target;
-    target.rectangle = box.rectangle;
-    target.clip = clip;
-    target.enabled = item.enabled;
-    target.focusable = item.enabled;
-    target.activatable = item.enabled;
-    target.contextMenu = item.contextMenu;
+    const HitTarget target = MakeBasicControlHitTarget(box.rectangle, clip, item.enabled, true, item.contextMenu);
     return m_context.addTarget(item.state, target);
 }
 
@@ -121,12 +107,7 @@ b8 Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& cl
         return false;
     if(!item.annotated)
         return true;
-    HitTarget target;
-    target.rectangle = bounds;
-    target.clip = clip;
-    target.focusable = false;
-    target.activatable = false;
-    target.contextMenu = item.contextMenu;
+    const HitTarget target = MakeAnnotatedClipHitTarget(bounds, clip, item.contextMenu);
     return m_context.addTarget(item.state, target);
 }
 

@@ -26,16 +26,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     const auto placement = PlaceRadioGroup(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics);
     if(!placement)
         return false;
-    HitTarget host;
-    host.rectangle = placement->bounds;
-    host.clip = placement->clip;
-    host.enabled = item.enabled;
-    host.focusable = item.enabled;
-    host.navigable = item.enabled;
-    host.horizontalNavigation = item.enabled;
-    host.contextMenu = item.contextMenu;
-    host.control = frame.m_token;
-    host.focusOnCommit = frame.m_focusOnCommit;
+    const HitTarget host = MakeRadioGroupHostHitTarget(*placement, item.enabled, item.contextMenu, frame.m_token, frame.m_focusOnCommit);
     if(!m_context.addTarget(item.state, host))
         return false;
     const auto choices = TryMakeWidgetId(item.state.id, s_WidgetPartChoices);
@@ -72,13 +63,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         ))
             return false;
         if(item.enabled){
-            HitTarget target;
-            target.rectangle = row.rectangle;
-            target.clip = row.clip;
-            target.enabled = enabled;
-            target.activatable = enabled;
-            target.control = frame.m_token;
-            target.value = row.key;
+            const HitTarget target = MakeRadioGroupChoiceHitTarget(row, enabled, frame.m_token);
             if(!m_context.addPartTarget(item.state, *part, target))
                 return false;
         }

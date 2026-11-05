@@ -126,13 +126,13 @@ b8 Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget
         return false;
     item.editState->placement = placement;
     item.editState->scroll = placement.scroll;
-    HitTarget target = navigation ? *navigation : HitTarget{};
-    target.rectangle = box.rectangle;
-    target.clip = visibleClip(box.clip);
-    target.enabled = item.editOptions.enabled;
-    target.focusable = item.editOptions.enabled;
-    target.textEditable = item.editOptions.enabled;
-    target.contextMenu = item.contextMenu;
+    const HitTarget target = MakeEditBoxHitTarget(
+        navigation ? *navigation : HitTarget{},
+        box.rectangle,
+        visibleClip(box.clip),
+        item.editOptions.enabled,
+        item.contextMenu
+    );
     if(!m_context.addTarget(item.state, target))
         return false;
     const b8 published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);

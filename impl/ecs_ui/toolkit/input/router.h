@@ -378,14 +378,6 @@ private:
             m_hoverPointerSource = {};
         }
     }
-    [[nodiscard]] PointerSource* findPointerSource(const InputSource& source, const PointerIntent::Enum intent)noexcept{
-        const auto found = FindRouterPointerSourceIndex(m_pointerSources, source, intent);
-        return found ? &m_pointerSources[*found] : nullptr;
-    }
-    [[nodiscard]] const PointerSource* findPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
-        const auto found = FindRouterPointerSourceIndex(m_pointerSources, source, intent);
-        return found ? &m_pointerSources[*found] : nullptr;
-    }
     void routePointerSource(const InputEvent& event, InputRoutingResult& result){
         if(event.type == InputEventType::PointerCaptureLost){
             result.pointerConsumed |= ownsPointerSource(event.source, PointerIntent::Activate) || ownsPointerSource(event.source, PointerIntent::ContextMenu);
@@ -404,94 +396,45 @@ private:
             }
             return;
         }
-        const b8 press = event.type == InputEventType::PrimaryDown || event.type == InputEventType::SecondaryDown;
-        const b8 release = event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp;
-        // Reuse only within this event; popup dismissal and layout reconciliation still resolve hover against their new state.
-        const HitTarget* hit = event.hoverCapable ? findHitTarget(event.position) : nullptr;
-        b8 hitResolved = event.hoverCapable;
-        const auto resolveHit = [this, &event, &hit, &hitResolved]()noexcept{
-            if(!hitResolved){
-                hit = findHitTarget(event.position);
-                hitResolved = true;
-            }
-            return hit;
-        };
-        observePointer(event, hit);
-        const PointerIntent::Enum intent = event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp ? PointerIntent::ContextMenu : PointerIntent::Activate;
-        PointerSource* held = findPointerSource(event.source, intent);
-        if(press){
-            if(held != nullptr){
-                result.pointerConsumed |= held->consumed;
-                return;
-            }
-            if(m_pointerSources.size() == s_InputMaxSources)
-                return;
-            const b8 accepted = !event.repeat && acceptsPointerSource(event.source);
-            const b8 consumed = !event.repeat && (m_activePointerSource == event.source ? m_primaryDown ? m_pointerSequenceConsumed : m_secondarySequenceConsumed : hasPopup() || resolveHit() != nullptr);
-            m_pointerSources.push_back({ event.source, intent, consumed, !accepted });
-            result.pointerConsumed |= consumed;
-            if(!accepted)
-                return;
-            m_activePointerSource = event.source;
-        }
-        else if(release){
-            if(held == nullptr){
-                result.pointerConsumed |= hasPopup() || resolveHit() != nullptr;
-                return;
-            }
-            result.pointerConsumed |= held->consumed;
-            if(held->inert || m_activePointerSource != event.source){
-                const auto index = static_cast<isize>(held - m_pointerSources.data());
-                m_pointerSources.erase(m_pointerSources.begin() + index);
-                return;
-            }
-        }
-        else{
-            const PointerSource* activation = findPointerSource(event.source, PointerIntent::Activate);
-            const PointerSource* context = findPointerSource(event.source, PointerIntent::ContextMenu);
-            const b8 blocked = (activation != nullptr && activation->inert) || (context != nullptr && context->inert) || !acceptsPointerSource(event.source);
-            if(blocked){
-                result.pointerConsumed |= (activation != nullptr && activation->consumed) || (context != nullptr && context->consumed);
-                return;
-            }
-            if(!m_activePointerSource.valid() && !event.hoverCapable && event.type == InputEventType::PointerMove)
-                return;
-        }
-        if(press || release || event.type == InputEventType::PointerWheel)
-            resolveHit();
-        result.pointerRouted = true;
-        m_interactionPosition = event.position;
-        if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
-            routeSecondary(event, hit, result);
-        else if(event.type == InputEventType::PointerWheel)
-            routeWheel(event, hit, result);
-        else
-            routePointer(event, hit, result);
-        if(release){
-            const auto index = static_cast<isize>(held - m_pointerSources.data());
-            m_pointerSources.erase(m_pointerSources.begin() + index);
-            if(!m_primaryDown && !m_secondaryDown)
-                m_activePointerSource = {};
-        }
-    }
-    void observePointer(const InputEvent& event, const HitTarget* const hit)noexcept{
-        b8 changedOwner = false;
-        ObserveRouterPointer(
+        b8 hasHit = false;
+        HitTarget hit;
+        usize heldIndex = m_pointerSources.size();
+        b8 advanceHover = false;
+        const b8 shouldRoute = AdmitRouterPointerSourceEvent(
             m_targets,
             m_lookup,
             m_popups,
             event,
-            hit != nullptr,
-            hit != nullptr ? *hit : HitTarget{},
+            m_primaryDown,
+            m_pointerSequenceConsumed,
+            m_secondarySequenceConsumed,
             m_pointer,
             m_pointerKnown,
             m_hoverPointerSource,
             m_hoverIdentity,
             m_hover,
-            changedOwner
+            m_pointerSources,
+            m_activePointerSource,
+            m_interactionPosition,
+            result,
+            hasHit,
+            hit,
+            heldIndex,
+            advanceHover
         );
-        if(changedOwner)
+        if(advanceHover)
             advanceHoverActivity();
+        if(!shouldRoute)
+            return;
+        const HitTarget* const hitPtr = hasHit ? &hit : nullptr;
+        if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
+            routeSecondary(event, hitPtr, result);
+        else if(event.type == InputEventType::PointerWheel)
+            routeWheel(event, hitPtr, result);
+        else
+            routePointer(event, hitPtr, result);
+        if(event.type == InputEventType::PrimaryUp || event.type == InputEventType::SecondaryUp)
+            FinishRouterPointerRelease(heldIndex, m_primaryDown, m_secondaryDown, m_pointerSources, m_activePointerSource);
     }
     void terminatePointerSource(const InputSource source)noexcept{
         b8 unfinishedHoverSource = false;
@@ -576,34 +519,39 @@ private:
         );
     }
     void retirePopup(const WidgetId id){
-        b8 top = false;
-        PopupRecord restore;
-        if(!TryRetireRouterPopupSubtree(id, m_popups, m_targets, m_popupDismissals, top, restore))
+        if(!RetireRouterPopupAndRestoreFocus(
+            id,
+            m_windowFocused,
+            m_popups,
+            m_targets,
+            m_lookup,
+            m_popupDismissals,
+            m_commandSources,
+            m_focus,
+            m_focusDeclaration,
+            m_focusControl
+        ))
             return;
-        rebuildLookup();
-        if(top){
-            RetireRouterCommandFocus(m_commandSources);
-            const HitTarget* target = findTarget(restore.restoreFocus, restore.restoreDeclaration);
-            if(m_windowFocused && target && target->popup == restore.restorePopup && target->focusable && IsRouterTargetInteractive(m_targets, m_lookup, m_popups, *target)){
-                m_focus = target->id;
-                m_focusDeclaration = target->declarationGeneration;
-                m_focusControl = target->control;
-            }
-            else
-                clearFocus();
-        }
         reconcileTargets();
     }
     void rebuildLookup(){
         RebuildRouterTargetLookup(m_targets, m_lookup);
     }
     void reconcileTargets()noexcept{
-        ReconcileRouterFocusCaptureAndActions(
+        b8 changedHoverOwner = false;
+        ReconcileRouterAllTargets(
             m_targets,
             m_lookup,
             m_popups,
+            m_windowFocused,
+            m_pointerKnown,
+            m_pointer,
             m_commandSources,
             m_actions,
+            m_controlActions,
+            m_contextMenuActions,
+            m_pointerGestures,
+            m_activeGestureSequence,
             m_focus,
             m_focusDeclaration,
             m_focusControl,
@@ -611,13 +559,14 @@ private:
             m_capturePopup,
             m_captureDeclaration,
             m_captureControl,
-            m_pointerSubmitArmed
+            m_pointerSubmitArmed,
+            m_secondaryOwner,
+            m_hoverIdentity,
+            m_hover,
+            changedHoverOwner
         );
-        ReconcileRouterPointerGestures(m_targets, m_lookup, m_popups, m_pointerGestures, m_activeGestureSequence);
-        ReconcileRouterControlActions(m_targets, m_lookup, m_popups, m_controlActions, m_commandSources);
-        ReconcileRouterContextMenus(m_targets, m_lookup, m_popups, m_windowFocused, m_contextMenuActions, m_secondaryOwner, m_commandSources);
-        ReconcileRouterCommandPresses(m_targets, m_lookup, m_popups, m_windowFocused, m_focus, m_focusDeclaration, m_commandSources);
-        updateHover();
+        if(changedHoverOwner)
+            advanceHoverActivity();
     }
     void updateHover()noexcept{ setHoverTarget(m_pointerKnown ? findHitTarget(m_pointer) : nullptr); }
     void setHoverTarget(const HitTarget* const hovered)noexcept{

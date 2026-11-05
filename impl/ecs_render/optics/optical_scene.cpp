@@ -60,16 +60,14 @@ void RayTracingOpticalSceneGather::markIncomplete()noexcept{
 }
 
 u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, header);
-    for(const auto& instance : instances)
-        Fnv64AppendValue(hash, instance);
-    if(!runtimeBounds.empty())
-        Fnv64AppendValue(hash, boundsCompleteExceptRuntime);
-    for(const auto& bounds : runtimeBounds){
-        Fnv64AppendValue(hash, bounds.objectToWorld);
-        Fnv64AppendValue(hash, bounds.instanceIndex);
-    }
+    u64 hash = ComputeRayTracingOpticalSceneBaseHash(
+        header,
+        Span<const RayTracingOpticalInstanceGpu>(instances.data(), instances.size()),
+        !runtimeBounds.empty(),
+        boundsCompleteExceptRuntime
+    );
+    for(const auto& bounds : runtimeBounds)
+        hash = UpdateRayTracingOpticalRuntimeBoundsHash(hash, LoadFloat(bounds.objectToWorld), bounds.instanceIndex);
     return hash;
 }
 

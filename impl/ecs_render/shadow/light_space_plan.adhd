@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/csg/cutter_gpu_data.adhd>
+#include <impl/ecs_render/raytrace/types.adhd>
 #include <impl/ecs_render/shadow/light_space_types.adhd>
 
 
@@ -285,6 +287,69 @@ LightSpaceCaptureIdentity BuildLightSpaceCaptureIdentity(
             identity.layout = updateFnv64U32(identity.layout, plan.views[cast<usize>(view)].light[lane]);
     }
     return identity;
+}
+
+u64 BuildLightSpaceCsgBaseCaptureIdentity(
+    in u64 captureGeometryIdentity,
+    in u64 snapshotContentIdentity,
+    in Span<NwbRtInstanceMaterialGpu> materials,
+    in Span<InstanceGpuData> instances,
+    in Span<u8> materialBytes,
+    in usize textureCount
+){
+    const usize instanceCount = instances.size();
+    u64 identity = updateFnv64U64(captureGeometryIdentity, snapshotContentIdentity);
+    identity = updateFnv64U64(identity, cast<u64>(instanceCount));
+    for(usize index = 0u; index < instanceCount; ++index){
+        const NwbRtInstanceMaterialGpu mat = materials[index];
+        identity = updateFnv64U32(identity, mat.surfaceDispatchId);
+        identity = updateFnv64U32(identity, mat.flags);
+        identity = updateFnv64U32(identity, mat.shadingModelId);
+        identity = updateFnv64U32(identity, mat.materialConstantByteOffset);
+        identity = updateFnv64U32(identity, mat.meshInstanceIndex);
+        identity = updateFnv64U32(identity, mat.indexSlot);
+        identity = updateFnv64U32(identity, mat.attributeSlot);
+        identity = updateFnv64U32(identity, mat.positionSlot);
+        identity = updateFnv64U32(identity, mat.nodeSlot);
+        const InstanceGpuData inst = instances[index];
+        identity = updateFnv64U32(identity, bit_cast<u32>(inst.translation.w));
+        for(usize slotIndex = 0u; slotIndex < inst.geometryHeapSlots.size(); ++slotIndex)
+            identity = updateFnv64U32(identity, inst.geometryHeapSlots[slotIndex]);
+    }
+    identity = UpdateFnv64ByteSpan(identity, materialBytes);
+    return updateFnv64U64(identity, cast<u64>(textureCount));
+}
+
+void UpdateLightSpaceCsgInstancesIdentity(
+    in Span<LightSpaceCsgInstanceGpu> instances,
+    mut u64 inOutIdentity
+){
+    const u64 instanceBytes = cast<u64>(instances.size()) * 96ul;
+    inOutIdentity = updateFnv64U64(inOutIdentity, instanceBytes);
+    for(in LightSpaceCsgInstanceGpu inst : instances){
+        inOutIdentity = UpdateFnv64Matrix34Bits(inOutIdentity, MatrixSingle(inst.worldToObject));
+        inOutIdentity = updateFnv64U32(inOutIdentity, inst.runtimeBoundsSlot);
+        inOutIdentity = updateFnv64U32(inOutIdentity, inst.primitiveCount);
+        inOutIdentity = updateFnv64U32(inOutIdentity, inst.meshRootSlot);
+        inOutIdentity = updateFnv64U32(inOutIdentity, inst.padding);
+        inOutIdentity = UpdateFnv64Vector4Bits(inOutIdentity, VectorSingle(inst.localMin));
+        inOutIdentity = UpdateFnv64Vector4Bits(inOutIdentity, VectorSingle(inst.localMax));
+    }
+}
+
+void LogLightSpaceCsgUnsupportedLimitationsIfNeeded(
+    in Span<CsgShadowReceiverRangeGpu> receiverRanges,
+    mut b8 inOutLimitationLogged
+){
+    if(inOutLimitationLogged)
+        return;
+    for(in CsgShadowReceiverRangeGpu range : receiverRanges){
+        if((range.flags & s_CsgRayReceiverUnsupported) == 0u)
+            continue;
+        inOutLimitationLogged = true;
+        warning("RendererSystem: unsupported or over-budget CSG cutters retain conservative shadows and suppress GI bounce radiance");
+        break;
+    }
 }
 
 

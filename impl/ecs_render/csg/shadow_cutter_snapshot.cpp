@@ -42,18 +42,20 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
         if(boundsCanCull && bounds->finiteBounds && !AabbTests::Intersects(receiverMin, receiverMax, bounds->minBounds, bounds->maxBounds))
             return;
 
-        Fnv64AppendValue(snapshot.contentIdentity, entity.id);
-        Fnv64AppendValue(snapshot.contentIdentity, cutter.shapeType.hash());
-        Fnv64AppendBuffer(snapshot.contentIdentity, *parameters);
-        Fnv64AppendValue(snapshot.identity, entity.id);
-        Fnv64AppendValue(snapshot.identity, cutter.shapeType.hash());
-        Fnv64AppendValue(snapshot.identity, cutter.worldToShape);
-        Fnv64AppendValue(snapshot.identity, cutter.shapeToWorld);
-        Fnv64AppendBuffer(snapshot.identity, *parameters);
+        const SIMDMatrix worldToShape = LoadFloat(cutter.worldToShape);
+        UpdateShadowCutterSnapshotHashes(
+            entity,
+            cutter.shapeType,
+            worldToShape,
+            shapeToWorld,
+            *parameters,
+            snapshot.contentIdentity,
+            snapshot.identity
+        );
         AppendShadowCutterRecord(
             static_cast<b8>(shapeType->desc.shaderModule),
             shapeType->desc.name,
-            LoadFloat(cutter.worldToShape),
+            worldToShape,
             shapeToWorld,
             *parameters,
             range,
@@ -107,31 +109,17 @@ b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<cons
 
     outSnapshot.receiverRanges.resize(receiverCount);
     outSnapshot.cutters.reserve(cutterCapacity);
-    outSnapshot.contentIdentity = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(outSnapshot.contentIdentity, shapeRegistry.revision());
-    Fnv64AppendValue(outSnapshot.contentIdentity, receiverCount);
-    outSnapshot.identity = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(outSnapshot.identity, shapeRegistry.revision());
-    Fnv64AppendValue(outSnapshot.identity, receiverCount);
+    InitializeShadowCutterSnapshotHashes(shapeRegistry.revision(), receiverCount, outSnapshot.contentIdentity, outSnapshot.identity);
     for(usize index = 0u; index < receiverCount; ++index){
         const CsgShadowReceiverInput& receiver = receivers[index];
-        Fnv64AppendValue(outSnapshot.contentIdentity, receiver.entity.id);
-        Fnv64AppendValue(outSnapshot.contentIdentity, receiver.receiverPass);
-        Fnv64AppendValue(outSnapshot.identity, receiver.entity.id);
-        Fnv64AppendValue(outSnapshot.identity, receiver.receiverPass);
+        UpdateShadowReceiverSnapshotHeaderHashes(receiver, drawStates[index].active, outSnapshot.contentIdentity, outSnapshot.identity);
         CsgShadowReceiverRangeGpu& range = outSnapshot.receiverRanges[index];
         range = CsgShadowReceiverRangeGpu{};
         if(drawStates[index].active){
-            Fnv64AppendBool(outSnapshot.identity, receiver.boundsValid);
-            if(receiver.boundsValid){
-                Fnv64AppendValue(outSnapshot.identity, receiver.worldMin);
-                Fnv64AppendValue(outSnapshot.identity, receiver.worldMax);
-            }
             __hidden_shadow_cutter_snapshot::AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range);
             outSnapshot.hasCsg = outSnapshot.hasCsg || (range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         }
-        Fnv64AppendValue(outSnapshot.identity, range);
-        Fnv64AppendValue(outSnapshot.contentIdentity, range);
+        UpdateShadowReceiverSnapshotRangeHashes(range, outSnapshot.contentIdentity, outSnapshot.identity);
     }
     if(!outSnapshot.hasCsg){
         outSnapshot.receiverRanges.clear();

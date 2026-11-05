@@ -28,18 +28,15 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     const Span<const u8> materialBytes,
     const Span<const Core::TextureHandle> textures
 )noexcept{
-    const usize instanceCount = instances.size();
-    NWB_ASSERT(materials.size() == instanceCount);
-    u64 identity = state.captureGeometryIdentity;
-    Fnv64AppendValue(identity, state.snapshot.contentIdentity);
-    Fnv64AppendValue(identity, instanceCount);
-    for(usize index = 0u; index < instanceCount; ++index){
-        Fnv64AppendValue(identity, materials[index]);
-        Fnv64AppendValue(identity, instances[index].translation.w);
-        Fnv64AppendValue(identity, instances[index].geometryHeapSlots);
-    }
-    Fnv64AppendBuffer(identity, materialBytes);
-    Fnv64AppendValue(identity, textures.size());
+    NWB_ASSERT(materials.size() == instances.size());
+    u64 identity = BuildLightSpaceCsgBaseCaptureIdentity(
+        state.captureGeometryIdentity,
+        state.snapshot.contentIdentity,
+        materials,
+        instances,
+        materialBytes,
+        textures.size()
+    );
     for(const Core::TextureHandle& texture : textures)
         Fnv64AppendValue(identity, texture.get());
     return identity;
@@ -205,16 +202,14 @@ b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgStat
         NWB_MEMCPY(state.bytes.data() + maskOffset, words.size_bytes(), words.data(), words.size_bytes());
         maskOffset += words.size_bytes();
     }
-    Fnv64AppendBuffer(state.snapshot.identity, Span<const u8>(static_cast<const u8*>(static_cast<const void*>(state.instances.data())), instanceBytes));
-    if(!state.limitationLogged){
-        for(const auto& range : state.snapshot.receiverRanges){
-            if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) == 0u)
-                continue;
-            state.limitationLogged = true;
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: unsupported or over-budget CSG cutters retain conservative shadows and suppress GI bounce radiance"));
-            break;
-        }
-    }
+    UpdateLightSpaceCsgInstancesIdentity(
+        Span<const LightSpaceCsgInstanceGpu>(state.instances.data(), state.instances.size()),
+        state.snapshot.identity
+    );
+    LogLightSpaceCsgUnsupportedLimitationsIfNeeded(
+        Span<const CsgShadowReceiverRangeGpu>(state.snapshot.receiverRanges.data(), state.snapshot.receiverRanges.size()),
+        state.limitationLogged
+    );
     return true;
 }
 

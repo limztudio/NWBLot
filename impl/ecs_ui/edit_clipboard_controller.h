@@ -134,28 +134,22 @@ private:
         case Core::ClipboardStatus::Success: break;
         default: return { UiEditClipboardStatus::NativeFailure };
         }
-        if(m_action != Ui::EditClipboardAction::Paste && m_action != Ui::EditClipboardAction::Cut)
-            return { UiEditClipboardStatus::Published };
-        if(readOnly)
-            return { UiEditClipboardStatus::ReadOnly };
+        const UiEditClipboardStatus::Enum prepStatus = PrepareUiEditClipboardInsertText(
+            m_action,
+            readOnly,
+            model.textMode(),
+            model.text().size(),
+            model.selectionStart(),
+            model.selectionEnd(),
+            model.limits().maxBytes,
+            AStringView(m_completion.text),
+            m_insertText
+        );
+        if(prepStatus != UiEditClipboardStatus::Pending)
+            return { prepStatus };
         const u64 revision = model.revision();
         const usize anchor = model.anchor();
         const usize caret = model.caret();
-        if(m_action == Ui::EditClipboardAction::Paste){
-            const usize retainedBytes = model.text().size() - (model.selectionEnd() - model.selectionStart());
-            if(retainedBytes > model.limits().maxBytes)
-                return { UiEditClipboardStatus::TooLarge };
-            const auto source = AStringView(m_completion.text);
-            const usize maxBytes = model.limits().maxBytes - retainedBytes;
-            auto normalized = model.textMode() == Ui::EditTextMode::Multiline
-                ? Ui::NormalizeMultilineText(m_insertText.get_allocator().arena(), source, maxBytes)
-                : Ui::NormalizeSingleLineText(m_insertText.get_allocator().arena(), source, maxBytes);
-            if(!normalized)
-                return { normalized.error() == Ui::EditTextStatus::TooLarge ? UiEditClipboardStatus::TooLarge : UiEditClipboardStatus::InvalidText };
-            m_insertText = Move(*normalized);
-            if(m_insertText.empty())
-                return { UiEditClipboardStatus::Applied };
-        }
         if(!model.replaceSelection(AStringView(m_insertText)))
             return { UiEditClipboardStatus::ModelRejected };
         return { UiEditClipboardStatus::Applied, model.revision() != revision, model.anchor() != anchor || model.caret() != caret };

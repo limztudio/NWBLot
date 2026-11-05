@@ -114,7 +114,7 @@ b8 UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry& 
                 return true;
         }
         else{
-            const usize anchor = event.dragging && entry.dragging ? entry.dragAnchor : event.extend ? model.anchor() : event.position;
+            const usize anchor = ResolveUiEditSelectionAnchor(event.dragging, entry.dragging, entry.dragAnchor, event.extend, model.anchor(), event.position);
             if(!model.setSelection(anchor, event.position))
                 return true;
             entry.dragAnchor = anchor;
@@ -202,9 +202,7 @@ b8 UiEditBoxHost::applyNavigation(const Event& event, const Ui::EditNavigationDi
     const auto target = navigation.resolver.resolve(model, direction, preferred, event.navigationViewportHeight);
     if(m_borrowRejected || m_context.failed() || !model.matchesStamp(expected) || model.composition().active || !navigation.state.matches(preferred) || !target || !IsFinite(target->preferredX))
         return false;
-    const auto& boundaries = model.graphemeBoundaries();
-    const auto boundary = LowerBound(boundaries.begin(), boundaries.end(), target->committedByte);
-    if(boundary == boundaries.end() || *boundary != target->committedByte)
+    if(!IsCommittedByteOnGraphemeBoundary(model.graphemeBoundaries(), target->committedByte))
         return false;
     if(!model.setSelection(event.command.extend ? expected.anchor : target->committedByte, target->committedByte))
         return false;

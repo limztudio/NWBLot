@@ -213,17 +213,45 @@ public:
     }
 
     [[nodiscard]] b8 undo(){
-        if(!canUndo())
-            return false;
-        const HistoryRecord& record = m_history[m_historyCursor - 1u];
-        return restoreHistoryState({ record.before.data(), record.before.size() }, record.beforeAnchor, record.beforeCaret, -1);
+        return ApplyEditModelUndo(
+            m_history,
+            m_textMode,
+            m_text,
+            m_boundaries,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_historyCursor,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration,
+            m_revision
+        );
     }
 
     [[nodiscard]] b8 redo(){
-        if(!canRedo())
-            return false;
-        const HistoryRecord& record = m_history[m_historyCursor];
-        return restoreHistoryState({ record.after.data(), record.after.size() }, record.afterAnchor, record.afterCaret, 1);
+        return ApplyEditModelRedo(
+            m_history,
+            m_textMode,
+            m_text,
+            m_boundaries,
+            m_anchor,
+            m_caret,
+            m_selectionGeneration,
+            m_historyCursor,
+            m_preedit,
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive,
+            m_compositionGeneration,
+            m_revision
+        );
     }
 
     [[nodiscard]] b8 canUndo()const noexcept{ return m_historyCursor != 0u; }
@@ -282,7 +310,14 @@ public:
     }
 
     [[nodiscard]] EditCompositionView composition()const noexcept{
-        return { { m_preedit.data(), m_preedit.size() }, m_preeditAnchor, m_preeditCaret, Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), m_compositionActive };
+        return MakeEditCompositionView(
+            { m_preedit.data(), m_preedit.size() },
+            m_preeditAnchor,
+            m_preeditCaret,
+            m_compositionAnchor,
+            m_compositionCaret,
+            m_compositionActive
+        );
     }
 
 

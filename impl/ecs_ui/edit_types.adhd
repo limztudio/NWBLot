@@ -240,5 +240,67 @@ b8 CanAppendUiEditBoxEvent(
     return currentEventCount < maxEvents && eventTextSize <= maxQueuedTextBytes - queuedTextBytes;
 }
 
+UiEditClipboardStatus PrepareUiEditClipboardInsertText(
+    in EditClipboardAction action,
+    in b8 readOnly,
+    in EditTextMode textMode,
+    in usize textLength,
+    in usize selectionStart,
+    in usize selectionEnd,
+    in usize maxModelBytes,
+    in StringView completionText,
+    mut String inOutInsertText
+){
+    if(action != EditClipboardAction::Paste && action != EditClipboardAction::Cut)
+        return UiEditClipboardStatus::Published;
+    if(readOnly)
+        return UiEditClipboardStatus::ReadOnly;
+    inOutInsertText.clear();
+    if(action == EditClipboardAction::Paste){
+        const usize retainedBytes = textLength - (selectionEnd - selectionStart);
+        if(retainedBytes > maxModelBytes)
+            return UiEditClipboardStatus::TooLarge;
+        const usize maxBytes = maxModelBytes - retainedBytes;
+        Expected<usize, EditTextStatus> normalized = makeUnexpected(EditTextStatus::InvalidText);
+        if(textMode == EditTextMode::Multiline)
+            normalized = NormalizeMultilineTextInto(completionText, maxBytes, inOutInsertText);
+        else
+            normalized = NormalizeSingleLineTextInto(completionText, maxBytes, inOutInsertText);
+        if(!normalized.has_value()){
+            if(normalized.error() == EditTextStatus::TooLarge)
+                return UiEditClipboardStatus::TooLarge;
+            return UiEditClipboardStatus::InvalidText;
+        }
+        if(inOutInsertText.empty())
+            return UiEditClipboardStatus::Applied;
+    }
+    return UiEditClipboardStatus::Pending;
+}
+
+b8 IsCommittedByteOnGraphemeBoundary(in Span<usize> boundaries, in usize committedByte){
+    for(in usize boundary : boundaries){
+        if(boundary == committedByte)
+            return true;
+        if(boundary > committedByte)
+            return false;
+    }
+    return false;
+}
+
+usize ResolveUiEditSelectionAnchor(
+    in b8 eventDragging,
+    in b8 entryDragging,
+    in usize entryDragAnchor,
+    in b8 eventExtend,
+    in usize modelAnchor,
+    in usize eventPosition
+){
+    if(eventDragging && entryDragging)
+        return entryDragAnchor;
+    if(eventExtend)
+        return modelAnchor;
+    return eventPosition;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

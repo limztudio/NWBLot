@@ -167,6 +167,190 @@ b8 ValidateFontAtlasGlyphGroupRect(
     return false;
 }
 
+class FontAtlasBinaryDecodedHeader{
+    public u32 faceIndex = 0u;
+    public u32 unitsPerEm = 0u;
+    public u32 sourceGlyphCount = 0u;
+    public u32 bakePpem = s_FontAtlasDefaultBakePpem;
+    public u32 spreadPixels = s_FontAtlasDefaultSpreadPixels;
+    public u32 guardTexels = s_FontAtlasDefaultGuardTexels;
+    public FontAtlasRasterMode rasterMode = FontAtlasRasterMode::Bitmap;
+    public f32 ascenderUnits = 0.0f;
+    public f32 descenderUnits = 0.0f;
+    public f32 lineGapUnits = 0.0f;
+    public u32 glyphCount = 0u;
+    public u32 groupCount = 0u;
+    public u32 tableCount = 0u;
+}
+
+b8 TryReadFontAtlasBinaryPreambleAndIdentity(
+    in Span<u8> bytes,
+    mut usize cursor,
+    mut Array<u64, 4u> outIdentityQwords
+){
+    const Expected<u32> magic = ReadU32LittleEndian(bytes, cursor);
+    if(!magic.has_value())
+        return false;
+    const Expected<u32> version = ReadU32LittleEndian(bytes, cursor);
+    if(!version.has_value())
+        return false;
+    const Expected<u32> encoding = ReadU32LittleEndian(bytes, cursor);
+    if(!encoding.has_value())
+        return false;
+    const Expected<u32> reserved = ReadU32LittleEndian(bytes, cursor);
+    if(!reserved.has_value())
+        return false;
+    if(!IsValidFontAtlasBinaryPreamble(magic.value(), version.value(), encoding.value(), reserved.value()))
+        return false;
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const Expected<u32> low = ReadU32LittleEndian(bytes, cursor);
+        if(!low.has_value())
+            return false;
+        const Expected<u32> high = ReadU32LittleEndian(bytes, cursor);
+        if(!high.has_value())
+            return false;
+        outIdentityQwords[lane] = PackFontAtlasQword(low.value(), high.value());
+    }
+    return true;
+}
+
+Expected<FontAtlasBinaryDecodedHeader> TryReadFontAtlasBinaryHeaderTail(
+    in Span<u8> bytes,
+    mut usize cursor
+){
+    FontAtlasBinaryDecodedHeader header;
+    const Expected<u32> faceIndex = ReadU32LittleEndian(bytes, cursor);
+    if(!faceIndex.has_value())
+        return makeUnexpected(Failure());
+    header.faceIndex = faceIndex.value();
+    const Expected<u32> unitsPerEm = ReadU32LittleEndian(bytes, cursor);
+    if(!unitsPerEm.has_value())
+        return makeUnexpected(Failure());
+    header.unitsPerEm = unitsPerEm.value();
+    const Expected<u32> sourceGlyphCount = ReadU32LittleEndian(bytes, cursor);
+    if(!sourceGlyphCount.has_value())
+        return makeUnexpected(Failure());
+    header.sourceGlyphCount = sourceGlyphCount.value();
+    const Expected<u32> bakePpem = ReadU32LittleEndian(bytes, cursor);
+    if(!bakePpem.has_value())
+        return makeUnexpected(Failure());
+    header.bakePpem = bakePpem.value();
+    const Expected<u32> spreadPixels = ReadU32LittleEndian(bytes, cursor);
+    if(!spreadPixels.has_value())
+        return makeUnexpected(Failure());
+    header.spreadPixels = spreadPixels.value();
+    const Expected<u32> guardTexels = ReadU32LittleEndian(bytes, cursor);
+    if(!guardTexels.has_value())
+        return makeUnexpected(Failure());
+    header.guardTexels = guardTexels.value();
+    const Expected<u32> raster = ReadU32LittleEndian(bytes, cursor);
+    if(!raster.has_value())
+        return makeUnexpected(Failure());
+    const Expected<f32> ascenderUnits = ReadF32LittleEndian(bytes, cursor);
+    if(!ascenderUnits.has_value())
+        return makeUnexpected(Failure());
+    header.ascenderUnits = ascenderUnits.value();
+    const Expected<f32> descenderUnits = ReadF32LittleEndian(bytes, cursor);
+    if(!descenderUnits.has_value())
+        return makeUnexpected(Failure());
+    header.descenderUnits = descenderUnits.value();
+    const Expected<f32> lineGapUnits = ReadF32LittleEndian(bytes, cursor);
+    if(!lineGapUnits.has_value())
+        return makeUnexpected(Failure());
+    header.lineGapUnits = lineGapUnits.value();
+    const Expected<u32> glyphCount = ReadU32LittleEndian(bytes, cursor);
+    if(!glyphCount.has_value())
+        return makeUnexpected(Failure());
+    header.glyphCount = glyphCount.value();
+    const Expected<u32> groupCount = ReadU32LittleEndian(bytes, cursor);
+    if(!groupCount.has_value())
+        return makeUnexpected(Failure());
+    header.groupCount = groupCount.value();
+    const Expected<u32> tableCount = ReadU32LittleEndian(bytes, cursor);
+    if(!tableCount.has_value())
+        return makeUnexpected(Failure());
+    header.tableCount = tableCount.value();
+    if(!IsValidFontAtlasBinaryCounts(header.glyphCount, header.sourceGlyphCount, header.groupCount, header.tableCount, raster.value(), cursor, bytes.size()))
+        return makeUnexpected(Failure());
+    header.rasterMode = cast<FontAtlasRasterMode>(raster.value());
+    return header;
+}
+
+b8 ValidateFontAtlasBinaryGroupChunk(
+    in u32 width,
+    in u32 height,
+    in u32 channelCount,
+    in u32 byteCount,
+    in u64 pixelBytes,
+    in usize cursor,
+    in usize totalBytes
+){
+    if(!IsValidFontAtlasGroupDimensions(width, height, channelCount))
+        return false;
+    const u64 expectedBytes = cast<u64>(width) * cast<u64>(height) * cast<u64>(channelCount);
+    return expectedBytes == cast<u64>(byteCount)
+        && pixelBytes + cast<u64>(byteCount) <= s_FontAtlasMaxPixelBytes
+        && cursor <= totalBytes
+        && cast<usize>(byteCount) <= totalBytes - cursor;
+}
+
+b8 ValidateFontAtlasBinaryTableChunk(
+    in u32 byteCount,
+    in u64 tableBytes,
+    in usize cursor,
+    in usize totalBytes
+){
+    return byteCount != 0u
+        && tableBytes + cast<u64>(byteCount) <= s_FontAtlasMaxPositioningBytes
+        && cursor <= totalBytes
+        && cast<usize>(byteCount) <= totalBytes - cursor;
+}
+
+void AppendFontAtlasBinaryPreambleAndIdentity(
+    in Array<u64, 4u> fontIdentityQwords,
+    mut Vector<u8> outBinary
+){
+    AppendU32LittleEndian(outBinary, s_FontAtlasBinaryMagic);
+    AppendU32LittleEndian(outBinary, s_FontAtlasBinaryVersion);
+    AppendU32LittleEndian(outBinary, s_FontAtlasDistanceEncoding);
+    AppendU32LittleEndian(outBinary, 0u);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        AppendU32LittleEndian(outBinary, UnpackFontAtlasLowWord(fontIdentityQwords[lane]));
+        AppendU32LittleEndian(outBinary, UnpackFontAtlasHighWord(fontIdentityQwords[lane]));
+    }
+}
+
+void AppendFontAtlasBinaryHeaderTail(
+    in u32 faceIndex,
+    in u32 unitsPerEm,
+    in u32 sourceGlyphCount,
+    in u32 bakePpem,
+    in u32 spreadPixels,
+    in u32 guardTexels,
+    in FontAtlasRasterMode rasterMode,
+    in f32 ascenderUnits,
+    in f32 descenderUnits,
+    in f32 lineGapUnits,
+    in u32 glyphCount,
+    in u32 groupCount,
+    in u32 tableCount,
+    mut Vector<u8> outBinary
+){
+    AppendU32LittleEndian(outBinary, faceIndex);
+    AppendU32LittleEndian(outBinary, unitsPerEm);
+    AppendU32LittleEndian(outBinary, sourceGlyphCount);
+    AppendU32LittleEndian(outBinary, bakePpem);
+    AppendU32LittleEndian(outBinary, spreadPixels);
+    AppendU32LittleEndian(outBinary, guardTexels);
+    AppendU32LittleEndian(outBinary, cast<u32>(rasterMode));
+    AppendF32LittleEndian(outBinary, ascenderUnits);
+    AppendF32LittleEndian(outBinary, descenderUnits);
+    AppendF32LittleEndian(outBinary, lineGapUnits);
+    AppendU32LittleEndian(outBinary, glyphCount);
+    AppendU32LittleEndian(outBinary, groupCount);
+    AppendU32LittleEndian(outBinary, tableCount);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -168,6 +168,36 @@ Rect ResolveComboQueryBoxAndAdvanceContent(in f32 measuredHeight, in f32 queryHe
     return queryRect;
 }
 
+void CommitSearchComboFilterState(
+    in b8 rebuild,
+    in StringView candidate,
+    in SearchComboSourceSnapshot full,
+    in SearchComboSourceSnapshot filtered,
+    in TextAreaModelStamp query,
+    mut String inOutFilteredQuery,
+    mut u64 outSourceGeneration,
+    mut u64 outSourceRevision,
+    mut u64 outSourceCount,
+    mut u64 outViewGeneration,
+    mut u64 outViewRevision,
+    mut u64 outViewCount,
+    mut u64 outQueryGeneration,
+    mut u64 outQueryExternalRevision,
+    mut b8 outFilterValid
+){
+    if(rebuild)
+        inOutFilteredQuery.assign(candidate);
+    outSourceGeneration = full.generation;
+    outSourceRevision = full.revision;
+    outSourceCount = full.count;
+    outViewGeneration = filtered.generation;
+    outViewRevision = filtered.revision;
+    outViewCount = filtered.count;
+    outQueryGeneration = query.instanceGeneration;
+    outQueryExternalRevision = query.externalRevision;
+    outFilterValid = true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

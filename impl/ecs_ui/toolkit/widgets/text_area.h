@@ -31,33 +31,25 @@ private:
         const ScrollViewportPlacement& placement,
         const Point step
     )noexcept{
-        const TextAreaScrollSnapshot next(
-            widget.id,
+        return PrepareTextAreaScrollState(
+            widget,
             popup,
-            widget.declarationGeneration,
+            stateGeneration,
             stateRevision,
             model.stamp(),
             enabled,
-            readOnly
+            readOnly,
+            placement,
+            step,
+            m_snapshot,
+            m_placement,
+            m_step,
+            m_revision,
+            m_prepared
         );
-        if(
-            !m_prepared || next != m_snapshot
-            || !SameScrollViewportPlacementGeometry(placement, m_placement)
-            || step.x != m_step.x || step.y != m_step.y
-        )
-            AdvanceNonWrappingRevision(m_revision);
-        m_snapshot = next;
-        m_placement = placement;
-        m_step = step;
-        m_prepared = true;
-        return { stateGeneration, next.model.instanceGeneration, m_revision };
     }
     void retire()noexcept{
-        AdvanceNonWrappingRevision(m_revision);
-        m_prepared = false;
-        m_snapshot = {};
-        m_placement = {};
-        m_step = {};
+        RetireTextAreaScrollState(m_snapshot, m_placement, m_step, m_revision, m_prepared);
     }
 
 

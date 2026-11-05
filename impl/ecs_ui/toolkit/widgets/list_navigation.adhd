@@ -165,6 +165,33 @@ f32 ResolveListRowBaseHeight(in SelectableMetrics metrics, in f32 textHeight){
     return max(metrics.minimum.y, textHeight + metrics.padding.top + metrics.padding.bottom);
 }
 
+void CommitListReconcileState(
+    in u64 generation,
+    in u64 revision,
+    in b8 selectedPresent,
+    in b8 cursorPresent,
+    in u64 candidateSelected,
+    in u64 candidateCursor,
+    mut u64 outSelected,
+    mut u64 outCursor,
+    mut b8 inOutEnsureCursor,
+    mut u64 inOutSourceGeneration,
+    mut u64 inOutSourceRevision
+){
+    u64 selected = 0u;
+    if(selectedPresent)
+        selected = candidateSelected;
+    u64 cursor = 0u;
+    if(cursorPresent)
+        cursor = candidateCursor;
+    const b8 changed = inOutSourceGeneration != generation || inOutSourceRevision != revision;
+    outSelected = selected;
+    outCursor = cursor;
+    inOutEnsureCursor = cursor != 0u && (inOutEnsureCursor || changed);
+    inOutSourceGeneration = generation;
+    inOutSourceRevision = revision;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

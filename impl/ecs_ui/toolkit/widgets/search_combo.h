@@ -127,17 +127,23 @@ public:
                 return false;
             state.m_combo.m_list.select(state.m_combo.selectedKey());
         }
-        if(rebuild)
-            state.m_filteredQuery = Move(candidate);
-        state.m_sourceGeneration = full.generation;
-        state.m_sourceRevision = full.revision;
-        state.m_sourceCount = full.count;
-        state.m_viewGeneration = filtered.generation;
-        state.m_viewRevision = filtered.revision;
-        state.m_viewCount = filtered.count;
-        state.m_queryGeneration = query.instanceGeneration;
-        state.m_queryExternalRevision = query.externalRevision;
-        state.m_filterValid = true;
+        CommitSearchComboFilterState(
+            rebuild,
+            AStringView(candidate.data(), candidate.size()),
+            full,
+            filtered,
+            query,
+            state.m_filteredQuery,
+            state.m_sourceGeneration,
+            state.m_sourceRevision,
+            state.m_sourceCount,
+            state.m_viewGeneration,
+            state.m_viewRevision,
+            state.m_viewCount,
+            state.m_queryGeneration,
+            state.m_queryExternalRevision,
+            state.m_filterValid
+        );
         return true;
     }
 

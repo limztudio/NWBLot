@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "edit_box_style.adhd"
 #include "scroll_viewport_placement.adhd"
 
 
@@ -102,6 +103,58 @@ void ReconcileTextAreaVisualScrollState(
         inOutRevealCaret = true;
     if(!outFirstBinding && stateCompositionGeneration != modelCompositionGeneration)
         inOutCaretElapsed = 0.0;
+}
+
+ControlToken PrepareTextAreaScrollState(
+    in WidgetState widget,
+    in PopupToken popup,
+    in u64 stateGeneration,
+    in u64 stateRevision,
+    in TextAreaModelStamp modelStamp,
+    in b8 enabled,
+    in b8 readOnly,
+    in ScrollViewportPlacement placement,
+    in Point step,
+    mut TextAreaScrollSnapshot inOutSnapshot,
+    mut ScrollViewportPlacement inOutPlacement,
+    mut Point inOutStep,
+    mut u64 inOutRevision,
+    mut b8 inOutPrepared
+){
+    const TextAreaScrollSnapshot next(
+        widget.id,
+        popup,
+        widget.declarationGeneration,
+        stateRevision,
+        modelStamp,
+        enabled,
+        readOnly
+    );
+    if(
+        !inOutPrepared || next != inOutSnapshot
+        || !SameScrollViewportPlacementGeometry(placement, inOutPlacement)
+        || step.x != inOutStep.x || step.y != inOutStep.y
+    )
+        ++inOutRevision;
+    inOutSnapshot = next;
+    inOutPlacement = placement;
+    inOutStep = step;
+    inOutPrepared = true;
+    return ControlToken(stateGeneration, next.model.instanceGeneration, inOutRevision);
+}
+
+void RetireTextAreaScrollState(
+    mut TextAreaScrollSnapshot outSnapshot,
+    mut ScrollViewportPlacement outPlacement,
+    mut Point outStep,
+    mut u64 inOutRevision,
+    mut b8 outPrepared
+){
+    ++inOutRevision;
+    outPrepared = false;
+    outSnapshot = TextAreaScrollSnapshot();
+    outPlacement = ScrollViewportPlacement();
+    outStep = Point();
 }
 
 

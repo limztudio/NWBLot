@@ -157,12 +157,19 @@ public:
             return false;
         if(replacement && !state.m_scroll.setOffset(0.0))
             return false;
-        const b8 changed = state.m_sourceGeneration != generation || state.m_sourceRevision != revision;
-        state.m_selected = selected;
-        state.m_cursor = cursor;
-        state.m_ensureCursor = cursor != 0u && (state.m_ensureCursor || changed);
-        state.m_sourceGeneration = generation;
-        state.m_sourceRevision = revision;
+        CommitListReconcileState(
+            generation,
+            revision,
+            selectedResolution->present,
+            cursorPresent,
+            selected,
+            cursor,
+            state.m_selected,
+            state.m_cursor,
+            state.m_ensureCursor,
+            state.m_sourceGeneration,
+            state.m_sourceRevision
+        );
         return true;
     }
 

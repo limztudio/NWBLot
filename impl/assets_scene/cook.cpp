@@ -34,20 +34,7 @@ b8 EntityAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(!entity.validatePayload(scratchArena))
         return false;
 
-    Vector<NameHash, Core::Alloc::ScratchArena> componentHashes(scratchArena);
-    CollectAssetRefHashes(Span<const EntityAsset::ComponentRef>(entity.components()), componentHashes);
-
-    usize reserveBytes = sizeof(EntityHeaderBinary);
-    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, componentHashes);
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    const EntityHeaderBinary header = MakeEntityHeaderBinary(static_cast<u64>(componentHashes.size()));
-    AppendPOD(outBinary, header);
-
-    return Core::Assets::AppendVectorPayload(componentHashes, s_EntitySerializeContext, s_EntityComponentsPayloadLabel, outBinary);
+    return SerializeEntityAssetBinary(Span<const EntityAsset::ComponentRef>(entity.components()), outBinary);
 }
 
 b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
@@ -71,37 +58,14 @@ b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     if(!scene.validatePayload(scratchArena))
         return false;
 
-    Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> entityHashes(scratchArena);
     Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
-
-    CollectAssetRefHashes(Span<const SceneAsset::SubsystemRef>(scene.subsystems()), subsystemHashes);
-    CollectAssetRefHashes(Span<const SceneAsset::EntityRef>(scene.entities()), entityHashes);
-    CollectSortedSceneAssetEntries(scene.assets(), assetEntries);
-
-    usize reserveBytes = sizeof(SceneHeaderBinary);
-    const b8 canReserve =
-        AddBinaryVectorReserveBytes(reserveBytes, subsystemHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, entityHashes)
-        && AddBinaryVectorReserveBytes(reserveBytes, assetEntries)
-    ;
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    const SceneHeaderBinary header = MakeSceneHeaderBinary(
-        static_cast<u64>(subsystemHashes.size()),
-        static_cast<u64>(entityHashes.size()),
-        static_cast<u64>(assetEntries.size())
+    return SerializeSceneAssetBinary(
+        Span<const SceneAsset::SubsystemRef>(scene.subsystems()),
+        Span<const SceneAsset::EntityRef>(scene.entities()),
+        scene.assets(),
+        assetEntries,
+        outBinary
     );
-    AppendPOD(outBinary, header);
-
-    return
-        Core::Assets::AppendVectorPayload(subsystemHashes, s_SceneSerializeContext, s_SceneSubsystemsPayloadLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(entityHashes, s_SceneSerializeContext, s_SceneEntitiesPayloadLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(assetEntries, s_SceneSerializeContext, s_SceneAssetsPayloadLabel, outBinary)
-    ;
 }
 
 

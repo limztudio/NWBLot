@@ -218,6 +218,81 @@ b8 BuildSkinJointPaletteToScratchVector(
     return true;
 }
 
+b8 ValidateMeshSkinningInfluenceStream(
+    in u64 handleValue,
+    in u32 skeletonJointCount,
+    in Span<SkinInfluence4> skin
+){
+    if(skin.empty())
+        return true;
+    if(!CanBuildMeshSkinningInfluences(skeletonJointCount, skin.size())){
+        error("MeshSkinningSystem: runtime mesh '{}' skin influence counts are invalid", handleValue);
+        return false;
+    }
+    for(usize vertexIndex = 0u; vertexIndex < skin.size(); ++vertexIndex){
+        if(!ValidateMeshSkinningInfluenceRecord(handleValue, vertexIndex, skeletonJointCount, skin[vertexIndex]))
+            return false;
+    }
+    return true;
+}
+
+b8 BuildRuntimeSkinPayloadFromPoseInto(
+    in u64 handleValue,
+    in u32 skeletonJointCount,
+    in Span<SkinInfluence4> skin,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in SkeletonPoseComponent skeletonPose,
+    mut ScratchSkeletonJointMatrixVector inOutPoseJoints,
+    mut ScratchSkeletonJointMatrixVector outJointMatrices,
+    mut usize outSkinInfluenceCount,
+    mut u32 outResolvedSkinningMode
+){
+    outSkinInfluenceCount = 0u;
+    outJointMatrices.clear();
+    inOutPoseJoints.clear();
+    const Expected<u32> skinningMode = TryBuildStoredJointPaletteScratchVectorFromSkeletonPose(skeletonPose, inOutPoseJoints);
+    if(!skinningMode.has_value()){
+        inOutPoseJoints.clear();
+        error("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid", handleValue);
+        return false;
+    }
+    outResolvedSkinningMode = skinningMode.value();
+    if(!BuildSkinJointPaletteToScratchVector(handleValue, skeletonJointCount, skin.size(), inOutPoseJoints, inverseBindMatrices, outResolvedSkinningMode, outJointMatrices)){
+        inOutPoseJoints.clear();
+        return false;
+    }
+    if(!outJointMatrices.empty())
+        outSkinInfluenceCount = skin.size();
+    return true;
+}
+
+b8 BuildRuntimeSkinPayloadFromJointPaletteInto(
+    in u64 handleValue,
+    in u32 skeletonJointCount,
+    in Span<SkinInfluence4> skin,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in b8 hasJointPaletteComponent,
+    in u32 jointPaletteSkinningMode,
+    in Span<SkeletonJointMatrix> jointPaletteJoints,
+    mut ScratchSkeletonJointMatrixVector inOutPoseJoints,
+    mut ScratchSkeletonJointMatrixVector outJointMatrices,
+    mut usize outSkinInfluenceCount,
+    mut u32 outResolvedSkinningMode
+){
+    outSkinInfluenceCount = 0u;
+    outJointMatrices.clear();
+    inOutPoseJoints.clear();
+    outResolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
+    if(hasJointPaletteComponent){
+        outResolvedSkinningMode = jointPaletteSkinningMode;
+        if(!BuildSkinJointPaletteToScratchVector(handleValue, skeletonJointCount, skin.size(), jointPaletteJoints, inverseBindMatrices, outResolvedSkinningMode, outJointMatrices))
+            return false;
+    }
+    if(!outJointMatrices.empty())
+        outSkinInfluenceCount = skin.size();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

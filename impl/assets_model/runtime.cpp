@@ -45,31 +45,8 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
 b8 Model::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_AssetsModelLoadBinaryArena);
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelHeaderBinary>(binary, s_ModelBinaryMagic, s_ModelLoadBinaryContext, s_ModelAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const ModelHeaderBinary& header = *headerResult;
-
-    if(!ValidateModelHeaderBinary(header))
-        return false;
     Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
-    Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
-    Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
-    Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
-
-    if(!Core::Assets::ReadVectorPayload(binary, header.skeletonObjectCount, s_ModelLoadBinaryContext, s_ModelSkeletonObjectsPayloadLabel, cursor, skeletonObjectBinaries))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.staticMeshObjectCount, s_ModelLoadBinaryContext, s_ModelStaticMeshObjectsPayloadLabel, cursor, staticMeshObjectBinaries))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.skinnedMeshObjectCount, s_ModelLoadBinaryContext, s_ModelSkinnedMeshObjectsPayloadLabel, cursor, skinnedMeshObjectBinaries))
-        return false;
-
-    UnpackModelSkeletonObjectBinaries(skeletonObjectBinaries, candidate.m_skeletonObjects);
-    UnpackModelStaticMeshObjectBinaries(staticMeshObjectBinaries, candidate.m_staticMeshObjects);
-    UnpackModelSkinnedMeshObjectBinaries(skinnedMeshObjectBinaries, candidate.m_skinnedMeshObjects);
-
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ModelLoadBinaryContext) || !candidate.validatePayload(scratchArena))
+    if(!DeserializeModelAssetBinary(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;

@@ -85,17 +85,8 @@ b8 ProjectAsset::validatePayload()const{
 }
 
 b8 ProjectAsset::loadBinary(const Span<const u8> binary){
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ProjectHeaderBinary>(binary, s_ProjectMagic, s_ProjectLoadBinaryContext, s_ProjectAssetKindLabel, cursor);
-    if(!headerResult)
+    if(!DeserializeProjectAssetBinary(binary, m_startScene.virtualPath))
         return false;
-    const ProjectHeaderBinary& header = *headerResult;
-    if(!ValidateProjectHeaderBinary(header))
-        return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_ProjectLoadBinaryContext))
-        return false;
-
-    m_startScene.virtualPath = Name(header.startSceneHash);
     return validatePayload();
 }
 

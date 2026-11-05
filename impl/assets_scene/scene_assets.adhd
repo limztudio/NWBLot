@@ -250,5 +250,78 @@ void CollectSortedSceneAssetEntries<TAsset>(
     }
 }
 
+const usize s_EntityHeaderBinaryBytes = 16u;
+const usize s_ProjectHeaderBinaryBytes = 72u;
+const usize s_SceneHeaderBinaryBytes = 32u;
+const usize s_NameHashBinaryBytes = 64u;
+const usize s_SceneAssetEntryBinaryBytes = 128u;
+
+b8 SerializeEntityAssetBinary<TComponent>(in Span<AssetRef<TComponent>> components, mut Vector<u8> outBinary){
+    usize reserveBytes = s_EntityHeaderBinaryBytes;
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, components.size(), s_NameHashBinaryBytes) || !CanStoreValueCount(outBinary, reserveBytes)){
+        error("EntityAssetCodec::serialize failed: 'components' payload byte size overflows");
+        return false;
+    }
+    outBinary.clear();
+    outBinary.reserve(reserveBytes);
+    AppendPOD(outBinary, MakeEntityHeaderBinary(cast<u64>(components.size())));
+    for(in AssetRef<TComponent> component : components)
+        AppendPOD(outBinary, component.name().hash());
+    return true;
+}
+
+b8 SerializeSceneAssetBinary<TSubsystem, TEntity, TAsset>(
+    in Span<AssetRef<TSubsystem>> subsystems,
+    in Span<AssetRef<TEntity>> entities,
+    in HashMap<Name, AssetRef<TAsset>> assets,
+    mut SceneScratchAssetEntryBinaryVector scratchAssetEntries,
+    mut Vector<u8> outBinary
+){
+    CollectSortedSceneAssetEntries(assets, scratchAssetEntries);
+    usize reserveBytes = s_SceneHeaderBinaryBytes;
+    const b8 canReserve =
+        AddBinaryRepeatedReserveBytes(reserveBytes, subsystems.size(), s_NameHashBinaryBytes)
+        && AddBinaryRepeatedReserveBytes(reserveBytes, entities.size(), s_NameHashBinaryBytes)
+        && AddBinaryRepeatedReserveBytes(reserveBytes, scratchAssetEntries.size(), s_SceneAssetEntryBinaryBytes)
+        && CanStoreValueCount(outBinary, reserveBytes)
+    ;
+    if(!canReserve){
+        error("SceneAssetCodec::serialize failed: scene payload byte size overflows");
+        return false;
+    }
+    outBinary.clear();
+    outBinary.reserve(reserveBytes);
+    AppendPOD(outBinary, MakeSceneHeaderBinary(cast<u64>(subsystems.size()), cast<u64>(entities.size()), cast<u64>(scratchAssetEntries.size())));
+    for(in AssetRef<TSubsystem> subsystem : subsystems)
+        AppendPOD(outBinary, subsystem.name().hash());
+    for(in AssetRef<TEntity> entity : entities)
+        AppendPOD(outBinary, entity.name().hash());
+    for(in SceneAssetEntryBinary entry : scratchAssetEntries)
+        AppendPOD(outBinary, entry);
+    return true;
+}
+
+b8 DeserializeProjectAssetBinary(in Span<u8> binary, mut Name outStartScene){
+    usize cursor = 0u;
+    const Expected<ProjectHeaderBinary> headerResult = ReadPOD<ProjectHeaderBinary>(binary, cursor);
+    if(!headerResult.has_value()){
+        error("ProjectAsset::loadBinary failed: malformed header");
+        return false;
+    }
+    const ProjectHeaderBinary header = headerResult.value();
+    if(header.magic != s_ProjectMagic){
+        error("ProjectAsset::loadBinary failed: invalid project asset format; recook required");
+        return false;
+    }
+    if(!ValidateProjectHeaderBinary(header))
+        return false;
+    if(cursor != binary.size()){
+        error("ProjectAsset::loadBinary failed: trailing bytes detected");
+        return false;
+    }
+    outStartScene = Name(header.startSceneHash);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -67,24 +67,14 @@ namespace MeshSkinningPayload{
 // Encode mesh-owned data only when creating its GPU buffer.
 [[nodiscard]] inline Expected<Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>> BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& arena){
     Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> influences(arena);
+    if(!ValidateMeshSkinningInfluenceStream(instance.handle.value, instance.skeletonJointCount, instance.skin))
+        return MakeUnexpected(Failure{});
     if(instance.skin.empty())
         return influences;
-    if(!CanBuildMeshSkinningInfluences(instance.skeletonJointCount, instance.skin.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence counts are invalid"), instance.handle.value);
-        return MakeUnexpected(Failure{});
-    }
 
     influences.reserve(instance.skin.size());
-    for(usize vertexIndex = 0u; vertexIndex < instance.skin.size(); ++vertexIndex){
-        const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
-        if(!ValidateMeshSkinningInfluenceRecord(instance.handle.value, vertexIndex, instance.skeletonJointCount, sourceSkin))
-            return MakeUnexpected(Failure{});
-
-        MeshSkinningInfluenceGpu gpuSkin;
-        gpuSkin.packedJoint = PackSkinInfluenceJoints(sourceSkin);
-        gpuSkin.weight = sourceSkin.weight;
-        influences.push_back(gpuSkin);
-    }
+    for(const SkinInfluence4& sourceSkin : instance.skin)
+        influences.push_back(MeshSkinningInfluenceGpu{ PackSkinInfluenceJoints(sourceSkin), sourceSkin.weight });
     return influences;
 }
 
@@ -135,29 +125,32 @@ namespace MeshSkinningPayload{
 
 
 [[nodiscard]] inline b8 BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload){
-    payload.skinInfluenceCount = 0u;
-    payload.jointMatrices.clear();
-    payload.poseJoints.clear();
-    payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
     if(skeletonPose && HasSkeletonPoseData(*skeletonPose)){
-        const auto skinningMode = SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints);
-        if(!skinningMode){
-            payload.poseJoints.clear();
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
-            return false;
-        }
-        payload.resolvedSkinningMode = *skinningMode;
-        if(!BuildSkinJointPalette(instance, payload.poseJoints, payload.resolvedSkinningMode, payload.jointMatrices)){
-            payload.poseJoints.clear();
-            return false;
-        }
+        return BuildRuntimeSkinPayloadFromPoseInto(
+            instance.handle.value,
+            instance.skeletonJointCount,
+            instance.skin,
+            instance.inverseBindMatrices,
+            *skeletonPose,
+            payload.poseJoints,
+            payload.jointMatrices,
+            payload.skinInfluenceCount,
+            payload.resolvedSkinningMode
+        );
     }
-    else if(jointPalette && !BuildSkinJointPalette(instance, jointPalette->joints, payload.resolvedSkinningMode, payload.jointMatrices))
-        return false;
-
-    if(!payload.jointMatrices.empty())
-        payload.skinInfluenceCount = instance.skin.size();
-    return true;
+    return BuildRuntimeSkinPayloadFromJointPaletteInto(
+        instance.handle.value,
+        instance.skeletonJointCount,
+        instance.skin,
+        instance.inverseBindMatrices,
+        jointPalette != nullptr,
+        jointPalette ? jointPalette->skinningMode : static_cast<u32>(SkeletonSkinningMode::LinearBlend),
+        jointPalette ? Span<const SkeletonJointMatrix>(jointPalette->joints) : Span<const SkeletonJointMatrix>{},
+        payload.poseJoints,
+        payload.jointMatrices,
+        payload.skinInfluenceCount,
+        payload.resolvedSkinningMode
+    );
 }
 
 

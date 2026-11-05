@@ -178,33 +178,7 @@ b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::A
     if(!model.validatePayload(scratchArena))
         return false;
 
-    Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
-    Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
-    Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
-
-    PackModelSkeletonObjectBinaries(model.skeletonObjects(), skeletonObjectBinaries);
-    PackModelStaticMeshObjectBinaries(model.staticMeshObjects(), staticMeshObjectBinaries);
-    PackModelSkinnedMeshObjectBinaries(model.skinnedMeshObjects(), skinnedMeshObjectBinaries);
-
-    usize reserveBytes = sizeof(ModelHeaderBinary);
-    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skeletonObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, staticMeshObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, skinnedMeshObjectBinaries);
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    const ModelHeaderBinary header = MakeModelHeaderBinary(
-        static_cast<u64>(skeletonObjectBinaries.size()),
-        static_cast<u64>(staticMeshObjectBinaries.size()),
-        static_cast<u64>(skinnedMeshObjectBinaries.size())
-    );
-    AppendPOD(outBinary, header);
-
-    return
-        Core::Assets::AppendVectorPayload(skeletonObjectBinaries, s_ModelSerializeContext, s_ModelSkeletonObjectsPayloadLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(staticMeshObjectBinaries, s_ModelSerializeContext, s_ModelStaticMeshObjectsPayloadLabel, outBinary)
-        && Core::Assets::AppendVectorPayload(skinnedMeshObjectBinaries, s_ModelSerializeContext, s_ModelSkinnedMeshObjectsPayloadLabel, outBinary)
-    ;
+    return SerializeModelAssetBinary(model.skeletonObjects(), model.staticMeshObjects(), model.skinnedMeshObjects(), outBinary);
 }
 
 Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

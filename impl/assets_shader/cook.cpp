@@ -49,13 +49,6 @@ using ScratchVector = Assets::ScratchVector<T>;
 template<typename T>
 using ScratchHashSet = HashSet<T, Alloc::ScratchArena, Hasher<T>, EqualTo<T>>;
 
-static constexpr Array<NamedEnumCase<ShaderOptimizationLevel::Enum>, 4u> s_ShaderOptimizationLevelCases = {{
-    { s_ShaderNoneOptText, ShaderOptimizationLevel::None },
-    { s_ShaderDefaultVariantText, ShaderOptimizationLevel::Default },
-    { s_ShaderHighOptText, ShaderOptimizationLevel::High },
-    { s_ShaderMaximalOptText, ShaderOptimizationLevel::Maximal },
-}};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -72,17 +65,16 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
         return MakeUnexpected(Failure{});
     }
 
+    const CookString nwbFilePathText = PathToString(arena, nwbFilePath);
     const auto& definesMap = definesVal->asMap();
     defines.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
-        const AStringView authoredName(key.data(), key.size());
-        if(IsReservedShaderEngineDefineName(authoredName)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(authoredName));
+        CookString defineName(key.data(), key.size(), arena);
+        if(IsReservedShaderEngineDefineName(AStringView(defineName))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
-        CookString defineName(key.data(), key.size(), arena);
-        const AStringView defineNameView(defineName);
-        if(!IsAsciiIdentifier(defineNameView)){
+        if(!IsAsciiIdentifier(AStringView(defineName))){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
@@ -92,16 +84,8 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
-        if(defineValues.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must provide at least one value"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+        if(!ValidateShaderDefineEntrySpec(AStringView(nwbFilePathText), AStringView(defineName), defineValues))
             return MakeUnexpected(Failure{});
-        }
-        for(const CookString& defineValue : defineValues){
-            if(!IsValidShaderDefineValueText(AStringView(defineValue))){
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
-                return MakeUnexpected(Failure{});
-            }
-        }
 
         ShaderCook::DefineEntry defineEntry(Move(defineValues));
         defines.insert_or_assign(Move(defineName), Move(defineEntry));
@@ -203,7 +187,7 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
     if(!optimizationLevelText)
         return MakeUnexpected(Failure{});
     if(optimizationLevelText->present){
-        const auto optimizationLevel = ParseNamedEnumText<ShaderOptimizationLevel::Enum>(optimizationLevelText->text, __hidden_shader_cook::s_ShaderOptimizationLevelCases);
+        const auto optimizationLevel = TryParseShaderOptimizationLevelText(optimizationLevelText->text);
         if(!optimizationLevel){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(optimizationLevelText->text));
             return MakeUnexpected(Failure{});
@@ -228,13 +212,9 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
             NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
-        for(const CookString& includeRoot : entry.includeRoots){
-            if(!includeRoot.empty())
-                continue;
-
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots entries must not be empty"), PathToString<tchar>(nwbFilePath));
+        const Assets::ScratchString nwbFilePathText = PathToString(scratchArena, nwbFilePath);
+        if(!ValidateShaderIncludeRoots(AStringView(nwbFilePathText), entry.includeRoots))
             return MakeUnexpected(Failure{});
-        }
     }
 
     auto defines = __hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena);

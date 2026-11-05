@@ -204,37 +204,21 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
     return entry;
 }
 
-b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena){
+b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchArena&){
     using namespace __hidden_assets_csg_cook;
 
     Sort(csgShapeEntries.begin(), csgShapeEntries.end(), [](const CsgShapeCookEntry& lhs, const CsgShapeCookEntry& rhs){
         return IsBeforeCsgShapeCookName(lhs.shapeName, rhs.shapeName);
     });
 
-    using ShapeIdNameMap = HashMap<CsgShapeTypeId, Name, ScratchArena, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>>;
-    ShapeIdNameMap shapeIdNames(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), scratchArena);
+    CookArena shapeIdArena(Name("AssetsCsgCook::AssignCsgShapeCookIds"));
+    HashMap<CsgShapeTypeId, Name> shapeIdNames(shapeIdArena);
     shapeIdNames.reserve(csgShapeEntries.size());
 
     for(usize index = 0u; index < csgShapeEntries.size(); ++index){
-        if(index >= static_cast<usize>(Limit<CsgShapeTypeId>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: too many CSG shape assets"));
-            return false;
-        }
-
         CsgShapeCookEntry& entry = csgShapeEntries[index];
-        const Expected<CsgShapeTypeId> shapeTypeIdResult = TryResolveCsgShapeTypeIdFromName(entry.shapeName);
-        if(!shapeTypeIdResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shape '{}' has an invalid canonical GPU id"), ConvertString(entry.shapeName.resolvedText()));
+        if(!ResolveAndCheckCsgShapeTypeIdCollision(index, entry.shapeName, shapeIdNames, entry.shapeTypeId))
             return false;
-        }
-        const CsgShapeTypeId shapeTypeId = *shapeTypeIdResult;
-
-        const auto insertedShapeId = shapeIdNames.try_emplace(shapeTypeId, entry.shapeName);
-        if(!insertedShapeId.second){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}"), ConvertString(insertedShapeId.first.value().resolvedText()), ConvertString(entry.shapeName.resolvedText()), shapeTypeId);
-            return false;
-        }
-        entry.shapeTypeId = shapeTypeId;
     }
 
     return true;

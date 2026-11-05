@@ -371,11 +371,13 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             return MakeUnexpected(Failure{});
         if(preparedEntry.dependencies.size() != initialDependencyCount)
             shaderCook.mergeInheritedDefines(preparedEntry.dependencies, includeMetadata, scratchArena, preparedEntry.entry);
-        if(!ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry.name, s_MaterialBindTypedBindingImplicitDefineText, preparedEntry.entry.defineValues.find(s_MaterialBindTypedBindingImplicitDefineText) != preparedEntry.entry.defineValues.end()))
-            return MakeUnexpected(Failure{});
-        if(!ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry.name, s_CsgClipImplicitDefineName, preparedEntry.entry.defineValues.find(s_CsgClipImplicitDefineName) != preparedEntry.entry.defineValues.end()))
-            return MakeUnexpected(Failure{});
-        if(!ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry.name, s_CsgIntervalSampleEnabledImplicitDefineName, preparedEntry.entry.defineValues.find(s_CsgIntervalSampleEnabledImplicitDefineName) != preparedEntry.entry.defineValues.end()))
+        if(!ValidateShaderReservedImplicitDefines(
+            preparedEntry.entry.name,
+            s_MaterialBindTypedBindingImplicitDefineText,
+            preparedEntry.entry.defineValues.find(s_MaterialBindTypedBindingImplicitDefineText) != preparedEntry.entry.defineValues.end(),
+            preparedEntry.entry.defineValues.find(s_CsgClipImplicitDefineName) != preparedEntry.entry.defineValues.end(),
+            preparedEntry.entry.defineValues.find(s_CsgIntervalSampleEnabledImplicitDefineName) != preparedEntry.entry.defineValues.end()
+        ))
             return MakeUnexpected(Failure{});
 
         auto materialDependency = ResolveMaterialBindDependencyInterface(AStringView(preparedEntry.entry.name), materialBindIncludeRoot, materialBindEntries, preparedEntry.dependencies, cookArena, scratchArena);

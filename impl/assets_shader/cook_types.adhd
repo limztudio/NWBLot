@@ -242,5 +242,53 @@ b8 ValidateVariantSignatureSeenCount(
     return false;
 }
 
+Expected<ShaderOptimizationLevel> TryParseShaderOptimizationLevelText(in StringView text){
+    if(text == s_ShaderNoneOptText)
+        return ShaderOptimizationLevel::None;
+    if(text == s_ShaderDefaultVariantText)
+        return ShaderOptimizationLevel::Default;
+    if(text == s_ShaderHighOptText)
+        return ShaderOptimizationLevel::High;
+    if(text == s_ShaderMaximalOptText)
+        return ShaderOptimizationLevel::Maximal;
+    return makeUnexpected(Failure());
+}
+
+b8 ValidateShaderDefineEntrySpec(
+    in StringView nwbFilePathText,
+    in StringView authoredName,
+    in Span<String> defineValues
+){
+    if(IsReservedShaderEngineDefineName(authoredName)){
+        error("Meta '{}': define '{}' is an engine transport feature selected in shader source", nwbFilePathText, authoredName);
+        return false;
+    }
+    if(!IsAsciiIdentifier(authoredName)){
+        error("Meta '{}': define '{}' must be an ASCII shader identifier", nwbFilePathText, authoredName);
+        return false;
+    }
+    if(defineValues.empty()){
+        error("Meta '{}': define '{}' must provide at least one value", nwbFilePathText, authoredName);
+        return false;
+    }
+    for(in String defineValue : defineValues){
+        if(!IsValidShaderDefineValueText(defineValue)){
+            error("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace", nwbFilePathText, authoredName);
+            return false;
+        }
+    }
+    return true;
+}
+
+b8 ValidateShaderIncludeRoots(in StringView nwbFilePathText, in Span<String> includeRoots){
+    for(in String includeRoot : includeRoots){
+        if(includeRoot.empty()){
+            error("Shader meta '{}': include_roots entries must not be empty", nwbFilePathText);
+            return false;
+        }
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

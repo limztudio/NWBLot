@@ -82,14 +82,17 @@ static b8 AppendUniqueShaderEntry(const Path* const nwbFilePath, ShaderCook::Sha
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: generated shader stage has invalid text (failure {})"), static_cast<u32>(stageName.error()));
         return false;
     }
-    const ShaderStageKey shaderIdentityKey(*shaderName ? **shaderName : s_NameNone, *stageName ? **stageName : s_NameNone);
-    if(!inOutGraphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-        if(nwbFilePath)
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate shader identity '{}' for stage '{}' from meta '{}'"), ConvertString(inOutShaderEntry.name), ConvertString(inOutShaderEntry.archiveStage), PathToString<tchar>(*nwbFilePath));
-        else
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: duplicate generated pixel shader identity '{}'"), ConvertString(inOutShaderEntry.name));
+    const Core::Assets::CookString nwbFilePathText = nwbFilePath ? PathToString(inOutShaderEntries.get_allocator().arena(), *nwbFilePath) : Core::Assets::CookString(inOutShaderEntries.get_allocator().arena());
+    if(!TryInsertUniqueShaderIdentityKey(
+        *shaderName ? **shaderName : s_NameNone,
+        *stageName ? **stageName : s_NameNone,
+        inOutShaderEntry.name,
+        inOutShaderEntry.archiveStage,
+        nwbFilePath != nullptr,
+        AStringView(nwbFilePathText),
+        inOutGraphicsMetadata.seenShaderIdentityKeys
+    ))
         return false;
-    }
 
     inOutShaderEntries.push_back(Move(inOutShaderEntry));
     return true;
@@ -288,21 +291,16 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
     if(!generatedAvboitExtinctionPixelShadersResult)
         return false;
 
-    usize shaderEntryCapacity = graphicsMetadata.shaderEntries.size();
-    const Array<usize, 4u> generatedShaderCounts = {
+    usize shaderEntryCapacity = 0u;
+    if(!TryAccumulateGeneratedShaderEntryCapacity(
+        graphicsMetadata.shaderEntries.size(),
         generatedPixelShadersResult->size(),
         generatedAvboitAccumulatePixelShadersResult->size(),
         generatedAvboitOccupancyPixelShadersResult->size(),
         generatedAvboitExtinctionPixelShadersResult->size(),
-    };
-    for(const usize generatedShaderCount : generatedShaderCounts){
-        const auto capacity = AddNoOverflow(shaderEntryCapacity, generatedShaderCount);
-        if(!capacity){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: generated shader entry count exceeds container capacity"));
-            return false;
-        }
-        shaderEntryCapacity = *capacity;
-    }
+        shaderEntryCapacity
+    ))
+        return false;
     graphicsMetadata.shaderEntries.reserve(shaderEntryCapacity);
     graphicsMetadata.seenShaderIdentityKeys.reserve(shaderEntryCapacity);
 

@@ -112,6 +112,34 @@ void AppendCsgShapeModuleEvalInclude(
     inOutSource.append(s_CsgUndefDirectiveEnd);
 }
 
+b8 ResolveAndCheckCsgShapeTypeIdCollision(
+    in usize index,
+    in Name shapeName,
+    mut HashMap<CsgShapeTypeId, Name> inOutShapeIdNames,
+    mut CsgShapeTypeId outShapeTypeId
+){
+    if(index >= cast<usize>(u32.max)){
+        error("CSG shape cook: too many CSG shape assets");
+        return false;
+    }
+
+    const Expected<CsgShapeTypeId> shapeTypeIdResult = TryResolveCsgShapeTypeIdFromName(shapeName);
+    if(!shapeTypeIdResult.has_value()){
+        error("CSG shape cook: shape '{}' has an invalid canonical GPU id", shapeName.resolvedText());
+        return false;
+    }
+    const CsgShapeTypeId shapeTypeId = shapeTypeIdResult.value();
+
+    if(inOutShapeIdNames.contains(shapeTypeId)){
+        const Name existingShape = inOutShapeIdNames.at(shapeTypeId);
+        error("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}", existingShape.resolvedText(), shapeName.resolvedText(), shapeTypeId);
+        return false;
+    }
+    inOutShapeIdNames.try_emplace(shapeTypeId, shapeName);
+    outShapeTypeId = shapeTypeId;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

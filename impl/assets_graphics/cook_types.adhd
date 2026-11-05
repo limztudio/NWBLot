@@ -184,5 +184,65 @@ b8 TryAccumulateShaderDefineVariantCount(
     return true;
 }
 
+b8 ValidateShaderReservedImplicitDefines(
+    in StringView entryName,
+    in StringView materialBindTypedBindingDefine,
+    in b8 hasMaterialBindTypedBindingDefine,
+    in b8 hasCsgClipDefine,
+    in b8 hasCsgIntervalSampleDefine
+){
+    if(!ValidateShaderDoesNotUseImplicitDefine(entryName, materialBindTypedBindingDefine, hasMaterialBindTypedBindingDefine))
+        return false;
+    if(!ValidateShaderDoesNotUseImplicitDefine(entryName, s_CsgClipImplicitDefineName, hasCsgClipDefine))
+        return false;
+    return ValidateShaderDoesNotUseImplicitDefine(entryName, s_CsgIntervalSampleEnabledImplicitDefineName, hasCsgIntervalSampleDefine);
+}
+
+b8 TryAccumulateGeneratedShaderEntryCapacity(
+    in usize baseCapacity,
+    in usize count0,
+    in usize count1,
+    in usize count2,
+    in usize count3,
+    mut usize outCapacity
+){
+    usize capacity = baseCapacity;
+    Array<usize, 4> counts;
+    counts[0u] = count0;
+    counts[1u] = count1;
+    counts[2u] = count2;
+    counts[3u] = count3;
+    for(in usize count : counts){
+        if(count > usize.max - capacity){
+            error("GraphicsCook: generated shader entry count exceeds container capacity");
+            return false;
+        }
+        capacity += count;
+    }
+    outCapacity = capacity;
+    return true;
+}
+
+b8 TryInsertUniqueShaderIdentityKey(
+    in Name shaderName,
+    in Name stageName,
+    in StringView shaderNameText,
+    in StringView stageText,
+    in b8 hasMetaPath,
+    in StringView metaPathText,
+    mut HashSet<ShaderStageKey> inOutSeenKeys
+){
+    const ShaderStageKey shaderIdentityKey(shaderName, stageName);
+    if(inOutSeenKeys.contains(shaderIdentityKey)){
+        if(hasMetaPath)
+            error("GraphicsCook: duplicate shader identity '{}' for stage '{}' from meta '{}'", shaderNameText, stageText, metaPathText);
+        else
+            error("GraphicsCook: duplicate generated pixel shader identity '{}'", shaderNameText);
+        return false;
+    }
+    inOutSeenKeys.insert(shaderIdentityKey);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

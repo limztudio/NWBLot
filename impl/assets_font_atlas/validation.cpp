@@ -47,7 +47,7 @@ namespace __hidden_font_atlas_validation{
 
 
 b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena&){
-    if(!payload.font || payload.fontSha256 == Sha256Digest{} || payload.faceIndex != 0u){
+    if(!payload.font || !IsFontAtlasDigestNonZero(Span<const u8>(payload.fontSha256.bytes, sizeof(payload.fontSha256.bytes))) || payload.faceIndex != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;
     }
@@ -67,20 +67,15 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
         return false;
     u64 pixelBytes = 0u;
     for(const FontAtlasGroup& group : payload.groups){
-        if(!IsValidFontAtlasGroupDimensions(group.width, group.height, group.channelCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid extent or channel count"));
+        if(!ValidateFontAtlasGroupPixelChunk(
+            group.width,
+            group.height,
+            group.channelCount,
+            group.pixels,
+            Span<const u8>(group.sha256.bytes, sizeof(group.sha256.bytes)),
+            pixelBytes
+        ))
             return false;
-        }
-        const u64 byteCount = static_cast<u64>(group.width) * group.height * group.channelCount;
-        if(group.pixels.size() != byteCount || pixelBytes + byteCount > s_FontAtlasMaxPixelBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid extent, payload size, or byte budget"));
-            return false;
-        }
-        if(ComputeSha256({ group.pixels.data(), group.pixels.size() }) != group.sha256){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: pixel content hash mismatch"));
-            return false;
-        }
-        pixelBytes += byteCount;
     }
     const f32 unitsPerPixel = ComputeFontAtlasUnitsPerPixel(payload.unitsPerEm, payload.bakePpem);
     for(usize index = 0u; index < payload.glyphs.size(); ++index){
@@ -102,12 +97,15 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
     u64 positioningBytes = 0u;
     u32 previousTag = 0u;
     for(const FontAtlasPositioningTable& table : payload.positioningTables){
-        positioningBytes += table.bytes.size();
-        if(table.tag <= previousTag || positioningBytes > s_FontAtlasMaxPositioningBytes || ComputeSha256({ table.bytes.data(), table.bytes.size() }) != table.sha256 || !ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, payload.sourceGlyphCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: positioning order, bounds, hash, or structure"));
+        if(!ValidateFontAtlasPositioningTableEntry(
+            table.tag,
+            table.bytes,
+            Span<const u8>(table.sha256.bytes, sizeof(table.sha256.bytes)),
+            payload.sourceGlyphCount,
+            previousTag,
+            positioningBytes
+        ))
             return false;
-        }
-        previousTag = table.tag;
     }
     return true;
 }

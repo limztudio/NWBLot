@@ -25,33 +25,16 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
     tables.reserve(s_FontAtlasMaxPositioningTableCount);
     u64 totalBytes = 0u;
     for(const u32 tag : s_Tags){
-        for(u16 index = 0u; index < directory->tableCount(); ++index){
-            const Expected<u32> tableTag = directory->tableTag(index);
-            if(!tableTag)
-                return MakeUnexpected(Failure{});
-            if(*tableTag != tag)
-                continue;
-            const Expected<FontSfntTable> sourceTable = directory->table(index);
-            if(!sourceTable)
-                return MakeUnexpected(Failure{});
-            const Span<const u8> sourceBytes = sourceTable->bytes;
-            const usize length = sourceBytes.size();
-            if(length == 0u)
-                break;
-            if(totalBytes + length > s_FontAtlasMaxPositioningBytes){
-                NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas positioning export failed: source table byte budget exceeded"));
-                return MakeUnexpected(Failure{});
-            }
-            FontAtlasPositioningTable table(arena);
-            table.tag = tag;
-            table.bytes.assign(sourceBytes.begin(), sourceBytes.end());
-            table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
-            if(!ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, sourceGlyphCount))
-                return MakeUnexpected(Failure{});
-            tables.push_back(Move(table));
-            totalBytes += length;
-            break;
-        }
+        const Expected<Span<const u8>> sourceBytesResult = FindFontAtlasSourcePositioningTableBytes(*directory, tag, sourceGlyphCount, totalBytes);
+        if(!sourceBytesResult)
+            return MakeUnexpected(Failure{});
+        if(sourceBytesResult->empty())
+            continue;
+        FontAtlasPositioningTable table(arena);
+        table.tag = tag;
+        table.bytes.assign(sourceBytesResult->begin(), sourceBytesResult->end());
+        table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
+        tables.push_back(Move(table));
     }
     return tables;
 }

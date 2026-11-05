@@ -36,15 +36,6 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_ModelComponentAssetAutoRegistrar, ModelCo
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
 
-template<typename TAsset>
-[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(const Span<const u8> payload, const TStringView context, Core::Assets::AssetRef<TAsset>& outRef){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, context);
-    if(!binaryPayload)
-        return false;
-    outRef = UnpackSingleAssetRefComponentPayloadBinary<TAsset>(*binaryPayload);
-    return true;
-}
-
 template<typename ComponentAssetT, typename TAsset>
 [[nodiscard]] static b8 ValidateSingleAssetRefComponentPayload(const ComponentAssetT& componentAsset, const Core::Assets::AssetRef<TAsset>& assetRef, const TStringView context, const AStringView contextAscii, const AStringView kindLabel){
     if(!componentAsset.checkVirtualPath(context))
@@ -63,7 +54,7 @@ template<typename ComponentAssetT, typename TAsset>
 
 
 b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("ModelComponentAsset::loadComponentPayload"), component.model);
+    return DeserializeSingleAssetRefComponentPayloadBinary(payload, "ModelComponentAsset::loadComponentPayload", component.model.virtualPath);
 }
 
 b8 ModelComponentAsset::validatePayload()const{
@@ -75,7 +66,7 @@ b8 ModelComponentAsset::validatePayload()const{
 
 
 b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("MeshComponentAsset::loadComponentPayload"), component.mesh);
+    return DeserializeSingleAssetRefComponentPayloadBinary(payload, "MeshComponentAsset::loadComponentPayload", component.mesh.virtualPath);
 }
 
 b8 MeshComponentAsset::validatePayload()const{
@@ -87,16 +78,7 @@ b8 MeshComponentAsset::validatePayload()const{
 
 
 b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<RendererComponentPayloadBinary>(payload, NWB_TEXT("RendererComponentAsset::loadComponentPayload"));
-    if(!binaryPayload)
-        return false;
-    const Expected<RendererComponent> unpacked = UnpackRendererComponentPayloadBinary(*binaryPayload);
-    if(!unpacked){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::loadComponentPayload failed: invalid renderer flags"));
-        return false;
-    }
-    component = *unpacked;
-    return true;
+    return DeserializeRendererComponentPayloadBinary(payload, component);
 }
 
 b8 RendererComponentAsset::validatePayload()const{

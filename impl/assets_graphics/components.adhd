@@ -248,6 +248,52 @@ b8 ValidateSingleAssetRefComponentAssetPayload(in b8 validAssetRef, in Name virt
     return false;
 }
 
+const usize s_SingleAssetRefComponentPayloadBinaryBytes = 64u;
+const usize s_RendererComponentPayloadBinaryBytes = 144u;
+
+b8 SerializeSingleAssetRefComponentPayloadBinary(in Name assetName, mut Vector<u8> outPayload){
+    const SingleAssetRefComponentPayloadBinary binaryPayload = PackSingleAssetRefComponentPayloadBinary(assetName);
+    outPayload.clear();
+    outPayload.reserve(s_SingleAssetRefComponentPayloadBinaryBytes);
+    AppendPOD(outPayload, binaryPayload);
+    return true;
+}
+
+b8 DeserializeSingleAssetRefComponentPayloadBinary(in Span<u8> payload, in StringView context, mut Name outVirtualPath){
+    usize cursor = 0u;
+    const Expected<SingleAssetRefComponentPayloadBinary> binaryPayload = ReadPOD<SingleAssetRefComponentPayloadBinary>(payload, cursor);
+    if(!binaryPayload.has_value() || cursor != payload.size()){
+        error("{} failed: invalid payload size", context);
+        return false;
+    }
+    outVirtualPath = Name(binaryPayload.value().assetHash);
+    return true;
+}
+
+b8 SerializeRendererComponentPayloadBinary(in RendererComponent component, mut Vector<u8> outPayload){
+    const RendererComponentPayloadBinary binaryPayload = PackRendererComponentPayloadBinary(component);
+    outPayload.clear();
+    outPayload.reserve(s_RendererComponentPayloadBinaryBytes);
+    AppendPOD(outPayload, binaryPayload);
+    return true;
+}
+
+b8 DeserializeRendererComponentPayloadBinary(in Span<u8> payload, mut RendererComponent outComponent){
+    usize cursor = 0u;
+    const Expected<RendererComponentPayloadBinary> binaryPayload = ReadPOD<RendererComponentPayloadBinary>(payload, cursor);
+    if(!binaryPayload.has_value() || cursor != payload.size()){
+        error("RendererComponentAsset::loadComponentPayload failed: invalid payload size");
+        return false;
+    }
+    const Expected<RendererComponent> unpacked = UnpackRendererComponentPayloadBinary(binaryPayload.value());
+    if(!unpacked.has_value()){
+        error("RendererComponentAsset::loadComponentPayload failed: invalid renderer flags");
+        return false;
+    }
+    outComponent = unpacked.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

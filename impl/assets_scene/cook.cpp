@@ -10,11 +10,6 @@
 
 #include "cook.h"
 
-#include <core/assets/binary_payload_io.h>
-#include <core/common/log.h>
-
-#include <global/binary.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,8 +40,7 @@ b8 ProjectAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     if(!project.validatePayload())
         return false;
 
-    const ProjectHeaderBinary header = MakeProjectHeaderBinary(project.startScene().name().hash());
-    return ComponentAssetSerialization::WriteSinglePodPayload(header, outBinary);
+    return SerializeProjectAssetBinary(project.startScene().name().hash(), outBinary);
 }
 
 b8 SceneAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{

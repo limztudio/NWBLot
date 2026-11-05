@@ -184,5 +184,23 @@ Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontByt
     return out;
 }
 
+b8 IsFontAtlasDigestNonZero(in Span<u8> digestBytes){
+    for(in u8 b : digestBytes){
+        if(b != 0u)
+            return true;
+    }
+    return false;
+}
+
+b8 DoesFontAtlasDigestMatchBytes(in Span<u8> dataBytes, in Span<u8> expectedSha256Bytes){
+    b8 matches = false;
+    native(in dataBytes, in expectedSha256Bytes, mut matches){
+        const Sha256Digest computed = ComputeSha256({ dataBytes.data(), dataBytes.size() });
+        if(expectedSha256Bytes.size() == sizeof(computed.bytes))
+            matches = NWB_MEMCMP(computed.bytes, expectedSha256Bytes.data(), sizeof(computed.bytes)) == 0;
+    }
+    return matches;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

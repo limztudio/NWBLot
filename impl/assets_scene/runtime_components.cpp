@@ -91,11 +91,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(const
 
 
 b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<TransformComponentPayloadBinary>(payload, NWB_TEXT("TransformComponentAsset::loadComponentPayload"));
-    if(!binaryPayload)
-        return false;
-    component = UnpackTransformComponentPayloadBinary(*binaryPayload);
-    return true;
+    return DeserializeTransformComponentPayload(payload, component);
 }
 
 b8 TransformComponentAsset::validatePayload()const{
@@ -109,11 +105,7 @@ b8 TransformComponentAsset::validatePayload()const{
 
 
 b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<CameraComponentPayloadBinary>(payload, NWB_TEXT("CameraComponentAsset::loadComponentPayload"));
-    if(!binaryPayload)
-        return false;
-    component = UnpackCameraComponentPayloadBinary(*binaryPayload);
-    return true;
+    return DeserializeCameraComponentPayload(payload, component);
 }
 
 b8 CameraComponentAsset::validatePayload()const{
@@ -127,16 +119,7 @@ b8 CameraComponentAsset::validatePayload()const{
 
 
 b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<LightComponentPayloadBinary>(payload, NWB_TEXT("LightComponentAsset::loadComponentPayload"));
-    if(!binaryPayload)
-        return false;
-    const Expected<LightComponent> unpacked = UnpackLightComponentPayloadBinary(*binaryPayload);
-    if(!unpacked){
-        NWB_LOGGER_ERROR(NWB_TEXT("LightComponentAsset::loadComponentPayload failed: invalid light flags"));
-        return false;
-    }
-    component = *unpacked;
-    return true;
+    return DeserializeLightComponentPayload(payload, component);
 }
 
 b8 LightComponentAsset::validatePayload()const{

@@ -195,6 +195,72 @@ Expected<Span<u8>> UnpackComponentAssetEnvelope(
     return payload;
 }
 
+const usize s_TransformComponentPayloadBinaryBytes = 48u;
+const usize s_CameraComponentPayloadBinaryBytes = 16u;
+const usize s_LightComponentPayloadBinaryBytes = 40u;
+
+b8 SerializeTransformComponentPayload(in TransformComponent component, mut Vector<u8> outPayload){
+    const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
+    outPayload.clear();
+    outPayload.reserve(s_TransformComponentPayloadBinaryBytes);
+    AppendPOD(outPayload, binaryPayload);
+    return true;
+}
+
+b8 DeserializeTransformComponentPayload(in Span<u8> payload, mut TransformComponent outComponent){
+    usize cursor = 0u;
+    const Expected<TransformComponentPayloadBinary> binaryPayload = ReadPOD<TransformComponentPayloadBinary>(payload, cursor);
+    if(!binaryPayload.has_value() || cursor != payload.size()){
+        error("TransformComponentAsset::loadComponentPayload failed: invalid payload size");
+        return false;
+    }
+    outComponent = UnpackTransformComponentPayloadBinary(binaryPayload.value());
+    return true;
+}
+
+b8 SerializeCameraComponentPayload(in CameraComponent component, mut Vector<u8> outPayload){
+    const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
+    outPayload.clear();
+    outPayload.reserve(s_CameraComponentPayloadBinaryBytes);
+    AppendPOD(outPayload, binaryPayload);
+    return true;
+}
+
+b8 DeserializeCameraComponentPayload(in Span<u8> payload, mut CameraComponent outComponent){
+    usize cursor = 0u;
+    const Expected<CameraComponentPayloadBinary> binaryPayload = ReadPOD<CameraComponentPayloadBinary>(payload, cursor);
+    if(!binaryPayload.has_value() || cursor != payload.size()){
+        error("CameraComponentAsset::loadComponentPayload failed: invalid payload size");
+        return false;
+    }
+    outComponent = UnpackCameraComponentPayloadBinary(binaryPayload.value());
+    return true;
+}
+
+b8 SerializeLightComponentPayload(in LightComponent component, mut Vector<u8> outPayload){
+    const LightComponentPayloadBinary binaryPayload = PackLightComponentPayloadBinary(component);
+    outPayload.clear();
+    outPayload.reserve(s_LightComponentPayloadBinaryBytes);
+    AppendPOD(outPayload, binaryPayload);
+    return true;
+}
+
+b8 DeserializeLightComponentPayload(in Span<u8> payload, mut LightComponent outComponent){
+    usize cursor = 0u;
+    const Expected<LightComponentPayloadBinary> binaryPayload = ReadPOD<LightComponentPayloadBinary>(payload, cursor);
+    if(!binaryPayload.has_value() || cursor != payload.size()){
+        error("LightComponentAsset::loadComponentPayload failed: invalid payload size");
+        return false;
+    }
+    const Expected<LightComponent> unpacked = UnpackLightComponentPayloadBinary(binaryPayload.value());
+    if(!unpacked.has_value()){
+        error("LightComponentAsset::loadComponentPayload failed: invalid light flags");
+        return false;
+    }
+    outComponent = unpacked.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

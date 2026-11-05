@@ -188,6 +188,89 @@ b8 ValidateFontAtlasPositioningTableBytes(in u32 tag, in Span<u8> bytes, in u32 
     return valid;
 }
 
+b8 ValidateFontAtlasPositioningTableEntry(
+    in u32 tag,
+    in Span<u8> tableBytes,
+    in Span<u8> expectedSha256Bytes,
+    in u32 sourceGlyphCount,
+    mut u32 inOutPreviousTag,
+    mut u64 inOutPositioningBytes
+){
+    inOutPositioningBytes += cast<u64>(tableBytes.size());
+    if(
+        tag <= inOutPreviousTag
+        || inOutPositioningBytes > cast<u64>(s_FontAtlasMaxPositioningBytes)
+        || !DoesFontAtlasDigestMatchBytes(tableBytes, expectedSha256Bytes)
+        || !ValidateFontAtlasPositioningTableBytes(tag, tableBytes, sourceGlyphCount)
+    ){
+        error("FontAtlas validation failed: positioning order, bounds, hash, or structure");
+        return false;
+    }
+    inOutPreviousTag = tag;
+    return true;
+}
+
+Expected<Span<u8>> FindFontAtlasSourcePositioningTableBytes(
+    in FontSfntDirectory directory,
+    in u32 tag,
+    in u32 sourceGlyphCount,
+    mut u64 inOutTotalBytes
+){
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        const Expected<u32> tableTag = directory.tableTag(cast<usize>(index));
+        if(!tableTag.has_value())
+            return makeUnexpected(Failure());
+        if(tableTag.value() != tag)
+            continue;
+        const Expected<FontSfntTable> sourceTable = directory.table(cast<usize>(index));
+        if(!sourceTable.has_value())
+            return makeUnexpected(Failure());
+        const Span<u8> sourceBytes = sourceTable.value().bytes;
+        const usize length = sourceBytes.size();
+        if(length == 0u)
+            return Span<u8>();
+        if(inOutTotalBytes + cast<u64>(length) > cast<u64>(s_FontAtlasMaxPositioningBytes)){
+            error("FontAtlas positioning export failed: source table byte budget exceeded");
+            return makeUnexpected(Failure());
+        }
+        if(!ValidateFontAtlasPositioningTableBytes(tag, sourceBytes, sourceGlyphCount))
+            return makeUnexpected(Failure());
+        inOutTotalBytes += cast<u64>(length);
+        return sourceBytes;
+    }
+    return Span<u8>();
+}
+
+b8 ValidateFontAtlasSourceHeaderAndMetrics(
+    in Name payloadFontName,
+    in Name fontVirtualPath,
+    in u32 payloadFaceIndex,
+    in u32 fontFaceIndex,
+    in Span<u8> sourceBytes,
+    in Span<u8> payloadFontSha256Bytes,
+    in u32 payloadUnitsPerEm,
+    in u32 payloadSourceGlyphCount,
+    mut FontSfntDirectory outDirectory
+){
+    if(
+        payloadFontName != fontVirtualPath
+        || payloadFaceIndex != fontFaceIndex
+        || !DoesFontAtlasDigestMatchBytes(sourceBytes, payloadFontSha256Bytes)
+        || sourceBytes.size() < s_FontSfntHeaderBytes
+    ){
+        error("FontAtlas source match failed: font identity, source hash, or face index differs");
+        return false;
+    }
+    const Expected<FontFaceSfntMetrics> sfntMetrics = TryReadFontFaceMetricsFromSfnt(sourceBytes);
+    if(!sfntMetrics.has_value() || sfntMetrics.value().unitsPerEm != payloadUnitsPerEm || sfntMetrics.value().sourceGlyphCount != payloadSourceGlyphCount)
+        return false;
+    const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(sourceBytes);
+    if(!directory.has_value())
+        return false;
+    outDirectory = directory.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

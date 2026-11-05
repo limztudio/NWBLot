@@ -270,6 +270,14 @@ b8 SerializeEntityAssetBinary<TComponent>(in Span<AssetRef<TComponent>> componen
     return true;
 }
 
+b8 SerializeProjectAssetBinary(in NameHash startSceneHash, mut Vector<u8> outBinary){
+    const ProjectHeaderBinary header = MakeProjectHeaderBinary(startSceneHash);
+    outBinary.clear();
+    outBinary.reserve(s_ProjectHeaderBinaryBytes);
+    AppendPOD(outBinary, header);
+    return true;
+}
+
 b8 SerializeSceneAssetBinary<TSubsystem, TEntity, TAsset>(
     in Span<AssetRef<TSubsystem>> subsystems,
     in Span<AssetRef<TEntity>> entities,

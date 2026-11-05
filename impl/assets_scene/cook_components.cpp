@@ -129,18 +129,15 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
 
 
 b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+    return SerializeTransformComponentPayload(component, outPayload);
 }
 
 b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+    return SerializeCameraComponentPayload(component, outPayload);
 }
 
 b8 LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const LightComponentPayloadBinary binaryPayload = PackLightComponentPayloadBinary(component);
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+    return SerializeLightComponentPayload(component, outPayload);
 }
 
 

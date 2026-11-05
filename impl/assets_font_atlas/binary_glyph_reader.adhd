@@ -444,6 +444,31 @@ b8 ReadFontAtlasBytesInto(
     return true;
 }
 
+b8 ValidateFontAtlasGroupPixelChunk(
+    in u32 width,
+    in u32 height,
+    in u32 channelCount,
+    in Span<u8> pixels,
+    in Span<u8> expectedSha256Bytes,
+    mut u64 inOutPixelBytes
+){
+    if(!IsValidFontAtlasGroupDimensions(width, height, channelCount)){
+        error("FontAtlas validation failed: invalid extent or channel count");
+        return false;
+    }
+    const u64 byteCount = cast<u64>(width) * cast<u64>(height) * cast<u64>(channelCount);
+    if(cast<u64>(pixels.size()) != byteCount || inOutPixelBytes + byteCount > cast<u64>(s_FontAtlasMaxPixelBytes)){
+        error("FontAtlas validation failed: invalid extent, payload size, or byte budget");
+        return false;
+    }
+    if(!DoesFontAtlasDigestMatchBytes(pixels, expectedSha256Bytes)){
+        error("FontAtlas validation failed: pixel content hash mismatch");
+        return false;
+    }
+    inOutPixelBytes += byteCount;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

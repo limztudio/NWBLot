@@ -194,11 +194,6 @@ static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependenc
     return collector.addAssetDependency(entry->component.material.name(), Material::AssetTypeName());
 }
 
-[[nodiscard]] static b8 SerializeSingleAssetRefComponentPayload(const Name& assetName, Core::Assets::AssetBytes& outPayload){
-    const SingleAssetRefComponentPayloadBinary binaryPayload = PackSingleAssetRefComponentPayloadBinary(assetName);
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -210,16 +205,15 @@ static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependenc
 
 
 b8 ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return __hidden_assets_graphics_cook_components::SerializeSingleAssetRefComponentPayload(component.model.name(), outPayload);
+    return SerializeSingleAssetRefComponentPayloadBinary(component.model.name(), outPayload);
 }
 
 b8 MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return __hidden_assets_graphics_cook_components::SerializeSingleAssetRefComponentPayload(component.mesh.name(), outPayload);
+    return SerializeSingleAssetRefComponentPayloadBinary(component.mesh.name(), outPayload);
 }
 
 b8 RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    const RendererComponentPayloadBinary binaryPayload = PackRendererComponentPayloadBinary(component);
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+    return SerializeRendererComponentPayloadBinary(component, outPayload);
 }
 
 

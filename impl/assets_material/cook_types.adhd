@@ -502,6 +502,56 @@ String BuildShadowSurfaceBindNamespace(in u32 bindNamespaceId){
     return bindNamespace;
 }
 
+void AppendShadowSurfaceBindStructInstanceAliases(
+    in StringView instanceName,
+    in MaterialBindStruct bindStruct,
+    in StringView bindNamespace,
+    mut Vector<String> outAliasSymbols,
+    mut HashSet<String> inOutSeenSymbols,
+    mut String inOutSource
+){
+    AppendShadowSurfaceBindInstanceBlockAliases(instanceName, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    for(in MaterialBindField field : bindStruct.fields)
+        AppendShadowSurfaceBindInstanceFieldAliases(instanceName, field.name, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+}
+
+b8 AppendShadowSurfaceBindAliases(
+    in StringView interfaceVirtualPath,
+    in Span<MaterialBindStruct> structs,
+    in Span<MaterialBindInstance> instances,
+    in StringView bindNamespace,
+    mut Vector<String> outAliasSymbols,
+    mut HashSet<String> inOutSeenSymbols,
+    mut String inOutSource
+){
+    inOutSeenSymbols.clear();
+    outAliasSymbols.clear();
+    outAliasSymbols.reserve(cast<usize>(s_NameHashLaneCount) + s_ShadowSurfaceBindLayoutAliasCount + structs.size() + instances.size() * s_ShadowSurfaceBindInstanceAliasReserveCount);
+
+    AppendShadowSurfaceBindLayoutAliases(bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+
+    for(in MaterialBindStruct bindStruct : structs)
+        AppendShadowSurfaceBindAlias(bindStruct.name, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+
+    for(in MaterialBindInstance instance : instances){
+        const Expected<usize> structIndex = FindMaterialBindStructIndex(structs, instance.type);
+        if(!structIndex.has_value()){
+            error("Shadow surface dispatch: interface '{}' instance '{}' has unknown type '{}'", interfaceVirtualPath, instance.name, instance.type);
+            return false;
+        }
+        AppendShadowSurfaceBindStructInstanceAliases(
+            instance.name,
+            structs[structIndex.value()],
+            bindNamespace,
+            outAliasSymbols,
+            inOutSeenSymbols,
+            inOutSource
+        );
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

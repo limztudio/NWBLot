@@ -41,32 +41,15 @@ static b8 AppendShadowSurfaceBindAliases(
     CookHashSet<CookString>& inOutSeenSymbols,
     CookString& inOutSource
 ){
-    inOutSeenSymbols.clear();
-    outAliasSymbols.clear();
-    outAliasSymbols.reserve(static_cast<usize>(s_NameHashLaneCount) + s_ShadowSurfaceBindLayoutAliasCount + bindEntry.structs.size() + bindEntry.instances.size() * s_ShadowSurfaceBindInstanceAliasReserveCount);
-
-    AppendShadowSurfaceBindLayoutAliases(bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
-
-    for(const MaterialBindStruct& bindStruct : bindEntry.structs){
-        AppendShadowSurfaceBindAlias(AStringView(bindStruct.name), bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
-    }
-
-    for(const MaterialBindInstance& instance : bindEntry.instances){
-        const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance.type));
-        if(!bindStruct){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: interface '{}' instance '{}' has unknown type '{}'"), ConvertString(bindEntry.virtualPath), ConvertString(instance.name), ConvertString(instance.type));
-            return false;
-        }
-
-        const AStringView instanceName(instance.name);
-        AppendShadowSurfaceBindInstanceBlockAliases(instanceName, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
-
-        for(const MaterialBindField& field : bindStruct->fields){
-            AppendShadowSurfaceBindInstanceFieldAliases(instanceName, AStringView(field.name), bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
-        }
-    }
-
-    return true;
+    return AppendShadowSurfaceBindAliases(
+        AStringView(bindEntry.virtualPath),
+        bindEntry.structs,
+        bindEntry.instances,
+        bindNamespace,
+        outAliasSymbols,
+        inOutSeenSymbols,
+        inOutSource
+    );
 }
 
 

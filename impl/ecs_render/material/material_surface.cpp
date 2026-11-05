@@ -183,12 +183,9 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     const Material& material = **loadedAsset;
 
     MaterialSurfaceInfo createdInfo(m_arena);
-    createdInfo.materialName = materialPath;
     // Material::loadBinary already rejected empty shader variants and missing material interfaces.
     NWB_ASSERT(!material.shaderVariant().empty());
     NWB_ASSERT(material.materialInterface());
-    createdInfo.shaderVariant.reserve(material.shaderVariant().size());
-    createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
 
     const auto pixelShader = material.findShader<PixelShader>();
     const auto meshShader = material.findShader<MeshShader>();
@@ -201,40 +198,48 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     createdInfo.avboitAccumulatePixelShader = material.avboitAccumulatePixelShader();
     createdInfo.avboitOccupancyPixelShader = material.avboitOccupancyPixelShader();
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
-    if(!hasMeshShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader"), ConvertString(materialPath.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-    if(!hasPixelShader && !material.transparent()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader"), ConvertString(materialPath.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
 
     // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
     NWB_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
     NWB_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    createdInfo.materialInterface = material.materialInterface();
-
-    createdInfo.typedLayoutHash = material.typedLayoutHash();
-    createdInfo.typedLayoutBlocks.reserve(material.typedLayoutBlocks().size());
-    createdInfo.typedLayoutBlocks.assign(material.typedLayoutBlocks().begin(), material.typedLayoutBlocks().end());
-    createdInfo.typedLayoutFields.reserve(material.typedLayoutFields().size());
-    createdInfo.typedLayoutFields.assign(material.typedLayoutFields().begin(), material.typedLayoutFields().end());
-    createdInfo.resourceReferences.reserve(material.resourceReferences().size());
-    createdInfo.resourceReferences.assign(material.resourceReferences().begin(), material.resourceReferences().end());
-    SplitMaterialTypedBlockBytesByClass(material.typedLayoutBlocks(), material.typedBlockBytes(), createdInfo.constantTypedBytes, createdInfo.mutableDefaultTypedBytes);
-    createdInfo.unpatchedConstantTypedBytes = createdInfo.constantTypedBytes;
+    if(!PopulateMaterialSurfaceInfoFromAsset(
+        materialPath,
+        AStringView(material.shaderVariant()),
+        hasMeshShader,
+        hasPixelShader,
+        material.transparent(),
+        material.materialInterface(),
+        material.typedLayoutHash(),
+        material.typedLayoutBlocks(),
+        material.typedLayoutFields(),
+        material.typedBlockBytes(),
+        material.resourceReferences(),
+        material.shadingModelId(),
+        material.surfaceDispatchId(),
+        material.twoSided(),
+        material.refractive(),
+        createdInfo.materialName,
+        createdInfo.shaderVariant,
+        createdInfo.materialInterface,
+        createdInfo.typedLayoutHash,
+        createdInfo.typedLayoutBlocks,
+        createdInfo.typedLayoutFields,
+        createdInfo.resourceReferences,
+        createdInfo.constantTypedBytes,
+        createdInfo.mutableDefaultTypedBytes,
+        createdInfo.unpatchedConstantTypedBytes,
+        createdInfo.shadingModelId,
+        createdInfo.surfaceDispatchId,
+        createdInfo.csgCapSurfaceDispatchAvailable,
+        createdInfo.transparent,
+        createdInfo.twoSided,
+        createdInfo.refractive
+    ))
+        return MakeUnexpected(Failure{});
     if(!resolveMaterialResourceReferences(createdInfo))
         return MakeUnexpected(Failure{});
-    createdInfo.shadingModelId = material.shadingModelId();
-    createdInfo.surfaceDispatchId = material.surfaceDispatchId();
-    // UINT_MAX marks explicit opaque shaders without a surface hook; keep them out of CSG clipping.
-    createdInfo.csgCapSurfaceDispatchAvailable = createdInfo.surfaceDispatchId != Limit<u32>::s_Max;
-    createdInfo.transparent = material.transparent();
-    createdInfo.twoSided = material.twoSided();
-    createdInfo.refractive = material.refractive();
 
     auto result = m_materialState.m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
@@ -388,7 +393,7 @@ Expected<Span<const u8>> RendererMaterialSystem::prepareMaterialInstanceMutableT
     ))
         return Span<const u8>(cacheEntry.mutableTypedBytes);
 
-    AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, materialInfo.mutableDefaultTypedBytes);
+    CopyMaterialTypedByteSpan(materialInfo.mutableDefaultTypedBytes, cacheEntry.mutableTypedBytes);
     if(!ApplyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, cacheEntry.mutableTypedBytes)){
         m_materialState.m_instanceMutableCache.erase(it);
         return MakeUnexpected(Failure{});

@@ -168,10 +168,14 @@ b8 RendererMaterialSystem::materialPassDrawBuffersReady(const Span<const Instanc
 }
 
 b8 RendererMaterialSystem::materialPassDrawBuffersReady(const usize instanceCount, const usize materialTypedByteCount)const noexcept{
-    if(materialTypedByteCount == 0u || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u)
-        return false;
-
-    return (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)) && m_materialState.m_materialTypedBuffer && m_materialState.m_materialTypedBufferCapacity >= materialTypedByteCount;
+    return IsMaterialPassDrawBuffersReady(
+        instanceCount,
+        materialTypedByteCount,
+        static_cast<b8>(m_materialState.m_instanceBuffer),
+        m_materialState.m_instanceBufferCapacity,
+        static_cast<b8>(m_materialState.m_materialTypedBuffer),
+        m_materialState.m_materialTypedBufferCapacity
+    );
 }
 
 ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const noexcept{

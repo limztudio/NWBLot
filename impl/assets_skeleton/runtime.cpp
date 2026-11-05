@@ -26,6 +26,8 @@ namespace __hidden_skeleton_runtime{
 inline constexpr TStringView s_SkeletonLoadBinaryContext = NWB_TEXT("Skeleton::loadBinary");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAssetCodec);
+static_assert(sizeof(SkeletonHeaderBinary) == s_SkeletonHeaderBinaryBytes, "SkeletonHeaderBinary layout drifted");
+static_assert(sizeof(SkeletonJointBinary) == s_SkeletonJointBinaryBytes, "SkeletonJointBinary layout drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,35 +57,9 @@ b8 Skeleton::loadBinary(const Span<const u8> binary){
         return false;
     const SkeletonHeaderBinary& header = *headerResult;
 
-    if(!ValidateSkeletonHeaderBinary(header))
-        return false;
-    const auto jointByteCount = ComputeBinaryVectorPayloadBytes<SkeletonJointBinary>(header.jointCount);
-    if(!jointByteCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint payload byte size overflows"));
-        return false;
-    }
-    if(!CanReadBytes(binary, cursor, *jointByteCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed joints payload"));
-        return false;
-    }
-
     Skeleton candidate(m_joints.get_allocator().arena(), virtualPath());
-    const usize jointCount = static_cast<usize>(header.jointCount);
-    if(!CanStoreValueCount(candidate.m_joints, jointCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: joint count exceeds runtime container limits"));
+    if(!ReadSkeletonJointsPayload(binary, header, cursor, candidate.m_joints, candidate.m_jointIndices))
         return false;
-    }
-    candidate.m_joints.reserve(jointCount);
-    candidate.m_jointIndices.reserve(jointCount);
-    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const auto jointBinaryResult = ReadPOD<SkeletonJointBinary>(binary, cursor);
-        if(!jointBinaryResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: malformed joint {}"), jointIndex);
-            return false;
-        }
-        if(!AppendUnpackedSkeletonJointBinary(*jointBinaryResult, candidate.m_joints, candidate.m_jointIndices))
-            return false;
-    }
 
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SkeletonLoadBinaryContext) || !candidate.validatePayload(scratchArena))
         return false;

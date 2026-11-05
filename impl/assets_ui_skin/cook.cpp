@@ -31,37 +31,16 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     if(!skin.validatePayload())
         return false;
 
-    usize reserveBytes = sizeof(UiSkinHeaderBinary);
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skin.regions().size(), sizeof(UiSkinRegionBinary))){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
-        return false;
-    }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, UiSkinColorRole::kCount, sizeof(UiSkinColor))){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
-        return false;
-    }
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, 1u, sizeof(UiSkinTypography))){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: typography payload size overflows"));
-        return false;
-    }
-
-    const UiSkinHeaderBinary header = MakeUiSkinHeaderBinary(
-        skin.texture().name().hash(),
+    return SerializeUiSkinBinaryPayload(
+        skin.texture(),
         skin.atlasWidth(),
         skin.atlasHeight(),
         skin.referenceDensity(),
-        static_cast<u32>(skin.regions().size())
+        skin.regions(),
+        skin.palette(),
+        skin.typography(),
+        outBinary
     );
-
-    outBinary.clear();
-    outBinary.reserve(reserveBytes);
-    AppendPOD(outBinary, header);
-    for(const UiSkinRegion& region : skin.regions())
-        AppendPOD(outBinary, PackUiSkinRegionBinary(region));
-    for(const UiSkinColor& color : skin.palette().colors)
-        AppendPOD(outBinary, color);
-    AppendPOD(outBinary, skin.typography());
-    return true;
 }
 
 

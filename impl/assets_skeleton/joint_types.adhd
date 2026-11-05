@@ -17,6 +17,8 @@ const u32 s_SkeletonJointMatrixFloatCount = 12u;
 const u32 s_SkeletonJointMatrixRowCount = 3u;
 const u32 s_SkeletonJointMatrixColumnCount = 4u;
 const u32 s_SkeletonBinaryMagic = 0x534B4C31u; // SKL1
+const usize s_SkeletonHeaderBinaryBytes = 16u;
+const usize s_SkeletonJointBinaryBytes = 128u;
 
 const Name s_AssetsSkeletonLoadBinaryArena = "impl/assets_skeleton/load_binary";
 const Name s_AssetsSkeletonSerializeArena = "impl/assets_skeleton/serialize";

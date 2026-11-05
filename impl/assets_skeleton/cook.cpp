@@ -125,25 +125,8 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     if(!skeleton.validatePayload(scratchArena))
         return false;
 
-    usize reserveBytes = sizeof(SkeletonHeaderBinary);
-    if(!AddBinaryRepeatedReserveBytes(reserveBytes, skeleton.joints().size(), sizeof(SkeletonJointBinary)) || !CanStoreValueCount(outBinary, reserveBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkeletonAssetCodec::serialize failed: cooked payload size overflows"));
-        return false;
-    }
-
     Vector<NameHash, Core::Alloc::ScratchArena> jointNameHashes(scratchArena);
-    CollectSkeletonJointNameHashes(skeleton.joints().size(), skeleton.jointIndices(), jointNameHashes);
-
-    outBinary.clear();
-    outBinary.reserve(reserveBytes);
-
-    const SkeletonHeaderBinary header = MakeSkeletonHeaderBinary(static_cast<u64>(skeleton.joints().size()));
-    AppendPOD(outBinary, header);
-    for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
-        const SkeletonJointBinary jointBinary = PackSkeletonJointBinary(jointNameHashes[jointIndex], skeleton.joints()[jointIndex]);
-        AppendPOD(outBinary, jointBinary);
-    }
-    return true;
+    return SerializeSkeletonBinaryPayload(skeleton.joints(), skeleton.jointIndices(), jointNameHashes, outBinary);
 }
 
 Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

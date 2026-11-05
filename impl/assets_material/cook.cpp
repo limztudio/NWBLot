@@ -26,18 +26,11 @@ using OptionalAvboitPixelShaderSetter = void(Material::*)(const Core::Assets::As
 template<OptionalAvboitPixelShaderSetter Setter>
 static b8 SetOptionalAvboitPixelShader(const MaterialCookEntry& materialEntry, const AStringView shaderNameText, const AStringView passLabel, Material& outMaterial){
     static_assert(Setter != nullptr);
-    if(shaderNameText.empty())
-        return true;
-
-    const auto shaderName = ToName(shaderNameText);
-    if(!shaderName || !*shaderName){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name"), ConvertString(AStringView(materialEntry.virtualPath)), ConvertString(passLabel));
-        return false;
-    }
-
     Core::Assets::AssetRef<PixelShader> shaderRef;
-    shaderRef.virtualPath = **shaderName;
-    (outMaterial.*Setter)(shaderRef);
+    if(!TryResolveOptionalMaterialAvboitPixelShader(AStringView(materialEntry.virtualPath), shaderNameText, passLabel, shaderRef))
+        return false;
+    if(shaderRef.valid())
+        (outMaterial.*Setter)(shaderRef);
     return true;
 }
 
@@ -108,54 +101,18 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     const Material& material = static_cast<const Material&>(asset);
     if(!material.validatePayload(s_SerializeFailureContext, s_MaterialSerializeContextText))
         return false;
-    usize reserveBytes = sizeof(u32);
-    b8 canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u64))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.typedLayoutBlocks().size(), s_MaterialTypedLayoutBlockBytes)
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.typedLayoutFields().size(), s_MaterialTypedLayoutFieldBytes)
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, material.typedBlockBytes().size())
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.resourceReferences().size(), s_MaterialResourceReferenceBytes)
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), s_MaterialShaderEntryBytes)
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
-    ;
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    AppendPOD(outBinary, s_MaterialBinaryMagic);
-    if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
+    if(!AppendMaterialBinaryHeaderAndTypedLayout(
+        AStringView(material.shaderVariant()),
+        material.materialInterface(),
+        material.typedLayoutHash(),
+        material.typedLayoutBlocks(),
+        material.typedLayoutFields(),
+        material.typedBlockBytes(),
+        material.resourceReferences(),
+        material.stageShaderCount(),
+        outBinary
+    ))
         return false;
-    }
-    AppendPOD(outBinary, material.materialInterface().hash());
-    AppendPOD(outBinary, material.typedLayoutHash());
-    AppendPOD(outBinary, static_cast<u32>(material.typedLayoutBlocks().size()));
-    AppendPOD(outBinary, static_cast<u32>(material.typedLayoutFields().size()));
-    for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks())
-        AppendPOD(outBinary, PackMaterialTypedLayoutBlockBinary(block));
-    for(const MaterialTypedLayoutField& field : material.typedLayoutFields())
-        AppendPOD(outBinary, PackMaterialTypedLayoutFieldBinary(field));
-    AppendPOD(outBinary, static_cast<u32>(material.typedBlockBytes().size()));
-    AppendBytesNoReserveUnchecked(outBinary, material.typedBlockBytes().data(), material.typedBlockBytes().size());
-    AppendPOD(outBinary, static_cast<u32>(material.resourceReferences().size()));
-    for(const MaterialResourceReference& resourceReference : material.resourceReferences())
-        AppendPOD(outBinary, PackMaterialResourceReferenceBinary(resourceReference));
-    AppendPOD(outBinary, material.stageShaderCount());
 
     const Material::StageShaderArray& stageShaders = material.stageShaders();
     for(usize shaderIndex = 0u; shaderIndex < stageShaders.size(); ++shaderIndex){
@@ -170,22 +127,17 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         AppendPOD(outBinary, shaderAsset.name().hash());
     }
 
-    AppendPOD(outBinary, PackMaterialFlags(material.transparent(), material.twoSided(), material.refractive()));
-    AppendPOD(outBinary, material.shadingModelId());
-    AppendPOD(outBinary, material.surfaceDispatchId());
-
-    // Optional AVBOIT pixel shaders (accumulate, occupancy, extinction) serialize as a presence flag plus shader name hash.
-    const auto appendOptionalAvboitPixelShader = [&outBinary](const Core::Assets::AssetRef<PixelShader>& shaderRef){
-        if(shaderRef.valid()){
-            AppendPOD(outBinary, static_cast<u32>(1u));
-            AppendPOD(outBinary, shaderRef.name().hash());
-        }
-        else
-            AppendPOD(outBinary, static_cast<u32>(0u));
-    };
-    appendOptionalAvboitPixelShader(material.avboitAccumulatePixelShader());
-    appendOptionalAvboitPixelShader(material.avboitOccupancyPixelShader());
-    appendOptionalAvboitPixelShader(material.avboitExtinctionPixelShader());
+    AppendMaterialBinaryFooter(
+        material.transparent(),
+        material.twoSided(),
+        material.refractive(),
+        material.shadingModelId(),
+        material.surfaceDispatchId(),
+        material.avboitAccumulatePixelShader(),
+        material.avboitOccupancyPixelShader(),
+        material.avboitExtinctionPixelShader(),
+        outBinary
+    );
 
     return true;
 }

@@ -31,6 +31,10 @@ namespace __hidden_ui_skin_runtime{
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_UiSkinAssetCodecAutoRegistrar, UiSkinAssetCodec);
 NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_UiSubsystemAssetAutoRegistrar, UiSubsystem);
 static_assert(UiSkinColorRole::kCount == s_UiSkinPaletteColorCount, "UI skin palette layout drifted");
+static_assert(sizeof(UiSkinHeaderBinary) == s_UiSkinHeaderBinaryBytes, "UiSkinHeaderBinary layout drifted");
+static_assert(sizeof(UiSkinRegionBinary) == s_UiSkinRegionBinaryBytes, "UiSkinRegionBinary layout drifted");
+static_assert(sizeof(UiSkinColor) == s_UiSkinColorBytes, "UiSkinColor layout drifted");
+static_assert(sizeof(UiSkinTypography) == s_UiSkinTypographyBytes, "UiSkinTypography layout drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,35 +60,8 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
     candidate.m_atlasWidth = header.atlasWidth;
     candidate.m_atlasHeight = header.atlasHeight;
     candidate.m_referenceDensity = header.referenceDensity;
-    candidate.m_regions.reserve(header.regionCount);
-    for(u32 index = 0u; index < header.regionCount; ++index){
-        const auto packedResult = ReadPOD<UiSkinRegionBinary>(binary, cursor);
-        if(!packedResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed region {}"), index);
-            return false;
-        }
-        const Expected<UiSkinRegion> unpacked = TryUnpackUiSkinRegionBinary(*packedResult, index);
-        if(!unpacked)
-            return false;
-
-        candidate.m_regions.push_back(*unpacked);
-    }
-    UiSkinPalette palette;
-    for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
-        const auto packedResult = ReadPOD<UiSkinColor>(binary, cursor);
-        if(!packedResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
-            return false;
-        }
-        palette.colors[index] = *packedResult;
-    }
-    candidate.setPalette(palette);
-    const auto typographyResult = ReadPOD<UiSkinTypography>(binary, cursor);
-    if(!typographyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
+    if(!ReadUiSkinRegionsPaletteAndTypography(binary, header.regionCount, cursor, candidate.m_regions, candidate.m_palette, candidate.m_typography))
         return false;
-    }
-    candidate.setTypography(*typographyResult);
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_UiSkinLoadBinaryContext))
         return false;
     candidate.rebuildRegionIndex();

@@ -148,5 +148,71 @@ b8 AppendUnpackedSkeletonJointBinary(
     return true;
 }
 
+b8 ReadSkeletonJointsPayload(
+    in Span<u8> binary,
+    in SkeletonHeaderBinary header,
+    mut usize inOutCursor,
+    mut Vector<SkeletonJoint> outJoints,
+    mut HashMap<Name, u32> outJointIndices
+){
+    if(!ValidateSkeletonHeaderBinary(header))
+        return false;
+    if(header.jointCount > cast<u64>(usize.max / s_SkeletonJointBinaryBytes)){
+        error("Skeleton::loadBinary failed: joint payload byte size overflows");
+        return false;
+    }
+    const usize jointByteCount = cast<usize>(header.jointCount) * s_SkeletonJointBinaryBytes;
+    if(!CanReadBytes(binary, inOutCursor, jointByteCount)){
+        error("Skeleton::loadBinary failed: malformed joints payload");
+        return false;
+    }
+
+    const usize jointCount = cast<usize>(header.jointCount);
+    if(!CanStoreValueCount(outJoints, jointCount)){
+        error("Skeleton::loadBinary failed: joint count exceeds runtime container limits");
+        return false;
+    }
+    outJoints.clear();
+    outJointIndices.clear();
+    outJoints.reserve(jointCount);
+    outJointIndices.reserve(jointCount);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointBinary> jointBinaryResult = ReadPOD<SkeletonJointBinary>(binary, inOutCursor);
+        if(!jointBinaryResult.has_value()){
+            error("Skeleton::loadBinary failed: malformed joint {}", jointIndex);
+            return false;
+        }
+        if(!AppendUnpackedSkeletonJointBinary(jointBinaryResult.value(), outJoints, outJointIndices))
+            return false;
+    }
+    return true;
+}
+
+b8 SerializeSkeletonBinaryPayload(
+    in Span<SkeletonJoint> joints,
+    in HashMap<Name, u32> jointIndices,
+    mut ScratchSkeletonNameHashVector jointNameHashes,
+    mut Vector<u8> outBinary
+){
+    usize reserveBytes = s_SkeletonHeaderBinaryBytes;
+    if(!AddBinaryRepeatedReserveBytes(reserveBytes, joints.size(), s_SkeletonJointBinaryBytes) || !CanStoreValueCount(outBinary, reserveBytes)){
+        error("SkeletonAssetCodec::serialize failed: cooked payload size overflows");
+        return false;
+    }
+
+    CollectSkeletonJointNameHashes(joints.size(), jointIndices, jointNameHashes);
+
+    outBinary.clear();
+    outBinary.reserve(reserveBytes);
+
+    const SkeletonHeaderBinary header = MakeSkeletonHeaderBinary(cast<u64>(joints.size()));
+    AppendPOD(outBinary, header);
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const SkeletonJointBinary jointBinary = PackSkeletonJointBinary(jointNameHashes[jointIndex], joints[jointIndex]);
+        AppendPOD(outBinary, jointBinary);
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -256,6 +256,267 @@ b8 ValidateMaterialPayloadData(
     return true;
 }
 
+void AssignMaterialTypedLayoutPayload(
+    in u64 layoutHash,
+    in Span<MaterialTypedLayoutBlock> blocks,
+    in Span<MaterialTypedLayoutField> fields,
+    in Span<u8> blockBytes,
+    mut u64 outLayoutHash,
+    mut Vector<MaterialTypedLayoutBlock> outBlocks,
+    mut Vector<MaterialTypedLayoutField> outFields,
+    mut Vector<u8> outBlockBytes
+){
+    outLayoutHash = layoutHash;
+    outBlocks.clear();
+    outBlocks.reserve(blocks.size());
+    for(in MaterialTypedLayoutBlock block : blocks)
+        outBlocks.push_back(block);
+    outFields.clear();
+    outFields.reserve(fields.size());
+    for(in MaterialTypedLayoutField field : fields)
+        outFields.push_back(field);
+    outBlockBytes.clear();
+    outBlockBytes.reserve(blockBytes.size());
+    for(in u8 byteValue : blockBytes)
+        outBlockBytes.push_back(byteValue);
+}
+
+void AssignMaterialResourceReferencesPayload(
+    in Span<MaterialResourceReference> resourceReferences,
+    mut Vector<MaterialResourceReference> outResourceReferences
+){
+    outResourceReferences.clear();
+    outResourceReferences.reserve(resourceReferences.size());
+    for(in MaterialResourceReference reference : resourceReferences)
+        outResourceReferences.push_back(reference);
+}
+
+b8 ReadMaterialBinaryPreamble(
+    in Span<u8> binary,
+    mut usize inOutCursor,
+    mut String outShaderVariant,
+    mut Name outMaterialInterface
+){
+    const Expected<u32> magicResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!magicResult.has_value()){
+        error("Material::loadBinary failed: missing magic");
+        return false;
+    }
+    if(magicResult.value() != s_MaterialBinaryMagic){
+        error("Material::loadBinary failed: invalid magic");
+        return false;
+    }
+
+    const Expected<StringView> shaderVariant = ReadString(binary, inOutCursor);
+    if(!shaderVariant.has_value()){
+        error("Material::loadBinary failed: missing shader variant");
+        return false;
+    }
+    outShaderVariant.assign(shaderVariant.value());
+    if(outShaderVariant.empty()){
+        error("Material::loadBinary failed: shader variant is empty");
+        return false;
+    }
+
+    const Expected<NameHash> materialInterfaceHashResult = ReadPOD<NameHash>(binary, inOutCursor);
+    if(!materialInterfaceHashResult.has_value()){
+        error("Material::loadBinary failed: missing material interface");
+        return false;
+    }
+    outMaterialInterface = Name(materialInterfaceHashResult.value());
+    if(outMaterialInterface == s_NameNone){
+        error("Material::loadBinary failed: material interface is required");
+        return false;
+    }
+    return true;
+}
+
+b8 ReadMaterialTypedLayout(
+    in Span<u8> binary,
+    mut usize inOutCursor,
+    mut u64 outLayoutHash,
+    mut Vector<MaterialTypedLayoutBlock> outBlocks,
+    mut Vector<MaterialTypedLayoutField> outFields,
+    mut Vector<u8> outBlockBytes,
+    mut Vector<MaterialResourceReference> outResourceReferences
+){
+    outBlocks.clear();
+    outFields.clear();
+    outBlockBytes.clear();
+    outResourceReferences.clear();
+
+    const Expected<u64> layoutHashResult = ReadPOD<u64>(binary, inOutCursor);
+    if(!layoutHashResult.has_value()){
+        error("Material::loadBinary failed: missing typed layout header");
+        return false;
+    }
+    const u64 layoutHash = layoutHashResult.value();
+    const Expected<u32> blockCountResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!blockCountResult.has_value()){
+        error("Material::loadBinary failed: missing typed layout header");
+        return false;
+    }
+    const u32 blockCount = blockCountResult.value();
+    const Expected<u32> fieldCountResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!fieldCountResult.has_value()){
+        error("Material::loadBinary failed: missing typed layout header");
+        return false;
+    }
+    const u32 fieldCount = fieldCountResult.value();
+
+    // Successful reads keep the cursor inside the binary.
+    if(cast<usize>(blockCount) > (binary.size() - inOutCursor) / s_MaterialTypedLayoutBlockBytes){
+        error("Material::loadBinary failed: typed layout block count exceeds available data");
+        return false;
+    }
+    outBlocks.reserve(cast<usize>(blockCount));
+    for(u32 i = 0u; i < blockCount; ++i){
+        const Expected<MaterialTypedLayoutBlockBinary> blockBinaryResult = ReadPOD<MaterialTypedLayoutBlockBinary>(binary, inOutCursor);
+        if(!blockBinaryResult.has_value()){
+            error("Material::loadBinary failed: malformed typed layout block at index {}", i);
+            return false;
+        }
+        outBlocks.push_back(UnpackMaterialTypedLayoutBlockBinary(blockBinaryResult.value()));
+    }
+
+    if(cast<usize>(fieldCount) > (binary.size() - inOutCursor) / s_MaterialTypedLayoutFieldBytes){
+        error("Material::loadBinary failed: typed layout field count exceeds available data");
+        return false;
+    }
+    outFields.reserve(cast<usize>(fieldCount));
+    for(u32 i = 0u; i < fieldCount; ++i){
+        const Expected<MaterialTypedLayoutFieldBinary> fieldBinaryResult = ReadPOD<MaterialTypedLayoutFieldBinary>(binary, inOutCursor);
+        if(!fieldBinaryResult.has_value()){
+            error("Material::loadBinary failed: malformed typed layout field at index {}", i);
+            return false;
+        }
+        outFields.push_back(UnpackMaterialTypedLayoutFieldBinary(fieldBinaryResult.value()));
+    }
+
+    const Expected<u32> blockByteCountResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!blockByteCountResult.has_value()){
+        error("Material::loadBinary failed: missing typed block byte count");
+        return false;
+    }
+    const u32 blockByteCount = blockByteCountResult.value();
+    if(cast<usize>(blockByteCount) > binary.size() - inOutCursor){
+        error("Material::loadBinary failed: typed block byte count exceeds available data");
+        return false;
+    }
+
+    outBlockBytes.resize(cast<usize>(blockByteCount));
+    for(u32 i = 0u; i < blockByteCount; ++i)
+        outBlockBytes[cast<usize>(i)] = binary[inOutCursor + cast<usize>(i)];
+    inOutCursor += cast<usize>(blockByteCount);
+
+    const Expected<u32> resourceReferenceCountResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!resourceReferenceCountResult.has_value()){
+        error("Material::loadBinary failed: missing material resource reference count");
+        return false;
+    }
+    const u32 resourceReferenceCount = resourceReferenceCountResult.value();
+    if(cast<usize>(resourceReferenceCount) > (binary.size() - inOutCursor) / s_MaterialResourceReferenceBytes){
+        error("Material::loadBinary failed: material resource reference count exceeds available data");
+        return false;
+    }
+    outResourceReferences.reserve(cast<usize>(resourceReferenceCount));
+    for(u32 i = 0u; i < resourceReferenceCount; ++i){
+        const Expected<MaterialResourceReferenceBinary> resourceReferenceBinaryResult = ReadPOD<MaterialResourceReferenceBinary>(binary, inOutCursor);
+        if(!resourceReferenceBinaryResult.has_value()){
+            error("Material::loadBinary failed: malformed material resource reference at index {}", i);
+            return false;
+        }
+        const Expected<MaterialResourceReference> resourceReference = TryUnpackMaterialResourceReferenceBinary(resourceReferenceBinaryResult.value());
+        if(!resourceReference.has_value()){
+            error("Material::loadBinary failed: material resource reference at index {} has an invalid asset identity", i);
+            return false;
+        }
+        outResourceReferences.push_back(resourceReference.value());
+    }
+
+    if(!LogAndValidateMaterialTypedLayout(layoutHash, outBlocks, outFields, outBlockBytes, s_MaterialLoadBinaryContextText))
+        return false;
+    if(!ValidateMaterialResourceReferences(outBlocks, outFields, outResourceReferences)){
+        error("Material::loadBinary failed: material resource references do not match typed layout");
+        return false;
+    }
+
+    outLayoutHash = layoutHash;
+    return true;
+}
+
+b8 ReadOptionalMaterialAvboitPixelShader(
+    in Span<u8> binary,
+    in StringView passLabel,
+    mut usize inOutCursor,
+    mut AssetRef<PixelShader> outShaderRef
+){
+    outShaderRef = AssetRef<PixelShader>();
+    const Expected<u32> hasShaderResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!hasShaderResult.has_value()){
+        error("Material::loadBinary failed: missing AVBOIT {} pixel shader presence flag", passLabel);
+        return false;
+    }
+    const u32 hasShader = hasShaderResult.value();
+    if(!ValidateMaterialBinaryAvboitPresenceFlag(passLabel, hasShader))
+        return false;
+    if(hasShader == 1u){
+        const Expected<NameHash> shaderNameHashResult = ReadPOD<NameHash>(binary, inOutCursor);
+        if(!shaderNameHashResult.has_value()){
+            error("Material::loadBinary failed: missing AVBOIT {} pixel shader name", passLabel);
+            return false;
+        }
+        outShaderRef.virtualPath = Name(shaderNameHashResult.value());
+        if(!ValidateMaterialBinaryAvboitShaderRef(passLabel, outShaderRef.valid()))
+            return false;
+    }
+    return true;
+}
+
+b8 ReadMaterialBinaryFooter(
+    in Span<u8> binary,
+    mut usize inOutCursor,
+    mut b8 outTransparent,
+    mut b8 outTwoSided,
+    mut b8 outRefractive,
+    mut u32 outShadingModelId,
+    mut u32 outSurfaceDispatchId,
+    mut AssetRef<PixelShader> outAvboitAccumulatePixelShader,
+    mut AssetRef<PixelShader> outAvboitOccupancyPixelShader,
+    mut AssetRef<PixelShader> outAvboitExtinctionPixelShader
+){
+    const Expected<u32> materialFlagsResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!materialFlagsResult.has_value()){
+        error("Material::loadBinary failed: missing material flags");
+        return false;
+    }
+    if(!ValidateMaterialBinaryFlags(materialFlagsResult.value(), outTransparent, outTwoSided, outRefractive))
+        return false;
+
+    const Expected<u32> shadingModelIdResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!shadingModelIdResult.has_value()){
+        error("Material::loadBinary failed: missing shading model id");
+        return false;
+    }
+    outShadingModelId = shadingModelIdResult.value();
+
+    const Expected<u32> surfaceDispatchIdResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!surfaceDispatchIdResult.has_value()){
+        error("Material::loadBinary failed: missing surface dispatch id");
+        return false;
+    }
+    outSurfaceDispatchId = surfaceDispatchIdResult.value();
+
+    if(!ReadOptionalMaterialAvboitPixelShader(binary, s_MaterialAvboitAccumulatePassLabel, inOutCursor, outAvboitAccumulatePixelShader))
+        return false;
+    if(!ReadOptionalMaterialAvboitPixelShader(binary, s_MaterialAvboitOccupancyPassLabel, inOutCursor, outAvboitOccupancyPixelShader))
+        return false;
+    if(!ReadOptionalMaterialAvboitPixelShader(binary, s_MaterialAvboitExtinctionPassLabel, inOutCursor, outAvboitExtinctionPixelShader))
+        return false;
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

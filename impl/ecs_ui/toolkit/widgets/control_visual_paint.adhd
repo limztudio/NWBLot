@@ -9,6 +9,7 @@
 #include <impl/ecs_ui/toolkit/widgets/radio_group_placement.adhd>
 #include <impl/ecs_ui/toolkit/widgets/scroll_viewport_placement.adhd>
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd>
+#include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd>
 
 native{
 #include <impl/assets_ui_skin/asset.h>
@@ -618,6 +619,33 @@ Expected<SliderResult> TryFinalizeSliderFrameResult(
         result.dragging = captureId == track.value() || captureId == thumb.value();
     }
     return result;
+}
+
+void ApplyBuilderSkinStyles(
+    in UiSkinPalette palette,
+    in f32 nextDefaultFontSize,
+    mut f32 inOutSkinDefaultFontSize,
+    mut WidgetStyle inOutStyle,
+    mut TooltipStyle inOutTooltipStyle,
+    mut EditBoxStyle inOutEditStyle,
+    mut ScrollbarStyle inOutScrollbarStyle,
+    mut PopupStyle inOutPopupStyle,
+    mut RadioGroupStyle inOutRadioGroupStyle,
+    mut SliderStyle inOutSliderStyle,
+    mut ProgressStyle inOutProgressStyle
+){
+    if(inOutStyle.fontSize == inOutSkinDefaultFontSize)
+        inOutStyle.fontSize = nextDefaultFontSize;
+    inOutSkinDefaultFontSize = nextDefaultFontSize;
+
+    ApplySkinPaletteToWidgetStyle(palette, inOutStyle);
+    ApplySkinPaletteToTooltipStyle(palette, inOutTooltipStyle);
+    ApplySkinPaletteToEditBoxStyle(palette, inOutEditStyle);
+    ApplySkinPaletteToScrollbarStyle(palette, inOutScrollbarStyle);
+    ApplySkinPaletteToPopupStyle(palette, inOutPopupStyle);
+    ApplySkinPaletteToRadioGroupStyle(palette, inOutRadioGroupStyle);
+    ApplySkinPaletteToSliderStyle(palette, inOutSliderStyle);
+    ApplySkinPaletteToProgressStyle(palette, inOutProgressStyle);
 }
 
 

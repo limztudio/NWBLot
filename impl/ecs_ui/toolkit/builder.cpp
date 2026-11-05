@@ -160,20 +160,19 @@ void Builder::setSkin(const UiSkin& skin)noexcept{
         return;
     }
     m_skin = &skin;
-    const f32 nextDefaultFontSize = skin.typography().defaultFontSize;
-    if(m_style.fontSize == m_skinDefaultFontSize)
-        m_style.fontSize = nextDefaultFontSize;
-    m_skinDefaultFontSize = nextDefaultFontSize;
-    const UiSkinPalette& palette = skin.palette();
-
-    ApplySkinPaletteToWidgetStyle(palette, m_style);
-    ApplySkinPaletteToTooltipStyle(palette, m_tooltipStyle);
-    ApplySkinPaletteToEditBoxStyle(palette, m_editStyle);
-    ApplySkinPaletteToScrollbarStyle(palette, m_scrollbarStyle);
-    ApplySkinPaletteToPopupStyle(palette, m_popupStyle);
-    ApplySkinPaletteToRadioGroupStyle(palette, m_radioGroupStyle);
-    ApplySkinPaletteToSliderStyle(palette, m_sliderStyle);
-    ApplySkinPaletteToProgressStyle(palette, m_progressStyle);
+    ApplyBuilderSkinStyles(
+        skin.palette(),
+        skin.typography().defaultFontSize,
+        m_skinDefaultFontSize,
+        m_style,
+        m_tooltipStyle,
+        m_editStyle,
+        m_scrollbarStyle,
+        m_popupStyle,
+        m_radioGroupStyle,
+        m_sliderStyle,
+        m_progressStyle
+    );
 }
 
 b8 Builder::setTextShaping(const u32 scriptTag, const StringView language){

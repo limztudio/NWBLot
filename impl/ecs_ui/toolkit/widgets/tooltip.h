@@ -45,18 +45,20 @@ public:
 public:
     void reset()noexcept{
         AdvanceNonWrappingRevision(m_revision);
-        m_owner = {};
-        m_ownerDeclaration = 0u;
-        m_anchor = {};
-        m_declarationGeneration = 0u;
-        m_popup = {};
-        m_focusLossGeneration = 0u;
-        m_hoverActivityGeneration = 0u;
-        m_options = {};
-        m_placement = {};
-        m_elapsed = 0.0;
-        m_hovered = false;
-        m_visible = false;
+        ResetTooltipStateFields(
+            m_owner,
+            m_ownerDeclaration,
+            m_anchor,
+            m_declarationGeneration,
+            m_popup,
+            m_focusLossGeneration,
+            m_hoverActivityGeneration,
+            m_options,
+            m_placement,
+            m_elapsed,
+            m_hovered,
+            m_visible
+        );
     }
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
 

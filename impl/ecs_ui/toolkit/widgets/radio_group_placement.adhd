@@ -197,5 +197,40 @@ Color ResolveRadioGroupChoiceTint(in RadioGroupStyle style, in b8 enabled, in b8
     return Color();
 }
 
+void ResetRadioGroupStateFields(
+    mut u64 outSelected,
+    mut u64 outCursor,
+    mut u64 outSourceGeneration,
+    mut u64 outSourceRevision,
+    mut RadioGroupPlacement outPlacement
+){
+    outSelected = 0u;
+    outCursor = 0u;
+    outSourceGeneration = 0u;
+    outSourceRevision = 0u;
+    outPlacement = RadioGroupPlacement();
+}
+
+void CommitRadioGroupReconcileState(
+    in RadioGroupSnapshot snapshot,
+    in RadioGroupChoices candidate,
+    in u64 selected,
+    in u64 cursor,
+    mut u64 outSelected,
+    mut u64 outCursor,
+    mut u64 outSourceGeneration,
+    mut u64 outSourceRevision,
+    mut RadioGroupResult inOutResult
+){
+    RadioGroupResult candidateResult = inOutResult;
+    candidateResult.valid = true;
+    candidateResult.selectionChanged = candidateResult.selectionChanged || snapshot.selectedKey != selected;
+    outSelected = selected;
+    outCursor = cursor;
+    outSourceGeneration = candidate.sourceGeneration;
+    outSourceRevision = candidate.sourceRevision;
+    inOutResult = candidateResult;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

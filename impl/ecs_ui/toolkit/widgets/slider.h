@@ -84,17 +84,19 @@ public:
         AdvanceNonWrappingRevision(m_revision);
         AdvanceNonWrappingRevision(m_admissionGeneration);
         m_inputGeneration = NextIdentity();
-        m_value = 0.0;
-        m_minimum = 0.0;
-        m_maximum = 1.0;
-        m_keyStep = 0.0;
-        m_admission = {};
-        m_press = {};
-        m_result = {};
-        m_placement = {};
-        m_enabled = true;
-        m_admitted = false;
-        m_pressMoved = false;
+        ResetSliderStateFields(
+            m_value,
+            m_minimum,
+            m_maximum,
+            m_keyStep,
+            m_admission,
+            m_press,
+            m_result,
+            m_placement,
+            m_enabled,
+            m_admitted,
+            m_pressMoved
+        );
     }
 
 
@@ -133,14 +135,18 @@ public:
             return true;
         AdvanceNonWrappingRevision(state.m_revision);
         AdvanceNonWrappingRevision(state.m_admissionGeneration);
-        state.m_minimum = options.minimum;
-        state.m_maximum = options.maximum;
-        state.m_keyStep = options.keyStep;
-        state.m_enabled = options.enabled;
-        state.m_admission = placement;
-        state.m_admitted = true;
-        state.m_press = {};
-        state.m_pressMoved = false;
+        CommitSliderAdmissionState(
+            options,
+            placement,
+            state.m_minimum,
+            state.m_maximum,
+            state.m_keyStep,
+            state.m_enabled,
+            state.m_admission,
+            state.m_admitted,
+            state.m_press,
+            state.m_pressMoved
+        );
         return true;
     }
     [[nodiscard]] static b8 Apply(const SliderOptions& options, const ControlAction& action, SliderState& state, SliderResult& result)noexcept{

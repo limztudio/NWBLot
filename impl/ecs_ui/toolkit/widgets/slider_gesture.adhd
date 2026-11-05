@@ -146,5 +146,53 @@ Name ResolveSliderThumbPreferredName(in SliderStyle style, in b8 interactive, in
     return style.normal;
 }
 
+void ResetSliderStateFields(
+    mut f64 outValue,
+    mut f64 outMinimum,
+    mut f64 outMaximum,
+    mut f64 outKeyStep,
+    mut SliderPlacement outAdmission,
+    mut InputActionId outPress,
+    mut SliderResult outResult,
+    mut SliderPlacement outPlacement,
+    mut b8 outEnabled,
+    mut b8 outAdmitted,
+    mut b8 outPressMoved
+){
+    outValue = 0.0;
+    outMinimum = 0.0;
+    outMaximum = 1.0;
+    outKeyStep = 0.0;
+    outAdmission = SliderPlacement();
+    outPress = InputActionId();
+    outResult = SliderResult();
+    outPlacement = SliderPlacement();
+    outEnabled = true;
+    outAdmitted = false;
+    outPressMoved = false;
+}
+
+void CommitSliderAdmissionState(
+    in SliderOptions options,
+    in SliderPlacement placement,
+    mut f64 outMinimum,
+    mut f64 outMaximum,
+    mut f64 outKeyStep,
+    mut b8 outEnabled,
+    mut SliderPlacement outAdmission,
+    mut b8 outAdmitted,
+    mut InputActionId outPress,
+    mut b8 outPressMoved
+){
+    outMinimum = options.minimum;
+    outMaximum = options.maximum;
+    outKeyStep = options.keyStep;
+    outEnabled = options.enabled;
+    outAdmission = placement;
+    outAdmitted = true;
+    outPress = InputActionId();
+    outPressMoved = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

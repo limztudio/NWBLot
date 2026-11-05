@@ -71,11 +71,7 @@ public:
     void reset()noexcept{
         AdvanceNonWrappingRevision(m_revision);
         m_inputGeneration = NextIdentity();
-        m_selected = 0u;
-        m_cursor = 0u;
-        m_sourceGeneration = 0u;
-        m_sourceRevision = 0u;
-        m_placement = {};
+        ResetRadioGroupStateFields(m_selected, m_cursor, m_sourceGeneration, m_sourceRevision, m_placement);
     }
 
 
@@ -171,15 +167,18 @@ public:
         // A second observation catches one-shot metadata mutation from the preceding final count callback.
         if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
             return MakeUnexpected(Failure{});
-        RadioGroupResult candidateResult = result;
-        candidateResult.valid = true;
-        candidateResult.selectionChanged |= snapshot.selectedKey != selected;
         AdvanceNonWrappingRevision(state.m_revision);
-        state.m_selected = selected;
-        state.m_cursor = cursor;
-        state.m_sourceGeneration = candidate.sourceGeneration;
-        state.m_sourceRevision = candidate.sourceRevision;
-        result = candidateResult;
+        CommitRadioGroupReconcileState(
+            snapshot,
+            candidate,
+            selected,
+            cursor,
+            state.m_selected,
+            state.m_cursor,
+            state.m_sourceGeneration,
+            state.m_sourceRevision,
+            result
+        );
         return candidate;
     }
     // Navigation consumes copied choices and never calls the source; accepted internal intents preserve the input token.

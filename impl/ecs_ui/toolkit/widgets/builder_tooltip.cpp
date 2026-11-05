@@ -25,7 +25,7 @@ b8 Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, co
     const auto widget = m_context.declare(stableKey, WidgetKind::Tooltip);
     if(!widget || !m_context.claimState(**widget, state.instanceGeneration()))
         return false;
-    if(state.m_owner != (*widget)->id || state.m_ownerDeclaration != (*widget)->declarationGeneration){
+    if(BindTooltipOwner((*widget)->id, (*widget)->declarationGeneration, state.m_owner, state.m_ownerDeclaration)){
         state.reset();
         state.m_owner = (*widget)->id;
         state.m_ownerDeclaration = (*widget)->declarationGeneration;

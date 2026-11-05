@@ -115,5 +115,33 @@ b8 PaintEditBoxViewVisual(
     return painted && contentPopped && framePopped;
 }
 
+TextLayoutStatus PrepareEditBoxShapeRequest(
+    in u64 revision,
+    in StringView displayText,
+    in EditTextMode textMode,
+    mut ShapeRequest inOutRequest
+){
+    if(revision == 0u || inOutRequest.direction != TextDirection::LeftToRight)
+        return TextLayoutStatus::InvalidParameters;
+    inOutRequest.text = displayText;
+    return ValidateTextRequest(inOutRequest, textMode == EditTextMode::Multiline);
+}
+
+b8 MeasureEditBoxViewVisual(
+    in b8 ready,
+    mut TextService text,
+    in TextLayout layout,
+    in DisplayMetrics display,
+    mut Rect outVisualBounds
+){
+    if(!ready)
+        return false;
+    const Expected<Rect> measured = text.measure(layout, display);
+    if(!measured.has_value())
+        return false;
+    outVisualBounds = measured.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

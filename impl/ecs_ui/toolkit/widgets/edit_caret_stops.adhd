@@ -296,5 +296,67 @@ Expected<EditBoxPlacement> TryArrangeEditBoxViewport(
     return placement.value();
 }
 
+Expected<EditBoxPlacement> TryArrangeEditBox(
+    in b8 ready,
+    in Rect bounds,
+    in Insets padding,
+    in Rect clip,
+    in Point previousScroll,
+    in f32 caretWidth,
+    in b8 revealCaret,
+    in EditTextMode textMode,
+    in Rect visualBounds,
+    in Point logicalSize,
+    in StringView utf8Text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in usize displayCaret,
+    in EditBoxRange selectionRange,
+    in EditBoxRange preeditRange,
+    in b8 composing
+){
+    if(!ready)
+        return makeUnexpected(Failure());
+    const Expected<Rect> viewport = TryComputeEditBoxViewport(bounds, padding, clip, previousScroll, caretWidth);
+    if(!viewport.has_value())
+        return makeUnexpected(Failure());
+    return TryArrangeEditBoxViewport(
+        ready,
+        bounds,
+        viewport.value(),
+        clip,
+        previousScroll,
+        caretWidth,
+        revealCaret,
+        textMode,
+        visualBounds,
+        logicalSize,
+        utf8Text,
+        textLines,
+        clusters,
+        boundaries,
+        caretLines,
+        displayCaret,
+        selectionRange,
+        preeditRange,
+        composing
+    );
+}
+
+Expected<usize> TryHitTestEditBoxView(
+    in b8 viewReady,
+    in b8 geometryReady,
+    in Point point,
+    in EditBoxPlacement placement,
+    in Span<EditCaretLine> lines,
+    in Span<EditBoxCaretStop> stops
+){
+    if(!viewReady || !geometryReady || !isFinite(point.x) || !isFinite(point.y) || !isFinite(placement.textOrigin.x) || !isFinite(placement.textOrigin.y))
+        return makeUnexpected(Failure());
+    return HitEditCaretGeometry(lines, stops, Point(point.x - placement.textOrigin.x, point.y - placement.textOrigin.y));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

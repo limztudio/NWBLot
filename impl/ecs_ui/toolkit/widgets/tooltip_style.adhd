@@ -125,6 +125,47 @@ PopupOptions BuildTooltipPopupOptions(
     return options;
 }
 
+void ResetTooltipStateFields(
+    mut WidgetId outOwner,
+    mut u64 outOwnerDeclaration,
+    mut WidgetId outAnchor,
+    mut u64 outDeclarationGeneration,
+    mut PopupToken outPopup,
+    mut u64 outFocusLossGeneration,
+    mut u64 outHoverActivityGeneration,
+    mut TooltipOptions outOptions,
+    mut PopupPlacement outPlacement,
+    mut f64 outElapsed,
+    mut b8 outHovered,
+    mut b8 outVisible
+){
+    outOwner = WidgetId();
+    outOwnerDeclaration = 0u;
+    outAnchor = WidgetId();
+    outDeclarationGeneration = 0u;
+    outPopup = PopupToken();
+    outFocusLossGeneration = 0u;
+    outHoverActivityGeneration = 0u;
+    outOptions = TooltipOptions();
+    outPlacement = PopupPlacement();
+    outElapsed = 0.0;
+    outHovered = false;
+    outVisible = false;
+}
+
+b8 BindTooltipOwner(
+    in WidgetId owner,
+    in u64 ownerDeclaration,
+    mut WidgetId inOutOwner,
+    mut u64 inOutOwnerDeclaration
+){
+    if(inOutOwner == owner && inOutOwnerDeclaration == ownerDeclaration)
+        return false;
+    inOutOwner = owner;
+    inOutOwnerDeclaration = ownerDeclaration;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

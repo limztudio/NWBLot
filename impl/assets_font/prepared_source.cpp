@@ -42,29 +42,7 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
     if(!expectedPayloadBytes)
         return MakeUnexpected(expectedPayloadBytes.error());
     Core::Assets::AssetBytes binary(arena);
-    binary.reserve(static_cast<usize>(*expectedPayloadBytes));
-    AppendU32LittleEndian(binary, s_PreparedFontMagic);
-    AppendU32LittleEndian(binary, s_PreparedFontVersion);
-    AppendU32LittleEndian(binary, faceIndex);
-    AppendU32LittleEndian(binary, static_cast<u32>(sfnt.size()));
-    AppendU32LittleEndian(binary, static_cast<u32>(groups.size()));
-    AppendU32LittleEndian(binary, 0u);
-    const Sha256Digest fontHash = ComputeSha256(sfnt);
-    binary.insert(binary.end(), fontHash.bytes, fontHash.bytes + sizeof(fontHash.bytes));
-    for(usize index = 0u; index < groups.size(); ++index){
-        const PreparedFontImageView& group = groups[index];
-        AppendU32LittleEndian(binary, group.width);
-        AppendU32LittleEndian(binary, group.height);
-        AppendU32LittleEndian(binary, group.channelCount);
-        AppendU32LittleEndian(binary, static_cast<u32>(group.pixels.size()));
-        const Sha256Digest imageHash = ComputeSha256({ group.pixels.data(), group.pixels.size() });
-        binary.insert(binary.end(), imageHash.bytes, imageHash.bytes + sizeof(imageHash.bytes));
-    }
-    binary.insert(binary.end(), sfnt.data(), sfnt.data() + sfnt.size());
-    for(usize index = 0u; index < groups.size(); ++index){
-        const Span<const u8> pixels = groups[index].pixels;
-        binary.insert(binary.end(), pixels.data(), pixels.data() + pixels.size());
-    }
+    AppendPreparedFontSourceBinary(Span<const u8>(sfnt.data(), sfnt.size()), faceIndex, groups, *expectedPayloadBytes, binary);
     return binary;
 }
 
@@ -84,16 +62,12 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     Array<u8, s_PreparedFontHeaderBytes> header{};
     if(!ReadStreamExact(stream, NotNull<void*>(header.data()), sizeof(header)))
         return ReadFailure(path, s_PreparedFontHeaderTruncatedReason);
-    const u32 magic = ReadU32LittleEndian(NotNull<const u8*>(header.data()));
-    const u32 version = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderVersionOffset));
-    const u32 faceIndex = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderFaceIndexOffset));
-    const u32 fontByteCount = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderFontByteCountOffset));
-    const u32 groupCount = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderGroupCountOffset));
-    const u32 flags = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderFlagsOffset));
-    if(!IsValidPreparedFontHeader(magic, version, faceIndex, flags))
-        return ReadFailure(path, s_PreparedFontUnsupportedHeaderReason);
-    if(!IsValidPreparedFontHeaderInputs(fontByteCount, faceIndex, groupCount))
-        return ReadFailure(path, s_PreparedFontCountsOutOfBoundsReason);
+    u32 faceIndex = 0u;
+    u32 fontByteCount = 0u;
+    u32 groupCount = 0u;
+    const Expected<b8, AStringView> headerDecode = DecodePreparedFontHeaderBytes(header, faceIndex, fontByteCount, groupCount);
+    if(!headerDecode)
+        return ReadFailure(path, headerDecode.error());
 
     PreparedFontSource candidate(arena);
     candidate.faceIndex = faceIndex;
@@ -106,18 +80,16 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         if(!ReadStreamExact(stream, NotNull<void*>(groupHeader.data()), sizeof(groupHeader)))
             return ReadFailure(path, s_PreparedFontImageDirectoryTruncatedReason);
         PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());
-        group.width = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data()));
-        group.height = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupHeightOffset));
-        group.channelCount = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupChannelCountOffset));
-        const Expected<u32> expectedBytes = TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount);
-        if(
-            !expectedBytes
-            || ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupByteCountOffset)) != *expectedBytes
-            || *expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount
-        )
-            return ReadFailure(path, s_PreparedFontInvalidImageGroupReason);
-        pixelByteCount += *expectedBytes;
-        groupByteCounts[index] = *expectedBytes;
+        const Expected<b8, AStringView> groupDecode = DecodePreparedFontGroupHeaderBytes(
+            groupHeader,
+            pixelByteCount,
+            group.width,
+            group.height,
+            group.channelCount,
+            groupByteCounts[index]
+        );
+        if(!groupDecode)
+            return ReadFailure(path, groupDecode.error());
         NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }

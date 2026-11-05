@@ -499,5 +499,79 @@ b8 SerializeTextureBinaryPayload(
     return true;
 }
 
+b8 DeserializeTextureBinaryPayload(
+    in Span<u8> binary,
+    mut u32 outWidth,
+    mut u32 outHeight,
+    mut u32 outDepth,
+    mut u8 outDimension,
+    mut u8 outPayloadFormat,
+    mut u8 outAlphaMode,
+    mut u8 outAlphaConstantUnorm8,
+    mut Vector<TextureMipLevel> outMipLevels,
+    mut Vector<u8> outPayloadBytes
+){
+    usize cursor = 0u;
+    if(!CanReadBytes(binary, cursor, s_TextureHeaderBinaryBytes)){
+        error("Texture::loadBinary failed: malformed header");
+        return false;
+    }
+    const Expected<u32> magic = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> version = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> dimension = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> width = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> height = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> depth = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> mipCount = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> alphaInfo = ReadPOD<u32>(binary, cursor);
+    const Expected<u32> payloadFormat = ReadPOD<u32>(binary, cursor);
+    const Expected<u64> payloadByteCount = ReadPOD<u64>(binary, cursor);
+    if(
+        !magic.has_value()
+        || !version.has_value()
+        || !dimension.has_value()
+        || !width.has_value()
+        || !height.has_value()
+        || !depth.has_value()
+        || !mipCount.has_value()
+        || !alphaInfo.has_value()
+        || !payloadFormat.has_value()
+        || !payloadByteCount.has_value()
+    ){
+        error("Texture::loadBinary failed: malformed header");
+        return false;
+    }
+    if(magic.value() != s_TextureBinaryMagic){
+        error("Texture::loadBinary failed: invalid texture asset format; recook required");
+        return false;
+    }
+    if(!ReadTextureMipLevelsAndPayloadBytes(
+        binary,
+        version.value(),
+        dimension.value(),
+        depth.value(),
+        mipCount.value(),
+        alphaInfo.value(),
+        payloadFormat.value(),
+        payloadByteCount.value(),
+        cursor,
+        outDimension,
+        outPayloadFormat,
+        outAlphaMode,
+        outAlphaConstantUnorm8,
+        outMipLevels,
+        outPayloadBytes
+    ))
+        return false;
+    if(cursor != binary.size()){
+        error("Texture::loadBinary failed: trailing bytes detected");
+        return false;
+    }
+    outWidth = width.value();
+    outHeight = height.value();
+    outDepth = depth.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

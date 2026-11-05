@@ -164,6 +164,19 @@ Expected<AssetPayloadView, AssetPayloadDecodeFailure> DecodeAssetPayload(in Span
     return outView;
 }
 
+void CommitDecodedShaderAssetPayload(
+    in StringView entryPoint,
+    in Span<u8> bytecode,
+    mut String outEntryPoint,
+    mut Vector<u8> outBytecode
+){
+    outEntryPoint = entryPoint;
+    outBytecode.clear();
+    outBytecode.resize(bytecode.size());
+    for(usize i = 0u; i < bytecode.size(); ++i)
+        outBytecode[i] = bytecode[i];
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

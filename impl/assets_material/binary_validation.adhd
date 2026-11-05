@@ -8,6 +8,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+namespace NWB::Impl{
+interface IShader;
+using MaterialStageShaderArray = Array<Core::Assets::AssetRef<IShader>, 14u>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 MaterialTypedLayoutBlock UnpackMaterialTypedLayoutBlockBinary(in MaterialTypedLayoutBlockBinary blockBinary){
     MaterialTypedLayoutBlock block;
     block.blockName = Name(blockBinary.blockNameHash);
@@ -514,6 +525,132 @@ b8 ReadMaterialBinaryFooter(
     if(!ReadOptionalMaterialAvboitPixelShader(binary, s_MaterialAvboitExtinctionPassLabel, inOutCursor, outAvboitExtinctionPixelShader))
         return false;
 
+    return true;
+}
+
+b8 ReadMaterialStageShadersBinary(
+    in Span<u8> binary,
+    mut usize inOutCursor,
+    mut MaterialStageShaderArray outStageShaders,
+    mut u32 outStageShaderCount
+){
+    for(usize i = 0u; i < s_MaterialShaderStageCount; ++i)
+        outStageShaders[i].virtualPath = s_NameNone;
+    outStageShaderCount = 0u;
+
+    const Expected<u32> shaderCountResult = ReadPOD<u32>(binary, inOutCursor);
+    if(!shaderCountResult.has_value()){
+        error("Material::loadBinary failed: missing shader count");
+        return false;
+    }
+    const u32 shaderCount = shaderCountResult.value();
+    if(!ValidateMaterialBinaryShaderCount(shaderCount, cast<u32>(s_MaterialShaderStageCount), binary.size() - inOutCursor, s_MaterialShaderEntryBytes))
+        return false;
+
+    for(u32 i = 0u; i < shaderCount; ++i){
+        const Expected<u8> shaderTypeResult = ReadPOD<u8>(binary, inOutCursor);
+        if(!shaderTypeResult.has_value()){
+            error("Material::loadBinary failed: malformed shader stage at index {}", i);
+            return false;
+        }
+        const Expected<NameHash> shaderNameHashResult = ReadPOD<NameHash>(binary, inOutCursor);
+        if(!shaderNameHashResult.has_value()){
+            error("Material::loadBinary failed: malformed shader stage at index {}", i);
+            return false;
+        }
+
+        const u8 shaderTypeValue = shaderTypeResult.value();
+        const Name shaderName = Name(shaderNameHashResult.value());
+        if(shaderName == s_NameNone){
+            error("Material::loadBinary failed: shader stage entries must not be empty");
+            return false;
+        }
+        if(!IsSupportedMaterialShaderStageValue(shaderTypeValue)){
+            error("Material::loadBinary failed: shader stage {} is not a material stage; only mesh and pixel are allowed", cast<u32>(shaderTypeValue));
+            return false;
+        }
+
+        const usize shaderIndex = cast<usize>(shaderTypeValue);
+        if(outStageShaders[shaderIndex].valid()){
+            error("Material::loadBinary failed: duplicate shader stage index {}", shaderIndex);
+            return false;
+        }
+
+        outStageShaders[shaderIndex].virtualPath = shaderName;
+        ++outStageShaderCount;
+    }
+    return true;
+}
+
+b8 DeserializeMaterialBinaryPayload(
+    in Span<u8> binary,
+    mut String outShaderVariant,
+    mut Name outMaterialInterface,
+    mut u64 outTypedLayoutHash,
+    mut Vector<MaterialTypedLayoutBlock> outTypedLayoutBlocks,
+    mut Vector<MaterialTypedLayoutField> outTypedLayoutFields,
+    mut Vector<u8> outTypedBlockBytes,
+    mut Vector<MaterialResourceReference> outResourceReferences,
+    mut MaterialStageShaderArray outStageShaders,
+    mut u32 outStageShaderCount,
+    mut b8 outTransparent,
+    mut b8 outTwoSided,
+    mut b8 outRefractive,
+    mut u32 outShadingModelId,
+    mut u32 outSurfaceDispatchId,
+    mut AssetRef<PixelShader> outAvboitAccumulatePixelShader,
+    mut AssetRef<PixelShader> outAvboitOccupancyPixelShader,
+    mut AssetRef<PixelShader> outAvboitExtinctionPixelShader
+){
+    usize cursor = 0u;
+    if(!ReadMaterialBinaryPreamble(binary, cursor, outShaderVariant, outMaterialInterface))
+        return false;
+    if(!ReadMaterialTypedLayout(
+        binary,
+        cursor,
+        outTypedLayoutHash,
+        outTypedLayoutBlocks,
+        outTypedLayoutFields,
+        outTypedBlockBytes,
+        outResourceReferences
+    ))
+        return false;
+    assert(outTypedLayoutHash != 0u);
+    if(!ReadMaterialStageShadersBinary(binary, cursor, outStageShaders, outStageShaderCount))
+        return false;
+    if(!ReadMaterialBinaryFooter(
+        binary,
+        cursor,
+        outTransparent,
+        outTwoSided,
+        outRefractive,
+        outShadingModelId,
+        outSurfaceDispatchId,
+        outAvboitAccumulatePixelShader,
+        outAvboitOccupancyPixelShader,
+        outAvboitExtinctionPixelShader
+    ))
+        return false;
+    if(!ValidateMaterialPayloadData(
+        outStageShaderCount,
+        outMaterialInterface,
+        StringView(outShaderVariant),
+        outTransparent,
+        outAvboitAccumulatePixelShader,
+        outAvboitOccupancyPixelShader,
+        outAvboitExtinctionPixelShader,
+        outTypedLayoutHash,
+        outTypedLayoutBlocks,
+        outTypedLayoutFields,
+        outTypedBlockBytes,
+        outResourceReferences,
+        s_MaterialLoadBinaryContextText
+    ))
+        return false;
+    if(cursor != binary.size()){
+        error("Material::loadBinary failed: trailing bytes detected");
+        return false;
+    }
     return true;
 }
 

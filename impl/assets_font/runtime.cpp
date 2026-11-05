@@ -5,7 +5,6 @@
 #include "asset.h"
 
 #include <core/assets/auto_registration.h>
-#include <core/assets/binary_payload_io.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,17 +35,9 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
 
 
 b8 Font::loadBinary(const Span<const u8> binary){
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<FontBinaryHeader>(binary, s_FontBinaryMagic, NWB_TEXT("Font::loadBinary"), FontBinaryPayload::s_FontAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const FontBinaryHeader& header = *headerResult;
-    if(!ValidateFontBinaryPayloadHeader(header, binary.size() - cursor))
-        return false;
-
     Font candidate(m_fontBytes.get_allocator().arena(), virtualPath());
-    candidate.m_fontBytes.assign(binary.begin() + cursor, binary.end());
-    candidate.m_faceIndex = header.faceIndex;
+    if(!DeserializeFontBinaryPayload(binary, candidate.m_fontBytes, candidate.m_faceIndex))
+        return false;
     if(!candidate.validatePayload())
         return false;
     *this = Move(candidate);

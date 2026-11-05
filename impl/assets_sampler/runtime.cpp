@@ -5,8 +5,6 @@
 #include "asset.h"
 
 #include <core/assets/auto_registration.h>
-#include <core/assets/binary_payload_io.h>
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,18 +55,13 @@ b8 Sampler::validatePayload()const{
 }
 
 b8 Sampler::loadBinary(const Span<const u8> binary){
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryHeader>(binary, s_SamplerBinaryMagic, SamplerBinaryPayload::s_SamplerLoadBinaryContext, SamplerBinaryPayload::s_SamplerAssetKindLabel, cursor);
+    const Expected<SamplerBinaryHeader> headerResult = DeserializeSamplerBinaryHeader(binary);
     if(!headerResult)
-        return false;
-    const SamplerBinaryHeader& header = *headerResult;
-    if(!ValidateSamplerBinaryHeaderAndDescription(header))
-        return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, SamplerBinaryPayload::s_SamplerLoadBinaryContext))
         return false;
     if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
 
+    const SamplerBinaryHeader& header = *headerResult;
     m_description.borderColor = Core::Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);
     m_description.maxAnisotropy = header.maxAnisotropy;
     m_description.mipBias = header.mipBias;

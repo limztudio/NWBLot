@@ -8,6 +8,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+namespace NWB::Impl{
+interface IShader;
+using MaterialStageShaderArray = Array<Core::Assets::AssetRef<IShader>, 14u>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_MaterialMetaDiagnosticPrefix = "Material meta";
 const StringView s_MaterialMetaInterfaceField = "interface";
 const StringView s_MaterialMetaSurfaceField = "surface";
@@ -236,6 +247,63 @@ void AppendMaterialBinaryFooter(
     AppendOptionalMaterialAvboitPixelShader(avboitAccumulatePixelShader, outBinary);
     AppendOptionalMaterialAvboitPixelShader(avboitOccupancyPixelShader, outBinary);
     AppendOptionalMaterialAvboitPixelShader(avboitExtinctionPixelShader, outBinary);
+}
+
+b8 SerializeMaterialBinaryPayload(
+    in StringView shaderVariant,
+    in Name materialInterface,
+    in u64 typedLayoutHash,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in Span<u8> typedBlockBytes,
+    in Span<MaterialResourceReference> resourceReferences,
+    in MaterialStageShaderArray stageShaders,
+    in u32 stageShaderCount,
+    in b8 transparent,
+    in b8 twoSided,
+    in b8 refractive,
+    in u32 shadingModelId,
+    in u32 surfaceDispatchId,
+    in AssetRef<PixelShader> avboitAccumulatePixelShader,
+    in AssetRef<PixelShader> avboitOccupancyPixelShader,
+    in AssetRef<PixelShader> avboitExtinctionPixelShader,
+    mut Vector<u8> outBinary
+){
+    if(!AppendMaterialBinaryHeaderAndTypedLayout(
+        shaderVariant,
+        materialInterface,
+        typedLayoutHash,
+        typedLayoutBlocks,
+        typedLayoutFields,
+        typedBlockBytes,
+        resourceReferences,
+        stageShaderCount,
+        outBinary
+    ))
+        return false;
+
+    for(usize shaderIndex = 0u; shaderIndex < s_MaterialShaderStageCount; ++shaderIndex){
+        if(!stageShaders[shaderIndex].valid())
+            continue;
+
+        const u8 shaderTypeValue = cast<u8>(shaderIndex);
+        assert(IsSupportedMaterialShaderStageValue(shaderTypeValue));
+        AppendPOD(outBinary, shaderTypeValue);
+        AppendPOD(outBinary, stageShaders[shaderIndex].name().hash());
+    }
+
+    AppendMaterialBinaryFooter(
+        transparent,
+        twoSided,
+        refractive,
+        shadingModelId,
+        surfaceDispatchId,
+        avboitAccumulatePixelShader,
+        avboitOccupancyPixelShader,
+        avboitExtinctionPixelShader,
+        outBinary
+    );
+    return true;
 }
 
 b8 ValidateMaterialGeneratedPixelShaderEntry(

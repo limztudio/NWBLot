@@ -101,7 +101,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     const Material& material = static_cast<const Material&>(asset);
     if(!material.validatePayload(s_SerializeFailureContext, s_MaterialSerializeContextText))
         return false;
-    if(!AppendMaterialBinaryHeaderAndTypedLayout(
+    return SerializeMaterialBinaryPayload(
         AStringView(material.shaderVariant()),
         material.materialInterface(),
         material.typedLayoutHash(),
@@ -109,25 +109,8 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         material.typedLayoutFields(),
         material.typedBlockBytes(),
         material.resourceReferences(),
+        material.stageShaders(),
         material.stageShaderCount(),
-        outBinary
-    ))
-        return false;
-
-    const Material::StageShaderArray& stageShaders = material.stageShaders();
-    for(usize shaderIndex = 0u; shaderIndex < stageShaders.size(); ++shaderIndex){
-        const Core::Assets::AssetRef<IShader>& shaderAsset = stageShaders[shaderIndex];
-        if(!shaderAsset.valid())
-            continue;
-
-        const Core::ShaderType::Enum shaderType = static_cast<Core::ShaderType::Enum>(shaderIndex);
-        NWB_ASSERT(IsSupportedMaterialShaderStage(shaderType));
-
-        AppendPOD(outBinary, shaderType);
-        AppendPOD(outBinary, shaderAsset.name().hash());
-    }
-
-    AppendMaterialBinaryFooter(
         material.transparent(),
         material.twoSided(),
         material.refractive(),
@@ -138,8 +121,6 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         material.avboitExtinctionPixelShader(),
         outBinary
     );
-
-    return true;
 }
 
 

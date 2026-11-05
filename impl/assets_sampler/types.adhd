@@ -277,6 +277,27 @@ void SerializeSamplerBinaryPayload(
     AppendPOD(outBinary, header);
 }
 
+Expected<SamplerBinaryHeader> DeserializeSamplerBinaryHeader(in Span<u8> binary){
+    usize cursor = 0u;
+    const Expected<SamplerBinaryHeader> headerResult = ReadPOD<SamplerBinaryHeader>(binary, cursor);
+    if(!headerResult.has_value()){
+        error("Sampler::loadBinary failed: malformed header");
+        return makeUnexpected(Failure());
+    }
+    const SamplerBinaryHeader header = headerResult.value();
+    if(header.magic != s_SamplerBinaryMagic){
+        error("Sampler::loadBinary failed: invalid sampler asset format; recook required");
+        return makeUnexpected(Failure());
+    }
+    if(!ValidateSamplerBinaryHeaderAndDescription(header))
+        return makeUnexpected(Failure());
+    if(cursor != binary.size()){
+        error("Sampler::loadBinary failed: trailing bytes detected");
+        return makeUnexpected(Failure());
+    }
+    return header;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -58,10 +58,7 @@ b8 IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderTy
         return false;
     }
 
-    Core::Assets::AssetString entryPoint(payload->entryPoint.begin(), payload->entryPoint.end(), m_entryPoint.get_allocator().arena());
-    Core::Assets::AssetBytes bytecode(payload->bytecode.data(), payload->bytecode.data() + payload->bytecode.size(), m_bytecode.get_allocator().arena());
-    m_entryPoint = Move(entryPoint);
-    m_bytecode = Move(bytecode);
+    ShaderBinaryPayload::CommitDecodedShaderAssetPayload(payload->entryPoint, payload->bytecode, m_entryPoint, m_bytecode);
     return true;
 }
 

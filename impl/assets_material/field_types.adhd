@@ -12,6 +12,10 @@ b8 IsValidMaterialBlockClass(in MaterialBlockClass blockClass){
     return blockClass == MaterialBlockClass::MaterialConstant || blockClass == MaterialBlockClass::MaterialMutable;
 }
 
+b8 IsSupportedMaterialShaderStageValue(in u8 shaderTypeValue){
+    return shaderTypeValue == s_MaterialMeshShaderStageValue || shaderTypeValue == s_MaterialPixelShaderStageValue;
+}
+
 b8 IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
     return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
 }

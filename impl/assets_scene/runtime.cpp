@@ -5,8 +5,6 @@
 #include "asset.h"
 
 #include <core/assets/auto_registration.h>
-#include <core/assets/binary_payload_io.h>
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,18 +48,8 @@ b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
 b8 EntityAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_EntityLoadBinaryArena);
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<EntityHeaderBinary>(binary, s_EntityMagic, s_EntityLoadBinaryContext, s_EntityAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const EntityHeaderBinary& header = *headerResult;
-    if(!ValidateEntityHeaderBinary(header))
-        return false;
-
     Vector<NameHash, Core::Alloc::ScratchArena> componentHashes(scratchArena);
-    if(!Core::Assets::ReadVectorPayload(binary, header.componentCount, s_EntityLoadBinaryContext, s_EntityComponentsPayloadLabel, cursor, componentHashes))
-        return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_EntityLoadBinaryContext))
+    if(!DeserializeEntityAssetBinaryHashes(binary, componentHashes))
         return false;
 
     auto& assetArena = m_components.get_allocator().arena();
@@ -110,25 +98,10 @@ b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
 b8 SceneAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_SceneLoadBinaryArena);
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SceneHeaderBinary>(binary, s_SceneMagic, s_SceneLoadBinaryContext, s_SceneAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const SceneHeaderBinary& header = *headerResult;
-    if(!ValidateSceneHeaderBinary(header))
-        return false;
-
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> entityHashes(scratchArena);
     Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
-
-    if(!Core::Assets::ReadVectorPayload(binary, header.subsystemCount, s_SceneLoadBinaryContext, s_SceneSubsystemsPayloadLabel, cursor, subsystemHashes))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.entityCount, s_SceneLoadBinaryContext, s_SceneEntitiesPayloadLabel, cursor, entityHashes))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.assetCount, s_SceneLoadBinaryContext, s_SceneAssetsPayloadLabel, cursor, assetEntries))
-        return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, s_SceneLoadBinaryContext))
+    if(!DeserializeSceneAssetBinaryPayload(binary, subsystemHashes, entityHashes, assetEntries))
         return false;
 
     auto& assetArena = m_subsystems.get_allocator().arena();

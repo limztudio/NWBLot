@@ -214,5 +214,30 @@ b8 SerializeSkeletonBinaryPayload(
     return true;
 }
 
+b8 DeserializeSkeletonBinaryPayload(
+    in Span<u8> binary,
+    mut Vector<SkeletonJoint> outJoints,
+    mut HashMap<Name, u32> outJointIndices
+){
+    usize cursor = 0u;
+    const Expected<SkeletonHeaderBinary> headerResult = ReadPOD<SkeletonHeaderBinary>(binary, cursor);
+    if(!headerResult.has_value()){
+        error("Skeleton::loadBinary failed: malformed header");
+        return false;
+    }
+    const SkeletonHeaderBinary header = headerResult.value();
+    if(header.magic != s_SkeletonBinaryMagic){
+        error("Skeleton::loadBinary failed: invalid skeleton asset format; recook required");
+        return false;
+    }
+    if(!ReadSkeletonJointsPayload(binary, header, cursor, outJoints, outJointIndices))
+        return false;
+    if(cursor != binary.size()){
+        error("Skeleton::loadBinary failed: trailing bytes detected");
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

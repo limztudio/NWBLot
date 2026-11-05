@@ -5,10 +5,6 @@
 #include "asset.h"
 
 #include <core/assets/auto_registration.h>
-#include <core/assets/binary_payload_io.h>
-#include <core/common/log.h>
-
-#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,28 +58,20 @@ b8 Texture::loadBinary(const Span<const u8> binary){
     if(!checkVirtualPath(__hidden_texture_runtime::s_LoadBinaryContext))
         return false;
 
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(binary, TextureBinaryPayload::s_TextureMagic, __hidden_texture_runtime::s_LoadBinaryContext, s_TextureAssetKindLabel, cursor);
-    if(!headerResult)
-        return false;
-    const TextureBinaryPayload::HeaderBinary& header = *headerResult;
-
     MipLevelVector mipLevels(m_mipLevels.get_allocator().arena());
     Core::Assets::AssetBytes payloadBytes(m_payloadBytes.get_allocator().arena());
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 depth = 1u;
     u8 dimensionValue = 0u;
     u8 payloadFormatValue = 0u;
     u8 alphaModeValue = 0u;
     u8 alphaConstantUnorm8 = 0u;
-    if(!ReadTextureMipLevelsAndPayloadBytes(
+    if(!DeserializeTextureBinaryPayload(
         binary,
-        header.version,
-        header.dimension,
-        header.depth,
-        header.mipCount,
-        header.alphaInfo,
-        header.payloadFormat,
-        header.payloadByteCount,
-        cursor,
+        width,
+        height,
+        depth,
         dimensionValue,
         payloadFormatValue,
         alphaModeValue,
@@ -92,17 +80,15 @@ b8 Texture::loadBinary(const Span<const u8> binary){
         payloadBytes
     ))
         return false;
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, __hidden_texture_runtime::s_LoadBinaryContext))
-        return false;
 
     Texture candidate(m_mipLevels.get_allocator().arena(), virtualPath());
     candidate.setPayload(
-        header.width,
-        header.height,
+        width,
+        height,
         Move(mipLevels),
         Move(payloadBytes),
         static_cast<TextureDimension::Enum>(dimensionValue),
-        header.depth,
+        depth,
         static_cast<TexturePayloadFormat::Enum>(payloadFormatValue),
         static_cast<TextureAlphaMode::Enum>(alphaModeValue),
         alphaConstantUnorm8

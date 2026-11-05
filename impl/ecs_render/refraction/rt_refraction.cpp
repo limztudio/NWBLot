@@ -130,14 +130,15 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
             : (csg ? m_rayTracingState.m_refractionDenseCsgHwPipeline : m_rayTracingState.m_refractionDenseHwPipeline))
         : m_rayTracingState.m_refractionDenseScreenPipeline;
     if(m_refractionDiagnosticsEnabled){
-        RefractionStatistics metadata;
-        metadata.frameIndex = frameIndex;
-        metadata.graphicsFrameIndex = m_graphics.getFrameIndex();
-        metadata.width = width;
-        metadata.height = height;
-        metadata.hardwareRequested = m_rayTracingState.m_refractionHardwareTracingEnabled;
-        metadata.hardwareAvailable = resources.usesHardwareTrace;
-        metadata.csgHardwareEnabled = resources.usesHardwareTrace && csg;
+        const RefractionStatistics metadata = MakeRefractionSnapshotMetadata(
+            frameIndex,
+            m_graphics.getFrameIndex(),
+            width,
+            height,
+            m_rayTracingState.m_refractionHardwareTracingEnabled,
+            resources.usesHardwareTrace,
+            csg
+        );
         resources.statistics = m_refractionStatistics.snapshot(metadata);
     }
     if(resources.usesHardwareTrace){

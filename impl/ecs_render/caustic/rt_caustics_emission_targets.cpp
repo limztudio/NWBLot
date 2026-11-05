@@ -151,17 +151,17 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
         return Optional<Core::GpuUploadBlobId>{};
     }
 
-    const usize targetByteCount = static_cast<usize>(targetCount) * sizeof(NwbCausticEmissionTargetGpu);
-    if(
-        m_preparedCausticEmissionTargetBytes.size() != targetByteCount
-        || !m_rayTracingState.m_causticEmissionTargetBuffer
-        || m_rayTracingState.m_causticEmissionTargetCapacity < targetCount
-        || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-        || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen caustic emission-target payload no longer matches preflight storage"));
+    usize targetByteCount = 0u;
+    if(!ValidatePreparedCausticEmissionTargetUploadState(
+        targetCount,
+        m_preparedCausticEmissionTargetBytes.size(),
+        static_cast<b8>(m_rayTracingState.m_causticEmissionTargetBuffer),
+        m_rayTracingState.m_causticEmissionTargetCapacity,
+        m_rayTracingState.m_causticEmissionTargetHeapHandle.valid(),
+        m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer,
+        targetByteCount
+    ))
         return MakeUnexpected(Failure{});
-    }
 
     const auto blob = graph.copyUploadData(m_preparedCausticEmissionTargetBytes.data(), targetByteCount, alignof(NwbCausticEmissionTargetGpu));
     if(!blob)
@@ -230,13 +230,13 @@ b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::
     if(!ensureCausticEmissionTargetBuffer(targetCount))
         return false;
 
-    const usize targetByteCount = targets.size() * sizeof(NwbCausticEmissionTargetGpu);
-    m_preparedCausticEmissionTargetBytes.resize(targetByteCount);
-    NWB_MEMCPY(m_preparedCausticEmissionTargetBytes.data(), m_preparedCausticEmissionTargetBytes.size(), targets.data(), targetByteCount);
-
+    CaptureCausticEmissionTargetsBytes(
+        Span<const NwbCausticEmissionTargetGpu>(targets.data(), targets.size()),
+        m_preparedCausticEmissionTargetBytes,
+        m_rayTracingState.m_causticRefractiveInstanceCount
+    );
     StoreFloat(combinedMin, m_rayTracingState.m_causticTargetBoundsMin);
     StoreFloat(combinedMax, m_rayTracingState.m_causticTargetBoundsMax);
-    m_rayTracingState.m_causticRefractiveInstanceCount = targetCount;
 
     return true;
 }

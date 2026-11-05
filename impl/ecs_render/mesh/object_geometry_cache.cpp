@@ -36,21 +36,22 @@ b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers&
     if(!expected.valid() || cache.buffer != expected.buffer)
         return false;
     // Accepted writes establish the retained buffer state even if current source content already moved on.
-    cache.initialized = true;
-    cache.acceptedContent = false;
-    if(
-        cache.decoderPipeline != expected.decoderPipeline
-        || cache.heapHandle != expected.heapHandle
-        || cache.indexByteOffset != expected.indexByteOffset
-        || cache.indexCount != expected.indexCount
-        || mesh.runtimeMesh != runtimeMesh
-        || mesh.runtimeGeometryContentRevision != expected.sourceRevision
-        || !mesh.sameBuffers(sourceBuffers)
-    )
-        return false;
-    cache.acceptedContent = !runtimeMesh || expected.sourceRevision != 0u;
-    cache.acceptedContentRevision = expected.sourceRevision;
-    return true;
+    return TryAcceptObjectGeometryCacheContent(
+        cache.decoderPipeline == expected.decoderPipeline,
+        cache.heapHandle == expected.heapHandle,
+        cache.indexByteOffset,
+        expected.indexByteOffset,
+        cache.indexCount,
+        expected.indexCount,
+        mesh.runtimeMesh,
+        runtimeMesh,
+        mesh.runtimeGeometryContentRevision,
+        expected.sourceRevision,
+        mesh.sameBuffers(sourceBuffers),
+        cache.initialized,
+        cache.acceptedContent,
+        cache.acceptedContentRevision
+    );
 }
 
 
@@ -73,7 +74,7 @@ ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryC
         .indexByteOffset = cache.indexByteOffset,
         .indexCount = cache.indexCount,
         .initialized = cache.initialized,
-        .requiresDecode = !cache.acceptedContent || (mesh.runtimeMesh && (mesh.runtimeGeometryContentRevision == 0u || cache.acceptedContentRevision != mesh.runtimeGeometryContentRevision)),
+        .requiresDecode = RequiresObjectGeometryCacheDecode(cache.acceptedContent, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, cache.acceptedContentRevision),
     };
 }
 

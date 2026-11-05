@@ -231,6 +231,78 @@ b8 RequiresMeshSwBvhUpdateState(
     return swBvhBuildPending || !swBvhTopologyBuilt || !swBvhBuildAccepted || (runtimeMesh && (runtimeGeometryContentRevision == 0u || runtimeGeometryContentRevision != swBvhGeometryContentRevision));
 }
 
+const usize s_MeshViewGpuDataBytes = 240u;
+
+Expected<MeshViewGpuData> TryReadAcceptedMeshViewGpuData(in b8 valid, in Span<u8> storedBytes){
+    if(!valid || storedBytes.size() != s_MeshViewGpuDataBytes)
+        return makeUnexpected(Failure());
+    usize cursor = 0u;
+    return ReadPOD<MeshViewGpuData>(storedBytes, cursor);
+}
+
+b8 IsMeshViewUploadRequired(in b8 valid, in Span<u8> storedBytes, in MeshViewGpuData viewState){
+    if(!valid || storedBytes.size() != s_MeshViewGpuDataBytes)
+        return true;
+    b8 matches = false;
+    native(in storedBytes, in viewState, mut matches){
+        matches = NWB_MEMCMP(storedBytes.data(), &viewState, sizeof(viewState)) == 0;
+    }
+    return !matches;
+}
+
+void StoreConfirmedMeshViewGpuData(
+    in MeshViewGpuData viewState,
+    mut Array<u8, 240u> outStoredBytes,
+    mut b8 outValid
+){
+    native(in viewState, mut outStoredBytes){
+        NWB_MEMCPY(outStoredBytes.data(), outStoredBytes.size(), &viewState, sizeof(viewState));
+    }
+    outValid = true;
+}
+
+b8 RequiresObjectGeometryCacheDecode(
+    in b8 acceptedContent,
+    in b8 runtimeMesh,
+    in u64 runtimeGeometryContentRevision,
+    in u64 acceptedContentRevision
+){
+    return !acceptedContent || (runtimeMesh && (runtimeGeometryContentRevision == 0u || acceptedContentRevision != runtimeGeometryContentRevision));
+}
+
+b8 TryAcceptObjectGeometryCacheContent(
+    in b8 sameDecoderPipeline,
+    in b8 sameHeapHandle,
+    in u32 cacheIndexByteOffset,
+    in u32 expectedIndexByteOffset,
+    in u32 cacheIndexCount,
+    in u32 expectedIndexCount,
+    in b8 meshRuntimeMesh,
+    in b8 expectedRuntimeMesh,
+    in u64 meshRuntimeGeometryContentRevision,
+    in u64 expectedSourceRevision,
+    in b8 sameBuffers,
+    mut b8 outInitialized,
+    mut b8 outAcceptedContent,
+    mut u64 inOutAcceptedContentRevision
+){
+    outInitialized = true;
+    outAcceptedContent = false;
+    if(
+        !sameDecoderPipeline
+        || !sameHeapHandle
+        || cacheIndexByteOffset != expectedIndexByteOffset
+        || cacheIndexCount != expectedIndexCount
+        || meshRuntimeMesh != expectedRuntimeMesh
+        || meshRuntimeGeometryContentRevision != expectedSourceRevision
+        || !sameBuffers
+    )
+        return false;
+    outAcceptedContent = !expectedRuntimeMesh || expectedSourceRevision != 0u;
+    inOutAcceptedContentRevision = expectedSourceRevision;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

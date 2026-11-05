@@ -211,6 +211,26 @@ Name ResolveRefractionPipelineDebugName(in b8 hardware, in b8 dense){
     return s_RefractionScreenDebugName;
 }
 
+RefractionStatistics MakeRefractionSnapshotMetadata(
+    in u32 frameIndex,
+    in u64 graphicsFrameIndex,
+    in u32 width,
+    in u32 height,
+    in b8 hardwareRequested,
+    in b8 usesHardwareTrace,
+    in b8 csg
+){
+    RefractionStatistics metadata;
+    metadata.frameIndex = frameIndex;
+    metadata.graphicsFrameIndex = graphicsFrameIndex;
+    metadata.width = width;
+    metadata.height = height;
+    metadata.hardwareRequested = hardwareRequested;
+    metadata.hardwareAvailable = usesHardwareTrace;
+    metadata.csgHardwareEnabled = usesHardwareTrace && csg;
+    return metadata;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

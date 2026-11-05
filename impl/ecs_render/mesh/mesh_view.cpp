@@ -128,12 +128,10 @@ ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapsh
 }
 
 Expected<Float44> RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip()const noexcept{
-    if(!m_meshState.m_meshViewGpuDataValid)
+    const Expected<MeshViewGpuData> acceptedView = TryReadAcceptedMeshViewGpuData(m_meshState.m_meshViewGpuDataValid, m_meshState.m_meshViewGpuData);
+    if(!acceptedView)
         return MakeUnexpected(Failure{});
-
-    MeshViewGpuData acceptedView;
-    NWB_MEMCPY(&acceptedView, sizeof(acceptedView), m_meshState.m_meshViewGpuData.data(), m_meshState.m_meshViewGpuData.size());
-    return acceptedView.worldToClip;
+    return acceptedView->worldToClip;
 }
 
 MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(const f32 fallbackAspectRatio)const noexcept{
@@ -141,13 +139,12 @@ MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(const f32 f
 
     MeshViewBufferUpload upload;
     upload.viewState = ECSRenderDetail::ResolveMeshViewState(fallbackAspectRatio, m_world);
-    upload.uploadRequired = !(m_meshState.m_meshViewGpuDataValid && NWB_MEMCMP(m_meshState.m_meshViewGpuData.data(), &upload.viewState, sizeof(upload.viewState)) == 0);
+    upload.uploadRequired = IsMeshViewUploadRequired(m_meshState.m_meshViewGpuDataValid, m_meshState.m_meshViewGpuData, upload.viewState);
     return upload;
 }
 
 void RendererMeshSystem::confirmMeshViewBufferUpload(const MeshViewGpuData& viewState)noexcept{
-    NWB_MEMCPY(m_meshState.m_meshViewGpuData.data(), m_meshState.m_meshViewGpuData.size(), &viewState, sizeof(viewState));
-    m_meshState.m_meshViewGpuDataValid = true;
+    StoreConfirmedMeshViewGpuData(viewState, m_meshState.m_meshViewGpuData, m_meshState.m_meshViewGpuDataValid);
 }
 
 

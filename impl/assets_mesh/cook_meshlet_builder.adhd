@@ -1,0 +1,94 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook_meshlet_metrics.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ResetMeshletBuilderState(
+    in usize primitiveOffset,
+    mut MeshletDesc outCurrent,
+    mut Vector<u32> outLocalSourceVertexRefs,
+    mut Vector<u32> outLocalTriangleIndices,
+    mut MeshletScoreState outScoreState
+){
+    outCurrent = MeshletDesc();
+    outCurrent.primitiveOffset = cast<u32>(primitiveOffset);
+    outLocalSourceVertexRefs.clear();
+    outLocalTriangleIndices.clear();
+    ResetMeshletScoreState(outScoreState);
+}
+
+b8 AddMeshletTriangleToBuilder(
+    in StringView metaKind,
+    in StringView filePathText,
+    in MeshletTriangleData triangle,
+    mut Vector<u32> localSourceVertexRefs,
+    mut MeshletDesc meshlet,
+    mut Vector<u8> primitiveIndices
+){
+    for(in u32 vertexRefIndex : triangle.vertexRefs){
+        u8 localVertex = 0u;
+        const Expected<u8> foundVertex = TryFindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex);
+        if(foundVertex.has_value())
+            localVertex = foundVertex.value();
+        else{
+            if(localSourceVertexRefs.size() >= cast<usize>(s_MeshMaxMeshletVertices)){
+                error("{} meta '{}': triangle cannot fit within one meshlet", metaKind, filePathText);
+                return false;
+            }
+            localVertex = cast<u8>(localSourceVertexRefs.size());
+            localSourceVertexRefs.push_back(vertexRefIndex);
+        }
+        primitiveIndices.push_back(localVertex);
+    }
+    meshlet.counts = PackMeshletCounts(0u, MeshletPrimitiveCount(meshlet) + 1u, 0u, 0u);
+    return true;
+}
+
+b8 AddVisitedMeshletTriangle(
+    in StringView metaKind,
+    in StringView filePathText,
+    in u32 triangleIndex,
+    in Span<MeshletTriangleData> triangles,
+    in Span<MeshletTriangleCalculation> triangleCalculations,
+    in Span<u32> positionTriangleOffsets,
+    in Span<u32> positionTriangleIndices,
+    mut Vector<u8> visitedTriangles,
+    mut Vector<u32> localSourceVertexRefs,
+    mut Vector<u32> localTriangleIndices,
+    mut MeshletDesc meshlet,
+    mut Vector<u8> primitiveIndices,
+    mut MeshletScoreState scoreState,
+    mut Vector<u32> frontier,
+    mut Vector<u8> frontierFlags
+){
+    const MeshletTriangleData triangle = triangles[cast<usize>(triangleIndex)];
+    if(!AddMeshletTriangleToBuilder(metaKind, filePathText, triangle, localSourceVertexRefs, meshlet, primitiveIndices))
+        return false;
+
+    localTriangleIndices.push_back(triangleIndex);
+    AddMeshletTriangleToScoreStateFromCalculations(
+        triangleCalculations,
+        localTriangleIndices,
+        triangleIndex,
+        scoreState
+    );
+    visitedTriangles[cast<usize>(triangleIndex)] = 1u;
+    AddMeshletTriangleNeighborsToFrontier(
+        triangles,
+        positionTriangleOffsets,
+        positionTriangleIndices,
+        visitedTriangles,
+        triangleIndex,
+        frontier,
+        frontierFlags
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

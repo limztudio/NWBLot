@@ -31,7 +31,7 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
         const auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
         if(!shapeType)
             return;
-        const auto parameters = ResolveCsgCutterParameterBytes(*shapeType, cutter);
+        const auto parameters = TryResolveCsgCutterParameterBytes(shapeType->desc.parameterByteSize, shapeType->desc.defaultParameterBytes, cutter.parameterBytes);
         if(!parameters)
             return;
         const u8* parameterBytes = parameters->data();
@@ -167,4 +167,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

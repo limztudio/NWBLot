@@ -1,0 +1,220 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/csg/work_region.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgClipWorkBounds{
+    public f32x4 minBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maxBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 valid = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CsgIntervalSampleStateGpuData ResolveCsgIntervalSampleState(
+    in CsgFrameWorkRegion workRegion,
+    in u32 frameWidth,
+    in u32 frameHeight,
+    in u32 meshViewHeapSlot
+){
+    const CsgWorkRect workRect = workRegion.resolveRect(frameWidth, frameHeight);
+    CsgIntervalSampleStateGpuData state;
+    state.workMinX = cast<u32>(max(workRect.minX, 0));
+    state.workMinY = cast<u32>(max(workRect.minY, 0));
+    state.workMaxX = cast<u32>(max(workRect.maxX, 0));
+    state.workMaxY = cast<u32>(max(workRect.maxY, 0));
+    state.meshViewHeapSlot = meshViewHeapSlot;
+    return state;
+}
+
+CsgIntervalDispatchPushConstants ResolveCsgIntervalDispatchPushConstants(
+    in CsgFrameWorkRegion workRegion,
+    in u32 frameWidth,
+    in u32 frameHeight,
+    in u32 csgPeelLayerCount,
+    in u32 receiverCount,
+    in u32 meshViewHeapSlot,
+    in u32 csgContextHeapSlot
+){
+    const CsgWorkRect workRect = workRegion.resolveRect(frameWidth, frameHeight);
+    CsgIntervalDispatchPushConstants pushConstants;
+    pushConstants.frameWidth = frameWidth;
+    pushConstants.frameHeight = frameHeight;
+    pushConstants.receiverCount = receiverCount;
+    pushConstants.layerCount = min(csgPeelLayerCount, s_CsgPeelLayerCount);
+    pushConstants.workOffsetX = cast<u32>(max(workRect.minX, 0));
+    pushConstants.workOffsetY = cast<u32>(max(workRect.minY, 0));
+    pushConstants.workExtentX = cast<u32>(max(workRect.width(), 0));
+    pushConstants.workExtentY = cast<u32>(max(workRect.height(), 0));
+    pushConstants.meshViewHeapSlot = meshViewHeapSlot;
+    pushConstants.csgContextHeapSlot = csgContextHeapSlot;
+    return pushConstants;
+}
+
+CsgClipContextSlots ResolveCsgClipContextSlots(
+    in u32 receiverRangesSlot,
+    in u32 cuttersSlot,
+    in u32 materialTypedSlot,
+    in u32 meshInstancesSlot,
+    in u32 deferredBindlessResourcesSlot,
+    in u32 intervalSampleStateSlot
+){
+    CsgClipContextSlots contextSlots;
+    contextSlots.receiverRanges = receiverRangesSlot;
+    contextSlots.cutters = cuttersSlot;
+    contextSlots.materialTyped = materialTypedSlot;
+    contextSlots.meshInstances = meshInstancesSlot;
+    contextSlots.deferredBindlessResources = deferredBindlessResourcesSlot;
+    contextSlots.intervalSampleState = intervalSampleStateSlot;
+    return contextSlots;
+}
+
+b8 CsgClipCutterRequiresShapeBounds(in b8 receiverBoundsValid, in b8 hasShaderModule, in Name shapeName){
+    if(receiverBoundsValid)
+        return true;
+    return !hasShaderModule && (shapeName == s_CsgBoxShapeName || shapeName == s_CsgSphereShapeName || shapeName == s_CsgCapsuleShapeName);
+}
+
+Expected<CsgClipWorkBounds> ResolveCsgClipWorkBoundsFromCutterBounds(
+    in CsgClipWorkBounds receiverBounds,
+    in b8 cutterBoundsResolved,
+    in b8 cutterFiniteBounds,
+    in VectorSingle cutterMinBounds,
+    in VectorSingle cutterMaxBounds
+){
+    CsgClipWorkBounds outWorkBounds;
+    if(!cutterBoundsResolved){
+        if(receiverBounds.valid)
+            return makeUnexpected(Failure());
+        return outWorkBounds;
+    }
+    if(!cutterFiniteBounds)
+        return receiverBounds;
+    if(!receiverBounds.valid){
+        outWorkBounds.minBounds = f32x4(cutterMinBounds);
+        outWorkBounds.maxBounds = f32x4(cutterMaxBounds);
+        outWorkBounds.valid = true;
+        return outWorkBounds;
+    }
+    if(
+        !isFinite(receiverBounds.minBounds.x) || !isFinite(receiverBounds.minBounds.y) || !isFinite(receiverBounds.minBounds.z)
+        || !isFinite(receiverBounds.maxBounds.x) || !isFinite(receiverBounds.maxBounds.y) || !isFinite(receiverBounds.maxBounds.z)
+        || !isFinite(cutterMinBounds.x) || !isFinite(cutterMinBounds.y) || !isFinite(cutterMinBounds.z)
+        || !isFinite(cutterMaxBounds.x) || !isFinite(cutterMaxBounds.y) || !isFinite(cutterMaxBounds.z)
+        || receiverBounds.minBounds.x > receiverBounds.maxBounds.x
+        || receiverBounds.minBounds.y > receiverBounds.maxBounds.y
+        || receiverBounds.minBounds.z > receiverBounds.maxBounds.z
+        || cutterMinBounds.x > cutterMaxBounds.x
+        || cutterMinBounds.y > cutterMaxBounds.y
+        || cutterMinBounds.z > cutterMaxBounds.z
+    )
+        return makeUnexpected(Failure());
+    if(
+        receiverBounds.maxBounds.x < cutterMinBounds.x || cutterMaxBounds.x < receiverBounds.minBounds.x
+        || receiverBounds.maxBounds.y < cutterMinBounds.y || cutterMaxBounds.y < receiverBounds.minBounds.y
+        || receiverBounds.maxBounds.z < cutterMinBounds.z || cutterMaxBounds.z < receiverBounds.minBounds.z
+    )
+        return makeUnexpected(Failure());
+
+    const VectorSingle mergedMin = max(VectorSingle(receiverBounds.minBounds), cutterMinBounds);
+    const VectorSingle mergedMax = min(VectorSingle(receiverBounds.maxBounds), cutterMaxBounds);
+    outWorkBounds.minBounds = f32x4(mergedMin);
+    outWorkBounds.maxBounds = f32x4(mergedMax);
+    outWorkBounds.valid = mergedMin.x <= mergedMax.x && mergedMin.y <= mergedMax.y && mergedMin.z <= mergedMax.z;
+    return outWorkBounds;
+}
+
+Expected<Span<u8>> TryResolveCsgCutterParameterBytes(
+    in u32 parameterByteSize,
+    in Span<u8> defaultParameterBytes,
+    in Span<u8> cutterParameterBytes
+){
+    Span<u8> resolved = cutterParameterBytes;
+    if(cutterParameterBytes.empty())
+        resolved = defaultParameterBytes;
+    if(resolved.size() != cast<usize>(parameterByteSize))
+        return makeUnexpected(Failure());
+    return resolved;
+}
+
+Expected<MatrixSingle> TryBuildCsgReceiverWorldToLocal(
+    in b8 hasTransform,
+    in VectorSingle position,
+    in VectorSingle rotation,
+    in VectorSingle scale
+){
+    MatrixSingle worldToLocal(
+        VectorSingle(1.0f, 0.0f, 0.0f, 0.0f),
+        VectorSingle(0.0f, 1.0f, 0.0f, 0.0f),
+        VectorSingle(0.0f, 0.0f, 1.0f, 0.0f),
+        VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
+    );
+    if(!hasTransform)
+        return worldToLocal;
+    b8 valid = false;
+    native(in position, in rotation, in scale, mut worldToLocal, mut valid){
+        const ::SIMDMatrix localToWorld = ::MatrixAffineTransformation(scale, ::VectorZero(), rotation, position);
+        ::SIMDVectorSingle determinant;
+        worldToLocal = ::MatrixInverse(&determinant, localToWorld);
+        valid = ::VectorIsFinite(determinant, ::VectorComponentMask::s_XYZW) && ::Vector4Greater(::VectorAbs(determinant), ::VectorZero());
+    }
+    if(!valid)
+        return makeUnexpected(Failure());
+    return worldToLocal;
+}
+
+CsgClipWorkBounds LoadCsgReceiverWorldBoundsFromTransform(
+    in CsgReceiverCpuBounds receiverBounds,
+    in b8 hasTransform,
+    in VectorSingle position,
+    in VectorSingle rotation,
+    in VectorSingle scale
+){
+    CsgClipWorkBounds worldBounds;
+    if(!CsgReceiverBoundsCanCull(receiverBounds))
+        return worldBounds;
+
+    const VectorSingle localMinBounds(receiverBounds.minBounds);
+    const VectorSingle localMaxBounds(receiverBounds.maxBounds);
+    b8 validAabb = false;
+    native(in localMinBounds, in localMaxBounds, mut validAabb){
+        validAabb = ::AabbTests::Valid(localMinBounds, localMaxBounds);
+    }
+    if(!validAabb)
+        return worldBounds;
+
+    if(!hasTransform){
+        worldBounds.minBounds = f32x4(localMinBounds);
+        worldBounds.maxBounds = f32x4(localMaxBounds);
+        worldBounds.valid = true;
+        return worldBounds;
+    }
+
+    VectorSingle transformedMin(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorSingle transformedMax(0.0f, 0.0f, 0.0f, 0.0f);
+    b8 transformed = false;
+    native(in position, in rotation, in scale, in localMinBounds, in localMaxBounds, mut transformedMin, mut transformedMax, mut transformed){
+        const ::SIMDMatrix localToWorld = ::MatrixAffineTransformation(scale, ::VectorZero(), rotation, position);
+        if(const auto transformedBounds = ::AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds)){
+            transformedMin = transformedBounds->minBounds;
+            transformedMax = transformedBounds->maxBounds;
+            transformed = true;
+        }
+    }
+    if(transformed){
+        worldBounds.minBounds = f32x4(transformedMin);
+        worldBounds.maxBounds = f32x4(transformedMax);
+        worldBounds.valid = true;
+    }
+    return worldBounds;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

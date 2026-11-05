@@ -1,0 +1,150 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "slider_interaction.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 TrySeekSliderPointerGesture(
+    in b8 admitted,
+    in f64 stateMin,
+    in f64 stateMax,
+    in f64 stateStep,
+    in b8 stateEnabled,
+    in ControlToken stateToken,
+    in SliderPlacement stateAdmission,
+    in f64 currentValue,
+    in SliderOptions options,
+    in PointerGesture gesture,
+    mut f64 outValue,
+    mut InputActionId outPress,
+    mut b8 outAdvanceRevision,
+    mut SliderResult inOutResult
+){
+    outValue = currentValue;
+    outPress = InputActionId();
+    outAdvanceRevision = false;
+    if(
+        !IsValidSliderOptions(options) || !admitted || !IsValidSliderGesture(gesture) || gesture.control != stateToken
+        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !EqualUiRect(gesture.referenceRectangle, stateAdmission.centerTravel)
+    )
+        return false;
+    SliderResult accepted = inOutResult;
+    accepted.valid = true;
+    if(!options.enabled || options.minimum == options.maximum || gesture.referenceRectangle.width <= 0.0f){
+        accepted.dragging = false;
+        inOutResult = accepted;
+        return true;
+    }
+    const Expected<f64> value = TryComputeSliderSeekValue(options, gesture);
+    if(!value.has_value())
+        return false;
+    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value.value());
+    accepted.dragging = gesture.state == PointerGestureState::Active;
+    outValue = value.value();
+    if(accepted.dragging)
+        outPress = gesture.id;
+    outAdvanceRevision = true;
+    inOutResult = accepted;
+    return true;
+}
+
+b8 TryDragSliderPointerGesture(
+    in b8 admitted,
+    in f64 stateMin,
+    in f64 stateMax,
+    in f64 stateStep,
+    in b8 stateEnabled,
+    in ControlToken stateToken,
+    in SliderPlacement stateAdmission,
+    in f64 currentValue,
+    in InputActionId currentPress,
+    in b8 currentPressMoved,
+    in SliderOptions options,
+    in PointerGesture gesture,
+    mut f64 outValue,
+    mut InputActionId outPress,
+    mut b8 outPressMoved,
+    mut b8 outAdvanceRevision,
+    mut SliderResult inOutResult
+){
+    outValue = currentValue;
+    outPress = currentPress;
+    outPressMoved = currentPressMoved;
+    outAdvanceRevision = false;
+    const f64 baseline = bit_cast<f64>(gesture.value);
+    if(
+        !IsValidSliderOptions(options) || !admitted || !IsValidSliderGesture(gesture) || gesture.control != stateToken
+        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !EqualUiRect(gesture.referenceRectangle, stateAdmission.travelBounds)
+        || gesture.targetRectangle.width != stateAdmission.thumbExtent.x
+        || gesture.targetRectangle.height != stateAdmission.thumbExtent.y || !isFinite(baseline)
+    )
+        return false;
+    SliderResult accepted = inOutResult;
+    accepted.valid = true;
+    const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
+    if(!options.enabled || options.minimum == options.maximum || travel <= 0.0){
+        accepted.dragging = false;
+        inOutResult = accepted;
+        return true;
+    }
+    b8 moved = currentPress == gesture.id && currentPressMoved;
+    f64 value = currentValue;
+    if(!TryComputeSliderDragValue(currentValue, baseline, options, gesture, moved, value, moved))
+        return false;
+    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value);
+    accepted.dragging = gesture.state == PointerGestureState::Active;
+    outValue = value;
+    outPress = InputActionId();
+    if(accepted.dragging)
+        outPress = gesture.id;
+    outPressMoved = accepted.dragging && moved;
+    outAdvanceRevision = true;
+    inOutResult = accepted;
+    return true;
+}
+
+Expected<f32> TryResolveSliderTrackContentWidth(in SliderMetrics metrics, in f32 trackMinimumWidth){
+    const f64 width = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right) + cast<f64>(metrics.thumbExtent.x) + cast<f64>(trackMinimumWidth);
+    if(!isFinite(width) || width > s_UiMaxFloatF64)
+        return makeUnexpected(Failure());
+    return max(metrics.contentSize.x, cast<f32>(width));
+}
+
+b8 IsSliderPlacementInteractive(in SliderOptions options, in SliderPlacement placement){
+    return options.enabled
+        && options.minimum != options.maximum
+        && placement.centerTravel.width > 0.0f
+        && placement.thumb.width > 0.0f
+        && placement.thumb.height > 0.0f
+        && placement.clip.width > 0.0f
+        && placement.clip.height > 0.0f;
+}
+
+Color ResolveSliderThumbTint(in SliderStyle style, in b8 interactive, in b8 pressed, in b8 hover){
+    if(!interactive)
+        return style.disabledTint;
+    if(pressed)
+        return style.pressedTint;
+    if(hover)
+        return style.hoverTint;
+    return Color();
+}
+
+Name ResolveSliderThumbPreferredName(in SliderStyle style, in b8 interactive, in b8 pressed, in b8 hover){
+    if(!interactive)
+        return style.disabled;
+    if(pressed)
+        return style.pressed;
+    if(hover)
+        return style.hover;
+    return style.normal;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

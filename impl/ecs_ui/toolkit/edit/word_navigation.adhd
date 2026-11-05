@@ -1,0 +1,155 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/navigation_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EditNavigationRunClass ClassifyEditNavigationOffset(in StringView text, in usize offset){
+    u32 codePoint = 0u;
+    usize byteCount = 0u;
+    if(!tryDecodeUtf8CodePoint(text.substr(offset, s_EditUtf8MaxSequenceBytes), codePoint, byteCount))
+        return EditNavigationRunClass::Text;
+    return ClassifyEditNavigationScalar(codePoint);
+}
+
+EditNavigationRunClass ClassifyEditWordRangeOffset(in StringView text, in usize offset){
+    if(text[offset] == '\n')
+        return EditNavigationRunClass::LineBreak;
+    return ClassifyEditNavigationOffset(text, offset);
+}
+
+usize ResolveEditWordBoundary(in StringView text, in Span<usize> boundaries, in usize position, in b8 forward){
+    if((forward && position == text.size()) || (!forward && position == 0u) || boundaries.empty())
+        return position;
+    usize cursor = lowerBoundIndex(boundaries, position);
+    const usize lastBoundaryIndex = boundaries.size() - 1u;
+    if(forward){
+        const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, position);
+        while(cursor < lastBoundaryIndex && ClassifyEditNavigationOffset(text, boundaries[cursor]) == category)
+            ++cursor;
+        while(cursor < lastBoundaryIndex && ClassifyEditNavigationOffset(text, boundaries[cursor]) == EditNavigationRunClass::Whitespace)
+            ++cursor;
+        return boundaries[cursor];
+    }
+    while(cursor != 0u && ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]) == EditNavigationRunClass::Whitespace)
+        --cursor;
+    if(cursor == 0u)
+        return 0u;
+    const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]);
+    while(cursor != 0u && ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]) == category)
+        --cursor;
+    return boundaries[cursor];
+}
+
+Expected<EditWordRange> ResolveEditWordRangeAt(in StringView text, in Span<usize> boundaries, in usize position){
+    const usize requested = lowerBoundIndex(boundaries, position);
+    if(requested >= boundaries.size() || boundaries[requested] != position)
+        return makeUnexpected(Failure());
+    if(text.empty())
+        return EditWordRange();
+    usize origin = requested;
+    if(position == text.size())
+        origin = requested - 1u;
+    const EditNavigationRunClass run = ClassifyEditWordRangeOffset(text, boundaries[origin]);
+    usize first = origin;
+    usize last = origin + 1u;
+    const usize lastBoundaryIndex = boundaries.size() - 1u;
+    while(first != 0u && ClassifyEditWordRangeOffset(text, boundaries[first - 1u]) == run)
+        --first;
+    while(last < lastBoundaryIndex && ClassifyEditWordRangeOffset(text, boundaries[last]) == run)
+        ++last;
+    EditWordRange range;
+    range.begin = boundaries[first];
+    range.end = boundaries[last];
+    return range;
+}
+
+Expected<usize> TryResolveEditMoveTarget(
+    in StringView text,
+    in Span<usize> boundaries,
+    in EditTextMode textMode,
+    in usize anchor,
+    in usize caret,
+    in EditMove movement,
+    in b8 extend
+){
+    if(cast<u8>(movement) > cast<u8>(EditMove::DocumentEnd))
+        return makeUnexpected(Failure());
+    usize target = caret;
+    if(!extend && anchor != caret && (movement == EditMove::Left || movement == EditMove::Right)){
+        if(movement == EditMove::Left)
+            target = min(anchor, caret);
+        else
+            target = max(anchor, caret);
+    }
+    else{
+        switch(movement){
+        case EditMove::Left:
+            target = PreviousEditBoundary(boundaries, target);
+            break;
+        case EditMove::Right:
+            target = NextEditBoundary(boundaries, text.size(), target);
+            break;
+        case EditMove::Home:
+            if(textMode == EditTextMode::SingleLine){
+                target = 0u;
+            }
+            else{
+                while(target != 0u && text[target - 1u] != '\n')
+                    --target;
+            }
+            break;
+        case EditMove::End:
+            if(textMode == EditTextMode::SingleLine){
+                target = text.size();
+            }
+            else{
+                while(target < text.size() && text[target] != '\n')
+                    ++target;
+            }
+            break;
+        case EditMove::WordLeft:
+            target = ResolveEditWordBoundary(text, boundaries, target, false);
+            break;
+        case EditMove::WordRight:
+            target = ResolveEditWordBoundary(text, boundaries, target, true);
+            break;
+        case EditMove::DocumentHome:
+            target = 0u;
+            break;
+        case EditMove::DocumentEnd:
+            target = text.size();
+            break;
+        }
+    }
+    return target;
+}
+
+Expected<f32> TryResolveEditNavigationPreferredX(in f32 preferredX){
+    if(!isFinite(preferredX))
+        return makeUnexpected(Failure());
+    return preferredX;
+}
+
+void ClearEditNavigationPreferredX(mut f32 outPreferredX, mut b8 outValid){
+    outPreferredX = 0.0f;
+    outValid = false;
+}
+
+void ComputeEditWordEraseDistances(in b8 forward, in usize caret, in usize boundary, mut usize outBeforeBytes, mut usize outAfterBytes){
+    if(forward){
+        outBeforeBytes = 0u;
+        outAfterBytes = boundary - caret;
+    }
+    else{
+        outBeforeBytes = caret - boundary;
+        outAfterBytes = 0u;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,168 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/optics/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
+class CoincidentOpticalVolumeCandidate{
+    public AssetRef<Mesh> mesh;
+    public AssetRef<Material> material;
+    public f32x4 position = f32x4(0.f, 0.f, 0.f, 0.f);
+    public f32x4 rotation = f32x4(0.f, 0.f, 0.f, 1.f);
+    public f32x4 scale = f32x4(1.f, 1.f, 1.f, 0.f);
+    public Span<u8> mutableTypedBytes;
+    public Name group = s_NameNone;
+    public EntityID entity = s_InvalidEntityId;
+    public i32 priority = 0;
+    // Identical-material grouping also requires the same authored medium semantics.
+    public u32 boundaryMode = 0u;
+    public i32 mediumPriority = 0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidCoincidentOpticalVolumeCandidateLanes(in VectorSingle position, in VectorSingle rotation, in VectorSingle scale){
+    if(
+        !isFinite(position.x) || !isFinite(position.y) || !isFinite(position.z)
+        || !isFinite(rotation.x) || !isFinite(rotation.y) || !isFinite(rotation.z) || !isFinite(rotation.w)
+        || !isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z)
+    )
+        return false;
+    const b8 scaleNonzero = scale.x != 0.f && scale.y != 0.f && scale.z != 0.f;
+    const b8 rotationNonzero = rotation.x != 0.f || rotation.y != 0.f || rotation.z != 0.f || rotation.w != 0.f;
+    return scaleNonzero && rotationNonzero;
+}
+
+b8 ValidCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate candidate){
+    if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
+        return false;
+    return ValidCoincidentOpticalVolumeCandidateLanes(VectorSingle(candidate.position), VectorSingle(candidate.rotation), VectorSingle(candidate.scale));
+}
+
+b8 RendererComponentOpticalVolumeMergingEnabled(in RendererComponent renderer){
+    return
+        renderer.visible
+        && (
+            renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial
+            || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone)
+        )
+    ;
+}
+
+b8 OpticalBoundaryModeIsClosed(in OpticalBoundaryMode mode){
+    return mode == OpticalBoundaryMode::ClosedNested || mode == OpticalBoundaryMode::ClosedPriority;
+}
+
+b8 CoincidentOpticalVolumeCandidateOutranks(in CoincidentOpticalVolumeCandidate candidate, in CoincidentOpticalVolumeCandidate previous){
+    return candidate.priority > previous.priority || (candidate.priority == previous.priority && candidate.entity.id < previous.entity.id);
+}
+
+b8 CoincidentOpticalVolumeTransformsEqual(
+    in VectorSingle lhsPosition,
+    in VectorSingle lhsRotation,
+    in VectorSingle lhsScale,
+    in VectorSingle rhsPosition,
+    in VectorSingle rhsRotation,
+    in VectorSingle rhsScale
+){
+    return
+        lhsPosition.x == rhsPosition.x
+        && lhsPosition.y == rhsPosition.y
+        && lhsPosition.z == rhsPosition.z
+        && lhsRotation.x == rhsRotation.x
+        && lhsRotation.y == rhsRotation.y
+        && lhsRotation.z == rhsRotation.z
+        && lhsRotation.w == rhsRotation.w
+        && lhsScale.x == rhsScale.x
+        && lhsScale.y == rhsScale.y
+        && lhsScale.z == rhsScale.z
+    ;
+}
+
+u32 OpticalFloatingHashBits(in f32 value){
+    if(value == 0.0f)
+        return 0u;
+    return bit_cast<u32>(value);
+}
+
+u64 ComputeOpticalFnv64Bytes(in Span<u8> bytes){
+    u64 hash = s_Fnv64OffsetBasis;
+    for(in u8 byte : bytes)
+        hash = updateFnv64Byte(hash, byte);
+    return hash;
+}
+
+usize HashCoincidentOpticalVolumeCandidate(in CoincidentOpticalVolumeCandidate candidate){
+    usize hash = hashValue(candidate.mesh.name());
+    hash = hashCombineValue(hash, candidate.material.name());
+    hash = hashCombineValue(hash, candidate.group);
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.x));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.y));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.position.z));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.x));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.y));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.z));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.rotation.w));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.x));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.y));
+    hash = hashCombineValue(hash, OpticalFloatingHashBits(candidate.scale.z));
+    if(candidate.group == s_NameNone){
+        hash = hashCombineValue(hash, candidate.boundaryMode);
+        hash = hashCombineValue(hash, candidate.mediumPriority);
+        hash = hashCombineValue(hash, candidate.mutableTypedBytes.size());
+        hash = hashCombineValue(hash, ComputeOpticalFnv64Bytes(candidate.mutableTypedBytes));
+    }
+    return hash;
+}
+
+b8 EqualCoincidentOpticalVolumeCandidates(in CoincidentOpticalVolumeCandidate lhs, in CoincidentOpticalVolumeCandidate rhs){
+    if(
+        lhs.mesh != rhs.mesh || lhs.material != rhs.material || lhs.group != rhs.group
+        || !CoincidentOpticalVolumeTransformsEqual(VectorSingle(lhs.position), VectorSingle(lhs.rotation), VectorSingle(lhs.scale), VectorSingle(rhs.position), VectorSingle(rhs.rotation), VectorSingle(rhs.scale))
+    )
+        return false;
+    if(lhs.group != s_NameNone)
+        return true;
+    if(
+        lhs.boundaryMode != rhs.boundaryMode
+        || lhs.mediumPriority != rhs.mediumPriority
+        || lhs.mutableTypedBytes.size() != rhs.mutableTypedBytes.size()
+    )
+        return false;
+    for(usize i = 0u; i < lhs.mutableTypedBytes.size(); ++i){
+        if(lhs.mutableTypedBytes[i] != rhs.mutableTypedBytes[i])
+            return false;
+    }
+    return true;
+}
+
+CoincidentOpticalVolumeCandidate MakeCoincidentOpticalVolumeCandidate(
+    in EntityID entity,
+    in AssetRef<Mesh> mesh,
+    in RendererComponent renderer,
+    in Span<u8> mutableTypedBytes
+){
+    CoincidentOpticalVolumeCandidate candidate;
+    candidate.entity = entity;
+    candidate.mesh = mesh;
+    candidate.material = renderer.material;
+    if(renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup)
+        candidate.group = renderer.opticalVolumeGroup;
+    else
+        candidate.group = s_NameNone;
+    candidate.priority = renderer.opticalVolumePriority;
+    candidate.boundaryMode = cast<u32>(renderer.opticalBoundaryMode);
+    candidate.mediumPriority = renderer.opticalMediumPriority;
+    candidate.mutableTypedBytes = mutableTypedBytes;
+    return candidate;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

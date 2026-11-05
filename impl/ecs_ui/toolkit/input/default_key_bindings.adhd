@@ -1,0 +1,95 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/input/commands.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+InputKeyBinding ResolveDefaultInputKeyBinding(in usize index){
+    const i32 shift = s_InputModifierShift;
+    const i32 ctrl = s_InputModifierControl;
+    const i32 alt = s_InputModifierAlt;
+    const i32 sup = s_InputModifierSuper;
+    switch(index){
+    case 0u: return MakeInputKeyBinding(s_InputKeyTab, 0, ctrl | alt | sup, InputCommand::FocusNext, InputSelectionPolicy::None, false, false);
+    case 1u: return MakeInputKeyBinding(s_InputKeyTab, shift, ctrl | alt | sup, InputCommand::FocusPrevious, InputSelectionPolicy::None, false, false);
+    case 2u: return MakeInputKeyBinding(s_InputKeyEnter, 0, shift | sup, InputCommand::Accept, InputSelectionPolicy::None, true, false);
+    case 3u: return MakeInputKeyBinding(s_InputKeyEnter, ctrl, shift | sup, InputCommand::Submit, InputSelectionPolicy::None, true, false);
+    case 4u: return MakeInputKeyBinding(s_InputKeyEnter, alt, shift | ctrl | sup, InputCommand::Accept, InputSelectionPolicy::None, false, false);
+    case 5u: return MakeInputKeyBinding(s_InputKeyKeypadEnter, 0, shift | sup, InputCommand::Accept, InputSelectionPolicy::None, true, false);
+    case 6u: return MakeInputKeyBinding(s_InputKeyKeypadEnter, ctrl, shift | sup, InputCommand::Submit, InputSelectionPolicy::None, true, false);
+    case 7u: return MakeInputKeyBinding(s_InputKeyKeypadEnter, alt, shift | ctrl | sup, InputCommand::Accept, InputSelectionPolicy::None, false, false);
+    case 8u: return MakeInputKeyBinding(s_InputKeySpace, 0, s_InputBindingModifierMask, InputCommand::Activate, InputSelectionPolicy::None, false, true);
+    case 9u: return MakeInputKeyBinding(s_InputKeyEscape, 0, shift | ctrl | sup, InputCommand::Cancel, InputSelectionPolicy::None, true, false);
+    case 10u: return MakeInputKeyBinding(s_InputKeyEscape, alt, shift | ctrl | sup, InputCommand::Cancel, InputSelectionPolicy::None, false, false);
+    case 11u: return MakeInputKeyBinding(s_InputKeyLeft, 0, shift | sup, InputCommand::Left, InputSelectionPolicy::Shift, true, false);
+    case 12u: return MakeInputKeyBinding(s_InputKeyLeft, ctrl, shift | sup, InputCommand::WordLeft, InputSelectionPolicy::Shift, true, false);
+    case 13u: return MakeInputKeyBinding(s_InputKeyLeft, alt, shift | sup, InputCommand::Left, InputSelectionPolicy::Shift, false, false);
+    case 14u: return MakeInputKeyBinding(s_InputKeyLeft, ctrl | alt, shift | sup, InputCommand::WordLeft, InputSelectionPolicy::Shift, false, false);
+    case 15u: return MakeInputKeyBinding(s_InputKeyRight, 0, shift | sup, InputCommand::Right, InputSelectionPolicy::Shift, true, false);
+    case 16u: return MakeInputKeyBinding(s_InputKeyRight, ctrl, shift | sup, InputCommand::WordRight, InputSelectionPolicy::Shift, true, false);
+    case 17u: return MakeInputKeyBinding(s_InputKeyRight, alt, shift | sup, InputCommand::Right, InputSelectionPolicy::Shift, false, false);
+    case 18u: return MakeInputKeyBinding(s_InputKeyRight, ctrl | alt, shift | sup, InputCommand::WordRight, InputSelectionPolicy::Shift, false, false);
+    case 19u: return MakeInputKeyBinding(s_InputKeyHome, 0, shift | sup, InputCommand::Home, InputSelectionPolicy::Shift, true, false);
+    case 20u: return MakeInputKeyBinding(s_InputKeyHome, ctrl, shift | sup, InputCommand::DocumentHome, InputSelectionPolicy::Shift, true, false);
+    case 21u: return MakeInputKeyBinding(s_InputKeyHome, alt, shift | sup, InputCommand::Home, InputSelectionPolicy::Shift, false, false);
+    case 22u: return MakeInputKeyBinding(s_InputKeyHome, ctrl | alt, shift | sup, InputCommand::DocumentHome, InputSelectionPolicy::Shift, false, false);
+    case 23u: return MakeInputKeyBinding(s_InputKeyEnd, 0, shift | sup, InputCommand::End, InputSelectionPolicy::Shift, true, false);
+    case 24u: return MakeInputKeyBinding(s_InputKeyEnd, ctrl, shift | sup, InputCommand::DocumentEnd, InputSelectionPolicy::Shift, true, false);
+    case 25u: return MakeInputKeyBinding(s_InputKeyEnd, alt, shift | sup, InputCommand::End, InputSelectionPolicy::Shift, false, false);
+    case 26u: return MakeInputKeyBinding(s_InputKeyEnd, ctrl | alt, shift | sup, InputCommand::DocumentEnd, InputSelectionPolicy::Shift, false, false);
+    case 27u: return MakeInputKeyBinding(s_InputKeyUp, 0, shift | sup, InputCommand::Up, InputSelectionPolicy::Shift, true, false);
+    case 28u: return MakeInputKeyBinding(s_InputKeyUp, ctrl, shift | sup, InputCommand::Up, InputSelectionPolicy::Shift, false, false);
+    case 29u: return MakeInputKeyBinding(s_InputKeyUp, alt, shift | ctrl | sup, InputCommand::Up, InputSelectionPolicy::Shift, false, false);
+    case 30u: return MakeInputKeyBinding(s_InputKeyDown, 0, shift | sup, InputCommand::Down, InputSelectionPolicy::Shift, true, false);
+    case 31u: return MakeInputKeyBinding(s_InputKeyDown, ctrl, shift | sup, InputCommand::Down, InputSelectionPolicy::Shift, false, false);
+    case 32u: return MakeInputKeyBinding(s_InputKeyDown, alt, shift | ctrl | sup, InputCommand::Down, InputSelectionPolicy::Shift, false, false);
+    case 33u: return MakeInputKeyBinding(s_InputKeyPageUp, 0, shift | sup, InputCommand::PageUp, InputSelectionPolicy::Shift, true, false);
+    case 34u: return MakeInputKeyBinding(s_InputKeyPageUp, ctrl, shift | sup, InputCommand::PageUp, InputSelectionPolicy::Shift, false, false);
+    case 35u: return MakeInputKeyBinding(s_InputKeyPageUp, alt, shift | ctrl | sup, InputCommand::PageUp, InputSelectionPolicy::Shift, false, false);
+    case 36u: return MakeInputKeyBinding(s_InputKeyPageDown, 0, shift | sup, InputCommand::PageDown, InputSelectionPolicy::Shift, true, false);
+    case 37u: return MakeInputKeyBinding(s_InputKeyPageDown, ctrl, shift | sup, InputCommand::PageDown, InputSelectionPolicy::Shift, false, false);
+    case 38u: return MakeInputKeyBinding(s_InputKeyPageDown, alt, shift | ctrl | sup, InputCommand::PageDown, InputSelectionPolicy::Shift, false, false);
+    case 39u: return MakeInputKeyBinding(s_InputKeyBackspace, 0, shift | sup, InputCommand::Backspace, InputSelectionPolicy::None, true, false);
+    case 40u: return MakeInputKeyBinding(s_InputKeyBackspace, ctrl, shift | sup, InputCommand::WordBackspace, InputSelectionPolicy::None, true, false);
+    case 41u: return MakeInputKeyBinding(s_InputKeyDelete, 0, sup, InputCommand::Delete, InputSelectionPolicy::None, true, false);
+    case 42u: return MakeInputKeyBinding(s_InputKeyDelete, ctrl, shift | sup, InputCommand::WordDelete, InputSelectionPolicy::None, true, false);
+    case 43u: return MakeInputKeyBinding(s_InputKeyDelete, shift, sup, InputCommand::Cut, InputSelectionPolicy::None, true, false);
+    case 44u: return MakeInputKeyBinding(s_InputKeyInsert, ctrl, sup, InputCommand::Copy, InputSelectionPolicy::None, true, false);
+    case 45u: return MakeInputKeyBinding(s_InputKeyInsert, shift, sup, InputCommand::Paste, InputSelectionPolicy::None, true, false);
+    case 46u: return MakeInputKeyBinding(s_InputKeyA, ctrl, shift | sup, InputCommand::SelectAll, InputSelectionPolicy::None, true, false);
+    case 47u: return MakeInputKeyBinding(s_InputKeyC, ctrl, shift | sup, InputCommand::Copy, InputSelectionPolicy::None, true, false);
+    case 48u: return MakeInputKeyBinding(s_InputKeyX, ctrl, shift | sup, InputCommand::Cut, InputSelectionPolicy::None, true, false);
+    case 49u: return MakeInputKeyBinding(s_InputKeyV, ctrl, shift | sup, InputCommand::Paste, InputSelectionPolicy::None, true, false);
+    case 50u: return MakeInputKeyBinding(s_InputKeyZ, ctrl, sup, InputCommand::Undo, InputSelectionPolicy::None, true, false);
+    case 51u: return MakeInputKeyBinding(s_InputKeyZ, ctrl | shift, sup, InputCommand::Redo, InputSelectionPolicy::None, true, false);
+    case 52u: return MakeInputKeyBinding(s_InputKeyY, ctrl, shift | sup, InputCommand::Redo, InputSelectionPolicy::None, true, false);
+    case 53u: return MakeInputKeyBinding(s_InputKeyMenu, 0, s_InputBindingModifierMask, InputCommand::ContextMenu, InputSelectionPolicy::None, false, false);
+    case 54u: return MakeInputKeyBinding(s_InputKeyF10, shift, sup, InputCommand::ContextMenu, InputSelectionPolicy::None, false, false);
+    default: return InputKeyBinding();
+    }
+}
+
+b8 TryBuildInputKeyBindingProfile(in Span<InputKeyBinding> bindings, mut Vector<InputKeyBinding> outBindings){
+    if(!ValidateInputKeyBindingProfile(bindings, s_InputBindingModifierMask))
+        return false;
+    outBindings.clear();
+    outBindings.reserve(s_InputMaxBindings);
+    for(in InputKeyBinding binding : bindings)
+        outBindings.push_back(binding);
+    return true;
+}
+
+b8 BuildDefaultInputKeyBindingProfile(mut Vector<InputKeyBinding> outBindings){
+    outBindings.clear();
+    outBindings.reserve(s_InputMaxBindings);
+    for(usize index = 0u; index < s_DefaultInputKeyBindingCount; ++index)
+        outBindings.push_back(ResolveDefaultInputKeyBinding(index));
+    return ValidateInputKeyBindingProfile(outBindings, s_InputBindingModifierMask);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

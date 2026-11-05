@@ -9,7 +9,7 @@
 
 #include <impl/ecs_ui/toolkit/global.h>
 
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/model_validation.adhd.h>
 
 #include <global/atomic_identity.h>
 #include <global/termination.h>
@@ -397,4 +397,3 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

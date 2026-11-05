@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/gi/quality_settings.adhd>
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd>
-#include <impl/ecs_render/optics/types.adhd>
+#include <impl/ecs_render/optics/coincident_volume_types.adhd>
 #include <impl/ecs_render/refraction/types.adhd>
 #include <impl/ecs_render/shadow/quality_settings.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>

@@ -5,7 +5,6 @@
 #include "coincident_volumes.h"
 
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/optics/types.adhd.h>
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_scene/components.adhd.h>
@@ -150,4 +149,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

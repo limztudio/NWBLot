@@ -27,45 +27,17 @@ struct CsgResolvedClipCutter{
     Float34 worldToShape = {};
     CsgClipWorkBounds workBounds;
     CsgShapeTypeInfo shapeType;
-    BinaryByteView parameterBytes;
+    Span<const u8> parameterBytes;
 };
 
-[[nodiscard]] Expected<SIMDMatrix> BuildCsgReceiverWorldToLocal(const Scene::TransformComponent* const transform)noexcept{
-    if(!transform)
-        return MatrixIdentity();
-
-    const SIMDMatrix localToWorld = MatrixAffineTransformation(LoadFloat(transform->scale), VectorZero(), LoadFloat(transform->rotation), LoadFloat(transform->position));
-    SIMDVectorSingle determinant;
-    const SIMDMatrix worldToLocal = MatrixInverse(&determinant, localToWorld);
-    if(!VectorIsFinite(determinant, VectorComponentMask::s_XYZW) || !Vector4Greater(VectorAbs(determinant), VectorZero()))
-        return MakeUnexpected(Failure{});
-    return worldToLocal;
-}
-
 [[nodiscard]] static CsgClipWorkBounds LoadCsgReceiverWorldBounds(const CsgReceiverCpuBounds& receiverBounds, const Scene::TransformComponent* const transform)noexcept{
-    CsgClipWorkBounds worldBounds;
-    if(!CsgReceiverBoundsCanCull(receiverBounds))
-        return worldBounds;
-
-    const SIMDVectorSingle localMinBounds = LoadFloatInt(receiverBounds.minBounds);
-    const SIMDVectorSingle localMaxBounds = LoadFloatInt(receiverBounds.maxBounds);
-    if(!AabbTests::Valid(localMinBounds, localMaxBounds))
-        return worldBounds;
-
-    if(!transform){
-        StoreFloat(localMinBounds, worldBounds.minBounds);
-        StoreFloat(localMaxBounds, worldBounds.maxBounds);
-        worldBounds.valid = true;
-        return worldBounds;
-    }
-
-    const SIMDMatrix localToWorld = MatrixAffineTransformation(LoadFloat(transform->scale), VectorZero(), LoadFloat(transform->rotation), LoadFloat(transform->position));
-    if(const auto transformedBounds = AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds)){
-        StoreFloat(transformedBounds->minBounds, worldBounds.minBounds);
-        StoreFloat(transformedBounds->maxBounds, worldBounds.maxBounds);
-        worldBounds.valid = true;
-    }
-    return worldBounds;
+    return LoadCsgReceiverWorldBoundsFromTransform(
+        receiverBounds,
+        transform != nullptr,
+        transform ? LoadFloat(transform->position) : VectorZero(),
+        transform ? LoadFloat(transform->rotation) : VectorZero(),
+        transform ? LoadFloat(transform->scale) : VectorZero()
+    );
 }
 
 [[nodiscard]] static Expected<CsgResolvedClipCutter> ResolveReceiverClipCutter(
@@ -76,7 +48,7 @@ struct CsgResolvedClipCutter{
     auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
     if(!shapeType)
         return MakeUnexpected(Failure{});
-    const auto parameterBytes = ResolveCsgCutterParameterBytes(*shapeType, cutter);
+    const auto parameterBytes = TryResolveCsgCutterParameterBytes(shapeType->desc.parameterByteSize, shapeType->desc.defaultParameterBytes, cutter.parameterBytes);
     if(!parameterBytes)
         return MakeUnexpected(Failure{});
     CsgResolvedClipCutter resolvedCutter{
@@ -129,19 +101,7 @@ template<typename CutterHandler>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<BinaryByteView> ResolveCsgCutterParameterBytes(const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter)noexcept{
-    const u8* bytes = cutter.parameterBytes.empty() ? (shapeType.desc.defaultParameterBytes.empty() ? nullptr : shapeType.desc.defaultParameterBytes.data()) : cutter.parameterBytes.data();
-    const usize byteSize = cutter.parameterBytes.empty() ? shapeType.desc.defaultParameterBytes.size() : cutter.parameterBytes.size();
-    if(byteSize != static_cast<usize>(shapeType.desc.parameterByteSize) || (byteSize != 0u && !bytes))
-        return MakeUnexpected(Failure{});
-    return BinaryByteView(bytes, byteSize);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const BinaryByteView parameterBytes, const CsgClipWorkBounds& receiverBounds, CsgClipWorkBounds& outWorkBounds){
+b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes, const CsgClipWorkBounds& receiverBounds, CsgClipWorkBounds& outWorkBounds){
     outWorkBounds = CsgClipWorkBounds{};
     if(!CsgClipCutterRequiresShapeBounds(receiverBounds.valid, static_cast<b8>(shapeType.desc.shaderModule), shapeType.desc.name))
         return true;
@@ -224,7 +184,12 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
         return MakeUnexpected(Failure{});
     const CsgClipWorkBounds receiverWorldBounds = __hidden_csg_clip_resolve::LoadCsgReceiverWorldBounds(receiverBounds, transform);
 
-    const auto worldToReceiver = __hidden_csg_clip_resolve::BuildCsgReceiverWorldToLocal(transform);
+    const auto worldToReceiver = TryBuildCsgReceiverWorldToLocal(
+        transform != nullptr,
+        transform ? LoadFloat(transform->position) : VectorZero(),
+        transform ? LoadFloat(transform->rotation) : VectorZero(),
+        transform ? LoadFloat(transform->scale) : VectorZero()
+    );
     if(!worldToReceiver)
         return MakeUnexpected(Failure{});
 
@@ -287,4 +252,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -84,15 +84,6 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     RefreshRuntimeMeshCsgBounds(LoadFloatInt(desc.localBounds.minBounds), LoadFloatInt(desc.localBounds.maxBounds), desc.localBounds.finite(), mesh.csgLocalBounds);
 }
 
-[[nodiscard]] static Expected<Name> DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const AStringView label){
-    const auto bufferName = DeriveName(meshName, suffix);
-    if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'"), ConvertString(label), ConvertString(meshName.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-    return bufferName;
-}
-
 template<typename PayloadT>
 [[nodiscard]] static Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupMeshBuffer(
     Core::GraphicsRuntime& graphics,
@@ -469,4 +460,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

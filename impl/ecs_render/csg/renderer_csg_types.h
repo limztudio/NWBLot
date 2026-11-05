@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/csg/work_region.adhd.h>
+#include <impl/ecs_render/csg/clip_bounds.adhd.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_csg/shape_registry.h>
@@ -65,10 +65,8 @@ namespace CsgFrameCacheDetail{
     [[nodiscard]] Expected<CsgFrameStateCacheSignature> BuildSignature(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry, const MeshSystem& meshSystem);
 };
 
-[[nodiscard]] Expected<BinaryByteView> ResolveCsgCutterParameterBytes(const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter)noexcept;
-
 // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
-[[nodiscard]] b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, BinaryByteView parameterBytes, const CsgClipWorkBounds& receiverBounds, CsgClipWorkBounds& outWorkBounds);
+[[nodiscard]] b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes, const CsgClipWorkBounds& receiverBounds, CsgClipWorkBounds& outWorkBounds);
 
 struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;
@@ -120,4 +118,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

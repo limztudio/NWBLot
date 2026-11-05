@@ -191,6 +191,18 @@ void ReportMeshBufferSetupFailure(in BufferSetupFailure failure, in Name meshNam
     error("RendererSystem: failed to create {} buffer for mesh '{}'", label, meshName.resolvedText());
 }
 
+Expected<Name> DeriveMeshBufferName(in Name meshName, in StringView suffix, in StringView label){
+    Expected<Name> derived = makeUnexpected(Failure());
+    native(in meshName, in suffix, mut derived){
+        derived = DeriveName(meshName, suffix);
+    }
+    if(!derived.has_value()){
+        error("RendererSystem: failed to derive {} buffer name for mesh '{}'", label, meshName.resolvedText());
+        return makeUnexpected(Failure());
+    }
+    return derived.value();
+}
+
 b8 ValidateMeshRawBufferLogicalByteCount(
     in b8 hasBuffer,
     in u32 structStride,

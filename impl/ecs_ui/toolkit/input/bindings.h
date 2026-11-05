@@ -7,7 +7,7 @@
 
 #include <impl/ecs_ui/toolkit/global.h>
 
-#include <impl/ecs_ui/toolkit/input/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/input/default_key_bindings.adhd.h>
 
 #include <core/input/module.h>
 

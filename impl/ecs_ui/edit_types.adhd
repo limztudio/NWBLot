@@ -41,61 +41,100 @@ Expected<Point> ResolveLocalUiEditTextPosition(
 }
 
 Expected<usize> HitUiEditBoxGeometry(
-    in u64 generation,
-    in Span<EditBoxCaretStop> stops,
-    in Span<EditCaretLine> lines,
-    in u64 geometryModelGeneration,
-    in PopupToken geometryPopup,
-    in EditTextMode textMode,
-    in EditBoxPlacement placement,
+    in UiEditBoxGeometry geometry,
     in UiTextEditOwner owner,
     in PopupToken popup,
     in Point position
 ){
     const Expected<Point> local = ResolveLocalUiEditTextPosition(
-        generation,
-        stops,
-        lines,
-        geometryModelGeneration,
-        geometryPopup,
-        textMode,
-        placement,
+        geometry.generation,
+        geometry.stops,
+        geometry.lines,
+        geometry.modelGeneration,
+        geometry.popup,
+        geometry.textMode,
+        geometry.placement,
         owner,
         popup,
         position
     );
     if(!local.has_value())
         return makeUnexpected(Failure());
-    return HitEditCaretGeometry(lines, stops, local.value());
+    return HitEditCaretGeometry(geometry.lines, geometry.stops, local.value());
 }
 
 Expected<usize> HitUiEditBoxWordGeometry(
-    in u64 generation,
-    in Span<EditBoxCaretStop> stops,
-    in Span<EditCaretLine> lines,
-    in u64 geometryModelGeneration,
-    in PopupToken geometryPopup,
-    in EditTextMode textMode,
-    in EditBoxPlacement placement,
+    in UiEditBoxGeometry geometry,
     in UiTextEditOwner owner,
     in PopupToken popup,
     in Point position
 ){
     const Expected<Point> local = ResolveLocalUiEditTextPosition(
-        generation,
-        stops,
-        lines,
-        geometryModelGeneration,
-        geometryPopup,
-        textMode,
-        placement,
+        geometry.generation,
+        geometry.stops,
+        geometry.lines,
+        geometry.modelGeneration,
+        geometry.popup,
+        geometry.textMode,
+        geometry.placement,
         owner,
         popup,
         position
     );
     if(!local.has_value())
         return makeUnexpected(Failure());
-    return TryHitEditWordCaretGeometry(lines, stops, local.value());
+    return TryHitEditWordCaretGeometry(geometry.lines, geometry.stops, local.value());
+}
+
+void PublishUiEditBoxGeometry(
+    in PopupToken popup,
+    in EditBoxPlacement placement,
+    in Span<EditBoxCaretStop> stops,
+    in Span<EditCaretLine> lines,
+    in EditTextMode textMode,
+    in EditBoxOptions options,
+    in u64 generation,
+    in u64 revision,
+    in u64 externalRevision,
+    in u64 modelGeneration,
+    mut UiEditBoxGeometry outCandidate
+){
+    outCandidate.popup = popup;
+    outCandidate.placement = placement;
+    outCandidate.stops.clear();
+    outCandidate.stops.reserve(stops.size());
+    for(in EditBoxCaretStop stop : stops)
+        outCandidate.stops.push_back(stop);
+    outCandidate.lines.clear();
+    outCandidate.lines.reserve(lines.size());
+    for(in EditCaretLine line : lines)
+        outCandidate.lines.push_back(line);
+    outCandidate.textMode = textMode;
+    outCandidate.options = options;
+    outCandidate.generation = generation;
+    outCandidate.revision = revision;
+    outCandidate.externalRevision = externalRevision;
+    outCandidate.modelGeneration = modelGeneration;
+}
+
+void CommitUiEditBoxCandidateGeometry(in u64 generation, mut UiEditBoxGeometry inOutCandidate, mut UiEditBoxGeometry inOutDisplayed){
+    if(inOutCandidate.generation == generation){
+        inOutDisplayed = inOutCandidate;
+        inOutCandidate.generation = 0u;
+    }
+}
+
+b8 IsFocusedUiEditBoxEntryDisplayedReady(in UiEditBoxGeometry displayed, in UiTextEditOwner owner, in PopupToken popup){
+    return displayed.generation != 0u
+        && displayed.options.enabled
+        && displayed.modelGeneration == owner.modelGeneration
+        && displayed.popup == popup;
+}
+
+b8 IsUiEditBoxEntrySessionDisplayReady(in UiEditBoxGeometry displayed, in UiTextEditOwner owner, in PopupToken popup){
+    return displayed.generation != 0u
+        && displayed.modelGeneration == owner.modelGeneration
+        && displayed.popup == popup;
 }
 
 usize ComputeUiTextEditRetainedBytes(in EditCompositionView composition, in usize textLength, in usize selectionStart, in usize selectionEnd){

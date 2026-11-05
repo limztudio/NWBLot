@@ -42,32 +42,27 @@ public:
 
 public:
     [[nodiscard]] b8 snapshot(const EditModel& model){
-        const AStringView committed = model.text();
-        const EditCompositionView composition = model.composition();
-        AString<Core::Alloc::GlobalArena> display(*m_arena);
-        PaintVector<EditCaretMapping> stops(*m_arena);
-        usize preeditBytes = 0u;
-        if(!BuildEditBoxSnapshotInto(committed, model.graphemeBoundaries(), composition, model.textMode(), display, stops, preeditBytes))
-            return false;
-        m_display = Move(display);
-        m_mapping = Move(stops);
-        m_composing = composition.active;
-        ResolveEditBoxSnapshotRanges(
-            composition,
-            preeditBytes,
+        return CommitEditBoxSnapshot(
+            model.text(),
+            model.graphemeBoundaries(),
+            model.composition(),
+            model.textMode(),
             model.selectionStart(),
             model.selectionEnd(),
             model.caret(),
+            model.revision(),
+            m_display,
+            m_mapping,
+            m_selection,
             m_preedit,
             m_replacement,
-            m_selection,
-            m_caret
+            m_caret,
+            m_committedBytes,
+            m_revision,
+            m_textMode,
+            m_composing,
+            m_ready
         );
-        m_committedBytes = committed.size();
-        m_revision = model.revision();
-        m_textMode = model.textMode();
-        m_ready = false;
-        return true;
     }
 
     // request.text is supplied by the owned snapshot. Font size remains logical; TextService applies paint DPI.
@@ -119,27 +114,27 @@ public:
     }
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.
     [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
-        if(!m_ready || !ValidateEditBoxViewportArrangeInputs(bounds, viewport, clip, previousScroll, caretWidth))
-            return MakeUnexpected(Failure{});
-        const auto caret = m_geometry.caretRect(m_caret);
-        if(!caret)
-            return MakeUnexpected(Failure{});
-        const auto placement = TryComputeEditBoxViewportPlacement(bounds, viewport, clip, previousScroll, caretWidth, revealCaret, m_textMode, m_visualBounds, layout().measure(), *caret);
-        if(!placement)
-            return MakeUnexpected(Failure{});
-        auto selection = m_geometry.rangeOnLine(m_selection, 0u, caretWidth);
-        if(!selection)
-            return MakeUnexpected(Failure{});
-        Rect preeditUnderline{};
-        if(m_composing){
-            const auto underline = m_geometry.rangeOnLine(m_preedit, 0u, caretWidth);
-            if(!underline)
-                return MakeUnexpected(underline.error());
-            preeditUnderline = *underline;
-        }
-        if(!ValidateEditBoxArrangedSegments(*placement, caretWidth, *selection, preeditUnderline, m_composing))
-            return MakeUnexpected(Failure{});
-        return *placement;
+        return TryArrangeEditBoxViewport(
+            m_ready,
+            bounds,
+            viewport,
+            clip,
+            previousScroll,
+            caretWidth,
+            revealCaret,
+            m_textMode,
+            m_visualBounds,
+            layout().measure(),
+            m_geometry.layout().utf8(),
+            m_geometry.layout().lines(),
+            m_geometry.layout().clusters(),
+            m_geometry.boundaries(),
+            m_geometry.lines(),
+            m_caret,
+            m_selection,
+            m_preedit,
+            m_composing
+        );
     }
     [[nodiscard]] Expected<usize> hitTest(const Point point, const EditBoxPlacement& placement)const noexcept{
         if(!m_ready || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))

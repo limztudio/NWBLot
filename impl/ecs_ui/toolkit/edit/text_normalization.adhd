@@ -4,6 +4,10 @@
 
 #include <impl/ecs_ui/toolkit/edit/scalar_predicates.adhd>
 
+native{
+#include <global/unicode/grapheme.h>
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -178,6 +182,37 @@ void BuildErasedAroundSelectionEditString(in StringView currentText, in usize be
     outCandidate.append(currentText.substr(0u, prefixEnd));
     outCandidate.append(currentText.substr(start, end - start));
     outCandidate.append(currentText.substr(suffixStart, currentText.size() - suffixStart));
+}
+
+b8 TryBuildGraphemeBoundariesInto(in StringView text, in b8 singleLine, mut Vector<usize> outBoundaries){
+    if(!ValidateGraphemeText(text, singleLine) || text.size() == usize.max)
+        return false;
+    outBoundaries.clear();
+    outBoundaries.reserve(text.size() + 1u);
+    usize offset = 0u;
+    b8 valid = true;
+    native(in text, mut offset, mut outBoundaries, mut valid){
+        ::GraphemeBoundaryState state;
+        while(offset < text.size()){
+            const auto decoded = ::DecodeUtf8Scalar(text.substr(offset, ::s_Utf8MaxSequenceBytes));
+            if(!decoded){
+                valid = false;
+                break;
+            }
+            const u32 scalar = decoded->codePoint;
+            const ::GraphemeBreak::Enum current = ::LookupGraphemeBreak(scalar);
+            const ::IndicConjunct::Enum indic = ::LookupIndicConjunct(scalar);
+            const b8 pictograph = ::IsExtendedPictographic(scalar);
+            if(state.breaksBefore(current, indic, pictograph))
+                outBoundaries.push_back(offset);
+            state.advance(current, indic, pictograph);
+            offset += static_cast<usize>(decoded->byteCount);
+        }
+    }
+    if(!valid)
+        return false;
+    outBoundaries.push_back(text.size());
+    return true;
 }
 
 

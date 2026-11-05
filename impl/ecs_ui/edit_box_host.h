@@ -22,23 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct UiEditBoxGeometry{
-    Ui::PopupToken popup;
-    Ui::EditBoxPlacement placement;
-    Ui::PaintVector<Ui::EditBoxCaretStop> stops;
-    Ui::PaintVector<Ui::EditCaretLine> lines;
-    Ui::EditBoxOptions options;
-    Ui::EditTextMode::Enum textMode = Ui::EditTextMode::SingleLine;
-    u64 generation = 0u;
-    u64 revision = 0u;
-    u64 externalRevision = 0u;
-    u64 modelGeneration = 0u;
-
-
-public:
-    explicit UiEditBoxGeometry(Core::Alloc::GlobalArena& arena)noexcept : stops(arena), lines(arena){}
-};
-
 // The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
 class UiEditBoxHost final : public Ui::IEditBoxHost{
 private:
@@ -74,7 +57,7 @@ private:
 
 
     public:
-        explicit Entry(Core::Alloc::GlobalArena& arena)noexcept : expected(arena), candidate(arena), displayed(arena){}
+        explicit Entry(Core::Alloc::GlobalArena& arena)noexcept : expected(arena){}
     };
 
     struct Event{

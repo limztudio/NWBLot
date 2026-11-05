@@ -166,7 +166,7 @@ void UiEditBoxHost::synchronizeSession(const Ui::EditBoxOptions& options, const 
         model.cancelComposition();
         return;
     }
-    if(entry.displayed.generation == 0u || entry.displayed.modelGeneration != entry.owner.modelGeneration || entry.displayed.popup != entry.popup)
+    if(!IsUiEditBoxEntrySessionDisplayReady(entry.displayed, entry.owner, entry.popup))
         return;
     if(m_session.token().valid() && m_session.owner() != entry.owner && !m_session.cancel())
         TerminateInvariant();

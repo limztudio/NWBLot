@@ -11,6 +11,7 @@ using Ui::DisplayMetrics;
 namespace EditAction = Ui::EditAction;
 namespace EditClipboardAction = Ui::EditClipboardAction;
 using Ui::EditBoxCaretStop;
+using Ui::EditBoxOptions;
 using Ui::EditBoxPlacement;
 using Ui::EditBoxResult;
 using Ui::EditCaretLine;
@@ -90,6 +91,19 @@ class UiTextEditOwner{
 
     public WidgetId widget;
     public u64 declarationGeneration = 0u;
+    public u64 modelGeneration = 0u;
+}
+
+class UiEditBoxGeometry{
+    public PopupToken popup;
+    public EditBoxPlacement placement;
+    public Vector<EditBoxCaretStop> stops;
+    public Vector<EditCaretLine> lines;
+    public EditBoxOptions options;
+    public EditTextMode textMode = EditTextMode::SingleLine;
+    public u64 generation = 0u;
+    public u64 revision = 0u;
+    public u64 externalRevision = 0u;
     public u64 modelGeneration = 0u;
 }
 

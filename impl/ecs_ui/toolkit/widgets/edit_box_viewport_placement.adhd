@@ -246,5 +246,55 @@ void OffsetEditBoxSegmentOrigin(in Point textOrigin, mut Rect inOutSegment){
     inOutSegment.y += textOrigin.y;
 }
 
+b8 CommitEditBoxSnapshot(
+    in StringView committed,
+    in Span<usize> graphemeBoundaries,
+    in EditCompositionView composition,
+    in EditTextMode textMode,
+    in usize selectionStart,
+    in usize selectionEnd,
+    in usize modelCaret,
+    in u64 modelRevision,
+    mut String outDisplay,
+    mut Vector<EditCaretMapping> outMapping,
+    mut EditBoxRange outSelection,
+    mut EditBoxRange outPreedit,
+    mut EditBoxRange outReplacement,
+    mut usize outCaret,
+    mut usize outCommittedBytes,
+    mut u64 outRevision,
+    mut EditTextMode outTextMode,
+    mut b8 outComposing,
+    mut b8 outReady
+){
+    String display;
+    Vector<EditCaretMapping> stops;
+    usize preeditBytes = 0u;
+    if(!BuildEditBoxSnapshotInto(committed, graphemeBoundaries, composition, textMode, display, stops, preeditBytes))
+        return false;
+    outDisplay.assign(display);
+    outMapping.clear();
+    outMapping.reserve(stops.size());
+    for(in EditCaretMapping stop : stops)
+        outMapping.push_back(stop);
+    outComposing = composition.active;
+    ResolveEditBoxSnapshotRanges(
+        composition,
+        preeditBytes,
+        selectionStart,
+        selectionEnd,
+        modelCaret,
+        outPreedit,
+        outReplacement,
+        outSelection,
+        outCaret
+    );
+    outCommittedBytes = committed.size();
+    outRevision = modelRevision;
+    outTextMode = textMode;
+    outReady = false;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

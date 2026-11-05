@@ -142,13 +142,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             return;
         }
         const auto byte = HitUiEditBoxGeometry(
-            entry->displayed.generation,
-            entry->displayed.stops,
-            entry->displayed.lines,
-            entry->displayed.modelGeneration,
-            entry->displayed.popup,
-            entry->displayed.textMode,
-            entry->displayed.placement,
+            entry->displayed,
             entry->owner,
             entry->popup,
             input.position
@@ -158,13 +152,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             return;
         }
         const auto wordByte = HitUiEditBoxWordGeometry(
-            entry->displayed.generation,
-            entry->displayed.stops,
-            entry->displayed.lines,
-            entry->displayed.modelGeneration,
-            entry->displayed.popup,
-            entry->displayed.textMode,
-            entry->displayed.placement,
+            entry->displayed,
             entry->owner,
             entry->popup,
             input.position

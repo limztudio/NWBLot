@@ -26,8 +26,7 @@ NWB_IMPL_UI_BEGIN
 class EditCaretGeometry final{
 public:
     explicit EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept
-        : m_arena(MakeNotNull(&arena))
-        , m_layout(arena)
+        : m_layout(arena)
         , m_boundaries(arena)
         , m_stops(arena)
         , m_lines(arena)
@@ -45,21 +44,26 @@ public:
 public:
     // Mapping is supplied by the committed/preedit snapshot; adoption is atomic.
     [[nodiscard]] b8 adoptLayout(TextLayout&& layout, const StringView expectedText, const Span<const EditCaretMapping> mapping, const usize committedBytes, const EditTextMode::Enum mode){
-        if(!ValidateEditCaretAdoptionRequest(layout.utf8(), layout.fontSize(), layout.lines(), layout.clusters(), layout.glyphs().size(), layout.measure(), layout.inkBounds(), expectedText, mapping, committedBytes, mode))
-            return false;
         if(!ValidateEditCaretClusterGlyphs(layout.clusters(), layout.glyphs()))
             return false;
-        auto boundaries = GraphemeSegmentation::Build(*m_arena, expectedText, mode == EditTextMode::SingleLine);
-        if(!boundaries)
-            return false;
-        PaintVector<EditBoxCaretStop> stops(*m_arena);
-        PaintVector<EditCaretLine> lines(*m_arena);
-        if(!BuildEditCaretStopsAndLinesInto(expectedText, layout.lines(), layout.clusters(), *boundaries, committedBytes, mapping, stops, lines))
+        if(!AdoptEditCaretGeometryInto(
+            layout.utf8(),
+            layout.fontSize(),
+            layout.lines(),
+            layout.clusters(),
+            layout.glyphs().size(),
+            layout.measure(),
+            layout.inkBounds(),
+            expectedText,
+            mapping,
+            committedBytes,
+            mode,
+            m_boundaries,
+            m_stops,
+            m_lines
+        ))
             return false;
         m_layout = Move(layout);
-        m_boundaries = Move(*boundaries);
-        m_stops = Move(stops);
-        m_lines = Move(lines);
         m_mode = mode;
         m_ready = true;
         return true;
@@ -101,7 +105,6 @@ public:
 
 
 private:
-    NotNull<Core::Alloc::GlobalArena*> m_arena;
     TextLayout m_layout;
     EditBoundaryVector m_boundaries;
     PaintVector<EditBoxCaretStop> m_stops;

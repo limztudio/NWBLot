@@ -35,9 +35,12 @@ namespace GraphemeSegmentation{
 
 // General segmentation accepts controls; single-line editing rejects line breaks and NUL.
 [[nodiscard]] inline Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, const AStringView text, const b8 singleLine = false){
-    if(!Validate(text, singleLine))
+    if(!Validate(text, singleLine) || text.size() == Limit<usize>::s_Max)
         return MakeUnexpected(Failure{});
-    return BuildGraphemeBoundaries(arena, text);
+    EditBoundaryVector boundaries(arena);
+    if(!TryBuildGraphemeBoundariesInto(text, singleLine, boundaries))
+        return MakeUnexpected(Failure{});
+    return boundaries;
 }
 
 

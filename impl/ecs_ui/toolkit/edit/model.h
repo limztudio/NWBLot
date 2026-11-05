@@ -39,8 +39,7 @@ private:
 
 public:
     explicit EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits = {}, const EditTextMode::Enum mode = EditTextMode::SingleLine)
-        : m_arena(arena)
-        , m_instanceGeneration(NextIdentity())
+        : m_instanceGeneration(NextIdentity())
         , m_limits(ClampEditLimits(limits))
         , m_text(arena)
         , m_boundaries(arena)
@@ -94,14 +93,10 @@ public:
     }
 
     [[nodiscard]] b8 setText(const AStringView value){
-        if(value.size() > m_limits.maxBytes)
-            return false;
-        auto boundaries = buildBoundaries(value);
-        if(!boundaries)
-            return false;
-        CommitEditModelSetText(
+        return ApplyEditModelSetText(
             value,
-            *boundaries,
+            m_limits.maxBytes,
+            m_textMode,
             m_text,
             m_boundaries,
             m_anchor,
@@ -120,7 +115,6 @@ public:
             m_revision,
             m_externalRevision
         );
-        return true;
     }
 
     [[nodiscard]] b8 setSelection(const usize anchor, const usize caret)noexcept{
@@ -193,23 +187,10 @@ public:
 
     // Native selection surrounding deletion retains selected bytes and direction, rejecting merged endpoint seams.
     [[nodiscard]] b8 eraseAroundSelection(const usize beforeBytes, const usize afterBytes){
-        const usize start = selectionStart();
-        const usize end = selectionEnd();
-        if(beforeBytes == 0u && afterBytes == 0u)
-            return beforeBytes <= start && afterBytes <= m_text.size() - end;
-        if(!CanEraseAroundEditSelection(beforeBytes, afterBytes, start, end, m_text.size(), m_boundaries))
-            return false;
-
-        AString<Core::Alloc::GlobalArena> candidate(m_arena);
-        BuildErasedAroundSelectionEditString(text(), beforeBytes, afterBytes, start, end, candidate);
-        const AStringView after(candidate.data(), candidate.size());
-        auto boundaries = buildBoundaries(after);
-        if(!boundaries)
-            return false;
-        return CommitEditModelEraseAroundSelection(
-            after,
-            *boundaries,
+        return ApplyEditModelEraseAroundSelection(
             beforeBytes,
+            afterBytes,
+            m_textMode,
             m_limits.maxHistoryRecords,
             m_limits.maxHistoryBytes,
             m_text,
@@ -307,20 +288,13 @@ public:
 
 private:
     [[nodiscard]] b8 replaceRange(const usize begin, const usize end, const AStringView replacement){
-        if(!CanReplaceEditRange(begin, end, replacement.size(), m_text.size(), m_limits.maxBytes, m_boundaries) || !ValidateEditTextForMode(replacement, m_textMode))
-            return false;
-        AString<Core::Alloc::GlobalArena> candidate(m_arena);
-        BuildReplacedEditString(text(), begin, end, replacement, candidate);
-        const AStringView after(candidate.data(), candidate.size());
-        auto boundaries = buildBoundaries(after);
-        if(!boundaries)
-            return false;
         // Inserted combining marks and neighboring emoji may merge clusters; keep the caret at a valid following edge.
-        CommitEditModelReplaceRange(
-            after,
-            *boundaries,
+        return ApplyEditModelReplaceRange(
             begin,
-            replacement.size(),
+            end,
+            replacement,
+            m_limits.maxBytes,
+            m_textMode,
             m_limits.maxHistoryRecords,
             m_limits.maxHistoryBytes,
             m_text,
@@ -340,25 +314,15 @@ private:
             m_compositionGeneration,
             m_revision
         );
-        return true;
-    }
-
-    [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(const AStringView value)const{
-        if(m_textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
-            return MakeUnexpected(Failure{});
-        return GraphemeSegmentation::Build(m_arena, value, m_textMode == EditTextMode::SingleLine);
     }
 
     [[nodiscard]] b8 restoreHistoryState(const AStringView value, const usize anchor, const usize caret, const isize cursorDelta){
-        auto boundaries = buildBoundaries(value);
-        if(!boundaries)
-            return false;
-        CommitEditModelRestoreHistoryState(
+        return ApplyEditModelRestoreHistoryState(
             value,
-            *boundaries,
             anchor,
             caret,
             cursorDelta,
+            m_textMode,
             m_text,
             m_boundaries,
             m_anchor,
@@ -374,12 +338,10 @@ private:
             m_compositionGeneration,
             m_revision
         );
-        return true;
     }
 
 
 private:
-    Core::Alloc::GlobalArena& m_arena;
     const u64 m_instanceGeneration;
     const EditLimits m_limits;
     AString<Core::Alloc::GlobalArena> m_text;

@@ -586,5 +586,229 @@ void ClearEditModelSnapshot(
     outExpectedExternalRevision = 0u;
 }
 
+b8 TryBuildEditModelBoundaries(in StringView value, in EditTextMode textMode, mut Vector<usize> outBoundaries){
+    if(textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
+        return false;
+    return TryBuildGraphemeBoundariesInto(value, textMode == EditTextMode::SingleLine, outBoundaries);
+}
+
+b8 ApplyEditModelSetText(
+    in StringView value,
+    in usize maxBytes,
+    in EditTextMode textMode,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize outAnchor,
+    mut usize outCaret,
+    mut u64 inOutSelectionGeneration,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize outHistoryCursor,
+    mut usize outHistoryBytes,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision,
+    mut u64 inOutExternalRevision
+){
+    if(value.size() > maxBytes)
+        return false;
+    Vector<usize> boundaries;
+    if(!TryBuildEditModelBoundaries(value, textMode, boundaries))
+        return false;
+    CommitEditModelSetText(
+        value,
+        boundaries,
+        inOutText,
+        inOutBoundaries,
+        outAnchor,
+        outCaret,
+        inOutSelectionGeneration,
+        inOutHistory,
+        outHistoryCursor,
+        outHistoryBytes,
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration,
+        inOutRevision,
+        inOutExternalRevision
+    );
+    return true;
+}
+
+b8 ApplyEditModelEraseAroundSelection(
+    in usize beforeBytes,
+    in usize afterBytes,
+    in EditTextMode textMode,
+    in usize maxHistoryRecords,
+    in usize maxHistoryBytes,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize inOutAnchor,
+    mut usize inOutCaret,
+    mut u64 inOutSelectionGeneration,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize inOutHistoryCursor,
+    mut usize inOutHistoryBytes,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision
+){
+    const usize start = min(inOutAnchor, inOutCaret);
+    const usize end = max(inOutAnchor, inOutCaret);
+    if(beforeBytes == 0u && afterBytes == 0u)
+        return beforeBytes <= start && afterBytes <= inOutText.size() - end;
+    if(!CanEraseAroundEditSelection(beforeBytes, afterBytes, start, end, inOutText.size(), inOutBoundaries))
+        return false;
+
+    String candidate;
+    BuildErasedAroundSelectionEditString(inOutText, beforeBytes, afterBytes, start, end, candidate);
+    Vector<usize> boundaries;
+    if(!TryBuildEditModelBoundaries(candidate, textMode, boundaries))
+        return false;
+    return CommitEditModelEraseAroundSelection(
+        candidate,
+        boundaries,
+        beforeBytes,
+        maxHistoryRecords,
+        maxHistoryBytes,
+        inOutText,
+        inOutBoundaries,
+        inOutAnchor,
+        inOutCaret,
+        inOutSelectionGeneration,
+        inOutHistory,
+        inOutHistoryCursor,
+        inOutHistoryBytes,
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration,
+        inOutRevision
+    );
+}
+
+b8 ApplyEditModelReplaceRange(
+    in usize begin,
+    in usize end,
+    in StringView replacement,
+    in usize maxBytes,
+    in EditTextMode textMode,
+    in usize maxHistoryRecords,
+    in usize maxHistoryBytes,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize inOutAnchor,
+    mut usize inOutCaret,
+    mut u64 inOutSelectionGeneration,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize inOutHistoryCursor,
+    mut usize inOutHistoryBytes,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision
+){
+    if(!CanReplaceEditRange(begin, end, replacement.size(), inOutText.size(), maxBytes, inOutBoundaries) || !ValidateEditTextForMode(replacement, textMode))
+        return false;
+    String candidate;
+    BuildReplacedEditString(inOutText, begin, end, replacement, candidate);
+    Vector<usize> boundaries;
+    if(!TryBuildEditModelBoundaries(candidate, textMode, boundaries))
+        return false;
+    CommitEditModelReplaceRange(
+        candidate,
+        boundaries,
+        begin,
+        replacement.size(),
+        maxHistoryRecords,
+        maxHistoryBytes,
+        inOutText,
+        inOutBoundaries,
+        inOutAnchor,
+        inOutCaret,
+        inOutSelectionGeneration,
+        inOutHistory,
+        inOutHistoryCursor,
+        inOutHistoryBytes,
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration,
+        inOutRevision
+    );
+    return true;
+}
+
+b8 ApplyEditModelRestoreHistoryState(
+    in StringView value,
+    in usize anchor,
+    in usize caret,
+    in isize cursorDelta,
+    in EditTextMode textMode,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize outAnchor,
+    mut usize outCaret,
+    mut u64 inOutSelectionGeneration,
+    mut usize inOutHistoryCursor,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision
+){
+    Vector<usize> boundaries;
+    if(!TryBuildEditModelBoundaries(value, textMode, boundaries))
+        return false;
+    CommitEditModelRestoreHistoryState(
+        value,
+        boundaries,
+        anchor,
+        caret,
+        cursorDelta,
+        inOutText,
+        inOutBoundaries,
+        outAnchor,
+        outCaret,
+        inOutSelectionGeneration,
+        inOutHistoryCursor,
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration,
+        inOutRevision
+    );
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -52,18 +52,19 @@ b8 UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& 
     Entry* entry = find(widget.id);
     if(!entry || entry->owner.declarationGeneration != widget.declarationGeneration || entry->popup != m_context.popupToken() || !view.ready())
         return false;
-    UiEditBoxGeometry candidate(m_arena);
-    candidate.popup = entry->popup;
-    candidate.placement = placement;
-    candidate.stops.assign(view.caretStops().begin(), view.caretStops().end());
-    candidate.lines.assign(view.caretGeometry().lines().begin(), view.caretGeometry().lines().end());
-    candidate.textMode = view.textMode();
-    candidate.options = options;
-    candidate.generation = m_generation;
-    candidate.revision = entry->expected.m_expectedRevision;
-    candidate.externalRevision = entry->expected.m_expectedExternalRevision;
-    candidate.modelGeneration = entry->owner.modelGeneration;
-    entry->candidate = Move(candidate);
+    PublishUiEditBoxGeometry(
+        entry->popup,
+        placement,
+        view.caretStops(),
+        view.caretGeometry().lines(),
+        view.textMode(),
+        options,
+        m_generation,
+        entry->expected.m_expectedRevision,
+        entry->expected.m_expectedExternalRevision,
+        entry->owner.modelGeneration,
+        entry->candidate
+    );
     return true;
 }
 
@@ -96,12 +97,8 @@ void UiEditBoxHost::commitFrame(const u64 generation){
         return;
     if(m_context.input().layoutGeneration() != generation)
         return;
-    for(auto& entry : m_entries){
-        if(entry.candidate.generation == generation){
-            entry.displayed = Move(entry.candidate);
-            entry.candidate.generation = 0u;
-        }
-    }
+    for(auto& entry : m_entries)
+        CommitUiEditBoxCandidateGeometry(generation, entry.candidate, entry.displayed);
     if(m_session.token().valid()){
         const Entry* entry = find(m_session.owner().widget);
         if(entry && entry->owner == m_session.owner() && entry->displayed.generation == generation){
@@ -201,7 +198,7 @@ const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const 
 
 const UiEditBoxHost::Entry* UiEditBoxHost::focusedTextEntry()const noexcept{
     const Entry* entry = find(m_context.input().focus());
-    if(!entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled || entry->displayed.modelGeneration != entry->owner.modelGeneration || entry->displayed.popup != entry->popup)
+    if(!entry || !IsFocusedUiEditBoxEntryDisplayedReady(entry->displayed, entry->owner, entry->popup))
         return nullptr;
     const Ui::HitTarget* target = m_context.input().findTarget(entry->widget.id, entry->owner.declarationGeneration);
     return target && target->enabled && target->textEditable && target->popup == entry->popup ? entry : nullptr;

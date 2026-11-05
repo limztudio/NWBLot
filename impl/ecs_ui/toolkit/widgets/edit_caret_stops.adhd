@@ -212,5 +212,89 @@ b8 BuildEditCaretStopsAndLinesInto(
     return true;
 }
 
+b8 AdoptEditCaretGeometryInto(
+    in StringView layoutText,
+    in f32 layoutFontSize,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in usize glyphCount,
+    in Point measure,
+    in Rect ink,
+    in StringView expectedText,
+    in Span<EditCaretMapping> mapping,
+    in usize committedBytes,
+    in EditTextMode mode,
+    mut Vector<usize> outBoundaries,
+    mut Vector<EditBoxCaretStop> outStops,
+    mut Vector<EditCaretLine> outLines
+){
+    if(!ValidateEditCaretAdoptionRequest(layoutText, layoutFontSize, textLines, clusters, glyphCount, measure, ink, expectedText, mapping, committedBytes, mode))
+        return false;
+    Vector<usize> boundaries;
+    if(!TryBuildGraphemeBoundariesInto(expectedText, mode == EditTextMode::SingleLine, boundaries))
+        return false;
+    Vector<EditBoxCaretStop> stops;
+    Vector<EditCaretLine> lines;
+    if(!BuildEditCaretStopsAndLinesInto(expectedText, textLines, clusters, boundaries, committedBytes, mapping, stops, lines))
+        return false;
+    outBoundaries.clear();
+    outBoundaries.reserve(boundaries.size());
+    for(in usize boundary : boundaries)
+        outBoundaries.push_back(boundary);
+    outStops.clear();
+    outStops.reserve(stops.size());
+    for(in EditBoxCaretStop stop : stops)
+        outStops.push_back(stop);
+    outLines.clear();
+    outLines.reserve(lines.size());
+    for(in EditCaretLine line : lines)
+        outLines.push_back(line);
+    return true;
+}
+
+Expected<EditBoxPlacement> TryArrangeEditBoxViewport(
+    in b8 ready,
+    in Rect bounds,
+    in Rect viewport,
+    in Rect clip,
+    in Point previousScroll,
+    in f32 caretWidth,
+    in b8 revealCaret,
+    in EditTextMode textMode,
+    in Rect visualBounds,
+    in Point logicalSize,
+    in StringView utf8Text,
+    in Span<TextLine> textLines,
+    in Span<TextCluster> clusters,
+    in Span<usize> boundaries,
+    in Span<EditCaretLine> caretLines,
+    in usize displayCaret,
+    in EditBoxRange selectionRange,
+    in EditBoxRange preeditRange,
+    in b8 composing
+){
+    if(!ready || !ValidateEditBoxViewportArrangeInputs(bounds, viewport, clip, previousScroll, caretWidth))
+        return makeUnexpected(Failure());
+    const Expected<Rect> caret = ResolveEditCaretRect(utf8Text, textLines, clusters, boundaries, displayCaret);
+    if(!caret.has_value())
+        return makeUnexpected(Failure());
+    const Expected<EditBoxPlacement> placement = TryComputeEditBoxViewportPlacement(bounds, viewport, clip, previousScroll, caretWidth, revealCaret, textMode, visualBounds, logicalSize, caret.value());
+    if(!placement.has_value())
+        return makeUnexpected(Failure());
+    const Expected<Rect> selection = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, selectionRange, 0u, caretWidth);
+    if(!selection.has_value())
+        return makeUnexpected(Failure());
+    Rect preeditUnderline;
+    if(composing){
+        const Expected<Rect> underline = ResolveEditCaretRangeOnLine(utf8Text, textLines, clusters, boundaries, caretLines, preeditRange, 0u, caretWidth);
+        if(!underline.has_value())
+            return makeUnexpected(underline.error());
+        preeditUnderline = underline.value();
+    }
+    if(!ValidateEditBoxArrangedSegments(placement.value(), caretWidth, selection.value(), preeditUnderline, composing))
+        return makeUnexpected(Failure());
+    return placement.value();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

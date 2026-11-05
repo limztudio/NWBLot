@@ -1,0 +1,192 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class ShadowCombinedTemporalPushConstants{
+    public f32x4x4 prevWorldToClip(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+    public u32 lightSlotCount = 0u;
+    public u32 historyValid = 0u;
+    public u32 geometryCurrSlot = 0u;
+    public u32 geometryPrevSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 opaqueSoftTraceSlot = 0u;
+    public u32 opaqueHistoryInSlot = 0u;
+    public u32 opaqueMomentsInSlot = 0u;
+    public u32 opaqueHistoryOutSlot = 0u;
+    public u32 opaqueMomentsOutSlot = 0u;
+    public u32 transparentSoftTraceSlot = 0u;
+    public u32 transparentHistoryInSlot = 0u;
+    public u32 transparentMomentsInSlot = 0u;
+    public u32 transparentHistoryOutSlot = 0u;
+    public u32 transparentMomentsOutSlot = 0u;
+}
+
+// Dedicated transparent trace ABI leaves all opaque, hardware and coarse software kernels unchanged.
+[serialize]
+class SoftwareTransparentSamplingPush{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 instanceCount = 0u;
+    public u32 frameIndex = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 transparentSoftHalfStorageSlot = 0u;
+    public u32 softSampleCount = s_SwShadowTransparentSpp;
+    public u32 historyValid = 0u;
+    public u32 geometryCurrSlot = 0u;
+    public u32 geometryPrevSlot = 0u;
+    public u32 momentsInSlot = 0u;
+    public Array<f32, 16u> prevWorldToClip;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// CPU mirror of the heap-only software-shadow selector block.
+[serialize]
+class SwShadowHeapPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 instanceCount = 0u;
+    public u32 frameIndex = 0u;
+    public u32 coarseWidth = 0u;
+    public u32 coarseHeight = 0u;
+    public f32 edgeThreshold = 0.1f;
+    public u32 edgeCapacity = 0u;
+    public u32 traceGroupSize = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+    public u32 coarseStorageSlot = 0u;
+    public u32 softHalfStorageSlot = 0u;
+    public u32 transparentSoftHalfStorageSlot = 0u;
+    public u32 edgeCounterStorageSlot = 0u;
+    public u32 edgeListStorageSlot = 0u;
+    public u32 indirectArgsStorageSlot = 0u;
+    public u32 softSampleCount = s_SwShadowTransparentSpp;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// CPU mirror of hardware RayQuery shadow push constants.
+[serialize]
+class ShadowRqPushConstants{
+    public u32 frameIndex = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+}
+
+// CPU mirror of half-resolution hardware soft-shadow push constants.
+[serialize]
+class ShadowRqSoftPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 frameIndex = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+    public u32 softSampleCount = s_SwShadowTransparentSpp;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// CPU mirror of NwbShadowResolvePushConstants.
+[serialize]
+class ShadowResolvePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 stepWidth = 1u;
+    public u32 stage = 1u;
+    public u32 lightSlotStart = 0u;
+    public u32 lightSlotCount = 0u;
+    public u32 momentsValid = 0u;
+    public u32 upsampleFold = 0u;
+    public u32 geometrySlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 inputColorSlot = 0u;
+    public u32 momentsSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+    public u32 visibilityStorageSlot = 0u;
+    public u32 sceneShadingSlot = 0u;
+    public u32 opaqueInputColorSlot = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// The combined wavelet extends the shared resolve ABI with opaque moments and output.
+[serialize]
+class ShadowCombinedWaveletPushConstants{
+    public ShadowResolvePushConstants resolve;
+    public u32 opaqueMomentsSlot = 0u;
+    public u32 opaqueMomentsValid = 0u;
+    public u32 opaqueOutputStorageSlot = 0u;
+}
+
+// CPU mirror of shadow geometry-downsample push constants.
+[serialize]
+class ShadowGeometryDownsamplePushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 depthSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+    public u32 sceneShadingSlot = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+// CPU mirror of temporal shadow-reprojection push constants.
+[serialize]
+class ShadowReprojectMergePushConstants{
+    public Array<f32, 16u> prevWorldToClip;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 halfWidth = 0u;
+    public u32 halfHeight = 0u;
+    public u32 lightSlotStart = 0u;
+    public u32 lightSlotCount = 0u;
+    public u32 historyValid = 0u;
+    public u32 softTraceSlot = 0u;
+    public u32 historyInSlot = 0u;
+    public u32 momentsInSlot = 0u;
+    public u32 geometryCurrSlot = 0u;
+    public u32 geometryPrevSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 historyOutputStorageSlot = 0u;
+    public u32 momentsOutputStorageSlot = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+[serialize]
+class HardwareTransparentShadowPushConstants{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 frameIndex = 0u;
+    public u32 lightSlot = 0u;
+    public u32 sampleIndex = 0u;
+    public u32 sampleCount = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 crossingsHeapSlot = 0u;
+    public u32 overflowListHeapSlot = 0u;
+    public u32 overflowArgsHeapSlot = 0u;
+    public u32 outputStorageSlot = 0u;
+    public u32 receiverFactor = s_ShadowReceiverFactorHalf;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

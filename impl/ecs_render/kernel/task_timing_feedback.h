@@ -98,7 +98,6 @@ public:
 
 
 private:
-    [[nodiscard]] b8 collectsScope(const Name& scopeName)const noexcept;
     void onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept;
 
 

@@ -151,24 +151,24 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         commandList.setEnableUavBarriersForTexture(resources.momentsOut, true);
         commandList.commitBarriers();
 
-        ShadowReprojectMergePushConstants push;
-        push.receiverFactor = targets.shadowReceiverFactor;
-        NWB_MEMCPY(&push.prevWorldToClip, sizeof(push.prevWorldToClip), &m_rayTracingState.m_prevWorldToClip, sizeof(push.prevWorldToClip));
-        push.width = targets.width;
-        push.height = targets.height;
-        push.halfWidth = softHalfWidth;
-        push.halfHeight = softHalfHeight;
-        push.lightSlotStart = 0u;
-        push.lightSlotCount = slotRangeCount;
-        push.historyValid = historyValid;
-        push.softTraceSlot = resources.softTraceSlot;
-        push.historyInSlot = resources.historyInSlot;
-        push.momentsInSlot = resources.momentsInSlot;
-        push.geometryCurrSlot = targets.bindless.shadowSoftGeometry.slot();
-        push.geometryPrevSlot = targets.bindless.shadowSoftGeometryPrev.slot();
-        push.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        push.historyOutputStorageSlot = resources.historyOutStorageSlot;
-        push.momentsOutputStorageSlot = resources.momentsOutStorageSlot;
+        const ShadowReprojectMergePushConstants push = MakeShadowReprojectMergePushConstants(
+            Span<const f32>(m_rayTracingState.m_prevWorldToClip.raw, 16u),
+            targets.width,
+            targets.height,
+            softHalfWidth,
+            softHalfHeight,
+            slotRangeCount,
+            historyValid,
+            resources.softTraceSlot,
+            resources.historyInSlot,
+            resources.momentsInSlot,
+            targets.bindless.shadowSoftGeometry.slot(),
+            targets.bindless.shadowSoftGeometryPrev.slot(),
+            targets.bindless.gbufferWorldPosition.slot(),
+            resources.historyOutStorageSlot,
+            resources.momentsOutStorageSlot,
+            targets.shadowReceiverFactor
+        );
 
         commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_shadowReprojectMergePipeline));
         heap.bindCompute(commandList, *m_rayTracingState.m_shadowReprojectMergePipeline.get());
@@ -275,21 +275,22 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                     commandList.setTextureState(frontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                     commandList.commitBarriers();
                 }
-                SoftwareTransparentSamplingPush tracePush;
-                tracePush.receiverFactor = targets.shadowReceiverFactor;
-                tracePush.width = targets.width;
-                tracePush.height = targets.height;
-                tracePush.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
-                tracePush.frameIndex = frameIndex;
-                tracePush.softSampleCount = transparentShadowSampleCount();
-                tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-                tracePush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-                tracePush.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
-                tracePush.historyValid = samplingHistoryUsable ? 1u : 0u;
-                tracePush.geometryCurrSlot = targets.bindless.shadowSoftGeometry.slot();
-                tracePush.geometryPrevSlot = targets.bindless.shadowSoftGeometryPrev.slot();
-                tracePush.momentsInSlot = frontIsA ? targets.bindless.transparentMomentsA.slot() : targets.bindless.transparentMomentsB.slot();
-                NWB_MEMCPY(&tracePush.prevWorldToClip, sizeof(tracePush.prevWorldToClip), &m_rayTracingState.m_prevWorldToClip, sizeof(tracePush.prevWorldToClip));
+                const SoftwareTransparentSamplingPush tracePush = MakeSoftwareTransparentSamplingPush(
+                    Span<const f32>(m_rayTracingState.m_prevWorldToClip.raw, 16u),
+                    targets.width,
+                    targets.height,
+                    m_rayTracingState.m_sceneBvhInstanceCount,
+                    frameIndex,
+                    transparentShadowSampleCount(),
+                    targets.bindless.slotsBufferDescriptor.slot(),
+                    m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
+                    targets.bindless.transparentSoftHalfStorage.slot(),
+                    samplingHistoryUsable,
+                    targets.bindless.shadowSoftGeometry.slot(),
+                    targets.bindless.shadowSoftGeometryPrev.slot(),
+                    frontIsA ? targets.bindless.transparentMomentsA.slot() : targets.bindless.transparentMomentsB.slot(),
+                    targets.shadowReceiverFactor
+                );
                 const auto& pipeline = m_rayTracingState.m_softwareTransparentSampling.m_pipelines[samplingHistoryUsable ? 1u : 0u];
                 commandList.setComputeState(RayTracingDetail::MakeComputePassState(pipeline));
                 heap.bindCompute(commandList, *pipeline.get());

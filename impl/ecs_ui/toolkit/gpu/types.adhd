@@ -2,137 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/paint_types.adhd>
+#include <impl/ecs_ui/toolkit/gpu/push_constants.adhd>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const usize s_GpuTargetSlotCount = 3u;
-const usize s_GpuFrameCount = 4u;
-// Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
-const usize s_GpuRasterFixedResourceUses = 4u;
-const usize s_GpuRasterDependencyCapacity = 3u;
-const usize s_GpuInitialVertexCapacity = 4096u;
-const usize s_GpuInitialIndexCapacity = 12288u;
-const u32 s_GpuFullscreenTriangleVertexCount = 3u;
-const u32 s_GpuTimingHeightShift = 16u;
-const u32 s_GpuFrameTimingQueryCount = 2u;
-const u32 s_GpuRgbChannelCount = 3u;
-const u32 s_GpuRgbaChannelCount = 4u;
-const u32 s_GpuOutputResourceUseCount = 2u;
-const f32 s_GpuClipSpaceExtent = 2.0f;
-const StringView s_GpuTextureImageMarkerLabel = "UI Texture Image";
-const StringView s_GpuTextureImageReadyMarkerLabel = "UI Texture Image Upload Completion";
-const StringView s_GpuLayerReadyMarkerLabel = "UI Layer Initialization Completion";
-const StringView s_GpuLayerMarkerLabel = "UI Linear Layer";
-const StringView s_GpuAtlasReadyMarkerLabel = "UI Atlas Upload Completion";
-const StringView s_GpuAtlasMarkerLabel = "UI Atlas";
-const StringView s_GpuRasterPipelineMarkerLabel = "UI Raster Pipeline";
-const StringView s_GpuVerticesMarkerLabel = "UI Vertices";
-const StringView s_GpuIndicesMarkerLabel = "UI Indices";
-const StringView s_GpuVertexUploadMarkerLabel = "UI Vertex Upload";
-const StringView s_GpuIndexUploadMarkerLabel = "UI Index Upload";
-const StringView s_GpuClearMarkerLabel = "UI Transparent Clear";
-const StringView s_GpuRasterMarkerLabel = "UI Raster";
-const StringView s_GpuTargetInitMarkerLabel = "UI Target Initialization";
-const StringView s_GpuTargetInitClearMarkerLabel = "UI Target Initialization Clear";
-const StringView s_GpuTargetInitReadyMarkerLabel = "UI Target Ready";
-const StringView s_GpuGlyphPageReadyMarkerLabel = "UI Glyph Page Upload Completion";
-const StringView s_GpuGlyphPageMarkerLabel = "UI Glyph Coverage Page";
-const StringView s_GpuSdfPageReadyMarkerLabel = "UI SDF Page Upload Completion";
-const StringView s_GpuSdfPageMarkerLabel = "UI Linear SDF Page";
-const StringView s_GpuFrameTimingBeginMarkerLabel = "UI Frame Timing Begin";
-const StringView s_GpuAcquiredMarkerLabel = "UI Acquired Image";
-const StringView s_GpuBackBufferMarkerLabel = "UI Acquired Backbuffer";
-const StringView s_GpuOutputPipelineMarkerLabel = "UI Output Pipeline";
-const StringView s_GpuStandaloneOutputMarkerLabel = "UI Standalone Output";
-const StringView s_GpuFrameTimingEndMarkerLabel = "UI Frame Timing End";
-const Name s_GpuLayerTextureName = "ui.layer";
-const Name s_GpuLayerReadyName = "ui.layer_ready";
-const Name s_GpuAtlasTextureName = "ui.atlas";
-const Name s_GpuAtlasReadyName = "ui.atlas_ready";
-const Name s_GpuVertexBufferName = "ui.vertices";
-const Name s_GpuIndexBufferName = "ui.indices";
-const Name s_GpuRasterPipelineName = "ui.raster_pipeline";
-const Name s_GpuVertexUploadTaskName = "ui.vertex_upload";
-const Name s_GpuIndexUploadTaskName = "ui.index_upload";
-const Name s_GpuClearTaskName = "ui.clear";
-const Name s_GpuRasterTaskName = "ui.raster";
-const Name s_GpuGlyphPageTextureName = "ui.glyph_page";
-const Name s_GpuGlyphPageReadyPrefix = "ui.glyph_page_ready/";
-const Name s_GpuGlyphPagePrefix = "ui.glyph_page/";
-const Name s_GpuSdfPageTextureName = "ui.sdf_page";
-const Name s_GpuSdfUploadArenaName = "impl/ecs_ui/gpu/sdf_upload";
-const Name s_GpuSdfPageReadyPrefix = "ui.sdf_page_ready/";
-const Name s_GpuSdfPagePrefix = "ui.sdf_page/";
-const Name s_GpuTextureImageReadyPrefix = "ui.texture_image_ready/";
-const Name s_GpuTextureImagePrefix = "ui.texture_image/";
-const Name s_GpuTargetInitTextureName = "ui.target_initialization";
-const Name s_GpuTargetInitClearTaskName = "ui.target_initialization_clear";
-const Name s_GpuTargetInitReadyTaskName = "ui.target_initialization_ready";
-const Name s_GpuVertexShaderName = "UiLayer_VS";
-const Name s_GpuPixelShaderName = "UiLayer_PS";
-const Name s_GpuOutputVertexShaderName = "UiLayer_OutputVS";
-const Name s_GpuOutputPixelShaderName = "UiLayer_OutputPS";
-const Name s_GpuVertexPositionSemantic = "POSITION";
-const Name s_GpuVertexTexCoordSemantic = "TEXCOORD";
-const Name s_GpuVertexColorSemantic = "COLOR";
-const Name s_GpuFrameTimingBeginTaskName = "ui.frame_timing_begin";
-const Name s_GpuAcquiredReadyName = "ui.acquired_ready";
-const Name s_GpuBackBufferTextureName = "ui.backbuffer";
-const Name s_GpuOutputPipelineName = "ui.output_pipeline";
-const Name s_GpuOutputTaskName = "ui.output";
-const Name s_GpuFrameTimingEndTaskName = "ui.frame_timing_end";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-enum<u8> GpuCommandRecordingMode{
-    Direct,
-    CommandIrReplay,
-}
-
-enum<u8> GpuSampledTextureImportError{
-    Identity,
-    Completion,
-    Texture,
-}
-
-[serialize]
-class GpuPaintPushConstants{
-    public Point scale;
-    public Point translate;
-    public u32 textureSlot = 0xffffffffu;
-    public u32 samplerSlot = 0xffffffffu;
-    public u32 material = 0u;
-    public u32 sdfChannel = 0u;
-    public u32 sdfSpreadPixels = 0u;
-    public u32 sdfDistanceEncoding = 0u;
-}
-
-[serialize]
-class GpuOutputPushConstants{
-    public u32 textureSlot = 0xffffffffu;
-    public u32 samplerSlot = 0xffffffffu;
-    public u32 presentationMode = 0u;
-}
-
-// Call-scoped calculation scratch shared by native commands and command IR; never retained or uploaded.
-class GpuRasterGeometry{
-    public GpuRasterGeometry(){
-        this.pixelScale = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        this.targetSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    }
-
-    public GpuRasterGeometry(in DisplayMetrics display, in u32 targetWidth, in u32 targetHeight){
-        this.pixelScale = f32x4(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
-        this.targetSize = f32x4(cast<f32>(targetWidth), cast<f32>(targetHeight), cast<f32>(targetWidth), cast<f32>(targetHeight));
-    }
-
-    public f32x4 pixelScale;
-    public f32x4 targetSize;
+native{
+#include <core/alloc/scratch.h>
+namespace NWB::Impl::Ui{
+using ScratchByteVector = Vector<u8, Core::Alloc::ScratchArena>;
+};
 }
 
 
@@ -195,6 +71,26 @@ b8 IsEmptyGpuSceneSnapshot(
         && glyphPageCount == 0u
         && sdfPageCount == 0u
         && textureImageCount == 0u;
+}
+
+void ExpandGpuSdfPagePixels(
+    in u32 width,
+    in u32 height,
+    in u32 sourceChannels,
+    in u32 uploadChannels,
+    in Span<u8> sourcePixels,
+    mut ScratchByteVector outExpanded
+){
+    const usize texels = cast<usize>(width) * cast<usize>(height);
+    const usize srcCh = cast<usize>(sourceChannels);
+    const usize dstCh = cast<usize>(uploadChannels);
+    outExpanded.resize(texels * dstCh, 0u);
+    for(usize texel = 0u; texel < texels; ++texel){
+        const usize srcBase = texel * srcCh;
+        const usize dstBase = texel * dstCh;
+        for(usize ch = 0u; ch < srcCh; ++ch)
+            outExpanded[dstBase + ch] = sourcePixels[srcBase + ch];
+    }
 }
 
 

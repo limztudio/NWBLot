@@ -18,14 +18,12 @@ NWB_IMPL_BEGIN
 
 
 RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, const b8 rendererActive, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept{
-    RendererTaskTimingFeedbackPolicyTransition transition{ .previousPolicy = currentPolicy, .requestedPolicy = requestedPolicy, };
-    if(!rendererActive || currentPolicy.enabled == requestedPolicy.enabled){
-        currentPolicy = requestedPolicy;
-        return transition;
-    }
-
-    transition.action = requestedPolicy.enabled ? RendererTaskTimingFeedbackCollectionAction::Enable : RendererTaskTimingFeedbackCollectionAction::Disable;
-    if(transition.action == RendererTaskTimingFeedbackCollectionAction::Disable)
+    RendererTaskTimingFeedbackPolicyTransition transition{
+        .previousPolicy = currentPolicy,
+        .requestedPolicy = requestedPolicy,
+        .action = ResolveRendererTaskTimingFeedbackCollectionAction(rendererActive, currentPolicy.enabled, requestedPolicy.enabled),
+    };
+    if(transition.action != RendererTaskTimingFeedbackCollectionAction::Enable)
         currentPolicy = requestedPolicy;
     return transition;
 }
@@ -103,9 +101,7 @@ void RendererTaskTimingFeedbackState::completeSample(const Core::GpuTimingSample
         || sample.scopeName != pending.scopeName
         || sample.sourceFrameIndex != pending.sourceFrameIndex
         || sample.physicalQueue != pending.expectedQueue
-        || !IsFinite(sample.durationSeconds)
-        || sample.durationSeconds <= 0.0
-        || sample.durationSeconds >= Limit<f64>::s_Max
+        || !IsValidRendererTaskTimingSampleDuration(sample.durationSeconds)
     )
         return;
 
@@ -248,7 +244,7 @@ void RendererTaskTimingFeedback::deactivate()noexcept{
 }
 
 Expected<Core::GpuTimingSampleAttribution> RendererTaskTimingFeedback::beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const b8 recordsNonCommittingTimingSample){
-    if(!scopeName || !collectsScope(scopeName) || !key.valid() || !expectedQueue.valid())
+    if(!scopeName || !ContainsRendererTaskTimingFeedbackScope(m_feedbackCollectionScopes, scopeName) || !key.valid() || !expectedQueue.valid())
         return Core::s_NoGpuTimingSampleAttribution;
 
     ScopedLock lock(m_mutex);
@@ -309,15 +305,6 @@ void RendererTaskTimingFeedback::reset()noexcept{
     ScopedLock lock(m_mutex);
     m_state.reset();
     m_history.reset(m_snapshot);
-}
-
-
-b8 RendererTaskTimingFeedback::collectsScope(const Name& scopeName)const noexcept{
-    for(const Name& feedbackCollectionScope : m_feedbackCollectionScopes){
-        if(feedbackCollectionScope == scopeName)
-            return true;
-    }
-    return false;
 }
 
 void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept{

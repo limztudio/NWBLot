@@ -38,24 +38,25 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedTemporalMerge(Core::Command
     commandList.commitBarriers();
 
     const DeferredBindlessFrameResources& bindless = targets.bindless;
-    ShadowCombinedTemporalPushConstants push;
-    NWB_MEMCPY(&push.prevWorldToClip, sizeof(push.prevWorldToClip), &m_rayTracingState.m_prevWorldToClip, sizeof(push.prevWorldToClip));
-    push.receiverFactor = targets.shadowReceiverFactor;
-    push.lightSlotCount = ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask);
-    push.historyValid = softShadowTemporalHistoryUsable() ? 1u : 0u;
-    push.geometryCurrSlot = bindless.shadowSoftGeometry.slot();
-    push.geometryPrevSlot = bindless.shadowSoftGeometryPrev.slot();
-    push.worldPositionSlot = bindless.gbufferWorldPosition.slot();
-    push.opaqueSoftTraceSlot = bindless.shadowSoftHalfA.slot();
-    push.opaqueHistoryInSlot = frontIsA ? bindless.shadowHistA.slot() : bindless.shadowHistB.slot();
-    push.opaqueMomentsInSlot = frontIsA ? bindless.shadowMomentsA.slot() : bindless.shadowMomentsB.slot();
-    push.opaqueHistoryOutSlot = frontIsA ? bindless.shadowHistBStorage.slot() : bindless.shadowHistAStorage.slot();
-    push.opaqueMomentsOutSlot = frontIsA ? bindless.shadowMomentsBStorage.slot() : bindless.shadowMomentsAStorage.slot();
-    push.transparentSoftTraceSlot = bindless.transparentSoftHalf.slot();
-    push.transparentHistoryInSlot = frontIsA ? bindless.transparentHistA.slot() : bindless.transparentHistB.slot();
-    push.transparentMomentsInSlot = frontIsA ? bindless.transparentMomentsA.slot() : bindless.transparentMomentsB.slot();
-    push.transparentHistoryOutSlot = frontIsA ? bindless.transparentHistBStorage.slot() : bindless.transparentHistAStorage.slot();
-    push.transparentMomentsOutSlot = frontIsA ? bindless.transparentMomentsBStorage.slot() : bindless.transparentMomentsAStorage.slot();
+    const ShadowCombinedTemporalPushConstants push = MakeShadowCombinedTemporalPushConstants(
+        LoadFloat(m_rayTracingState.m_prevWorldToClip),
+        targets.shadowReceiverFactor,
+        ResolveSoftShadowLightSlotRangeCount(m_rayTracingState.m_softShadowSlotMask),
+        softShadowTemporalHistoryUsable(),
+        bindless.shadowSoftGeometry.slot(),
+        bindless.shadowSoftGeometryPrev.slot(),
+        bindless.gbufferWorldPosition.slot(),
+        bindless.shadowSoftHalfA.slot(),
+        frontIsA ? bindless.shadowHistA.slot() : bindless.shadowHistB.slot(),
+        frontIsA ? bindless.shadowMomentsA.slot() : bindless.shadowMomentsB.slot(),
+        frontIsA ? bindless.shadowHistBStorage.slot() : bindless.shadowHistAStorage.slot(),
+        frontIsA ? bindless.shadowMomentsBStorage.slot() : bindless.shadowMomentsAStorage.slot(),
+        bindless.transparentSoftHalf.slot(),
+        frontIsA ? bindless.transparentHistA.slot() : bindless.transparentHistB.slot(),
+        frontIsA ? bindless.transparentMomentsA.slot() : bindless.transparentMomentsB.slot(),
+        frontIsA ? bindless.transparentHistBStorage.slot() : bindless.transparentHistAStorage.slot(),
+        frontIsA ? bindless.transparentMomentsBStorage.slot() : bindless.transparentMomentsAStorage.slot()
+    );
     Core::ComputeState state;
     state.setPipeline(resolve.m_combinedTemporal.m_pipeline.get());
     commandList.setComputeState(state);

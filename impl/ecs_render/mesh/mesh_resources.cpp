@@ -38,22 +38,6 @@ namespace __hidden_mesh_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_PositionBufferLabel = NWB_TEXT("position");
-inline constexpr TStringView s_NormalBufferLabel = NWB_TEXT("normal");
-inline constexpr TStringView s_TangentBufferLabel = NWB_TEXT("tangent");
-inline constexpr TStringView s_Uv0BufferLabel = NWB_TEXT("uv0");
-inline constexpr TStringView s_ColorBufferLabel = NWB_TEXT("color");
-inline constexpr TStringView s_MeshletDescriptorBufferLabel = NWB_TEXT("meshlet descriptor");
-inline constexpr TStringView s_MeshletBoundsBufferLabel = NWB_TEXT("meshlet bounds");
-inline constexpr TStringView s_MeshletPositionRefDeltaBufferLabel = NWB_TEXT("meshlet position ref-delta");
-inline constexpr TStringView s_MeshletAttributeRefDeltaBufferLabel = NWB_TEXT("meshlet attribute ref-delta");
-inline constexpr TStringView s_MeshletLocalVertexRefBufferLabel = NWB_TEXT("meshlet local vertex-ref");
-inline constexpr TStringView s_MeshletPrimitiveIndexBufferLabel = NWB_TEXT("meshlet primitive index");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class UnpublishedMeshDescriptors final : NoCopy{
 public:
     UnpublishedMeshDescriptors(RendererMeshSystem& meshSystem, MeshResources& mesh)noexcept
@@ -100,25 +84,10 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     RefreshRuntimeMeshCsgBounds(LoadFloatInt(desc.localBounds.minBounds), LoadFloatInt(desc.localBounds.maxBounds), desc.localBounds.finite(), mesh.csgLocalBounds);
 }
 
-static void ReportMeshBufferSetupFailure(const BufferSetupFailure::Enum failure, const Name& meshName, const TStringView label){
-    switch(failure){
-    case BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload"), ConvertString(meshName.resolvedText()), label);
-        return;
-    case BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows"), ConvertString(meshName.resolvedText()), label);
-        return;
-    case BufferSetupFailure::CreateFailed:
-        break;
-    }
-    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'"), label, ConvertString(meshName.resolvedText()));
-    return;
-}
-
-[[nodiscard]] static Expected<Name> DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const TStringView label){
+[[nodiscard]] static Expected<Name> DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const AStringView label){
     const auto bufferName = DeriveName(meshName, suffix);
     if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'"), label, ConvertString(meshName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'"), ConvertString(label), ConvertString(meshName.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     return bufferName;
@@ -130,7 +99,7 @@ template<typename PayloadT>
     const Name& meshName,
     const AStringView suffix,
     const Span<const PayloadT> payload,
-    const TStringView label,
+    const AStringView label,
     const b8 canHaveRawViews = false,
     const b8 accelStructBuildInput = false
 ){
@@ -152,7 +121,7 @@ template<typename PayloadT>
     const Name& meshName,
     const AStringView suffix,
     const Span<const u8> payload,
-    const TStringView label
+    const AStringView label
 ){
     const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName)
@@ -166,18 +135,10 @@ template<typename PayloadT>
     return Move(*buffer);
 }
 
-[[nodiscard]] static b8 ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const TStringView label){
-    if(!buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer"), ConvertString(meshName.resolvedText()), label);
-        return false;
-    }
-
-    const Core::BufferDesc& desc = buffer->getCreationDescription();
-    if(desc.structStride != sizeof(u8) || desc.byteSize < static_cast<u64>(logicalByteCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes"), ConvertString(meshName.resolvedText()), label, logicalByteCount);
-        return false;
-    }
-    return true;
+[[nodiscard]] static b8 ValidateRawBufferLogicalByteCount(const Core::BufferHandle& buffer, const u32 logicalByteCount, const Name& meshName, const AStringView label){
+    const Core::BufferDesc emptyDesc{};
+    const Core::BufferDesc& desc = buffer ? buffer->getCreationDescription() : emptyDesc;
+    return ValidateMeshRawBufferLogicalByteCount(buffer != nullptr, desc.structStride, desc.byteSize, logicalByteCount, meshName, label);
 }
 
 
@@ -235,50 +196,50 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
     const b8 swShadow = !rtSupported;
 
     b8 uploaded = true;
-    auto positionBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Float3U>(m_graphics, meshPath, s_PositionsBufferName, mesh.positionStream(), __hidden_mesh_resources::s_PositionBufferLabel, true, rtSupported);
+    auto positionBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Float3U>(m_graphics, meshPath, s_PositionsBufferName, mesh.positionStream(), s_MeshPositionBufferLabel, true, rtSupported);
     if(positionBufferResult)
         createdMesh.positionBuffer = Move(*positionBufferResult);
     else
         createdMesh.positionBuffer.reset();
     uploaded = static_cast<b8>(positionBufferResult) && uploaded;
-    auto normalBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, s_NormalsBufferName, mesh.normalStream(), __hidden_mesh_resources::s_NormalBufferLabel);
+    auto normalBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, s_NormalsBufferName, mesh.normalStream(), s_MeshNormalBufferLabel);
     if(normalBufferResult)
         createdMesh.normalBuffer = Move(*normalBufferResult);
     else
         createdMesh.normalBuffer.reset();
     uploaded = static_cast<b8>(normalBufferResult) && uploaded;
-    auto tangentBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, s_TangentsBufferName, mesh.tangentStream(), __hidden_mesh_resources::s_TangentBufferLabel);
+    auto tangentBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, s_TangentsBufferName, mesh.tangentStream(), s_MeshTangentBufferLabel);
     if(tangentBufferResult)
         createdMesh.tangentBuffer = Move(*tangentBufferResult);
     else
         createdMesh.tangentBuffer.reset();
     uploaded = static_cast<b8>(tangentBufferResult) && uploaded;
-    auto uv0BufferResult = __hidden_mesh_resources::SetupMeshBuffer<Float2U>(m_graphics, meshPath, s_Uv0BufferName, mesh.uv0Stream(), __hidden_mesh_resources::s_Uv0BufferLabel);
+    auto uv0BufferResult = __hidden_mesh_resources::SetupMeshBuffer<Float2U>(m_graphics, meshPath, s_Uv0BufferName, mesh.uv0Stream(), s_MeshUv0BufferLabel);
     if(uv0BufferResult)
         createdMesh.uv0Buffer = Move(*uv0BufferResult);
     else
         createdMesh.uv0Buffer.reset();
     uploaded = static_cast<b8>(uv0BufferResult) && uploaded;
-    auto colorBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, s_ColorsBufferName, mesh.colorStream(), __hidden_mesh_resources::s_ColorBufferLabel);
+    auto colorBufferResult = __hidden_mesh_resources::SetupMeshBuffer<Half4U>(m_graphics, meshPath, s_ColorsBufferName, mesh.colorStream(), s_MeshColorBufferLabel);
     if(colorBufferResult)
         createdMesh.colorBuffer = Move(*colorBufferResult);
     else
         createdMesh.colorBuffer.reset();
     uploaded = static_cast<b8>(colorBufferResult) && uploaded;
-    auto meshletDescBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletDesc>(m_graphics, meshPath, s_MeshletsBufferName, mesh.meshlets(), __hidden_mesh_resources::s_MeshletDescriptorBufferLabel);
+    auto meshletDescBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletDesc>(m_graphics, meshPath, s_MeshletsBufferName, mesh.meshlets(), s_MeshletDescriptorBufferLabel);
     if(meshletDescBufferResult)
         createdMesh.meshletDescBuffer = Move(*meshletDescBufferResult);
     else
         createdMesh.meshletDescBuffer.reset();
     uploaded = static_cast<b8>(meshletDescBufferResult) && uploaded;
-    auto meshletBoundsBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletBounds>(m_graphics, meshPath, s_MeshletBoundsBufferName, mesh.meshletBounds(), __hidden_mesh_resources::s_MeshletBoundsBufferLabel, true);
+    auto meshletBoundsBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletBounds>(m_graphics, meshPath, s_MeshletBoundsBufferName, mesh.meshletBounds(), s_MeshletBoundsBufferLabel, true);
     if(meshletBoundsBufferResult)
         createdMesh.meshletBoundsBuffer = Move(*meshletBoundsBufferResult);
     else
         createdMesh.meshletBoundsBuffer.reset();
     uploaded = static_cast<b8>(meshletBoundsBufferResult) && uploaded;
     auto meshletPositionRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
-        m_graphics, scratchArena, meshPath, s_MeshletPositionRefDeltasBufferName, mesh.meshletPositionRefDeltas(), __hidden_mesh_resources::s_MeshletPositionRefDeltaBufferLabel
+        m_graphics, scratchArena, meshPath, s_MeshletPositionRefDeltasBufferName, mesh.meshletPositionRefDeltas(), s_MeshletPositionRefDeltaBufferLabel
     );
     if(meshletPositionRefDeltaBufferResult)
         createdMesh.meshletPositionRefDeltaBuffer = Move(*meshletPositionRefDeltaBufferResult);
@@ -286,7 +247,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         createdMesh.meshletPositionRefDeltaBuffer.reset();
     uploaded = static_cast<b8>(meshletPositionRefDeltaBufferResult) && uploaded;
     auto meshletAttributeRefDeltaBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
-        m_graphics, scratchArena, meshPath, s_MeshletAttributeRefDeltasBufferName, mesh.meshletAttributeRefDeltas(), __hidden_mesh_resources::s_MeshletAttributeRefDeltaBufferLabel
+        m_graphics, scratchArena, meshPath, s_MeshletAttributeRefDeltasBufferName, mesh.meshletAttributeRefDeltas(), s_MeshletAttributeRefDeltaBufferLabel
     );
     if(meshletAttributeRefDeltaBufferResult)
         createdMesh.meshletAttributeRefDeltaBuffer = Move(*meshletAttributeRefDeltaBufferResult);
@@ -294,7 +255,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         createdMesh.meshletAttributeRefDeltaBuffer.reset();
     uploaded = static_cast<b8>(meshletAttributeRefDeltaBufferResult) && uploaded;
     auto meshletLocalVertexRefBufferResult = __hidden_mesh_resources::SetupMeshBuffer<MeshletLocalVertexRef>(
-        m_graphics, meshPath, s_MeshletLocalVertexRefsBufferName, mesh.meshletLocalVertexRefs(), __hidden_mesh_resources::s_MeshletLocalVertexRefBufferLabel
+        m_graphics, meshPath, s_MeshletLocalVertexRefsBufferName, mesh.meshletLocalVertexRefs(), s_MeshletLocalVertexRefBufferLabel
     );
     if(meshletLocalVertexRefBufferResult)
         createdMesh.meshletLocalVertexRefBuffer = Move(*meshletLocalVertexRefBufferResult);
@@ -302,7 +263,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         createdMesh.meshletLocalVertexRefBuffer.reset();
     uploaded = static_cast<b8>(meshletLocalVertexRefBufferResult) && uploaded;
     auto meshletPrimitiveIndexBufferResult = __hidden_mesh_resources::SetupPaddedRawMeshBuffer(
-        m_graphics, scratchArena, meshPath, s_MeshletPrimitiveIndicesBufferName, mesh.meshletPrimitiveIndices(), __hidden_mesh_resources::s_MeshletPrimitiveIndexBufferLabel
+        m_graphics, scratchArena, meshPath, s_MeshletPrimitiveIndicesBufferName, mesh.meshletPrimitiveIndices(), s_MeshletPrimitiveIndexBufferLabel
     );
     if(meshletPrimitiveIndexBufferResult)
         createdMesh.meshletPrimitiveIndexBuffer = Move(*meshletPrimitiveIndexBufferResult);
@@ -459,7 +420,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createRuntimeMeshResources
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles"), ConvertString(createdMesh.meshName.resolvedText()), createdMesh.meshletPrimitiveIndexCount);
         return MakeUnexpected(Failure{});
     }
-    if(!__hidden_mesh_resources::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, __hidden_mesh_resources::s_MeshletPrimitiveIndexBufferLabel))
+    if(!__hidden_mesh_resources::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, s_MeshletPrimitiveIndexBufferLabel))
         return MakeUnexpected(Failure{});
     NWB_ASSERT(createdMesh.valid());
     __hidden_mesh_resources::UnpublishedMeshDescriptors retireUnpublished(*this, createdMesh);

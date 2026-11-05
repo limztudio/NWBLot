@@ -65,10 +65,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuRendererState::prepareSdfPage(Core::
     NotNull<const u8*> uploadData(page->pixels().data());
     usize uploadBytes = page->pixels().size();
     if(uploadChannels != binding.channelCount){
-        const usize texels = static_cast<usize>(binding.width) * binding.height;
-        expanded.resize(texels * uploadChannels, 0u);
-        for(usize texel = 0u; texel < texels; ++texel)
-            NWB_MEMCPY(expanded.data() + texel * uploadChannels, uploadChannels, uploadData.get() + texel * binding.channelCount, binding.channelCount);
+        ExpandGpuSdfPagePixels(binding.width, binding.height, binding.channelCount, uploadChannels, page->pixels(), expanded);
         uploadData = expanded.data();
         uploadBytes = expanded.size();
     }

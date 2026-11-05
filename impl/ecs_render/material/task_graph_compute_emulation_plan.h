@@ -24,8 +24,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GeneratedGeometryEquivalenceKey MakeGeneratedGeometryEquivalenceKey(const MaterialPassDrawItem& drawItem)noexcept;
-
 struct RegularSharedComputeEmulationGraphPlan{
     Array<MaterialPassDrawItem, s_SharedComputeEmulationMaximumDrawCount> drawItems{};
     Array<GeneratedGeometryEquivalenceKey, s_SharedComputeEmulationMaximumDrawCount> equivalenceKeys{};

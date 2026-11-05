@@ -13,8 +13,7 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 nwb_target_adhd_sources(testbed NAMESPACE "Testbed" SOURCES
-    "${CMAKE_CURRENT_LIST_DIR}/scene_constants.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/ui_gallery_constants.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
 set_target_properties(testbed PROPERTIES DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}")
 nwb_target_link_libraries_whole_archive(testbed

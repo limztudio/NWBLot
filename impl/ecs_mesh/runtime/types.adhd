@@ -2,115 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/payload_validation.adhd>
+#include <impl/ecs_mesh/runtime/buffer_names.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const RuntimeMeshHandle s_InvalidRuntimeMeshHandle();
-const i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
-const i32 s_RuntimeMeshBoundsFiniteFlag = 1 << 1;
-// ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
-const usize s_RawByteLoadAlignmentBytes = 4u;
-const StringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
-const StringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
-const StringView s_RuntimePrefix = ":runtime_";
-const StringView s_RevisionSeparator = "_revision_";
-const StringView s_OwnerSeparator = "_";
-const StringView s_RestPositionsSuffix = "rest_positions";
-const StringView s_RestNormalsSuffix = "rest_normals";
-const StringView s_RestTangentsSuffix = "rest_tangents";
-const StringView s_SkinnedPositionsSuffix = "skinned_positions";
-const StringView s_SkinnedNormalsSuffix = "skinned_normals";
-const StringView s_SkinnedTangentsSuffix = "skinned_tangents";
-const StringView s_Uv0Suffix = "uv0";
-const StringView s_ColorsSuffix = "colors";
-const StringView s_MeshletsSuffix = "meshlets";
-const StringView s_MeshletBoundsSuffix = "meshlet_bounds";
-const StringView s_MeshletLocalBoundsSuffix = "meshlet_local_bounds";
-const StringView s_LocalBoundsSuffix = "local_bounds";
-const StringView s_MeshletPositionRefDeltasSuffix = "meshlet_position_ref_deltas";
-const StringView s_MeshletAttributeRefDeltasSuffix = "meshlet_attribute_ref_deltas";
-const StringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
-const StringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
-const StringView s_AttributeSkinsSuffix = "attribute_skins";
-const StringView s_RuntimeCacheRestPositionLabel = "rest position";
-const StringView s_RuntimeCacheRestNormalLabel = "rest normal";
-const StringView s_RuntimeCacheRestTangentLabel = "rest tangent";
-const StringView s_RuntimeCacheSkinnedPositionLabel = "skinned position";
-const StringView s_RuntimeCacheSkinnedNormalLabel = "skinned normal";
-const StringView s_RuntimeCacheSkinnedTangentLabel = "skinned tangent";
-const StringView s_RuntimeCacheUv0Label = "uv0";
-const StringView s_RuntimeCacheColorLabel = "color";
-const StringView s_RuntimeCacheMeshletDescriptorLabel = "meshlet descriptor";
-const StringView s_RuntimeCacheMeshletBoundsLabel = "meshlet bounds";
-const StringView s_RuntimeCacheMeshletPositionRefDeltaLabel = "meshlet position ref delta";
-const StringView s_RuntimeCacheMeshletAttributeRefDeltaLabel = "meshlet attribute ref delta";
-const StringView s_RuntimeCacheMeshletLocalVertexRefLabel = "meshlet local vertex ref";
-const StringView s_RuntimeCacheMeshletPrimitiveIndexLabel = "meshlet primitive index";
-const StringView s_RuntimeCacheAttributeSkinLabel = "attribute skin";
-const StringView s_RuntimeCacheRtTriangleIndexLabel = "rt triangle index";
-const StringView s_RuntimeCacheRtTriangleAttributeLabel = "rt triangle attribute";
-const usize s_RuntimeMeshRequestInlineCapacity = 32u;
-const usize s_RuntimeMeshIndexBucketsPerRequest = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-flag<u8> RuntimeMeshDirtyFlag{
-    None = 0u,
-    SkinningInputDirty,
-    GpuUploadDirty,
-    MeshletBoundsDirty,
-    All = SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
-}
-
-enum<u8> RenderableMeshResolution{
-    Absent,
-    Unavailable
-}
-
-enum<u8> BufferSetupFailure{
-    EmptyPayload,
-    ByteSizeOverflow,
-    CreateFailed
-}
-
-[reflect]
-class RuntimeMeshHandle{
-    public b8 operator==(in RuntimeMeshHandle rhs)const{
-        return this.value == rhs.value;
-    }
-
-    public b8 operator!=(in RuntimeMeshHandle rhs)const{
-        return this.value != rhs.value;
-    }
-
-    public b8 valid()const{
-        return this.value != 0u;
-    }
-
-    public void reset(){
-        this.value = 0u;
-    }
-
-    public u64 value = 0u;
-}
-
-class RuntimeMeshLocalBounds{
-    public b8 valid()const{
-        return (this.minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0;
-    }
-
-    public b8 finite()const{
-        return (this.minBounds.w & s_RuntimeMeshBoundsFiniteFlag) != 0;
-    }
-
-    public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
-    public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
-}
 
 class RuntimeMeshRequestKey{
     public RuntimeMeshRequestKey(){
@@ -279,6 +175,39 @@ b8 ValidateReconstructedRuntimeTriangleIndexCount(in usize reconstructedCount, i
         , handleValue
     );
     return false;
+}
+
+void ReportMeshBufferSetupFailure(in BufferSetupFailure failure, in Name meshName, in StringView label){
+    switch(failure){
+    case BufferSetupFailure::EmptyPayload:
+        error("RendererSystem: mesh '{}' has empty {} payload", meshName.resolvedText(), label);
+        return;
+    case BufferSetupFailure::ByteSizeOverflow:
+        error("RendererSystem: mesh '{}' {} payload byte size overflows", meshName.resolvedText(), label);
+        return;
+    case BufferSetupFailure::CreateFailed:
+        break;
+    }
+    error("RendererSystem: failed to create {} buffer for mesh '{}'", label, meshName.resolvedText());
+}
+
+b8 ValidateMeshRawBufferLogicalByteCount(
+    in b8 hasBuffer,
+    in u32 structStride,
+    in u64 byteSize,
+    in u32 logicalByteCount,
+    in Name meshName,
+    in StringView label
+){
+    if(!hasBuffer){
+        error("RendererSystem: mesh '{}' has no {} buffer", meshName.resolvedText(), label);
+        return false;
+    }
+    if(structStride != 1u || byteSize < cast<u64>(logicalByteCount)){
+        error("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes", meshName.resolvedText(), label, logicalByteCount);
+        return false;
+    }
+    return true;
 }
 
 

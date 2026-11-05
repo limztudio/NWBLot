@@ -101,24 +101,6 @@ b8 OpaqueRegularComputeEmulationGraphPlan::capture(const MaterialPassDrawItemsVi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GeneratedGeometryEquivalenceKey MakeGeneratedGeometryEquivalenceKey(const MaterialPassDrawItem& drawItem)noexcept{
-    GeneratedGeometryEquivalenceKey key{};
-    key.meshKey = drawItem.meshKey;
-    key.material = drawItem.pipelineKey.material;
-    key.pass = drawItem.pipelineKey.pass;
-    key.instanceIndex = drawItem.instanceIndex;
-    key.materialConstantByteOffset = drawItem.materialConstantByteOffset;
-    key.shadingModelId = drawItem.shadingModelId;
-    key.outputHeapSlot = drawItem.meshResources.emulationVertexHeapHandle.valid() ? drawItem.meshResources.emulationVertexHeapHandle.slot() : 0u;
-    key.emulationIndexByteOffset = drawItem.meshResources.emulationIndexByteOffset;
-    key.indexedGeometryOutput = drawItem.pipelineResources.indexedGeometryOutput;
-    return key;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RegularSharedComputeEmulationGraphPlan::reset()noexcept{
     for(MaterialPassDrawItem& drawItem : drawItems)
         drawItem = {};
@@ -153,7 +135,18 @@ b8 RegularSharedComputeEmulationGraphPlan::capture(const MaterialPassDrawItemsVi
             return false;
 
         drawItems[drawIndex] = drawItem;
-        equivalenceKeys[drawIndex] = MakeGeneratedGeometryEquivalenceKey(drawItem);
+        equivalenceKeys[drawIndex] = MakeGeneratedGeometryEquivalenceKey(
+            drawItem.meshKey,
+            drawItem.pipelineKey.material,
+            drawItem.pipelineKey.pass,
+            drawItem.instanceIndex,
+            drawItem.materialConstantByteOffset,
+            drawItem.shadingModelId,
+            mesh.emulationVertexHeapHandle.valid(),
+            mesh.emulationVertexHeapHandle.slot(),
+            mesh.emulationIndexByteOffset,
+            drawItem.pipelineResources.indexedGeometryOutput
+        );
     }
     captured = static_cast<b8>(outputBuffer);
     return captured;

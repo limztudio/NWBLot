@@ -154,3 +154,33 @@ class GeneratedGeometryEquivalenceKey{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GeneratedGeometryEquivalenceKey MakeGeneratedGeometryEquivalenceKey(
+    in Name meshKey,
+    in Name material,
+    in MaterialPipelinePass pass,
+    in u32 instanceIndex,
+    in u32 materialConstantByteOffset,
+    in u32 shadingModelId,
+    in b8 outputHeapValid,
+    in u32 outputHeapSlot,
+    in u32 emulationIndexByteOffset,
+    in b8 indexedGeometryOutput
+){
+    GeneratedGeometryEquivalenceKey key;
+    key.meshKey = meshKey;
+    key.material = material;
+    key.pass = pass;
+    key.instanceIndex = instanceIndex;
+    key.materialConstantByteOffset = materialConstantByteOffset;
+    key.shadingModelId = shadingModelId;
+    if(outputHeapValid)
+        key.outputHeapSlot = outputHeapSlot;
+    key.emulationIndexByteOffset = emulationIndexByteOffset;
+    key.indexedGeometryOutput = indexedGeometryOutput;
+    return key;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

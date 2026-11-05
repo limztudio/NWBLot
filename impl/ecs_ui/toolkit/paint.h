@@ -407,24 +407,6 @@ private:
             m_commandsOrdered
         );
     }
-    void emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint){
-        NWB_ASSERT(m_recording);
-        EmitPaintNineSlice(
-            m_recording,
-            m_clips.back(),
-            region,
-            rectangle,
-            tint,
-            m_snapshot.m_skinBinding.atlasWidth,
-            m_snapshot.m_skinBinding.atlasHeight,
-            m_snapshot.m_skinBinding.referenceDensity,
-            m_layer,
-            m_snapshot.m_vertices,
-            m_snapshot.m_indices,
-            m_snapshot.m_commands,
-            m_commandsOrdered
-        );
-    }
 
 
 private:

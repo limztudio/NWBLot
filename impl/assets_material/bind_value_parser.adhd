@@ -2,201 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_material/bind_types.adhd>
-
-native{
-#include <global/simd/convert.h>
-}
+#include <impl/assets_material/bind_token_parser.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const u32 s_MaterialTypedValueRecordWordCount = 8u;
-const usize s_MaterialCompactStringMaxLength = 254u;
-const StringView s_MaterialParameterKeySeparator = ".";
-const u64 s_MaterialParameterKeyHashLowWordMask = 0xFFFFFFFFul;
-const u32 s_MaterialParameterKeyHashHighWordBitShift = 32u;
-const StringView s_MaterialBoolTrueTextToken = "true";
-const StringView s_MaterialBoolTrueNumberToken = "1";
-const StringView s_MaterialBoolFalseTextToken = "false";
-const StringView s_MaterialBoolFalseNumberToken = "0";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MaterialBindStorageByteSizes{
-    public u32 constantBytes = 0u;
-    public u32 mutableBytes = 0u;
-}
-
-class MaterialTypedValueData{
-    public u32x4 meta(0u, 0u, 0u, 0u);
-    public u32x4 data(0u, 0u, 0u, 0u);
-}
-
-class MaterialParameterCall{
-    public StringView typeText = "";
-    public StringView arguments = "";
-}
-
-class MaterialParameterTokens{
-    public Array<StringView, 4> values;
-    public u32 count = 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<MaterialParameterCall> SplitMaterialParameterCall(in StringView text){
-    const StringView trimmed = trimView(text);
-    usize openParen = trimmed.size();
-    for(usize i = 0u; i < trimmed.size(); ++i){
-        if(trimmed[i] == '('){
-            openParen = i;
-            break;
-        }
-    }
-    if(openParen >= trimmed.size() || trimmed.empty() || trimmed[trimmed.size() - 1u] != ')')
-        return makeUnexpected(Failure());
-
-    const StringView typeText = trimView(trimmed.substr(0u, openParen));
-    const StringView arguments = trimView(trimmed.substr(openParen + 1u, trimmed.size() - openParen - 2u));
-    if(typeText.empty() || arguments.empty())
-        return makeUnexpected(Failure());
-    MaterialParameterCall outCall;
-    outCall.typeText = typeText;
-    outCall.arguments = arguments;
-    return outCall;
-}
-
-Expected<MaterialParameterTokens> SplitMaterialParameterTokens(in StringView text){
-    MaterialParameterTokens outTokens;
-    usize cursor = 0u;
-    while(true){
-        const Expected<StringView> token = readCommaOrSpaceDelimitedToken(text, cursor);
-        if(!token.has_value())
-            break;
-        if(outTokens.count >= s_MaterialTypedValueComponentCount)
-            return makeUnexpected(Failure());
-        outTokens.values[cast<usize>(outTokens.count)] = token.value();
-        ++outTokens.count;
-    }
-    if(outTokens.count == 0u)
-        return makeUnexpected(Failure());
-    return outTokens;
-}
-
-u32x4u MaterialTypedValueToLayoutValue(in MaterialTypedValueData parameter){
-    return u32x4u(parameter.data.x, parameter.data.y, parameter.data.z, parameter.data.w);
-}
-
-Expected<CompactString> BuildMaterialBindParameterKey(in StringView instanceName, in StringView fieldName){
-    if(
-        instanceName.size() > s_MaterialCompactStringMaxLength
-        || fieldName.size() > s_MaterialCompactStringMaxLength - instanceName.size()
-        || instanceName.size() + fieldName.size() + s_MaterialParameterKeySeparator.size() > s_MaterialCompactStringMaxLength
-        || hasEmbeddedNull(instanceName)
-        || hasEmbeddedNull(fieldName)
-    )
-        return makeUnexpected(Failure());
-
-    CompactString outKey;
-    if(
-        !outKey.assign(instanceName)
-        || !outKey.append(s_MaterialParameterKeySeparator)
-        || !outKey.append(fieldName)
-    )
-        return makeUnexpected(Failure());
-    return outKey;
-}
-
-u32x4 PackMaterialTypedValueMeta(in StringView key, in MaterialParameterType type){
-    const u64 keyHash = computeFnv64AsciiLowerText(key);
-    return u32x4(
-        cast<u32>(keyHash & s_MaterialParameterKeyHashLowWordMask),
-        cast<u32>(keyHash >> s_MaterialParameterKeyHashHighWordBitShift),
-        cast<u32>(type.valueType),
-        type.componentCount
-    );
-}
-
-Expected<u32> TryParseMaterialBoolToken(in StringView token){
-    if(token == s_MaterialBoolTrueTextToken || token == s_MaterialBoolTrueNumberToken)
-        return 1u;
-    if(token == s_MaterialBoolFalseTextToken || token == s_MaterialBoolFalseNumberToken)
-        return 0u;
-    return makeUnexpected(Failure());
-}
-
-Expected<f32> ParseMaterialParameterF32Token(in StringView token){
-    const Expected<f64> parsed = parseF64(token);
-    if(!parsed.has_value() || !isFinite(parsed.value()))
-        return makeUnexpected(Failure());
-    if(parsed.value() < cast<f64>(f32.min) || parsed.value() > cast<f64>(f32.max))
-        return makeUnexpected(Failure());
-    return cast<f32>(parsed.value());
-}
-
-Expected<u32> ParseMaterialParameterSignedToken(in StringView token, in i64 minValue, in i64 maxValue, in u32 storageMask){
-    const Expected<i64> parsed = parseI64(token);
-    if(!parsed.has_value())
-        return makeUnexpected(Failure());
-    if(parsed.value() < minValue || parsed.value() > maxValue)
-        return makeUnexpected(Failure());
-    return cast<u32>(cast<u64>(parsed.value()) & cast<u64>(storageMask));
-}
-
-Expected<u32> ParseMaterialParameterUnsignedToken(in StringView token, in u64 maxValue){
-    const Expected<u64> parsed = parseU64(token);
-    if(!parsed.has_value() || parsed.value() > maxValue)
-        return makeUnexpected(Failure());
-    return cast<u32>(parsed.value());
-}
-
-StringView NormalizeMaterialParameterNumericToken(in StringView token, in MaterialParameterValueType type){
-    if(type == MaterialParameterValueType::f32)
-        return stripMatchingTrailingByte(token, cast<u8>('f'), cast<u8>('F'));
-    if(type == MaterialParameterValueType::f16){
-        const StringView stripped = stripMatchingTrailingByte(token, cast<u8>('h'), cast<u8>('H'));
-        if(stripped == token)
-            return stripMatchingTrailingByte(token, cast<u8>('f'), cast<u8>('F'));
-        return stripped;
-    }
-    if(type == MaterialParameterValueType::u8 || type == MaterialParameterValueType::u16 || type == MaterialParameterValueType::u32)
-        return stripMatchingTrailingByte(token, cast<u8>('u'), cast<u8>('U'));
-    return token;
-}
-
-Expected<u32> ParseMaterialParameterNonHalfToken(in StringView token, in MaterialParameterValueType type){
-    const StringView numericToken = NormalizeMaterialParameterNumericToken(token, type);
-    switch(type){
-    case MaterialParameterValueType::b8:
-        return TryParseMaterialBoolToken(token);
-    case MaterialParameterValueType::i8:
-        return ParseMaterialParameterSignedToken(numericToken, cast<i64>(i8.min), cast<i64>(i8.max), cast<u32>(u8.max));
-    case MaterialParameterValueType::u8:
-        return ParseMaterialParameterUnsignedToken(numericToken, cast<u64>(u8.max));
-    case MaterialParameterValueType::i16:
-        return ParseMaterialParameterSignedToken(numericToken, cast<i64>(i16.min), cast<i64>(i16.max), cast<u32>(u16.max));
-    case MaterialParameterValueType::u16:
-        return ParseMaterialParameterUnsignedToken(numericToken, cast<u64>(u16.max));
-    case MaterialParameterValueType::i32:
-        return ParseMaterialParameterSignedToken(numericToken, cast<i64>(i32.min), cast<i64>(i32.max), u32.max);
-    case MaterialParameterValueType::u32:
-        return ParseMaterialParameterUnsignedToken(numericToken, cast<u64>(u32.max));
-    case MaterialParameterValueType::f32:{
-        const Expected<f32> converted = ParseMaterialParameterF32Token(numericToken);
-        if(!converted.has_value())
-            return makeUnexpected(Failure());
-        return bit_cast<u32>(converted.value());
-    }
-    default:
-        return makeUnexpected(Failure());
-    }
-}
 
 Expected<MaterialTypedValueData> StoreMaterialTypedValueComponent(in MaterialParameterValueType valueType, in u32 componentIndex, in u32 value, in MaterialTypedValueData parameter){
     if(componentIndex >= s_MaterialTypedValueComponentCount)
@@ -343,6 +153,111 @@ u32 ComputeMaterialBindBlockStorageByteBegin(in Span<MaterialTypedLayoutBlock> b
         byteBegin += block.byteSize;
     }
     return byteBegin;
+}
+
+u8 ExtractMaterialLayoutValueByte(in u32x4u value, in u32 byteIndex){
+    const u32 wordIndex = byteIndex / 4u;
+    const u32 shift = (byteIndex % 4u) * 8u;
+    u32 word = value.w;
+    if(wordIndex == 0u)
+        word = value.x;
+    else if(wordIndex == 1u)
+        word = value.y;
+    else if(wordIndex == 2u)
+        word = value.z;
+    return cast<u8>((word >> shift) & 0xffu);
+}
+
+void AppendMaterialTypedLayoutFieldBytes(in MaterialLayoutFieldType fieldType, in u32x4u value, mut Vector<u8> inOutBlockBytes){
+    const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
+    assert(byteSize != 0u && byteSize <= 16u);
+    const usize oldSize = inOutBlockBytes.size();
+    inOutBlockBytes.resize(oldSize + cast<usize>(byteSize), 0u);
+    for(u32 i = 0u; i < byteSize; ++i)
+        inOutBlockBytes[oldSize + cast<usize>(i)] = ExtractMaterialLayoutValueByte(value, i);
+}
+
+void PadMaterialTypedLayoutBytesTo(in usize targetByteSize, mut Vector<u8> inOutBlockBytes){
+    assert(targetByteSize >= inOutBlockBytes.size());
+    inOutBlockBytes.reserve(targetByteSize);
+    inOutBlockBytes.resize(targetByteSize, 0u);
+}
+
+b8 WriteMaterialTypedLayoutFieldBytes(in usize byteOffset, in MaterialLayoutFieldType fieldType, in u32x4u value, mut Vector<u8> inOutBlockBytes){
+    const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
+    if(byteSize == 0u || byteSize > 16u)
+        return false;
+    if(byteOffset > inOutBlockBytes.size() || cast<usize>(byteSize) > inOutBlockBytes.size() - byteOffset)
+        return false;
+    for(u32 i = 0u; i < byteSize; ++i)
+        inOutBlockBytes[byteOffset + cast<usize>(i)] = ExtractMaterialLayoutValueByte(value, i);
+    return true;
+}
+
+Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
+    in Name materialName,
+    in StringView instanceName,
+    in StringView fieldName,
+    in StringView fieldTypeText,
+    in StringView defaultArgument,
+    in MaterialLayoutFieldType fieldType
+){
+    if(IsMaterialLayoutResourceFieldType(fieldType))
+        return u32x4u(0u, 0u, 0u, 0u);
+
+    const Expected<CompactString> key = BuildMaterialBindParameterKey(instanceName, fieldName);
+    if(!key.has_value()){
+        error("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity", instanceName, fieldName, materialName.resolvedText());
+        return makeUnexpected(Failure());
+    }
+
+    CompactString defaultText;
+    if(!defaultText.assign(defaultArgument)){
+        error("Material bind typed layout: default for '{}.{}' in '{}' exceeds ACompactString capacity", instanceName, fieldName, materialName.resolvedText());
+        return makeUnexpected(Failure());
+    }
+
+    const Expected<MaterialTypedValueData> defaultParameter = ParseMaterialTypedValue(key.value().view(), defaultText.view());
+    if(!defaultParameter.has_value()){
+        error("Material bind typed layout: default '{}' for '{}.{}' in '{}' is invalid", defaultArgument, instanceName, fieldName, materialName.resolvedText());
+        return makeUnexpected(Failure());
+    }
+
+    const MaterialLayoutFieldType defaultFieldType = MaterialLayoutFieldTypeFromParameterType(cast<MaterialParameterValueType>(defaultParameter.value().meta.z), defaultParameter.value().meta.w);
+    if(defaultFieldType != fieldType){
+        error(
+            "Material bind typed layout: default '{}' for '{}.{}' in '{}' does not match field type '{}'",
+            defaultArgument,
+            instanceName,
+            fieldName,
+            materialName.resolvedText(),
+            fieldTypeText
+        );
+        return makeUnexpected(Failure());
+    }
+
+    return MaterialTypedValueToLayoutValue(defaultParameter.value());
+}
+
+Expected<u32x4u> TryParseMaterialTypedLayoutParameterValue(
+    in Name materialName,
+    in StringView parameterName,
+    in StringView parameterValue,
+    in MaterialTypedLayoutField field
+){
+    const Expected<MaterialTypedValueData> parameter = ParseMaterialTypedValue(parameterName, parameterValue);
+    if(!parameter.has_value()){
+        error("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'", parameterName, materialName.resolvedText(), parameterValue);
+        return makeUnexpected(Failure());
+    }
+
+    const MaterialLayoutFieldType parameterFieldType = MaterialLayoutFieldTypeFromParameterType(cast<MaterialParameterValueType>(parameter.value().meta.z), parameter.value().meta.w);
+    if(parameterFieldType != field.fieldType){
+        error("Material bind typed layout: parameter '{}' for '{}' does not match interface field type", parameterName, materialName.resolvedText());
+        return makeUnexpected(Failure());
+    }
+
+    return MaterialTypedValueToLayoutValue(parameter.value());
 }
 
 

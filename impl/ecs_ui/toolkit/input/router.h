@@ -41,9 +41,6 @@ private:
         const auto targetIndex = FindTargetIndexInTable(targets, lookup, id, declarationGeneration);
         return targetIndex ? &targets[*targetIndex] : nullptr;
     }
-    [[nodiscard]] static b8 HasVisibleBounds(const HitTarget& target)noexcept{
-        return HasVisibleUiRectIntersection(target.rectangle, target.clip);
-    }
 
 
 public:
@@ -89,10 +86,10 @@ public:
     [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event){
         if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::CommandUp)
             return MakeUnexpected(Failure{});
-        const auto pointer = resolvePointerEvent(event);
+        const auto pointer = TryResolveRouterPointerEvent(event, m_pointerBindings);
         if(!pointer)
             return MakeUnexpected(Failure{});
-        const auto candidate = resolveSourceEvent(*pointer);
+        const auto candidate = TryResolveRouterSourceEvent(m_bindings.bindings(), *pointer, m_boundSources);
         if(!candidate)
             return MakeUnexpected(Failure{});
         m_events.push_back(*candidate);
@@ -124,7 +121,7 @@ public:
                 m_windowFocused = false;
                 result.pointerConsumed |= hasPopup() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
                 result.commandConsumed |= wantsCommands();
-                cancelPopupFocus();
+                CancelRouterPopupFocus(m_popups, m_popupDismissals);
                 cancelInteraction();
             }
             else if(event.type == InputEventType::FocusGained)
@@ -143,7 +140,7 @@ public:
     [[nodiscard]] b8 commitTargets(const Span<const HitTarget> targets, const u64 layoutGeneration, const Span<const PopupScope> popups = {}, const u64 expectedFocusLossGeneration = Limit<u64>::s_Max){
         if(targets.size() > s_InputMaxTargets || layoutGeneration <= m_layoutGeneration)
             return false;
-        if(!stagePopups(popups) || !StageRouterHitTargets(targets, m_stagedPopups, m_stagedTargets, m_stagedLookup))
+        if(!TryStageRouterPopups(popups, m_popups, m_stagedPopups) || !StageRouterHitTargets(targets, m_stagedPopups, m_stagedTargets, m_stagedLookup))
             return false;
         Sort(m_stagedLookup.begin(), m_stagedLookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
             return lhs.value < rhs.value;
@@ -153,7 +150,20 @@ public:
         m_targets.swap(m_stagedTargets);
         m_lookup.swap(m_stagedLookup);
         m_layoutGeneration = layoutGeneration;
-        installPopups(expectedFocusLossGeneration);
+        InstallRouterPopups(
+            m_targets,
+            m_lookup,
+            m_windowFocused,
+            m_focusLossGeneration,
+            expectedFocusLossGeneration,
+            m_popupDismissals,
+            m_stagedPopups,
+            m_popups,
+            m_commandSources,
+            m_focus,
+            m_focusDeclaration,
+            m_focusControl
+        );
         reconcileTargets();
         ApplyRouterFocusOnCommit(
             m_targets,
@@ -213,7 +223,7 @@ public:
     }
     // Transfer command focus to another input owner without cancelling already accepted UI actions.
     void clearFocus()noexcept{
-        retireCommandFocus();
+        RetireRouterCommandFocus(m_commandSources);
         m_focus = {};
         m_focusDeclaration = 0u;
         m_focusControl = {};
@@ -342,12 +352,6 @@ public:
 
 
 private:
-    [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event){
-        return TryResolveRouterSourceEvent(m_bindings.bindings(), event, m_boundSources);
-    }
-    [[nodiscard]] Expected<InputEvent> resolvePointerEvent(const InputEvent& event){
-        return TryResolveRouterPointerEvent(event, m_pointerBindings);
-    }
     void retireQueuedReleases()noexcept{
         b8 unfinishedHoverSource = false;
         RetireRouterQueuedReleases(
@@ -520,99 +524,9 @@ private:
             m_hoverPointerSource = {};
         }
     }
-    [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept{
-        const auto found = FindRouterCommandSourceIndex(m_commandSources, source);
-        return found ? &m_commandSources[*found] : nullptr;
-    }
-    [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept{
-        const auto found = FindRouterCommandSourceIndex(m_commandSources, source);
-        return found ? &m_commandSources[*found] : nullptr;
-    }
-    [[nodiscard]] b8 currentCommandFocus(const CommandSource& source)const noexcept{
-        return IsCurrentRouterCommandFocus(m_targets, m_lookup, m_popups, m_windowFocused, m_focus, m_focusDeclaration, source);
-    }
-    void releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result){
-        ReleaseRouterCommand(
-            m_targets,
-            m_lookup,
-            m_popups,
-            m_windowFocused,
-            m_focus,
-            m_focusDeclaration,
-            m_layoutGeneration,
-            event,
-            source,
-            m_actions,
-            m_controlActions,
-            m_contextMenuActions,
-            m_nextActionSequence,
-            result
-        );
-    }
-    void cancelCommandPresses()noexcept{
-        CancelRouterCommandPresses(m_commandSources);
-    }
-    void retireCommandFocus()noexcept{
-        RetireRouterCommandFocus(m_commandSources);
-    }
-    void reconcileCommandPresses()noexcept{
-        ReconcileRouterCommandPresses(m_targets, m_lookup, m_popups, m_windowFocused, m_focus, m_focusDeclaration, m_commandSources);
-    }
-    void cancelPointerPress()noexcept{
-        CancelRouterPointerPress(
-            m_pointerGestures,
-            m_activeGestureSequence,
-            m_pointerSubmitArmed,
-            m_secondaryOwner,
-            m_capture,
-            m_capturePopup,
-            m_captureDeclaration,
-            m_captureControl
-        );
-    }
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const noexcept{
         const auto hitIndex = FindRouterHitTargetIndex(m_targets, m_lookup, m_popups, position);
         return hitIndex ? &m_targets[*hitIndex] : nullptr;
-    }
-    [[nodiscard]] b8 isInteractive(const HitTarget& target)const noexcept{
-        return IsRouterTargetInteractive(m_targets, m_lookup, m_popups, target);
-    }
-    [[nodiscard]] b8 validControlTargets()const noexcept{
-        return ValidateStagedHitTargetControlTargets(m_stagedTargets, m_stagedLookup);
-    }
-    [[nodiscard]] b8 validCommandOwners()const noexcept{
-        return ValidateStagedHitTargetCommandOwners(m_stagedTargets, m_stagedLookup);
-    }
-    [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const noexcept{
-        const auto hostIndex = TryResolveRouterCommandHostIndex(m_targets, m_lookup, m_popups, source);
-        return hostIndex ? &m_targets[*hostIndex] : nullptr;
-    }
-    [[nodiscard]] b8 currentControlCommandOwner(const CommandSource& held)const noexcept{
-        return IsCurrentRouterControlCommandOwner(m_targets, m_lookup, m_popups, held);
-    }
-    [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const noexcept{
-        if(!target.owner.valid())
-            return IsValidRouterControlHostTarget(m_popups, target, target) ? &target : nullptr;
-        const auto hostIndex = TryResolveRouterControlHostIndex(m_targets, m_lookup, m_popups, target);
-        return hostIndex ? &m_targets[*hostIndex] : nullptr;
-    }
-    [[nodiscard]] b8 currentControlAction(const ControlAction& action)const noexcept{
-        return IsCurrentRouterControlAction(m_targets, m_lookup, m_popups, action);
-    }
-    void reconcileControlActions()noexcept{
-        ReconcileRouterControlActions(m_targets, m_lookup, m_popups, m_controlActions, m_commandSources);
-    }
-    [[nodiscard]] b8 currentContextMenuOwner(const TargetOwner& owner)const noexcept{
-        return IsCurrentRouterContextMenuOwner(m_targets, m_lookup, m_popups, m_windowFocused, owner);
-    }
-    void reconcileContextMenus()noexcept{
-        ReconcileRouterContextMenus(m_targets, m_lookup, m_popups, m_windowFocused, m_contextMenuActions, m_secondaryOwner, m_commandSources);
-    }
-    void appendContextMenu(const HitTarget& target, const Point& position, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
-        AppendRouterContextMenu(target, m_layoutGeneration, position, origin, inputSource, m_contextMenuActions, m_nextActionSequence, result);
-    }
-    [[nodiscard]] b8 routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, const b8 alreadyPressed, CommandSource& source)noexcept{
-        return focused != nullptr && m_windowFocused && isInteractive(*focused) && TryRouteRouterContextMenuCommand(event, *focused, alreadyPressed, source);
     }
     void routeSecondary(const InputEvent& event, const HitTarget* const hit, InputRoutingResult& result){
         b8 advanceHover = false;
@@ -646,15 +560,6 @@ private:
             updateHover();
         }
     }
-    void appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, const f64 deltaX, InputRoutingResult& result){
-        AppendRouterControlAction(host, source, m_layoutGeneration, kind, delta, deltaX, m_controlActions, m_nextActionSequence, result);
-    }
-    void appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, InputRoutingResult& result){
-        appendControlAction(host, source, kind, delta, 0.0, result);
-    }
-    [[nodiscard]] b8 routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const b8 alreadyPressed, CommandSource& held, InputRoutingResult& result){
-        return TryRouteRouterControlNavigation(event, host, source, alreadyPressed, m_layoutGeneration, held, m_controlActions, m_nextActionSequence, result);
-    }
     void routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result){
         RouteRouterWheel(
             m_targets,
@@ -673,34 +578,6 @@ private:
             result
         );
     }
-    [[nodiscard]] b8 allowedByPopup(const HitTarget& target)const noexcept{
-        return IsTargetAllowedByRouterPopup(m_popups, target);
-    }
-    [[nodiscard]] b8 popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
-        return IsPopupTokenDescendant(m_popups, token, ancestor);
-    }
-    [[nodiscard]] b8 stagePopups(const Span<const PopupScope> scopes){
-        return TryStageRouterPopups(scopes, m_popups, m_stagedPopups);
-    }
-    [[nodiscard]] b8 validPopupTarget(const HitTarget& target)const noexcept{
-        return ValidStagedPopupTarget(target, m_stagedPopups);
-    }
-    void installPopups(const u64 expectedFocusLossGeneration){
-        InstallRouterPopups(
-            m_targets,
-            m_lookup,
-            m_windowFocused,
-            m_focusLossGeneration,
-            expectedFocusLossGeneration,
-            m_popupDismissals,
-            m_stagedPopups,
-            m_popups,
-            m_commandSources,
-            m_focus,
-            m_focusDeclaration,
-            m_focusControl
-        );
-    }
     void retirePopup(const WidgetId id){
         b8 top = false;
         PopupRecord restore;
@@ -708,9 +585,9 @@ private:
             return;
         rebuildLookup();
         if(top){
-            retireCommandFocus();
+            RetireRouterCommandFocus(m_commandSources);
             const HitTarget* target = findTarget(restore.restoreFocus, restore.restoreDeclaration);
-            if(m_windowFocused && target && target->popup == restore.restorePopup && target->focusable && isInteractive(*target)){
+            if(m_windowFocused && target && target->popup == restore.restorePopup && target->focusable && IsRouterTargetInteractive(m_targets, m_lookup, m_popups, *target)){
                 m_focus = target->id;
                 m_focusDeclaration = target->declarationGeneration;
                 m_focusControl = target->control;
@@ -719,9 +596,6 @@ private:
                 clearFocus();
         }
         reconcileTargets();
-    }
-    void cancelPopupFocus(){
-        CancelRouterPopupFocus(m_popups, m_popupDismissals);
     }
     void rebuildLookup(){
         m_lookup.clear();
@@ -747,10 +621,10 @@ private:
             m_captureControl,
             m_pointerSubmitArmed
         );
-        reconcilePointerGestures();
-        reconcileControlActions();
-        reconcileContextMenus();
-        reconcileCommandPresses();
+        ReconcileRouterPointerGestures(m_targets, m_lookup, m_popups, m_pointerGestures, m_activeGestureSequence);
+        ReconcileRouterControlActions(m_targets, m_lookup, m_popups, m_controlActions, m_commandSources);
+        ReconcileRouterContextMenus(m_targets, m_lookup, m_popups, m_windowFocused, m_contextMenuActions, m_secondaryOwner, m_commandSources);
+        ReconcileRouterCommandPresses(m_targets, m_lookup, m_popups, m_windowFocused, m_focus, m_focusDeclaration, m_commandSources);
         updateHover();
     }
     void updateHover()noexcept{ setHoverTarget(m_pointerKnown ? findHitTarget(m_pointer) : nullptr); }
@@ -800,28 +674,6 @@ private:
             m_secondaryOwner,
             m_pointerSubmitArmed
         );
-    }
-    void appendActivation(const HitTarget& target, const InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result){
-        AppendRouterActivation(target, m_layoutGeneration, origin, inputSource, m_actions, m_nextActionSequence, result);
-    }
-    void appendPointerGesture(const HitTarget& target, InputRoutingResult& result){
-        AppendRouterPointerGesture(
-            target,
-            m_layoutGeneration,
-            m_activePointerSource,
-            m_interactionPosition,
-            m_pointerGestures,
-            m_activeGestureSequence,
-            m_nextActionSequence,
-            result
-        );
-    }
-    void updatePointerGesture(const Point& position, const b8 completed)noexcept{
-        if(!TryUpdateRouterPointerGesture(position, completed, m_pointerGestures, m_activeGestureSequence, m_nextActionSequence))
-            TerminateInvariant();
-    }
-    void reconcilePointerGestures()noexcept{
-        ReconcileRouterPointerGestures(m_targets, m_lookup, m_popups, m_pointerGestures, m_activeGestureSequence);
     }
     void routePointer(const InputEvent& event, const HitTarget* const hit, InputRoutingResult& result){
         b8 advanceHover = false;
@@ -905,30 +757,6 @@ private:
             reconcileTargets();
             updateHover();
         }
-    }
-    void assignFocus(const HitTarget& target)noexcept{
-        AssignRouterFocus(target, m_commandSources, m_focus, m_focusDeclaration, m_focusControl);
-    }
-    [[nodiscard]] b8 moveFocus(const b8 reverse)noexcept{
-        return TryMoveRouterFocus(m_targets, m_lookup, m_popups, reverse, m_commandSources, m_focus, m_focusDeclaration, m_focusControl);
-    }
-    [[nodiscard]] b8 moveFocusForTraversal(const b8 reverse){
-        b8 dismissedPopup = false;
-        const b8 moved = TryMoveRouterFocusForTraversal(
-            m_targets,
-            m_lookup,
-            reverse,
-            m_popups,
-            m_popupDismissals,
-            m_commandSources,
-            m_focus,
-            m_focusDeclaration,
-            m_focusControl,
-            dismissedPopup
-        );
-        if(dismissedPopup)
-            reconcileTargets();
-        return moved;
     }
 
 

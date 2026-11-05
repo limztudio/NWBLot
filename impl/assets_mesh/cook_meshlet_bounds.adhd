@@ -1,0 +1,146 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook_meshlets.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidMeshletDirection3(in VectorSingle value){
+    return isFinite(value.x) && isFinite(value.y) && isFinite(value.z) && lengthSq(value.xyz) > s_MeshletDirectionEpsilon;
+}
+
+VectorSingle NormalizeMeshletDirection3OrZero(in VectorSingle value){
+    if(IsValidMeshletDirection3(value)){
+        const VectorSingle normalized = normalize(value.xyz);
+        return VectorSingle(normalized, 0.0f);
+    }
+    return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+MeshletBounds BuildMeshletBounds(
+    in Span<f32x3u> meshPositions,
+    in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
+    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+    in Span<u8> meshletPrimitiveIndices,
+    in MeshletDesc meshlet
+){
+    const u32 positionCount = MeshletPositionCount(meshlet);
+    const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+    assert(positionCount <= s_MeshMaxMeshletVertices, "positionCount <= s_MeshMaxMeshletVertices");
+    Array<f32x4, s_MeshMaxMeshletVertices> positions;
+    for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
+        const MeshletPositionStreamRef ref = meshletPositionStreamRefs[cast<usize>(meshlet.positionRefOffset + localPositionIndex)];
+        const f32x3u pos = meshPositions[cast<usize>(ref.position)];
+        positions[cast<usize>(localPositionIndex)] = f32x4(pos.x, pos.y, pos.z, 0.0f);
+    }
+
+    VectorSingle minBounds(f32.max, f32.max, f32.max, 0.0f);
+    VectorSingle maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
+    for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
+        const VectorSingle pos(positions[cast<usize>(localPositionIndex)]);
+        minBounds = min(minBounds, pos);
+        maxBounds = max(maxBounds, pos);
+    }
+
+    const VectorSingle center = (minBounds + maxBounds) * 0.5f;
+    VectorSingle radiusSquaredLanes(0.0f, 0.0f, 0.0f, 0.0f);
+    for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
+        const VectorSingle delta = VectorSingle(positions[cast<usize>(localPositionIndex)]) - center;
+        radiusSquaredLanes = max(radiusSquaredLanes, VectorSingle(lengthSq(delta.xyz)));
+    }
+    const f32 radius = sqrt(radiusSquaredLanes.x);
+
+    VectorSingle areaWeightedNormal(0.0f, 0.0f, 0.0f, 0.0f);
+    u32 validFaceNormalCount = 0u;
+    for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
+        const usize primitiveOffset = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitiveIndex) * cast<usize>(s_MeshletTriangleIndexCount);
+        const u8 localVertex0 = meshletPrimitiveIndices[primitiveOffset + 0u];
+        const u8 localVertex1 = meshletPrimitiveIndices[primitiveOffset + 1u];
+        const u8 localVertex2 = meshletPrimitiveIndices[primitiveOffset + 2u];
+        const MeshletLocalVertexRef ref0 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex0)];
+        const MeshletLocalVertexRef ref1 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex1)];
+        const MeshletLocalVertexRef ref2 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex2)];
+        const VectorSingle p0(positions[cast<usize>(ref0.localDeformedPosition)]);
+        const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
+        const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
+        const VectorSingle faceNormal = cross((p1 - p0).xyz, (p2 - p0).xyz);
+        if(IsValidMeshletDirection3(faceNormal)){
+            areaWeightedNormal = areaWeightedNormal + faceNormal;
+            ++validFaceNormalCount;
+        }
+    }
+
+    const VectorSingle coneAxis = NormalizeMeshletDirection3OrZero(areaWeightedNormal);
+    f32 coneCutoff = -1.0f;
+    if(validFaceNormalCount == primitiveCount && IsValidMeshletDirection3(coneAxis)){
+        coneCutoff = 1.0f;
+        for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
+            const usize primitiveOffset = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitiveIndex) * cast<usize>(s_MeshletTriangleIndexCount);
+            const u8 localVertex0 = meshletPrimitiveIndices[primitiveOffset + 0u];
+            const u8 localVertex1 = meshletPrimitiveIndices[primitiveOffset + 1u];
+            const u8 localVertex2 = meshletPrimitiveIndices[primitiveOffset + 2u];
+            const MeshletLocalVertexRef ref0 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex0)];
+            const MeshletLocalVertexRef ref1 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex1)];
+            const MeshletLocalVertexRef ref2 = meshletLocalVertexRefs[cast<usize>(meshlet.localVertexOffset) + cast<usize>(localVertex2)];
+            const VectorSingle p0(positions[cast<usize>(ref0.localDeformedPosition)]);
+            const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
+            const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
+            const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(cross((p1 - p0).xyz, (p2 - p0).xyz));
+            if(IsValidMeshletDirection3(faceNormal))
+                coneCutoff = min(coneCutoff, dot(coneAxis.xyz, faceNormal.xyz));
+        }
+        if(coneCutoff <= 0.0f)
+            coneCutoff = -1.0f;
+    }
+
+    MeshletBounds bounds;
+    bounds.sphere = f32x4u(center, radius * s_MeshletBoundsRadiusInflation);
+    bounds.conePacked = PackMeshletCone(coneAxis, coneCutoff);
+    return bounds;
+}
+
+b8 FlushBuiltMeshlet(
+    in StringView metaKind,
+    in StringView filePathText,
+    in Span<f32x3u> positions,
+    in Span<MeshVertexRef> vertexRefs,
+    in Span<u8> primitiveIndices,
+    in Span<u32> localSourceVertexRefs,
+    mut MeshletDesc inOutCurrent,
+    mut Vector<MeshletPositionStreamRef> inOutPositionRefs,
+    mut Vector<MeshletAttributeStreamRef> inOutAttributeRefs,
+    mut Vector<MeshletLocalVertexRef> inOutLocalVertexRefs,
+    mut Vector<MeshletDesc> inOutMeshlets,
+    mut Vector<MeshletBounds> inOutMeshletBounds
+){
+    const u32 primitiveCount = MeshletPrimitiveCount(inOutCurrent);
+    if(primitiveCount == 0u)
+        return true;
+
+    FixedVector<MeshletPositionStreamRef, s_MeshMaxMeshletVertices> localPositionRefs;
+    FixedVector<MeshletAttributeStreamRef, s_MeshMaxMeshletVertices> localAttributeRefs;
+    FixedVector<MeshletLocalVertexRef, s_MeshMaxMeshletVertices> localVertexRefs;
+    if(!BuildZippedMeshletRefsFixed(metaKind, filePathText, vertexRefs, localSourceVertexRefs, localPositionRefs, localAttributeRefs, localVertexRefs))
+        return false;
+
+    inOutCurrent.localVertexOffset = cast<u32>(inOutLocalVertexRefs.size());
+    inOutCurrent.positionRefOffset = cast<u32>(inOutPositionRefs.size());
+    inOutCurrent.attributeRefOffset = cast<u32>(inOutAttributeRefs.size());
+    inOutCurrent.counts = PackMeshletCounts(cast<u32>(localVertexRefs.size()), primitiveCount, cast<u32>(localPositionRefs.size()), cast<u32>(localAttributeRefs.size()));
+
+    for(in MeshletPositionStreamRef ref : localPositionRefs)
+        inOutPositionRefs.push_back(ref);
+    for(in MeshletAttributeStreamRef ref : localAttributeRefs)
+        inOutAttributeRefs.push_back(ref);
+    for(in MeshletLocalVertexRef ref : localVertexRefs)
+        inOutLocalVertexRefs.push_back(ref);
+    inOutMeshlets.push_back(inOutCurrent);
+    inOutMeshletBounds.push_back(BuildMeshletBounds(positions, inOutPositionRefs, inOutLocalVertexRefs, primitiveIndices, inOutCurrent));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

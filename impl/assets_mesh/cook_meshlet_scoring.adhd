@@ -2,21 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/cook_meshlets.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const f32 s_MeshletScoreSharedVertexWeight = 20.0f;
-const f32 s_MeshletScoreNewVertexWeight = 8.0f;
-const f32 s_MeshletScoreRadiusWeight = 4.0f;
-const f32 s_MeshletScoreCentroidWeight = 1.0f;
-const f32 s_MeshletScoreNormalWeight = 10.0f;
-const f32 s_MeshletScoreConePenaltyWeight = 12.0f;
-const f32 s_MeshletScoreDisconnectedPenalty = 24.0f;
-const usize s_MeshletDisconnectedCandidateParallelThreshold = 4096u;
-const usize s_MeshletDisconnectedCandidateParallelOversubscription = 4u;
+#include <impl/assets_mesh/cook_meshlet_score_state.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,27 +27,6 @@ Expected<MeshletFrontierCandidate> SelectBestMeshletCandidateFromResults(in Span
     if(!found)
         return makeUnexpected(Failure());
     return bestCandidate;
-}
-
-f32 EvaluateMeshletCandidateScore(
-    in u32 sharedVertexCount,
-    in u32 missingVertexCount,
-    in f32 predictedRadiusGrowth,
-    in f32 centroidDistance,
-    in f32 normalCoherence,
-    in f32 coneWidening,
-    in b8 disconnected
-){
-    f32 disconnectedPenalty = 0.0f;
-    if(disconnected)
-        disconnectedPenalty = s_MeshletScoreDisconnectedPenalty;
-    return cast<f32>(sharedVertexCount) * s_MeshletScoreSharedVertexWeight
-        - cast<f32>(missingVertexCount) * s_MeshletScoreNewVertexWeight
-        - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
-        - s_MeshletScoreCentroidWeight * centroidDistance
-        + s_MeshletScoreNormalWeight * normalCoherence
-        - s_MeshletScoreConePenaltyWeight * coneWidening
-        - disconnectedPenalty;
 }
 
 b8 IsBetterMeshletCandidate(in f32 score, in u32 triangleIndex, in b8 hasExisting, in MeshletFrontierCandidate existing){
@@ -96,146 +61,6 @@ void ResolveMeshletDisconnectedCandidateChunkRange(
     }
     outChunkBegin = searchOffset + chunkIndex * chunkSize + extraOffset;
     outChunkEnd = outChunkBegin + chunkSize + extraCount;
-}
-
-void ResetMeshletScoreState(mut MeshletScoreState state){
-    state.minBounds = f32x4(f32.max, f32.max, f32.max, 0.0f);
-    state.maxBounds = f32x4(-f32.max, -f32.max, -f32.max, 0.0f);
-    state.centroidSum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    state.normalSum = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    state.normalAxis = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    state.primitiveCount = 0u;
-    state.radius = 0.0f;
-    state.coneCutoff = -1.0f;
-    state.coneEnabled = false;
-}
-
-f32 PredictMeshletScoreRadiusFromCalculation(in MeshletScoreState state, in MeshletTriangleCalculation triangleCalculation){
-    VectorSingle minBounds = min(VectorSingle(state.minBounds), VectorSingle(triangleCalculation.positions[0u]));
-    minBounds = min(minBounds, VectorSingle(triangleCalculation.positions[1u]));
-    minBounds = min(minBounds, VectorSingle(triangleCalculation.positions[2u]));
-    VectorSingle maxBounds = max(VectorSingle(state.maxBounds), VectorSingle(triangleCalculation.positions[0u]));
-    maxBounds = max(maxBounds, VectorSingle(triangleCalculation.positions[1u]));
-    maxBounds = max(maxBounds, VectorSingle(triangleCalculation.positions[2u]));
-    const VectorSingle extents = (maxBounds - minBounds) * 0.5f;
-    return length(extents.xyz);
-}
-
-f32 MeshletScoreCentroidDistance(in MeshletScoreState state, in VectorSingle triangleCentroid){
-    if(state.primitiveCount == 0u)
-        return 0.0f;
-    const VectorSingle meshletCentroid = VectorSingle(state.centroidSum) / VectorSingle(cast<f32>(state.primitiveCount));
-    return length((triangleCentroid - meshletCentroid).xyz);
-}
-
-f32 MeshletScoreNormalCoherence(in MeshletScoreState state, in VectorSingle triangleAreaNormal){
-    const VectorSingle stateAxis(state.normalAxis);
-    const VectorSingle candidateNormal = NormalizeMeshletDirection3OrZero(triangleAreaNormal);
-    if(!IsValidMeshletDirection3(stateAxis) || !IsValidMeshletDirection3(candidateNormal))
-        return 0.0f;
-    return dot(stateAxis.xyz, candidateNormal.xyz);
-}
-
-void UpdateMeshletScoreConeCutoff(in VectorSingle axis, in VectorSingle triangleAreaNormal, mut b8 hasNormal, mut f32 coneCutoff){
-    const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(triangleAreaNormal);
-    if(!IsValidMeshletDirection3(faceNormal))
-        return;
-    hasNormal = true;
-    coneCutoff = min(coneCutoff, dot(axis.xyz, faceNormal.xyz));
-}
-
-Expected<f32> TryComputeMeshletScoreConeCutoffFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in VectorSingle axis,
-    in u32 extraTriangleIndex,
-    in b8 hasExtraTriangle
-){
-    if(!IsValidMeshletDirection3(axis))
-        return makeUnexpected(Failure());
-
-    b8 hasNormal = false;
-    f32 coneCutoff = 1.0f;
-    for(in u32 triangleIndex : triangleIndices)
-        UpdateMeshletScoreConeCutoff(axis, VectorSingle(triangleCalculations[cast<usize>(triangleIndex)].areaNormal), hasNormal, coneCutoff);
-    if(hasExtraTriangle)
-        UpdateMeshletScoreConeCutoff(axis, VectorSingle(triangleCalculations[cast<usize>(extraTriangleIndex)].areaNormal), hasNormal, coneCutoff);
-
-    if(!hasNormal || !(coneCutoff > 0.0f))
-        return makeUnexpected(Failure());
-
-    return coneCutoff;
-}
-
-f32 PredictMeshletScoreConeWideningFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in MeshletScoreState state,
-    in u32 triangleIndex,
-    in VectorSingle triangleAreaNormal
-){
-    if(!state.coneEnabled)
-        return 0.0f;
-
-    const VectorSingle predictedAxis = NormalizeMeshletDirection3OrZero(VectorSingle(state.normalSum) + triangleAreaNormal);
-    const Expected<f32> predictedCutoff = TryComputeMeshletScoreConeCutoffFromCalculations(triangleCalculations, triangleIndices, predictedAxis, triangleIndex, true);
-    if(!predictedCutoff.has_value())
-        return 1.0f;
-
-    return max(state.coneCutoff - predictedCutoff.value(), 0.0f);
-}
-
-f32 ScoreMeshletCandidateFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in MeshletScoreState state,
-    in u32 triangleIndex,
-    in u32 sharedVertexCount,
-    in u32 missingVertexCount,
-    in b8 disconnected
-){
-    const MeshletTriangleCalculation triangleCalculation = triangleCalculations[cast<usize>(triangleIndex)];
-    const VectorSingle areaNormal(triangleCalculation.areaNormal);
-    const f32 predictedRadius = PredictMeshletScoreRadiusFromCalculation(state, triangleCalculation);
-    const f32 predictedRadiusGrowth = max(predictedRadius - state.radius, 0.0f);
-    const f32 centroidDistance = MeshletScoreCentroidDistance(state, VectorSingle(triangleCalculation.centroid));
-    const f32 normalCoherence = MeshletScoreNormalCoherence(state, areaNormal);
-    const f32 coneWidening = PredictMeshletScoreConeWideningFromCalculations(triangleCalculations, triangleIndices, state, triangleIndex, areaNormal);
-    return EvaluateMeshletCandidateScore(sharedVertexCount, missingVertexCount, predictedRadiusGrowth, centroidDistance, normalCoherence, coneWidening, disconnected);
-}
-
-void AddMeshletTriangleToScoreStateFromCalculations(
-    in Span<MeshletTriangleCalculation> triangleCalculations,
-    in Span<u32> triangleIndices,
-    in u32 triangleIndex,
-    mut MeshletScoreState state
-){
-    const MeshletTriangleCalculation triangleCalculation = triangleCalculations[cast<usize>(triangleIndex)];
-    const VectorSingle p0(triangleCalculation.positions[0u]);
-    const VectorSingle p1(triangleCalculation.positions[1u]);
-    const VectorSingle p2(triangleCalculation.positions[2u]);
-    VectorSingle minBounds = min(VectorSingle(state.minBounds), p0);
-    minBounds = min(minBounds, p1);
-    minBounds = min(minBounds, p2);
-    VectorSingle maxBounds = max(VectorSingle(state.maxBounds), p0);
-    maxBounds = max(maxBounds, p1);
-    maxBounds = max(maxBounds, p2);
-    state.minBounds = f32x4(minBounds);
-    state.maxBounds = f32x4(maxBounds);
-    const VectorSingle extents = (maxBounds - minBounds) * 0.5f;
-    state.radius = length(extents.xyz);
-    state.centroidSum = f32x4(VectorSingle(state.centroidSum) + VectorSingle(triangleCalculation.centroid));
-    const VectorSingle normalSum = VectorSingle(state.normalSum) + VectorSingle(triangleCalculation.areaNormal);
-    state.normalSum = f32x4(normalSum);
-    const VectorSingle normalAxis = NormalizeMeshletDirection3OrZero(normalSum);
-    state.normalAxis = f32x4(normalAxis);
-    ++state.primitiveCount;
-    const Expected<f32> coneCutoff = TryComputeMeshletScoreConeCutoffFromCalculations(triangleCalculations, triangleIndices, normalAxis, 0u, false);
-    state.coneEnabled = coneCutoff.has_value();
-    if(coneCutoff.has_value())
-        state.coneCutoff = coneCutoff.value();
-    else
-        state.coneCutoff = -1.0f;
 }
 
 void UpdateBestMeshletCandidateFromPrecompute(

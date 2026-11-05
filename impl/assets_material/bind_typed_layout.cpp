@@ -39,76 +39,6 @@ static Expected<MaterialBlockClass::Enum> ParseMaterialBindBlockClass(const Mate
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<UInt4U> BuildMaterialTypedLayoutDefaultValue(const Name& materialName, const MaterialBindInstance& instance, const MaterialBindField& bindField, const MaterialLayoutFieldType::Enum fieldType){
-
-    // Keep slots zero until the renderer resolves MaterialResourceReference against its live descriptor heap.
-    if(IsMaterialLayoutResourceFieldType(fieldType))
-        return UInt4U{};
-
-    const Expected<ACompactString> key = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name));
-    if(!key){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity"), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(materialName.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-
-    ACompactString defaultText;
-    const AStringView defaultArgument = bindField.defaultArgument();
-    if(!defaultText.assign(defaultArgument)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default for '{}.{}' in '{}' exceeds ACompactString capacity"), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(materialName.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto defaultParameter = ParseMaterialTypedValue(*key, defaultText);
-    if(!defaultParameter){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default '{}' for '{}.{}' in '{}' is invalid"), ConvertString(defaultArgument), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(materialName.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-
-    const MaterialLayoutFieldType::Enum defaultFieldType = MaterialLayoutFieldTypeFromParameterType(static_cast<MaterialParameterValueType::Enum>(defaultParameter->meta.z), defaultParameter->meta.w);
-    if(defaultFieldType != fieldType){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default '{}' for '{}.{}' in '{}' " "does not match field type '{}'")
-            , ConvertString(defaultArgument)
-            , ConvertString(instance.name)
-            , ConvertString(bindField.name)
-            , ConvertString(materialName.resolvedText())
-            , ConvertString(bindField.type)
-        );
-        return MakeUnexpected(Failure{});
-    }
-
-    return MaterialTypedValueToLayoutValue(*defaultParameter);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The builder admits only field types with a nonzero byte size.
-static void AppendMaterialTypedLayoutFieldBytes(const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value, Material::TypedBlockByteVector& inOutBlockBytes){
-    const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
-    NWB_ASSERT(byteSize != 0u && byteSize <= sizeof(value));
-
-    const usize oldSize = inOutBlockBytes.size();
-    inOutBlockBytes.resize(oldSize + byteSize, 0u);
-    NWB_MEMCPY(inOutBlockBytes.data() + oldSize, byteSize, &value, byteSize);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Field offsets only grow inside a block, so padding never shrinks the bytes.
-static void PadMaterialTypedLayoutBytesTo(const usize targetByteSize, Material::TypedBlockByteVector& inOutBlockBytes){
-    NWB_ASSERT(targetByteSize >= inOutBlockBytes.size());
-    if(targetByteSize > inOutBlockBytes.capacity())
-        inOutBlockBytes.reserve(targetByteSize);
-    inOutBlockBytes.resize(targetByteSize, 0u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static b8 ReserveMaterialBindTypedLayoutVectors(const MaterialBindEntry& bindEntry, const Name& contextName, const Span<const NotNull<const MaterialBindInstance*>> sortedInstances, MaterialBindTypedLayout& outLayout){
     usize fieldReserveCount = 0u;
     usize byteReserveCount = 0u;
@@ -271,42 +201,6 @@ static b8 BuildMaterialBindTypedLayoutParameterLookup(const AStringView contextL
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 WriteMaterialTypedLayoutFieldBytes(const usize byteOffset, const MaterialLayoutFieldType::Enum fieldType, const UInt4U& value, Material::TypedBlockByteVector& inOutBlockBytes)noexcept{
-    const u32 byteSize = MaterialLayoutFieldByteSize(fieldType);
-    if(byteSize == 0u || byteSize > sizeof(value))
-        return false;
-    if(byteOffset > inOutBlockBytes.size() || byteSize > inOutBlockBytes.size() - byteOffset)
-        return false;
-
-    NWB_MEMCPY(inOutBlockBytes.data() + byteOffset, byteSize, &value, byteSize);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<UInt4U> ParseMaterialTypedLayoutParameterValue(const Name& materialName, const AStringView parameterName, const AStringView parameterValue, const MaterialTypedLayoutField& field){
-
-    const auto parameter = ParseMaterialTypedValue(parameterName, parameterValue);
-    if(!parameter){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'"), ConvertString(parameterName), ConvertString(materialName.resolvedText()), ConvertString(parameterValue));
-        return MakeUnexpected(Failure{});
-    }
-
-    const MaterialLayoutFieldType::Enum parameterFieldType = MaterialLayoutFieldTypeFromParameterType(static_cast<MaterialParameterValueType::Enum>(parameter->meta.z), parameter->meta.w);
-    if(parameterFieldType != field.fieldType){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' does not match interface field type"), ConvertString(parameterName), ConvertString(materialName.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-
-    return MaterialTypedValueToLayoutValue(*parameter);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
@@ -351,7 +245,7 @@ b8 ApplyMaterialBindTypedLayoutParameterValue(
         return true;
     }
 
-    const auto typedValue = ParseMaterialTypedLayoutParameterValue(materialName, parameterName, parameterValue, field);
+    const auto typedValue = TryParseMaterialTypedLayoutParameterValue(materialName, parameterName.view(), parameterValue, field);
     if(!typedValue)
         return false;
 
@@ -462,7 +356,14 @@ Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBin
             field.fieldName = *fieldName;
             field.fieldType = fieldType;
             field.offset = *fieldOffset;
-            const auto defaultValue = BuildMaterialTypedLayoutDefaultValue(contextName, *instance, bindField, fieldType);
+            const auto defaultValue = TryBuildMaterialTypedLayoutDefaultValue(
+                contextName,
+                AStringView(instance->name),
+                AStringView(bindField.name),
+                AStringView(bindField.type),
+                bindField.defaultArgument(),
+                fieldType
+            );
             if(!defaultValue)
                 return MakeUnexpected(Failure{});
             field.defaultValue = *defaultValue;

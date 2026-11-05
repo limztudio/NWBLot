@@ -1,0 +1,213 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "router_focus_traversal.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<InputEvent> TryResolveRouterSourceEvent(
+    in Span<InputKeyBinding> keyBindings,
+    in InputEvent event,
+    mut Vector<BoundSource> boundSources
+){
+    InputEvent resolved = event;
+    const b8 physical = event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp;
+    const b8 command = event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp;
+    if(!physical && !command)
+        return resolved;
+    if(physical){
+        if(!IsValidInputKeyCode(event.key))
+            return makeUnexpected(Failure());
+        if(event.type == InputEventType::KeyDown)
+            resolved.type = InputEventType::CommandDown;
+        else
+            resolved.type = InputEventType::CommandUp;
+        resolved.source = InputSource(0u, cast<u64>(event.key) + 1u);
+    }
+    else if(!event.source.valid() || event.command > InputCommand::ContextMenu)
+        return makeUnexpected(Failure());
+    usize heldIndex = boundSources.size();
+    for(usize index = 0u; index < boundSources.size(); ++index){
+        if(boundSources[index].source == resolved.source){
+            heldIndex = index;
+            break;
+        }
+    }
+    if(heldIndex != boundSources.size()){
+        const InputCommandIntent heldIntent = boundSources[heldIndex].intent;
+        resolved.command = heldIntent.command;
+        resolved.extend = heldIntent.extend;
+        resolved.edit = heldIntent.edit;
+        resolved.allowText = heldIntent.allowText;
+        if(resolved.type == InputEventType::CommandUp){
+            for(usize moveIndex = heldIndex + 1u; moveIndex < boundSources.size(); ++moveIndex)
+                boundSources[moveIndex - 1u] = boundSources[moveIndex];
+            boundSources.pop_back();
+        }
+        else
+            resolved.repeat = true;
+    }
+    else if(resolved.type == InputEventType::CommandDown){
+        if(boundSources.size() == s_InputMaxSources)
+            return makeUnexpected(Failure());
+        if(physical){
+            const i32 modifiers = BuildInputEventModifierMask(event);
+            const InputCommandIntent intent = ResolveInputKeyBinding(
+                keyBindings,
+                event.key,
+                modifiers,
+                IsValidInputKeyCode(event.key),
+                s_InputBindingModifierMask,
+                s_InputLockModifierMask,
+                s_InputModifierShift
+            );
+            resolved.command = intent.command;
+            resolved.extend = intent.extend;
+            resolved.edit = intent.edit;
+            resolved.allowText = intent.allowText;
+        }
+        BoundSource bound;
+        bound.source = resolved.source;
+        bound.intent.command = resolved.command;
+        bound.intent.extend = resolved.extend;
+        bound.intent.edit = resolved.edit;
+        bound.intent.allowText = resolved.allowText;
+        boundSources.push_back(bound);
+    }
+    else{
+        resolved.command = InputCommand::None;
+        resolved.extend = false;
+        resolved.edit = false;
+        resolved.allowText = false;
+    }
+    if(resolved.type == InputEventType::CommandUp)
+        resolved.repeat = false;
+    return resolved;
+}
+
+b8 IsRouterTargetPressedByCommand(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in Span<CommandSource> commandSources,
+    in b8 windowFocused,
+    in WidgetId focus,
+    in u64 focusDeclaration,
+    in WidgetId id
+){
+    for(in CommandSource source : commandSources){
+        if(source.submitArmed && source.focusOwner.target == id && IsCurrentRouterCommandFocus(targets, lookup, popups, windowFocused, focus, focusDeclaration, source))
+            return true;
+    }
+    return false;
+}
+
+void ReleaseRouterCommand(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in b8 windowFocused,
+    in WidgetId focus,
+    in u64 focusDeclaration,
+    in u64 layoutGeneration,
+    in InputEvent event,
+    in CommandSource source,
+    mut Vector<InputAction> actions,
+    mut Vector<ControlAction> controlActions,
+    mut Vector<ContextMenuAction> contextMenuActions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    if(!IsCurrentRouterCommandFocus(targets, lookup, popups, windowFocused, focus, focusDeclaration, source))
+        return;
+    if(source.contextArmed && event.command == InputCommand::ContextMenu && IsCurrentRouterContextMenuOwner(targets, lookup, popups, windowFocused, source.focusOwner)){
+        const Expected<usize> targetIndex = FindTargetIndexInTable(targets, lookup, source.focusOwner.target, source.focusOwner.declarationGeneration);
+        if(targetIndex.has_value())
+            AppendRouterContextMenu(targets[targetIndex.value()], layoutGeneration, source.contextPosition, InputActionSource::Command, event.source, contextMenuActions, inOutNextActionSequence, inOutResult);
+        return;
+    }
+    if(!source.submitArmed || (event.command != InputCommand::Accept && event.command != InputCommand::Submit && event.command != InputCommand::Activate))
+        return;
+    const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, source.focusOwner.target, source.focusOwner.declarationGeneration);
+    if(!focusedIndex.has_value())
+        return;
+    const HitTarget focused = targets[focusedIndex.value()];
+    if(source.controlOwner.host.valid()){
+        if(IsCurrentRouterControlCommandOwner(targets, lookup, popups, source)){
+            const Expected<usize> hostIndex = FindTargetIndexInTable(targets, lookup, source.controlOwner.host, source.controlOwner.declarationGeneration);
+            if(hostIndex.has_value())
+                AppendRouterControlAction(targets[hostIndex.value()], focused, layoutGeneration, ControlActionKind::Submit, 0.0, 0.0, controlActions, inOutNextActionSequence, inOutResult);
+        }
+    }
+    else if(focused.activatable)
+        AppendRouterActivation(focused, layoutGeneration, InputActionSource::Command, event.source, actions, inOutNextActionSequence, inOutResult);
+}
+
+void RouteRouterActiveCommandAction(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in InputEvent event,
+    in b8 hasFocused,
+    in HitTarget focused,
+    in b8 alreadyPressed,
+    in u64 layoutGeneration,
+    mut CommandSource inOutSource,
+    mut Vector<ControlAction> controlActions,
+    mut u64 inOutNextActionSequence,
+    mut InputRoutingResult inOutResult
+){
+    if(!hasFocused)
+        return;
+    const b8 delegatedCommand = event.command == InputCommand::Up || event.command == InputCommand::Down
+        || event.command == InputCommand::PageUp || event.command == InputCommand::PageDown
+        || event.command == InputCommand::Accept || event.command == InputCommand::Submit;
+    b8 hasCommandOwner = false;
+    HitTarget control = focused;
+    if(delegatedCommand){
+        const Expected<usize> commandOwnerIndex = TryResolveRouterCommandHostIndex(targets, lookup, popups, focused);
+        if(commandOwnerIndex.has_value()){
+            hasCommandOwner = true;
+            control = targets[commandOwnerIndex.value()];
+        }
+    }
+    const b8 submitCommand = event.command == InputCommand::Accept || event.command == InputCommand::Submit || event.command == InputCommand::Activate;
+    b8 controlHandled = false;
+    if(control.navigable){
+        if(submitCommand){
+            controlHandled = true;
+            if(!event.repeat && !alreadyPressed)
+                inOutSource.controlOwner = ControlCommandOwner(control.id, control.declarationGeneration, control.popup, control.control, false);
+        }
+        else
+            controlHandled = TryRouteRouterControlNavigation(event, control, focused, alreadyPressed, layoutGeneration, inOutSource, controlActions, inOutNextActionSequence, inOutResult);
+    }
+    if(controlHandled && hasCommandOwner)
+        inOutSource.delegated = true;
+    if(submitCommand && !event.repeat && !alreadyPressed && (controlHandled || focused.activatable || focused.textEditable))
+        inOutSource.submitArmed = true;
+}
+
+b8 OwnsRouterCommandSource(
+    in Span<CommandSource> commandSources,
+    in InputSource source
+){
+    const Expected<usize> found = FindRouterCommandSourceIndex(commandSources, source);
+    return found.has_value() && commandSources[found.value()].consumed;
+}
+
+b8 WantsRouterCommands(in Span<PopupRecord> popups, in WidgetId focus, in Span<CommandSource> commandSources){
+    if(!popups.empty() || focus.valid())
+        return true;
+    for(in CommandSource source : commandSources){
+        if(source.consumed)
+            return true;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

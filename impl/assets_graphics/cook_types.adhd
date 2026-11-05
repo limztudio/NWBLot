@@ -244,5 +244,23 @@ b8 TryInsertUniqueShaderIdentityKey(
     return true;
 }
 
+b8 TryAccumulatePreparedShaderRecordCount(in u64 variantCount, mut u64 inOutShaderRecordCount){
+    if(inOutShaderRecordCount > u64.max - variantCount){
+        error("GraphicsCook: shader record count overflow");
+        return false;
+    }
+    inOutShaderRecordCount += variantCount;
+    return true;
+}
+
+b8 ValidatePreparedShaderRecordCountFitsCapacity(in u64 shaderRecordCount, mut usize outCount){
+    if(shaderRecordCount > cast<u64>(usize.max)){
+        error("GraphicsCook: shader record count exceeds container capacity");
+        return false;
+    }
+    outCount = cast<usize>(shaderRecordCount);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

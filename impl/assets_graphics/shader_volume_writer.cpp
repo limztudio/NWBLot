@@ -153,19 +153,14 @@ static b8 GetVariantBytecode(
 static Expected<usize> ReserveShaderIndexRecords(const Span<const PreparedShaderEntry> preparedEntries, Vector<Core::ShaderArchive::Record, ScratchArena>& outShaderIndexRecords){
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
-        if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader record count overflow"));
+        if(!TryAccumulatePreparedShaderRecordCount(preparedEntry.variantCount, shaderRecordCount))
             return MakeUnexpected(Failure{});
-        }
-        shaderRecordCount += preparedEntry.variantCount;
     }
-    if(shaderRecordCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader record count exceeds container capacity"));
+    usize count = 0u;
+    if(!ValidatePreparedShaderRecordCountFitsCapacity(shaderRecordCount, count))
         return MakeUnexpected(Failure{});
-    }
 
     outShaderIndexRecords.clear();
-    const usize count = static_cast<usize>(shaderRecordCount);
     outShaderIndexRecords.reserve(count);
     return count;
 }

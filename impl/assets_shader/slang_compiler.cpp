@@ -161,19 +161,6 @@ static const Array<SlangStageMapping, 14u> s_StageMappings = {{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<AStringView> TryMapStageToSlangStage(const AStringView stage)noexcept{
-    for(const SlangStageMapping& mapping : s_StageMappings){
-        if(stage == mapping.stage)
-            return mapping.slangStage;
-    }
-
-    return MakeUnexpected(Failure{});
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -235,30 +222,14 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
         return MakeUnexpected(Failure{});
     }
 
-    const auto appendText = [&fingerprint](const AStringView text)noexcept{
-        fingerprint = UpdateFnv64TextExact(fingerprint, text);
-    };
     // The version identifies the loaded Slang compiler library as well as its executable launcher.
-    appendText(TrimView(versionText));
-    for(const AStringView argument : s_CommonCompilerArguments)
-        appendText(argument);
-    for(const AStringView capability : s_SpirvBaselineCapabilities){
-        appendText(s_SlangCapabilityArgument);
-        appendText(capability);
-    }
-    appendText(ShaderBinaryPayload::s_SpvRayQueryCapabilityText);
-    appendText(s_SlangEntryPointArgument);
-    appendText(s_SlangStageArgument);
-    appendText(s_SlangIncludeArgument);
-    appendText(s_SlangDefineArgument);
-    appendText(s_SlangOutputArgument);
-    for(const SlangStageMapping& mapping : s_StageMappings){
-        appendText(mapping.stage);
-        appendText(mapping.slangStage);
-    }
-    for(u8 optimizationLevel = 0u; optimizationLevel < ShaderBinaryPayload::ShaderOptimizationLevel::kCount; ++optimizationLevel)
-        appendText(SlangOptimizationArgument(static_cast<ShaderBinaryPayload::ShaderOptimizationLevel::Enum>(optimizationLevel)));
-    return fingerprint;
+    return FinalizeSlangCompilerFingerprint(
+        AStringView(versionText),
+        s_CommonCompilerArguments,
+        s_SpirvBaselineCapabilities,
+        s_StageMappings,
+        fingerprint
+    );
 }
 
 
@@ -270,32 +241,20 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
 
     outBytecode.clear();
 
-    if(request.sourcePath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : source path is empty"), ConvertString(request.shaderName));
+    AStringView slangStage;
+    AStringView optimizationArgument;
+    if(!ValidateSlangCompilerRequestInputs(
+        request.shaderName,
+        request.sourcePath.empty(),
+        request.outputPath.empty(),
+        request.entryPoint,
+        request.stage,
+        static_cast<u8>(request.optimizationLevel),
+        s_StageMappings,
+        slangStage,
+        optimizationArgument
+    ))
         return false;
-    }
-
-    if(request.outputPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : output path is empty"), ConvertString(request.shaderName));
-        return false;
-    }
-
-    if(request.entryPoint.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : entry point is empty"), ConvertString(request.shaderName));
-        return false;
-    }
-
-    const auto slangStage = TryMapStageToSlangStage(request.stage);
-    if(!slangStage){
-        NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), ConvertString(request.stage), ConvertString(request.shaderName));
-        return false;
-    }
-
-    const AStringView optimizationArgument = SlangOptimizationArgument(request.optimizationLevel);
-    if(request.optimizationLevel >= ShaderBinaryPayload::ShaderOptimizationLevel::kCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}"), ConvertString(request.shaderName), static_cast<u32>(request.optimizationLevel));
-        return false;
-    }
 
     const ScratchPath outputParent = request.outputPath.parentPath();
     const auto compilerWorkDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(outputParent.empty() ? ScratchPath(scratchArena, s_CurrentDirectoryPathText) : outputParent, scratchArena);
@@ -313,13 +272,11 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
 
     const usize includeDirectoryCount = compilerIncludeDirectories.size();
     const usize defineCount = request.defines.size();
-    if(AddOverflows<usize>(s_MaxFixedArgumentCount, defineCount) || includeDirectoryCount > (Limit<usize>::s_Max - s_MaxFixedArgumentCount - defineCount) / 2u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), ConvertString(request.shaderName));
+    usize argumentReserve = 0u;
+    usize ownedArgumentCount = 0u;
+    if(!TryComputeSlangCompilerArgumentCounts(request.shaderName, includeDirectoryCount, defineCount, argumentReserve, ownedArgumentCount))
         return false;
-    }
 
-    const usize argumentReserve = s_MaxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
-    const usize ownedArgumentCount = s_SlangFixedOwnedArgumentCount + includeDirectoryCount + defineCount;
     ScratchVector<AStringView> arguments(scratchArena);
     arguments.reserve(argumentReserve);
     ScratchVector<ScratchString> ownedArguments(scratchArena);
@@ -352,7 +309,7 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
     arguments.push_back(s_SlangEntryPointArgument);
     arguments.push_back(request.entryPoint);
     arguments.push_back(s_SlangStageArgument);
-    arguments.push_back(*slangStage);
+    arguments.push_back(slangStage);
     for(const ScratchPath& includeDirectory : compilerIncludeDirectories){
         arguments.push_back(s_SlangIncludeArgument);
         auto includeDirectoryText = SlangCompilerWorkspace::BuildCompilerPathText(includeDirectory, scratchArena);

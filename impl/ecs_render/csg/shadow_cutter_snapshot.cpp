@@ -34,8 +34,6 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
         const auto parameters = TryResolveCsgCutterParameterBytes(shapeType->desc.parameterByteSize, shapeType->desc.defaultParameterBytes, cutter.parameterBytes);
         if(!parameters)
             return;
-        const u8* parameterBytes = parameters->data();
-        const usize parameterByteCount = parameters->size();
 
         const SIMDMatrix shapeToWorld = LoadFloat(cutter.shapeToWorld);
         const auto bounds = shapeRegistry.buildShapeBounds(shapeType->id, shapeToWorld, *parameters);
@@ -52,33 +50,17 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
         Fnv64AppendValue(snapshot.identity, cutter.worldToShape);
         Fnv64AppendValue(snapshot.identity, cutter.shapeToWorld);
         Fnv64AppendBuffer(snapshot.identity, *parameters);
-        range.flags |= NWB_CSG_RAY_RECEIVER_ACTIVE;
-        const u32 shapeKind = ResolveCsgShapeGpuKind(static_cast<b8>(shapeType->desc.shaderModule), shapeType->desc.name);
-        const SIMDMatrix worldToShape = LoadFloat(cutter.worldToShape);
-        if(
-            shapeKind == NWB_CSG_RAY_SHAPE_UNSUPPORTED
-            || parameterByteCount != sizeof(Float4)
-            || MatrixIsNaN(worldToShape) || MatrixIsInfinite(worldToShape)
-            || MatrixIsNaN(shapeToWorld) || MatrixIsInfinite(shapeToWorld)
-            || range.cutterCount == NWB_CSG_RAY_MAX_CUTTERS
-        ){
-            range.flags |= NWB_CSG_RAY_RECEIVER_UNSUPPORTED;
-            return;
-        }
-        if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u)
-            return;
-
-        CsgCutterGpuData gpuCutter;
-        gpuCutter.shapeType = shapeKind;
-        gpuCutter.worldToShape = cutter.worldToShape;
-        NWB_MEMCPY(&gpuCutter.parameter0, sizeof(Float4), parameterBytes, parameterByteCount);
-        snapshot.cutters.push_back(gpuCutter);
-        ++range.cutterCount;
+        AppendShadowCutterRecord(
+            static_cast<b8>(shapeType->desc.shaderModule),
+            shapeType->desc.name,
+            LoadFloat(cutter.worldToShape),
+            shapeToWorld,
+            *parameters,
+            range,
+            snapshot.cutters
+        );
     });
-    if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u){
-        snapshot.cutters.resize(range.firstCutter);
-        range.cutterCount = 0u;
-    }
+    FinalizeShadowReceiverCuttersRange(range, snapshot.cutters);
 }
 
 

@@ -77,38 +77,8 @@ Core::ComputeState MakeComputePassState(const Core::ComputePipelineHandle& pipel
 }
 
 // Binned-SAH BVH over indices[lo, hi); node 0 is root. Splits on the min SAH boundary, median on coincident centroids.
-u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, const Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes){
-    const u32 nodeIndex = static_cast<u32>(nodes.size());
-    nodes.push_back(SceneBvhNodeCalculation{});
-
-    if((hi - lo) == 1u){
-        const u32 instance = indices[lo];
-        nodes[nodeIndex] = MakeSceneBvhLeafNode(primitiveBounds[instance], instance);
-        return nodeIndex;
-    }
-
-    const SceneBvhSahSplit split = SelectSceneBvhSahSplit(lo, hi, primitiveBounds, instanceLeafCost, indices);
-    u32 mid = lo;
-    if(split.valid){
-        // Partition the index slice by the winning axis/bin boundary, matching the binning that produced bestCost.
-        for(u32 i = lo; i < hi; ++i){
-            const u32 instance = indices[i];
-            if(ComputeSceneBvhSahBinIndex(primitiveBounds[instance], split) < split.bin){
-                const u32 swap = indices[i];
-                indices[i] = indices[mid];
-                indices[mid] = swap;
-                ++mid;
-            }
-        }
-    }
-
-    mid = ResolveSceneBvhSplitMidpoint(split, lo, hi, mid); // degenerate split (coincident centroids everywhere) -> count median; still correct
-
-    const u32 leftChild = BuildSceneBvhNode(lo, mid, primitiveBounds, instanceLeafCost, indices, nodes);
-    const u32 rightChild = BuildSceneBvhNode(mid, hi, primitiveBounds, instanceLeafCost, indices, nodes);
-
-    nodes[nodeIndex] = MakeSceneBvhInternalNode(nodes[leftChild], nodes[rightChild], leftChild, rightChild);
-    return nodeIndex;
+u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes){
+    return ::NWB::Impl::BuildSceneBvhNode(lo, hi, primitiveBounds, instanceLeafCost, indices, nodes);
 }
 
 

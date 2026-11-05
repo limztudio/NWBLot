@@ -8,6 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+namespace NWB::Impl{
+using ScratchPoseJointMatrixVector = Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const f32 s_SkeletonAffineEpsilon = 0.000001f;
 const f32 s_SkeletonJointDeterminantEpsilon = 0.000000000001f;
 const f32 s_SkeletonRigidJointEpsilon = 0.001f;
@@ -166,6 +176,26 @@ Expected<SkeletonJointMatrix> TryResolveSkeletonPoseJointMatrixAt(
 Expected<u32> TryBuildStoredJointPaletteVectorFromSkeletonPose(
     in SkeletonPoseComponent pose,
     mut Vector<SkeletonJointMatrix> outJointPalette
+){
+    outJointPalette.clear();
+    if(!HasSkeletonPoseData(pose))
+        return cast<u32>(SkeletonSkinningMode::LinearBlend);
+    if(!ValidSkeletonPoseTopology(pose))
+        return makeUnexpected(Failure());
+    const usize jointCount = pose.localJoints.size();
+    outJointPalette.reserve(jointCount);
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointMatrix> resolved = TryResolveSkeletonPoseJointMatrixAt(pose, jointIndex, outJointPalette);
+        if(!resolved.has_value())
+            return makeUnexpected(Failure());
+        outJointPalette.push_back(resolved.value());
+    }
+    return pose.skinningMode;
+}
+
+Expected<u32> TryBuildStoredJointPaletteScratchVectorFromSkeletonPose(
+    in SkeletonPoseComponent pose,
+    mut ScratchPoseJointMatrixVector outJointPalette
 ){
     outJointPalette.clear();
     if(!HasSkeletonPoseData(pose))

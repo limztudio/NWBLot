@@ -7,7 +7,7 @@
 
 #include "../global.h"
 
-#include <impl/assets_texture/types.adhd.h>
+#include <impl/assets_texture/validation.adhd.h>
 
 #include <core/assets/module.h>
 

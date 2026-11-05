@@ -32,63 +32,19 @@ namespace __hidden_texture_cook{
 
 
 [[nodiscard]] static Expected<Texture::MipLevelVector> BuildMipLevels(const TextureCookEntry& entry, Core::Assets::AssetArena& arena){
-    if(
-        !IsValidTexturePayloadFormat(entry.payloadFormat)
-        || !TextureFormat::IsValidTextureResolution(entry.dimension, entry.width, entry.height, entry.depth)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: invalid texture format or resolution."));
-        return MakeUnexpected(Failure{});
-    }
-
-    auto levels = TextureFormat::BuildMipChainLayout(
-        entry.payloadFormat,
-        entry.dimension,
+    Texture::MipLevelVector levels(arena);
+    if(!BuildTextureCookMipLevels(
+        static_cast<u8>(entry.payloadFormat),
+        static_cast<u8>(entry.dimension),
         entry.width,
         entry.height,
         entry.depth,
-        Texture::MipLevelVector(arena),
-        [](const TextureFormat::MipLevelLayout& level)noexcept -> TextureMipLevel{
-            return TextureMipLevel(
-                level.offsetBytes,
-                level.sizeBytes,
-                level.width,
-                level.height,
-                level.blockCountX,
-                level.blockCountY,
-                level.sliceCount
-            );
-        }
-    );
-    if(!levels){
-        switch(levels.error().failure){
-        case TextureFormat::MipChainLayoutFailure::InvalidMipChain:
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: resolution cannot describe a complete mip chain."));
-            break;
-        case TextureFormat::MipChainLayoutFailure::BlockLayoutOverflow:
-        case TextureFormat::MipChainLayoutFailure::SliceCountInvalid:
-        case TextureFormat::MipChainLayoutFailure::ByteSizeOverflow:
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: mip {} block layout exceeds supported limits."), levels.error().mipIndex);
-            break;
-        case TextureFormat::MipChainLayoutFailure::OffsetOverflow:
-        default:
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: mip byte offsets overflow."));
-            break;
-        }
+        static_cast<u8>(entry.alphaMode),
+        entry.payloadBytes.size(),
+        levels
+    ))
         return MakeUnexpected(Failure{});
-    }
-
-    const TextureMipLevel& lastMip = levels->back();
-    const u64 primaryByteCount = lastMip.offsetBytes + lastMip.sizeBytes;
-    const auto expectedBytes = TextureFormat::ComputeExpectedPayloadByteCount(primaryByteCount, entry.alphaMode);
-    if(!expectedBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: separate alpha byte count overflows."));
-        return MakeUnexpected(Failure{});
-    }
-    if(*expectedBytes != static_cast<u64>(entry.payloadBytes.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: raw texture byte count does not match the declared mip and alpha layout."));
-        return MakeUnexpected(Failure{});
-    }
-    return Move(*levels);
+    return Move(levels);
 }
 
 [[nodiscard]] static Expected<Texture> FinalizeTextureAsset(

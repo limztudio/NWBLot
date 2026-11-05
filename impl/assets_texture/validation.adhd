@@ -1,0 +1,257 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_texture/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <global/texture_payload.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<u64> ValidateTextureAssetMipLevels(
+    in Span<TextureMipLevel> mipLevels,
+    in u8 payloadFormat,
+    in u8 dimension,
+    in u32 width,
+    in u32 height,
+    in u32 depth,
+    in StringView failureContext
+){
+    u64 primaryBytes = 0u;
+    u8 failureKind = 0u;
+    u32 failureMipIndex = 0u;
+    native(in mipLevels, in payloadFormat, in dimension, in width, in height, in depth, mut primaryBytes, mut failureKind, mut failureMipIndex){
+        const auto result = ::TextureFormat::ValidateMipChainLayout(
+            mipLevels,
+            static_cast<::TexturePayloadFormat::Enum>(payloadFormat),
+            static_cast<::TextureDimension::Enum>(dimension),
+            width,
+            height,
+            depth
+        );
+        if(result)
+            primaryBytes = *result;
+        else{
+            failureKind = static_cast<u8>(result.error().failure);
+            failureMipIndex = result.error().mipIndex;
+        }
+    }
+    if(failureKind == 0u)
+        return primaryBytes;
+
+    switch(failureKind){
+    case 1u:
+        error("{} failed: base resolution is invalid", failureContext);
+        break;
+    case 2u:
+        error("{} failed: mip count does not describe a complete chain", failureContext);
+        break;
+    case 3u:
+        error("{} failed: mip {} block layout exceeds runtime limits", failureContext, failureMipIndex);
+        break;
+    case 4u:
+    case 5u:
+        error("{} failed: mip {} slice count is invalid", failureContext, failureMipIndex);
+        break;
+    case 6u:
+        error("{} failed: mip {} byte size overflows", failureContext, failureMipIndex);
+        break;
+    case 8u:
+        error("{} failed: mip {} resolution is not a complete chain", failureContext, failureMipIndex);
+        break;
+    case 9u:
+        error("{} failed: mip {} block grid is invalid", failureContext, failureMipIndex);
+        break;
+    case 10u:
+        error("{} failed: mip {} is not a contiguous texture payload", failureContext, failureMipIndex);
+        break;
+    default:
+        error("{} failed: mip {} byte range overflows", failureContext, failureMipIndex);
+        break;
+    }
+    return makeUnexpected(Failure());
+}
+
+b8 ValidateTextureAssetPayload(
+    in Name virtualPath,
+    in u8 payloadFormat,
+    in u8 dimension,
+    in u32 width,
+    in u32 height,
+    in u32 depth,
+    in u8 alphaMode,
+    in u8 alphaConstantUnorm8,
+    in Span<TextureMipLevel> mipLevels,
+    in Span<u8> payloadBytes
+){
+    if(payloadFormat > 1u){
+        error("Texture::validatePayload failed: texture '{}' has an invalid payload format", virtualPath.resolvedText());
+        return false;
+    }
+    if(dimension > 2u){
+        error("Texture::validatePayload failed: texture '{}' has an invalid dimension", virtualPath.resolvedText());
+        return false;
+    }
+    if(width == 0u || height == 0u || depth == 0u){
+        error("Texture::validatePayload failed: texture '{}' has an empty resolution", virtualPath.resolvedText());
+        return false;
+    }
+    if(dimension != 2u && depth != 1u){
+        error("Texture::validatePayload failed: non-volume texture '{}' has an invalid depth", virtualPath.resolvedText());
+        return false;
+    }
+    if(dimension == 1u && width != height){
+        error("Texture::validatePayload failed: cubemap texture '{}' must have square faces", virtualPath.resolvedText());
+        return false;
+    }
+    if(mipLevels.empty() || payloadBytes.empty()){
+        error("Texture::validatePayload failed: texture '{}' has an incomplete payload", virtualPath.resolvedText());
+        return false;
+    }
+    if(alphaMode > 3u){
+        error("Texture::validatePayload failed: texture '{}' has an invalid alpha mode", virtualPath.resolvedText());
+        return false;
+    }
+    if(alphaMode == 2u && alphaConstantUnorm8 >= 255u){
+        error("Texture::validatePayload failed: texture '{}' constant alpha must be below opaque alpha", virtualPath.resolvedText());
+        return false;
+    }
+    if(alphaMode != 2u && alphaConstantUnorm8 != 255u){
+        error("Texture::validatePayload failed: texture '{}' has an unexpected alpha constant", virtualPath.resolvedText());
+        return false;
+    }
+    b8 validAlphaTransport = alphaMode != 1u;
+    if(payloadFormat == 0u)
+        validAlphaTransport = alphaMode == 0u || alphaMode == 1u;
+    if(!validAlphaTransport){
+        error("Texture::validatePayload failed: texture '{}' has an invalid alpha transport for its payload format", virtualPath.resolvedText());
+        return false;
+    }
+
+    const Expected<u64> primaryPayloadByteCountResult = ValidateTextureAssetMipLevels(
+        mipLevels,
+        payloadFormat,
+        dimension,
+        width,
+        height,
+        depth,
+        "Texture::validatePayload"
+    );
+    if(!primaryPayloadByteCountResult.has_value())
+        return false;
+    const u64 primaryPayloadByteCount = primaryPayloadByteCountResult.value();
+
+    u64 expectedPayloadByteCount = primaryPayloadByteCount;
+    if(alphaMode == 3u){
+        if(primaryPayloadByteCount > u64.max - primaryPayloadByteCount){
+            error("Texture::validatePayload failed: texture '{}' alpha payload size overflows", virtualPath.resolvedText());
+            return false;
+        }
+        expectedPayloadByteCount = primaryPayloadByteCount + primaryPayloadByteCount;
+    }
+    if(expectedPayloadByteCount != cast<u64>(payloadBytes.size())){
+        error("Texture::validatePayload failed: texture '{}' byte count does not match its payload transport", virtualPath.resolvedText());
+        return false;
+    }
+    return true;
+}
+
+b8 BuildTextureCookMipLevels(
+    in u8 payloadFormat,
+    in u8 dimension,
+    in u32 width,
+    in u32 height,
+    in u32 depth,
+    in u8 alphaMode,
+    in usize payloadByteSize,
+    mut Vector<TextureMipLevel> outLevels
+){
+    b8 validInputs = false;
+    native(in payloadFormat, in dimension, in width, in height, in depth, mut validInputs){
+        validInputs =
+            ::IsValidTexturePayloadFormat(static_cast<::TexturePayloadFormat::Enum>(payloadFormat))
+            && ::TextureFormat::IsValidTextureResolution(static_cast<::TextureDimension::Enum>(dimension), width, height, depth)
+        ;
+    }
+    if(!validInputs){
+        error("Texture cook: invalid texture format or resolution.");
+        return false;
+    }
+
+    u8 failureKind = 0u;
+    u32 failureMipIndex = 0u;
+    native(in payloadFormat, in dimension, in width, in height, in depth, mut outLevels, mut failureKind, mut failureMipIndex){
+        auto levels = ::TextureFormat::BuildMipChainLayout(
+            static_cast<::TexturePayloadFormat::Enum>(payloadFormat),
+            static_cast<::TextureDimension::Enum>(dimension),
+            width,
+            height,
+            depth,
+            Move(outLevels),
+            [](const ::TextureFormat::MipLevelLayout& level)noexcept -> TextureMipLevel{
+                return TextureMipLevel(
+                    level.offsetBytes,
+                    level.sizeBytes,
+                    level.width,
+                    level.height,
+                    level.blockCountX,
+                    level.blockCountY,
+                    level.sliceCount
+                );
+            }
+        );
+        if(levels)
+            outLevels = Move(*levels);
+        else{
+            failureKind = static_cast<u8>(levels.error().failure);
+            failureMipIndex = levels.error().mipIndex;
+        }
+    }
+    if(failureKind != 0u){
+        switch(failureKind){
+        case 1u:
+            error("Texture cook: resolution cannot describe a complete mip chain.");
+            break;
+        case 3u:
+        case 4u:
+        case 6u:
+            error("Texture cook: mip {} block layout exceeds supported limits.", failureMipIndex);
+            break;
+        default:
+            error("Texture cook: mip byte offsets overflow.");
+            break;
+        }
+        return false;
+    }
+
+    const TextureMipLevel lastMip = outLevels.back();
+    const u64 primaryByteCount = lastMip.offsetBytes + lastMip.sizeBytes;
+    u64 expectedBytes = primaryByteCount;
+    if(alphaMode > 3u){
+        error("Texture cook: separate alpha byte count overflows.");
+        return false;
+    }
+    if(alphaMode == 3u){
+        if(primaryByteCount > u64.max - primaryByteCount){
+            error("Texture cook: separate alpha byte count overflows.");
+            return false;
+        }
+        expectedBytes = primaryByteCount + primaryByteCount;
+    }
+    if(expectedBytes != cast<u64>(payloadByteSize)){
+        error("Texture cook: raw texture byte count does not match the declared mip and alpha layout.");
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

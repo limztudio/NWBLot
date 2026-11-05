@@ -188,6 +188,58 @@ b8 ValidateSamplerBinaryHeader(in SamplerBinaryHeader header){
     return true;
 }
 
+b8 ValidateSamplerDescriptionPayload(
+    in Name virtualPath,
+    in f32 borderColorR,
+    in f32 borderColorG,
+    in f32 borderColorB,
+    in f32 borderColorA,
+    in f32 maxAnisotropy,
+    in f32 mipBias,
+    in u32 addressU,
+    in u32 addressV,
+    in u32 addressW,
+    in u32 reductionType
+){
+    if(IsValidSamplerDescriptionParameters(
+        borderColorR,
+        borderColorG,
+        borderColorB,
+        borderColorA,
+        maxAnisotropy,
+        mipBias,
+        addressU,
+        addressV,
+        addressW,
+        reductionType
+    ))
+        return true;
+
+    error("Sampler::validatePayload failed: sampler '{}' has an invalid description", virtualPath.resolvedText());
+    return false;
+}
+
+b8 ValidateSamplerBinaryHeaderAndDescription(in SamplerBinaryHeader header){
+    if(!ValidateSamplerBinaryHeader(header))
+        return false;
+    if(IsValidSamplerDescriptionParameters(
+        header.borderColorR,
+        header.borderColorG,
+        header.borderColorB,
+        header.borderColorA,
+        header.maxAnisotropy,
+        header.mipBias,
+        header.addressU,
+        header.addressV,
+        header.addressW,
+        header.reductionType
+    ))
+        return true;
+
+    error("Sampler::loadBinary failed: sampler description is invalid");
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

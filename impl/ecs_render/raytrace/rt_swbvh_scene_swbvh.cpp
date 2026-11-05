@@ -343,27 +343,11 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
             return false;
         // CPU-build the small scene BVH and upload the shared node layout.
         Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
-        indices.reserve(instanceCount);
-        for(u32 i = 0u; i < instanceCount; ++i)
-            indices.push_back(i);
-
-        Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
-        buildNodes.reserve(requiredNodeCount);
         Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
-        instanceLeafCost.reserve(instanceCount);
-        for(u32 i = 0u; i < instanceCount; ++i)
-            instanceLeafCost.push_back(instances[i].primitiveCount);
-        RayTracingDetail::BuildSceneBvhNode(0u, instanceCount, instanceBvhPrimitives, instanceLeafCost, indices, buildNodes);
-        NWB_ASSERT(buildNodes.size() == requiredNodeCount);
-
+        Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
         Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
-        nodes.reserve(buildNodes.size());
-        for(const SceneBvhNodeCalculation& buildNode : buildNodes){
-            const u32 nodeIndex = static_cast<u32>(nodes.size());
-            if(!IsValidSceneBvhNodeChildren(buildNode.leftChild, buildNode.rightChild, nodeIndex, static_cast<u32>(buildNodes.size()), instanceCount))
-                return false;
-            nodes.push_back(PackSceneBvhNodeGpu(buildNode));
-        }
+        if(!BuildAndPackSceneBvhNodesInto(instances, instanceBvhPrimitives, indices, instanceLeafCost, buildNodes, nodes))
+            return false;
 
         if(!capturePreparedSceneBvh(staticScene, sceneStaticHash, nodes, instances))
             return false;

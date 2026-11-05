@@ -35,57 +35,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_TextureAssetCodecAutoRegistrar, TextureAssetC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<u64> ValidateTextureMipLevels(
-    const Span<const TextureMipLevel> mipLevels,
-    const TexturePayloadFormat::Enum payloadFormat,
-    const TextureDimension::Enum dimension,
-    const u32 width,
-    const u32 height,
-    const u32 depth,
-    const TStringView failureContext
-){
-    const auto result = TextureFormat::ValidateMipChainLayout(mipLevels, payloadFormat, dimension, width, height, depth);
-    if(!result){
-        switch(result.error().failure){
-        case TextureFormat::MipChainLayoutFailure::InvalidMipChain:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: base resolution is invalid"), failureContext);
-            break;
-        case TextureFormat::MipChainLayoutFailure::MipCountMismatch:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip count does not describe a complete chain"), failureContext);
-            break;
-        case TextureFormat::MipChainLayoutFailure::BlockLayoutOverflow:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block layout exceeds runtime limits"), failureContext, result.error().mipIndex);
-            break;
-        case TextureFormat::MipChainLayoutFailure::SliceCountInvalid:
-        case TextureFormat::MipChainLayoutFailure::SliceCountMismatch:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} slice count is invalid"), failureContext, result.error().mipIndex);
-            break;
-        case TextureFormat::MipChainLayoutFailure::ByteSizeOverflow:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte size overflows"), failureContext, result.error().mipIndex);
-            break;
-        case TextureFormat::MipChainLayoutFailure::ResolutionMismatch:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} resolution is not a complete chain"), failureContext, result.error().mipIndex);
-            break;
-        case TextureFormat::MipChainLayoutFailure::BlockGridMismatch:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block grid is invalid"), failureContext, result.error().mipIndex);
-            break;
-        case TextureFormat::MipChainLayoutFailure::ByteRangeMismatch:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} is not a contiguous texture payload"), failureContext, result.error().mipIndex);
-            break;
-        case TextureFormat::MipChainLayoutFailure::OffsetOverflow:
-        default:
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte range overflows"), failureContext, result.error().mipIndex);
-            break;
-        }
-        return MakeUnexpected(Failure{});
-    }
-    return *result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -95,63 +44,18 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_TextureAssetCodecAutoRegistrar, TextureAssetC
 b8 Texture::validatePayload()const{
     if(!checkVirtualPath(__hidden_texture_runtime::s_ValidatePayloadContext))
         return false;
-    if(!IsValidTexturePayloadFormat(m_payloadFormat)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid payload format"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(!IsValidTextureDimension(m_dimension)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid dimension"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(m_width == 0u || m_height == 0u || m_depth == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an empty resolution"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(m_dimension != TextureDimension::Texture3D && m_depth != 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: non-volume texture '{}' has an invalid depth"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(m_dimension == TextureDimension::TextureCube && m_width != m_height){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: cubemap texture '{}' must have square faces"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(m_mipLevels.empty() || m_payloadBytes.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an incomplete payload"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-
-    if(!IsValidTextureAlphaMode(m_alphaMode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha mode"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-
-    if(m_alphaMode == TextureAlphaMode::ConstantUnorm8 && !TextureFormat::IsValidTextureAlphaConstant(m_alphaMode, m_alphaConstantUnorm8)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' constant alpha must be below opaque alpha"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(m_alphaMode != TextureAlphaMode::ConstantUnorm8 && !TextureFormat::IsValidTextureAlphaConstant(m_alphaMode, m_alphaConstantUnorm8)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an unexpected alpha constant"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(!TextureFormat::IsValidTextureAlphaTransport(m_payloadFormat, m_alphaMode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha transport for its payload format"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-
-    const auto primaryPayloadByteCountResult = __hidden_texture_runtime::ValidateTextureMipLevels(m_mipLevels, m_payloadFormat, m_dimension, m_width, m_height, m_depth, __hidden_texture_runtime::s_ValidatePayloadContext);
-    if(!primaryPayloadByteCountResult)
-        return false;
-
-    const auto expectedPayloadByteCount = TextureFormat::ComputeExpectedPayloadByteCount(*primaryPayloadByteCountResult, m_alphaMode);
-    if(!expectedPayloadByteCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' alpha payload size overflows"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    if(*expectedPayloadByteCount != static_cast<u64>(m_payloadBytes.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' byte count does not match its payload transport"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return ValidateTextureAssetPayload(
+        virtualPath(),
+        static_cast<u8>(m_payloadFormat),
+        static_cast<u8>(m_dimension),
+        m_width,
+        m_height,
+        m_depth,
+        static_cast<u8>(m_alphaMode),
+        m_alphaConstantUnorm8,
+        m_mipLevels,
+        m_payloadBytes
+    );
 }
 
 b8 Texture::loadBinary(const Span<const u8> binary){

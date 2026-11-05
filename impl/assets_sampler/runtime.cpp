@@ -41,11 +41,19 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetC
 b8 Sampler::validatePayload()const{
     if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
-    if(!IsValidSamplerDescription(m_description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description"), ConvertString(virtualPath().resolvedText()));
-        return false;
-    }
-    return true;
+    return ValidateSamplerDescriptionPayload(
+        virtualPath(),
+        m_description.borderColor.r,
+        m_description.borderColor.g,
+        m_description.borderColor.b,
+        m_description.borderColor.a,
+        m_description.maxAnisotropy,
+        m_description.mipBias,
+        static_cast<u32>(m_description.addressU),
+        static_cast<u32>(m_description.addressV),
+        static_cast<u32>(m_description.addressW),
+        static_cast<u32>(m_description.reductionType)
+    );
 }
 
 b8 Sampler::loadBinary(const Span<const u8> binary){
@@ -54,30 +62,23 @@ b8 Sampler::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const SamplerBinaryHeader& header = *headerResult;
-    if(!ValidateSamplerBinaryHeader(header))
+    if(!ValidateSamplerBinaryHeaderAndDescription(header))
         return false;
-
-    Core::SamplerDesc description;
-    description.borderColor = Core::Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);
-    description.maxAnisotropy = header.maxAnisotropy;
-    description.mipBias = header.mipBias;
-    description.minFilter = header.minFilter != 0u;
-    description.magFilter = header.magFilter != 0u;
-    description.mipFilter = header.mipFilter != 0u;
-    description.addressU = static_cast<Core::SamplerAddressMode::Enum>(header.addressU);
-    description.addressV = static_cast<Core::SamplerAddressMode::Enum>(header.addressV);
-    description.addressW = static_cast<Core::SamplerAddressMode::Enum>(header.addressW);
-    description.reductionType = static_cast<Core::SamplerReductionType::Enum>(header.reductionType);
-    if(!IsValidSamplerDescription(description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler description is invalid"));
-        return false;
-    }
     if(!Core::Assets::ReadCompletePayload(binary, cursor, SamplerBinaryPayload::s_SamplerLoadBinaryContext))
         return false;
-
     if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
         return false;
-    m_description = description;
+
+    m_description.borderColor = Core::Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);
+    m_description.maxAnisotropy = header.maxAnisotropy;
+    m_description.mipBias = header.mipBias;
+    m_description.minFilter = header.minFilter != 0u;
+    m_description.magFilter = header.magFilter != 0u;
+    m_description.mipFilter = header.mipFilter != 0u;
+    m_description.addressU = static_cast<Core::SamplerAddressMode::Enum>(header.addressU);
+    m_description.addressV = static_cast<Core::SamplerAddressMode::Enum>(header.addressV);
+    m_description.addressW = static_cast<Core::SamplerAddressMode::Enum>(header.addressW);
+    m_description.reductionType = static_cast<Core::SamplerReductionType::Enum>(header.reductionType);
     return true;
 }
 

@@ -1,0 +1,105 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/scene_bvh.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace NWB::Impl{
+using ScratchSceneBvhIndexVector = Vector<u32, Core::Alloc::ScratchArena>;
+using ScratchSceneBvhNodeCalculationVector = Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>;
+using ScratchSceneBvhNodeGpuVector = Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena>;
+using MutableSceneBvhIndexSpan = Span<u32>;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Binned-SAH BVH over indices[lo, hi); node 0 is root. Splits on the min SAH boundary, median on coincident centroids.
+u32 BuildSceneBvhNode(
+    in u32 lo,
+    in u32 hi,
+    in Span<SceneBvhPrimitiveCalculation> primitiveBounds,
+    in Span<u32> instanceLeafCost,
+    mut MutableSceneBvhIndexSpan indices,
+    mut ScratchSceneBvhNodeCalculationVector nodes
+){
+    const u32 nodeIndex = cast<u32>(nodes.size());
+    nodes.push_back(SceneBvhNodeCalculation());
+
+    if((hi - lo) == 1u){
+        const u32 instance = indices[cast<usize>(lo)];
+        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhLeafNode(primitiveBounds[cast<usize>(instance)], instance);
+        return nodeIndex;
+    }
+
+    const SceneBvhSahSplit split = SelectSceneBvhSahSplit(lo, hi, primitiveBounds, instanceLeafCost, indices);
+    u32 mid = lo;
+    if(split.valid){
+        // Partition the index slice by the winning axis/bin boundary, matching the binning that produced bestCost.
+        for(u32 i = lo; i < hi; ++i){
+            const u32 instance = indices[cast<usize>(i)];
+            if(ComputeSceneBvhSahBinIndex(primitiveBounds[cast<usize>(instance)], split) < split.bin){
+                const u32 swap = indices[cast<usize>(i)];
+                indices[cast<usize>(i)] = indices[cast<usize>(mid)];
+                indices[cast<usize>(mid)] = swap;
+                ++mid;
+            }
+        }
+    }
+
+    mid = ResolveSceneBvhSplitMidpoint(split, lo, hi, mid);
+
+    const u32 leftChild = BuildSceneBvhNode(lo, mid, primitiveBounds, instanceLeafCost, indices, nodes);
+    const u32 rightChild = BuildSceneBvhNode(mid, hi, primitiveBounds, instanceLeafCost, indices, nodes);
+
+    nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(nodes[cast<usize>(leftChild)], nodes[cast<usize>(rightChild)], leftChild, rightChild);
+    return nodeIndex;
+}
+
+b8 BuildAndPackSceneBvhNodesInto(
+    in Span<SceneSwBvhInstanceGpu> instances,
+    in Span<SceneBvhPrimitiveCalculation> instanceBvhPrimitives,
+    mut ScratchSceneBvhIndexVector indices,
+    mut ScratchSceneBvhIndexVector instanceLeafCost,
+    mut ScratchSceneBvhNodeCalculationVector buildNodes,
+    mut ScratchSceneBvhNodeGpuVector outNodes
+){
+    const u32 instanceCount = cast<u32>(instances.size());
+    const usize requiredNodeCount = cast<usize>(instanceCount) * 2u - 1u;
+
+    indices.clear();
+    indices.reserve(cast<usize>(instanceCount));
+    for(u32 i = 0u; i < instanceCount; ++i)
+        indices.push_back(i);
+
+    buildNodes.clear();
+    buildNodes.reserve(requiredNodeCount);
+    instanceLeafCost.clear();
+    instanceLeafCost.reserve(cast<usize>(instanceCount));
+    for(u32 i = 0u; i < instanceCount; ++i)
+        instanceLeafCost.push_back(instances[cast<usize>(i)].primitiveCount);
+
+    MutableSceneBvhIndexSpan indexSpan(indices.data(), indices.size());
+    BuildSceneBvhNode(0u, instanceCount, instanceBvhPrimitives, instanceLeafCost, indexSpan, buildNodes);
+    assert(buildNodes.size() == requiredNodeCount);
+
+    outNodes.clear();
+    outNodes.reserve(buildNodes.size());
+    for(in SceneBvhNodeCalculation buildNode : buildNodes){
+        const u32 nodeIndex = cast<u32>(outNodes.size());
+        if(!IsValidSceneBvhNodeChildren(buildNode.leftChild, buildNode.rightChild, nodeIndex, cast<u32>(buildNodes.size()), instanceCount))
+            return false;
+        outNodes.push_back(PackSceneBvhNodeGpu(buildNode));
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

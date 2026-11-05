@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/raytrace/scene_bvh.adhd.h>
+#include <impl/ecs_render/raytrace/scene_bvh_build.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>

@@ -114,6 +114,60 @@ CsgCutterGpuData BuildCsgCutterGpuData(
     return outCutter;
 }
 
+b8 IsFiniteCsgMatrixRow(in VectorSingle row){
+    return isFinite(row.x) && isFinite(row.y) && isFinite(row.z) && isFinite(row.w);
+}
+
+b8 IsFiniteCsgMatrix(in MatrixSingle matrix){
+    return IsFiniteCsgMatrixRow(matrix[0u])
+        && IsFiniteCsgMatrixRow(matrix[1u])
+        && IsFiniteCsgMatrixRow(matrix[2u])
+        && IsFiniteCsgMatrixRow(matrix[3u])
+    ;
+}
+
+void AppendShadowCutterRecord(
+    in b8 hasShaderModule,
+    in Name shapeName,
+    in MatrixSingle worldToShape,
+    in MatrixSingle shapeToWorld,
+    in Span<u8> parameterBytes,
+    mut CsgShadowReceiverRangeGpu inOutRange,
+    mut Vector<CsgCutterGpuData> inOutCutters
+){
+    inOutRange.flags |= s_CsgRayReceiverActive;
+    const u32 shapeKind = ResolveCsgShapeGpuKind(hasShaderModule, shapeName);
+    if(
+        shapeKind == s_CsgRayShapeUnsupported
+        || parameterBytes.size() != 16u
+        || !IsFiniteCsgMatrix(worldToShape)
+        || !IsFiniteCsgMatrix(shapeToWorld)
+        || inOutRange.cutterCount == s_CsgRayMaxCutters
+    ){
+        inOutRange.flags |= s_CsgRayReceiverUnsupported;
+        return;
+    }
+    if((inOutRange.flags & s_CsgRayReceiverUnsupported) != 0u)
+        return;
+
+    CsgCutterGpuData gpuCutter;
+    gpuCutter.shapeType = shapeKind;
+    gpuCutter.worldToShape = f32x3x4(worldToShape);
+    CopyCsgCutterInlineParameters(parameterBytes, gpuCutter);
+    inOutCutters.push_back(gpuCutter);
+    ++inOutRange.cutterCount;
+}
+
+void FinalizeShadowReceiverCuttersRange(
+    mut CsgShadowReceiverRangeGpu inOutRange,
+    mut Vector<CsgCutterGpuData> inOutCutters
+){
+    if((inOutRange.flags & s_CsgRayReceiverUnsupported) != 0u){
+        inOutCutters.resize(cast<usize>(inOutRange.firstCutter));
+        inOutRange.cutterCount = 0u;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -287,5 +287,15 @@ Color ResolveSliderThumbTint(in SliderStyle style, in b8 interactive, in b8 pres
     return Color();
 }
 
+Name ResolveSliderThumbPreferredName(in SliderStyle style, in b8 interactive, in b8 pressed, in b8 hover){
+    if(!interactive)
+        return style.disabled;
+    if(pressed)
+        return style.pressed;
+    if(hover)
+        return style.hover;
+    return style.normal;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -256,10 +256,6 @@ b8 GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& firs
     ;
 }
 
-b8 GpuRendererState::ValidSnapshotImageCount(const DrawSnapshot& snapshot)noexcept{
-    return ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size());
-}
-
 b8 GpuRendererState::createResources(){
     if(m_resources)
         return true;

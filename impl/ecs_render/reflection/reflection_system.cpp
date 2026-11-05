@@ -248,18 +248,21 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         depthPyramid.mips[mipIndex].sampledSlot = m_depthMipSampledDescriptors[mipIndex].slot();
         depthPyramid.mips[mipIndex].storageSlot = m_depthMipStorageDescriptors[mipIndex].slot();
     }
-    m_resources.parameters.width = width;
-    m_resources.parameters.height = height;
-    m_resources.parameters.queueCapacity = capacity;
-    m_resources.parameters.opaqueOutputSlot = m_descriptors[DescriptorIndex::OpaqueStorage].slot();
-    m_resources.parameters.glassOutputSlot = m_descriptors[DescriptorIndex::GlassStorage].slot();
-    m_resources.parameters.opaqueRadianceSlot = m_descriptors[DescriptorIndex::OpaqueSampled].slot();
-    m_resources.parameters.glassRadianceSlot = m_descriptors[DescriptorIndex::GlassSampled].slot();
-    m_resources.parameters.queueSlot = m_descriptors[DescriptorIndex::Queue].slot();
-    m_resources.parameters.counterSlot = m_descriptors[DescriptorIndex::Counters].slot();
-    m_resources.parameters.argsSlot = m_descriptors[DescriptorIndex::Args].slot();
-    m_resources.parameters.depthPyramidSlot = depthPyramid.sampledSlot;
-    m_resources.parameters.depthMipCount = depthPyramid.mipCount;
+    PopulateReflectionPreparedFrameParameters(
+        width,
+        height,
+        capacity,
+        m_descriptors[DescriptorIndex::OpaqueStorage].slot(),
+        m_descriptors[DescriptorIndex::GlassStorage].slot(),
+        m_descriptors[DescriptorIndex::OpaqueSampled].slot(),
+        m_descriptors[DescriptorIndex::GlassSampled].slot(),
+        m_descriptors[DescriptorIndex::Queue].slot(),
+        m_descriptors[DescriptorIndex::Counters].slot(),
+        m_descriptors[DescriptorIndex::Args].slot(),
+        depthPyramid.sampledSlot,
+        depthPyramid.mipCount,
+        m_resources.parameters
+    );
     m_resources.frameParametersSlot = m_descriptors[DescriptorIndex::Parameters].slot();
     return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings) && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled);
 }
@@ -341,25 +344,16 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     if(parameters.hardwareEnabled != 0u)
         snapshot.scene = scene;
     if(settings.diagnosticsEnabled){
-        ReflectionStatistics metadata;
-        metadata.frameIndex = frameIndex;
-        metadata.feedbackRequested = settings.screenFeedbackEnabled;
-        // Never publish an unused zero as fact.
-        metadata.schedulingCounterValid = settings.diagnosticsEnabled;
-        metadata.graphicsFrameIndex = m_graphics.getFrameIndex();
-        metadata.samplingSeed = settings.samplingSeed;
-        metadata.width = parameters.width;
-        metadata.height = parameters.height;
-        metadata.requestedHardwareBudget = settings.maxHardwareRaysPerFrame;
-        metadata.maxOpticalQueries = settings.maxOpticalQueries;
-        metadata.csgHardwareEnabled = parameters.hardwareEnabled != 0u && static_cast<b8>(scene.csgTraceContextBuffer);
-        metadata.opticalTransportEnabled = parameters.hardwareEnabled != 0u && opticalTransport;
-        metadata.effectiveHardwareBudget = parameters.maxHardwareRays;
-        metadata.queueCapacity = parameters.queueCapacity;
-        metadata.traceMode = settings.traceMode;
-        metadata.hardwareRequested = hardwareRequested;
-        metadata.hardwareAvailable = scene.valid() && snapshot.hardwarePipeline;
-        snapshot.statistics = m_statistics.snapshot(metadata);
+        snapshot.statistics = m_statistics.snapshot(MakeReflectionStatisticsMetadata(
+            settings,
+            parameters,
+            frameIndex,
+            m_graphics.getFrameIndex(),
+            static_cast<b8>(scene.csgTraceContextBuffer),
+            opticalTransport,
+            hardwareRequested,
+            scene.valid() && snapshot.hardwarePipeline
+        ));
     }
     return snapshot;
 }

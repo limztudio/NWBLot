@@ -98,17 +98,18 @@ public:
         if(!outcome.reused || payload.snapshot.history.settings.temporalMaxSamples <= 1u)
             return true;
         commandList.endRenderPass();
-        ReflectionTemporalPushConstants parameters;
-        parameters.width = payload.width;
-        parameters.height = payload.height;
-        parameters.currentRadianceUavSlot = payload.snapshot.current.storageSlot;
-        parameters.previousRadianceSrvSlot = payload.snapshot.previous.sampledSlot;
-        parameters.opaqueSpecularSlot = payload.snapshot.opaqueSpecularSlot;
-        parameters.previousSampleCount = outcome.reused ? payload.snapshot.history.previousSampleCount : 0u;
-        parameters.maxSampleCount = payload.snapshot.history.settings.temporalMaxSamples;
-        parameters.historyValid = outcome.reused ? 1u : 0u;
-        parameters.sampleIndex = outcome.sampleIndex;
-        parameters.samplingSeed = payload.snapshot.history.settings.samplingSeed;
+        const ReflectionTemporalPushConstants parameters = MakeReflectionTemporalPushConstants(
+            payload.width,
+            payload.height,
+            payload.snapshot.current.storageSlot,
+            payload.snapshot.previous.sampledSlot,
+            payload.snapshot.opaqueSpecularSlot,
+            outcome.reused,
+            payload.snapshot.history.previousSampleCount,
+            payload.snapshot.history.settings.temporalMaxSamples,
+            outcome.sampleIndex,
+            payload.snapshot.history.settings.samplingSeed
+        );
         Core::ComputeState state;
         state.setPipeline(payload.snapshot.temporalPipeline.get());
         commandList.setComputeState(state);
@@ -268,13 +269,14 @@ Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
     for(u32 mipIndex = 0u; mipIndex < pyramid.mipCount; ++mipIndex){
         const ReflectionDepthPyramidMip& destination = pyramid.mips[mipIndex];
         const ReflectionDepthPyramidMip& source = pyramid.mips[mipIndex == 0u ? 0u : mipIndex - 1u];
-        ReflectionDepthReducePushConstants parameters;
-        parameters.sourceSlot = mipIndex == 0u ? pyramid.sourceDepthSlot : source.sampledSlot;
-        parameters.destinationSlot = destination.storageSlot;
-        parameters.sourceWidth = source.width;
-        parameters.sourceHeight = source.height;
-        parameters.destinationWidth = destination.width;
-        parameters.destinationHeight = destination.height;
+        const ReflectionDepthReducePushConstants parameters = MakeReflectionDepthReducePushConstants(
+            mipIndex == 0u ? pyramid.sourceDepthSlot : source.sampledSlot,
+            destination.storageSlot,
+            source.width,
+            source.height,
+            destination.width,
+            destination.height
+        );
         const Array<Core::GpuTaskResourceUse, 2u> depthUses = {
             ReadTextureUse(mipIndex == 0u ? opaqueDepth : outDepthPyramid, Core::TextureSubresourceSet(mipIndex == 0u ? 0u : mipIndex - 1u, 1u, 0u, 1u)),
             WriteTextureUse(outDepthPyramid, Core::TextureSubresourceSet(mipIndex, 1u, 0u, 1u), Core::ResourceStates::UnorderedAccess),
@@ -342,15 +344,16 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     desc = ReflectionTaskDesc(s_ReflectionSpatialTaskName, s_ReflectionSpatialTaskLabel, dependency);
     desc.setResourceUses(uses);
     desc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
-    ReflectionSpatialPushConstants spatialParameters;
-    spatialParameters.width = resources.parameters.width;
-    spatialParameters.height = resources.parameters.height;
-    spatialParameters.sourceRadianceSrvSlot = snapshot.current.sampledSlot;
-    spatialParameters.destinationRadianceUavSlot = snapshot.spatial.storageSlot;
-    spatialParameters.deferredResourcesSlot = snapshot.deferredResourcesSlot;
-    spatialParameters.opaqueSpecularSlot = snapshot.opaqueSpecularSlot;
-    spatialParameters.viewSlot = snapshot.viewSlot;
-    spatialParameters.radius = snapshot.history.settings.spatialRadius;
+    const ReflectionSpatialPushConstants spatialParameters = MakeReflectionSpatialPushConstants(
+        resources.parameters.width,
+        resources.parameters.height,
+        snapshot.current.sampledSlot,
+        snapshot.spatial.storageSlot,
+        snapshot.deferredResourcesSlot,
+        snapshot.opaqueSpecularSlot,
+        snapshot.viewSlot,
+        snapshot.history.settings.spatialRadius
+    );
     const auto spatialTask = graph.addTask<SpatialTask>(
         desc,
         SpatialTask::Payload{ graphics, snapshot.spatialPipeline, spatialParameters }

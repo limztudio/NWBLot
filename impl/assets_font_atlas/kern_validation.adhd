@@ -1,0 +1,110 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font_atlas/positioning_table_constants.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FontAtlasKernTableValidator{
+    public FontAtlasKernTableValidator(in Span<u8> bytes, in u32 glyphCount){
+        this.m_bytes = bytes;
+        this.m_glyphCount = glyphCount;
+        this.m_budget = s_FontAtlasValidationWorkBudget;
+    }
+
+    public b8 validate(){
+        if(!this.range(0u, s_FontAtlasKernHeaderBytes))
+            return false;
+        const b8 apple = this.u32At(0u) == s_FontAtlasAppleKernVersion;
+        if(!apple && this.u16At(0u) != 0u)
+            return false;
+        if(apple && !this.range(0u, s_FontAtlasAppleKernHeaderBytes))
+            return false;
+        u32 tableCount = 0u;
+        u64 offset = 0u;
+        if(apple){
+            tableCount = this.u32At(s_FontAtlasAppleKernTableCountOffset);
+            offset = s_FontAtlasAppleKernHeaderBytes;
+        }
+        else{
+            tableCount = cast<u32>(this.u16At(s_FontAtlasKernTableCountOffset));
+            offset = s_FontAtlasKernHeaderBytes;
+        }
+        if(tableCount > s_FontAtlasKernMaxTableCount)
+            return false;
+        for(u32 table = 0u; table < tableCount; ++table){
+            u32 header = s_FontAtlasKernSubtableHeaderBytes;
+            if(apple)
+                header = s_FontAtlasAppleKernSubtableHeaderBytes;
+            if(!this.range(offset, header))
+                return false;
+            u32 length = 0u;
+            if(apple)
+                length = this.u32At(offset);
+            else
+                length = cast<u32>(this.u16At(offset + s_FontAtlasKernSubtableLengthOffset));
+            const u16 coverage = this.u16At(offset + s_FontAtlasKernSubtableCoverageOffset);
+            u16 format = 0u;
+            if(apple)
+                format = cast<u16>(cast<u32>(coverage) & s_FontAtlasAppleKernFormatMask);
+            else
+                format = cast<u16>(cast<u32>(coverage) >> s_FontAtlasKernFormatShift);
+            if(length < header || !this.range(offset, length))
+                return false;
+            if(0u == format){
+                if(length < header + s_FontAtlasKernPairListHeaderBytes)
+                    return false;
+                const u32 count = cast<u32>(this.u16At(offset + header));
+                if(cast<u64>(count) * s_FontAtlasKernPairBytes > length - header - s_FontAtlasKernPairListHeaderBytes || !this.spend(count))
+                    return false;
+                u32 previous = 0u;
+                for(u32 index = 0u; index < count; ++index){
+                    const u64 record = offset + header + s_FontAtlasKernPairListHeaderBytes + cast<u64>(index) * s_FontAtlasKernPairBytes;
+                    const u32 left = cast<u32>(this.u16At(record));
+                    const u32 right = cast<u32>(this.u16At(record + s_FontAtlasKernPairRightOffset));
+                    const u32 pair = left * s_FontAtlasKernPairKeyLeftScale + right;
+                    if(left >= this.m_glyphCount || right >= this.m_glyphCount || (index > 0u && pair <= previous))
+                        return false;
+                    previous = pair;
+                }
+            }
+            offset += length;
+        }
+        return offset == cast<u64>(this.m_bytes.size());
+    }
+
+    private Span<u8> m_bytes;
+    private u32 m_glyphCount;
+    private u32 m_budget;
+
+    private b8 spend(in u32 count){
+        if(count > this.m_budget)
+            return false;
+        this.m_budget -= count;
+        return true;
+    }
+
+    private b8 range(in u64 offset, in u64 count){
+        const u64 byteCount = cast<u64>(this.m_bytes.size());
+        return this.spend(1u) && offset <= byteCount && count <= byteCount - offset;
+    }
+
+    private u16 u16At(in u64 offset)const{
+        return ReadFontSfntU16BigEndian(this.m_bytes, cast<usize>(offset));
+    }
+
+    private u32 u32At(in u64 offset)const{
+        return ReadFontSfntU32BigEndian(this.m_bytes, cast<usize>(offset));
+    }
+}
+
+b8 ValidateFontAtlasKernTableBytes(in Span<u8> bytes, in u32 glyphCount){
+    FontAtlasKernTableValidator validator(bytes, glyphCount);
+    return validator.validate();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

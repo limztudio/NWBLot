@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 
 b8 GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
-    if(!ValidSnapshotImageCount(snapshot))
+    if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
         return false;
     const auto& pages = snapshot.sdfPages();
     if(!AllValidAndDistinct(Span<const SharedSdfAtlasPage>(pages.data(), pages.size()), [](const SharedSdfAtlasPage& current)noexcept{ return current && ValidSdfAtlasPageBinding(current->binding(), current->pixels().size()); }, [](const SharedSdfAtlasPage& current, const SharedSdfAtlasPage& previous)noexcept{ return SameSdfAtlasPageKey(current->binding(), previous->binding()); }))

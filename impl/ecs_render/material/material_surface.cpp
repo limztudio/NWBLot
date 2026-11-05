@@ -156,10 +156,6 @@ static void WriteMaterialInstanceOverrideBytes(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInstanceOverrideField(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter){
-    return ResolveMaterialInstanceOverrideField(entity.id, materialInfo.materialName, materialInfo.typedLayoutBlocks, materialInfo.typedLayoutFields, parameter);
-}
-
 b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, const Span<u8> inOutMutableTypedBytes){
     if(!ValidateMaterialInstanceOverrideInterface(entity.id, materialInstance.materialInterface, materialInfo.materialName, materialInfo.materialInterface))
         return false;
@@ -179,11 +175,6 @@ b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::Entit
     }
 
     return true;
-}
-
-void RendererMaterialSystem::SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes){
-    NWB_ASSERT(material.typedLayoutHash() != 0u);
-    SplitMaterialTypedBlockBytesByClass(material.typedLayoutBlocks(), material.typedBlockBytes(), outConstantTypedBytes, outMutableDefaultTypedBytes);
 }
 
 
@@ -253,7 +244,7 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     createdInfo.typedLayoutFields.assign(material.typedLayoutFields().begin(), material.typedLayoutFields().end());
     createdInfo.resourceReferences.reserve(material.resourceReferences().size());
     createdInfo.resourceReferences.assign(material.resourceReferences().begin(), material.resourceReferences().end());
-    SplitMaterialTypedBytesByClass(material, createdInfo.constantTypedBytes, createdInfo.mutableDefaultTypedBytes);
+    SplitMaterialTypedBlockBytesByClass(material.typedLayoutBlocks(), material.typedBlockBytes(), createdInfo.constantTypedBytes, createdInfo.mutableDefaultTypedBytes);
     createdInfo.unpatchedConstantTypedBytes = createdInfo.constantTypedBytes;
     if(!resolveMaterialResourceReferences(createdInfo))
         return MakeUnexpected(Failure{});

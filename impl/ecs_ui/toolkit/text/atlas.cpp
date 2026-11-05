@@ -115,10 +115,7 @@ b8 GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){
     AtlasPage& page = m_pages[pageIndex];
     record.pageIndex = static_cast<u32>(pageIndex);
     record.pixels = { static_cast<f32>(placement.x + 1u), static_cast<f32>(placement.y + 1u), static_cast<f32>(m_bitmap.width), static_cast<f32>(m_bitmap.height) };
-    for(u32 row = 0u; row < m_bitmap.height; ++row){
-        const usize destination = static_cast<usize>(placement.y + row + 1u) * s_GlyphAtlasPageExtent + placement.x + 1u;
-        NWB_MEMCPY(page.pixels.data() + destination, m_bitmap.width, m_bitmap.pixels.data() + static_cast<usize>(row) * m_bitmap.width, m_bitmap.width);
-    }
+    CopyGlyphBitmapToAtlasPage(placement.x, placement.y, m_bitmap.width, m_bitmap.height, m_bitmap.pixels, page.pixels);
     page.cursorX = placement.x + paddedWidth;
     page.cursorY = placement.y;
     page.rowHeight = placement.rowHeight;

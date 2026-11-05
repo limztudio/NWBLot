@@ -2,124 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/validation.adhd>
-
-native{
-#include <impl/ecs_ui/toolkit/images/image_source.h>
-namespace NWB::Impl{
-class UiSkin;
-class Texture;
-};
-namespace NWB::Impl::Ui{
-template<typename TUiSkin, typename TTexture>
-class SkinBindingRecord;
-using SkinBinding = SkinBindingRecord<NWB::Impl::UiSkin, NWB::Impl::Texture>;
-};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Share of free space placed before an item to center it, or the midpoint of an extent.
-const f32 s_RectCenterFraction = 0.5f;
-const f64 s_RectCenterFractionF64 = 0.5;
-const f32 s_UiMaxFloat = 3.40282346638528859812e+38f;
-const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
-const usize s_PaintMaxImages = 64u;
-const usize s_PaintMaxOverlayDepth = 16u;
-const usize s_PaintDefaultClipDepth = 8u;
-const u32 s_PaintQuadVertexCount = 4u;
-const u32 s_PaintQuadIndexCount = 6u;
-const u32 s_PaintNineSliceAxisCells = 3u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-enum<u8> PaintMaterial{
-    Solid,
-    Skin,
-    Glyph,
-    SdfGlyph,
-    Image,
-}
-
-enum<u8> UiRectPrecision{
-    RoundedEndpoints,
-    BoundedEndpoints,
-    PreciseExtents,
-    EmptyPaint,
-}
-
-class Point{
-    public f32 x = 0.0f;
-    public f32 y = 0.0f;
-}
-
-class Rect{
-    public f32 x = 0.0f;
-    public f32 y = 0.0f;
-    public f32 width = 0.0f;
-    public f32 height = 0.0f;
-}
-
-class Insets{
-    public f32 left = 0.0f;
-    public f32 top = 0.0f;
-    public f32 right = 0.0f;
-    public f32 bottom = 0.0f;
-}
-
-// Input colors use linear RGB and straight alpha; frozen vertices use premultiplied alpha.
-class Color{
-    public f32 r = 1.0f;
-    public f32 g = 1.0f;
-    public f32 b = 1.0f;
-    public f32 a = 1.0f;
-}
-
-[serialize]
-class Vertex{
-    public Point position;
-    public Point texCoord;
-    public Color color;
-}
-
-class DisplayMetrics{
-    public f32 logicalWidth = 0.0f;
-    public f32 logicalHeight = 0.0f;
-    public f32 pixelScaleX = 1.0f;
-    public f32 pixelScaleY = 1.0f;
-}
-
-class DrawCommand{
-    public Rect clip;
-    public u32 firstIndex = 0u;
-    public u32 indexCount = 0u;
-    public u32 glyphPageIndex = 0xffffffffu;
-    public u32 sdfPageIndex = 0xffffffffu;
-    public u32 sdfChannel = 0u;
-    // Base paint is layer zero; higher layers render later without changing owned index or image bindings.
-    public u32 layer = 0u;
-    public u32 textureImageIndex = 0xffffffffu;
-    public PaintMaterial material = PaintMaterial::Solid;
-}
-
-// Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
-class SkinBindingRecord<TUiSkin, TTexture>{
-    public AssetRef<TUiSkin> skin;
-    public AssetRef<TTexture> texture;
-    public u64 generation = 0u;
-    public u32 atlasWidth = 0u;
-    public u32 atlasHeight = 0u;
-    public f32 referenceDensity = 1.0f;
-}
-
-class PaintOverlayFrame{
-    public usize clipDepth = 0u;
-    public u32 layer = 0u;
-}
+#include <impl/ecs_ui/toolkit/paint_primitives.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,11 +22,24 @@ b8 SameTextureImageKey(in ImageSource first, in ImageSource second){
     return first.identity() == second.identity() && first.generation() == second.generation();
 }
 
-b8 SameSkinBindingKey(in SkinBinding lhs, in SkinBinding rhs){
+b8 ValidUiTextureImageSource(in ImageSource source){
+    if(source.generation() == 0u || !source.identity().valid())
+        return false;
+    return
+        source.texture().virtualPath() == source.identity().name()
+        && cast<u8>(source.texture().dimension()) == 0u && source.texture().depth() == 1u
+        && source.texture().width() != 0u && source.texture().height() != 0u
+        && !source.texture().mipLevels().empty() && !source.texture().payloadBytes().empty()
+        && IsValidTexturePayloadFormat(source.texture().payloadFormat())
+        && IsValidTextureAlphaMode(source.texture().alphaMode())
+    ;
+}
+
+b8 SameSkinBindingKey<TUiSkin, TTexture>(in SkinBindingRecord<TUiSkin, TTexture> lhs, in SkinBindingRecord<TUiSkin, TTexture> rhs){
     return lhs.skin == rhs.skin && lhs.texture == rhs.texture && lhs.generation == rhs.generation;
 }
 
-b8 SameSkinBinding(in SkinBinding lhs, in SkinBinding rhs){
+b8 SameSkinBinding<TUiSkin, TTexture>(in SkinBindingRecord<TUiSkin, TTexture> lhs, in SkinBindingRecord<TUiSkin, TTexture> rhs){
     return SameSkinBindingKey(lhs, rhs)
         && lhs.atlasWidth == rhs.atlasWidth
         && lhs.atlasHeight == rhs.atlasHeight

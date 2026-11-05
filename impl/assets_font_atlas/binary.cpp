@@ -22,63 +22,6 @@ namespace __hidden_font_atlas_binary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Span<const u8> bytes, usize& cursor)noexcept{
-    FontAtlasGlyph glyph;
-    const auto glyphId = ReadU32LittleEndian(bytes, cursor);
-    if(!glyphId)
-        return MakeUnexpected(glyphId.error());
-    glyph.glyphId = *glyphId;
-    const auto group = ReadU32LittleEndian(bytes, cursor);
-    if(!group)
-        return MakeUnexpected(group.error());
-    glyph.group = *group;
-    const auto channel = ReadU32LittleEndian(bytes, cursor);
-    if(!channel)
-        return MakeUnexpected(channel.error());
-    glyph.channel = *channel;
-    const auto x = ReadU32LittleEndian(bytes, cursor);
-    if(!x)
-        return MakeUnexpected(x.error());
-    glyph.x = *x;
-    const auto y = ReadU32LittleEndian(bytes, cursor);
-    if(!y)
-        return MakeUnexpected(y.error());
-    glyph.y = *y;
-    const auto width = ReadU32LittleEndian(bytes, cursor);
-    if(!width)
-        return MakeUnexpected(width.error());
-    glyph.width = *width;
-    const auto height = ReadU32LittleEndian(bytes, cursor);
-    if(!height)
-        return MakeUnexpected(height.error());
-    glyph.height = *height;
-    const auto planeLeft = ReadF32LittleEndian(bytes, cursor);
-    if(!planeLeft)
-        return MakeUnexpected(planeLeft.error());
-    glyph.planeLeft = *planeLeft;
-    const auto planeTop = ReadF32LittleEndian(bytes, cursor);
-    if(!planeTop)
-        return MakeUnexpected(planeTop.error());
-    glyph.planeTop = *planeTop;
-    const auto planeRight = ReadF32LittleEndian(bytes, cursor);
-    if(!planeRight)
-        return MakeUnexpected(planeRight.error());
-    glyph.planeRight = *planeRight;
-    const auto planeBottom = ReadF32LittleEndian(bytes, cursor);
-    if(!planeBottom)
-        return MakeUnexpected(planeBottom.error());
-    glyph.planeBottom = *planeBottom;
-    const auto advanceUnits = ReadF32LittleEndian(bytes, cursor);
-    if(!advanceUnits)
-        return MakeUnexpected(advanceUnits.error());
-    glyph.advanceUnits = *advanceUnits;
-    const auto drawable = ReadU32LittleEndian(bytes, cursor);
-    if(!drawable)
-        return MakeUnexpected(drawable.error());
-    glyph.drawable = *drawable;
-    return glyph;
-}
-
 [[nodiscard]] static Expected<FontAtlasPayload> Deserialize(const Span<const u8> bytes, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     usize cursor = 0u;
     FontAtlasPayload payload(arena);
@@ -162,7 +105,7 @@ namespace __hidden_font_atlas_binary{
     payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
     payload.glyphs.resize(*glyphCount);
     for(FontAtlasGlyph& glyph : payload.glyphs){
-        const auto decoded = ReadGlyph(bytes, cursor);
+        const auto decoded = TryReadFontAtlasGlyph(bytes, cursor);
         if(!decoded)
             return MakeUnexpected(decoded.error());
         glyph = *decoded;

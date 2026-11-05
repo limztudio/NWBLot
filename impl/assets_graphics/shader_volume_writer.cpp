@@ -251,7 +251,7 @@ b8 AppendPreparedShadersToManifest(
         const Name stageName = **stageNameResult;
 
         auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> b8{
-            const Core::Assets::CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
+            const Core::Assets::CookString generatedVariantName = ShaderCook::BuildCanonicalVariantName(defineCombo, cookArena, scratchArena);
 
             const u64 sourceChecksum = ShaderCook::ComputeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
             const Core::Assets::ScratchString sourceChecksumHex = FormatHex64A(scratchArena, sourceChecksum);

@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 
 
 b8 GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept{
-    if(!ValidSnapshotImageCount(snapshot))
+    if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
         return false;
     const auto& pages = snapshot.glyphPages();
     for(usize index = 0u; index < pages.size(); ++index){

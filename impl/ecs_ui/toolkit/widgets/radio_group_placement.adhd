@@ -78,6 +78,26 @@ Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabe
     return candidate;
 }
 
+b8 IsUniqueRadioGroupChoiceKey(in RadioGroupChoices choices, in u32 index, in u64 key){
+    if(key == 0u)
+        return false;
+    for(u32 previous = 0u; previous < index; ++previous){
+        if(choices.rows[previous].key == key)
+            return false;
+    }
+    return true;
+}
+
+b8 IsRadioGroupInteractive(in RadioGroupChoices choices, in RadioGroupOptions options){
+    if(!options.enabled)
+        return false;
+    for(u32 index = 0u; index < choices.count; ++index){
+        if(choices.rows[index].enabled)
+            return true;
+    }
+    return false;
+}
+
 Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)
         return makeUnexpected(Failure());
@@ -101,12 +121,8 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
     const f64 markInsetScalar = indicatorExtentScalar * cast<f64>(metrics.markInset);
     const f64 rowHeightScalar = cast<f64>(metrics.rowHeight);
     for(u32 index = 0u; index < candidate.count; ++index){
-        if(choices.rows[index].key == 0u)
+        if(!IsUniqueRadioGroupChoiceKey(choices, index, choices.rows[index].key))
             return makeUnexpected(Failure());
-        for(u32 previous = 0u; previous < index; ++previous){
-            if(choices.rows[previous].key == choices.rows[index].key)
-                return makeUnexpected(Failure());
-        }
         RadioGroupChoicePlacement row;
         row.key = choices.rows[index].key;
         row.enabled = choices.rows[index].enabled;

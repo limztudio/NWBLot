@@ -1,0 +1,138 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/text/atlas_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_TextBytesPerKilobyte = 1024u;
+const usize s_TextMaxBytes = s_TextBytesPerKilobyte * s_TextBytesPerKilobyte;
+const usize s_TextMaxFontSources = 8u;
+const usize s_TextMaxLanguageBytes = 63u;
+const f32 s_TextDefaultFontSize = 16.0f;
+const StringView s_TextDefaultLanguage = "en";
+const f32 s_TextFixedPointScale = 64.0f;
+const f64 s_TextFixedPointScaleF64 = 64.0;
+const f32 s_TextMaxFontSize = 2048.0f;
+const u32 s_TextMaxRasterPpem = 4096u;
+const f32 s_TextMaxRasterPpemF32 = 4096.0f;
+const u32 s_TextDefaultScriptTag = 0x4c61746eu;
+const u32 s_ScriptTagLetterCount = 4u;
+const u32 s_ScriptTagLetterMask = 0xffu;
+const u32 s_ScriptTagBitsPerByte = 8u;
+const u32 s_TextUnicodeSpace = 0x20u;
+const u32 s_TextUnicodeDelete = 0x7fu;
+const u32 s_TextUnicodeC1Last = 0x9fu;
+const u32 s_TextUnicodeLineSeparator = 0x2028u;
+const u32 s_TextUnicodeParagraphSeparator = 0x2029u;
+const f32 s_TextFixedPointRoundBiasF32 = 0.5f;
+const f64 s_TextOutlineBoundsMargin = 1.0;
+const f64 s_TextOutlineBoundsMarginBothSides = 2.0;
+const f32 s_TextMaxCoordinateF32 = 3.40282346638528859812e+38f;
+const f64 s_TextMaxCoordinateF64 = cast<f64>(s_TextMaxCoordinateF32);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> TextDirection{
+    LeftToRight,
+    RightToLeft,
+}
+
+enum<u8> TextLayoutStatus{
+    Success,
+    InvalidUtf8,
+    UnsupportedControl,
+    MissingGlyph,
+    InvalidParameters,
+    FontFailure,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShapeRequest{
+    public StringView text = "";
+    public StringView language = s_TextDefaultLanguage;
+    public f32 fontSize = s_TextDefaultFontSize;
+    public u32 scriptTag = s_TextDefaultScriptTag;
+    public TextDirection direction = TextDirection::LeftToRight;
+}
+
+class FontMetrics{
+    public f32 ascender = 0.0f;
+    public f32 descender = 0.0f;
+    public f32 lineGap = 0.0f;
+}
+
+class GlyphCoverageBounds{
+    public GlyphCoverageBounds(){
+        this.known = false;
+    }
+
+    public GlyphCoverageBounds(in Rect inInk, in b8 inKnown){
+        this.ink = inInk;
+        this.known = inKnown;
+    }
+
+    public Rect ink;
+    public b8 known;
+}
+
+class RawShapedGlyph{
+    public RawShapedGlyph(){
+        this.glyphId = 0u;
+        this.byteBegin = 0u;
+        this.byteEnd = 0u;
+    }
+
+    public RawShapedGlyph(in u32 inGlyphId, in u32 inByteBegin, in u32 inByteEnd, in Point inOffset, in Point inAdvance, in Rect inInk, in GlyphCoverageBounds inCoverage){
+        this.glyphId = inGlyphId;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+        this.offset = inOffset;
+        this.advance = inAdvance;
+        this.ink = inInk;
+        this.coverage = inCoverage;
+    }
+
+    public u32 glyphId;
+    public u32 byteBegin;
+    public u32 byteEnd;
+    public Point offset;
+    public Point advance;
+    public Rect ink;
+    public GlyphCoverageBounds coverage;
+}
+
+class TextFontSpan{
+    public TextFontSpan(){
+        this.fontIndex = 0u;
+        this.glyphBegin = 0u;
+        this.glyphEnd = 0u;
+        this.byteBegin = 0u;
+        this.byteEnd = 0u;
+    }
+
+    public TextFontSpan(in usize inFontIndex, in usize inGlyphBegin, in usize inGlyphEnd, in u32 inByteBegin, in u32 inByteEnd){
+        this.fontIndex = inFontIndex;
+        this.glyphBegin = inGlyphBegin;
+        this.glyphEnd = inGlyphEnd;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+    }
+
+    public usize fontIndex;
+    public usize glyphBegin;
+    public usize glyphEnd;
+    public u32 byteBegin;
+    public u32 byteEnd;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -336,7 +336,6 @@ public:
 class GpuRendererState final : NoCopy{
 public:
     [[nodiscard]] static b8 MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
-    [[nodiscard]] static b8 ValidSnapshotImageCount(const DrawSnapshot& snapshot)noexcept;
     [[nodiscard]] static b8 ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
     [[nodiscard]] static b8 ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
     [[nodiscard]] static b8 ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;

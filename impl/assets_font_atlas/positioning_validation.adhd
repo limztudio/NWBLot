@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font_atlas/positioning_table_constants.adhd>
+#include <impl/assets_font_atlas/kern_validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,67 +13,6 @@ class FontAtlasTableValidator{
         this.m_bytes = bytes;
         this.m_glyphCount = glyphCount;
         this.m_budget = s_FontAtlasValidationWorkBudget;
-    }
-
-    public b8 kern(){
-        if(!this.range(0u, s_FontAtlasKernHeaderBytes))
-            return false;
-        const b8 apple = this.u32At(0u) == s_FontAtlasAppleKernVersion;
-        if(!apple && this.u16At(0u) != 0u)
-            return false;
-        if(apple && !this.range(0u, s_FontAtlasAppleKernHeaderBytes))
-            return false;
-        u32 tableCount = 0u;
-        u64 offset = 0u;
-        if(apple){
-            tableCount = this.u32At(s_FontAtlasAppleKernTableCountOffset);
-            offset = s_FontAtlasAppleKernHeaderBytes;
-        }
-        else{
-            tableCount = cast<u32>(this.u16At(s_FontAtlasKernTableCountOffset));
-            offset = s_FontAtlasKernHeaderBytes;
-        }
-        if(tableCount > s_FontAtlasKernMaxTableCount)
-            return false;
-        for(u32 table = 0u; table < tableCount; ++table){
-            u32 header = s_FontAtlasKernSubtableHeaderBytes;
-            if(apple)
-                header = s_FontAtlasAppleKernSubtableHeaderBytes;
-            if(!this.range(offset, header))
-                return false;
-            u32 length = 0u;
-            if(apple)
-                length = this.u32At(offset);
-            else
-                length = cast<u32>(this.u16At(offset + s_FontAtlasKernSubtableLengthOffset));
-            const u16 coverage = this.u16At(offset + s_FontAtlasKernSubtableCoverageOffset);
-            u16 format = 0u;
-            if(apple)
-                format = cast<u16>(cast<u32>(coverage) & s_FontAtlasAppleKernFormatMask);
-            else
-                format = cast<u16>(cast<u32>(coverage) >> s_FontAtlasKernFormatShift);
-            if(length < header || !this.range(offset, length))
-                return false;
-            if(0u == format){
-                if(length < header + s_FontAtlasKernPairListHeaderBytes)
-                    return false;
-                const u32 count = cast<u32>(this.u16At(offset + header));
-                if(cast<u64>(count) * s_FontAtlasKernPairBytes > length - header - s_FontAtlasKernPairListHeaderBytes || !this.spend(count))
-                    return false;
-                u32 previous = 0u;
-                for(u32 index = 0u; index < count; ++index){
-                    const u64 record = offset + header + s_FontAtlasKernPairListHeaderBytes + cast<u64>(index) * s_FontAtlasKernPairBytes;
-                    const u32 left = cast<u32>(this.u16At(record));
-                    const u32 right = cast<u32>(this.u16At(record + s_FontAtlasKernPairRightOffset));
-                    const u32 pair = left * s_FontAtlasKernPairKeyLeftScale + right;
-                    if(left >= this.m_glyphCount || right >= this.m_glyphCount || (index > 0u && pair <= previous))
-                        return false;
-                    previous = pair;
-                }
-            }
-            offset += length;
-        }
-        return offset == cast<u64>(this.m_bytes.size());
     }
 
     public b8 gpos(){
@@ -492,7 +431,7 @@ b8 ValidateFontAtlasPositioningTableBytes(in u32 tag, in Span<u8> bytes, in u32 
     FontAtlasTableValidator validator(bytes, glyphCount);
     b8 valid = false;
     if(tag == s_FontAtlasKernTag)
-        valid = validator.kern();
+        valid = ValidateFontAtlasKernTableBytes(bytes, glyphCount);
     else if(tag == s_FontAtlasGposTag)
         valid = validator.gpos();
     else if(tag == s_FontAtlasGdefTag)

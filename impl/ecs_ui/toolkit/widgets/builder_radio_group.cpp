@@ -130,10 +130,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     frame.m_snapshot = state.snapshot();
     frame.m_token = { state.inputGeneration(), frame.m_choices.sourceGeneration, frame.m_choices.sourceRevision };
     m_context.input().fenceControl((*widget)->id, (*widget)->declarationGeneration, frame.m_token);
-    b8 interactive = false;
-    for(u32 index = 0u; index < frame.m_choices.count; ++index)
-        interactive = interactive || frame.m_choices.rows[index].enabled;
-    interactive = interactive && options.enabled;
+    const b8 interactive = IsRadioGroupInteractive(frame.m_choices, options);
     if(!interactive)
         m_context.input().invalidateTarget((*widget)->id);
     while(auto action = m_context.takeControlAction(**widget, interactive, frame.m_token)){

@@ -77,12 +77,7 @@ class RendererOpticalVolumeSelection;
 
 class RendererMaterialSystem final : public IMaterialSurfaceLookup, NoCopy{
 public:
-    [[nodiscard]] static Expected<MaterialInstanceOverrideField> FindMaterialInstanceOverrideField(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter);
     [[nodiscard]] static b8 ApplyMaterialInstanceOverrides(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, Span<u8> inOutMutableTypedBytes);
-
-
-private:
-    static void SplitMaterialTypedBytesByClass(const Material& material, MaterialTypedByteVector& outConstantTypedBytes, MaterialTypedByteVector& outMutableDefaultTypedBytes);
 
 
 public:

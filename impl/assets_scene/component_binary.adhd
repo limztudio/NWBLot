@@ -1,0 +1,234 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_scene/components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+NWB_IMPL_BEGIN
+using Scene::TransformComponent;
+using Scene::CameraComponent;
+using Scene::CameraProjection;
+namespace LightType = Scene::LightType;
+using Scene::LightComponent;
+using Scene::TryBuildCameraProjection;
+using Scene::s_CameraFallbackAspectRatio;
+using Scene::IsValidLightCone;
+NWB_IMPL_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_EntityLoadBinaryArena = "impl/assets_scene/entity_load_binary";
+const Name s_EntitySerializeArena = "impl/assets_scene/entity_serialize";
+const Name s_SceneLoadBinaryArena = "impl/assets_scene/scene_load_binary";
+const Name s_SceneSerializeArena = "impl/assets_scene/scene_serialize";
+const Name s_ActiveSceneLoadArena = "impl/assets_scene/active_scene_load";
+
+const StringView s_DefaultProjectVirtualPathText = "project/project";
+const Name s_DefaultProjectVirtualPath = "project/project";
+
+const StringView s_TransformDiagnosticPrefix = "Transform component meta";
+const StringView s_CameraDiagnosticPrefix = "Camera component meta";
+const StringView s_LightDiagnosticPrefix = "Light component meta";
+const StringView s_EntityDiagnosticPrefix = "Entity meta";
+const StringView s_ProjectDiagnosticPrefix = "Project meta";
+const StringView s_SceneDiagnosticPrefix = "Scene meta";
+
+const StringView s_SceneStartSceneField = "start_scene";
+const StringView s_SceneSubsystemsField = "subsystems";
+const StringView s_SceneEntitiesField = "entities";
+const StringView s_SceneAssetsField = "assets";
+const StringView s_EntityComponentsField = "components";
+
+const StringView s_TransformPositionField = "position";
+const StringView s_TransformRotationField = "rotation";
+const StringView s_TransformRotationEulerField = "rotation_euler";
+const StringView s_TransformRotationEulerDegreesField = "rotation_euler_degrees";
+const StringView s_TransformScaleField = "scale";
+
+const StringView s_CameraVerticalFovDegreesField = "vertical_fov_degrees";
+const StringView s_CameraVerticalFovRadiansField = "vertical_fov_radians";
+const StringView s_CameraNearPlaneField = "near_plane";
+const StringView s_CameraFarPlaneField = "far_plane";
+const StringView s_CameraAspectRatioField = "aspect_ratio";
+
+const StringView s_LightTypeField = "type";
+const StringView s_LightColorField = "color";
+const StringView s_LightIntensityField = "intensity";
+const StringView s_LightRangeField = "range";
+const StringView s_LightInnerConeCosField = "inner_cone_cos";
+const StringView s_LightOuterConeCosField = "outer_cone_cos";
+const StringView s_LightAngularRadiusField = "angular_radius";
+const StringView s_LightSourceRadiusField = "source_radius";
+const StringView s_LightEnableCausticsField = "enable_caustics";
+const StringView s_LightTypeDirectional = "directional";
+const StringView s_LightTypePoint = "point";
+const StringView s_LightTypeSpot = "spot";
+const StringView s_LightTypeHint = "must be 'directional', 'point', or 'spot'";
+
+const f32 s_SceneDegreesToRadians = s_PI / 180.0f;
+const f32 s_SceneMinQuaternionLengthSq = 0.000001f;
+const f32 s_TransformRotationUnitLengthSquaredTolerance = 0.001f;
+
+const u32 s_ProjectMagic = 0x50524A31u; // PRJ1
+const u32 s_ProjectVersion = 1u;
+
+const u32 s_ComponentMagic = 0x434D5031u; // CMP1
+const u32 s_ComponentVersion = 1u;
+
+const u32 s_EntityMagic = 0x454E5431u; // ENT1
+const u32 s_EntityVersion = 1u;
+
+const u32 s_SceneMagic = 0x53434E31u; // SCN1
+const u32 s_SceneVersion = 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class ComponentHeaderBinary{
+    public u32 magic = s_ComponentMagic;
+    public u32 version = s_ComponentVersion;
+    public NameHash componentTypeHash;
+    public u64 payloadByteCount = 0u;
+}
+
+[serialize]
+class TransformComponentPayloadBinary{
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 scale(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
+[serialize]
+class CameraComponentPayloadBinary{
+    public f32x4 projection(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[serialize]
+class LightComponentPayloadBinary{
+    public f32x4 colorIntensity(1.0f, 1.0f, 1.0f, 1.0f);
+    public f32 range = 10.0f;
+    public f32 innerConeCos = 0.95f;
+    public f32 outerConeCos = 0.90f;
+    public f32 angularRadius = 0.00465f;
+    public f32 sourceRadius = 0.1f;
+    public u8 type = 0u;
+    public u8 enableCaustics = 1u;
+    public u16 reserved = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[component_asset("transform_component")]
+class TransformComponentAsset{
+    public TransformComponent component;
+}
+
+[component_asset("camera_component")]
+class CameraComponentAsset{
+    public CameraComponent component;
+}
+
+[component_asset("light_component")]
+class LightComponentAsset{
+    public LightComponent component;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ComponentHeaderBinary MakeComponentHeaderBinary(in NameHash componentTypeHash, in u64 payloadByteCount){
+    ComponentHeaderBinary header;
+    header.componentTypeHash = componentTypeHash;
+    header.payloadByteCount = payloadByteCount;
+    return header;
+}
+
+TransformComponentPayloadBinary PackTransformComponentPayloadBinary(in TransformComponent component){
+    TransformComponentPayloadBinary binaryPayload;
+    binaryPayload.position = component.position;
+    binaryPayload.rotation = component.rotation;
+    binaryPayload.scale = component.scale;
+    return binaryPayload;
+}
+
+TransformComponent UnpackTransformComponentPayloadBinary(in TransformComponentPayloadBinary binaryPayload){
+    TransformComponent component;
+    component.position = binaryPayload.position;
+    component.rotation = binaryPayload.rotation;
+    component.scale = binaryPayload.scale;
+    return component;
+}
+
+CameraComponentPayloadBinary PackCameraComponentPayloadBinary(in CameraComponent component){
+    CameraComponentPayloadBinary binaryPayload;
+    binaryPayload.projection = component.projection;
+    return binaryPayload;
+}
+
+CameraComponent UnpackCameraComponentPayloadBinary(in CameraComponentPayloadBinary binaryPayload){
+    CameraComponent component;
+    component.projection = binaryPayload.projection;
+    return component;
+}
+
+LightComponentPayloadBinary PackLightComponentPayloadBinary(in LightComponent component){
+    LightComponentPayloadBinary binaryPayload;
+    binaryPayload.colorIntensity = component.colorIntensity;
+    binaryPayload.range = component.range;
+    binaryPayload.innerConeCos = component.innerConeCos;
+    binaryPayload.outerConeCos = component.outerConeCos;
+    binaryPayload.angularRadius = component.angularRadius;
+    binaryPayload.sourceRadius = component.sourceRadius;
+    if(component.type == LightType::Point)
+        binaryPayload.type = 1u;
+    else if(component.type == LightType::Spot)
+        binaryPayload.type = 2u;
+    else
+        binaryPayload.type = 0u;
+    if(component.enableCaustics)
+        binaryPayload.enableCaustics = 1u;
+    else
+        binaryPayload.enableCaustics = 0u;
+    binaryPayload.reserved = 0u;
+    return binaryPayload;
+}
+
+Expected<LightComponent> UnpackLightComponentPayloadBinary(in LightComponentPayloadBinary binaryPayload){
+    if(binaryPayload.enableCaustics > 1u || binaryPayload.reserved != 0u)
+        return makeUnexpected(Failure());
+
+    LightComponent unpacked;
+    if(binaryPayload.type == 0u)
+        unpacked.type = LightType::Directional;
+    else if(binaryPayload.type == 1u)
+        unpacked.type = LightType::Point;
+    else if(binaryPayload.type == 2u)
+        unpacked.type = LightType::Spot;
+    else
+        return makeUnexpected(Failure());
+
+    unpacked.colorIntensity = binaryPayload.colorIntensity;
+    unpacked.range = binaryPayload.range;
+    unpacked.innerConeCos = binaryPayload.innerConeCos;
+    unpacked.outerConeCos = binaryPayload.outerConeCos;
+    unpacked.angularRadius = binaryPayload.angularRadius;
+    unpacked.sourceRadius = binaryPayload.sourceRadius;
+    unpacked.enableCaustics = binaryPayload.enableCaustics != 0u;
+    return unpacked;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

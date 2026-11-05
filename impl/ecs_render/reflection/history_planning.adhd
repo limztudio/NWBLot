@@ -2,106 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/reflection/settings.adhd>
+#include <impl/ecs_render/reflection/feedback_planning.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-ReflectionFeedbackPlan ResolveReflectionFeedbackPlan(
-    in ReflectionSceneContentStamp stamp,
-    in ReflectionSettings settings,
-    in b8 enabled,
-    in u64 graphicsFrameIndex,
-    in ReflectionSceneContentStamp previousStamp,
-    in ReflectionSettings previousSettings,
-    in u64 generation,
-    in u64 sequence,
-    in u64 acceptedSequence,
-    in u64 epoch,
-    in u64 startGraphicsFrame,
-    in u32 nextProbeIndex,
-    in u32 acceptedBank,
-    in b8 previousEnabled,
-    in b8 previousEligible,
-    in b8 previousHardwareReady,
-    in b8 resourcesChanged,
-    in b8 quarantined
-){
-    ReflectionFeedbackPlan result;
-    result.stamp = stamp;
-    result.settings = settings;
-    result.generation = generation;
-    result.sequence = sequence;
-    result.acceptedSequence = acceptedSequence;
-    result.graphicsFrameIndex = graphicsFrameIndex;
-    result.enabled = enabled;
-    result.previousHardwareReady = previousHardwareReady;
-    result.quarantined = quarantined;
-    if(quarantined)
-        result.resetReason = ReflectionFeedbackResetReason::InvalidAcceptance;
-    else if(acceptedSequence == 0u){
-        if(resourcesChanged)
-            result.resetReason = ReflectionFeedbackResetReason::ResourcesChanged;
-        else
-            result.resetReason = ReflectionFeedbackResetReason::FirstObservation;
-    }
-    else if(enabled != previousEnabled || !SameReflectionTraceSettings(settings, previousSettings))
-        result.resetReason = ReflectionFeedbackResetReason::SettingsChanged;
-    else if(!stamp.matchesScene(previousStamp))
-        result.resetReason = ReflectionFeedbackResetReason::SceneChanged;
-    else if(stamp.view != previousStamp.view)
-        result.resetReason = ReflectionFeedbackResetReason::ViewChanged;
-    result.reset = result.resetReason != ReflectionFeedbackResetReason::None;
-    if(result.reset)
-        result.epoch = epoch + 1u;
-    else
-        result.epoch = epoch;
-    if(result.reset)
-        result.startGraphicsFrame = graphicsFrameIndex;
-    else
-        result.startGraphicsFrame = startGraphicsFrame;
-    if(result.reset)
-        result.probeIndex = 0u;
-    else
-        result.probeIndex = nextProbeIndex;
-    result.eligible = !quarantined && enabled && stamp.trusted && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
-    result.reused = result.eligible && previousEligible && !result.reset;
-    result.previousBank = acceptedBank;
-    // Never overwrite the accepted bank.
-    if(acceptedSequence != 0u)
-        result.currentBank = 1u - acceptedBank;
-    else
-        result.currentBank = 0u;
-    if(!quarantined && result.reset && (!enabled || settings.traceMode != ReflectionTraceMode::Hybrid || settings.maxHardwareRaysPerFrame == 0u))
-        result.resetReason = ReflectionFeedbackResetReason::Disabled;
-    else if(!quarantined && result.reset && !stamp.trusted)
-        result.resetReason = ReflectionFeedbackResetReason::UntrustedScene;
-    return result;
-}
-
-ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedbackPlan plan, in b8 hardwareReady){
-    const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
-    ReflectionFeedbackOutcome result;
-    if(hardwareChanged){
-        result.epoch = plan.epoch + 1u;
-        result.startGraphicsFrame = plan.graphicsFrameIndex;
-        result.probeIndex = 0u;
-    }
-    else{
-        result.epoch = plan.epoch;
-        result.startGraphicsFrame = plan.startGraphicsFrame;
-        result.probeIndex = plan.probeIndex;
-    }
-    result.eligible = plan.eligible && hardwareReady;
-    result.reused = result.eligible && plan.reused && !hardwareChanged;
-    result.reset = plan.reset || hardwareChanged;
-    if(hardwareChanged)
-        result.resetReason = ReflectionFeedbackResetReason::HardwareChanged;
-    else
-        result.resetReason = plan.resetReason;
-    return result;
-}
 
 ReflectionHistoryPlan ResolveReflectionHistoryPlan(
     in ReflectionSceneContentStamp stamp,
@@ -261,55 +166,6 @@ ReflectionFrameParameters ResolveReflectionUploadFrameParameters(
     return parameters;
 }
 
-b8 CanReserveReflectionFeedbackPlan(
-    in b8 quarantined,
-    in u16 deviceGeneration,
-    in u64 reservedSequence,
-    in u64 currentGeneration,
-    in u64 currentAcceptedSequence,
-    in ReflectionFeedbackPlan plan
-){
-    return !quarantined
-        && deviceGeneration != 0u
-        && reservedSequence == 0u
-        && plan.generation == currentGeneration
-        && plan.sequence > currentAcceptedSequence
-        && plan.acceptedSequence == currentAcceptedSequence;
-}
-
-void ApplyAcceptedReflectionFeedbackPlan(
-    in ReflectionFeedbackPlan plan,
-    in b8 hardwareReady,
-    mut ReflectionSceneContentStamp outStamp,
-    mut ReflectionSettings outSettings,
-    mut u64 outAcceptedSequence,
-    mut u64 outEpoch,
-    mut u64 outStartGraphicsFrame,
-    mut u32 outNextProbeIndex,
-    mut u32 inOutAcceptedBank,
-    mut b8 outEnabled,
-    mut b8 outEligible,
-    mut b8 outHardwareReady,
-    mut b8 outResourcesChanged
-){
-    const ReflectionFeedbackOutcome outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
-    outStamp = plan.stamp;
-    outSettings = plan.settings;
-    outAcceptedSequence = plan.sequence;
-    outEpoch = outcome.epoch;
-    outStartGraphicsFrame = outcome.startGraphicsFrame;
-    if(outcome.eligible){
-        outNextProbeIndex = outcome.probeIndex + 1u;
-        inOutAcceptedBank = plan.currentBank;
-    }
-    else
-        outNextProbeIndex = 0u;
-    outEnabled = plan.enabled;
-    outEligible = outcome.eligible;
-    outHardwareReady = hardwareReady;
-    outResourcesChanged = false;
-}
-
 b8 CanReserveReflectionHistoryPlan(
     in u16 deviceGeneration,
     in u64 reservedSequence,
@@ -369,17 +225,63 @@ void ApplyReflectionStatisticsHistoryOutcome(
     inOutMetadata.historyResetReason = history.resetReason;
 }
 
-void ApplyReflectionStatisticsFeedbackOutcome(
-    in ReflectionFeedbackOutcome feedback,
-    mut ReflectionStatistics inOutMetadata
+void PopulateReflectionPreparedFrameParameters(
+    in u32 width,
+    in u32 height,
+    in u32 queueCapacity,
+    in u32 opaqueOutputSlot,
+    in u32 glassOutputSlot,
+    in u32 opaqueRadianceSlot,
+    in u32 glassRadianceSlot,
+    in u32 queueSlot,
+    in u32 counterSlot,
+    in u32 argsSlot,
+    in u32 depthPyramidSlot,
+    in u32 depthMipCount,
+    mut ReflectionFrameParameters outParameters
 ){
-    inOutMetadata.feedbackEpoch = feedback.epoch;
-    inOutMetadata.feedbackStartGraphicsFrame = feedback.startGraphicsFrame;
-    inOutMetadata.feedbackProbeIndex = feedback.probeIndex;
-    inOutMetadata.feedbackEnabled = feedback.eligible;
-    inOutMetadata.feedbackReused = feedback.reused;
-    inOutMetadata.feedbackReset = feedback.reset;
-    inOutMetadata.feedbackResetReason = feedback.resetReason;
+    outParameters.width = width;
+    outParameters.height = height;
+    outParameters.queueCapacity = queueCapacity;
+    outParameters.opaqueOutputSlot = opaqueOutputSlot;
+    outParameters.glassOutputSlot = glassOutputSlot;
+    outParameters.opaqueRadianceSlot = opaqueRadianceSlot;
+    outParameters.glassRadianceSlot = glassRadianceSlot;
+    outParameters.queueSlot = queueSlot;
+    outParameters.counterSlot = counterSlot;
+    outParameters.argsSlot = argsSlot;
+    outParameters.depthPyramidSlot = depthPyramidSlot;
+    outParameters.depthMipCount = depthMipCount;
+}
+
+ReflectionStatistics MakeReflectionStatisticsMetadata(
+    in ReflectionSettings settings,
+    in ReflectionFrameParameters parameters,
+    in u32 frameIndex,
+    in u64 graphicsFrameIndex,
+    in b8 hasCsgTraceContextBuffer,
+    in b8 opticalTransport,
+    in b8 hardwareRequested,
+    in b8 hardwareAvailable
+){
+    ReflectionStatistics metadata;
+    metadata.frameIndex = frameIndex;
+    metadata.feedbackRequested = settings.screenFeedbackEnabled;
+    metadata.schedulingCounterValid = settings.diagnosticsEnabled;
+    metadata.graphicsFrameIndex = graphicsFrameIndex;
+    metadata.samplingSeed = settings.samplingSeed;
+    metadata.width = parameters.width;
+    metadata.height = parameters.height;
+    metadata.requestedHardwareBudget = settings.maxHardwareRaysPerFrame;
+    metadata.maxOpticalQueries = settings.maxOpticalQueries;
+    metadata.csgHardwareEnabled = parameters.hardwareEnabled != 0u && hasCsgTraceContextBuffer;
+    metadata.opticalTransportEnabled = parameters.hardwareEnabled != 0u && opticalTransport;
+    metadata.effectiveHardwareBudget = parameters.maxHardwareRays;
+    metadata.queueCapacity = parameters.queueCapacity;
+    metadata.traceMode = settings.traceMode;
+    metadata.hardwareRequested = hardwareRequested;
+    metadata.hardwareAvailable = hardwareAvailable;
+    return metadata;
 }
 
 

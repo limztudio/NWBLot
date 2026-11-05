@@ -31,22 +31,8 @@ static constexpr TStringView s_ImageLoadContext = NWB_TEXT("UI Texture Image");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 ValidSource(const SharedImageSource& source)noexcept{
-    if(!source || source->generation() == 0u || !source->identity().valid())
-        return false;
-    const Texture& texture = source->texture();
-    return
-        texture.virtualPath() == source->identity().name()
-        && texture.dimension() == TextureDimension::Texture2D && texture.depth() == 1u
-        && texture.width() != 0u && texture.height() != 0u
-        && !texture.mipLevels().empty() && !texture.payloadBytes().empty()
-        && IsValidTexturePayloadFormat(texture.payloadFormat())
-        && IsValidTextureAlphaMode(texture.alphaMode())
-    ;
-}
-
 [[nodiscard]] static b8 ValidVersion(const GpuTextureImageVersion& version)noexcept{
-    if(!ValidSource(version.m_source) || !version.m_texture.valid())
+    if(!version.m_source || !ValidUiTextureImageSource(*version.m_source) || !version.m_texture.valid())
         return false;
     const TextureGpuResource& resource = version.m_texture;
     if(resource.format == Core::Format::UNKNOWN || resource.format >= Core::Format::Count)
@@ -80,11 +66,11 @@ static constexpr TStringView s_ImageLoadContext = NWB_TEXT("UI Texture Image");
 
 
 b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept{
-    if(!ValidSnapshotImageCount(snapshot))
+    if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
         return false;
     const auto& images = snapshot.textureImages();
     for(usize index = 0u; index < images.size(); ++index){
-        if(!__hidden_ui_gpu_texture_resources::ValidSource(images[index]))
+        if(!images[index] || !ValidUiTextureImageSource(*images[index]))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
             if(images[index]->generation() == images[previous]->generation())
@@ -95,7 +81,7 @@ b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept
 }
 
 Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureImage(const SharedImageSource& source){
-    if(!__hidden_ui_gpu_texture_resources::ValidSource(source))
+    if(!source || !ValidUiTextureImageSource(*source))
         return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_textureCache.size(); ++index){
         const auto& existing = m_textureCache[index];

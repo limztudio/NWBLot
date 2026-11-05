@@ -57,7 +57,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     const b8 hover = interactive && input.hover() == *thumbId;
     const b8 pressed = interactive && input.primaryDown() && (input.capture() == *trackId || input.capture() == *thumbId);
     const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);
-    const UiSkinRegion* thumb = !interactive ? m_skin->findRegion(frame.m_style.disabled) : pressed ? m_skin->findRegion(frame.m_style.pressed) : hover ? m_skin->findRegion(frame.m_style.hover) : nullptr;
+    const UiSkinRegion* thumb = m_skin->findRegion(ResolveSliderThumbPreferredName(frame.m_style, interactive, pressed, hover));
     if(!thumb)
         thumb = region(frame.m_style.normal, frame.m_style.thumbFallback);
     if(!track || !thumb)

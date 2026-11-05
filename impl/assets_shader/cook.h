@@ -239,10 +239,6 @@ public:
 
     [[nodiscard]] b8 expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
 
-    [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena){
-        return BuildCanonicalVariantName(combo, m_memoryArena, scratchArena);
-    }
-
 
 private:
     CookArena& m_memoryArena;

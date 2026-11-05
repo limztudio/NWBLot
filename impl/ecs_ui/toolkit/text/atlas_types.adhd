@@ -245,5 +245,21 @@ Rect ResolveCoverageGlyphUv(in Rect pixels){
     return Rect(pixels.x / extent, pixels.y / extent, pixels.width / extent, pixels.height / extent);
 }
 
+void CopyGlyphBitmapToAtlasPage(
+    in u32 placementX,
+    in u32 placementY,
+    in u32 width,
+    in u32 height,
+    in Span<u8> bitmapPixels,
+    mut Vector<u8> outPagePixels
+){
+    for(u32 row = 0u; row < height; ++row){
+        const usize destination = cast<usize>(placementY + row + 1u) * cast<usize>(s_GlyphAtlasPageExtent) + cast<usize>(placementX + 1u);
+        const usize source = cast<usize>(row) * cast<usize>(width);
+        for(u32 col = 0u; col < width; ++col)
+            outPagePixels[destination + cast<usize>(col)] = bitmapPixels[source + cast<usize>(col)];
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

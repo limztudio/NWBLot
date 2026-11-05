@@ -184,5 +184,80 @@ StringView ResolveReflectionSpatialVariant(in u32 radiusIndex){
     }
 }
 
+ReflectionTemporalPushConstants MakeReflectionTemporalPushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 currentRadianceUavSlot,
+    in u32 previousRadianceSrvSlot,
+    in u32 opaqueSpecularSlot,
+    in b8 reused,
+    in u32 previousSampleCount,
+    in u32 maxSampleCount,
+    in u32 sampleIndex,
+    in u32 samplingSeed
+){
+    ReflectionTemporalPushConstants parameters;
+    parameters.width = width;
+    parameters.height = height;
+    parameters.currentRadianceUavSlot = currentRadianceUavSlot;
+    parameters.previousRadianceSrvSlot = previousRadianceSrvSlot;
+    parameters.opaqueSpecularSlot = opaqueSpecularSlot;
+    if(reused){
+        parameters.previousSampleCount = previousSampleCount;
+        parameters.historyValid = 1u;
+    }
+    parameters.maxSampleCount = maxSampleCount;
+    parameters.sampleIndex = sampleIndex;
+    parameters.samplingSeed = samplingSeed;
+    return parameters;
+}
+
+ReflectionSpatialPushConstants MakeReflectionSpatialPushConstants(
+    in u32 width,
+    in u32 height,
+    in u32 sourceRadianceSrvSlot,
+    in u32 destinationRadianceUavSlot,
+    in u32 deferredResourcesSlot,
+    in u32 opaqueSpecularSlot,
+    in u32 viewSlot,
+    in u32 radius
+){
+    ReflectionSpatialPushConstants parameters;
+    parameters.width = width;
+    parameters.height = height;
+    parameters.sourceRadianceSrvSlot = sourceRadianceSrvSlot;
+    parameters.destinationRadianceUavSlot = destinationRadianceUavSlot;
+    parameters.deferredResourcesSlot = deferredResourcesSlot;
+    parameters.opaqueSpecularSlot = opaqueSpecularSlot;
+    parameters.viewSlot = viewSlot;
+    parameters.radius = radius;
+    return parameters;
+}
+
+ReflectionDepthReducePushConstants MakeReflectionDepthReducePushConstants(
+    in u32 sourceSlot,
+    in u32 destinationSlot,
+    in u32 sourceWidth,
+    in u32 sourceHeight,
+    in u32 destinationWidth,
+    in u32 destinationHeight
+){
+    ReflectionDepthReducePushConstants parameters;
+    parameters.sourceSlot = sourceSlot;
+    parameters.destinationSlot = destinationSlot;
+    parameters.sourceWidth = sourceWidth;
+    parameters.sourceHeight = sourceHeight;
+    parameters.destinationWidth = destinationWidth;
+    parameters.destinationHeight = destinationHeight;
+    return parameters;
+}
+
+ReflectionCsgDispatchPushConstants MakeReflectionCsgDispatchPushConstants(in u32 frameParametersSlot, in u32 rayOffset){
+    ReflectionCsgDispatchPushConstants parameters;
+    parameters.frameParametersSlot = frameParametersSlot;
+    parameters.rayOffset = rayOffset;
+    return parameters;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

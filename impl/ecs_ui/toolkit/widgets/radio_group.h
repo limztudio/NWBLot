@@ -155,12 +155,8 @@ public:
             if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard))
                 return MakeUnexpected(Failure{});
             const u64 key = source.key(index);
-            if(key == 0u || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+            if(!IsUniqueRadioGroupChoiceKey(candidate, index, key) || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
                 return MakeUnexpected(Failure{});
-            for(u32 previous = 0u; previous < index; ++previous){
-                if(candidate.rows[previous].key == key)
-                    return MakeUnexpected(Failure{});
-            }
             const auto resolved = source.indexOf(key);
             if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !resolved || *resolved != index)
                 return MakeUnexpected(Failure{});

@@ -114,8 +114,7 @@ public:
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, hardware ? resources.scene.tlasHeapHandle : Core::GpuDescriptorHandle::Invalid());
         const b8 sliced = resources.scene.csgTraceContextBuffer && (hardware || payload.stage == DispatchStage::BuildArgs);
-        ReflectionCsgDispatchPushConstants csgParameters;
-        csgParameters.frameParametersSlot = resources.frameParametersSlot;
+        const ReflectionCsgDispatchPushConstants csgParameters = MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, 0u);
         if(sliced)
             commandList.setPushConstants(&csgParameters, sizeof(csgParameters));
         else
@@ -198,9 +197,7 @@ public:
         state.setPipeline(pipeline).setIndirectParams(resources.indirectArgs.get());
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, resources.scene.tlasHeapHandle);
-        ReflectionCsgDispatchPushConstants parameters;
-        parameters.frameParametersSlot = resources.frameParametersSlot;
-        parameters.rayOffset = payload.slice * s_ReflectionTraceSliceRays;
+        const ReflectionCsgDispatchPushConstants parameters = MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, payload.slice * s_ReflectionTraceSliceRays);
         commandList.setPushConstants(&parameters, sizeof(parameters));
         if(payload.slice == 0u && !payload.dispatch->timing->begin(ReflectionGpuTimingScope::s_Hardware, payload.graphics.getDevice(), commandList))
             return false;

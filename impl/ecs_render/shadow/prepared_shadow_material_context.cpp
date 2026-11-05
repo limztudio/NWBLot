@@ -7,67 +7,11 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 
-#include <global/hash_utils.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 ComputeShadowMaterialContextHash(
-    const Span<const NwbRtInstanceMaterialGpu> instanceMaterials,
-    const Span<const InstanceGpuData> instanceData,
-    const Span<const u8> materialTypedBytes
-)noexcept{
-    NWB_ASSERT(instanceMaterials.size() == instanceData.size());
-
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
-    for(const NwbRtInstanceMaterialGpu& material : instanceMaterials){
-        Fnv64AppendValue(hash, material.surfaceDispatchId);
-        Fnv64AppendValue(hash, material.flags);
-        Fnv64AppendValue(hash, material.shadingModelId);
-        Fnv64AppendValue(hash, material.materialConstantByteOffset);
-        Fnv64AppendValue(hash, material.meshInstanceIndex);
-        Fnv64AppendValue(hash, material.indexSlot);
-        Fnv64AppendValue(hash, material.attributeSlot);
-        Fnv64AppendValue(hash, material.positionSlot);
-        Fnv64AppendValue(hash, material.nodeSlot);
-    }
-    for(const InstanceGpuData& instance : instanceData){
-        Fnv64AppendValue(hash, instance.rotation);
-        Fnv64AppendValue(hash, instance.translation.x);
-        Fnv64AppendValue(hash, instance.translation.y);
-        Fnv64AppendValue(hash, instance.translation.z);
-        Fnv64AppendValue(hash, instance.translation.w);
-        Fnv64AppendValue(hash, instance.scale.x);
-        Fnv64AppendValue(hash, instance.scale.y);
-        Fnv64AppendValue(hash, instance.scale.z);
-        Fnv64AppendValue(hash, instance.scale.w);
-        for(u32 slotIndex = 0u; slotIndex < s_MeshInstanceGeometrySlotCount; ++slotIndex)
-            Fnv64AppendValue(hash, instance.geometryHeapSlots[slotIndex]);
-    }
-    if(!materialTypedBytes.empty())
-        Fnv64AppendBuffer(hash, materialTypedBytes);
-    return hash;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -299,4 +243,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

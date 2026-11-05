@@ -38,30 +38,6 @@ u64 ComputeTlasStaticSceneHash(const Span<const Core::RayTracingInstanceDesc> in
     return hash;
 }
 
-u64 ComputeSceneSwBvhStaticSceneHash(const Span<const SceneSwBvhInstanceGpu> instances, const Span<const SceneBvhPrimitiveCalculation> primitives)noexcept{
-    NWB_ASSERT(instances.size() == primitives.size());
-
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
-    Fnv64AppendValue(hash, instances.size());
-    for(usize index = 0u; index < instances.size(); ++index){
-        const SceneSwBvhInstanceGpu& instance = instances[index];
-        const SceneBvhPrimitiveCalculation& primitive = primitives[index];
-        Fnv64AppendValue(hash, instance.worldToObject);
-        Fnv64AppendValue(hash, instance.primitiveCount);
-        Fnv64AppendValue(hash, primitive.aabbMin.x);
-        Fnv64AppendValue(hash, primitive.aabbMin.y);
-        Fnv64AppendValue(hash, primitive.aabbMin.z);
-        Fnv64AppendValue(hash, 0.0f);
-        Fnv64AppendValue(hash, primitive.aabbMax.x);
-        Fnv64AppendValue(hash, primitive.aabbMax.y);
-        Fnv64AppendValue(hash, primitive.aabbMax.z);
-        Fnv64AppendValue(hash, 0.0f);
-        Fnv64AppendBool(hash, primitive.transparentOccluder);
-    }
-    return hash;
-}
-
 Expected<Core::GpuDescriptorHandle> AcquireMeshHeapHandle(const Core::BufferHandle& bufferHandle, Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache){
     if(!bufferHandle)
         return MakeUnexpected(Failure{});
@@ -665,4 +641,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

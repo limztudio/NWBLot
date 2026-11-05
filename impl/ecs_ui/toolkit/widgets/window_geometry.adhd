@@ -1,0 +1,141 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/style.adhd>
+#include <impl/ecs_ui/toolkit/input/input.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_WindowResizeGripMaximumThickness = 2.0f;
+const f32 s_WindowResizeGripThicknessFraction = 0.125f;
+const f32 s_WindowResizeGripStartFraction = 0.25f;
+const f32 s_WindowResizeGripLengthFraction = 0.75f;
+const Rect s_WindowDefaultBounds = Rect(20.0f, 20.0f, 360.0f, 280.0f);
+const Point s_WindowDefaultMinimumSize = Point(160.0f, 80.0f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Gesture baselines stay in the host model; frozen draw snapshots never borrow WindowState.
+class WindowGestureState{
+    public InputActionId id;
+    public Rect initialBounds;
+}
+
+class WindowState{
+    public Rect bounds;
+    public WindowGestureState moveGesture;
+    public WindowGestureState resizeGesture;
+    public b8 initialized = false;
+    public b8 collapsed = false;
+}
+
+class WindowOptions{
+    public Rect initialBounds = s_WindowDefaultBounds;
+    public Point minimumSize = s_WindowDefaultMinimumSize;
+    public LayoutDirection direction = LayoutDirection::Column;
+    public b8 contentWidthFirstUse = false;
+    public b8 contentHeightFirstUse = false;
+    public b8 movable = true;
+    public b8 resizable = true;
+    public b8 collapsible = true;
+}
+
+class WindowMetrics{
+    public Insets contentPadding;
+    public Insets titlePadding;
+    public Point minimumSize;
+    public f32 titleHeight = 0.0f;
+    public f32 collapseExtent = 0.0f;
+    public f32 resizeExtent = 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Rect ResolveVisibleWindowBounds(in WindowState state, in WindowMetrics metrics){
+    Rect bounds = state.bounds;
+    if(state.collapsed){
+        bounds.height = metrics.titleHeight;
+    }
+    return bounds;
+}
+
+Rect ResolveWindowContentBounds(in WindowState state, in WindowMetrics metrics){
+    return Rect(
+        state.bounds.x,
+        state.bounds.y + metrics.titleHeight,
+        state.bounds.width,
+        max(0.0f, state.bounds.height - metrics.titleHeight)
+    );
+}
+
+Rect ResolveWindowCollapseBounds(in WindowState state, in WindowMetrics metrics){
+    const f32 x = state.bounds.x + metrics.titlePadding.left;
+    const f32 availableHeight = ((metrics.titleHeight - metrics.titlePadding.top) - metrics.titlePadding.bottom) - metrics.collapseExtent;
+    const f32 y = (state.bounds.y + metrics.titlePadding.top) + max(0.0f, availableHeight * 0.5f);
+    return Rect(x, y, metrics.collapseExtent, metrics.collapseExtent);
+}
+
+Rect ResolveWindowResizeBounds(in WindowState state, in WindowMetrics metrics){
+    const f32 extent = min(metrics.resizeExtent, min(state.bounds.width, state.bounds.height - metrics.titleHeight));
+    const f32 endX = state.bounds.x + state.bounds.width;
+    const f32 endY = state.bounds.y + state.bounds.height;
+    return Rect(endX - extent, endY - extent, extent, extent);
+}
+
+void ResolveWindowResizeGripBars(in Rect corner, mut Rect outHorizontal, mut Rect outVertical){
+    const f32 thickness = min(s_WindowResizeGripMaximumThickness, corner.width * s_WindowResizeGripThicknessFraction);
+    const VectorSingle cornerSize(corner.width, corner.height, corner.width, corner.height);
+    const VectorSingle scaledSize = cornerSize * VectorSingle(
+        s_WindowResizeGripStartFraction,
+        s_WindowResizeGripStartFraction,
+        s_WindowResizeGripLengthFraction,
+        s_WindowResizeGripLengthFraction
+    );
+    const VectorSingle ends = (cornerSize * VectorSingle(s_WindowResizeGripStartFraction, 1.0f, 1.0f, s_WindowResizeGripStartFraction)) + VectorSingle(corner.x, corner.y, corner.x, corner.y);
+    const VectorSingle origins = ends - VectorSingle(0.0f, thickness, thickness, 0.0f);
+    outHorizontal = Rect(origins.x, origins.y, scaledSize.z, thickness);
+    outVertical = Rect(origins.z, origins.w, thickness, scaledSize.w);
+}
+
+Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in UiSkinRegion collapse, in UiSkinRegion resize, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
+    if(
+        !isFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
+        || !isFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
+        || !isFinite(style.gap) || style.gap < 0.0f
+        || !isFinite(density) || density <= 0.0f
+        || !IsValidUiExtent(options.minimumSize)
+    )
+        return makeUnexpected(Failure());
+    WindowMetrics metrics;
+    metrics.contentPadding = Insets(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
+    metrics.titlePadding = Insets(title.padding.left, title.padding.top, title.padding.right, title.padding.bottom);
+    if(options.collapsible)
+        metrics.collapseExtent = ResolveUiSkinSquareExtent(style.windowCollapseExtent, collapse, density);
+    metrics.resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
+    const f32 titleContentX = titleSize.x;
+    const f32 titleContentY = max(titleSize.y, metrics.collapseExtent);
+    const f32 titlePaddedX = (titleContentX + metrics.titlePadding.left) + metrics.titlePadding.right;
+    const f32 titlePaddedY = (titleContentY + metrics.titlePadding.top) + metrics.titlePadding.bottom;
+    metrics.titleHeight = max(title.minimumHeight, titlePaddedY);
+    f32 collapseWidth = 0.0f;
+    if(options.collapsible)
+        collapseWidth = metrics.collapseExtent + style.gap;
+    const f32 titleMinX = max(title.minimumWidth, titlePaddedX + collapseWidth);
+    const f32 contentMinY = (metrics.titleHeight + metrics.contentPadding.top) + metrics.contentPadding.bottom;
+    const f32 minX = max(options.minimumSize.x, max(frame.minimumWidth, titleMinX));
+    const f32 minY = max(options.minimumSize.y, max(frame.minimumHeight, contentMinY));
+    metrics.minimumSize = Point(minX, minY);
+    if(!isFinite(metrics.titleHeight) || !isFinite(metrics.minimumSize.x) || !isFinite(metrics.minimumSize.y) || metrics.titleHeight <= 0.0f || metrics.minimumSize.x <= 0.0f || metrics.minimumSize.y <= 0.0f)
+        return makeUnexpected(Failure());
+    return metrics;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -338,7 +338,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
-    const u64 hwMaterialContextHash = ECSRenderDetail::ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
+    const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
     u64 gatheredMaterialContentHash = hwMaterialContextHash;
     const b8 canReuseHwMaterialContext =
         staticScene
@@ -406,4 +406,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

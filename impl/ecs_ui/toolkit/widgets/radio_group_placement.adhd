@@ -2,101 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "radio_group_style.adhd"
+#include "radio_group_metrics.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 IsValidRadioGroupMetrics(in RadioGroupMetrics metrics){
-    if(
-        metrics.count > s_RadioGroupMaxChoices
-        || !IsValidUiPadding(metrics.padding)
-        || !isFinite(metrics.rowHeight) || metrics.rowHeight <= 0.0f
-        || !isFinite(metrics.indicatorExtent) || metrics.indicatorExtent <= 0.0f
-        || metrics.indicatorExtent > metrics.rowHeight
-        || !isFinite(metrics.gap) || metrics.gap < 0.0f
-        || !isFinite(metrics.rowGap) || metrics.rowGap < 0.0f
-        || !IsValidUiExtent(metrics.contentSize)
-        || !isFinite(metrics.markInset) || metrics.markInset < 0.0f || cast<f64>(metrics.markInset) > s_RadioGroupMaxMarkInsetF64
-    )
-        return false;
-    const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
-    const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
-    u32 gapCount = 0u;
-    if(metrics.count != 0u)
-        gapCount = metrics.count - 1u;
-    const f64 rowsH = cast<f64>(metrics.count) * cast<f64>(metrics.rowHeight) + cast<f64>(gapCount) * cast<f64>(metrics.rowGap);
-    f64 labelW = 0.0;
-    if(metrics.count != 0u)
-        labelW = cast<f64>(metrics.indicatorExtent) + cast<f64>(metrics.gap);
-    const f64 minimumWidth = padW + labelW;
-    const f64 height = padH + rowsH;
-    return height <= s_UiMaxFloatF64
-        && cast<f64>(metrics.contentSize.y) == cast<f64>(cast<f32>(height))
-        && minimumWidth <= s_UiMaxFloatF64
-        && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(minimumWidth));
-}
-
-Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
-    if(
-        count > s_RadioGroupMaxChoices
-        || !IsValidUiExtent(maximumLabel)
-        || !IsValidUiPadding(style.padding)
-        || !IsValidLayoutSize(options.width)
-        || !isFinite(style.indicatorExtent) || style.indicatorExtent <= 0.0f
-        || !isFinite(style.gap) || style.gap < 0.0f
-        || !isFinite(style.rowGap) || style.rowGap < 0.0f
-        || !isFinite(style.markInset) || style.markInset < 0.0f || style.markInset > s_RadioGroupMaxMarkInset
-        || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
-    )
-        return makeUnexpected(Failure());
-    RadioGroupMetrics candidate;
-    candidate.rowHeight = max(maximumLabel.y, style.indicatorExtent);
-    candidate.indicatorExtent = style.indicatorExtent;
-    candidate.gap = style.gap;
-    candidate.rowGap = style.rowGap;
-    candidate.markInset = style.markInset;
-    candidate.padding = style.padding;
-    candidate.count = count;
-    const f64 padW = cast<f64>(style.padding.left) + cast<f64>(style.padding.right);
-    const f64 padH = cast<f64>(style.padding.top) + cast<f64>(style.padding.bottom);
-    u32 gapCount = 0u;
-    if(count != 0u)
-        gapCount = count - 1u;
-    const f64 rowsH = cast<f64>(count) * cast<f64>(candidate.rowHeight) + cast<f64>(gapCount) * cast<f64>(style.rowGap);
-    f64 labelW = 0.0;
-    if(count != 0u)
-        labelW = (cast<f64>(style.indicatorExtent) + cast<f64>(style.gap)) + cast<f64>(maximumLabel.x);
-    const f64 width = padW + labelW;
-    const f64 height = padH + rowsH;
-    if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
-        return makeUnexpected(Failure());
-    candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
-    if(!IsValidRadioGroupMetrics(candidate))
-        return makeUnexpected(Failure());
-    return candidate;
-}
-
-b8 IsUniqueRadioGroupChoiceKey(in RadioGroupChoices choices, in u32 index, in u64 key){
-    if(key == 0u)
-        return false;
-    for(u32 previous = 0u; previous < index; ++previous){
-        if(choices.rows[previous].key == key)
-            return false;
-    }
-    return true;
-}
-
-b8 IsRadioGroupInteractive(in RadioGroupChoices choices, in RadioGroupOptions options){
-    if(!options.enabled)
-        return false;
-    for(u32 index = 0u; index < choices.count; ++index){
-        if(choices.rows[index].enabled)
-            return true;
-    }
-    return false;
-}
 
 Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)

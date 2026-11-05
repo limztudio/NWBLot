@@ -2,105 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "context_staging.adhd"
-#include "router_commands.adhd"
+#include "router_target_staging.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 StageRouterHitTargets(
-    in Span<HitTarget> targets,
-    in Span<PopupRecord> stagedPopups,
-    mut Vector<HitTarget> stagedTargets,
-    mut Vector<TargetLookup> stagedLookup
-){
-    stagedTargets.clear();
-    stagedLookup.clear();
-    for(usize index = 0u; index < targets.size(); ++index){
-        const HitTarget target = targets[index];
-        if(
-            !target.id.valid() || target.declarationGeneration == 0u
-            || !HasValidHitTargetGeometry(target.rectangle, target.clip, target.gestureReference)
-            || !ValidStagedPopupTarget(target, stagedPopups)
-        )
-            return false;
-        stagedTargets.push_back(target);
-        TargetLookup entry;
-        entry.value = target.id.value;
-        entry.index = cast<u32>(index);
-        stagedLookup.push_back(entry);
-    }
-    return true;
-}
-
-b8 ValidateSortedStagedRouterTargetsAndPopups(
-    in Span<HitTarget> stagedTargets,
-    in Span<TargetLookup> stagedLookup,
-    in Span<PopupRecord> stagedPopups
-){
-    for(usize index = 1u; index < stagedLookup.size(); ++index){
-        if(stagedLookup[index - 1u].value == stagedLookup[index].value)
-            return false;
-    }
-    if(!ValidateStagedHitTargetControlTargets(stagedTargets, stagedLookup) || !ValidateStagedHitTargetCommandOwners(stagedTargets, stagedLookup))
-        return false;
-    for(in PopupRecord popup : stagedPopups){
-        const Expected<usize> ownerIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, popup.scope.token.widget, popup.scope.token.declarationGeneration);
-        if(!ownerIndex.has_value())
-            return false;
-        const HitTarget ownerTarget = stagedTargets[ownerIndex.value()];
-        if(ownerTarget.popup != popup.scope.token || !ownerTarget.enabled)
-            return false;
-        if(popup.scope.dismissFocusTraversal){
-            const Expected<usize> anchorIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, popup.scope.focusAnchor, popup.scope.focusAnchorDeclarationGeneration);
-            if(!anchorIndex.has_value())
-                return false;
-            const HitTarget anchorTarget = stagedTargets[anchorIndex.value()];
-            if(anchorTarget.popup != popup.scope.parent || !anchorTarget.focusable || !anchorTarget.enabled || anchorTarget.owner.valid())
-                return false;
-        }
-    }
-    return true;
-}
-
-void ApplyRouterFocusOnCommit(
-    in Span<HitTarget> targets,
-    in Span<TargetLookup> lookup,
-    in Span<PopupRecord> popups,
-    in b8 windowFocused,
-    in u64 focusLossGeneration,
-    in u64 expectedFocusLossGeneration,
-    mut WidgetId inOutFocus,
-    mut u64 inOutFocusDeclaration,
-    mut ControlToken inOutFocusControl
-){
-    if(inOutFocus.valid() || !windowFocused || (expectedFocusLossGeneration != u64.max && expectedFocusLossGeneration != focusLossGeneration))
-        return;
-    for(in HitTarget target : targets){
-        if(target.focusOnCommit && target.focusable && IsRouterTargetInteractive(targets, lookup, popups, target)){
-            inOutFocus = target.id;
-            inOutFocusDeclaration = target.declarationGeneration;
-            inOutFocusControl = target.control;
-            break;
-        }
-    }
-}
-
-b8 EraseInvalidatedRouterTargets(in WidgetId id, in Span<TargetLookup> lookup, mut Vector<HitTarget> targets){
-    if(!FindTargetIndexInTable(targets, lookup, id, 0u).has_value())
-        return false;
-    usize keptTargets = 0u;
-    for(usize index = 0u; index < targets.size(); ++index){
-        if(targets[index].id != id && targets[index].owner != id){
-            if(keptTargets != index)
-                targets[keptTargets] = targets[index];
-            ++keptTargets;
-        }
-    }
-    targets.resize(keptTargets);
-    return true;
-}
 
 void RetireRouterQueuedReleases(
     in Span<InputEvent> events,

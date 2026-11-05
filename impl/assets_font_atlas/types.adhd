@@ -2,109 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font/types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const u32 s_FontAtlasMaxGlyphCount = 65535u;
-const u32 s_FontAtlasMaxGroupCount = 8u;
-const u32 s_FontAtlasMaxChannelCount = 4u;
-const u32 s_FontAtlasMaxPositioningTableCount = 3u; // kern, GPOS and GDEF.
-const u32 s_FontAtlasMinUnitsPerEm = 16u;
-const u32 s_FontAtlasMaxUnitsPerEm = 16384u;
-const u32 s_FontAtlasMaxExtent = 2048u;
-const u32 s_FontAtlasBytesPerKilobyte = 1024u;
-const u32 s_FontAtlasMaxPixelMegabytes = 128u;
-const u32 s_FontAtlasMaxPixelBytes = s_FontAtlasMaxPixelMegabytes * s_FontAtlasBytesPerKilobyte * s_FontAtlasBytesPerKilobyte;
-const u32 s_FontAtlasMinBakePpem = 16u;
-const u32 s_FontAtlasMaxBakePpem = 256u;
-const u32 s_FontAtlasMinSpreadPixels = 2u;
-const u32 s_FontAtlasMaxSpreadPixels = 32u;
-const u32 s_FontAtlasDistanceEncoding = 1u;
-const u32 s_FontAtlasMaxPositioningMegabytes = 32u;
-const u32 s_FontAtlasMaxPositioningBytes = s_FontAtlasMaxPositioningMegabytes * s_FontAtlasBytesPerKilobyte * s_FontAtlasBytesPerKilobyte;
-const u32 s_FontAtlasDefaultBakePpem = 64u;
-const u32 s_FontAtlasDefaultSpreadPixels = 8u;
-const u32 s_FontAtlasDefaultGuardTexels = 1u;
-const u32 s_FontAtlasKernTag = 0x6b65726eu;
-const u32 s_FontAtlasGposTag = 0x47504f53u;
-const u32 s_FontAtlasGdefTag = 0x47444546u;
-const u32 s_FontAtlasBinaryMagic = 0x31415446u; // FTA1, explicitly encoded little endian.
-const u32 s_FontAtlasBinaryVersion = 2u;
-const u32 s_FontAtlasBinaryHeaderBytes = 164u;
-const u32 s_FontAtlasBinaryGlyphBytes = 52u;
-const u32 s_FontAtlasBinaryGroupHeaderBytes = 48u;
-const u32 s_FontAtlasBinaryTableHeaderBytes = 40u;
-const u32 s_FontAtlasQwordHighWordShift = 32u;
-const usize s_FontAtlasOccupiedWordLastBit = 63u;
-const usize s_FontAtlasBitsPerOccupiedWord = 64u;
-const f32 s_FontAtlasGlyphPlaneSizeRelativeTolerance = 0.0001f;
-const Name s_AssetsFontAtlasLoadBinaryArena = "impl/assets_font_atlas/load_binary";
-const Name s_AssetsFontAtlasSerializeArena = "impl/assets_font_atlas/serialize";
-const StringView s_FontAtlasMetaDiagnosticPrefix = "Font atlas meta";
-const StringView s_FontAtlasMetaFontField = "font";
-const StringView s_FontAtlasBakePpemField = "bake_ppem";
-const StringView s_FontAtlasSpreadPixelsField = "spread_pixels";
-const StringView s_FontAtlasRasterModeField = "raster_mode";
-const StringView s_FontAtlasAscenderUnitsField = "ascender_units";
-const StringView s_FontAtlasDescenderUnitsField = "descender_units";
-const StringView s_FontAtlasLineGapUnitsField = "line_gap_units";
-const StringView s_FontAtlasRasterModeBitmap = "bitmap";
-const StringView s_FontAtlasRasterModeOutline = "outline";
-const StringView s_FontAtlasGlyphsField = "glyphs";
-const StringView s_FontAtlasGlyphMetaDiagnosticPrefix = "Font atlas glyph meta";
-const StringView s_FontAtlasGlyphAdvanceUnitsField = "advance_units";
-const StringView s_FontAtlasGlyphGroupField = "group";
-const StringView s_FontAtlasGlyphChannelField = "channel";
-const StringView s_FontAtlasGlyphXField = "x";
-const StringView s_FontAtlasGlyphYField = "y";
-const StringView s_FontAtlasGlyphWidthField = "width";
-const StringView s_FontAtlasGlyphHeightField = "height";
-const StringView s_FontAtlasGlyphPlaneLeftField = "plane_left";
-const StringView s_FontAtlasGlyphPlaneTopField = "plane_top";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[reflect]
-enum<u32> FontAtlasRasterMode{
-    Outline = 0u,
-    Bitmap = 1u
-}
-
-[reflect]
-class FontAtlasGlyph{
-    public u32 glyphId = 0u;
-    public u32 group = 0u;
-    public u32 channel = 0u;
-    public u32 x = 0u;
-    public u32 y = 0u;
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public f32 planeLeft = 0.0f;
-    public f32 planeTop = 0.0f;
-    public f32 planeRight = 0.0f;
-    public f32 planeBottom = 0.0f;
-    public f32 advanceUnits = 0.0f;
-    public u32 drawable = 0u;
-}
-
-class FontFaceSfntMetrics{
-    public u32 unitsPerEm = 0u;
-    public u32 sourceGlyphCount = 0u;
-}
-
-class FontAtlasGroupCompactBounds{
-    public u32 firstX = 0u;
-    public u32 firstY = 0u;
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 channelCount = 0u;
-    public b8 unchanged = false;
-}
+#include <impl/assets_font_atlas/constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -288,4 +186,3 @@ Expected<FontFaceSfntMetrics> TryReadFontFaceMetricsFromSfnt(in Span<u8> fontByt
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/payload_types.adhd>
+#include <impl/assets_mesh/meshlet_cone_packing.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,32 +192,6 @@ Expected<MeshletAttributeStreamRef> TryDecodeMeshletAttributeRef(in Span<u8> byt
     return refValue;
 }
 
-u32 PackMeshletConeCutoffUnorm8(in f32 value){
-    return cast<u32>(clamp(value, 0.0f, 1.0f) * s_MeshletUnorm8Max);
-}
-
-f32 ConservativePackedMeshletConeCutoff(in VectorSingle axis, in f32 cutoff, in VectorSingle unpackedAxis){
-    VectorSingle normalizedAxis = unpackedAxis;
-    if(lengthSq(axis.xyz) > s_MeshletConeAxisLengthSquaredEpsilon)
-        normalizedAxis = normalize(axis.xyz);
-    const f32 axisDot = clamp(dot(normalizedAxis.xyz, unpackedAxis.xyz), -1.0f, 1.0f);
-    const f32 safeCutoff = clamp(cutoff, 0.0f, 1.0f);
-    const VectorSingle anglePair(safeCutoff, axisDot, 0.0f, 0.0f);
-    const VectorSingle oneMinusSquare = VectorSingle(1.0f) - anglePair * anglePair;
-    const VectorSingle clampedSquare = max(oneMinusSquare, VectorSingle(0.0f));
-    const VectorSingle sinPair = sqrt(clampedSquare);
-    const f32 cutoffSin = sinPair.x;
-    const f32 axisSin = sinPair.y;
-    return safeCutoff * axisDot - cutoffSin * axisSin;
-}
-
-u32 PackMeshletConeFromAxisAndCutoff(in u32 packedAxis, in f32 conservativeCutoff){
-    const u32 packedCutoff = PackMeshletConeCutoffUnorm8(conservativeCutoff);
-    if(packedCutoff == 0u)
-        return 0u;
-    return packedAxis | (packedCutoff << s_MeshletConeCutoffShift) | (s_MeshletConeFlagEnabled << s_MeshletConeFlagShift);
-}
-
 b8 TryDecodeMeshletTriangleCornerPosition(
     in Span<u8> positionRefDeltas,
     in MeshletDesc meshlet,
@@ -247,50 +221,6 @@ b8 TryDecodeMeshletTriangleCornerAttribute(
     outAttribute.normal = normalStream[cast<usize>(attributeRef.value().normal)];
     outAttribute.uv0 = uv0Stream[cast<usize>(attributeRef.value().uv0)];
     return true;
-}
-
-u32 PackMeshletConeOct16(in VectorSingle axis){
-    const f32 l1Length = abs(axis.x) + abs(axis.y) + abs(axis.z);
-    if(!isFinite(l1Length) || !(l1Length > s_MeshletConeAxisLengthEpsilon))
-        return s_MeshletConeAxisFallback;
-
-    const f32 invL1 = 1.0f / l1Length;
-    VectorSingle octAxis = foldOctahedralAxis(VectorSingle(axis.x * invL1, axis.y * invL1, axis.z * invL1, 0.0f));
-    const f32 encodedX = clamp(octAxis.x * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
-    const f32 encodedY = clamp(octAxis.y * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
-    return (cast<u32>(encodedX) << s_MeshletConeAxisXShift) | (cast<u32>(encodedY) << s_MeshletConeAxisYShift);
-}
-
-VectorSingle UnpackMeshletConeOct16Axis(in u32 conePacked){
-    const f32 invUnorm8Max = 1.0f / s_MeshletUnorm8Max;
-    const f32 packedX = cast<f32>((conePacked >> s_MeshletConeAxisXShift) & s_MeshletPackedByteMask) * invUnorm8Max;
-    const f32 packedY = cast<f32>((conePacked >> s_MeshletConeAxisYShift) & s_MeshletPackedByteMask) * invUnorm8Max;
-    const f32 octX = packedX * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
-    const f32 octY = packedY * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
-    const f32 octZ = 1.0f - (abs(octX) + abs(octY));
-    const VectorSingle folded = foldOctahedralAxis(VectorSingle(octX, octY, octZ, 0.0f));
-    const f32 lengthSquared = lengthSq(folded.xyz);
-    if(isFinite(lengthSquared) && lengthSquared > s_MeshletConeAxisLengthSquaredEpsilon){
-        const VectorSingle normalized = folded * rsqrt(VectorSingle(lengthSquared));
-        if(isFinite(normalized.x) && isFinite(normalized.y) && isFinite(normalized.z))
-            return VectorSingle(normalized, 0.0f);
-    }
-    return VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
-}
-
-u32 PackMeshletCone(in VectorSingle axis, in f32 cutoff){
-    if(cutoff <= 0.0f)
-        return 0u;
-
-    const u32 packedAxis = PackMeshletConeOct16(axis);
-    return PackMeshletConeFromAxisAndCutoff(
-        packedAxis,
-        ConservativePackedMeshletConeCutoff(axis, cutoff, UnpackMeshletConeOct16Axis(packedAxis))
-    );
-}
-
-u32 PackMeshletCone(in VectorSingle axis, in VectorSingle cutoff){
-    return PackMeshletCone(axis, cutoff.x);
 }
 
 

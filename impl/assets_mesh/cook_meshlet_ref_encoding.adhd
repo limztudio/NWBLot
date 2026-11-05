@@ -1,0 +1,123 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/meshlet_ref_decoding.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_MeshMetaKindText = "Mesh";
+const StringView s_VertexRefPositionName = "position";
+const StringView s_VertexRefNormalName = "normal";
+const StringView s_VertexRefTangentName = "tangent";
+const StringView s_VertexRefUvName = "uv0";
+const StringView s_VertexRefColorName = "color";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class MeshVertexRef{
+    public u32 position = s_MeshMissingStreamIndex;
+    public u32 normal = s_MeshMissingStreamIndex;
+    public u32 tangent = s_MeshMissingStreamIndex;
+    public u32 uv0 = s_MeshMissingStreamIndex;
+    public u32 color = s_MeshMissingStreamIndex;
+}
+
+class MeshletRefEncodeRange{
+    public u32 minimum = 0xffffffffu;
+    public u32 maximum = 0u;
+}
+
+class MeshletAttributeRefEncodeRanges{
+    public MeshletRefEncodeRange normal;
+    public MeshletRefEncodeRange tangent;
+    public MeshletRefEncodeRange uv0;
+    public MeshletRefEncodeRange color;
+}
+
+enum<u8> EncodedMeshletRefDeltaStatus{
+    Valid,
+    InvalidWidth,
+    ByteCountMismatch,
+    PositionDecodeMismatch,
+    AttributeDecodeMismatch
+}
+
+class MeshletRefChannelWidths{
+    public MeshletRefDeltaWidth position = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth skin = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth normal = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth tangent = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth uv0 = MeshletRefDeltaWidth::U8;
+    public MeshletRefDeltaWidth color = MeshletRefDeltaWidth::U8;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MeshletRefDeltaWidth MeshletRefDeltaWidthForMaxDelta(in u32 maxDelta){
+    if(maxDelta <= 0xffu)
+        return MeshletRefDeltaWidth::U8;
+    if(maxDelta <= 0xffffu)
+        return MeshletRefDeltaWidth::U16;
+    return MeshletRefDeltaWidth::U32;
+}
+
+u32 PackMeshletRefEncodingWidth(in MeshletRefDeltaWidth width, in u32 shift){
+    return (cast<u32>(width) & s_MeshletRefEncodingWidthMask) << shift;
+}
+
+u32 PackMeshletRefEncoding(in MeshletRefDeltaWidth positionWidth, in MeshletRefDeltaWidth skinWidth, in MeshletRefDeltaWidth normalWidth, in MeshletRefDeltaWidth tangentWidth, in MeshletRefDeltaWidth uv0Width, in MeshletRefDeltaWidth colorWidth){
+    return
+        PackMeshletRefEncodingWidth(positionWidth, s_MeshletRefEncodingPositionShift)
+        | PackMeshletRefEncodingWidth(skinWidth, s_MeshletRefEncodingSkinShift)
+        | PackMeshletRefEncodingWidth(normalWidth, s_MeshletRefEncodingNormalShift)
+        | PackMeshletRefEncodingWidth(tangentWidth, s_MeshletRefEncodingTangentShift)
+        | PackMeshletRefEncodingWidth(uv0Width, s_MeshletRefEncodingUv0Shift)
+        | PackMeshletRefEncodingWidth(colorWidth, s_MeshletRefEncodingColorShift)
+    ;
+}
+
+void AddMeshletRefEncodeIndex(in u32 index, mut MeshletRefEncodeRange range){
+    range.minimum = min(range.minimum, index);
+    range.maximum = max(range.maximum, index);
+}
+
+void AddMeshletAttributeRefEncodeRanges(in MeshletAttributeStreamRef streamRef, mut MeshletAttributeRefEncodeRanges ranges){
+    AddMeshletRefEncodeIndex(streamRef.normal, ranges.normal);
+    AddMeshletRefEncodeIndex(streamRef.tangent, ranges.tangent);
+    AddMeshletRefEncodeIndex(streamRef.uv0, ranges.uv0);
+    AddMeshletRefEncodeIndex(streamRef.color, ranges.color);
+}
+
+void StoreMeshletAttributeRefEncodeBases(in MeshletAttributeRefEncodeRanges ranges, mut MeshletDesc meshlet){
+    meshlet.normalBase = ranges.normal.minimum;
+    meshlet.tangentBase = ranges.tangent.minimum;
+    meshlet.uv0Base = ranges.uv0.minimum;
+    meshlet.colorBase = ranges.color.minimum;
+}
+
+MeshletRefDeltaWidth MeshletRefEncodeRangeWidth(in MeshletRefEncodeRange range){
+    return MeshletRefDeltaWidthForMaxDelta(range.maximum - range.minimum);
+}
+
+b8 MeshletDecodedPositionRefMatches(in MeshletPositionStreamRef decoded, in MeshletPositionStreamRef source, in b8 skinRequired){
+    if(decoded.position != source.position)
+        return false;
+    if(skinRequired)
+        return decoded.skin == source.skin;
+    return decoded.skin == s_MeshMissingStreamIndex;
+}
+
+b8 MeshletDecodedAttributeRefMatches(in MeshletAttributeStreamRef decoded, in MeshletAttributeStreamRef source){
+    return decoded.normal == source.normal && decoded.tangent == source.tangent && decoded.uv0 == source.uv0 && decoded.color == source.color;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

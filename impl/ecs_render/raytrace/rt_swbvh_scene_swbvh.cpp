@@ -382,7 +382,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
-    const u64 swMaterialContextHash = ECSRenderDetail::ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
+    const u64 swMaterialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
     const b8 canReuseSwMaterialContext =
         staticScene
         && m_rayTracingState.m_swShadowMaterialContextHashValid
@@ -451,4 +451,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

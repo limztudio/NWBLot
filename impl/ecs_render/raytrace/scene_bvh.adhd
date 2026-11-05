@@ -219,5 +219,46 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
     return split;
 }
 
+u64 UpdateSceneSwBvhF32Hash(in u64 inHash, in f32 value){
+    return updateFnv64U32(inHash, bit_cast<u32>(value));
+}
+
+u64 UpdateSceneSwBvhVector4Hash(in u64 inHash, in VectorSingle v){
+    u64 hash = UpdateSceneSwBvhF32Hash(inHash, v.x);
+    hash = UpdateSceneSwBvhF32Hash(hash, v.y);
+    hash = UpdateSceneSwBvhF32Hash(hash, v.z);
+    return UpdateSceneSwBvhF32Hash(hash, v.w);
+}
+
+u64 ComputeSceneSwBvhStaticSceneHash(in Span<SceneSwBvhInstanceGpu> instances, in Span<SceneBvhPrimitiveCalculation> primitives){
+    assert(instances.size() == primitives.size());
+
+    u64 hash = s_Fnv64OffsetBasis;
+    hash = updateFnv64U32(hash, s_SceneStaticCacheHashVersion);
+    hash = updateFnv64U64(hash, cast<u64>(instances.size()));
+    for(usize index = 0u; index < instances.size(); ++index){
+        const SceneSwBvhInstanceGpu instance = instances[index];
+        const SceneBvhPrimitiveCalculation primitive = primitives[index];
+        const MatrixSingle worldToObject(instance.worldToObject);
+        hash = UpdateSceneSwBvhVector4Hash(hash, worldToObject[0u]);
+        hash = UpdateSceneSwBvhVector4Hash(hash, worldToObject[1u]);
+        hash = UpdateSceneSwBvhVector4Hash(hash, worldToObject[2u]);
+        hash = updateFnv64U32(hash, instance.primitiveCount);
+        hash = UpdateSceneSwBvhF32Hash(hash, primitive.aabbMin.x);
+        hash = UpdateSceneSwBvhF32Hash(hash, primitive.aabbMin.y);
+        hash = UpdateSceneSwBvhF32Hash(hash, primitive.aabbMin.z);
+        hash = UpdateSceneSwBvhF32Hash(hash, 0.0f);
+        hash = UpdateSceneSwBvhF32Hash(hash, primitive.aabbMax.x);
+        hash = UpdateSceneSwBvhF32Hash(hash, primitive.aabbMax.y);
+        hash = UpdateSceneSwBvhF32Hash(hash, primitive.aabbMax.z);
+        hash = UpdateSceneSwBvhF32Hash(hash, 0.0f);
+        u8 transparentByte = 0u;
+        if(primitive.transparentOccluder)
+            transparentByte = 1u;
+        hash = updateFnv64Byte(hash, transparentByte);
+    }
+    return hash;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

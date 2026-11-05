@@ -2,17 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/types.adhd>
-#include <impl/ecs_render/shadow/quality_settings.adhd>
-#include <impl/ecs_render/shared/frame_types.adhd>
+#include <impl/ecs_render/shadow/slot_selection.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f32 s_ShadowSlotUnassigned = -1.0f;
-const f32 s_DirectionalShadowImportanceBoost = 4.0f;
-const f32 s_ShadowImportanceDistanceSquaredEpsilon = 0.0001f;
 const StringView s_ShadowSoftHalfAName = "render.shadow_visibility.soft_half_a";
 const StringView s_ShadowSoftHalfALabel = "Shadow Soft Half A";
 const StringView s_ShadowSoftHalfBName = "render.shadow_visibility.soft_half_b";
@@ -219,64 +214,3 @@ class ShadowTraceBufferRecord{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-f32 ShadowSlotImportance(in VectorSingle colorIntensity, in VectorSingle params, in VectorSingle lightPosition, in VectorSingle cameraPosition){
-    const f32 radiantImportance = SceneLightRadiantImportance(colorIntensity);
-    if(params.y < s_LightTypeDirectionalMax)
-        return radiantImportance * s_DirectionalShadowImportanceBoost + 1.0f;
-
-    const VectorSingle delta = lightPosition - cameraPosition;
-    const f32 distanceSquared = lengthSq(delta.xyz);
-    const f32 range = max(params.x, 0.0f);
-    const f32 rangeSquared = range * range;
-    f32 coverageSquared = 1.0f;
-    if(distanceSquared > s_ShadowImportanceDistanceSquaredEpsilon)
-        coverageSquared = rangeSquared / distanceSquared;
-    return radiantImportance * min(coverageSquared, 1.0f);
-}
-
-u32 SelectNextShadowSlotLightIndex(in Span<SceneLightGpuData> lights, in Span<f32> shadowImportance){
-    const u32 lightCount = cast<u32>(lights.size());
-    f32 bestImportance = -1.0f;
-    u32 bestIndex = lightCount;
-    for(u32 i = 0u; i < lightCount && i < cast<u32>(shadowImportance.size()); ++i){
-        if(lights[i].params.z >= 0.0f)
-            continue;
-        const f32 importance = shadowImportance[i];
-        if(importance > bestImportance){
-            bestImportance = importance;
-            bestIndex = i;
-        }
-    }
-    return bestIndex;
-}
-
-u32 ResolveSoftShadowSlotMask(in Span<SceneLightGpuData> lights){
-    u32 mask = 0u;
-    for(usize i = 0u; i < lights.size(); ++i){
-        const f32 slot = lights[i].params.z;
-        if(slot >= 0.0f){
-            const u32 slotIndex = cast<u32>(slot);
-            if(slotIndex < s_SceneShadowSlotCount)
-                mask |= (1u << slotIndex);
-        }
-    }
-    return mask;
-}
-
-b8 CanCombineSoftShadowWavelets(in b8 combinedUpsample, in b8 pipelineReady, in b8 opaqueTemporalReady, in b8 transparentTemporalReady, in u32 opaquePassCount, in u32 transparentPassCount){
-    return combinedUpsample && pipelineReady && opaqueTemporalReady && transparentTemporalReady && opaquePassCount == 1u && transparentPassCount == 1u;
-}
-
-u32 ResolveSoftShadowLightSlotRangeCount(in u32 softShadowSlotMask){
-    return bitWidthLowU32(softShadowSlotMask, s_SceneShadowSlotCount);
-}
-
-b8 SoftShadowTemporalHistoryUsable(in b8 softShadowTemporalReady, in b8 prevWorldToClipValid, in b8 softShadowTemporalSeeded){
-    return softShadowTemporalReady && prevWorldToClipValid && softShadowTemporalSeeded;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

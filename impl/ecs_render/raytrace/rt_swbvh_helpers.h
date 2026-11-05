@@ -40,7 +40,6 @@ using MeshBufferSlotLookup = HashMap<NotNull<Core::Buffer*>, u32, Core::Alloc::S
 
 void AppendTlasInstanceStaticCacheInput(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
 [[nodiscard]] u64 ComputeTlasStaticSceneHash(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
-[[nodiscard]] u64 ComputeSceneSwBvhStaticSceneHash(Span<const SceneSwBvhInstanceGpu> instances, Span<const SceneBvhPrimitiveCalculation> primitives)noexcept;
 
 // Cross-frame cache pins raw keys; failed registrations retry next gather.
 [[nodiscard]] Expected<Core::GpuDescriptorHandle> AcquireMeshHeapHandle(const Core::BufferHandle& bufferHandle, Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache);
@@ -115,4 +114,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

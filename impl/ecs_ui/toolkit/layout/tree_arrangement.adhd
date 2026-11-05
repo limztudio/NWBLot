@@ -2,79 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "validation.adhd"
+#include "tree_measurement.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 CanAddLayoutTreeNode(in Span<LayoutTreeNode> nodes, in u32 maxNodes, in b8 buildFailed, in u32 parent, in LayoutNodeDesc description){
-    if(buildFailed || nodes.size() >= cast<usize>(maxNodes) || !IsValidLayoutNodeDesc(description))
-        return false;
-    if(nodes.empty())
-        return parent == s_LayoutNoParent;
-    if(cast<usize>(parent) >= nodes.size())
-        return false;
-    return nodes[cast<usize>(parent)].description.direction != LayoutDirection::Leaf;
-}
-
-Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<LayoutTreeWork> work, in u32 index){
-    const LayoutTreeNode node = nodes[cast<usize>(index)];
-    const LayoutNodeDesc description = node.description;
-    f64 extentX = 0.0;
-    f64 extentY = 0.0;
-    u32 childCount = 0u;
-    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
-        const Point measured = work[cast<usize>(child)].box.measuredSize;
-        const f64 candidateX = cast<f64>(measured.x);
-        const f64 candidateY = cast<f64>(measured.y);
-        f64 maxX = candidateX;
-        if(extentX > candidateX)
-            maxX = extentX;
-        f64 maxY = candidateY;
-        if(extentY > candidateY)
-            maxY = extentY;
-        if(description.direction == LayoutDirection::Row){
-            extentX = extentX + candidateX;
-            extentY = maxY;
-        }
-        else if(description.direction == LayoutDirection::Column){
-            extentX = maxX;
-            extentY = extentY + candidateY;
-        }
-        else{
-            extentX = maxX;
-            extentY = maxY;
-        }
-        ++childCount;
-    }
-    if(childCount > 1u){
-        const f64 spacing = cast<f64>(description.gap) * cast<f64>(childCount - 1u);
-        if(description.direction == LayoutDirection::Row)
-            extentX += spacing;
-        else if(description.direction == LayoutDirection::Column)
-            extentY += spacing;
-    }
-    const f64 intrinsicX = cast<f64>(description.intrinsicSize.x);
-    const f64 intrinsicY = cast<f64>(description.intrinsicSize.y);
-    f64 maxX = intrinsicX;
-    if(extentX > intrinsicX)
-        maxX = extentX;
-    f64 maxY = intrinsicY;
-    if(extentY > intrinsicY)
-        maxY = extentY;
-    const f64 width = (maxX + cast<f64>(description.padding.left)) + cast<f64>(description.padding.right);
-    const f64 height = (maxY + cast<f64>(description.padding.top)) + cast<f64>(description.padding.bottom);
-    if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
-        return makeUnexpected(Failure());
-    f32 resolvedWidth = cast<f32>(width);
-    if(description.width.policy == LayoutSizePolicy::Fixed)
-        resolvedWidth = description.width.value;
-    f32 resolvedHeight = cast<f32>(height);
-    if(description.height.policy == LayoutSizePolicy::Fixed)
-        resolvedHeight = description.height.value;
-    return Point(resolvedWidth, resolvedHeight);
-}
 
 b8 TryBeginArrangeLayoutTreeNode(
     in Span<LayoutTreeNode> nodes,
@@ -188,39 +120,6 @@ Expected<Rect> TryArrangeLayoutTreeChild(
     else if(column)
         inoutCursor += cast<f64>(height) + gap;
     return rectangle;
-}
-
-Expected<u32> TryAppendLayoutTreeNode(
-    mut Vector<LayoutTreeNode> nodes,
-    in u32 maxNodes,
-    in b8 buildFailed,
-    in u32 parent,
-    in LayoutNodeDesc description
-){
-    if(!CanAddLayoutTreeNode(nodes, maxNodes, buildFailed, parent, description))
-        return makeUnexpected(Failure());
-    const u32 index = cast<u32>(nodes.size());
-    nodes.push_back(LayoutTreeNode(description));
-    if(parent != s_LayoutNoParent){
-        const u32 previousLastChild = nodes[cast<usize>(parent)].lastChild;
-        if(previousLastChild == s_LayoutNoParent)
-            nodes[cast<usize>(parent)].firstChild = index;
-        else
-            nodes[cast<usize>(previousLastChild)].nextSibling = index;
-        nodes[cast<usize>(parent)].lastChild = index;
-    }
-    return index;
-}
-
-b8 MeasureLayoutTreeNodes(in Span<LayoutTreeNode> nodes, mut Vector<LayoutTreeWork> work){
-    for(usize reverse = nodes.size(); reverse > 0u; --reverse){
-        const u32 index = cast<u32>(reverse - 1u);
-        const Expected<Point> measuredSize = MeasureLayoutTreeNode(nodes, work, index);
-        if(!measuredSize.has_value())
-            return false;
-        work[cast<usize>(index)].box.measuredSize = measuredSize.value();
-    }
-    return true;
 }
 
 b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vector<LayoutTreeWork> work){

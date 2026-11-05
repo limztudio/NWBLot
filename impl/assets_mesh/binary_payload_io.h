@@ -74,36 +74,6 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ReadMeshAttributeStreams(
-    Span<const u8> binary,
-    const MeshBinaryHeader& header,
-    TStringView failureContext,
-    usize& inOutCursor,
-    Core::Assets::AssetVector<Float3U>& outPositions,
-    Core::Assets::AssetVector<Half4U>& outNormals,
-    Core::Assets::AssetVector<Half4U>& outTangents,
-    Core::Assets::AssetVector<Float2U>& outUv0,
-    Core::Assets::AssetVector<Half4U>& outColors
-);
-
-[[nodiscard]] b8 ReadMeshletStreams(
-    Span<const u8> binary,
-    const MeshBinaryHeader& header,
-    TStringView failureContext,
-    usize& inOutCursor,
-    Core::Assets::AssetVector<MeshletDesc>& outMeshlets,
-    Core::Assets::AssetVector<MeshletBounds>& outMeshletBounds,
-    Core::Assets::AssetVector<u8>& outMeshletPositionRefDeltas,
-    Core::Assets::AssetVector<u8>& outMeshletAttributeRefDeltas,
-    Core::Assets::AssetVector<MeshletLocalVertexRef>& outMeshletLocalVertexRefs,
-    Core::Assets::AssetVector<u8>& outMeshletPrimitiveIndices,
-    Core::Assets::AssetVector<u32>& outSolidTriangleWords
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #if defined(NWB_COOK)
 
 

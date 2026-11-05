@@ -49,6 +49,9 @@ template<typename T>
 using CookVector = MaterialCookVector<T>;
 
 template<typename T>
+using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
+
+template<typename T>
 using ScratchHashSet = HashSet<T, ScratchArena, Hasher<T>, EqualTo<T>>;
 
 using MaterialBindInterfaceLookup = HashMap<Name, NotNull<const MaterialBindEntry*>, ScratchArena, Hasher<Name>, EqualTo<Name>>;
@@ -58,32 +61,6 @@ using MaterialBindInterfaceLookup = HashMap<Name, NotNull<const MaterialBindEntr
 
 
 [[nodiscard]] Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-[[nodiscard]] AString<ArenaT> BuildMaterialBindGeneratedSymbol(const InitializerList<AStringView> nameSegments, const AStringView suffix, ArenaT& arena){
-    AString<ArenaT> symbol(s_MaterialBindGeneratedSymbolPrefix, arena);
-    b8 firstSegment = true;
-    for(const AStringView nameSegment : nameSegments){
-        if(!firstSegment)
-            symbol += '_';
-        AppendAsciiUpperIdentifier(nameSegment, s_MaterialBindFallbackUpperIdentifier.data(), symbol);
-        firstSegment = false;
-    }
-    symbol += suffix;
-    return symbol;
-}
-
-template<typename ArenaT>
-[[nodiscard]] AString<ArenaT> BuildMaterialBindAccessorName(const InitializerList<AStringView> nameSegments, ArenaT& arena){
-    AString<ArenaT> functionName(s_MaterialBindAccessorNamePrefix, arena);
-    for(const AStringView nameSegment : nameSegments)
-        AppendUnderscoreSeparatedPascalIdentifier(nameSegment, s_MaterialBindFallbackPascalIdentifier.data(), functionName);
-    return functionName;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

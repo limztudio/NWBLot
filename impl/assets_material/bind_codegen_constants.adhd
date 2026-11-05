@@ -278,6 +278,132 @@ void AppendMaterialBindIncludeFooter(mut String inOutSource){
     AppendMaterialBindGeneratedSeparator(1u, inOutSource);
 }
 
+i8 ToMaterialBindAsciiUpperByte(in i8 ch){
+    if(ch >= 'a' && ch <= 'z')
+        return cast<i8>(cast<u8>(ch) - 32u);
+    return ch;
+}
+
+b8 IsMaterialBindAsciiAlphaNumericByte(in i8 ch){
+    return isAsciiAlpha(ch) || (ch >= '0' && ch <= '9');
+}
+
+void AppendMaterialBindAsciiUpperIdentifier(in StringView text, mut String inOutText){
+    const usize beginSize = inOutText.size();
+    for(usize i = 0u; i < text.size(); ++i){
+        const i8 ch = text[i];
+        if(IsMaterialBindAsciiAlphaNumericByte(ch))
+            inOutText.push_back(ToMaterialBindAsciiUpperByte(ch));
+        else
+            inOutText.push_back('_');
+    }
+    if(inOutText.size() == beginSize)
+        inOutText.append(s_MaterialBindFallbackUpperIdentifier);
+}
+
+void AppendMaterialBindPascalIdentifier(in StringView text, mut String inOutText){
+    const usize beginSize = inOutText.size();
+    b8 upperNext = true;
+    for(usize i = 0u; i < text.size(); ++i){
+        const i8 ch = text[i];
+        if(ch == '_'){
+            upperNext = true;
+            continue;
+        }
+        if(upperNext)
+            inOutText.push_back(ToMaterialBindAsciiUpperByte(ch));
+        else
+            inOutText.push_back(ch);
+        upperNext = false;
+    }
+    if(inOutText.size() == beginSize)
+        inOutText.append(s_MaterialBindFallbackPascalIdentifier);
+}
+
+String BuildMaterialBindIncludeGuard(in StringView includePath){
+    String guard = "";
+    guard.append(s_MaterialBindIncludeGuardPrefix);
+    AppendMaterialBindAsciiUpperIdentifier(includePath, guard);
+    return guard;
+}
+
+String BuildMaterialBindGeneratedSymbol(in StringView suffix){
+    String symbol = "";
+    symbol.append(s_MaterialBindGeneratedSymbolPrefix);
+    symbol.append(suffix);
+    return symbol;
+}
+
+String BuildMaterialBindGeneratedSymbol(in StringView segment0, in StringView suffix){
+    String symbol = "";
+    symbol.append(s_MaterialBindGeneratedSymbolPrefix);
+    AppendMaterialBindAsciiUpperIdentifier(segment0, symbol);
+    symbol.append(suffix);
+    return symbol;
+}
+
+String BuildMaterialBindGeneratedSymbol(in StringView segment0, in StringView segment1, in StringView suffix){
+    String symbol = "";
+    symbol.append(s_MaterialBindGeneratedSymbolPrefix);
+    AppendMaterialBindAsciiUpperIdentifier(segment0, symbol);
+    symbol.push_back('_');
+    AppendMaterialBindAsciiUpperIdentifier(segment1, symbol);
+    symbol.append(suffix);
+    return symbol;
+}
+
+String BuildMaterialBindAccessorName(in StringView segment0){
+    String functionName = "";
+    functionName.append(s_MaterialBindAccessorNamePrefix);
+    AppendMaterialBindPascalIdentifier(segment0, functionName);
+    return functionName;
+}
+
+String BuildMaterialBindAccessorName(in StringView segment0, in StringView segment1){
+    String functionName = "";
+    functionName.append(s_MaterialBindAccessorNamePrefix);
+    AppendMaterialBindPascalIdentifier(segment0, functionName);
+    AppendMaterialBindPascalIdentifier(segment1, functionName);
+    return functionName;
+}
+
+b8 RegisterGeneratedMaterialBindSymbol(in StringView includePath, in StringView symbol, mut HashSet<String> inOutSymbols){
+    String ownedSymbol = "";
+    ownedSymbol.append(symbol);
+    if(inOutSymbols.contains(ownedSymbol)){
+        error("Material bind include '{}': generated symbol '{}' is ambiguous", includePath, symbol);
+        return false;
+    }
+    inOutSymbols.insert(ownedSymbol);
+    return true;
+}
+
+b8 AppendMaterialBindU32Constant(
+    in StringView includePath,
+    in StringView symbol,
+    in u32 value,
+    mut HashSet<String> inOutSymbols,
+    mut String inOutSource
+){
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, symbol, inOutSymbols))
+        return false;
+    AppendMaterialBindU32ConstantStatement(symbol, value, inOutSource);
+    return true;
+}
+
+b8 AppendMaterialBindU64Constant(
+    in StringView includePath,
+    in StringView symbol,
+    in u64 value,
+    mut HashSet<String> inOutSymbols,
+    mut String inOutSource
+){
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, symbol, inOutSymbols))
+        return false;
+    AppendMaterialBindU64ConstantStatement(symbol, value, inOutSource);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

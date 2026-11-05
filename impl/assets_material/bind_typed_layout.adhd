@@ -478,5 +478,146 @@ b8 TryFinalizeMaterialBindTypedLayoutBlock(
     return true;
 }
 
+b8 AppendMaterialBindGlobalLayoutConstants(
+    in StringView includePath,
+    in Name interfaceName,
+    in u64 layoutHash,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in usize typedLayoutFieldCount,
+    mut HashSet<String> inOutSymbols,
+    mut String inOutSource
+){
+    const Expected<MaterialBindStorageByteSizes> storageByteSizes = TryComputeMaterialBindStorageByteSizes(typedLayoutBlocks);
+    if(!storageByteSizes.has_value()){
+        error("Material bind include '{}': typed layout storage byte size exceeds u32", includePath);
+        return false;
+    }
+    const u32 constantByteSize = storageByteSizes.value().constantBytes;
+    const u32 mutableByteSize = storageByteSizes.value().mutableBytes;
+
+    const NameHash interfaceHash = interfaceName.hash();
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
+        String laneSuffix = "";
+        laneSuffix.append(s_MaterialBindInterfaceHashSymbolPrefix);
+        AppendDecimalU32(lane, laneSuffix);
+        const String symbol = BuildMaterialBindGeneratedSymbol(laneSuffix);
+        if(!AppendMaterialBindU64Constant(includePath, symbol, interfaceHash.qwords[cast<usize>(lane)], inOutSymbols, inOutSource))
+            return false;
+    }
+
+    const String layoutHashSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindLayoutHashSymbol);
+    const String blockCountSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindBlockCountSymbol);
+    const String fieldCountSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindFieldCountSymbol);
+    const String storageConstantSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindStorageConstantSymbol);
+    const String storageMutableSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindStorageMutableSymbol);
+    const String constantByteSizeSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindConstantByteSizeSymbol);
+    const String mutableByteSizeSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindMutableByteSizeSymbol);
+
+    if(!AppendMaterialBindU64Constant(includePath, layoutHashSymbol, layoutHash, inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, blockCountSymbol, cast<u32>(typedLayoutBlocks.size()), inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, fieldCountSymbol, cast<u32>(typedLayoutFieldCount), inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, storageConstantSymbol, cast<u32>(MaterialBlockClass::MaterialConstant), inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, storageMutableSymbol, cast<u32>(MaterialBlockClass::MaterialMutable), inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, constantByteSizeSymbol, constantByteSize, inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, mutableByteSizeSymbol, mutableByteSize, inOutSymbols, inOutSource))
+        return false;
+    return true;
+}
+
+b8 AppendMaterialBindBlockLayoutConstants(
+    in StringView includePath,
+    in StringView instanceName,
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in u32 blockIndex,
+    mut HashSet<String> inOutSymbols,
+    mut String inOutSource
+){
+    const MaterialTypedLayoutBlock block = typedLayoutBlocks[cast<usize>(blockIndex)];
+    const u32 blockStorageByteBegin = ComputeMaterialBindBlockStorageByteBegin(typedLayoutBlocks, blockIndex);
+    const String storageSymbol = BuildMaterialBindGeneratedSymbol(instanceName, s_MaterialBindStorageSymbolSuffix);
+    const String offsetSymbol = BuildMaterialBindGeneratedSymbol(instanceName, s_MaterialBindByteOffsetSymbolSuffix);
+    const String sizeSymbol = BuildMaterialBindGeneratedSymbol(instanceName, s_MaterialBindByteSizeSymbolSuffix);
+    if(!AppendMaterialBindU32Constant(includePath, storageSymbol, cast<u32>(block.blockClass), inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, offsetSymbol, blockStorageByteBegin, inOutSymbols, inOutSource))
+        return false;
+    if(!AppendMaterialBindU32Constant(includePath, sizeSymbol, block.byteSize, inOutSymbols, inOutSource))
+        return false;
+    return true;
+}
+
+b8 AppendMaterialBindFieldConstants(
+    in StringView includePath,
+    in StringView instanceName,
+    in StringView fieldName,
+    in StringView fieldType,
+    in StringView defaultAttribute,
+    in StringView keySymbol,
+    in StringView defaultSymbol,
+    mut HashSet<String> inOutSymbols,
+    mut String inOutSource
+){
+    assert(!defaultAttribute.empty());
+    const Expected<CompactString> keyText = BuildMaterialBindParameterKey(instanceName, fieldName);
+    if(!keyText.has_value()){
+        error("Material bind include '{}': failed to build key for '{}.{}'", includePath, instanceName, fieldName);
+        return false;
+    }
+    const u64 keyHash = computeFnv64AsciiLowerText(keyText.value().view());
+    if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, inOutSymbols, inOutSource))
+        return false;
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, defaultSymbol, inOutSymbols))
+        return false;
+    AppendMaterialBindDefaultConstantStatement(defaultSymbol, fieldType, defaultAttribute, inOutSource);
+    return true;
+}
+
+b8 AppendMaterialBindGeneratedInstanceField(
+    in StringView includePath,
+    in StringView instanceName,
+    in StringView fieldName,
+    in StringView fieldType,
+    in StringView defaultAttribute,
+    in MaterialBlockClass blockClass,
+    in u32 layoutBlockStorageByteBegin,
+    in MaterialTypedLayoutField layoutField,
+    mut HashSet<String> inOutSymbols,
+    mut String inOutSource
+){
+    assert(layoutField.offset <= u32.max - layoutBlockStorageByteBegin);
+    const b8 isResourceField = IsMaterialLayoutResourceFieldType(layoutField.fieldType);
+    const String byteOffsetSymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindByteOffsetSymbolSuffix);
+    const String functionName = BuildMaterialBindAccessorName(instanceName, fieldName);
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, functionName, inOutSymbols))
+        return false;
+
+    const u32 fieldByteOffset = layoutBlockStorageByteBegin + layoutField.offset;
+    if(!AppendMaterialBindU32Constant(includePath, byteOffsetSymbol, fieldByteOffset, inOutSymbols, inOutSource))
+        return false;
+    inOutSource.push_back('\n');
+    if(isResourceField){
+        assert(blockClass == MaterialBlockClass::MaterialConstant);
+        AppendMaterialBindResourceFieldAccessor(layoutField.fieldType, byteOffsetSymbol, functionName, inOutSource);
+        inOutSource.push_back('\n');
+        return true;
+    }
+
+    const String loadFunctionName = BuildMaterialBindFieldLookupFunctionName(layoutField.fieldType, blockClass);
+    assert(!loadFunctionName.empty());
+    const String keySymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindKeySymbolSuffix);
+    const String defaultSymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindDefaultSymbolSuffix);
+    if(!AppendMaterialBindFieldConstants(includePath, instanceName, fieldName, fieldType, defaultAttribute, keySymbol, defaultSymbol, inOutSymbols, inOutSource))
+        return false;
+    AppendMaterialBindFieldAccessor(fieldType, byteOffsetSymbol, functionName, loadFunctionName, inOutSource);
+    inOutSource.push_back('\n');
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -293,6 +293,104 @@ void BuildGeneratedMaterialPixelShaderSource(
     outSource.append(s_GeneratedIncludeDirectiveEnd);
 }
 
+void AppendShadowSurfaceBindAlias(
+    in StringView symbol,
+    in StringView bindNamespace,
+    mut Vector<String> outAliasSymbols,
+    mut HashSet<String> inOutSeenSymbols,
+    mut String inOutSource
+){
+    String ownedSymbol = "";
+    ownedSymbol.append(symbol);
+    if(inOutSeenSymbols.contains(ownedSymbol))
+        return;
+    inOutSeenSymbols.insert(ownedSymbol);
+    AppendShadowSurfaceBindAliasDefinition(symbol, bindNamespace, inOutSource);
+    outAliasSymbols.push_back(ownedSymbol);
+}
+
+void AppendShadowSurfaceBindLayoutAliases(
+    in StringView bindNamespace,
+    mut Vector<String> outAliasSymbols,
+    mut HashSet<String> inOutSeenSymbols,
+    mut String inOutSource
+){
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
+        String suffix = "";
+        suffix.append(s_MaterialBindInterfaceHashSymbolPrefix);
+        AppendDecimalU32(lane, suffix);
+        const String symbol = BuildMaterialBindGeneratedSymbol(suffix);
+        AppendShadowSurfaceBindAlias(symbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    }
+
+    const String layoutHashSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindLayoutHashSymbol);
+    const String blockCountSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindBlockCountSymbol);
+    const String fieldCountSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindFieldCountSymbol);
+    const String storageConstantSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindStorageConstantSymbol);
+    const String storageMutableSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindStorageMutableSymbol);
+    const String constantByteSizeSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindConstantByteSizeSymbol);
+    const String mutableByteSizeSymbol = BuildMaterialBindGeneratedSymbol(s_MaterialBindMutableByteSizeSymbol);
+    AppendShadowSurfaceBindAlias(layoutHashSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(blockCountSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(fieldCountSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(storageConstantSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(storageMutableSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(constantByteSizeSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(mutableByteSizeSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+}
+
+void AppendShadowSurfaceBindInstanceBlockAliases(
+    in StringView instanceName,
+    in StringView bindNamespace,
+    mut Vector<String> outAliasSymbols,
+    mut HashSet<String> inOutSeenSymbols,
+    mut String inOutSource
+){
+    const String storageSymbol = BuildMaterialBindGeneratedSymbol(instanceName, s_MaterialBindStorageSymbolSuffix);
+    const String byteOffsetSymbol = BuildMaterialBindGeneratedSymbol(instanceName, s_MaterialBindByteOffsetSymbolSuffix);
+    const String byteSizeSymbol = BuildMaterialBindGeneratedSymbol(instanceName, s_MaterialBindByteSizeSymbolSuffix);
+    AppendShadowSurfaceBindAlias(storageSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(byteOffsetSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(byteSizeSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+
+    const String blockAccessor = BuildMaterialBindAccessorName(instanceName);
+    AppendShadowSurfaceBindAlias(blockAccessor, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+}
+
+void AppendShadowSurfaceBindInstanceFieldAliases(
+    in StringView instanceName,
+    in StringView fieldName,
+    in StringView bindNamespace,
+    mut Vector<String> outAliasSymbols,
+    mut HashSet<String> inOutSeenSymbols,
+    mut String inOutSource
+){
+    const String byteOffsetSymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindByteOffsetSymbolSuffix);
+    const String keySymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindKeySymbolSuffix);
+    const String defaultSymbol = BuildMaterialBindGeneratedSymbol(instanceName, fieldName, s_MaterialBindDefaultSymbolSuffix);
+    AppendShadowSurfaceBindAlias(byteOffsetSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(keySymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+    AppendShadowSurfaceBindAlias(defaultSymbol, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+
+    const String fieldAccessor = BuildMaterialBindAccessorName(instanceName, fieldName);
+    AppendShadowSurfaceBindAlias(fieldAccessor, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
+}
+
+void AppendShadowSurfaceBindAliasUndefines(in Span<String> aliasSymbols, mut String inOutSource){
+    for(usize index = aliasSymbols.size(); index > 0u; --index){
+        inOutSource.append(s_GeneratedUndefDirective);
+        inOutSource.append(aliasSymbols[index - 1u]);
+        inOutSource.push_back('\n');
+    }
+}
+
+String BuildShadowSurfaceBindNamespace(in u32 bindNamespaceId){
+    String bindNamespace = "";
+    bindNamespace.append(s_ShadowSurfaceBindNamespacePrefix);
+    AppendDecimalU32(bindNamespaceId, bindNamespace);
+    return bindNamespace;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

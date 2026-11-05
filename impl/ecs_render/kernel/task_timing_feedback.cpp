@@ -95,14 +95,16 @@ void RendererTaskTimingFeedbackState::completeSample(const Core::GpuTimingSample
 
     // Every matching notification is terminal; only complete positive durations enter history.
     pending.sampleResolved = true;
-    if(
-        !feedbackActive
-        || !sample.published
-        || sample.scopeName != pending.scopeName
-        || sample.sourceFrameIndex != pending.sourceFrameIndex
-        || sample.physicalQueue != pending.expectedQueue
-        || !IsValidRendererTaskTimingSampleDuration(sample.durationSeconds)
-    )
+    if(!IsValidCompletedRendererTaskTimingSample(
+        feedbackActive,
+        sample.published,
+        sample.scopeName,
+        pending.scopeName,
+        sample.sourceFrameIndex,
+        pending.sourceFrameIndex,
+        sample.physicalQueue == pending.expectedQueue,
+        sample.durationSeconds
+    ))
         return;
 
     pending.durationSeconds = sample.durationSeconds;

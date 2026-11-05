@@ -29,52 +29,15 @@ namespace __hidden_renderer_frame_pipeline_telemetry{
 
 
 [[nodiscard]] static AStringView PhysicalQueueClassLabel(const Core::CommandQueue::Enum queueClass)noexcept{
-    switch(queueClass){
-    case Core::CommandQueue::Graphics:
-        return s_GraphicsQueueLabel;
-    case Core::CommandQueue::Compute:
-        return s_ComputeQueueLabel;
-    case Core::CommandQueue::Transfer:
-        return s_TransferQueueLabel;
-    default:
-        return s_UnknownStageLabel;
-    }
+    return ResolveTelemetryPhysicalQueueClassLabel(static_cast<u8>(queueClass));
 }
 
 [[nodiscard]] static AStringView OwnershipTransferRouteLabel(const Core::GpuOwnershipTransferRoute::Enum route)noexcept{
-    switch(route){
-    case Core::GpuOwnershipTransferRoute::Internal:
-        return s_InternalRouteLabel;
-    case Core::GpuOwnershipTransferRoute::ExternalImport:
-        return s_ExternalImportRouteLabel;
-    case Core::GpuOwnershipTransferRoute::ExternalExport:
-        return s_ExternalExportRouteLabel;
-    default:
-        return s_UnknownStageLabel;
-    }
+    return ResolveTelemetryOwnershipTransferRouteLabel(static_cast<u8>(route));
 }
 
 [[nodiscard]] static AStringView ResourceQueueSharingLabel(const Core::ResourceQueueSharing::Mask queueSharing)noexcept{
-    switch(queueSharing){
-    case Core::ResourceQueueSharing::Exclusive:
-        return s_ExclusiveSharingLabel;
-    case Core::ResourceQueueSharing::Graphics:
-        return s_GraphicsQueueLabel;
-    case Core::ResourceQueueSharing::AsyncCompute:
-        return s_AsyncComputeSharingLabel;
-    case Core::ResourceQueueSharing::Transfer:
-        return s_TransferQueueLabel;
-    case Core::ResourceQueueSharing::GraphicsAndAsyncCompute:
-        return s_GraphicsAndAsyncComputeSharingLabel;
-    case Core::ResourceQueueSharing::GraphicsAndTransfer:
-        return s_GraphicsAndTransferSharingLabel;
-    case Core::ResourceQueueSharing::AsyncComputeAndTransfer:
-        return s_AsyncComputeAndTransferSharingLabel;
-    case Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer:
-        return s_GraphicsAsyncComputeAndTransferSharingLabel;
-    default:
-        return s_UnknownStageLabel;
-    }
+    return ResolveTelemetryResourceQueueSharingLabel(static_cast<u8>(queueSharing));
 }
 
 static void AppendCommandArenaWorkerStatistics(const Core::GpuCommandArenaWorkerStatistics& statistics, AString<Core::Alloc::GlobalArena>& label){

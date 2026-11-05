@@ -162,6 +162,64 @@ b8 ContainsRendererTaskTimingFeedbackScope(in Span<Name> scopes, in Name scopeNa
     return false;
 }
 
+b8 IsValidCompletedRendererTaskTimingSample(
+    in b8 feedbackActive,
+    in b8 published,
+    in Name sampleScopeName,
+    in Name expectedScopeName,
+    in u64 sampleSourceFrameIndex,
+    in u64 expectedSourceFrameIndex,
+    in b8 queueMatches,
+    in f64 durationSeconds
+){
+    return feedbackActive
+        && published
+        && sampleScopeName == expectedScopeName
+        && sampleSourceFrameIndex == expectedSourceFrameIndex
+        && queueMatches
+        && IsValidRendererTaskTimingSampleDuration(durationSeconds);
+}
+
+StringView ResolveTelemetryPhysicalQueueClassLabel(in u8 queueClassValue){
+    if(queueClassValue == 0u)
+        return s_GraphicsQueueLabel;
+    if(queueClassValue == 1u)
+        return s_ComputeQueueLabel;
+    if(queueClassValue == 2u)
+        return s_TransferQueueLabel;
+    return s_UnknownStageLabel;
+}
+
+StringView ResolveTelemetryOwnershipTransferRouteLabel(in u8 routeValue){
+    if(routeValue == 0u)
+        return s_InternalRouteLabel;
+    if(routeValue == 1u)
+        return s_ExternalImportRouteLabel;
+    if(routeValue == 2u)
+        return s_ExternalExportRouteLabel;
+    return s_UnknownStageLabel;
+}
+
+StringView ResolveTelemetryResourceQueueSharingLabel(in u8 queueSharingValue){
+    if(queueSharingValue == 0u)
+        return s_ExclusiveSharingLabel;
+    if(queueSharingValue == 1u)
+        return s_GraphicsQueueLabel;
+    if(queueSharingValue == 2u)
+        return s_AsyncComputeSharingLabel;
+    if(queueSharingValue == 4u)
+        return s_TransferQueueLabel;
+    if(queueSharingValue == 3u)
+        return s_GraphicsAndAsyncComputeSharingLabel;
+    if(queueSharingValue == 5u)
+        return s_GraphicsAndTransferSharingLabel;
+    if(queueSharingValue == 6u)
+        return s_AsyncComputeAndTransferSharingLabel;
+    if(queueSharingValue == 7u)
+        return s_GraphicsAsyncComputeAndTransferSharingLabel;
+    return s_UnknownStageLabel;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -384,40 +384,34 @@ b8 RendererFramePipeline::prepareGpuTimingScopes(){
 void RendererFramePipeline::commitFrameTargets(DeferredFrameTargets&& targets){
     m_frameTargets = Move(targets);
 
-    NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT(
-            "RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, "
-            "CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, "
-            "receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, "
-            "AVBOIT color {}, extinction {}, transmittance {})"
-        )
-        , m_frameTargets.width
-        , m_frameTargets.height
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.albedoFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.normalFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.worldPositionFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.opaqueColorFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.compositeColorFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.depthFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.shadowVisibilityFormat).getName())
-        , m_frameTargets.csgPeelLayerCount
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgCapNormalFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgIntervalDepthFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgIntervalIdFormat).getName())
-        , m_frameTargets.csgReceiverEventLayerCount
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgReceiverEventDataFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgReceiverEventCountFormat).getName())
-        , m_frameTargets.csgReceiverSpanLayerCount
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanDataFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanCountFormat).getName())
-        , m_frameTargets.csgRemovedIntervalLayerCount
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDepthFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCapNormalFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDataFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCountFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.avboit.accumColorFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.avboit.accumExtinctionFormat).getName())
-        , ConvertString(Core::GetFormatInfo(m_frameTargets.avboit.transmittanceFormat).getName())
+    LogCommittedDeferredFrameTargets(
+        m_frameTargets.width,
+        m_frameTargets.height,
+        Core::GetFormatInfo(m_frameTargets.albedoFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.normalFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.worldPositionFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.opaqueColorFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.compositeColorFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.depthFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.shadowVisibilityFormat).getName(),
+        m_frameTargets.csgPeelLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgCapNormalFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgIntervalDepthFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgIntervalIdFormat).getName(),
+        m_frameTargets.csgReceiverEventLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgReceiverEventDataFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgReceiverEventCountFormat).getName(),
+        m_frameTargets.csgReceiverSpanLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgReceiverSpanDataFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgReceiverSpanCountFormat).getName(),
+        m_frameTargets.csgRemovedIntervalLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDepthFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCapNormalFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDataFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCountFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.avboit.accumColorFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.avboit.accumExtinctionFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.avboit.transmittanceFormat).getName()
     );
 }
 

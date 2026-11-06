@@ -46,43 +46,45 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
         return false;
     }
 
-    bindless.slots.gbufferBaseColor = bindless.gbufferBaseColor.slot();
-    bindless.slots.gbufferNormal = bindless.gbufferNormal.slot();
-    bindless.slots.gbufferWorldPosition = bindless.gbufferWorldPosition.slot();
-    bindless.slots.gbufferDepth = bindless.gbufferDepth.slot();
-    bindless.slots.shadowVisibility = bindless.shadowVisibility.slot();
-    bindless.slots.causticIrradiance = bindless.causticIrradiance.slot();
-    bindless.slots.surfelIrradiance = bindless.surfelIrradiance.slot();
-    bindless.slots.sampler = bindless.sampler.slot();
-    bindless.slots.opaqueColor = bindless.opaqueColor.slot();
-    bindless.slots.opaqueColorStorage = bindless.opaqueColorStorage.slot();
-    bindless.slots.compositeColor = bindless.compositeColor.slot();
-    bindless.slots.compositeColorStorage = bindless.compositeColorStorage.slot();
-    bindless.slots.avboitAccumColor = bindless.avboitAccumColor.slot();
-    bindless.slots.avboitAccumExtinction = bindless.avboitAccumExtinction.slot();
-    bindless.slots.refractionDepth = bindless.refractionDepth.slot();
-    bindless.slots.refractionNormalIor = bindless.refractionNormalIor.slot();
-    bindless.slots.refractionTintCoverage = bindless.refractionTintCoverage.slot();
-    bindless.slots.refractionInstance = bindless.refractionInstance.slot();
-    bindless.slots.refractionResolve = bindless.refractionResolve.slot();
-    bindless.slots.avboitForegroundColor = bindless.avboitForegroundColor.slot();
-    bindless.slots.avboitForegroundExtinction = bindless.avboitForegroundExtinction.slot();
-    bindless.slots.refractionResolveStorage = bindless.refractionResolveStorage.slot();
-    bindless.slots.avboitTransmittance = bindless.avboitTransmittance.slot();
-    bindless.slots.avboitLinearSampler = bindless.avboitLinearSampler.slot();
-    bindless.slots.sceneShading = bindless.sceneShading.slot();
-    bindless.slots.lightList = bindless.lightList.slot();
-    bindless.slots.csgCapBackNormal = bindless.csgCapBackNormal.slot();
-    bindless.slots.csgIntervalDepth = bindless.csgIntervalDepth.slot();
-    bindless.slots.csgIntervalId = bindless.csgIntervalId.slot();
-    bindless.slots.csgReceiverEventData = bindless.csgReceiverEventData.slot();
-    bindless.slots.csgReceiverEventCount = bindless.csgReceiverEventCount.slot();
-    bindless.slots.csgReceiverSpanData = bindless.csgReceiverSpanData.slot();
-    bindless.slots.csgReceiverSpanCount = bindless.csgReceiverSpanCount.slot();
-    bindless.slots.csgRemovedIntervalDepth = bindless.csgRemovedIntervalDepth.slot();
-    bindless.slots.csgRemovedIntervalCapNormal = bindless.csgRemovedIntervalCapNormal.slot();
-    bindless.slots.csgRemovedIntervalData = bindless.csgRemovedIntervalData.slot();
-    bindless.slots.csgRemovedIntervalCount = bindless.csgRemovedIntervalCount.slot();
+    bindless.slots = BuildDeferredBindlessResourceSlots(
+        bindless.gbufferBaseColor.slot(),
+        bindless.gbufferNormal.slot(),
+        bindless.gbufferWorldPosition.slot(),
+        bindless.gbufferDepth.slot(),
+        bindless.shadowVisibility.slot(),
+        bindless.causticIrradiance.slot(),
+        bindless.surfelIrradiance.slot(),
+        bindless.sampler.slot(),
+        bindless.opaqueColor.slot(),
+        bindless.opaqueColorStorage.slot(),
+        bindless.compositeColor.slot(),
+        bindless.compositeColorStorage.slot(),
+        bindless.avboitAccumColor.slot(),
+        bindless.avboitAccumExtinction.slot(),
+        bindless.refractionDepth.slot(),
+        bindless.refractionNormalIor.slot(),
+        bindless.refractionTintCoverage.slot(),
+        bindless.refractionInstance.slot(),
+        bindless.refractionResolve.slot(),
+        bindless.avboitForegroundColor.slot(),
+        bindless.avboitForegroundExtinction.slot(),
+        bindless.refractionResolveStorage.slot(),
+        bindless.avboitTransmittance.slot(),
+        bindless.avboitLinearSampler.slot(),
+        bindless.sceneShading.slot(),
+        bindless.lightList.slot(),
+        bindless.csgCapBackNormal.slot(),
+        bindless.csgIntervalDepth.slot(),
+        bindless.csgIntervalId.slot(),
+        bindless.csgReceiverEventData.slot(),
+        bindless.csgReceiverEventCount.slot(),
+        bindless.csgReceiverSpanData.slot(),
+        bindless.csgReceiverSpanCount.slot(),
+        bindless.csgRemovedIntervalDepth.slot(),
+        bindless.csgRemovedIntervalCapNormal.slot(),
+        bindless.csgRemovedIntervalData.slot(),
+        bindless.csgRemovedIntervalCount.slot()
+    );
 
     Core::BufferDesc slotsBufferDesc;
     slotsBufferDesc

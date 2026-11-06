@@ -119,9 +119,12 @@ b8 RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::Al
     )){
         const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
         const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph scheduling failed: analysis={} task={} resource={} queue={} queueTask={}")
-            , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
-            , static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
+        LogDeferredGraphSchedulingFailure(
+            static_cast<u32>(analysisDiagnostic.status),
+            analysisDiagnostic.task.index,
+            analysisDiagnostic.resource.index,
+            static_cast<u32>(queueDiagnostic.status),
+            queueDiagnostic.task.index
         );
         return false;
     }

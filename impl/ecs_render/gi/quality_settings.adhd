@@ -151,8 +151,54 @@ void LogSurfelGiResolveDispatchIfNeeded(
     if(inOutLogged)
         return;
     [essential]
-    info("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})", resolveFactor, sourceWidth, sourceHeight, resolveSize.width, resolveSize.height);
+    info(
+        "RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})"
+        , resolveFactor
+        , sourceWidth
+        , sourceHeight
+        , resolveSize.width
+        , resolveSize.height
+    );
     inOutLogged = true;
+}
+
+b8 IsSurfelCountReadbackDue(in u32 frameIndex){
+    return (frameIndex % s_SurfelCountLogInterval) == 0u;
+}
+
+b8 IsSurfelCountReadbackDelayElapsed(in u32 frameIndex, in u32 readbackFrame){
+    return (frameIndex - readbackFrame) >= s_SurfelCountLogDelay;
+}
+
+void LogSurfelCountReadbackCounts(
+    in u32 bumpTop,
+    in u32 freeTop,
+    in u32 geometryFailures,
+    in u32 poolCapacity,
+    mut u32 inOutTraceGeometryFailureFlags
+){
+    if((geometryFailures & ~inOutTraceGeometryFailureFlags) != 0u){
+        inOutTraceGeometryFailureFlags |= geometryFailures;
+        warning(
+            "RendererSystem: CSG GI traversal rejected incomplete geometry or exceeded crossing capacity (flags={}); conservative occlusion and zero bounce radiance retained"
+            , geometryFailures
+        );
+    }
+    info(
+        "RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity"
+        , cast<u64>(bumpTop - freeTop)
+        , cast<u64>(bumpTop)
+        , cast<u64>(freeTop)
+        , cast<u64>(poolCapacity)
+    );
+}
+
+void AdvanceSurfelGiFrameState(
+    mut b8 outSeeded,
+    mut u32 inOutFrameIndex
+){
+    outSeeded = true;
+    inOutFrameIndex = inOutFrameIndex + 1u;
 }
 
 b8 BeginSurfelResourceInitializationLifecycle(

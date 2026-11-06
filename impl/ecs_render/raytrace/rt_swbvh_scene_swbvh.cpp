@@ -284,13 +284,11 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    if(m_rayTracingState.m_swShadowMeshCount > m_rayTracingState.m_swShadowMeshHeapHighWater){
-        m_rayTracingState.m_swShadowMeshHeapHighWater = m_rayTracingState.m_swShadowMeshCount;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
-            , static_cast<u64>(m_rayTracingState.m_swShadowMeshCount)
-            , static_cast<u64>(m_rayTracingState.m_swShadowMeshCount) * s_SoftwareRayTracingMeshBufferCount
-        );
-    }
+    LogShadowMeshHeapHighWaterIfNeeded(
+        false,
+        m_rayTracingState.m_swShadowMeshCount,
+        m_rayTracingState.m_swShadowMeshHeapHighWater
+    );
     SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
 
     if(!FinishLightSpaceCsgGather(m_csgShapeRegistry, m_lightSpaceShadow.m_csg, m_world, scratchArena))

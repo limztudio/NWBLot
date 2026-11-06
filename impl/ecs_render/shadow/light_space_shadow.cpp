@@ -65,11 +65,12 @@ void RendererRayTracingSystem::acceptLightSpaceShadowCapture(const LightSpaceCap
     auto& state = m_lightSpaceShadow;
     if(!prepared || !state.m_captureHistory.accept(ticket))
         return;
-    const u32 requiredReuses = ResolveSoftwareShadowRequiredReuses(state.m_settings.captureCadence);
-    if(ticket.reuse && !state.m_captureReuseLogged && state.m_captureHistory.acceptedReuseAge() == requiredReuses){
-        state.m_captureReuseLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: accepted light-space capture reuse (cadence={})"), static_cast<u32>(state.m_settings.captureCadence) + 1u);
-    }
+    LogAcceptedLightSpaceCaptureReuseIfNeeded(
+        ticket.reuse,
+        state.m_captureHistory.acceptedReuseAge(),
+        state.m_settings.captureCadence,
+        state.m_captureReuseLogged
+    );
 }
 
 void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
@@ -213,7 +214,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const SceneLi
     );
     auto& diagnostics = state.m_diagnostics;
     snapshot.diagnostics = state.m_csg.snapshot.hasCsg ? &diagnostics : nullptr;
-    if(state.m_csg.snapshot.hasCsg && diagnostics.readback && !diagnostics.submission.valid() && (diagnostics.acceptedFrame == 0u || diagnostics.frameIndex - diagnostics.acceptedFrame >= s_LightSpaceDiagnosticInterval)){
+    if(state.m_csg.snapshot.hasCsg && diagnostics.readback && !diagnostics.submission.valid() && IsLightSpaceDiagnosticIntervalDue(diagnostics.frameIndex, diagnostics.acceptedFrame)){
         snapshot.diagnosticReadback = diagnostics.readback;
         snapshot.diagnosticFrame = diagnostics.frameIndex;
     }

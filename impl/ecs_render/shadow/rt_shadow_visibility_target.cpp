@@ -104,10 +104,12 @@ b8 RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& 
 
     m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     m_rayTracingState.m_transparentShadowSamplingHistory.reset();
-    m_rayTracingState.m_softShadowTemporalSeeded = false;
-    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
-    m_rayTracingState.m_prevWorldToClipValid = false;
-    m_rayTracingState.m_softShadowHistoryFrontIsA = 1u;
+    ResetSoftShadowTemporalHistoryState(
+        m_rayTracingState.m_softShadowTemporalSeeded,
+        m_rayTracingState.m_softShadowTemporalHistoryAdvancePending,
+        m_rayTracingState.m_prevWorldToClipValid,
+        m_rayTracingState.m_softShadowHistoryFrontIsA
+    );
 
     // Transparent temporal history shares geometry and the opaque history selector.
     if(
@@ -138,12 +140,10 @@ b8 RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& 
     }
 
     // Edge records are capped at one per pixel; overflow falls back to interpolation.
-    const u64 edgeListCapacity = static_cast<u64>(targets.width) * targets.height;
-    if(edgeListCapacity > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow edge-list capacity exceeds u32 limits"));
+    const Expected<u32> edgeListCapacityResult = TryResolveShadowEdgeListCapacityRecords(targets.width, targets.height);
+    if(!edgeListCapacityResult)
         return false;
-    }
-    const u32 edgeListCapacityRecords = static_cast<u32>(edgeListCapacity);
+    const u32 edgeListCapacityRecords = *edgeListCapacityResult;
     Core::BufferDesc edgeListDesc;
     edgeListDesc
         .setByteSize(static_cast<u64>(sizeof(u32)) * static_cast<u64>(NWB_SW_SHADOW_EDGE_RECORD_WORDS) * static_cast<u64>(edgeListCapacityRecords))
@@ -170,7 +170,7 @@ b8 RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& 
     m_rayTracingState.m_swShadowEdgeListBuffer = Move(edgeListBuffer);
     m_rayTracingState.m_swShadowEdgeListCapacity = edgeListCapacityRecords;
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created shadow receiver grid factor={} full={}x{} receiver={}x{}"), targets.shadowReceiverFactor, targets.width, targets.height, softHalfWidth, softHalfHeight);
+    LogCreatedShadowReceiverGrid(targets.shadowReceiverFactor, targets.width, targets.height, softHalfWidth, softHalfHeight);
 
     return true;
 }
@@ -258,10 +258,12 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
                 commandList, heap, m_graphics.gpuTiming(), *targets.shadowSoftHalfA
             ))
                 return MakeUnexpected(Failure{});
-            if(!m_lightSpaceShadow.m_csgDispatchLogged){
-                m_lightSpaceShadow.m_csgDispatchLogged = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=1, {} instances)"), static_cast<u64>(lightSpace->push.instanceCount));
-            }
+            LogLightSpaceCsgShadowDispatchIfNeeded(
+                true,
+                true,
+                lightSpace->push.instanceCount,
+                m_lightSpaceShadow.m_csgDispatchLogged
+            );
         }
 
         // Split resolve declares the trace fence; unsplit soft resolve phases retain their internal UAV fence.

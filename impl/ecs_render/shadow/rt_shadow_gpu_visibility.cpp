@@ -187,14 +187,13 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 NWB_ASSERT(splitSoftTransparentFold);
                 if(!RecordLightSpaceResolve(*lightSpace, frameIndex, softTracePush.softSampleCount, targets.bindless.shadowSoftHalfAStorage.slot(), false, commandList, heap, m_graphics.gpuTiming(), *targets.shadowSoftHalfA))
                     return MakeUnexpected(Failure{});
-                if((lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u && !m_lightSpaceShadow.m_csgDispatchLogged){
-                    m_lightSpaceShadow.m_csgDispatchLogged = true;
-                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=0, {} instances)"), static_cast<u64>(lightSpace->push.instanceCount));
-                }
-                if(!m_lightSpaceShadow.m_dispatchLogged){
-                    m_lightSpaceShadow.m_dispatchLogged = true;
-                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched light-space shadow maps"));
-                }
+                LogLightSpaceCsgShadowDispatchIfNeeded(
+                    (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u,
+                    false,
+                    lightSpace->push.instanceCount,
+                    m_lightSpaceShadow.m_csgDispatchLogged
+                );
+                LogLightSpaceShadowMapDispatchIfNeeded(m_lightSpaceShadow.m_dispatchLogged);
             }
             else{
                 commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowSoftOpaquePipeline));

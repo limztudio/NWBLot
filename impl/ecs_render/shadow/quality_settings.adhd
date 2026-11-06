@@ -89,8 +89,48 @@ void LogTransparentShadowSamplingIfNeeded(
     if(hardwareReady)
         hardwareFlag = 1u;
     [essential]
-    info("RendererSystem: recorded temporal-one transparent shadow sampling samples={} hardware={}", sampleCount, hardwareFlag);
+    info(
+        "RendererSystem: recorded temporal-one transparent shadow sampling samples={} hardware={}"
+        , sampleCount
+        , hardwareFlag
+    );
     inOutLogged = true;
+}
+
+void LogHardwareTransparentShadowDispatchIfNeeded(
+    in u32 width,
+    in u32 height,
+    in usize tlasInstanceCount,
+    mut b8 inOutDispatchLogged
+){
+    if(inOutDispatchLogged)
+        return;
+    [essential]
+    info(
+        "RendererSystem: dispatched hardware transparent shadow traversal ({}x{}, {} instances)"
+        , cast<u64>(width)
+        , cast<u64>(height)
+        , cast<u64>(tlasInstanceCount)
+    );
+    inOutDispatchLogged = true;
+}
+
+void LogCreatedShadowReceiverGrid(
+    in u32 receiverFactor,
+    in u32 fullWidth,
+    in u32 fullHeight,
+    in u32 receiverWidth,
+    in u32 receiverHeight
+){
+    [essential]
+    info(
+        "RendererSystem: created shadow receiver grid factor={} full={}x{} receiver={}x{}"
+        , receiverFactor
+        , fullWidth
+        , fullHeight
+        , receiverWidth
+        , receiverHeight
+    );
 }
 
 

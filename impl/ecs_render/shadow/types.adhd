@@ -359,5 +359,26 @@ b8 ValidatePreparedShadowMaterialContextRetainState(
     return true;
 }
 
+void ResetSoftShadowTemporalHistoryState(
+    mut b8 outSoftShadowTemporalSeeded,
+    mut b8 outSoftShadowTemporalHistoryAdvancePending,
+    mut b8 outPrevWorldToClipValid,
+    mut u32 outSoftShadowHistoryFrontIsA
+){
+    outSoftShadowTemporalSeeded = false;
+    outSoftShadowTemporalHistoryAdvancePending = false;
+    outPrevWorldToClipValid = false;
+    outSoftShadowHistoryFrontIsA = 1u;
+}
+
+Expected<u32> TryResolveShadowEdgeListCapacityRecords(in u32 width, in u32 height){
+    const u64 edgeListCapacity = cast<u64>(width) * cast<u64>(height);
+    if(edgeListCapacity > cast<u64>(u32.max)){
+        error("RendererSystem: shadow edge-list capacity exceeds u32 limits");
+        return makeUnexpected(Failure());
+    }
+    return cast<u32>(edgeListCapacity);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

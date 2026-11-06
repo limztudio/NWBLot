@@ -271,6 +271,27 @@ u32 ResolveSoftwareShadowRequiredReuses(in SoftwareShadowCaptureCadence cadence)
     return s_ShadowCaptureReuseLimitOneFrame;
 }
 
+void LogAcceptedLightSpaceCaptureReuseIfNeeded(
+    in b8 ticketReuse,
+    in u32 acceptedReuseAge,
+    in SoftwareShadowCaptureCadence captureCadence,
+    mut b8 inOutCaptureReuseLogged
+){
+    const u32 requiredReuses = ResolveSoftwareShadowRequiredReuses(captureCadence);
+    if(ticketReuse && !inOutCaptureReuseLogged && acceptedReuseAge == requiredReuses){
+        inOutCaptureReuseLogged = true;
+        [essential]
+        info(
+            "RendererSystem: accepted light-space capture reuse (cadence={})"
+            , cast<u32>(captureCadence) + 1u
+        );
+    }
+}
+
+b8 IsLightSpaceDiagnosticIntervalDue(in u32 frameIndex, in u32 acceptedFrame){
+    return acceptedFrame == 0u || (frameIndex - acceptedFrame) >= s_LightSpaceDiagnosticInterval;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

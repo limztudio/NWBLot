@@ -231,6 +231,21 @@ RefractionStatistics MakeRefractionSnapshotMetadata(
     return metadata;
 }
 
+void LogCreatedRefractionResolvePipeline(in b8 hardware, in b8 dense){
+    StringView traceLabel = "screen space";
+    if(hardware)
+        traceLabel = "hardware ray query";
+    StringView densityLabel = "sparse queue";
+    if(dense)
+        densityLabel = "dense grid";
+    [essential]
+    info(
+        "RendererSystem: created refraction resolve pipeline ({}, {})"
+        , traceLabel
+        , densityLabel
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

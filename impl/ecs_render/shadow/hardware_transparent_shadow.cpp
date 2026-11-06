@@ -214,10 +214,12 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
     commandList.setBufferState(state.m_overflowListBuffer.get(), Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(state.m_overflowArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
-    if(!state.m_dispatchLogged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware transparent shadow traversal ({}x{}, {} instances)"), static_cast<u64>(targets.width), static_cast<u64>(targets.height), static_cast<u64>(m_rayTracingState.m_tlasInstanceCount));
-        state.m_dispatchLogged = true;
-    }
+    LogHardwareTransparentShadowDispatchIfNeeded(
+        targets.width,
+        targets.height,
+        m_rayTracingState.m_tlasInstanceCount,
+        state.m_dispatchLogged
+    );
 }
 
 

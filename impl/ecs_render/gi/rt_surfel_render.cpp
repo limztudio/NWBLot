@@ -256,7 +256,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
             const Expected<u64> completedValue = m_graphics.getDevice().queueGetCompletedInstance(Core::GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration, });
             submissionComplete = completedValue && *completedValue >= submissionToken.value;
         }
-        if(submissionComplete && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay){
+        if(submissionComplete && IsSurfelCountReadbackDelayElapsed(frameIndex, m_rayTracingState.m_surfelCountReadbackFrame)){
             Core::Buffer& readback = *m_rayTracingState.m_surfelCounterReadback;
             const Expected<void*> mappedCounts = m_graphics.getDevice().mapBuffer(readback, Core::CpuAccessMode::Read);
             if(mappedCounts){
@@ -265,15 +265,12 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
                 const u32 freeTop = counts.get()[NWB_SURFEL_COUNTER_FREE_TOP];
                 const u32 geometryFailures = counts.get()[NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE];
                 m_graphics.getDevice().unmapBuffer(readback);
-                if((geometryFailures & ~m_rayTracingState.m_surfelTraceGeometryFailureFlags) != 0u){
-                    m_rayTracingState.m_surfelTraceGeometryFailureFlags |= geometryFailures;
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG GI traversal rejected incomplete geometry or exceeded crossing capacity (flags={}); conservative occlusion and zero bounce radiance retained"), geometryFailures);
-                }
-                NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
-                    , static_cast<u64>(bumpTop - freeTop)
-                    , static_cast<u64>(bumpTop)
-                    , static_cast<u64>(freeTop)
-                    , static_cast<u64>(m_rayTracingState.m_surfelPoolCapacity)
+                LogSurfelCountReadbackCounts(
+                    bumpTop,
+                    freeTop,
+                    geometryFailures,
+                    m_rayTracingState.m_surfelPoolCapacity,
+                    m_rayTracingState.m_surfelTraceGeometryFailureFlags
                 );
             }
             m_rayTracingState.m_surfelCountReadbackSubmissionToken = {};
@@ -281,8 +278,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     }
 
     // Subsequent frames use steady-state round-robin updates.
-    m_rayTracingState.m_surfelSeeded = true;
-    m_rayTracingState.m_surfelFrameIndex = m_rayTracingState.m_surfelFrameIndex + 1u;
+    AdvanceSurfelGiFrameState(m_rayTracingState.m_surfelSeeded, m_rayTracingState.m_surfelFrameIndex);
     return true;
 }
 

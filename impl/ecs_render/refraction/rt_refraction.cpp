@@ -90,7 +90,7 @@ b8 RendererRayTracingSystem::prepareRefractionResources(){
             failed = true;
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created refraction resolve pipeline ({}, {})"), hardware ? NWB_TEXT("hardware ray query") : NWB_TEXT("screen space"), dense ? NWB_TEXT("dense grid") : NWB_TEXT("sparse queue"));
+        LogCreatedRefractionResolvePipeline(hardware, dense);
         return true;
     };
 

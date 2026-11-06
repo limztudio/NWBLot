@@ -591,6 +591,34 @@ void PopulatePreparedLightSpaceShadowPush(
     outPush.outputSlot = outputSlot;
 }
 
+void LogLightSpaceCsgShadowDispatchIfNeeded(
+    in b8 csgEnabled,
+    in b8 hardwareCompose,
+    in u32 instanceCount,
+    mut b8 inOutCsgDispatchLogged
+){
+    if(!csgEnabled || inOutCsgDispatchLogged)
+        return;
+    inOutCsgDispatchLogged = true;
+    u32 hardwareComposeFlag = 0u;
+    if(hardwareCompose)
+        hardwareComposeFlag = 1u;
+    [essential]
+    info(
+        "RendererSystem: dispatched CSG light-space shadows (hardware_compose={}, {} instances)"
+        , hardwareComposeFlag
+        , cast<u64>(instanceCount)
+    );
+}
+
+void LogLightSpaceShadowMapDispatchIfNeeded(mut b8 inOutDispatchLogged){
+    if(inOutDispatchLogged)
+        return;
+    inOutDispatchLogged = true;
+    [essential]
+    info("RendererSystem: dispatched light-space shadow maps");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

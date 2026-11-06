@@ -260,13 +260,11 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         m_lightSpaceShadow.m_sceneBuffers.clear();
     }
 
-    if(m_rayTracingState.m_shadowMeshCount > m_rayTracingState.m_shadowMeshHeapHighWater){
-        m_rayTracingState.m_shadowMeshHeapHighWater = m_rayTracingState.m_shadowMeshCount;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
-            , static_cast<u64>(m_rayTracingState.m_shadowMeshCount)
-            , static_cast<u64>(m_rayTracingState.m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
-        );
-    }
+    LogShadowMeshHeapHighWaterIfNeeded(
+        true,
+        m_rayTracingState.m_shadowMeshCount,
+        m_rayTracingState.m_shadowMeshHeapHighWater
+    );
     SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
 
     m_rayTracingState.m_tlasInstanceCount = static_cast<u32>(instances.size());

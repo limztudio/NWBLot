@@ -54,42 +54,29 @@ RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLighting
 
 void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTracingLightingClassification& classification, const Span<const SceneLightGpuData> lights){
     m_rayTracingState.m_causticLightCount = classification.causticLightCount;
-    if(m_shadowVisibilityTraceResourcesPreflighted && classification.causticLightCount != 0u && m_unsupportedCausticVolumeCount != 0u && (!m_unsupportedCausticVolumeReported || m_reportedUnsupportedCausticVolumeHash != m_unsupportedCausticVolumeHash)){
-        m_reportedUnsupportedCausticVolumeHash = m_unsupportedCausticVolumeHash;
-        m_unsupportedCausticVolumeReported = true;
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic photons unavailable: {} refractive volume(s) need an explicit closed homogeneous optical boundary mode (first entity {})"), m_unsupportedCausticVolumeCount, m_firstUnsupportedCausticVolumeEntity);
-    }
+    LogUnsupportedCausticVolumesIfNeeded(
+        m_shadowVisibilityTraceResourcesPreflighted,
+        classification.causticLightCount,
+        m_unsupportedCausticVolumeCount,
+        m_unsupportedCausticVolumeHash,
+        m_firstUnsupportedCausticVolumeEntity,
+        m_unsupportedCausticVolumeReported,
+        m_reportedUnsupportedCausticVolumeHash
+    );
     m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights);
     prepareLightSpaceShadows(lights);
 
     // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds and diagnostic latch.
     // A successful prefix publication leaves the latch set across optional graph-build retries; final declaration failure restores the earlier snapshot.
-    if(m_rayTracingState.m_causticEmissionGateLogged)
-        return;
-    m_rayTracingState.m_causticEmissionGateLogged = true;
-
-    const Float4& boundsMin = m_rayTracingState.m_causticTargetBoundsMin;
-    const Float4& boundsMax = m_rayTracingState.m_causticTargetBoundsMax;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})")
-        , classification.causticLightCount
-        , m_rayTracingState.m_causticRefractiveInstanceCount
-        , boundsMin.x
-        , boundsMin.y
-        , boundsMin.z
-        , boundsMax.x
-        , boundsMax.y
-        , boundsMax.z
+    LogCausticEmissionGateIfNeeded(
+        classification.causticLightCount,
+        m_rayTracingState.m_causticRefractiveInstanceCount,
+        LoadFloat(m_rayTracingState.m_causticTargetBoundsMin),
+        LoadFloat(m_rayTracingState.m_causticTargetBoundsMax),
+        lights,
+        m_rayTracingState.m_causticEmissionGateLogged
     );
-
-    const u32 lightCount = static_cast<u32>(lights.size());
-    for(u32 i = 0u; i < lightCount; ++i){
-        if(lights[i].params.w < 0.f)
-            continue;
-        // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only directional/spot reach here.
-        const b8 directional = lights[i].params.y < s_LightTypeDirectionalMax;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})"), static_cast<u32>(lights[i].params.w), i, directional ? NWB_TEXT("directional") : NWB_TEXT("spot"));
-    }
 }
 
 RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const noexcept{
@@ -151,14 +138,11 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
 
 
 void RendererRayTracingSystem::logCapabilityOnce(){
-    if(m_rayTracingState.m_capabilityLogged)
-        return;
-
-    m_rayTracingState.m_capabilityLogged = true;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: ray tracing capability - accel struct {}, pipeline {}, ray query {}")
-        , m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        , m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline)
-        , m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
+    LogRayTracingCapabilityIfNeeded(
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct),
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline),
+        m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
+        m_rayTracingState.m_capabilityLogged
     );
 }
 

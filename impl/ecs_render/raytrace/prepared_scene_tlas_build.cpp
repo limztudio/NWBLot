@@ -75,16 +75,15 @@ void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
     if(!m_ready)
         return;
 
-    const b8 preparedTlasMatchesCurrent = storageMatches(state);
-    if(preparedTlasMatchesCurrent && m_static){
-        state.m_tlasStaticSceneHash = m_staticSceneHash;
-        state.m_tlasStaticSceneHashValid = true;
-    }
-    else
-        state.m_tlasStaticSceneHashValid = false;
     // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
-    if(preparedTlasMatchesCurrent)
-        state.m_tlasBackingFresh = false;
+    PublishConfirmedSceneTlasBuild(
+        storageMatches(state),
+        m_static,
+        m_staticSceneHash,
+        state.m_tlasStaticSceneHash,
+        state.m_tlasStaticSceneHashValid,
+        state.m_tlasBackingFresh
+    );
     clear();
 }
 

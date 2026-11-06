@@ -314,7 +314,7 @@ b8 RendererRayTracingSystem::ensureSurfelResources(){
 }
 
 b8 RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const noexcept{
-    return hasSurfelWork() && m_rayTracingState.m_surfelCounterBuffer && m_rayTracingState.m_surfelCounterReadback && !m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid() && (m_rayTracingState.m_surfelFrameIndex % s_SurfelCountLogInterval) == 0u;
+    return hasSurfelWork() && m_rayTracingState.m_surfelCounterBuffer && m_rayTracingState.m_surfelCounterReadback && !m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid() && IsSurfelCountReadbackDue(m_rayTracingState.m_surfelFrameIndex);
 }
 
 b8 RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){

@@ -264,5 +264,67 @@ b8 ValidatePreparedSceneBvhRetainState(
     return true;
 }
 
+void ApplyConfirmedMeshBlasBuildState(
+    in b8 firstBuild,
+    in b8 performRefit,
+    in u32 refitsAfterBuild,
+    in u64 geometryContentRevision,
+    in u64 positionByteSize,
+    mut b8 outBlasBuildPending,
+    mut b8 outBlasBackingFresh,
+    mut u32 outBlasRefitsSinceRebuild,
+    mut b8 outBlasBuildAccepted,
+    mut u64 outBlasGeometryContentRevision,
+    mut u64 inOutFirstBuilds,
+    mut u64 inOutRefits,
+    mut u64 inOutRebuilds,
+    mut u64 inOutUploadedBytes
+){
+    outBlasBuildPending = false;
+    outBlasBackingFresh = false;
+    outBlasRefitsSinceRebuild = refitsAfterBuild;
+    outBlasBuildAccepted = true;
+    outBlasGeometryContentRevision = geometryContentRevision;
+    if(firstBuild)
+        inOutFirstBuilds += 1u;
+    else if(performRefit)
+        inOutRefits += 1u;
+    else
+        inOutRebuilds += 1u;
+    inOutUploadedBytes += positionByteSize;
+}
+
+void ApplyConfirmedMeshSwBvhBuildState(
+    in b8 performRefit,
+    in u32 refitsAfterBuild,
+    in u64 geometryContentRevision,
+    mut b8 outSwBvhBuildPending,
+    mut b8 outSwBvhBuildAccepted,
+    mut u64 outSwBvhGeometryContentRevision,
+    mut b8 inOutSwBvhTopologyBuilt,
+    mut u32 outSwBvhRefitsSinceRebuild
+){
+    outSwBvhBuildPending = false;
+    outSwBvhBuildAccepted = true;
+    outSwBvhGeometryContentRevision = geometryContentRevision;
+    if(!performRefit)
+        inOutSwBvhTopologyBuilt = true;
+    outSwBvhRefitsSinceRebuild = refitsAfterBuild;
+}
+
+void InitializeCreatedMeshBlasState(
+    mut b8 outBlasBuildPending,
+    mut b8 outBlasBuildAccepted,
+    mut u64 outBlasGeometryContentRevision,
+    mut b8 outBlasBackingFresh,
+    mut u32 outBlasRefitsSinceRebuild
+){
+    outBlasBuildPending = true;
+    outBlasBuildAccepted = false;
+    outBlasGeometryContentRevision = 0u;
+    outBlasBackingFresh = true;
+    outBlasRefitsSinceRebuild = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -57,12 +57,16 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
         }
 
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResult);
-        meshResult->swBvhBuildPending = false;
-        meshResult->swBvhBuildAccepted = true;
-        meshResult->swBvhGeometryContentRevision = build.geometryContentRevision;
-        if(!build.performRefit)
-            meshResult->swBvhTopologyBuilt = true;
-        meshResult->swBvhRefitsSinceRebuild = build.refitsAfterBuild;
+        ApplyConfirmedMeshSwBvhBuildState(
+            build.performRefit,
+            build.refitsAfterBuild,
+            build.geometryContentRevision,
+            meshResult->swBvhBuildPending,
+            meshResult->swBvhBuildAccepted,
+            meshResult->swBvhGeometryContentRevision,
+            meshResult->swBvhTopologyBuilt,
+            meshResult->swBvhRefitsSinceRebuild
+        );
         if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResult))){
             allPlansCurrent = false;
             continue;

@@ -276,16 +276,30 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::M
     mesh.swBvhParentBuffer = desired.swBvhParentBuffer;
     mesh.swBvhNodeHeapHandle = desired.swBvhNodeHeapHandle;
     mesh.swBvhParentHeapHandle = desired.swBvhParentHeapHandle;
-    mesh.blasRefitsSinceRebuild = blasReplaced ? 0u : desired.blasRefitsSinceRebuild;
-    mesh.swBvhRefitsSinceRebuild = swBvhReplaced ? 0u : desired.swBvhRefitsSinceRebuild;
-    mesh.blasBuildPending = blasReplaced || desired.blasBuildPending;
-    mesh.blasBackingFresh = desired.blasBackingFresh;
-    mesh.swBvhBuildPending = swBvhReplaced || desired.swBvhBuildPending;
-    mesh.swBvhTopologyBuilt = !swBvhReplaced && desired.swBvhTopologyBuilt;
-    mesh.blasBuildAccepted = !blasReplaced && desired.blasBuildAccepted;
-    mesh.swBvhBuildAccepted = !swBvhReplaced && desired.swBvhBuildAccepted;
-    mesh.blasGeometryContentRevision = mesh.blasBuildAccepted ? desired.blasGeometryContentRevision : 0u;
-    mesh.swBvhGeometryContentRevision = mesh.swBvhBuildAccepted ? desired.swBvhGeometryContentRevision : 0u;
+    CommitMeshRayTracingSnapshotState(
+        blasReplaced,
+        swBvhReplaced,
+        desired.blasRefitsSinceRebuild,
+        desired.swBvhRefitsSinceRebuild,
+        desired.blasBuildPending,
+        desired.blasBackingFresh,
+        desired.swBvhBuildPending,
+        desired.swBvhTopologyBuilt,
+        desired.blasBuildAccepted,
+        desired.swBvhBuildAccepted,
+        desired.blasGeometryContentRevision,
+        desired.swBvhGeometryContentRevision,
+        mesh.blasRefitsSinceRebuild,
+        mesh.swBvhRefitsSinceRebuild,
+        mesh.blasBuildPending,
+        mesh.blasBackingFresh,
+        mesh.swBvhBuildPending,
+        mesh.swBvhTopologyBuilt,
+        mesh.blasBuildAccepted,
+        mesh.swBvhBuildAccepted,
+        mesh.blasGeometryContentRevision,
+        mesh.swBvhGeometryContentRevision
+    );
     return true;
 }
 
@@ -300,18 +314,19 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::en
 void RendererMeshSystem::discardRayTracingBuildState()noexcept{
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         MeshResources& mesh = meshIt.value();
-        mesh.blasBuildAccepted = false;
-        mesh.swBvhBuildAccepted = false;
-        mesh.blasGeometryContentRevision = 0u;
-        mesh.swBvhGeometryContentRevision = 0u;
-        if(mesh.blas)
-            mesh.blasBuildPending = true;
-        if(mesh.swBvhNodeBuffer || mesh.swBvhParentBuffer){
-            mesh.swBvhBuildPending = true;
-            mesh.swBvhTopologyBuilt = false;
-        }
-        mesh.blasRefitsSinceRebuild = 0u;
-        mesh.swBvhRefitsSinceRebuild = 0u;
+        ResetMeshRayTracingBuildState(
+            mesh.blas != nullptr,
+            mesh.swBvhNodeBuffer != nullptr || mesh.swBvhParentBuffer != nullptr,
+            mesh.blasBuildPending,
+            mesh.blasBuildAccepted,
+            mesh.blasGeometryContentRevision,
+            mesh.blasRefitsSinceRebuild,
+            mesh.swBvhBuildPending,
+            mesh.swBvhTopologyBuilt,
+            mesh.swBvhBuildAccepted,
+            mesh.swBvhGeometryContentRevision,
+            mesh.swBvhRefitsSinceRebuild
+        );
     }
 }
 

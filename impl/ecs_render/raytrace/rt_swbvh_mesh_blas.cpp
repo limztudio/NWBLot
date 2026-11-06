@@ -27,25 +27,36 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         }
 
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResourcesResult);
-        meshResourcesResult->blasBuildPending = false;
-        // Accepted Shadow Preparation publishes this generation's native final state.
-        meshResourcesResult->blasBackingFresh = false;
-        meshResourcesResult->blasRefitsSinceRebuild = build.refitsAfterBuild;
-        meshResourcesResult->blasBuildAccepted = true;
-        meshResourcesResult->blasGeometryContentRevision = build.geometryContentRevision;
+        u64 firstBuilds = m_blasLedgerFirstBuilds;
+        u64 refits = m_blasLedgerRefits;
+        u64 rebuilds = m_blasLedgerRebuilds;
+        u64 uploadedBytes = m_blasLedgerUploadedBytes;
+        ApplyConfirmedMeshBlasBuildState(
+            build.firstBuild,
+            build.performRefit,
+            build.refitsAfterBuild,
+            build.geometryContentRevision,
+            build.positionByteSize,
+            meshResourcesResult->blasBuildPending,
+            meshResourcesResult->blasBackingFresh,
+            meshResourcesResult->blasRefitsSinceRebuild,
+            meshResourcesResult->blasBuildAccepted,
+            meshResourcesResult->blasGeometryContentRevision,
+            firstBuilds,
+            refits,
+            rebuilds,
+            uploadedBytes
+        );
         if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResourcesResult))){
             allPlansCurrent = false;
             continue;
         }
-        if(build.firstBuild){
-            ++m_blasLedgerFirstBuilds;
+        m_blasLedgerFirstBuilds = firstBuilds;
+        m_blasLedgerRefits = refits;
+        m_blasLedgerRebuilds = rebuilds;
+        m_blasLedgerUploadedBytes = uploadedBytes;
+        if(build.firstBuild)
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)"), ConvertString(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.vertexCount), static_cast<u64>(build.indexCount));
-        }
-        else if(build.performRefit)
-            ++m_blasLedgerRefits;
-        else
-            ++m_blasLedgerRebuilds;
-        m_blasLedgerUploadedBytes += static_cast<u64>(build.positionByteSize);
     }
     // A replacement after recording never joins the accepted cache. Force a future TLAS rebuild, not a retired hash.
     if(!allPlansCurrent)
@@ -174,11 +185,13 @@ b8 RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTr
     }
     Core::RayTracingAccelStructHandle blas = Move(*blasResult);
     meshResources.blas = Move(blas);
-    meshResources.blasBuildPending = true;
-    meshResources.blasBuildAccepted = false;
-    meshResources.blasGeometryContentRevision = 0u;
-    meshResources.blasBackingFresh = true;
-    meshResources.blasRefitsSinceRebuild = 0u;
+    InitializeCreatedMeshBlasState(
+        meshResources.blasBuildPending,
+        meshResources.blasBuildAccepted,
+        meshResources.blasGeometryContentRevision,
+        meshResources.blasBackingFresh,
+        meshResources.blasRefitsSinceRebuild
+    );
     return true;
 }
 

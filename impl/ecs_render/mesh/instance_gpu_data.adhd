@@ -303,6 +303,85 @@ b8 TryAcceptObjectGeometryCacheContent(
     return true;
 }
 
+void CommitMeshRayTracingSnapshotState(
+    in b8 blasReplaced,
+    in b8 swBvhReplaced,
+    in u32 desiredBlasRefitsSinceRebuild,
+    in u32 desiredSwBvhRefitsSinceRebuild,
+    in b8 desiredBlasBuildPending,
+    in b8 desiredBlasBackingFresh,
+    in b8 desiredSwBvhBuildPending,
+    in b8 desiredSwBvhTopologyBuilt,
+    in b8 desiredBlasBuildAccepted,
+    in b8 desiredSwBvhBuildAccepted,
+    in u64 desiredBlasGeometryContentRevision,
+    in u64 desiredSwBvhGeometryContentRevision,
+    mut u32 outBlasRefitsSinceRebuild,
+    mut u32 outSwBvhRefitsSinceRebuild,
+    mut b8 outBlasBuildPending,
+    mut b8 outBlasBackingFresh,
+    mut b8 outSwBvhBuildPending,
+    mut b8 outSwBvhTopologyBuilt,
+    mut b8 outBlasBuildAccepted,
+    mut b8 outSwBvhBuildAccepted,
+    mut u64 outBlasGeometryContentRevision,
+    mut u64 outSwBvhGeometryContentRevision
+){
+    if(blasReplaced)
+        outBlasRefitsSinceRebuild = 0u;
+    else
+        outBlasRefitsSinceRebuild = desiredBlasRefitsSinceRebuild;
+
+    if(swBvhReplaced)
+        outSwBvhRefitsSinceRebuild = 0u;
+    else
+        outSwBvhRefitsSinceRebuild = desiredSwBvhRefitsSinceRebuild;
+
+    outBlasBuildPending = blasReplaced || desiredBlasBuildPending;
+    outBlasBackingFresh = desiredBlasBackingFresh;
+    outSwBvhBuildPending = swBvhReplaced || desiredSwBvhBuildPending;
+    outSwBvhTopologyBuilt = !swBvhReplaced && desiredSwBvhTopologyBuilt;
+    outBlasBuildAccepted = !blasReplaced && desiredBlasBuildAccepted;
+    outSwBvhBuildAccepted = !swBvhReplaced && desiredSwBvhBuildAccepted;
+
+    if(outBlasBuildAccepted)
+        outBlasGeometryContentRevision = desiredBlasGeometryContentRevision;
+    else
+        outBlasGeometryContentRevision = 0u;
+
+    if(outSwBvhBuildAccepted)
+        outSwBvhGeometryContentRevision = desiredSwBvhGeometryContentRevision;
+    else
+        outSwBvhGeometryContentRevision = 0u;
+}
+
+void ResetMeshRayTracingBuildState(
+    in b8 hasBlas,
+    in b8 hasSwBvhBuffers,
+    mut b8 inOutBlasBuildPending,
+    mut b8 outBlasBuildAccepted,
+    mut u64 outBlasGeometryContentRevision,
+    mut u32 outBlasRefitsSinceRebuild,
+    mut b8 inOutSwBvhBuildPending,
+    mut b8 inOutSwBvhTopologyBuilt,
+    mut b8 outSwBvhBuildAccepted,
+    mut u64 outSwBvhGeometryContentRevision,
+    mut u32 outSwBvhRefitsSinceRebuild
+){
+    outBlasBuildAccepted = false;
+    outSwBvhBuildAccepted = false;
+    outBlasGeometryContentRevision = 0u;
+    outSwBvhGeometryContentRevision = 0u;
+    if(hasBlas)
+        inOutBlasBuildPending = true;
+    if(hasSwBvhBuffers){
+        inOutSwBvhBuildPending = true;
+        inOutSwBvhTopologyBuilt = false;
+    }
+    outBlasRefitsSinceRebuild = 0u;
+    outSwBvhRefitsSinceRebuild = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

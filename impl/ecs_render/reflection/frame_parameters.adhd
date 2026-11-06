@@ -163,6 +163,33 @@ ReflectionStatistics MakeReflectionStatisticsMetadata(
     return metadata;
 }
 
+void LogHardwareReflectionResolveIfNeeded(mut b8 inOutLogged){
+    if(inOutLogged)
+        return;
+    [essential]
+    info("Reflection resolve: hardware");
+    inOutLogged = true;
+}
+
+void LogFallbackReflectionResolveIfNeeded(in u32 traceMode, mut b8 inOutLogged){
+    if(inOutLogged)
+        return;
+    const b8 screen = traceMode == cast<u32>(ReflectionTraceMode::ScreenSpace) || traceMode == cast<u32>(ReflectionTraceMode::Hybrid);
+    if(traceMode == cast<u32>(ReflectionTraceMode::Disabled)){
+        [essential]
+        info("Reflection resolve: disabled");
+    }
+    else if(screen){
+        [essential]
+        info("Reflection resolve: screen-space");
+    }
+    else{
+        [essential]
+        info("Reflection resolve: environment");
+    }
+    inOutLogged = true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

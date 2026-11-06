@@ -246,6 +246,20 @@ void LogCreatedRefractionResolvePipeline(in b8 hardware, in b8 dense){
     );
 }
 
+void LogAcceptedRefractionResolveIfNeeded(in b8 usedHardware, mut b8 inOutLogged){
+    if(inOutLogged)
+        return;
+    StringView routeLabel = "screen-space";
+    if(usedHardware)
+        routeLabel = "hardware";
+    [essential]
+    info(
+        "AVBOIT refraction resolve: {}"
+        , routeLabel
+    );
+    inOutLogged = true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

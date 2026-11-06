@@ -89,10 +89,8 @@ void RefractionResolveGraphTask::Accepted(Payload& payload, const Core::QueueSub
     if(usedHardware)
         payload.system.confirmRayTraceContextReadSubmission(token);
     b8* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
-    if(dispatchLogged && !*dispatchLogged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AVBOIT refraction resolve: {}"), usedHardware ? NWB_TEXT("hardware") : NWB_TEXT("screen-space"));
-        *dispatchLogged = true;
-    }
+    if(dispatchLogged)
+        LogAcceptedRefractionResolveIfNeeded(usedHardware, *dispatchLogged);
 }
 
 

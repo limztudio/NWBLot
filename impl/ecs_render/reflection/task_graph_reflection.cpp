@@ -41,13 +41,6 @@ namespace __hidden_task_graph_reflection{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_DisabledReflectionRoute = NWB_TEXT("disabled");
-inline constexpr TStringView s_HardwareReflectionResolveLogMessage = NWB_TEXT("Reflection resolve: hardware");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct UploadParametersTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
 
@@ -143,21 +136,12 @@ public:
         if(payload.stage == DispatchStage::Hardware && hardware && payload.resources.scene.csgTraceContextBuffer)
             payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
         if(payload.stage == DispatchStage::Hardware && hardware){
-            if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
-                NWB_LOGGER_ESSENTIAL_INFO(s_HardwareReflectionResolveLogMessage);
-                *payload.hardwareDispatchLogged = true;
-            }
+            if(payload.hardwareDispatchLogged)
+                LogHardwareReflectionResolveIfNeeded(*payload.hardwareDispatchLogged);
         }
         else if(payload.stage == DispatchStage::Classify && !hardware){
-            if(payload.fallbackDispatchLogged && !*payload.fallbackDispatchLogged){
-                const u32 mode = payload.resources.parameters.traceMode;
-                const b8 screen = mode == NWB_REFLECTION_MODE_SCREEN || mode == NWB_REFLECTION_MODE_HYBRID;
-                TStringView route = screen ? NWB_TEXT("screen-space") : NWB_TEXT("environment");
-                if(mode == NWB_REFLECTION_MODE_DISABLED)
-                    route = s_DisabledReflectionRoute;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: {}"), route);
-                *payload.fallbackDispatchLogged = true;
-            }
+            if(payload.fallbackDispatchLogged)
+                LogFallbackReflectionResolveIfNeeded(payload.resources.parameters.traceMode, *payload.fallbackDispatchLogged);
         }
     }
 
@@ -221,10 +205,8 @@ public:
             NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing end"));
             payload.dispatch->timing->discard();
         }
-        if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
-            NWB_LOGGER_ESSENTIAL_INFO(s_HardwareReflectionResolveLogMessage);
-            *payload.hardwareDispatchLogged = true;
-        }
+        if(payload.hardwareDispatchLogged)
+            LogHardwareReflectionResolveIfNeeded(*payload.hardwareDispatchLogged);
     }
 
     static void Discarded(Payload& payload)noexcept{

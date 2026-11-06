@@ -271,6 +271,16 @@ b8 TryComputeOpticalWorldBounds(
 const usize s_RayTracingOpticalSceneHeaderBytes = 32u;
 const usize s_RayTracingOpticalInstanceBytes = 16u;
 
+b8 ComputeRayTracingOpticalSceneByteSize(in usize instanceCount, mut usize outInstanceBytes, mut usize outByteCount){
+    if(instanceCount > (cast<usize>(u32.max) - s_RayTracingOpticalSceneHeaderBytes) / s_RayTracingOpticalInstanceBytes){
+        error("Ray optical scene: instance table exceeds the shader address range");
+        return false;
+    }
+    outInstanceBytes = instanceCount * s_RayTracingOpticalInstanceBytes;
+    outByteCount = s_RayTracingOpticalSceneHeaderBytes + outInstanceBytes;
+    return true;
+}
+
 void SerializeRayTracingOpticalSceneGatherBytes(
     in RayTracingOpticalSceneHeaderGpu header,
     in Span<RayTracingOpticalInstanceGpu> instances,

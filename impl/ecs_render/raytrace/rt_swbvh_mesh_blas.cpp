@@ -55,13 +55,18 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         m_blasLedgerRefits = refits;
         m_blasLedgerRebuilds = rebuilds;
         m_blasLedgerUploadedBytes = uploadedBytes;
-        if(build.firstBuild)
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)"), ConvertString(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.vertexCount), static_cast<u64>(build.indexCount));
+        LogConfirmedMeshBlasFirstBuildIfNeeded(build.firstBuild, build.meshName, build.runtimeMesh, build.vertexCount, build.indexCount);
     }
     // A replacement after recording never joins the accepted cache. Force a future TLAS rebuild, not a retired hash.
-    if(!allPlansCurrent)
-        m_rayTracingState.m_tlasStaticSceneHashValid = false;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}"), m_blasLedgerStaticSkipped, m_blasLedgerFirstBuilds, m_blasLedgerRefits, m_blasLedgerRebuilds, m_blasLedgerUploadedBytes);
+    FinalizeConfirmedMeshBlasBuilds(
+        allPlansCurrent,
+        m_blasLedgerStaticSkipped,
+        m_blasLedgerFirstBuilds,
+        m_blasLedgerRefits,
+        m_blasLedgerRebuilds,
+        m_blasLedgerUploadedBytes,
+        m_rayTracingState.m_tlasStaticSceneHashValid
+    );
     clearPreparedMeshBlasBuilds();
 }
 

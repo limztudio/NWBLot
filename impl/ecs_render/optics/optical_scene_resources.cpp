@@ -39,12 +39,10 @@ b8 RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& 
     m_prepared = false;
     m_runtimeBoundsRequired = !gather.runtimeBounds.empty();
     m_runtimeBoundsSnapshot.reset();
-    if(gather.instances.size() > (Limit<u32>::s_Max - sizeof(gather.header)) / sizeof(RayTracingOpticalInstanceGpu)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: instance table exceeds the shader address range"));
+    usize instanceBytes = 0u;
+    usize byteCount = 0u;
+    if(!ComputeRayTracingOpticalSceneByteSize(gather.instances.size(), instanceBytes, byteCount))
         return false;
-    }
-    const usize instanceBytes = gather.instances.size() * sizeof(RayTracingOpticalInstanceGpu);
-    const usize byteCount = sizeof(gather.header) + instanceBytes;
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){

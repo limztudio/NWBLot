@@ -451,5 +451,60 @@ void LogRayTracingCapabilityIfNeeded(
     );
 }
 
+void LogConfirmedMeshBlasFirstBuildIfNeeded(
+    in b8 firstBuild,
+    in Name meshName,
+    in b8 runtimeMesh,
+    in u32 vertexCount,
+    in u32 indexCount
+){
+    if(!firstBuild)
+        return;
+    info(
+        "RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)"
+        , meshName.resolvedText()
+        , runtimeMesh
+        , cast<u64>(vertexCount)
+        , cast<u64>(indexCount)
+    );
+}
+
+void FinalizeConfirmedMeshBlasBuilds(
+    in b8 allPlansCurrent,
+    in u64 staticSkipped,
+    in u64 firstBuilds,
+    in u64 refits,
+    in u64 rebuilds,
+    in u64 uploadedBytes,
+    mut b8 inOutTlasStaticSceneHashValid
+){
+    if(!allPlansCurrent)
+        inOutTlasStaticSceneHashValid = false;
+    info(
+        "RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}"
+        , staticSkipped
+        , firstBuilds
+        , refits
+        , rebuilds
+        , uploadedBytes
+    );
+}
+
+void LogConfirmedMeshSwBvhFirstBuildIfNeeded(
+    in b8 firstBuild,
+    in Name meshName,
+    in b8 runtimeMesh,
+    in u32 primitiveCount
+){
+    if(!firstBuild)
+        return;
+    info(
+        "RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"
+        , meshName.resolvedText()
+        , runtimeMesh
+        , cast<u64>(primitiveCount)
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

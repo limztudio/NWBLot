@@ -71,8 +71,7 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
             allPlansCurrent = false;
             continue;
         }
-        if(build.firstBuild)
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)"), ConvertString(build.meshName.resolvedText()), build.runtimeMesh, static_cast<u64>(build.primitiveCount));
+        LogConfirmedMeshSwBvhFirstBuildIfNeeded(build.firstBuild, build.meshName, build.runtimeMesh, build.primitiveCount);
     }
     if(!allPlansCurrent)
         m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;

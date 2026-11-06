@@ -352,13 +352,13 @@ void LogCausticProducerDispatchIfNeeded(
     inOutDispatchLogged = true;
     [essential]
     info(
-        "RendererSystem: dispatched {} caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)",
-        routeLabel,
-        cast<u64>(photonBudget.photonsPerFrame),
-        cast<u64>(temporalPhaseCount),
-        cast<u64>(photonBudget.fullGridCount),
-        cast<u64>(causticLightCount),
-        cast<u64>(causticRefractiveInstanceCount)
+        "RendererSystem: dispatched {} caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)"
+        , routeLabel
+        , cast<u64>(photonBudget.photonsPerFrame)
+        , cast<u64>(temporalPhaseCount)
+        , cast<u64>(photonBudget.fullGridCount)
+        , cast<u64>(causticLightCount)
+        , cast<u64>(causticRefractiveInstanceCount)
     );
 }
 

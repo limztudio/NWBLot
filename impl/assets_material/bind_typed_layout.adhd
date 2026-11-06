@@ -194,12 +194,12 @@ Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
     const MaterialLayoutFieldType defaultFieldType = MaterialLayoutFieldTypeFromParameterType(cast<MaterialParameterValueType>(defaultParameter.value().meta.z), defaultParameter.value().meta.w);
     if(defaultFieldType != fieldType){
         error(
-            "Material bind typed layout: default '{}' for '{}.{}' in '{}' does not match field type '{}'",
-            defaultArgument,
-            instanceName,
-            fieldName,
-            materialName.resolvedText(),
-            fieldTypeText
+            "Material bind typed layout: default '{}' for '{}.{}' in '{}' does not match field type '{}'"
+            , defaultArgument
+            , instanceName
+            , fieldName
+            , materialName.resolvedText()
+            , fieldTypeText
         );
         return makeUnexpected(Failure());
     }
@@ -294,10 +294,10 @@ b8 ApplyMaterialBindTypedLayoutParameterValueToStorage(
 ){
     if(!parameterLookup.contains(parameterName)){
         error(
-            "Material bind typed layout: typed parameter '{}' is not declared by interface '{}' for '{}'",
-            parameterName.view(),
-            interfacePath,
-            materialName.resolvedText()
+            "Material bind typed layout: typed parameter '{}' is not declared by interface '{}' for '{}'"
+            , parameterName.view()
+            , interfacePath
+            , materialName.resolvedText()
         );
         return false;
     }
@@ -392,11 +392,11 @@ b8 TryInsertMaterialBindTypedLayoutParameterLookupEntry(
     }
     if(field.offset > u32.max - blockEntry.byteBegin){
         error(
-            "Material bind typed layout: interface '{}' field '{}.{}' byte offset exceeds u32 for '{}'",
-            interfacePath,
-            structName,
-            fieldName,
-            contextLabel
+            "Material bind typed layout: interface '{}' field '{}.{}' byte offset exceeds u32 for '{}'"
+            , interfacePath
+            , structName
+            , fieldName
+            , contextLabel
         );
         return false;
     }
@@ -437,12 +437,12 @@ b8 TryAppendMaterialBindTypedLayoutField(
     const Expected<MaterialLayoutFieldType> fieldTypeResult = TryParseMaterialLayoutFieldTypeText(fieldTypeText);
     if(!fieldTypeResult.has_value()){
         error(
-            "Material bind typed layout: interface '{}' field '{}.{}' has unsupported type '{}' for '{}'",
-            interfacePath,
-            instanceName,
-            fieldName,
-            fieldTypeText,
-            contextName.resolvedText()
+            "Material bind typed layout: interface '{}' field '{}.{}' has unsupported type '{}' for '{}'"
+            , interfacePath
+            , instanceName
+            , fieldName
+            , fieldTypeText
+            , contextName.resolvedText()
         );
         return false;
     }
@@ -463,11 +463,11 @@ b8 TryAppendMaterialBindTypedLayoutField(
     const Expected<Name> parsedFieldName = TryParseMaterialBindName(fieldName);
     if(!parsedFieldName.has_value()){
         error(
-            "Material bind typed layout: interface '{}' has invalid field '{}.{}' for '{}'",
-            interfacePath,
-            instanceName,
-            fieldName,
-            contextName.resolvedText()
+            "Material bind typed layout: interface '{}' has invalid field '{}.{}' for '{}'"
+            , interfacePath
+            , instanceName
+            , fieldName
+            , contextName.resolvedText()
         );
         return false;
     }
@@ -487,11 +487,11 @@ b8 TryAppendMaterialBindTypedLayoutField(
     field.defaultValue = defaultValue.value();
     if(cast<usize>(field.offset) > usize.max - blockByteBegin){
         error(
-            "Material bind typed layout: interface '{}' field '{}.{}' could not append alignment padding for '{}'",
-            interfacePath,
-            instanceName,
-            fieldName,
-            contextName.resolvedText()
+            "Material bind typed layout: interface '{}' field '{}.{}' could not append alignment padding for '{}'"
+            , interfacePath
+            , instanceName
+            , fieldName
+            , contextName.resolvedText()
         );
         return false;
     }

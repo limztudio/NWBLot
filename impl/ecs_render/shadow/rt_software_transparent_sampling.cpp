@@ -62,10 +62,7 @@ u32 RendererRayTracingSystem::transparentShadowSampleCount()const noexcept{
 }
 
 void RendererRayTracingSystem::reportTransparentShadowSampling(const u32 sampleCount){
-    if(sampleCount != 1u || m_temporalOneShadowSamplingLogged)
-        return;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: recorded temporal-one transparent shadow sampling samples={} hardware={}"), sampleCount, hardwareTransparentShadowReady() ? 1u : 0u);
-    m_temporalOneShadowSamplingLogged = true;
+    LogTransparentShadowSamplingIfNeeded(sampleCount, hardwareTransparentShadowReady(), m_temporalOneShadowSamplingLogged);
 }
 
 

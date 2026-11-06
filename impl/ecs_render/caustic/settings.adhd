@@ -339,6 +339,29 @@ void CaptureCausticEmissionTargetsBytes(
     outRefractiveInstanceCount = cast<u32>(targets.size());
 }
 
+void LogCausticProducerDispatchIfNeeded(
+    in StringView routeLabel,
+    in CausticPhotonBudget photonBudget,
+    in u32 temporalPhaseCount,
+    in u32 causticLightCount,
+    in u32 causticRefractiveInstanceCount,
+    mut b8 inOutDispatchLogged
+){
+    if(inOutDispatchLogged)
+        return;
+    inOutDispatchLogged = true;
+    [essential]
+    info(
+        "RendererSystem: dispatched {} caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)",
+        routeLabel,
+        cast<u64>(photonBudget.photonsPerFrame),
+        cast<u64>(temporalPhaseCount),
+        cast<u64>(photonBudget.fullGridCount),
+        cast<u64>(causticLightCount),
+        cast<u64>(causticRefractiveInstanceCount)
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

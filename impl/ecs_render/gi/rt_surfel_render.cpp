@@ -220,10 +220,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
             commandList.dispatch(DivideUp(resolveSize.width, groupSize), DivideUp(resolveSize.height, groupSize), 1u);
             if(commandList.commandRecordingFailed())
                 return false;
-            if(!m_rayTracingState.m_surfelResolveDispatchLogged){
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})"), targets.surfelResolveFactor, targets.width, targets.height, resolveSize.width, resolveSize.height);
-                m_rayTracingState.m_surfelResolveDispatchLogged = true;
-            }
+            LogSurfelGiResolveDispatchIfNeeded(targets.surfelResolveFactor, targets.width, targets.height, resolveSize, m_rayTracingState.m_surfelResolveDispatchLogged);
         }
     }
 

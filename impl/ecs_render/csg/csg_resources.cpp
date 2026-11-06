@@ -34,17 +34,14 @@ namespace __hidden_csg_resources{
         return true;
     if(buffer && inOutCapacity >= requiredCount)
         return true;
-    NWB_ASSERT(elementByteSize != 0u);
-    if(requiredCount > Limit<usize>::s_Max / elementByteSize)
-        return false;
-
-    const usize capacity = ::NextGrowingCapacity(inOutCapacity, requiredCount);
-    if(capacity > Limit<usize>::s_Max / elementByteSize)
+    usize capacity = 0u;
+    u64 byteSize = 0u;
+    if(!ResolveCsgStructuredBufferCapacity(inOutCapacity, requiredCount, elementByteSize, capacity, byteSize))
         return false;
 
     Core::BufferDesc bufferDesc;
     bufferDesc
-        .setByteSize(static_cast<u64>(capacity * elementByteSize))
+        .setByteSize(byteSize)
         .setStructStride(static_cast<u32>(elementByteSize))
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(debugName)

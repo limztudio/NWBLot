@@ -118,19 +118,11 @@ void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(const Core::
 }
 
 b8 RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
-    if(!m_rayTracingState.m_surfelResourcesNeedClear)
-        return false;
-
-    m_rayTracingState.m_surfelResourcesClearPending = true;
-    return true;
+    return BeginSurfelResourceInitializationLifecycle(m_rayTracingState.m_surfelResourcesNeedClear, m_rayTracingState.m_surfelResourcesClearPending);
 }
 
 void RendererRayTracingSystem::finalizeSurfelResourceInitialization()noexcept{
-    if(!m_rayTracingState.m_surfelResourcesClearPending)
-        return;
-
-    m_rayTracingState.m_surfelResourcesClearPending = false;
-    m_rayTracingState.m_surfelResourcesNeedClear = false;
+    FinalizeSurfelResourceInitializationLifecycle(m_rayTracingState.m_surfelResourcesClearPending, m_rayTracingState.m_surfelResourcesNeedClear);
 }
 
 b8 RendererRayTracingSystem::ensureSurfelResources(){

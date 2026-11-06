@@ -78,6 +78,21 @@ b8 SameShadowQualitySettings(in ShadowQualitySettings first, in ShadowQualitySet
     return first.transparentSampling == second.transparentSampling && first.receiverResolution == second.receiverResolution;
 }
 
+void LogTransparentShadowSamplingIfNeeded(
+    in u32 sampleCount,
+    in b8 hardwareReady,
+    mut b8 inOutLogged
+){
+    if(sampleCount != 1u || inOutLogged)
+        return;
+    u32 hardwareFlag = 0u;
+    if(hardwareReady)
+        hardwareFlag = 1u;
+    [essential]
+    info("RendererSystem: recorded temporal-one transparent shadow sampling samples={} hardware={}", sampleCount, hardwareFlag);
+    inOutLogged = true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

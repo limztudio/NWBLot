@@ -163,6 +163,46 @@ class CsgFrameStateCacheSignature{
     public u64 shapeRegistryRevision = 0u;
 }
 
+b8 ResolveCsgStructuredBufferCapacity(
+    in usize currentCapacity,
+    in usize requiredCount,
+    in usize elementByteSize,
+    mut usize outCapacity,
+    mut u64 outByteSize
+){
+    assert(elementByteSize != 0u);
+    if(requiredCount > usize.max / elementByteSize)
+        return false;
+    const usize capacity = NextGrowingCapacity(currentCapacity, requiredCount);
+    if(capacity > usize.max / elementByteSize)
+        return false;
+    outCapacity = capacity;
+    outByteSize = cast<u64>(capacity * elementByteSize);
+    return true;
+}
+
+b8 ResolveCsgTraceContextBufferCapacity(
+    in b8 heapInitialized,
+    in usize byteCount,
+    in u64 maxStorageBufferRange,
+    in b8 hasExistingBuffer,
+    in u64 previousCapacity,
+    mut u64 outCapacity
+){
+    const u64 maximumCapacity = min(maxStorageBufferRange, cast<u64>(u32.max));
+    if(!heapInitialized || byteCount == 0u || cast<u64>(byteCount) > maximumCapacity){
+        error("RendererSystem: current CSG ray context exceeds storage capacity");
+        return false;
+    }
+    u64 capacity = cast<u64>(byteCount);
+    if(hasExistingBuffer){
+        const u64 growth = min(previousCapacity / 2u, maximumCapacity - previousCapacity);
+        capacity = max(capacity, previousCapacity + growth);
+    }
+    outCapacity = capacity;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

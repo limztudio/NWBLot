@@ -95,23 +95,20 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const usize byteCount = m_lightSpaceShadow.m_csg.bytes.size();
-    const u64 maximumCapacity = Min<u64>(device.getMaxStorageBufferRange(), Limit<u32>::s_Max);
-    if(!heap.isInitialized() || byteCount == 0u || byteCount > maximumCapacity){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: current CSG ray context exceeds storage capacity"));
-        return false;
-    }
-
     auto& buffer = m_rayTracingState.m_csgTraceContextBuffer;
     auto& handle = m_rayTracingState.m_csgTraceContextHeapHandle;
+    u64 capacity = 0u;
+    if(!ResolveCsgTraceContextBufferCapacity(
+        heap.isInitialized(),
+        byteCount,
+        device.getMaxStorageBufferRange(),
+        static_cast<b8>(buffer),
+        buffer ? buffer->getCreationDescription().byteSize : 0u,
+        capacity
+    ))
+        return false;
     if(buffer && buffer->getCreationDescription().byteSize >= byteCount)
         return RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, *buffer, handle);
-
-    u64 capacity = byteCount;
-    if(buffer){
-        const u64 previousCapacity = buffer->getCreationDescription().byteSize;
-        const u64 growth = Min<u64>(previousCapacity / 2u, maximumCapacity - previousCapacity);
-        capacity = Max<u64>(capacity, previousCapacity + growth);
-    }
     Core::BufferDesc desc;
     desc.setByteSize(capacity).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name("raytrace_csg_context")).enableAutomaticStateTracking(Core::ResourceStates::Common);
     auto replacementResult = m_graphics.createBuffer(desc);

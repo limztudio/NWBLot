@@ -56,7 +56,7 @@ static void RecordCausticPhotonPass(
     const RendererRayTracingState& state,
     const CausticPhotonBudget& photonBudget,
     const u32 temporalPhaseCount,
-    const tchar* const routeLabel,
+    const AStringView routeLabel,
     Core::CommandList& commandList,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming,
     b8& dispatchLogged,
@@ -73,17 +73,14 @@ static void RecordCausticPhotonPass(
         recordPhotons();
     }
 
-    if(!dispatchLogged){
-        dispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched {} caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
-            , routeLabel
-            , static_cast<u64>(photonBudget.photonsPerFrame)
-            , static_cast<u64>(temporalPhaseCount)
-            , static_cast<u64>(photonBudget.fullGridCount)
-            , static_cast<u64>(state.m_causticLightCount)
-            , static_cast<u64>(state.m_causticRefractiveInstanceCount)
-        );
-    }
+    LogCausticProducerDispatchIfNeeded(
+        routeLabel,
+        photonBudget,
+        temporalPhaseCount,
+        state.m_causticLightCount,
+        state.m_causticRefractiveInstanceCount,
+        dispatchLogged
+    );
 }
 
 
@@ -113,7 +110,7 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList
         m_rayTracingState,
         photonBudget,
         temporalPhaseCount,
-        NWB_TEXT("software"),
+        "software",
         commandList,
         causticPhotonTiming,
         m_rayTracingState.m_swCausticDispatchLogged,
@@ -164,7 +161,7 @@ b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, co
         m_rayTracingState,
         photonBudget,
         temporalPhaseCount,
-        NWB_TEXT("hardware"),
+        "hardware",
         commandList,
         causticPhotonTiming,
         m_rayTracingState.m_hwCausticDispatchLogged,

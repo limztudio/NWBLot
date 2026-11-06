@@ -141,6 +141,40 @@ SurfelHeapPushConstants MakeSurfelHeapPushConstants(
     return push;
 }
 
+void LogSurfelGiResolveDispatchIfNeeded(
+    in u32 resolveFactor,
+    in u32 sourceWidth,
+    in u32 sourceHeight,
+    in SurfelGiResolveSize resolveSize,
+    mut b8 inOutLogged
+){
+    if(inOutLogged)
+        return;
+    [essential]
+    info("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})", resolveFactor, sourceWidth, sourceHeight, resolveSize.width, resolveSize.height);
+    inOutLogged = true;
+}
+
+b8 BeginSurfelResourceInitializationLifecycle(
+    in b8 surfelResourcesNeedClear,
+    mut b8 outSurfelResourcesClearPending
+){
+    if(!surfelResourcesNeedClear)
+        return false;
+    outSurfelResourcesClearPending = true;
+    return true;
+}
+
+void FinalizeSurfelResourceInitializationLifecycle(
+    mut b8 inOutSurfelResourcesClearPending,
+    mut b8 inOutSurfelResourcesNeedClear
+){
+    if(!inOutSurfelResourcesClearPending)
+        return;
+    inOutSurfelResourcesClearPending = false;
+    inOutSurfelResourcesNeedClear = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

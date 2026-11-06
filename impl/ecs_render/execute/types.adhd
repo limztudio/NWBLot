@@ -61,6 +61,39 @@ class OpaqueEmulationMergeValidationResult{
     public b8 csgIntervalClearBundleMerged = false;
 }
 
+void ReportLaggedLightingTransitionIfNeeded(
+    in LaggedLightingReport report,
+    in u64 targetGeneration,
+    mut LaggedLightingReport inOutLastReport,
+    mut u64 inOutLastGeneration
+){
+    if(inOutLastReport == report && inOutLastGeneration == targetGeneration)
+        return;
+
+    inOutLastReport = report;
+    inOutLastGeneration = targetGeneration;
+    switch(report){
+    case LaggedLightingReport::Unreported:
+        break;
+    case LaggedLightingReport::NoDedicatedAsyncCompute:
+        [essential]
+        info("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation {})", targetGeneration);
+        break;
+    case LaggedLightingReport::BootstrapAccepted:
+        [essential]
+        info("RendererSystem: frame-lagged async lighting bootstrap accepted (target generation {})", targetGeneration);
+        break;
+    case LaggedLightingReport::ActiveHistoryAccepted:
+        [essential]
+        info("RendererSystem: frame-lagged async lighting active history accepted (target generation {})", targetGeneration);
+        break;
+    case LaggedLightingReport::CurrentFrameAccepted:
+        [essential]
+        info("RendererSystem: frame-lagged async lighting current-frame path accepted (target generation {})", targetGeneration);
+        break;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

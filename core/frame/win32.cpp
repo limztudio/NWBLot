@@ -347,6 +347,21 @@ b8 Frame::init(){
         }
     }
 
+    RECT clientRect = {};
+    if(!GetClientRect(hwnd, &clientRect)){
+        const DWORD nativeError = GetLastError();
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
+        return false;
+    }
+    const i32 clientWidth = clientRect.right - clientRect.left;
+    const i32 clientHeight = clientRect.bottom - clientRect.top;
+    if(clientWidth <= 0 || clientHeight <= 0){
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 client rectangle dimensions are invalid: {}x{}"), clientWidth, clientHeight);
+        return false;
+    }
+    frameData.width() = static_cast<u16>(Min<u32>(static_cast<u32>(clientWidth), s_MaxU16));
+    frameData.height() = static_cast<u16>(Min<u32>(static_cast<u32>(clientHeight), s_MaxU16));
+
     if(!startup())
         return false;
 

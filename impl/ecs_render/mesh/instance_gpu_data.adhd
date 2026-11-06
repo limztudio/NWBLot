@@ -382,6 +382,42 @@ void ResetMeshRayTracingBuildState(
     outSwBvhRefitsSinceRebuild = 0u;
 }
 
+void FinalizeMeshShadowTraceIndexBuildState(
+    in Name meshPath,
+    in usize triangleIndexCount,
+    in u32 expectedPrimitiveIndexCount,
+    in b8 rtSupported,
+    in b8 swShadow,
+    mut b8 outBlasBuildPending,
+    mut b8 outSwBvhBuildPending
+){
+    info(
+        "RendererSystem: mesh '{}' shadow trace index buffer ready ({} indices, expected {})"
+        , meshPath.resolvedText()
+        , cast<u64>(triangleIndexCount)
+        , cast<u64>(expectedPrimitiveIndexCount)
+    );
+    outBlasBuildPending = rtSupported;
+    // Keep software geometry pending until a software preparation route accepts its build.
+    outSwBvhBuildPending = swShadow || rtSupported;
+}
+
+b8 ValidateRuntimeMeshPrimitiveIndexCount(
+    in Name meshName,
+    in u32 primitiveIndexCount,
+    in u32 triangleIndexCount
+){
+    if(triangleIndexCount == 0u || (primitiveIndexCount % triangleIndexCount) != 0u){
+        error(
+            "RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles"
+            , meshName.resolvedText()
+            , primitiveIndexCount
+        );
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

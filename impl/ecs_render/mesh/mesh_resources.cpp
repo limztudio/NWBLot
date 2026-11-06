@@ -291,16 +291,15 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         }
 
         createdMesh.triangleIndexBuffer = Move(*indexBuffer);
-
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: mesh '{}' shadow trace index buffer ready ({} indices, expected {})")
-            , ConvertString(meshPath.resolvedText())
-            , static_cast<u64>(triangleIndices->size())
-            , static_cast<u64>(createdMesh.meshletPrimitiveIndexCount)
+        FinalizeMeshShadowTraceIndexBuildState(
+            meshPath,
+            triangleIndices->size(),
+            createdMesh.meshletPrimitiveIndexCount,
+            rtSupported,
+            swShadow,
+            createdMesh.blasBuildPending,
+            createdMesh.swBvhBuildPending
         );
-
-        createdMesh.blasBuildPending = rtSupported;
-        // Keep software geometry pending until a software preparation route accepts its build.
-        createdMesh.swBvhBuildPending = swShadow || rtSupported;
     }
 
     // Flat per-corner trace attributes in lockstep with the index buffer; always carries a raw view.
@@ -407,10 +406,8 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createRuntimeMeshResources
     createdMesh.runtimeMeshVersion = desc.version;
     NWB_ASSERT(desc.localBounds.valid());
     __hidden_mesh_resources::RefreshRuntimeMeshContent(createdMesh, desc);
-    if((createdMesh.meshletPrimitiveIndexCount % s_MeshletTriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles"), ConvertString(createdMesh.meshName.resolvedText()), createdMesh.meshletPrimitiveIndexCount);
+    if(!ValidateRuntimeMeshPrimitiveIndexCount(createdMesh.meshName, createdMesh.meshletPrimitiveIndexCount, s_MeshletTriangleIndexCount))
         return MakeUnexpected(Failure{});
-    }
     if(!__hidden_mesh_resources::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, s_MeshletPrimitiveIndexBufferLabel))
         return MakeUnexpected(Failure{});
     NWB_ASSERT(createdMesh.valid());

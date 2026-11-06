@@ -313,9 +313,11 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         // Retire the old heap block before replacing the TLAS generation.
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
         m_rayTracingState.m_tlas = Move(tlas);
-        m_rayTracingState.m_tlasBackingFresh = true;
-        m_rayTracingState.m_tlasMaxInstances = capacity;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)"), static_cast<u64>(capacity));
+        InitializeCreatedSceneTlasState(
+            capacity,
+            m_rayTracingState.m_tlasBackingFresh,
+            m_rayTracingState.m_tlasMaxInstances
+        );
     }
 
     // Allocate a heap block only for a new TLAS generation.

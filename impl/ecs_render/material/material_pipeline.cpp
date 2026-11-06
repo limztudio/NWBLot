@@ -372,29 +372,7 @@ void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialK
         it.value() = renderPath;
     }
 
-    switch(renderPath){
-    case RenderPath::MeshShader:{
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected MeshShader + PS on this device"), ConvertString(materialKey.resolvedText()));
-        break;
-    }
-    case RenderPath::VertexIndexed:{
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected VertexIndexed + PS from persistent object-space geometry"), ConvertString(materialKey.resolvedText()));
-        break;
-    }
-    case RenderPath::ComputeEmulation:{
-        if(!meshSupported){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because native mesh shaders are unavailable in the current graphics configuration")
-                , ConvertString(materialKey.resolvedText())
-            );
-        }
-        else
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected CS + PS through compute emulation"), ConvertString(materialKey.resolvedText()));
-        break;
-    }
-    default:{
-        break;
-    }
-    }
+    LogMaterialRenderPathDecision(materialKey, renderPath, meshSupported);
 }
 
 

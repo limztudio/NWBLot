@@ -292,6 +292,25 @@ b8 IsLightSpaceDiagnosticIntervalDue(in u32 frameIndex, in u32 acceptedFrame){
     return acceptedFrame == 0u || (frameIndex - acceptedFrame) >= s_LightSpaceDiagnosticInterval;
 }
 
+void ApplySoftwareShadowSettingsChange(
+    in SoftwareShadowSettings settings,
+    mut SoftwareShadowSettings outSettings,
+    mut LightSpaceCaptureHistory outCaptureHistory,
+    mut b8 outCaptureReuseLogged,
+    mut b8 outSnapshotReady,
+    mut b8 outResourcesPrepared,
+    mut b8 outDispatchLogged,
+    mut b8 outSoftShadowTemporalSeeded
+){
+    outSettings = settings;
+    outCaptureHistory.invalidate();
+    outCaptureReuseLogged = false;
+    outSnapshotReady = false;
+    outResourcesPrepared = false;
+    outDispatchLogged = false;
+    outSoftShadowTemporalSeeded = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

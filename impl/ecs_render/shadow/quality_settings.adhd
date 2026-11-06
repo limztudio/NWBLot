@@ -133,6 +133,39 @@ void LogCreatedShadowReceiverGrid(
     );
 }
 
+void LogSoftwareShadowTraversalDispatchIfNeeded(
+    in u32 width,
+    in u32 height,
+    in u32 sceneBvhInstanceCount,
+    mut b8 inOutDispatchLogged
+){
+    if(inOutDispatchLogged)
+        return;
+    inOutDispatchLogged = true;
+    [essential]
+    info(
+        "RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)"
+        , cast<u64>(width)
+        , cast<u64>(height)
+        , cast<u64>(sceneBvhInstanceCount)
+    );
+}
+
+void ApplyShadowQualitySettingsChange(
+    in ShadowQualitySettings settings,
+    mut ShadowQualitySettings outSettings,
+    mut b8 outTemporalOneShadowSamplingLogged,
+    mut TransparentShadowSamplingHistory outTransparentShadowSamplingHistory,
+    mut b8 outSoftShadowTemporalSeeded,
+    mut b8 outSoftShadowTemporalHistoryAdvancePending
+){
+    outSettings = settings;
+    outTemporalOneShadowSamplingLogged = false;
+    outTransparentShadowSamplingHistory.reset();
+    outSoftShadowTemporalSeeded = false;
+    outSoftShadowTemporalHistoryAdvancePending = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

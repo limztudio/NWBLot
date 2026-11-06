@@ -326,5 +326,55 @@ MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(
     return selection;
 }
 
+void LogMaterialRenderPathDecision(in Name materialKey, in RenderPath renderPath, in b8 meshSupported){
+    switch(renderPath){
+    case RenderPath::MeshShader:
+        [essential]
+        info(
+            "RendererSystem: material '{}' selected MeshShader + PS on this device"
+            , materialKey.resolvedText()
+        );
+        break;
+    case RenderPath::VertexIndexed:
+        [essential]
+        info(
+            "RendererSystem: material '{}' selected VertexIndexed + PS from persistent object-space geometry"
+            , materialKey.resolvedText()
+        );
+        break;
+    case RenderPath::ComputeEmulation:
+        if(!meshSupported){
+            [essential]
+            info(
+                "RendererSystem: material '{}' selected CS + PS by compiling its mesh shader for compute emulation because native mesh shaders are unavailable in the current graphics configuration"
+                , materialKey.resolvedText()
+            );
+        }
+        else{
+            [essential]
+            info(
+                "RendererSystem: material '{}' selected CS + PS through compute emulation"
+                , materialKey.resolvedText()
+            );
+        }
+        break;
+    }
+}
+
+void LogCsgCapSurfaceDispatchUnavailableIfNeeded(
+    in b8 csgClipRequested,
+    in b8 csgCapSurfaceDispatchAvailable,
+    in Name materialName,
+    mut b8 inOutUnavailableLogged
+){
+    if(!csgClipRequested || csgCapSurfaceDispatchAvailable || inOutUnavailableLogged)
+        return;
+    warning(
+        "RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract"
+        , materialName.resolvedText()
+    );
+    inOutUnavailableLogged = true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

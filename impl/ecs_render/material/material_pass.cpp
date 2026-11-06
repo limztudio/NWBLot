@@ -338,14 +338,12 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
         const b8 csgClipRequested = csgReceiverLookupPtr && csgReceiverState.active && MaterialPipelinePassUsesRendererCsgClip(pass, transparent);
-        if(csgClipRequested && !materialInfo->csgCapSurfaceDispatchAvailable){
-            if(!materialInfo->csgCapSurfaceDispatchUnavailableLogged){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract")
-                    , ConvertString(materialInfo->materialName.resolvedText())
-                );
-                materialInfo->csgCapSurfaceDispatchUnavailableLogged = true;
-            }
-        }
+        LogCsgCapSurfaceDispatchUnavailableIfNeeded(
+            csgClipRequested,
+            materialInfo->csgCapSurfaceDispatchAvailable,
+            materialInfo->materialName,
+            materialInfo->csgCapSurfaceDispatchUnavailableLogged
+        );
         const b8 csgClipCandidate = csgClipRequested && materialInfo->csgCapSurfaceDispatchAvailable;
         const auto csgClipInfo = csgClipCandidate ? m_csgSystem.resolveCsgReceiverClipDrawInfo(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform) : Expected<CsgReceiverClipDrawInfo>(MakeUnexpected(Failure{}));
         const b8 csgClipActive = csgClipInfo && csgClipInfo->cutterCount > 0u;

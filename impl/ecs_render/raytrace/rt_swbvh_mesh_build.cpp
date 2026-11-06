@@ -121,10 +121,8 @@ b8 RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::Bu
 }
 
 b8 RendererRayTracingSystem::ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle){
-    if(primitiveCount > s_BvhMaxPrimitivesPerMesh){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped"), static_cast<u64>(primitiveCount), static_cast<u64>(s_BvhMaxPrimitivesPerMesh));
+    if(!ValidateMeshSwBvhPrimitiveCount(primitiveCount))
         return false;
-    }
 
     if(!ensureBvhSortPipeline())
         return false;

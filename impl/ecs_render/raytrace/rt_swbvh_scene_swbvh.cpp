@@ -323,10 +323,8 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
     // Topology hash includes bounds, transforms, and transparent-subtree class.
     const u64 sceneStaticHash = staticScene ? ComputeSceneSwBvhStaticSceneHash(instances, instanceBvhPrimitives) : 0u;
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
-    if(requiredNodeCount > static_cast<usize>(BvhNodeIndex::ChildIndexMask) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires {} nodes, exceeding the tagged child-index limit"), static_cast<u64>(requiredNodeCount));
+    if(!ValidateSceneSwBvhNodeCount(requiredNodeCount))
         return false;
-    }
     const b8 canReuseSceneBvh =
         staticScene
         && m_rayTracingState.m_sceneSwBvhStaticSceneHashValid

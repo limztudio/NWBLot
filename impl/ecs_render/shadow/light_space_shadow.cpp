@@ -42,13 +42,16 @@ b8 RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSetti
     auto& state = m_lightSpaceShadow;
     if(SameSoftwareShadowSettings(state.m_settings, settings))
         return true;
-    state.m_settings = settings;
-    state.m_captureHistory.invalidate();
-    state.m_captureReuseLogged = false;
-    state.m_snapshot.ready = false;
-    state.m_resourcesPrepared = false;
-    state.m_dispatchLogged = false;
-    m_rayTracingState.m_softShadowTemporalSeeded = false;
+    ApplySoftwareShadowSettingsChange(
+        settings,
+        state.m_settings,
+        state.m_captureHistory,
+        state.m_captureReuseLogged,
+        state.m_snapshot.ready,
+        state.m_resourcesPrepared,
+        state.m_dispatchLogged,
+        m_rayTracingState.m_softShadowTemporalSeeded
+    );
     m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     return true;
 }

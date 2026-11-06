@@ -506,5 +506,41 @@ void LogConfirmedMeshSwBvhFirstBuildIfNeeded(
     );
 }
 
+b8 ValidateMeshSwBvhPrimitiveCount(in u32 primitiveCount){
+    if(primitiveCount > s_BvhMaxPrimitivesPerMesh){
+        warning(
+            "RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped"
+            , cast<u64>(primitiveCount)
+            , cast<u64>(s_BvhMaxPrimitivesPerMesh)
+        );
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSceneSwBvhNodeCount(in usize requiredNodeCount){
+    if(requiredNodeCount > cast<usize>(BvhNodeIndex::ChildIndexMask) + 1u){
+        error(
+            "RendererSystem: software scene BVH requires {} nodes, exceeding the tagged child-index limit"
+            , cast<u64>(requiredNodeCount)
+        );
+        return false;
+    }
+    return true;
+}
+
+void InitializeCreatedSceneTlasState(
+    in usize capacity,
+    mut b8 outTlasBackingFresh,
+    mut usize outTlasMaxInstances
+){
+    outTlasBackingFresh = true;
+    outTlasMaxInstances = capacity;
+    info(
+        "RendererSystem: created scene TLAS (capacity {} instances)"
+        , cast<u64>(capacity)
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

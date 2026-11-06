@@ -22,11 +22,14 @@ b8 RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySetting
         return false;
     if(SameShadowQualitySettings(m_shadowQualitySettings, settings))
         return true;
-    m_shadowQualitySettings = settings;
-    m_temporalOneShadowSamplingLogged = false;
-    m_rayTracingState.m_transparentShadowSamplingHistory.reset();
-    m_rayTracingState.m_softShadowTemporalSeeded = false;
-    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
+    ApplyShadowQualitySettingsChange(
+        settings,
+        m_shadowQualitySettings,
+        m_temporalOneShadowSamplingLogged,
+        m_rayTracingState.m_transparentShadowSamplingHistory,
+        m_rayTracingState.m_softShadowTemporalSeeded,
+        m_rayTracingState.m_softShadowTemporalHistoryAdvancePending
+    );
     m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     return true;
 }

@@ -260,11 +260,12 @@ b8 RendererRayTracingSystem::renderSoftTransparentShadowFold(Core::CommandList& 
 }
 
 void RendererRayTracingSystem::reportSoftwareShadowTraversal(const DeferredFrameTargets& targets){
-    if(m_rayTracingState.m_swShadowDispatchLogged)
-        return;
-
-    m_rayTracingState.m_swShadowDispatchLogged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)"), static_cast<u64>(targets.width), static_cast<u64>(targets.height), static_cast<u64>(m_rayTracingState.m_sceneBvhInstanceCount));
+    LogSoftwareShadowTraversalDispatchIfNeeded(
+        targets.width,
+        targets.height,
+        m_rayTracingState.m_sceneBvhInstanceCount,
+        m_rayTracingState.m_swShadowDispatchLogged
+    );
 }
 
 

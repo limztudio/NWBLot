@@ -43,7 +43,10 @@ b8 ValidateSkinJointPaletteInputs(
         error("MeshSkinningSystem: runtime mesh '{}' skinning mode {} is invalid", handleValue, skinningMode);
         return false;
     }
-    assert(skeletonJointCount > 0u && skeletonJointCount <= cast<u32>(u16.max) + 1u && skinCount <= cast<usize>(u32.max));
+    if(skeletonJointCount == 0u || skeletonJointCount > cast<u32>(u16.max) + 1u || skinCount > cast<usize>(u32.max)){
+        error("MeshSkinningSystem: runtime mesh '{}' joint palette counts are invalid", handleValue);
+        return false;
+    }
     if(sourceJointCount > cast<usize>(u32.max)){
         error("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid", handleValue);
         return false;

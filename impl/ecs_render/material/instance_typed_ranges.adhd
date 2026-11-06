@@ -229,22 +229,24 @@ b8 EqualMaterialTypedByteContent(in u64 lhsByteHash, in Span<u8> lhsBytes, in u6
 
 usize ResolveMaterialTypedUploadByteCount(in Span<u8> materialTypedBytes){
     const usize uploadByteCount = materialTypedBytes.size();
-    assert(uploadByteCount != 0u, "RendererSystem: material typed data upload is empty");
-    assert((uploadByteCount & (cast<usize>(s_MaterialTypedWordBytes) - 1u)) == 0u, "RendererSystem: material typed data upload is not word-aligned");
+    if(uploadByteCount == 0u || (uploadByteCount & (cast<usize>(s_MaterialTypedWordBytes) - 1u)) != 0u){
+        error("RendererSystem: material typed data upload is empty or not word-aligned");
+        return 0u;
+    }
     return uploadByteCount;
 }
 
 void ValidateMaterialTypedUploadRange(in MaterialTypedByteRange range, in usize uploadByteCount, in StringView rangeName){
     if(range.byteCount == 0u){
-        assert(MaterialTypedByteRangeEmptyOffsetValid(range), "RendererSystem: {} material typed byte range has zero count with nonzero offset", rangeName);
+        if(!MaterialTypedByteRangeEmptyOffsetValid(range))
+            error("RendererSystem: {} material typed byte range has zero count with nonzero offset", rangeName);
         return;
     }
-
-    assert(((range.byteOffset | range.byteCount) & (s_MaterialTypedWordBytes - 1u)) == 0u, "RendererSystem: {} material typed byte range is not word-aligned", rangeName);
-
+    if(((range.byteOffset | range.byteCount) & (s_MaterialTypedWordBytes - 1u)) != 0u)
+        error("RendererSystem: {} material typed byte range is not word-aligned", rangeName);
     const usize byteOffset = cast<usize>(range.byteOffset);
-    assert(byteOffset <= uploadByteCount, "RendererSystem: {} material typed byte range offset exceeds upload data", rangeName);
-    assert(byteOffset <= uploadByteCount && cast<usize>(range.byteCount) <= uploadByteCount - byteOffset, "RendererSystem: {} material typed byte range exceeds upload data", rangeName);
+    if(byteOffset > uploadByteCount || cast<usize>(range.byteCount) > uploadByteCount - byteOffset)
+        error("RendererSystem: {} material typed byte range exceeds upload data", rangeName);
 }
 
 void ValidateMaterialTypedInstanceRange(in MaterialTypedInstanceRanges ranges, in usize uploadByteCount){
@@ -360,3 +362,4 @@ b8 IsMaterialPassDrawBuffersReady(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

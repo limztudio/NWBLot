@@ -27,7 +27,10 @@ void ReservePaintSnapshot(
 }
 
 void PushPaintClip(in b8 recording, in Rect clip, mut Vector<Rect> clips){
-    assert(recording);
+    if(!recording){
+        error("PaintSystem: paint clip pushed while recording is off");
+        return;
+    }
     const Rect parent = clips.back();
     Rect next;
     if(HasUiRectArea(parent) && HasUiRectArea(clip))
@@ -41,7 +44,10 @@ b8 PopPaintClip(
     in Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> overlays,
     mut Vector<Rect> clips
 ){
-    assert(recording);
+    if(!recording){
+        error("PaintSystem: paint clip popped while recording is off");
+        return false;
+    }
     if(clips.size() <= 1u || (overlayDepth != 0u && clips.size() <= overlays[overlayDepth - 1u].clipDepth + 1u))
         return false;
     clips.pop_back();
@@ -101,8 +107,14 @@ void EmitPaintQuad(
     mut Vector<DrawCommand> commands,
     mut b8 inOutCommandsOrdered
 ){
-    assert(recording);
-    assert(IsValidPaintColor(color));
+    if(!recording){
+        error("PaintSystem: paint quad emitted while recording is off");
+        return;
+    }
+    if(!IsValidPaintColor(color)){
+        error("PaintSystem: paint quad color is invalid");
+        return;
+    }
     if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip))
         return;
     const Rect visible = IntersectUiRectsBounds(rectangle, clip);
@@ -162,3 +174,4 @@ void EmitPaintQuad(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

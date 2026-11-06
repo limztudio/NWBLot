@@ -26,6 +26,10 @@ namespace GlobalFilesystemDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !defined(NWB_PLATFORM_WINDOWS)
+[[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAllAt(const int parentDescriptor, const NotNull<const char*> entryName)noexcept;
+#endif
+
 template<typename ArenaT>
 [[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAllImpl(const Path<ArenaT>& path){
 #if defined(NWB_PLATFORM_WINDOWS)

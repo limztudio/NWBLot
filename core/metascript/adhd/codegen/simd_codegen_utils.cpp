@@ -526,11 +526,17 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     }
 }
 
-[[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept{
+[[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB, const SymbolTable* const symbols)noexcept{
     if(!expr || expr->kind != ExprKind::Binary || expr->op != TokenType::Star || !expr->lhs || !expr->rhs)
         return false;
     const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(expr->resolvedSimdType);
     if(!vecInfo || !vecInfo->isFloatReg)
+        return false;
+    const auto isUnitOrNegUnitOperand = [&](const Expr& op)noexcept -> b8{
+        const Expr* scalar = op.resolvedSimdType.empty() ? &op : (symbols ? TryUnwrapSimdSplatScalarArg(op, *symbols) : nullptr);
+        return scalar && (IsUnitFloatLiteral(*scalar, symbols) || IsNegativeUnitFloatLiteral(*scalar, symbols));
+    };
+    if(isUnitOrNegUnitOperand(*expr->lhs) || isUnitOrNegUnitOperand(*expr->rhs))
         return false;
     outMulA = expr->lhs;
     outMulB = expr->rhs;

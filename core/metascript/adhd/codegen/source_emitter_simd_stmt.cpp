@@ -55,36 +55,45 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             out.append(" } }");
             return;
         }
-        out.append(isDouble ? "::MatrixDoubleSet(" : "::MatrixSet(");
-        const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType);
-        const u32 elemCount = (arguments.size() == 9u || arguments.size() == 12u)
-            ? static_cast<u32>(arguments.size())
-            : (matInfo ? matInfo->elemCount : 16u);
-        const b8 isSplat = (arguments.size() == 1u);
-        if(elemCount == 9u){
-            for(usize r = 0u; r < 3u; ++r){
-                for(usize c = 0u; c < 3u; ++c){
-                    if(r > 0u || c > 0u)
-                        out.append(", ");
-                    const usize argIdx = isSplat ? 0u : (r * 3u + c);
-                    if(argIdx < arguments.size() && arguments[argIdx])
-                        emitExpr(out, *arguments[argIdx]);
-                    else
-                        out.append(isDouble ? "0.0" : "0.0f");
+        if(arguments.size() == 9u || arguments.size() == 12u || arguments.size() == 16u){
+            if(arguments.size() == 16u){
+                b8 allZero = true;
+                for(const Expr* arg : arguments){
+                    if(!arg || !IsZeroScalarLiteral(*arg, &m_symbols)){
+                        allZero = false;
+                        break;
+                    }
                 }
-                out.append(isDouble ? ", 0.0" : ", 0.0f");
+                if(allZero){
+                    out.append(isDouble ? "::SIMDMatrixDouble{}" : "::SIMDMatrix{}");
+                    return;
+                }
             }
-            out.append(isDouble ? ", 0.0, 0.0, 0.0, 1.0)" : ", 0.0f, 0.0f, 0.0f, 1.0f)");
+            const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType);
+            const MStringView rowSimdType = matInfo ? matInfo->rowVectorType : (isDouble ? MStringView("VectorDouble") : MStringView("VectorSingle"));
+            const usize cols = (arguments.size() == 9u) ? 3u : 4u;
+            const usize rows = (arguments.size() == 16u) ? 4u : 3u;
+            out.append(isDouble ? "::SIMDMatrixDouble{ .v = { " : "::SIMDMatrix{ .v = { ");
+            for(usize r = 0u; r < rows; ++r){
+                if(r > 0u)
+                    out.append(", ");
+                emitSimdVectorCtorReg(out, rowSimdType, Span<const Expr* const>(arguments.data() + (r * cols), cols));
+            }
+            if(rows == 3u)
+                out.append(isDouble ? ", ::s_DoubleSIMDIdentityR3" : ", ::s_SIMDIdentityR3");
+            out.append(" } }");
             return;
         }
+        if(arguments.size() == 1u && arguments[0] && IsZeroScalarLiteral(*arguments[0], &m_symbols)){
+            out.append(isDouble ? "::SIMDMatrixDouble{}" : "::SIMDMatrix{}");
+            return;
+        }
+        out.append(isDouble ? "::MatrixDoubleSet(" : "::MatrixSet(");
         for(usize i = 0u; i < 16u; ++i){
             if(i > 0u)
                 out.append(", ");
-            const usize argIdx = isSplat ? 0u : i;
-            if(i < elemCount && argIdx < arguments.size() && arguments[argIdx])
-                emitExpr(out, *arguments[argIdx]);
-            else if(i == 15u && elemCount == 12u)
-                out.append(isDouble ? "1.0" : "1.0f");
+            if(!arguments.empty() && arguments[0])
+                emitExpr(out, *arguments[0]);
             else
                 out.append(isDouble ? "0.0" : "0.0f");
         }

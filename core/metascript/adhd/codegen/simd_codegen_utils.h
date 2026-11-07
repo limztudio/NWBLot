@@ -59,7 +59,7 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, b8 isDouble, u32 effLanes,
     u32 lane = 3u;
     return TryMapSwizzleCharToLane(c, lane) ? lane : 3u;
 }
-[[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept;
+[[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB, const SymbolTable* symbols = nullptr)noexcept;
 [[nodiscard]] const Expr* TryUnwrapSimdSplatScalarArg(const Expr& expr, const SymbolTable& symbols)noexcept;
 [[nodiscard]] b8 IsZeroScalarLiteral(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
 [[nodiscard]] b8 IsPureSimdAddressExpr(const Expr& expr)noexcept;

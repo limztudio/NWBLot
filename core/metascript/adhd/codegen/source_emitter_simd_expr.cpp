@@ -393,8 +393,8 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
         if(!isInt){
             const Expr* rhsMulA = nullptr;
             const Expr* rhsMulB = nullptr;
-            const b8 lhsIsMul = IsSimdMulExpr(&lhs, mulA, mulB);
-            const b8 rhsIsMul = IsSimdMulExpr(&rhs, rhsMulA, rhsMulB);
+            const b8 lhsIsMul = IsSimdMulExpr(&lhs, mulA, mulB, &m_symbols);
+            const b8 rhsIsMul = IsSimdMulExpr(&rhs, rhsMulA, rhsMulB, &m_symbols);
             if(lhsIsMul && rhsIsMul){
                 const b8 lhsNeedsRep = WouldSimdMulOperandRequireReplicateInFma(*mulA, simdType, m_symbols)
                     || WouldSimdMulOperandRequireReplicateInFma(*mulB, simdType, m_symbols);
@@ -431,11 +431,11 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
             out.push_back(')');
             return true;
         }
-        if(IsSimdMulExpr(&lhs, mulA, mulB)){
+        if(IsSimdMulExpr(&lhs, mulA, mulB, &m_symbols)){
             emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplySubtract(" : "::VectorMultiplySubtract(", *mulA, *mulB, rhs);
             return true;
         }
-        if(IsSimdMulExpr(&rhs, mulA, mulB)){
+        if(IsSimdMulExpr(&rhs, mulA, mulB, &m_symbols)){
             emitTernaryRegCall(isDouble ? "::VectorDoubleNegativeMultiplySubtract(" : "::VectorNegativeMultiplySubtract(", *mulA, *mulB, lhs);
             return true;
         }
@@ -474,28 +474,65 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
     if(binaryOp == TokenType::Star){
         if(!isInt){
             const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
-            if(!lhs.resolvedSimdType.empty() && rhsScalar && !CanEmitScalarAsSimdVectorWithoutReplicate(*rhsScalar, simdType, m_symbols)){
-                out.append(isDouble ? "::VectorDoubleScale(" : "::VectorScale(");
-                emitSimdRegExpr(out, lhs, simdType);
-                out.append(", ");
-                emitExpr(out, *rhsScalar);
-                out.push_back(')');
-                return true;
+            if(!lhs.resolvedSimdType.empty() && rhsScalar){
+                if(IsUnitFloatLiteral(*rhsScalar, &m_symbols)){
+                    emitSimdRegExpr(out, lhs, simdType);
+                    return true;
+                }
+                if(IsNegativeUnitFloatLiteral(*rhsScalar, &m_symbols)){
+                    out.append(isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(");
+                    emitSimdRegExpr(out, lhs, simdType);
+                    out.push_back(')');
+                    return true;
+                }
+                if(!CanEmitScalarAsSimdVectorWithoutReplicate(*rhsScalar, simdType, m_symbols)){
+                    out.append(isDouble ? "::VectorDoubleScale(" : "::VectorScale(");
+                    emitSimdRegExpr(out, lhs, simdType);
+                    out.append(", ");
+                    emitExpr(out, *rhsScalar);
+                    out.push_back(')');
+                    return true;
+                }
             }
             const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
-            if(lhsScalar && !rhs.resolvedSimdType.empty() && !CanEmitScalarAsSimdVectorWithoutReplicate(*lhsScalar, simdType, m_symbols)){
-                out.append(isDouble ? "::VectorDoubleScale(" : "::VectorScale(");
-                emitSimdRegExpr(out, rhs, simdType);
-                out.append(", ");
-                emitExpr(out, *lhsScalar);
-                out.push_back(')');
-                return true;
+            if(lhsScalar && !rhs.resolvedSimdType.empty()){
+                if(IsUnitFloatLiteral(*lhsScalar, &m_symbols)){
+                    emitSimdRegExpr(out, rhs, simdType);
+                    return true;
+                }
+                if(IsNegativeUnitFloatLiteral(*lhsScalar, &m_symbols)){
+                    out.append(isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(");
+                    emitSimdRegExpr(out, rhs, simdType);
+                    out.push_back(')');
+                    return true;
+                }
+                if(!CanEmitScalarAsSimdVectorWithoutReplicate(*lhsScalar, simdType, m_symbols)){
+                    out.append(isDouble ? "::VectorDoubleScale(" : "::VectorScale(");
+                    emitSimdRegExpr(out, rhs, simdType);
+                    out.append(", ");
+                    emitExpr(out, *lhsScalar);
+                    out.push_back(')');
+                    return true;
+                }
             }
         }
         emitBinaryRegCall(isDouble ? "::VectorDoubleMultiply(" : "::VectorMultiply(", lhs, rhs);
         return true;
     }
     if(binaryOp == TokenType::Slash){
+        const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
+        if(!isInt && !lhs.resolvedSimdType.empty() && rhsScalar){
+            if(IsUnitFloatLiteral(*rhsScalar, &m_symbols)){
+                emitSimdRegExpr(out, lhs, simdType);
+                return true;
+            }
+            if(IsNegativeUnitFloatLiteral(*rhsScalar, &m_symbols)){
+                out.append(isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(");
+                emitSimdRegExpr(out, lhs, simdType);
+                out.push_back(')');
+                return true;
+            }
+        }
         const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
         if(!isInt && lhsScalar && IsUnitFloatLiteral(*lhsScalar, &m_symbols) && !rhs.resolvedSimdType.empty()){
             if(const Expr* lenVec = TryMatchSimdLengthVecArg(&rhs, isDouble, m_symbols)){

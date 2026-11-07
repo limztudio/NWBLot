@@ -249,6 +249,13 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "        0.0f, 0.0f, 0.0f, 1.0f\r\n"
         "    );\r\n"
         "    const MatrixSingle scaledMat = idMat * scale;\r\n"
+        "    const MatrixSingle projMat = MatrixSingle(\r\n"
+        "        a.x, 0.0f, 0.0f, 0.0f,\r\n"
+        "        0.0f, a.y, 0.0f, 0.0f,\r\n"
+        "        0.0f, 0.0f, a.z, a.w,\r\n"
+        "        0.0f, 0.0f, 1.0f, 0.0f\r\n"
+        "    );\r\n"
+        "    const VectorSingle unitMul = (a * 1.0f) + (b * -1.0f);\r\n"
         "    const VectorSingle unitVec = VectorSingle(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
         "    const VectorSingle halfVec = VectorSingle(0.5f);\r\n"
         "    const VectorSingle axisW = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
@@ -271,8 +278,8 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "    const VectorSingle scaled = b * VectorSingle(scale);\r\n"
         "    const VectorSingle invLen = a * rsqrt(lengthSq(a.xyz));\r\n"
         "    const VectorSingle pt = mul(VectorSingle(box.minPt, s_AffineW), scaledMat);\r\n"
-        "    const VectorSingle pt2 = mul(VectorSingle(a.x, a.y, 0.0f, 1.0f), m);\r\n"
-        "    const VectorSingle nrm = mul(VectorSingle(b, 0.0f), m);\r\n"
+        "    const VectorSingle pt2 = mul(VectorSingle(a.x, a.y, 0.0f, 1.0f), projMat);\r\n"
+        "    const VectorSingle nrm = mul(VectorSingle(b, 0.0f), m) + unitMul;\r\n"
         "    outBox.extent4 = f32x4(a, b.w);\r\n"
         "    if(!isFinite(d.x) || d.x > 10.0 || !isFinite(d.y) || d.y > 10.0)\r\n"
         "        return constZero;\r\n"
@@ -291,6 +298,8 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
 
     EXPECT_NE(optView.find("::MatrixIdentity()"), MStringView::npos);
     EXPECT_EQ(optView.find("for(usize __i = 0u; __i < 4u; ++__i)"), MStringView::npos);
+    EXPECT_NE(optView.find("::SIMDMatrix{ .v = { ::VectorAndInt(a, ::s_SIMDMaskX), ::VectorAndInt(a, ::s_SIMDMaskY), ::VectorAndCInt(a, ::s_SIMDMaskXY), ::s_SIMDIdentityR2 } }"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle unitMul = ::VectorAdd(a, ::VectorNegate(b));"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDOne"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDOneHalf"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDIdentityR3"), MStringView::npos);
@@ -313,7 +322,7 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("::VectorScale(b, scale)"), MStringView::npos);
     EXPECT_NE(optView.find("::VectorMultiply(a, ::Vector3ReciprocalLength(a))"), MStringView::npos);
     EXPECT_NE(optView.find("::Vector3Transform(::LoadFloat(box.minPt), scaledMat)"), MStringView::npos);
-    EXPECT_NE(optView.find("::Vector2Transform(a, m)"), MStringView::npos);
+    EXPECT_NE(optView.find("::Vector2Transform(a, projMat)"), MStringView::npos);
     EXPECT_NE(optView.find("::Vector3TransformNormal(b, m)"), MStringView::npos);
     EXPECT_NE(optView.find("::StoreFloat(::VectorPermute<0u, 1u, 2u, 7u>(a, b), outBox.extent4)"), MStringView::npos);
     EXPECT_NE(optView.find("!::VectorDoubleIsFinite(d, ::VectorDoubleComponentMask::s_DoubleXY) || ((::VectorDoubleMoveMask(::VectorDoubleGreater(d, ::VectorDoubleReplicate(10.0))) & ::VectorDoubleComponentMask::s_DoubleXY) != 0u)"), MStringView::npos);

@@ -6,7 +6,7 @@
 
 
 #include "cpp_type_emitter.h"
-#include "simd_binding_analyzer.h"
+#include "simd_codegen_utils.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,34 +51,21 @@ private:
     void emitParallelStmt(MString& out, const Stmt& stmt, u32 indent)const;
     [[nodiscard]] b8 tryEmitStorageStoreFromSimdArgs(MString& out, MStringView storageTypeName, Span<const Expr* const> arguments, MStringView dstExprText)const;
     [[nodiscard]] b8 isDirectSimdRegExpr(const Expr& expr)const noexcept;
-    [[nodiscard]] const SimdVarBinding* findSimdBinding(b8 isThisMember, MStringView name)const noexcept;
-    [[nodiscard]] const SimdVarBinding* findSimdBindingForExpr(const Expr* expr)const noexcept;
-    [[nodiscard]] const SimdVarBinding* findSimdRootBindingForExpr(const Expr* expr)const noexcept;
-    void emitSimdBindingInitialDecl(MString& out, const SimdVarBinding& binding, b8 loadFromStorage, b8 qualifyThisMember, u32 indent)const;
-    void emitSimdStoreForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;
-    void emitSimdLoadReloadForBinding(MString& out, const SimdVarBinding& binding, u32 indent)const;
-    void emitSimdMutCallReloads(MString& out, const Expr& expr, u32 indent)const;
-    void emitSimdBlockStores(MString& out, u32 indent)const;
-    void emitScopedSimdBody(MString& out, Span<const Stmt* const> statements, u32 indent)const;
     [[nodiscard]] b8 tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, u32 indent)const;
     [[nodiscard]] b8 tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, u32 indent)const;
     [[nodiscard]] b8 tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitSimdLaneGetExpr(MString& out, const Expr& vecExpr, u32 lane, const Expr* dynamicIndexExpr)const;
     [[nodiscard]] b8 tryEmitSimdBinaryOpReg(MString& out, TokenType::Enum binaryOp, const Expr& lhs, const Expr& rhs, MStringView simdType)const;
     void emitSimdRegExpr(MString& out, const Expr& expr, MStringView expectedSimdType)const;
+    [[nodiscard]] b8 tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, b8 omitOuterBinaryParens)const;
 
 
 private:
     MetaArena& m_arena;
     const SymbolTable& m_symbols;
     CppTypeEmitter m_typeEmitter;
-    mutable const MVector<SimdVarBinding>* m_activeSimdBindings = nullptr;
-    mutable const SimdVarBinding* m_activeSimdLoopBinding = nullptr;
-    mutable u32 m_activeSimdLoopInnerBreakDepth = 0u;
-    mutable u32 m_activeSimdLoopInnerContinueDepth = 0u;
     mutable u32 m_activeSwitchBreakLabelLine = 0u;
     mutable const MVector<const Expr*>* m_skippedCtorAssignExprs = nullptr;
-    mutable b8 m_activeScopeUsesTaskScope = false;
 };
 
 
@@ -89,4 +76,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

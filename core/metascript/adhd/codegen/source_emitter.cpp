@@ -147,10 +147,10 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     if(method.usesTaskScope)
         emitTaskScopePrologue(out, indent);
 
-    const b8 prevTaskScope = m_activeScopeUsesTaskScope;
-    m_activeScopeUsesTaskScope = method.usesTaskScope;
-    emitScopedSimdBody(out, method.body, indent);
-    m_activeScopeUsesTaskScope = prevTaskScope;
+    const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
+    m_activeSwitchBreakLabelLine = 0u;
+    emitStatementList(out, method.body, indent);
+    m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
     m_skippedCtorAssignExprs = nullptr;
 }
 
@@ -270,4 +270,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

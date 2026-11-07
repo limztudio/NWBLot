@@ -14,6 +14,415 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_expr{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<const Expr*>& outTerms){
+    if(expr.kind == ExprKind::Binary && expr.op == op && !expr.isNotNullRebind && !expr.wrapInSimdResult && expr.lhs && expr.rhs){
+        CollectLogicChainTerms(*expr.lhs, op, outTerms);
+        CollectLogicChainTerms(*expr.rhs, op, outTerms);
+        return;
+    }
+    outTerms.push_back(&expr);
+}
+
+[[nodiscard]] b8 IsFloatSimdRegisterVectorType(const MStringView simdType)noexcept{
+    return simdType == "VectorSingle" || simdType == "VectorDouble";
+}
+
+[[nodiscard]] b8 TryMatchIsFiniteLaneTerm(const Expr* term, const b8 expectNegated, const Expr*& outBase, u32& outLane)noexcept{
+    if(!term)
+        return false;
+    const Expr* callExpr = term;
+    if(expectNegated){
+        if(term->kind != ExprKind::Unary || term->isPostfix || term->op != TokenType::Bang || !term->lhs)
+            return false;
+        callExpr = term->lhs;
+    }
+    if(
+        callExpr->kind != ExprKind::Call
+        || !callExpr->isBuiltinCall
+        || !callExpr->lhs
+        || callExpr->lhs->kind != ExprKind::Identifier
+        || callExpr->lhs->text != "isFinite"
+        || callExpr->arguments.size() != 1u
+        || !callExpr->arguments[0]
+    ){
+        return false;
+    }
+    if(!TryMatchSingleLaneAccess(callExpr->arguments[0], outBase, outLane) || !outBase)
+        return false;
+    return IsFloatSimdRegisterVectorType(outBase->resolvedSimdType) && IsPureSimdAddressExpr(*outBase);
+}
+
+[[nodiscard]] constexpr b8 IsSimdComparisonOp(const TokenType::Enum op)noexcept{
+    return op == TokenType::EqualEqual
+        || op == TokenType::BangEqual
+        || op == TokenType::Less
+        || op == TokenType::LessEqual
+        || op == TokenType::Greater
+        || op == TokenType::GreaterEqual;
+}
+
+[[nodiscard]] constexpr TokenType::Enum FlipComparisonOp(const TokenType::Enum op)noexcept{
+    switch(op){
+    case TokenType::Less: return TokenType::Greater;
+    case TokenType::LessEqual: return TokenType::GreaterEqual;
+    case TokenType::Greater: return TokenType::Less;
+    case TokenType::GreaterEqual: return TokenType::LessEqual;
+    default: return op;
+    }
+}
+
+[[nodiscard]] b8 TryMatchSimdLaneComparisonTerm(
+    const Expr* term,
+    TokenType::Enum& outCmpOp,
+    const Expr*& outLhsBase,
+    const Expr*& outRhsBase,
+    const Expr*& outRhsScalar,
+    u32& outLane
+)noexcept{
+    if(!term || term->kind != ExprKind::Binary || !IsSimdComparisonOp(term->op) || !term->lhs || !term->rhs)
+        return false;
+
+    const Expr* lhsBase = nullptr;
+    u32 lhsLane = 0u;
+    const Expr* rhsBase = nullptr;
+    u32 rhsLane = 0u;
+    const b8 lhsIsLane = TryMatchSingleLaneAccess(term->lhs, lhsBase, lhsLane)
+        && lhsBase
+        && IsFloatSimdRegisterVectorType(lhsBase->resolvedSimdType)
+        && IsPureSimdAddressExpr(*lhsBase);
+    const b8 rhsIsLane = TryMatchSingleLaneAccess(term->rhs, rhsBase, rhsLane)
+        && rhsBase
+        && IsFloatSimdRegisterVectorType(rhsBase->resolvedSimdType)
+        && IsPureSimdAddressExpr(*rhsBase);
+
+    if(lhsIsLane && rhsIsLane){
+        if(lhsLane != rhsLane || lhsBase->resolvedSimdType != rhsBase->resolvedSimdType)
+            return false;
+        outCmpOp = term->op;
+        outLhsBase = lhsBase;
+        outRhsBase = rhsBase;
+        outRhsScalar = nullptr;
+        outLane = lhsLane;
+        return true;
+    }
+    if(lhsIsLane && term->rhs->resolvedSimdType.empty() && IsPureSimdAddressExpr(*term->rhs)){
+        outCmpOp = term->op;
+        outLhsBase = lhsBase;
+        outRhsBase = nullptr;
+        outRhsScalar = term->rhs;
+        outLane = lhsLane;
+        return true;
+    }
+    if(rhsIsLane && term->lhs->resolvedSimdType.empty() && IsPureSimdAddressExpr(*term->lhs)){
+        outCmpOp = FlipComparisonOp(term->op);
+        outLhsBase = rhsBase;
+        outRhsBase = nullptr;
+        outRhsScalar = term->lhs;
+        outLane = rhsLane;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] constexpr u32 CountMaskBits4(const u8 mask)noexcept{
+    return (mask & 1u) + ((mask >> 1u) & 1u) + ((mask >> 2u) & 1u) + ((mask >> 3u) & 1u);
+}
+
+[[nodiscard]] MStringView MapSimdVectorCompareIntrinsicPrefix(const TokenType::Enum cmpOp, const b8 isDouble)noexcept{
+    switch(cmpOp){
+    case TokenType::EqualEqual: return isDouble ? "::VectorDoubleEqual(" : "::VectorEqual(";
+    case TokenType::BangEqual: return isDouble ? "::VectorDoubleNotEqual(" : "::VectorNotEqual(";
+    case TokenType::Less: return isDouble ? "::VectorDoubleLess(" : "::VectorLess(";
+    case TokenType::LessEqual: return isDouble ? "::VectorDoubleLessOrEqual(" : "::VectorLessOrEqual(";
+    case TokenType::Greater: return isDouble ? "::VectorDoubleGreater(" : "::VectorGreater(";
+    case TokenType::GreaterEqual: return isDouble ? "::VectorDoubleGreaterOrEqual(" : "::VectorGreaterOrEqual(";
+    default: return {};
+    }
+}
+
+void AppendSimdMoveMaskHexOrConstant(MString& out, const u8 mask, const b8 isDouble){
+    const MStringView maskConst = SimdComponentMaskConstant(mask, isDouble);
+    if(!maskConst.empty()){
+        out.append(maskConst.data(), maskConst.size());
+        return;
+    }
+    static constexpr char s_HexDigits[] = "0123456789ABCDEF";
+    out.append("0x");
+    out.push_back(s_HexDigits[mask & 0xFu]);
+    out.push_back('u');
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
+    using namespace __hidden_adhd_expr;
+
+    if(expr.kind != ExprKind::Binary || (expr.op != TokenType::AmpersandAmpersand && expr.op != TokenType::PipePipe))
+        return false;
+
+    const b8 isOrChain = (expr.op == TokenType::PipePipe);
+    MVector<const Expr*> terms(m_arena);
+    CollectLogicChainTerms(expr, expr.op, terms);
+    if(terms.size() < 2u)
+        return false;
+
+    struct FusedSegment{
+        u8 kind = 0u;
+        usize start = 0u;
+        usize end = 0u;
+        u8 laneMask = 0u;
+        TokenType::Enum cmpOp = TokenType::EndOfFile;
+        const Expr* lhsBase = nullptr;
+        const Expr* rhsBase = nullptr;
+        const Expr* rhsScalar = nullptr;
+    };
+
+    MVector<FusedSegment> segments(m_arena);
+    b8 anyFused = false;
+    usize idx = 0u;
+    while(idx < terms.size()){
+        const Expr* finBase = nullptr;
+        u32 finLane = 0u;
+        if(TryMatchIsFiniteLaneTerm(terms[idx], isOrChain, finBase, finLane)){
+            const b8 isDouble = IsDoubleSimdType(finBase->resolvedSimdType);
+            u8 accMask = static_cast<u8>(1u << finLane);
+            usize bestEnd = 0u;
+            u8 bestMask = 0u;
+            usize scan = idx + 1u;
+            while(scan < terms.size()){
+                const Expr* nextBase = nullptr;
+                u32 nextLane = 0u;
+                if(!TryMatchIsFiniteLaneTerm(terms[scan], isOrChain, nextBase, nextLane) || !AreSamePureSimdExpr(*finBase, *nextBase))
+                    break;
+                accMask |= static_cast<u8>(1u << nextLane);
+                ++scan;
+                if(!SimdComponentMaskConstant(accMask, isDouble).empty()){
+                    bestEnd = scan;
+                    bestMask = accMask;
+                }
+            }
+            if(bestEnd >= idx + 2u){
+                FusedSegment seg;
+                seg.kind = 1u;
+                seg.start = idx;
+                seg.end = bestEnd;
+                seg.laneMask = bestMask;
+                seg.lhsBase = finBase;
+                segments.push_back(seg);
+                anyFused = true;
+                idx = bestEnd;
+                continue;
+            }
+        }
+
+        TokenType::Enum cmpOp = TokenType::EndOfFile;
+        const Expr* lhsBase = nullptr;
+        const Expr* rhsBase = nullptr;
+        const Expr* rhsScalar = nullptr;
+        u32 cmpLane = 0u;
+        if(TryMatchSimdLaneComparisonTerm(terms[idx], cmpOp, lhsBase, rhsBase, rhsScalar, cmpLane)){
+            u8 accMask = static_cast<u8>(1u << cmpLane);
+            usize scan = idx + 1u;
+            while(scan < terms.size()){
+                TokenType::Enum nextCmpOp = TokenType::EndOfFile;
+                const Expr* nextLhsBase = nullptr;
+                const Expr* nextRhsBase = nullptr;
+                const Expr* nextRhsScalar = nullptr;
+                u32 nextLane = 0u;
+                if(!TryMatchSimdLaneComparisonTerm(terms[scan], nextCmpOp, nextLhsBase, nextRhsBase, nextRhsScalar, nextLane))
+                    break;
+                if(nextCmpOp != cmpOp || !AreSamePureSimdExpr(*lhsBase, *nextLhsBase))
+                    break;
+                if(rhsBase){
+                    if(!nextRhsBase || !AreSamePureSimdExpr(*rhsBase, *nextRhsBase))
+                        break;
+                }
+                else{
+                    if(!nextRhsScalar || !AreSamePureSimdExpr(*rhsScalar, *nextRhsScalar))
+                        break;
+                }
+                accMask |= static_cast<u8>(1u << nextLane);
+                ++scan;
+            }
+            if(scan >= idx + 2u && CountMaskBits4(accMask) >= 2u){
+                FusedSegment seg;
+                seg.kind = 2u;
+                seg.start = idx;
+                seg.end = scan;
+                seg.laneMask = accMask;
+                seg.cmpOp = cmpOp;
+                seg.lhsBase = lhsBase;
+                seg.rhsBase = rhsBase;
+                seg.rhsScalar = rhsScalar;
+                segments.push_back(seg);
+                anyFused = true;
+                idx = scan;
+                continue;
+            }
+        }
+
+        FusedSegment rawSeg;
+        rawSeg.kind = 0u;
+        rawSeg.start = idx;
+        rawSeg.end = idx + 1u;
+        segments.push_back(rawSeg);
+        ++idx;
+    }
+
+    if(!anyFused)
+        return false;
+
+    const auto emitCmpSecondArg = [&](const FusedSegment& seg, const MStringView simdType){
+        if(seg.rhsBase)
+            emitSimdRegExpr(out, *seg.rhsBase, simdType);
+        else
+            emitSimdRegExpr(out, *seg.rhsScalar, simdType);
+    };
+
+    const auto emitSegment = [&](const FusedSegment& seg){
+        if(seg.kind == 0u){
+            emitExpr(out, *terms[seg.start]);
+            return;
+        }
+        const MStringView simdType = seg.lhsBase->resolvedSimdType;
+        const b8 isDouble = IsDoubleSimdType(simdType);
+        if(seg.kind == 1u){
+            const MStringView maskConst = SimdComponentMaskConstant(seg.laneMask, isDouble);
+            if(isOrChain)
+                out.push_back('!');
+            out.append(isDouble ? "::VectorDoubleIsFinite(" : "::VectorIsFinite(");
+            emitSimdRegExpr(out, *seg.lhsBase, simdType);
+            out.append(", ");
+            out.append(maskConst.data(), maskConst.size());
+            out.push_back(')');
+            return;
+        }
+
+        if(!isOrChain){
+            if(seg.laneMask == 0x7u){
+                MStringView fnPrefix;
+                b8 swapOperands = false;
+                switch(seg.cmpOp){
+                case TokenType::EqualEqual: fnPrefix = isDouble ? "::VectorDouble3Equal(" : "::Vector3Equal("; break;
+                case TokenType::Greater: fnPrefix = isDouble ? "::VectorDouble3Greater(" : "::Vector3Greater("; break;
+                case TokenType::GreaterEqual: fnPrefix = isDouble ? "::VectorDouble3GreaterOrEqual(" : "::Vector3GreaterOrEqual("; break;
+                case TokenType::LessEqual: fnPrefix = isDouble ? "::VectorDouble3LessOrEqual(" : "::Vector3LessOrEqual("; break;
+                case TokenType::Less:
+                    fnPrefix = isDouble ? "::VectorDouble3Greater(" : "::Vector3Greater(";
+                    swapOperands = true;
+                    break;
+                default:
+                    break;
+                }
+                if(!fnPrefix.empty()){
+                    out.append(fnPrefix.data(), fnPrefix.size());
+                    if(swapOperands){
+                        emitCmpSecondArg(seg, simdType);
+                        out.append(", ");
+                        emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                    }
+                    else{
+                        emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                        out.append(", ");
+                        emitCmpSecondArg(seg, simdType);
+                    }
+                    out.push_back(')');
+                    return;
+                }
+            }
+            if(seg.laneMask == 0xFu){
+                MStringView fnPrefix;
+                switch(seg.cmpOp){
+                case TokenType::EqualEqual: fnPrefix = isDouble ? "::VectorDouble4Equal(" : "::Vector4Equal("; break;
+                case TokenType::Greater: fnPrefix = isDouble ? "::VectorDouble4Greater(" : "::Vector4Greater("; break;
+                case TokenType::GreaterEqual: fnPrefix = isDouble ? "::VectorDouble4GreaterOrEqual(" : "::Vector4GreaterOrEqual("; break;
+                case TokenType::Less: fnPrefix = isDouble ? "::VectorDouble4Less(" : "::Vector4Less("; break;
+                case TokenType::LessEqual: fnPrefix = isDouble ? "::VectorDouble4LessOrEqual(" : "::Vector4LessOrEqual("; break;
+                default:
+                    break;
+                }
+                if(!fnPrefix.empty()){
+                    out.append(fnPrefix.data(), fnPrefix.size());
+                    emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                    out.append(", ");
+                    emitCmpSecondArg(seg, simdType);
+                    out.push_back(')');
+                    return;
+                }
+            }
+            if(seg.laneMask == 0x3u && (seg.cmpOp == TokenType::GreaterEqual || seg.cmpOp == TokenType::LessEqual)){
+                out.append(isDouble ? "::VectorDouble2GreaterOrEqual(" : "::Vector2GreaterOrEqual(");
+                if(seg.cmpOp == TokenType::LessEqual){
+                    emitCmpSecondArg(seg, simdType);
+                    out.append(", ");
+                    emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                }
+                else{
+                    emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                    out.append(", ");
+                    emitCmpSecondArg(seg, simdType);
+                }
+                out.push_back(')');
+                return;
+            }
+        }
+        else if(seg.cmpOp == TokenType::BangEqual && (seg.laneMask == 0x7u || seg.laneMask == 0xFu)){
+            if(seg.laneMask == 0x7u)
+                out.append(isDouble ? "!::VectorDouble3Equal(" : "!::Vector3Equal(");
+            else
+                out.append(isDouble ? "!::VectorDouble4Equal(" : "!::Vector4Equal(");
+            emitSimdRegExpr(out, *seg.lhsBase, simdType);
+            out.append(", ");
+            emitCmpSecondArg(seg, simdType);
+            out.push_back(')');
+            return;
+        }
+
+        const MStringView cmpPrefix = MapSimdVectorCompareIntrinsicPrefix(seg.cmpOp, isDouble);
+        out.append(isDouble ? "((::VectorDoubleMoveMask(" : "((::VectorMoveMask(");
+        out.append(cmpPrefix.data(), cmpPrefix.size());
+        emitSimdRegExpr(out, *seg.lhsBase, simdType);
+        out.append(", ");
+        emitCmpSecondArg(seg, simdType);
+        out.append(")) & ");
+        AppendSimdMoveMaskHexOrConstant(out, seg.laneMask, isDouble);
+        if(isOrChain){
+            out.append(") != 0u)");
+        }
+        else{
+            out.append(") == ");
+            AppendSimdMoveMaskHexOrConstant(out, seg.laneMask, isDouble);
+            out.push_back(')');
+        }
+    };
+
+    const b8 needOuterParens = !omitOuterBinaryParens && segments.size() > 1u;
+    if(needOuterParens)
+        out.push_back('(');
+    for(usize i = 0u; i < segments.size(); ++i){
+        if(i > 0u)
+            out.append(isOrChain ? " || " : " && ");
+        emitSegment(segments[i]);
+    }
+    if(needOuterParens)
+        out.push_back(')');
+    return true;
+}
+
 void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
     if(expr.wrapInSimdResult){
         out.append(IsDoubleSimdType(expr.resolvedSimdType) ? "::SIMDVectorDoubleResult{ " : "::SIMDVectorSingleResult{ ");
@@ -176,11 +585,33 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 out.push_back(')');
                 break;
             }
-            MStringView scalarReductionSuffix;
-#define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION(adhdName, laneIntrinsicSuffix) \
-            if(callee == adhdName) scalarReductionSuffix = laneIntrinsicSuffix;
-#include "../export_functions.h"
-#undef NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION
+            if(callee == "isFinite" && expr.arguments.size() == 1u && expr.arguments[0] && (expr.arguments[0]->resolvedSimdType == "VectorSingle" || expr.arguments[0]->resolvedSimdType == "VectorDouble")){
+                const Expr& arg0 = *expr.arguments[0];
+                const b8 isDouble = IsDoubleSimdType(arg0.resolvedSimdType);
+                u8 activeMask = 0xFu;
+                const Expr* vecBase = &arg0;
+                if(arg0.kind == ExprKind::MemberAccess && arg0.isSwizzle && arg0.lhs && arg0.lhs->resolvedSimdType == arg0.resolvedSimdType){
+                    u8 swizMask = 0u;
+                    for(usize i = 0u; i < arg0.text.size(); ++i)
+                        swizMask |= static_cast<u8>(1u << MapSwizzleCharToLane(arg0.text[i]));
+                    if(!SimdComponentMaskConstant(swizMask, isDouble).empty()){
+                        activeMask = swizMask;
+                        vecBase = arg0.lhs;
+                    }
+                    else{
+                        const u32 effLanes = InferEffectiveSimdLanes(arg0);
+                        activeMask = effLanes == 2u ? 0x3u : (effLanes == 3u ? 0x7u : 0xFu);
+                    }
+                }
+                const MStringView maskConst = SimdComponentMaskConstant(activeMask, isDouble);
+                out.append(isDouble ? "::VectorDoubleIsFinite(" : "::VectorIsFinite(");
+                emitSimdRegExpr(out, *vecBase, arg0.resolvedSimdType);
+                out.append(", ");
+                out.append(maskConst.data(), maskConst.size());
+                out.push_back(')');
+                break;
+            }
+            const MStringView scalarReductionSuffix = MapSimdScalarReductionSuffix(callee);
             if(!scalarReductionSuffix.empty() && !expr.arguments.empty() && expr.arguments[0] && IsRegisterPromotableSimdType(expr.arguments[0]->resolvedSimdType)){
                 const MStringView argSimd = expr.arguments[0]->resolvedSimdType;
                 const b8 isDouble = IsDoubleSimdType(argSimd);
@@ -298,6 +729,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append(omitOuterBinaryParens ? "))" : ")))");
             break;
         }
+        if((expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe) && tryEmitFusedSimdLogicChain(out, expr, omitOuterBinaryParens))
+            break;
         if(!omitOuterBinaryParens)
             out.push_back('(');
         if(expr.lhs)
@@ -364,10 +797,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             emitScratchArenaPrologue(out, 2u, "lambda");
         if(expr.lambdaUsesTaskScope)
             emitTaskScopePrologue(out, 2u);
-        const b8 prevTaskScope = m_activeScopeUsesTaskScope;
-        m_activeScopeUsesTaskScope = expr.lambdaUsesTaskScope;
-        emitScopedSimdBody(out, expr.lambdaBody, 2u);
-        m_activeScopeUsesTaskScope = prevTaskScope;
+        const u32 prevSwitchBreak = m_activeSwitchBreakLabelLine;
+        m_activeSwitchBreakLabelLine = 0u;
+        emitStatementList(out, expr.lambdaBody, 2u);
+        m_activeSwitchBreakLabelLine = prevSwitchBreak;
         out.append("    }");
         break;
     }
@@ -401,4 +834,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

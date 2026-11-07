@@ -80,12 +80,6 @@ b8 SourceEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, const 
             out.append(");\r\n");
         }
     }
-    if(m_activeSimdBindings){
-        for(const SimdVarBinding& binding : *m_activeSimdBindings){
-            if(binding.capturedByMutLambda)
-                emitSimdLoadReloadForBinding(out, binding, indent);
-        }
-    }
     return true;
 }
 
@@ -115,14 +109,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             emitExpr(out, *stmt.expr);
         out.append(")[__adhd_idx];\r\n");
 
-        const SimdVarBinding* loopBinding = findSimdBinding(false, stmt.name);
-        if(loopBinding && loopBinding->isLoopElement)
-            emitSimdBindingInitialDecl(out, *loopBinding, true, false, indent + 1u);
-
         emitStatementList(out, stmt.statements, indent + 1u);
-
-        if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written)
-            emitSimdStoreForBinding(out, *loopBinding, indent + 1u);
 
         emitIndent(out, indent);
         out.append("}, ");
@@ -349,12 +336,6 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         emitIndent(out, indent + 1u);
         AppendTextDiscardCrAndExpandLf(out, stmt.nativeCode);
         out.append("\r\n");
-        for(const NativeBinding& binding : stmt.nativeBindings){
-            if(binding.mode != ParamPassingMode::Mut || !binding.sourceExpr)
-                continue;
-            if(const SimdVarBinding* mutBinding = findSimdRootBindingForExpr(binding.sourceExpr))
-                emitSimdLoadReloadForBinding(out, *mutBinding, indent + 1u);
-        }
         emitIndent(out, indent);
         out.append("}\r\n");
         break;
@@ -394,4 +375,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

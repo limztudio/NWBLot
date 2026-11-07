@@ -116,8 +116,6 @@ void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const S
             if(child->condition)
                 emitExpr(out, *child->condition, true);
             out.append("){\r\n");
-            if(child->condition)
-                emitSimdMutCallReloads(out, *child->condition, indent + 1u);
             if(isLastInCase)
                 emitSwitchIfChainStatements(out, child->statements, indent + 1u);
             else
@@ -127,17 +125,12 @@ void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const S
             if(!child->elseStatements.empty()){
                 emitIndent(out, indent);
                 out.append("else{\r\n");
-                if(child->condition)
-                    emitSimdMutCallReloads(out, *child->condition, indent + 1u);
                 if(isLastInCase)
                     emitSwitchIfChainStatements(out, child->elseStatements, indent + 1u);
                 else
                     emitStatementList(out, child->elseStatements, indent + 1u);
                 emitIndent(out, indent);
                 out.append("}\r\n");
-            }
-            else if(child->condition){
-                emitSimdMutCallReloads(out, *child->condition, indent);
             }
         }
         else{
@@ -149,11 +142,7 @@ void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const S
 void SourceEmitter::emitLoopBodyStatements(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
     m_activeSwitchBreakLabelLine = 0u;
-    ++m_activeSimdLoopInnerBreakDepth;
-    ++m_activeSimdLoopInnerContinueDepth;
     emitStatementList(out, statements, indent);
-    --m_activeSimdLoopInnerBreakDepth;
-    --m_activeSimdLoopInnerContinueDepth;
     m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
 }
 
@@ -215,12 +204,6 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         else{
             out.append("{};\r\n");
         }
-        if(stmt.expr)
-            emitSimdMutCallReloads(out, *stmt.expr, indent);
-        for(const Expr* arg : stmt.arguments){
-            if(arg)
-                emitSimdMutCallReloads(out, *arg, indent);
-        }
         break;
     }
     case StmtKind::ExprStmt:{
@@ -244,13 +227,9 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
         out.append(";\r\n");
-
-        if(stmt.expr)
-            emitSimdMutCallReloads(out, *stmt.expr, indent);
         break;
     }
     case StmtKind::Return:{
-        emitSimdBlockStores(out, indent);
         if(tryEmitSimdReturnStmt(out, stmt, indent))
             break;
         emitIndent(out, indent);
@@ -270,8 +249,6 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         break;
     }
     case StmtKind::Break:{
-        if(m_activeSimdLoopBinding && m_activeSimdLoopInnerBreakDepth == 0u && m_activeSwitchBreakLabelLine == 0u)
-            emitSimdStoreForBinding(out, *m_activeSimdLoopBinding, indent);
         emitIndent(out, indent);
         if(m_activeSwitchBreakLabelLine != 0u){
             out.append("goto __adhd_switch_break_");
@@ -284,8 +261,6 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         break;
     }
     case StmtKind::Continue:{
-        if(m_activeSimdLoopBinding && m_activeSimdLoopInnerContinueDepth == 0u)
-            emitSimdStoreForBinding(out, *m_activeSimdLoopBinding, indent);
         emitIndent(out, indent);
         out.append("continue;\r\n");
         break;
@@ -296,22 +271,15 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         if(stmt.condition)
             emitExpr(out, *stmt.condition, true);
         out.append("){\r\n");
-        if(stmt.condition)
-            emitSimdMutCallReloads(out, *stmt.condition, indent + 1u);
         emitStatementList(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}\r\n");
         if(!stmt.elseStatements.empty()){
             emitIndent(out, indent);
             out.append("else{\r\n");
-            if(stmt.condition)
-                emitSimdMutCallReloads(out, *stmt.condition, indent + 1u);
             emitStatementList(out, stmt.elseStatements, indent + 1u);
             emitIndent(out, indent);
             out.append("}\r\n");
-        }
-        else if(stmt.condition){
-            emitSimdMutCallReloads(out, *stmt.condition, indent);
         }
         break;
     }
@@ -355,8 +323,6 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 m_activeSwitchBreakLabelLine = stmt.span.line != 0u ? stmt.span.line : 1u;
             else if(needsDoWhileWrap)
                 m_activeSwitchBreakLabelLine = 0u;
-            if(needsDoWhileWrap)
-                ++m_activeSimdLoopInnerBreakDepth;
 
             b8 firstBranch = true;
             usize defaultGroupEnd = stmt.switchCases.size();
@@ -408,8 +374,6 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 out.append("}\r\n");
             }
 
-            if(needsDoWhileWrap)
-                --m_activeSimdLoopInnerBreakDepth;
             m_activeSwitchBreakLabelLine = prevBreakLabelLine;
 
             if(needsBreakLabel){
@@ -430,7 +394,6 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         else{
             const u32 prevBreakLabelLine = m_activeSwitchBreakLabelLine;
             m_activeSwitchBreakLabelLine = 0u;
-            ++m_activeSimdLoopInnerBreakDepth;
             emitIndent(out, indent);
             out.append("switch(");
             if(stmt.expr)
@@ -459,7 +422,6 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             }
             emitIndent(out, indent);
             out.append("}\r\n");
-            --m_activeSimdLoopInnerBreakDepth;
             m_activeSwitchBreakLabelLine = prevBreakLabelLine;
         }
         break;
@@ -479,39 +441,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
         out.append("){\r\n");
-
-        const SimdVarBinding* loopBinding = findSimdBinding(false, stmt.name);
-        if(loopBinding && loopBinding->isLoopElement)
-            emitSimdBindingInitialDecl(out, *loopBinding, true, false, indent + 1u);
-
-        const SimdVarBinding* prevSimdLoopBinding = m_activeSimdLoopBinding;
-        const u32 prevInnerBreakDepth = m_activeSimdLoopInnerBreakDepth;
-        const u32 prevInnerContinueDepth = m_activeSimdLoopInnerContinueDepth;
-        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
-        m_activeSwitchBreakLabelLine = 0u;
-        if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written){
-            m_activeSimdLoopBinding = loopBinding;
-            m_activeSimdLoopInnerBreakDepth = 0u;
-            m_activeSimdLoopInnerContinueDepth = 0u;
-        }
-        else if(m_activeSimdLoopBinding){
-            ++m_activeSimdLoopInnerBreakDepth;
-            ++m_activeSimdLoopInnerContinueDepth;
-        }
-
-        emitStatementList(out, stmt.statements, indent + 1u);
-
-        m_activeSimdLoopBinding = prevSimdLoopBinding;
-        m_activeSimdLoopInnerBreakDepth = prevInnerBreakDepth;
-        m_activeSimdLoopInnerContinueDepth = prevInnerContinueDepth;
-        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
-
-        if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written){
-            const b8 endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && IsTerminalJumpStmtKind(stmt.statements.back()->kind);
-            if(!endsWithTerminal)
-                emitSimdStoreForBinding(out, *loopBinding, indent + 1u);
-        }
-
+        emitLoopBodyStatements(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}\r\n");
         break;
@@ -588,4 +518,3 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

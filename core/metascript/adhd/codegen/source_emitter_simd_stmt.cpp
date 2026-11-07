@@ -14,6 +14,147 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_simd_stmt{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] const Expr* TryExtractDirectTransposeMatSource(const Stmt& declStmt)noexcept{
+    if(!declStmt.isConst || declStmt.name.empty())
+        return nullptr;
+    const Expr* initExpr = nullptr;
+    if(!declStmt.isCtorInit && declStmt.expr)
+        initExpr = declStmt.expr;
+    else if(declStmt.isCtorInit && declStmt.arguments.size() == 1u && declStmt.arguments[0])
+        initExpr = declStmt.arguments[0];
+    if(
+        !initExpr
+        || initExpr->kind != ExprKind::Call
+        || !initExpr->isBuiltinCall
+        || !initExpr->lhs
+        || initExpr->lhs->kind != ExprKind::Identifier
+        || initExpr->lhs->text != "transpose"
+        || initExpr->arguments.size() != 1u
+        || !initExpr->arguments[0]
+    ){
+        return nullptr;
+    }
+    const Expr* srcMat = initExpr->arguments[0];
+    if(srcMat->kind != ExprKind::Identifier || srcMat->isMutArg || !SymbolTable::IsSimdRegisterMatrixType(srcMat->resolvedSimdType))
+        return nullptr;
+    return srcMat;
+}
+
+[[nodiscard]] b8 ExprReferencesIdentifier(const Expr* expr, const MStringView name)noexcept{
+    if(!expr)
+        return false;
+    if(expr->kind == ExprKind::Identifier && expr->text == name)
+        return true;
+    if(ExprReferencesIdentifier(expr->lhs, name) || ExprReferencesIdentifier(expr->rhs, name))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprReferencesIdentifier(arg, name))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 CanElideConstTransposeVarDeclInStmts(
+    const MStringView transposedName,
+    const MStringView srcMatName,
+    const Span<const Stmt* const> statements,
+    const SymbolTable& symbols,
+    const Span<const Stmt* const> localVarDecls,
+    u32& inOutValidUseCount
+)noexcept{
+    const auto checkExpr = [&](auto& self, const Expr* expr)noexcept -> b8{
+        if(!expr)
+            return true;
+        if(expr->kind == ExprKind::Lambda)
+            return !ExprReferencesIdentifier(expr, transposedName) && !ExprReferencesIdentifier(expr, srcMatName);
+        if(
+            expr->kind == ExprKind::Call
+            && expr->isBuiltinCall
+            && expr->lhs
+            && expr->lhs->kind == ExprKind::Identifier
+            && expr->lhs->text == "mul"
+            && expr->arguments.size() == 2u
+            && expr->arguments[0]
+            && expr->arguments[1]
+        ){
+            const Expr* a0 = expr->arguments[0];
+            const Expr* a1 = expr->arguments[1];
+            const b8 a0IsTrans = (a0->kind == ExprKind::Identifier && a0->text == transposedName && !a0->isMutArg);
+            const b8 a1IsTrans = (a1->kind == ExprKind::Identifier && a1->text == transposedName && !a1->isMutArg);
+            if(a0IsTrans != a1IsTrans){
+                const Expr* vecArg = a0IsTrans ? a1 : a0;
+                u32 rowIdx = 0u;
+                if(TryMatchIdentityRowIndex(*vecArg, symbols, rowIdx, localVarDecls) && !ExprReferencesIdentifier(vecArg, transposedName)){
+                    ++inOutValidUseCount;
+                    return self(self, vecArg);
+                }
+                return false;
+            }
+        }
+        if(expr->kind == ExprKind::Identifier){
+            if(expr->text == transposedName)
+                return false;
+            if(expr->text == srcMatName && expr->isMutArg)
+                return false;
+        }
+        if(expr->kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr->op) && ExprReferencesIdentifier(expr->lhs, srcMatName))
+            return false;
+        if(!self(self, expr->lhs) || !self(self, expr->rhs))
+            return false;
+        for(const Expr* arg : expr->arguments){
+            if(!self(self, arg))
+                return false;
+        }
+        return true;
+    };
+
+    for(const Stmt* s : statements){
+        if(!s)
+            continue;
+        if(s->kind == StmtKind::NativeBlock)
+            return false;
+        if(!s->name.empty() && (s->name == transposedName || s->name == srcMatName))
+            return false;
+        if(s->initStmt && !s->initStmt->name.empty() && (s->initStmt->name == transposedName || s->initStmt->name == srcMatName))
+            return false;
+        if(!checkExpr(checkExpr, s->expr) || !checkExpr(checkExpr, s->condition) || !checkExpr(checkExpr, s->stepExpr))
+            return false;
+        for(const Expr* arg : s->arguments){
+            if(!checkExpr(checkExpr, arg))
+                return false;
+        }
+        if(s->initStmt && !checkExpr(checkExpr, s->initStmt->expr))
+            return false;
+        if(!CanElideConstTransposeVarDeclInStmts(transposedName, srcMatName, s->statements, symbols, localVarDecls, inOutValidUseCount))
+            return false;
+        if(!CanElideConstTransposeVarDeclInStmts(transposedName, srcMatName, s->elseStatements, symbols, localVarDecls, inOutValidUseCount))
+            return false;
+        for(const SwitchCase& sc : s->switchCases){
+            if(!checkExpr(checkExpr, sc.matchExpr))
+                return false;
+            if(!CanElideConstTransposeVarDeclInStmts(transposedName, srcMatName, sc.statements, symbols, localVarDecls, inOutValidUseCount))
+                return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdType, const Span<const Expr* const> arguments)const{
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
@@ -190,6 +331,10 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         }
         if(arguments[0]->resolvedSimdType == simdType){
             if(!isInt && IsZeroScalarLiteral(*arguments[1], &m_symbols)){
+                if(InferSimdRegZeroedAboveLane(*arguments[0], isDouble, &m_symbols, activeLocalVarDecls()) <= 3u){
+                    emitSimdRegExpr(out, *arguments[0], simdType);
+                    return;
+                }
                 out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
                 emitSimdRegExpr(out, *arguments[0], simdType);
                 out.append(isDouble ? ", ::s_DoubleSIMDMask3)" : ", ::s_SIMDMask3)");
@@ -382,8 +527,11 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 }
             };
             if(!cV1 && cAllInPlaceOrZero){
-                const u8 loadedZeroMask = static_cast<u8>((1u << cV0ZeroedAbove) - 1u);
-                if(cInPlaceMask == 0xFu || cInPlaceMask == loadedZeroMask){
+                const u32 effCV0ZeroedAbove = !cV0RegType.empty()
+                    ? InferSimdRegZeroedAboveLane(*cV0, !isDouble, &m_symbols, activeLocalVarDecls())
+                    : cV0ZeroedAbove;
+                const u8 loadedZeroMask = static_cast<u8>((1u << effCV0ZeroedAbove) - 1u);
+                if(cInPlaceMask == 0xFu || (cInPlaceMask & loadedZeroMask) == loadedZeroMask){
                     out.append(isDouble ? "::ConvertVectorSingleToDouble(" : "::ConvertVectorDoubleToSingle(");
                     emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
                     out.push_back(')');
@@ -775,8 +923,11 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             }
         }
         if(allInPlaceOrZero && inPlaceBase && (!inPlaceRegType.empty() || (inPlaceMask & (inPlaceMask - 1u)) != 0u)){
-            const u8 naturalLoadMask = static_cast<u8>((1u << inPlaceZeroedAbove) - 1u);
-            if(inPlaceMask == 0xFu || inPlaceMask == naturalLoadMask){
+            const u32 effInPlaceZeroedAbove = !inPlaceRegType.empty()
+                ? InferSimdRegZeroedAboveLane(*inPlaceBase, isDouble, &m_symbols, activeLocalVarDecls())
+                : inPlaceZeroedAbove;
+            const u8 naturalLoadMask = static_cast<u8>((1u << effInPlaceZeroedAbove) - 1u);
+            if(inPlaceMask == 0xFu || (inPlaceMask & naturalLoadMask) == naturalLoadMask){
                 if(!inPlaceRegType.empty()){
                     emitSimdRegExpr(out, *inPlaceBase, simdType);
                 }
@@ -884,7 +1035,10 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         }
         const u8 negUsedMask = static_cast<u8>(negMask | posMask);
         if(allNegInPlaceOrZero && negBase && negMask != 0u && (!negRegType.empty() || (negUsedMask & (negUsedMask - 1u)) != 0u)){
-            const u8 naturalZeroLaneMask = static_cast<u8>(~((1u << negZeroedAbove) - 1u) & 0xFu & ~negMask);
+            const u32 effNegZeroedAbove = !negRegType.empty()
+                ? InferSimdRegZeroedAboveLane(*negBase, isDouble, &m_symbols, activeLocalVarDecls())
+                : negZeroedAbove;
+            const u8 naturalZeroLaneMask = static_cast<u8>(~((1u << effNegZeroedAbove) - 1u) & 0xFu & ~negMask);
             const u8 effectivePosMask = static_cast<u8>(posMask | naturalZeroLaneMask);
             if(negMask == 0xFu && posMask == 0u){
                 out.append(isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(");
@@ -1385,9 +1539,15 @@ b8 SourceEmitter::tryEmitStorageStoreFromSimdArgs(MString& out, const MStringVie
             out.append(", ");
         }
         else if(!IsIntSimdType(baseSimdType) && IsZeroScalarLiteral(wArg, &m_symbols)){
-            out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
-            emitSimdRegExpr(out, baseVec, baseSimdType);
-            out.append(isDouble ? ", ::s_DoubleSIMDMask3), " : ", ::s_SIMDMask3), ");
+            if(InferSimdRegZeroedAboveLane(baseVec, isDouble, &m_symbols, activeLocalVarDecls()) <= 3u){
+                emitSimdRegExpr(out, baseVec, baseSimdType);
+                out.append(", ");
+            }
+            else{
+                out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
+                emitSimdRegExpr(out, baseVec, baseSimdType);
+                out.append(isDouble ? ", ::s_DoubleSIMDMask3), " : ", ::s_SIMDMask3), ");
+            }
         }
         else{
             out.append(isDouble ? "::VectorDoubleSetW(" : "::VectorSetW(");
@@ -1474,6 +1634,13 @@ b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u
         return false;
     const MStringView varSimdType = ResolveLocalVarDeclSimdType(stmt, m_symbols);
     if(SymbolTable::IsSimdRegisterType(varSimdType)){
+        if(SymbolTable::IsSimdRegisterMatrixType(varSimdType)){
+            if(const Expr* transposeSrcMat = __hidden_adhd_simd_stmt::TryExtractDirectTransposeMatSource(stmt)){
+                u32 validUseCount = 0u;
+                if(__hidden_adhd_simd_stmt::CanElideConstTransposeVarDeclInStmts(stmt.name, transposeSrcMat->text, m_remainingBlockStatements, m_symbols, activeLocalVarDecls(), validUseCount) && validUseCount > 0u)
+                    return true;
+            }
+        }
         const MStringView regType = SimdRegisterCppType(varSimdType);
         emitIndent(out, indent);
         if(stmt.isConst)

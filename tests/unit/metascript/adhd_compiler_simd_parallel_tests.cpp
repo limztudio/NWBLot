@@ -303,6 +303,16 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "    const VectorSingle pt = mul(VectorSingle(box.minPt, s_AffineW), scaledMat);\r\n"
         "    const VectorSingle pt2 = mul(VectorSingle(a.x, a.y, 0.0f, 1.0f), projMat);\r\n"
         "    const VectorSingle nrm = mul(VectorSingle(b, 0.0f), m) + unitMul;\r\n"
+        "    const MatrixSingle transposed = transpose(m);\r\n"
+        "    const VectorSingle transRow0 = mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), transposed);\r\n"
+        "    const VectorSingle transRow2 = mul(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), transpose(m));\r\n"
+        "    const VectorSingle matCol0 = mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), m);\r\n"
+        "    const VectorSingle norm3 = normalize(a.xyz);\r\n"
+        "    const VectorSingle norm3ZeroW = VectorSingle(norm3, 0.0f);\r\n"
+        "    const VectorDouble minD(cast<f64>(a.x), cast<f64>(a.y), 0.0, 0.0);\r\n"
+        "    const VectorDouble divD = VectorDouble(d.x, d.y, 0.0, 0.0) / xyUnitZW;\r\n"
+        "    const VectorDouble maxD = max(minD, divD);\r\n"
+        "    const VectorSingle narrowXY = VectorSingle(cast<f32>(maxD.x), cast<f32>(maxD.y), 0.0f, 0.0f);\r\n"
         "    outBox.extent4 = f32x4(a, b.w);\r\n"
         "    if(!isFinite(d.x) || d.x > 10.0 || !isFinite(d.y) || d.y > 10.0)\r\n"
         "        return constZero;\r\n"
@@ -312,7 +322,7 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "        return unitVec;\r\n"
         "    if(a.x <= a.z && a.y <= a.w && isFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n"
         "        return halfVec + axisW + VectorSingle(xyUnitZW);\r\n"
-        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
+        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + narrowXY + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
         "}\r\n";
 
     CompileResult optRes(arena.arena);
@@ -378,6 +388,12 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("::Vector2LessOrEqual(a, ::VectorSwizzle<2u, 3u, 2u, 3u>(a))"), MStringView::npos);
     EXPECT_NE(optView.find("::VectorIsFinite(b, ::VectorComponentMask::s_XYZ)"), MStringView::npos);
     EXPECT_NE(optView.find("::Vector3Equal(a, b)"), MStringView::npos);
+    EXPECT_EQ(optView.find("::MatrixTranspose(m)"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle transRow0 = m.v[0u];"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle transRow2 = m.v[2u];"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle matCol0 = ::Vector4Transform(::s_SIMDIdentityR0, m);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle norm3ZeroW = norm3;"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle narrowXY = ::ConvertVectorDoubleToSingle(maxD);"), MStringView::npos);
 }
 
 

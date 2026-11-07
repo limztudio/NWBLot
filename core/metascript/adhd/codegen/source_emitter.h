@@ -24,6 +24,7 @@ public:
         : m_arena(arena)
         , m_symbols(symbols)
         , m_typeEmitter(symbols)
+        , m_activeLocalVarDecls(arena)
     {}
 
 
@@ -64,9 +65,17 @@ private:
     MetaArena& m_arena;
     const SymbolTable& m_symbols;
     CppTypeEmitter m_typeEmitter;
+    [[nodiscard]] Span<const Stmt* const> activeLocalVarDecls()const noexcept{
+        return Span<const Stmt* const>(m_activeLocalVarDecls.data(), m_activeLocalVarDecls.size());
+    }
+
+
+private:
     mutable u32 m_activeSwitchBreakLabelLine = 0u;
     mutable TokenType::Enum m_unfusedLogicOp = TokenType::EndOfFile;
     mutable const MVector<const Expr*>* m_skippedCtorAssignExprs = nullptr;
+    mutable MVector<const Stmt*> m_activeLocalVarDecls;
+    mutable Span<const Stmt* const> m_remainingBlockStatements;
 };
 
 

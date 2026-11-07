@@ -149,7 +149,11 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
 
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
     m_activeSwitchBreakLabelLine = 0u;
+    m_activeLocalVarDecls.clear();
+    m_remainingBlockStatements = {};
     emitStatementList(out, method.body, indent);
+    m_activeLocalVarDecls.clear();
+    m_remainingBlockStatements = {};
     m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
     m_skippedCtorAssignExprs = nullptr;
 }

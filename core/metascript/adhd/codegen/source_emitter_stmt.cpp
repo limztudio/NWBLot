@@ -84,13 +84,24 @@ namespace __hidden_adhd_source_emitter_stmt{
 
 
 void SourceEmitter::emitStatementList(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
-    for(const Stmt* stmt : statements){
-        if(stmt)
-            emitStmt(out, *stmt, indent);
+    const usize prevLocalDeclCount = m_activeLocalVarDecls.size();
+    const Span<const Stmt* const> prevRemaining = m_remainingBlockStatements;
+    for(usize i = 0u; i < statements.size(); ++i){
+        const Stmt* stmt = statements[i];
+        if(!stmt)
+            continue;
+        m_remainingBlockStatements = Span<const Stmt* const>(statements.data() + (i + 1u), statements.size() - (i + 1u));
+        emitStmt(out, *stmt, indent);
+        if(stmt->kind == StmtKind::VarDecl && !stmt->name.empty())
+            m_activeLocalVarDecls.push_back(stmt);
     }
+    m_remainingBlockStatements = prevRemaining;
+    m_activeLocalVarDecls.resize(prevLocalDeclCount);
 }
 
 void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
+    const usize prevLocalDeclCount = m_activeLocalVarDecls.size();
+    const Span<const Stmt* const> prevRemaining = m_remainingBlockStatements;
     for(usize i = 0u; i < statements.size(); ++i){
         const Stmt* child = statements[i];
         if(!child)
@@ -98,6 +109,7 @@ void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const S
         const b8 isTrailingBreak = (child->kind == StmtKind::Break) && (i + 1u == statements.size());
         if(isTrailingBreak)
             continue;
+        m_remainingBlockStatements = Span<const Stmt* const>(statements.data() + (i + 1u), statements.size() - (i + 1u));
         if(child->kind == StmtKind::Block){
             emitIndent(out, indent);
             out.append("{\r\n");
@@ -135,8 +147,12 @@ void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const S
         }
         else{
             emitStmt(out, *child, indent);
+            if(child->kind == StmtKind::VarDecl && !child->name.empty())
+                m_activeLocalVarDecls.push_back(child);
         }
     }
+    m_remainingBlockStatements = prevRemaining;
+    m_activeLocalVarDecls.resize(prevLocalDeclCount);
 }
 
 void SourceEmitter::emitLoopBodyStatements(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
@@ -441,7 +457,11 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
         out.append("){\r\n");
+        const usize prevForRangeDecls = m_activeLocalVarDecls.size();
+        if(!stmt.name.empty())
+            m_activeLocalVarDecls.push_back(&stmt);
         emitLoopBodyStatements(out, stmt.statements, indent + 1u);
+        m_activeLocalVarDecls.resize(prevForRangeDecls);
         emitIndent(out, indent);
         out.append("}\r\n");
         break;
@@ -449,6 +469,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
     case StmtKind::ForIndex:{
         emitIndent(out, indent);
         out.append("for(");
+        const usize prevForIdxDecls = m_activeLocalVarDecls.size();
         if(stmt.initStmt && stmt.initStmt->varType){
             m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
             out.push_back(' ');
@@ -460,6 +481,8 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 emitExpr(out, *stmt.initStmt->arguments[0]);
             else
                 out.append("0");
+            if(!stmt.initStmt->name.empty())
+                m_activeLocalVarDecls.push_back(&stmt);
         }
         else if(stmt.initStmt && stmt.initStmt->kind == StmtKind::ExprStmt && stmt.initStmt->expr){
             emitExpr(out, *stmt.initStmt->expr);
@@ -472,6 +495,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             emitExpr(out, *stmt.stepExpr);
         out.append("){\r\n");
         emitLoopBodyStatements(out, stmt.statements, indent + 1u);
+        m_activeLocalVarDecls.resize(prevForIdxDecls);
         emitIndent(out, indent);
         out.append("}\r\n");
         break;

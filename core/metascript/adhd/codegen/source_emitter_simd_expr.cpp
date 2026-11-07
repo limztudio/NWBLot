@@ -439,6 +439,43 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
     return nullptr;
 }
 
+[[nodiscard]] const Expr* TryGetTransposeSourceMatrix(
+    const Expr& matExpr,
+    const Span<const Stmt* const> localVarDecls
+)noexcept{
+    const Expr* callExpr = &matExpr;
+    if(matExpr.kind == ExprKind::Identifier){
+        const Stmt* foundDecl = FindLocalConstVarDecl(matExpr.text, localVarDecls);
+        if(!foundDecl)
+            return nullptr;
+        if(foundDecl->isCtorInit && foundDecl->arguments.size() == 1u && foundDecl->arguments[0])
+            callExpr = foundDecl->arguments[0];
+        else if(!foundDecl->isCtorInit && foundDecl->expr)
+            callExpr = foundDecl->expr;
+        else
+            return nullptr;
+    }
+    if(
+        callExpr->kind == ExprKind::Call
+        && callExpr->isBuiltinCall
+        && callExpr->lhs
+        && callExpr->lhs->kind == ExprKind::Identifier
+        && callExpr->lhs->text == "transpose"
+        && callExpr->arguments.size() == 1u
+        && callExpr->arguments[0]
+    ){
+        const Expr* srcMat = callExpr->arguments[0];
+        if(
+            SymbolTable::IsSimdRegisterMatrixType(srcMat->resolvedSimdType)
+            && IsPureSimdAddressExpr(*srcMat)
+            && (srcMat->kind == ExprKind::Identifier || srcMat->kind == ExprKind::ThisMember || srcMat->kind == ExprKind::MemberAccess || srcMat->kind == ExprKind::Index)
+        ){
+            return srcMat;
+        }
+    }
+    return nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1270,7 +1307,12 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_SIMD_LANE_VECTOR_INTRINSIC
             if(!laneVectorSuffix.empty() && !expr.arguments.empty() && expr.arguments[0]){
-                const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0], &m_symbols);
+                u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0], &m_symbols);
+                if(expr.arguments.size() >= 2u && expr.arguments[1] && !expr.arguments[1]->resolvedSimdType.empty()){
+                    const u32 effLanes1 = InferEffectiveSimdLanes(*expr.arguments[1], &m_symbols);
+                    if(effLanes1 > effLanes)
+                        effLanes = effLanes1;
+                }
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes > maxVectorLanes ? maxVectorLanes : effLanes, laneVectorSuffix);
                 emitSimdCallRegArgsAndClose(expr.arguments);
                 return;
@@ -1290,6 +1332,16 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 }
                 const Expr& vecExpr = lhsIsMat ? *expr.arguments[1] : *expr.arguments[0];
                 const Expr& matExpr = lhsIsMat ? *expr.arguments[0] : *expr.arguments[1];
+                u32 unitRowIdx = 0u;
+                if(!isInt && TryMatchIdentityRowIndex(vecExpr, m_symbols, unitRowIdx, activeLocalVarDecls())){
+                    if(const Expr* transposeSrcMat = TryGetTransposeSourceMatrix(matExpr, activeLocalVarDecls())){
+                        emitSimdRegExpr(out, *transposeSrcMat, transposeSrcMat->resolvedSimdType);
+                        out.append(".v[");
+                        AppendUnsignedDecimal(out, unitRowIdx);
+                        out.append("u]");
+                        return;
+                    }
+                }
                 const Expr* transformBaseVec = nullptr;
                 MStringView transformRegType;
                 MStringView transformLoadFn;
@@ -1316,7 +1368,11 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                     out.push_back(')');
                     return;
                 }
-                const u32 effLanes = InferEffectiveSimdLanes(vecExpr, &m_symbols);
+                u32 effLanes = 4u;
+                if(vecExpr.kind == ExprKind::MemberAccess && vecExpr.isSwizzle && vecExpr.text.size() >= 2u && vecExpr.text.size() <= 4u)
+                    effLanes = static_cast<u32>(vecExpr.text.size());
+                else
+                    (void)SymbolTable::IsSimdVectorType(vecExpr.resolvedSimdType, effLanes);
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "Transform");
                 emitSimdRegExpr(out, vecExpr, vecExpr.resolvedSimdType);
                 out.append(", ");

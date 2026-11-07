@@ -29,6 +29,9 @@ NWB_ADHD_BEGIN
 [[nodiscard]] MStringView SimdInPlaceSignFlipMaskConstant(u8 negMask, b8 isDouble)noexcept;
 [[nodiscard]] MStringView SimdComponentMaskConstant(u8 laneMask, b8 isDouble)noexcept;
 void AppendIntSimdLaneExtract(MString& out, MStringView varName, u32 lane, b8 isDouble, MStringView laneType);
+[[nodiscard]] const Stmt* FindLocalConstVarDecl(MStringView name, Span<const Stmt* const> localVarDecls)noexcept;
+[[nodiscard]] u32 InferSimdRegZeroedAboveLane(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr, Span<const Stmt* const> localVarDecls = {})noexcept;
+[[nodiscard]] b8 TryMatchIdentityRowIndex(const Expr& expr, const SymbolTable& symbols, u32& outRowIndex, Span<const Stmt* const> localVarDecls = {})noexcept;
 [[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
 [[nodiscard]] const Expr& UnwrapConstScalarExpr(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;
 [[nodiscard]] b8 IsUnitFloatLiteral(const Expr& expr, const SymbolTable* symbols = nullptr)noexcept;

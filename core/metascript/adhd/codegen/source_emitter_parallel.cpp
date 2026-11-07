@@ -109,7 +109,11 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             emitExpr(out, *stmt.expr);
         out.append(")[__adhd_idx];\r\n");
 
+        const usize prevParRangeDecls = m_activeLocalVarDecls.size();
+        if(!stmt.name.empty())
+            m_activeLocalVarDecls.push_back(&stmt);
         emitStatementList(out, stmt.statements, indent + 1u);
+        m_activeLocalVarDecls.resize(prevParRangeDecls);
 
         emitIndent(out, indent);
         out.append("}, ");
@@ -182,7 +186,11 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                 out.append(">(__adhd_idx);\r\n");
             }
         }
+        const usize prevParIdxDecls = m_activeLocalVarDecls.size();
+        if(stmt.initStmt && !stmt.initStmt->name.empty())
+            m_activeLocalVarDecls.push_back(&stmt);
         emitStatementList(out, stmt.statements, indent + 1u);
+        m_activeLocalVarDecls.resize(prevParIdxDecls);
         emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);
@@ -220,7 +228,11 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         out.append("__adhd_task_scope.submit([&]()noexcept{\r\n");
         if(stmt.usesScratchArena)
             emitScratchArenaPrologue(out, indent + 1u, "parallel");
+        const usize prevParIdxDecls = m_activeLocalVarDecls.size();
+        if(stmt.initStmt && !stmt.initStmt->name.empty())
+            m_activeLocalVarDecls.push_back(&stmt);
         emitStatementList(out, stmt.statements, indent + 1u);
+        m_activeLocalVarDecls.resize(prevParIdxDecls);
         emitIndent(out, indent);
         out.append("}, ");
         AppendTaskOptions(out, stmt);

@@ -227,8 +227,24 @@ void SourceEmitter::emitCtorOrCallArgs(MString& out, const MStringView baseTypeN
         return;
     }
 
-    out.push_back(useBracesForList ? '{' : '(');
     u32 ctorVecLanes = 0u;
+    const b8 isStorageOrUnalignedVecCtor = !baseTypeName.empty()
+        && (SymbolTable::IsSimdStorageVectorType(baseTypeName, ctorVecLanes) || SymbolTable::IsUnalignedVectorType(baseTypeName, ctorVecLanes));
+    if(isStorageOrUnalignedVecCtor){
+        b8 allZeroVecArgs = true;
+        for(const Expr* arg : arguments){
+            if(!arg || !IsZeroScalarLiteral(*arg, &m_symbols)){
+                allZeroVecArgs = false;
+                break;
+            }
+        }
+        if(arguments.empty() || allZeroVecArgs){
+            out.append("{}");
+            return;
+        }
+    }
+
+    out.push_back(useBracesForList ? '{' : '(');
     const b8 isScalarSplatCtor = !baseTypeName.empty()
         && (SymbolTable::IsSimdVectorType(baseTypeName, ctorVecLanes) || SymbolTable::IsUnalignedVectorType(baseTypeName, ctorVecLanes))
         && arguments.size() == 1u && arguments[0]

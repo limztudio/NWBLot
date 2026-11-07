@@ -266,6 +266,14 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "    const VectorSingle satMinMax = min(max(b, 0.0f), 1.0f);\r\n"
         "    const VectorSingle storageSwiz = VectorSingle(box.minPt.z, box.minPt.y, box.minPt.x, 0.0f);\r\n"
         "    const VectorSingle storageBinOp = VectorSingle(box.minPt.x + box.extent4.x, box.minPt.y + box.extent4.y, box.minPt.z + box.extent4.z, 0.0f);\r\n"
+        "    const VectorSingle storageNeg3 = VectorSingle(-box.minPt.x, -box.minPt.y, -box.minPt.z, 0.0f);\r\n"
+        "    const VectorSingle laneMathMin = VectorSingle(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w));\r\n"
+        "    const VectorSingle altMaskSplat = VectorSingle(scale, 0.0f, scale, 0.0f);\r\n"
+        "    const VectorSingle zeroSubAdd = (0.0f - a) + (b - 0.0f);\r\n"
+        "    const VectorSingle lerpZero = lerp(a, b, 0.0f);\r\n"
+        "    const f32 swizGetX = (a.zyx).x;\r\n"
+        "    const MatrixSingle mulTrans = transpose(m * scaledMat);\r\n"
+        "    const f32x4 zeroStorageVec = f32x4(0.0f);\r\n"
         "    const f32x4x4 zeroStorageMat = f32x4x4(0.0f);\r\n"
         "    const VectorSingle unitVec = VectorSingle(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
         "    const VectorSingle halfVec = VectorSingle(0.5f);\r\n"
@@ -300,7 +308,7 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "        return unitVec;\r\n"
         "    if(a.x <= a.z && a.y <= a.w && isFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n"
         "        return halfVec + axisW + VectorSingle(xyUnitZW);\r\n"
-        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + proj + scaled + invLen + pt + pt2 + nrm + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + VectorSingle(dot3ZeroW + sumAll + zeroStorageMat[0][0]);\r\n"
+        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + proj + scaled + invLen + pt + pt2 + nrm + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
         "}\r\n";
 
     CompileResult optRes(arena.arena);
@@ -321,6 +329,14 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("const ::SIMDVectorSingle satMinMax = ::VectorSaturate(b);"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle storageSwiz = ::VectorSwizzle<2u, 1u, 0u, 3u>(::LoadFloat(box.minPt));"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle storageBinOp = ::VectorAndInt(::VectorAdd(::LoadFloat(box.minPt), ::LoadFloat(box.extent4)), ::s_SIMDMask3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle storageNeg3 = ::VectorXorInt(::LoadFloat(box.minPt), ::s_SIMDNegate3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle laneMathMin = ::VectorMin(a, b);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle altMaskSplat = ::VectorAndCInt(::VectorReplicate(scale), ::s_SIMDSelect0101);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle zeroSubAdd = ::VectorSubtract(b, a);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle lerpZero = a;"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 swizGetX = ::VectorGetZ(a);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDMatrix mulTrans = ::MatrixMultiplyTranspose(m, scaledMat);"), MStringView::npos);
+    EXPECT_NE(optView.find("const Float4 zeroStorageVec = Float4{};"), MStringView::npos);
     EXPECT_NE(optView.find("const Float44 zeroStorageMat = Float44{};"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDOne"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDOneHalf"), MStringView::npos);

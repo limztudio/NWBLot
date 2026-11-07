@@ -37,6 +37,7 @@ void AppendIntSimdLaneExtract(MString& out, MStringView varName, u32 lane, b8 is
 [[nodiscard]] MStringView TryMatchKnownSimdFloatVectorConstant(Span<const Expr* const> arguments, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
 [[nodiscard]] b8 IsSimdZeroFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
 [[nodiscard]] b8 IsSimdUnitFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
+[[nodiscard]] b8 IsSimdNegativeUnitFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
 [[nodiscard]] b8 IsIdentityMatrixCtorArgs(Span<const Expr* const> arguments, const SymbolTable& symbols)noexcept;
 [[nodiscard]] b8 TryGetStorageVectorLoadInfo(const Expr& srcExpr, b8 targetIsDouble, MStringView& outLoadFn, u32& outLanes)noexcept;
 [[nodiscard]] b8 TryGetFloatVectorSourceInfo(const Expr& srcExpr, b8 targetIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept;

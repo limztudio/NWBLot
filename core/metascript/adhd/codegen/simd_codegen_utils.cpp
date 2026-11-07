@@ -139,6 +139,7 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
     case 0x8u: return isDouble ? "::s_DoubleSIMDMaskW" : "::s_SIMDMaskW";
     case 0x3u: return isDouble ? "::s_DoubleSIMDMaskXY" : "::s_SIMDMaskXY";
     case 0x7u: return isDouble ? "::s_DoubleSIMDMask3" : "::s_SIMDMask3";
+    case 0xAu: return isDouble ? "::s_DoubleSIMDSelect0101" : "::s_SIMDSelect0101";
     default: return {};
     }
 }
@@ -338,6 +339,8 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
 [[nodiscard]] b8 IsSimdZeroFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
     if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
         return IsZeroScalarLiteral(expr, symbols);
+    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs)
+        return IsSimdZeroFloatVectorExpr(*expr.lhs, isDouble, symbols);
     if(symbols){
         if(const Expr* splatScalar = TryUnwrapSimdSplatScalarArg(expr, *symbols))
             return IsZeroScalarLiteral(*splatScalar, symbols);
@@ -375,6 +378,8 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
 [[nodiscard]] b8 IsSimdUnitFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
     if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
         return IsUnitFloatLiteral(expr, symbols);
+    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs)
+        return IsSimdNegativeUnitFloatVectorExpr(*expr.lhs, isDouble, symbols);
     if(symbols){
         if(const Expr* splatScalar = TryUnwrapSimdSplatScalarArg(expr, *symbols))
             return IsUnitFloatLiteral(*splatScalar, symbols);
@@ -393,6 +398,34 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
             const Span<const Expr* const> constArgs = __hidden_adhd_simd_codegen_utils::ExtractGlobalConstCtorArgs(*globalConst);
             if(!constArgs.empty())
                 return TryMatchKnownSimdFloatVectorConstant(constArgs, isDouble, symbols) == expectedOneConst;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] b8 IsSimdNegativeUnitFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
+    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
+        return IsNegativeUnitFloatLiteral(expr, symbols);
+    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs)
+        return IsSimdUnitFloatVectorExpr(*expr.lhs, isDouble, symbols);
+    if(symbols){
+        if(const Expr* splatScalar = TryUnwrapSimdSplatScalarArg(expr, *symbols))
+            return IsNegativeUnitFloatLiteral(*splatScalar, symbols);
+    }
+    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
+    if(expr.resolvedSimdType != expectedSimd)
+        return false;
+    const MStringView expectedNegOneConst = isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne";
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
+        if(baseCallee == expectedSimd)
+            return TryMatchKnownSimdFloatVectorConstant(expr.arguments, isDouble, symbols) == expectedNegOneConst;
+    }
+    if(symbols && expr.kind == ExprKind::Identifier){
+        if(const Stmt* globalConst = symbols->findGlobalConstant(expr.text)){
+            const Span<const Expr* const> constArgs = __hidden_adhd_simd_codegen_utils::ExtractGlobalConstCtorArgs(*globalConst);
+            if(!constArgs.empty())
+                return TryMatchKnownSimdFloatVectorConstant(constArgs, isDouble, symbols) == expectedNegOneConst;
         }
     }
     return false;
@@ -621,8 +654,9 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     if(!vecInfo || !vecInfo->isFloatReg)
         return false;
     const auto isUnitOrNegUnitOperand = [&](const Expr& op)noexcept -> b8{
-        const Expr* scalar = op.resolvedSimdType.empty() ? &op : (symbols ? TryUnwrapSimdSplatScalarArg(op, *symbols) : nullptr);
-        return scalar && (IsUnitFloatLiteral(*scalar, symbols) || IsNegativeUnitFloatLiteral(*scalar, symbols));
+        return IsSimdZeroFloatVectorExpr(op, vecInfo->isDoubleReg, symbols)
+            || IsSimdUnitFloatVectorExpr(op, vecInfo->isDoubleReg, symbols)
+            || IsSimdNegativeUnitFloatVectorExpr(op, vecInfo->isDoubleReg, symbols);
     };
     if(isUnitOrNegUnitOperand(*expr->lhs) || isUnitOrNegUnitOperand(*expr->rhs))
         return false;

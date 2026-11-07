@@ -802,7 +802,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                         vecBase = arg0.lhs;
                     }
                     else{
-                        const u32 effLanes = InferEffectiveSimdLanes(arg0);
+                        const u32 effLanes = InferEffectiveSimdLanes(arg0, &m_symbols);
                         activeMask = effLanes == 2u ? 0x3u : (effLanes == 3u ? 0x7u : 0xFu);
                     }
                 }

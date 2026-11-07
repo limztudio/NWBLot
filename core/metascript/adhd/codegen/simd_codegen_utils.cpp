@@ -807,6 +807,98 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     return TryMatchSingleLaneAccess(expr->lhs, outBase, outLane);
 }
 
+[[nodiscard]] b8 TryMatchSimdMaxComponentReduction(
+    const Expr& expr,
+    const Expr*& outBaseVec,
+    b8& outIsDouble,
+    u32& outLanes,
+    b8& outIsAbs
+)noexcept{
+    if(
+        expr.kind != ExprKind::Call
+        || !expr.isBuiltinCall
+        || !expr.lhs
+        || expr.lhs->kind != ExprKind::Identifier
+        || expr.lhs->text != "max"
+        || expr.arguments.size() != 2u
+        || !expr.arguments[0]
+        || !expr.arguments[1]
+        || !expr.resolvedSimdType.empty()
+        || !expr.resolvedUnalignedType.empty()
+    ){
+        return false;
+    }
+
+    const Expr* firstBase = nullptr;
+    b8 baseIsDouble = false;
+    u32 baseZeroedAbove = 4u;
+    b8 firstIsAbs = false;
+    u8 laneMask = 0u;
+
+    const auto visitNode = [&](auto& self, const Expr* node)noexcept -> b8{
+        if(!node || !node->resolvedSimdType.empty() || !node->resolvedUnalignedType.empty())
+            return false;
+        if(
+            node->kind == ExprKind::Call
+            && node->isBuiltinCall
+            && node->lhs
+            && node->lhs->kind == ExprKind::Identifier
+            && node->lhs->text == "max"
+            && node->arguments.size() == 2u
+            && node->arguments[0]
+            && node->arguments[1]
+        ){
+            return self(self, node->arguments[0]) && self(self, node->arguments[1]);
+        }
+
+        const Expr* leafBase = nullptr;
+        u32 leafLane = 0u;
+        b8 leafIsAbs = false;
+        if(
+            node->kind == ExprKind::Call
+            && node->isBuiltinCall
+            && node->lhs
+            && node->lhs->kind == ExprKind::Identifier
+            && node->lhs->text == "abs"
+            && node->arguments.size() == 1u
+            && node->arguments[0]
+        ){
+            if(!TryMatchSingleLaneAccess(node->arguments[0], leafBase, leafLane) || !leafBase)
+                return false;
+            leafIsAbs = true;
+        }
+        else if(!TryMatchSingleLaneAccess(node, leafBase, leafLane) || !leafBase){
+            return false;
+        }
+
+        if(!firstBase){
+            MStringView regType;
+            MStringView loadFn;
+            if(!TryGetAnyFloatVectorSourceInfo(*leafBase, baseIsDouble, regType, loadFn, baseZeroedAbove))
+                return false;
+            firstBase = leafBase;
+            firstIsAbs = leafIsAbs;
+        }
+        else if(leafIsAbs != firstIsAbs || !AreSamePureSimdExpr(*firstBase, *leafBase)){
+            return false;
+        }
+
+        if(leafLane >= baseZeroedAbove || leafLane >= 4u)
+            return false;
+        laneMask |= static_cast<u8>(1u << leafLane);
+        return true;
+    };
+
+    if(!visitNode(visitNode, &expr) || !firstBase || (laneMask != 0x7u && laneMask != 0xFu))
+        return false;
+
+    outBaseVec = firstBase;
+    outIsDouble = baseIsDouble;
+    outLanes = (laneMask == 0x7u) ? 3u : 4u;
+    outIsAbs = firstIsAbs;
+    return true;
+}
+
 [[nodiscard]] MStringView ResolveLocalVarDeclSimdType(const Stmt& stmt, const SymbolTable& symbols)noexcept{
     if(stmt.usesScratchArena || (stmt.varType && stmt.varType->refMode != ParamPassingMode::None))
         return {};

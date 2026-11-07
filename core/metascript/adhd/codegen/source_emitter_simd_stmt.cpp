@@ -40,9 +40,10 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             emitSimdRegExpr(out, *arguments[0], simdType);
             return;
         }
-        if((arguments.size() == 3u || arguments.size() == 4u) && arguments[0] && SymbolTable::IsSimdRegisterVectorType(arguments[0]->resolvedSimdType)){
+        u32 rowVecLanes = 0u;
+        if((arguments.size() == 3u || arguments.size() == 4u) && arguments[0] && (SymbolTable::IsSimdVectorType(arguments[0]->resolvedSimdType, rowVecLanes) || !arguments[0]->resolvedUnalignedType.empty())){
             const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType);
-            const MStringView rowSimdType = matInfo ? matInfo->rowVectorType : arguments[0]->resolvedSimdType;
+            const MStringView rowSimdType = matInfo ? matInfo->rowVectorType : (isDouble ? MStringView("VectorDouble") : MStringView("VectorSingle"));
             out.append(isDouble ? "::SIMDMatrixDouble{ .v = { " : "::SIMDMatrix{ .v = { ");
             for(usize i = 0u; i < arguments.size(); ++i){
                 if(i > 0u)
@@ -308,6 +309,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         MStringView cV1LoadFn;
         Array<u32, 4> cPermIdx{};
         u8 cInPlaceMask = 0u;
+        u8 cV0UsedMask = 0u;
         b8 cAllInPlaceOrZero = true;
         b8 cHasZeroLane = false;
         b8 cValid = true;
@@ -328,6 +330,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                     cV0LoadFn = baseLoadFn;
                     cV0ZeroedAbove = baseZeroedAbove;
                     cPermIdx[i] = laneIdx;
+                    cV0UsedMask |= static_cast<u8>(1u << laneIdx);
                     if(laneIdx == i)
                         cInPlaceMask |= static_cast<u8>(1u << i);
                     else
@@ -335,6 +338,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 }
                 else if(AreSamePureSimdExpr(*cV0, *base)){
                     cPermIdx[i] = laneIdx;
+                    cV0UsedMask |= static_cast<u8>(1u << laneIdx);
                     if(laneIdx == i && !cV1)
                         cInPlaceMask |= static_cast<u8>(1u << i);
                     else
@@ -365,7 +369,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 break;
             }
         }
-        if(cValid && cV0){
+        if(cValid && cV0 && (cV1 || (cV0UsedMask & (cV0UsedMask - 1u)) != 0u)){
             const auto emitCastSourceVec = [&](const Expr& srcVec, const MStringView regType, const MStringView loadFn){
                 if(!regType.empty()){
                     emitSimdRegExpr(out, srcVec, regType);
@@ -403,6 +407,33 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                     out.push_back(')');
                     return;
                 }
+            }
+            if(!cV1 && !cAllInPlaceOrZero && !cHasZeroLane){
+                if(isDouble){
+                    out.append("::ConvertVectorSingleToDouble(::VectorSwizzle<");
+                    for(u32 i = 0u; i < 4u; ++i){
+                        if(i > 0u)
+                            out.append(", ");
+                        AppendUnsignedDecimal(out, cPermIdx[i]);
+                        out.push_back('u');
+                    }
+                    out.append(">(");
+                    emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
+                    out.append("))");
+                }
+                else{
+                    out.append("::VectorSwizzle<");
+                    for(u32 i = 0u; i < 4u; ++i){
+                        if(i > 0u)
+                            out.append(", ");
+                        AppendUnsignedDecimal(out, cPermIdx[i]);
+                        out.push_back('u');
+                    }
+                    out.append(">(::ConvertVectorDoubleToSingle(");
+                    emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
+                    out.append("))");
+                }
+                return;
             }
             if(cV1 && !cHasZeroLane){
                 if(isDouble){

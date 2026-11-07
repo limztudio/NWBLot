@@ -127,6 +127,12 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
         }
         if(callee == "rsqrt" && scalarExpr.arguments.size() == 1u && TryMatchSimdLengthSqVecArg(scalarExpr.arguments[0], isDouble, symbols))
             return true;
+        const Expr* maxBaseVec = nullptr;
+        b8 maxIsDouble = false;
+        u32 maxLanes = 0u;
+        b8 maxIsAbs = false;
+        if(callee == "max" && TryMatchSimdMaxComponentReduction(scalarExpr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble)
+            return true;
     }
     if(scalarExpr.kind == ExprKind::Binary && scalarExpr.op == TokenType::Slash && scalarExpr.lhs && scalarExpr.rhs){
         if(IsUnitFloatLiteral(*scalarExpr.lhs, &symbols) && TryMatchSimdLengthVecArg(scalarExpr.rhs, isDouble, symbols))
@@ -196,6 +202,28 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
             }
         }
         return false;
+    }
+    if(vecExpr.arguments.size() == 3u && vecExpr.arguments[0] && vecExpr.arguments[1] && vecExpr.arguments[2]){
+        MStringView regType2;
+        MStringView loadFn2;
+        u32 zeroedAbove2 = 4u;
+        if(
+            TryGetFloatVectorSourceInfo(*vecExpr.arguments[0], isDouble, regType2, loadFn2, zeroedAbove2)
+            && zeroedAbove2 == 2u
+            && vecExpr.arguments[1]->resolvedSimdType.empty()
+            && vecExpr.arguments[1]->resolvedUnalignedType.empty()
+            && vecExpr.arguments[2]->resolvedSimdType.empty()
+            && vecExpr.arguments[2]->resolvedUnalignedType.empty()
+            && IsZeroScalarLiteral(*vecExpr.arguments[1], &symbols)
+            && IsUnitFloatLiteral(*vecExpr.arguments[2], &symbols)
+        ){
+            outBaseVec = vecExpr.arguments[0];
+            outBaseRegType = regType2;
+            outBaseLoadFn = loadFn2;
+            outTransformLanes = 2u;
+            outIsNormal = false;
+            return true;
+        }
     }
     if((vecExpr.arguments.size() == 3u || vecExpr.arguments.size() == 4u) && vecExpr.arguments[0] && vecExpr.arguments[1] && vecExpr.arguments[2]){
         const Expr* baseVec = nullptr;
@@ -938,6 +966,20 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                         out.push_back(')');
                         return;
                     }
+                }
+                const Expr* maxBaseVec = nullptr;
+                b8 maxIsDouble = false;
+                u32 maxLanes = 0u;
+                b8 maxIsAbs = false;
+                if(callee == "max" && TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble && maxBaseVec){
+                    AppendSimdLaneCountIntrinsicPrefix(out, isDouble, maxLanes, "MaxComponent");
+                    if(maxIsAbs)
+                        out.append(isDouble ? "::VectorDoubleAbs(" : "::VectorAbs(");
+                    emitSimdRegExpr(out, *maxBaseVec, isDouble ? "VectorDouble" : "VectorSingle");
+                    if(maxIsAbs)
+                        out.push_back(')');
+                    out.push_back(')');
+                    return;
                 }
             }
             if(expr.kind == ExprKind::Binary && expr.op == TokenType::Slash && expr.lhs && expr.rhs && IsUnitFloatLiteral(*expr.lhs, &m_symbols)){

@@ -70,6 +70,7 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, b8 isDouble, u32 effLanes,
 [[nodiscard]] b8 TryMatchSingleLaneAccess(const Expr* expr, const Expr*& outBase, u32& outLane)noexcept;
 [[nodiscard]] b8 TryMatchNegatedSingleLaneAccess(const Expr* expr, const Expr*& outBase, u32& outLane)noexcept;
 [[nodiscard]] b8 TryMatchCastSingleLaneAccess(const Expr* expr, MStringView expectedScalarType, const SymbolTable& symbols, const Expr*& outBase, u32& outLane)noexcept;
+[[nodiscard]] b8 TryMatchSimdMaxComponentReduction(const Expr& expr, const Expr*& outBaseVec, b8& outIsDouble, u32& outLanes, b8& outIsAbs)noexcept;
 [[nodiscard]] MStringView ResolveLocalVarDeclSimdType(const Stmt& stmt, const SymbolTable& symbols)noexcept;
 
 

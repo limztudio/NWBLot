@@ -864,6 +864,21 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 out.append("))");
                 break;
             }
+            const Expr* maxBaseVec = nullptr;
+            b8 maxIsDouble = false;
+            u32 maxLanes = 0u;
+            b8 maxIsAbs = false;
+            if(callee == "max" && TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxBaseVec){
+                out.append(maxIsDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
+                AppendSimdLaneCountIntrinsicPrefix(out, maxIsDouble, maxLanes, "MaxComponent");
+                if(maxIsAbs)
+                    out.append(maxIsDouble ? "::VectorDoubleAbs(" : "::VectorAbs(");
+                emitSimdRegExpr(out, *maxBaseVec, maxIsDouble ? "VectorDouble" : "VectorSingle");
+                if(maxIsAbs)
+                    out.push_back(')');
+                out.append("))");
+                break;
+            }
         }
 
         if(expr.isStringSubstr && expr.lhs && expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
@@ -980,6 +995,77 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         break;
     }
     case ExprKind::BitCast:{
+        if(
+            expr.targetType
+            && expr.targetType->refMode == ParamPassingMode::None
+            && expr.targetType->templateArgs.empty()
+            && expr.lhs
+            && !expr.lhs->isMutArg
+        ){
+            const Expr* vecBase = nullptr;
+            u32 staticLane = 0u;
+            const Expr* dynamicIdx = nullptr;
+            if(
+                expr.lhs->kind == ExprKind::MemberAccess
+                && !expr.lhs->isSwizzle
+                && expr.lhs->lhs
+                && SymbolTable::IsSimdRegisterVectorType(expr.lhs->lhs->resolvedSimdType)
+                && IsSingleSwizzleLane(expr.lhs->text, staticLane)
+            ){
+                vecBase = expr.lhs->lhs;
+                while(
+                    vecBase->kind == ExprKind::MemberAccess
+                    && vecBase->isSwizzle
+                    && vecBase->lhs
+                    && vecBase->lhs->resolvedSimdType == vecBase->resolvedSimdType
+                    && staticLane < vecBase->text.size()
+                ){
+                    staticLane = MapSwizzleCharToLane(vecBase->text[staticLane]);
+                    vecBase = vecBase->lhs;
+                }
+            }
+            else if(
+                expr.lhs->kind == ExprKind::Index
+                && expr.lhs->lhs
+                && expr.lhs->rhs
+                && SymbolTable::IsSimdRegisterVectorType(expr.lhs->lhs->resolvedSimdType)
+            ){
+                vecBase = expr.lhs->lhs;
+                dynamicIdx = expr.lhs->rhs;
+            }
+            if(vecBase){
+                const MStringView vecSimd = vecBase->resolvedSimdType;
+                const b8 isDouble = IsDoubleSimdType(vecSimd);
+                const MStringView targetScalar = m_symbols.resolveBaseTypeName(expr.targetType->name);
+                const b8 isUnsignedIntTarget = isDouble ? (targetScalar == "u64") : (targetScalar == "u32");
+                const b8 isSignedIntTarget = isDouble ? (targetScalar == "i64") : (targetScalar == "i32");
+                const b8 isFloatTarget = isDouble ? (targetScalar == "f64") : (targetScalar == "f32");
+                if(isUnsignedIntTarget || isSignedIntTarget || isFloatTarget){
+                    if(isSignedIntTarget)
+                        out.append(isDouble ? "static_cast<i64>(" : "static_cast<i32>(");
+                    if(isFloatTarget)
+                        out.append(isDouble ? "::VectorDoubleGet" : "::VectorGet");
+                    else
+                        out.append(isDouble ? "::VectorDoubleGetInt" : "::VectorGetInt");
+                    if(dynamicIdx){
+                        out.append("ByIndex(");
+                        emitSimdRegExpr(out, *vecBase, vecSimd);
+                        out.append(", static_cast<usize>(");
+                        emitExpr(out, *dynamicIdx);
+                        out.append("))");
+                    }
+                    else{
+                        const MStringView laneSuffix = SimdLaneCallSuffix(staticLane);
+                        out.append(laneSuffix.data(), laneSuffix.size());
+                        emitSimdRegExpr(out, *vecBase, vecSimd);
+                        out.push_back(')');
+                    }
+                    if(isSignedIntTarget)
+                        out.push_back(')');
+                    break;
+                }
+            }
+        }
         out.append("::BitCast<");
         if(expr.targetType)
             m_typeEmitter.emitTypeCpp(out, *expr.targetType);

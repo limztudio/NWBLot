@@ -183,7 +183,14 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
 
 void SourceEmitter::emitCtorOrCallArgs(MString& out, const MStringView baseTypeName, const Span<const Expr* const> arguments, const MStringView injectedArenaName, const b8 useBracesForList, const b8 emptyUsesBraces)const{
     if(!baseTypeName.empty() && SymbolTable::IsSimdMatrixType(baseTypeName)){
-        if(arguments.empty()){
+        b8 allZeroArgs = true;
+        for(const Expr* arg : arguments){
+            if(!arg || !IsZeroScalarLiteral(*arg, &m_symbols)){
+                allZeroArgs = false;
+                break;
+            }
+        }
+        if(arguments.empty() || allZeroArgs){
             out.append("{}");
         }
         else if(!useBracesForList && arguments.size() == 1u && arguments[0] && SymbolTable::IsSimdMatrixType(arguments[0]->resolvedSimdType)){

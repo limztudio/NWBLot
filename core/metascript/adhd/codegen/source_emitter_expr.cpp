@@ -824,6 +824,17 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                     if(effLanes1 < effLanes)
                         effLanes = effLanes1;
                 }
+                if(callee == "dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                    const Expr* sumArg = IsSimdUnitFloatVectorExpr(*expr.arguments[1], isDouble, &m_symbols)
+                        ? expr.arguments[0]
+                        : (IsSimdUnitFloatVectorExpr(*expr.arguments[0], isDouble, &m_symbols) ? expr.arguments[1] : nullptr);
+                    if(sumArg){
+                        out.append(isDouble ? "::VectorDoubleGetX(::VectorDoubleSum(" : "::VectorGetX(::VectorSum(");
+                        emitSimdRegExpr(out, *sumArg, argSimd);
+                        out.append("))");
+                        break;
+                    }
+                }
                 out.append(isDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
                 for(usize i = 0u; i < expr.arguments.size(); ++i){

@@ -335,6 +335,69 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     return {};
 }
 
+[[nodiscard]] b8 IsSimdZeroFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
+    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
+        return IsZeroScalarLiteral(expr, symbols);
+    if(symbols){
+        if(const Expr* splatScalar = TryUnwrapSimdSplatScalarArg(expr, *symbols))
+            return IsZeroScalarLiteral(*splatScalar, symbols);
+    }
+    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
+    if(expr.resolvedSimdType != expectedSimd)
+        return false;
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
+        if(baseCallee == expectedSimd){
+            if(expr.arguments.empty())
+                return true;
+            for(const Expr* arg : expr.arguments){
+                if(!arg || !IsZeroScalarLiteral(*arg, symbols))
+                    return false;
+            }
+            return true;
+        }
+    }
+    if(symbols && expr.kind == ExprKind::Identifier){
+        if(const Stmt* globalConst = symbols->findGlobalConstant(expr.text)){
+            const Span<const Expr* const> constArgs = __hidden_adhd_simd_codegen_utils::ExtractGlobalConstCtorArgs(*globalConst);
+            if(!constArgs.empty()){
+                for(const Expr* cArg : constArgs){
+                    if(!cArg || !IsZeroScalarLiteral(*cArg, symbols))
+                        return false;
+                }
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] b8 IsSimdUnitFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
+    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
+        return IsUnitFloatLiteral(expr, symbols);
+    if(symbols){
+        if(const Expr* splatScalar = TryUnwrapSimdSplatScalarArg(expr, *symbols))
+            return IsUnitFloatLiteral(*splatScalar, symbols);
+    }
+    const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
+    if(expr.resolvedSimdType != expectedSimd)
+        return false;
+    const MStringView expectedOneConst = isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne";
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
+        if(baseCallee == expectedSimd)
+            return TryMatchKnownSimdFloatVectorConstant(expr.arguments, isDouble, symbols) == expectedOneConst;
+    }
+    if(symbols && expr.kind == ExprKind::Identifier){
+        if(const Stmt* globalConst = symbols->findGlobalConstant(expr.text)){
+            const Span<const Expr* const> constArgs = __hidden_adhd_simd_codegen_utils::ExtractGlobalConstCtorArgs(*globalConst);
+            if(!constArgs.empty())
+                return TryMatchKnownSimdFloatVectorConstant(constArgs, isDouble, symbols) == expectedOneConst;
+        }
+    }
+    return false;
+}
+
 [[nodiscard]] b8 IsIdentityMatrixCtorArgs(const Span<const Expr* const> arguments, const SymbolTable& symbols)noexcept{
     const usize count = arguments.size();
     if(count == 1u && arguments[0] && arguments[0]->kind == ExprKind::Identifier){

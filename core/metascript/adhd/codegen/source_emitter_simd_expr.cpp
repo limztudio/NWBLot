@@ -352,6 +352,70 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
     return false;
 }
 
+[[nodiscard]] const Expr* TryGetSimdScalarOperand(const Expr& operand, const SymbolTable& symbols)noexcept{
+    if(operand.resolvedSimdType.empty() && operand.resolvedUnalignedType.empty())
+        return &operand;
+    return TryUnwrapSimdSplatScalarArg(operand, symbols);
+}
+
+[[nodiscard]] const Expr* TryMatchSimdSaturateCallArg(
+    const Expr& callExpr,
+    const MStringView simdType,
+    const b8 isDouble,
+    const SymbolTable& symbols
+)noexcept{
+    if(callExpr.kind != ExprKind::Call || !callExpr.isBuiltinCall || !callExpr.lhs || callExpr.lhs->kind != ExprKind::Identifier)
+        return nullptr;
+    const MStringView callee = callExpr.lhs->text;
+    if(callee == "clamp" && callExpr.arguments.size() == 3u && callExpr.arguments[0] && callExpr.arguments[1] && callExpr.arguments[2]){
+        if(
+            IsSimdZeroFloatVectorExpr(*callExpr.arguments[1], isDouble, &symbols)
+            && IsSimdUnitFloatVectorExpr(*callExpr.arguments[2], isDouble, &symbols)
+        ){
+            return callExpr.arguments[0];
+        }
+        return nullptr;
+    }
+    const auto matchMinMaxConstArg = [&](const Expr& e, const MStringView expectedName, const b8 wantUnit)noexcept -> const Expr*{
+        if(
+            e.kind != ExprKind::Call
+            || !e.isBuiltinCall
+            || !e.lhs
+            || e.lhs->kind != ExprKind::Identifier
+            || e.lhs->text != expectedName
+            || e.arguments.size() != 2u
+            || !e.arguments[0]
+            || !e.arguments[1]
+        ){
+            return nullptr;
+        }
+        const b8 arg1Matches = wantUnit
+            ? IsSimdUnitFloatVectorExpr(*e.arguments[1], isDouble, &symbols)
+            : IsSimdZeroFloatVectorExpr(*e.arguments[1], isDouble, &symbols);
+        if(arg1Matches)
+            return e.arguments[0];
+        const b8 arg0Matches = wantUnit
+            ? IsSimdUnitFloatVectorExpr(*e.arguments[0], isDouble, &symbols)
+            : IsSimdZeroFloatVectorExpr(*e.arguments[0], isDouble, &symbols);
+        if(arg0Matches)
+            return e.arguments[1];
+        return nullptr;
+    };
+    if(callee == "min"){
+        if(const Expr* innerMax = matchMinMaxConstArg(callExpr, "min", true)){
+            if(innerMax->resolvedSimdType == simdType)
+                return matchMinMaxConstArg(*innerMax, "max", false);
+        }
+    }
+    else if(callee == "max"){
+        if(const Expr* innerMin = matchMinMaxConstArg(callExpr, "max", false)){
+            if(innerMin->resolvedSimdType == simdType)
+                return matchMinMaxConstArg(*innerMin, "min", true);
+        }
+    }
+    return nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -469,8 +533,8 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
     const Expr* mulA = nullptr;
     const Expr* mulB = nullptr;
     if(!isInt && (binaryOp == TokenType::Plus || binaryOp == TokenType::Minus || binaryOp == TokenType::Star || binaryOp == TokenType::Slash)){
-        const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
-        const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
+        const Expr* lhsScalar = TryGetSimdScalarOperand(lhs, m_symbols);
+        const Expr* rhsScalar = TryGetSimdScalarOperand(rhs, m_symbols);
         if(
             lhsScalar
             && rhsScalar
@@ -648,8 +712,8 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
             const Expr* negRhs = TryUnwrapSimdNegatedVecExpr(rhs, simdType, m_symbols);
             if(negLhs && negRhs)
                 return tryEmitSimdBinaryOpReg(out, binaryOp, *negLhs, *negRhs, simdType);
-            const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
-            if(!lhs.resolvedSimdType.empty() && rhsScalar){
+            const Expr* rhsScalar = TryGetSimdScalarOperand(rhs, m_symbols);
+            if((!lhs.resolvedSimdType.empty() || !lhs.resolvedUnalignedType.empty()) && rhsScalar){
                 if(IsUnitFloatLiteral(*rhsScalar, &m_symbols)){
                     emitSimdRegExpr(out, lhs, simdType);
                     return true;
@@ -669,8 +733,8 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
                     return true;
                 }
             }
-            const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
-            if(lhsScalar && !rhs.resolvedSimdType.empty()){
+            const Expr* lhsScalar = TryGetSimdScalarOperand(lhs, m_symbols);
+            if(lhsScalar && (!rhs.resolvedSimdType.empty() || !rhs.resolvedUnalignedType.empty())){
                 if(IsUnitFloatLiteral(*lhsScalar, &m_symbols)){
                     emitSimdRegExpr(out, rhs, simdType);
                     return true;
@@ -701,8 +765,8 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
             if(negLhs && negRhs)
                 return tryEmitSimdBinaryOpReg(out, binaryOp, *negLhs, *negRhs, simdType);
         }
-        const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
-        if(!isInt && !lhs.resolvedSimdType.empty() && rhsScalar){
+        const Expr* rhsScalar = TryGetSimdScalarOperand(rhs, m_symbols);
+        if(!isInt && (!lhs.resolvedSimdType.empty() || !lhs.resolvedUnalignedType.empty()) && rhsScalar){
             if(IsUnitFloatLiteral(*rhsScalar, &m_symbols)){
                 emitSimdRegExpr(out, lhs, simdType);
                 return true;
@@ -714,8 +778,8 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
                 return true;
             }
         }
-        const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
-        if(!isInt && lhsScalar && IsUnitFloatLiteral(*lhsScalar, &m_symbols) && !rhs.resolvedSimdType.empty()){
+        const Expr* lhsScalar = TryGetSimdScalarOperand(lhs, m_symbols);
+        if(!isInt && lhsScalar && IsUnitFloatLiteral(*lhsScalar, &m_symbols) && (!rhs.resolvedSimdType.empty() || !rhs.resolvedUnalignedType.empty())){
             if(const Expr* lenVec = TryMatchSimdLengthVecArg(&rhs, isDouble, m_symbols)){
                 const u32 effLanes = InferEffectiveSimdLanes(*lenVec, &m_symbols);
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
@@ -762,6 +826,15 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
     const b8 isMatrix = SymbolTable::IsSimdMatrixType(simdType);
 
     if(expr.resolvedSimdType.empty() && !expectedSimdType.empty()){
+        MStringView storageLoadFn;
+        u32 storageLanes = 0u;
+        if(TryGetStorageVectorLoadInfo(expr, isDouble, storageLoadFn, storageLanes)){
+            out.append(storageLoadFn.data(), storageLoadFn.size());
+            out.push_back('(');
+            emitExpr(out, expr);
+            out.push_back(')');
+            return;
+        }
         if(!isInt && !isMatrix){
             const Expr* laneBase = nullptr;
             u32 laneIdx = 0u;
@@ -783,6 +856,17 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                             const u32 effLanes1 = InferEffectiveSimdLanes(*expr.arguments[1], &m_symbols);
                             if(effLanes1 < effLanes)
                                 effLanes = effLanes1;
+                        }
+                        if(callee == "dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+                            const Expr* sumArg = IsSimdUnitFloatVectorExpr(*expr.arguments[1], isDouble, &m_symbols)
+                                ? expr.arguments[0]
+                                : (IsSimdUnitFloatVectorExpr(*expr.arguments[0], isDouble, &m_symbols) ? expr.arguments[1] : nullptr);
+                            if(sumArg){
+                                out.append(isDouble ? "::VectorDoubleSum(" : "::VectorSum(");
+                                emitSimdRegExpr(out, *sumArg, argSimd);
+                                out.push_back(')');
+                                return;
+                            }
                         }
                         AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
                         for(usize i = 0u; i < expr.arguments.size(); ++i){
@@ -1041,6 +1125,14 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 out.push_back('(');
                 emitSimdCallRegArgsAndClose(expr.arguments);
                 return;
+            }
+            if(!isInt && !isMatrix){
+                if(const Expr* satArg = TryMatchSimdSaturateCallArg(expr, simdType, isDouble, m_symbols)){
+                    out.append(isDouble ? "::VectorDoubleSaturate(" : "::VectorSaturate(");
+                    emitSimdRegExpr(out, *satArg, simdType);
+                    out.push_back(')');
+                    return;
+                }
             }
             const MStringView unaryIntrinsic = MapSimdUnaryFloatIntrinsic(callee, isDouble);
             if(!unaryIntrinsic.empty()){

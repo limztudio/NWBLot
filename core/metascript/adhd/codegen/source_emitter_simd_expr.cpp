@@ -273,6 +273,85 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
     return false;
 }
 
+[[nodiscard]] const Expr* TryUnwrapSimdNegatedVecExpr(const Expr& expr, const MStringView simdType, const SymbolTable& symbols)noexcept{
+    if(expr.resolvedSimdType != simdType || IsIntSimdType(simdType) || SymbolTable::IsSimdMatrixType(simdType))
+        return nullptr;
+    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs && expr.lhs->resolvedSimdType == simdType)
+        return expr.lhs;
+    if(expr.kind == ExprKind::Binary && expr.lhs && expr.rhs){
+        if(expr.op == TokenType::Star){
+            if(expr.lhs->resolvedSimdType == simdType){
+                const Expr* rhsScalar = expr.rhs->resolvedSimdType.empty() ? expr.rhs : TryUnwrapSimdSplatScalarArg(*expr.rhs, symbols);
+                if(rhsScalar && IsNegativeUnitFloatLiteral(*rhsScalar, &symbols))
+                    return expr.lhs;
+            }
+            if(expr.rhs->resolvedSimdType == simdType){
+                const Expr* lhsScalar = expr.lhs->resolvedSimdType.empty() ? expr.lhs : TryUnwrapSimdSplatScalarArg(*expr.lhs, symbols);
+                if(lhsScalar && IsNegativeUnitFloatLiteral(*lhsScalar, &symbols))
+                    return expr.rhs;
+            }
+        }
+        else if(expr.op == TokenType::Slash && expr.lhs->resolvedSimdType == simdType){
+            const Expr* rhsScalar = expr.rhs->resolvedSimdType.empty() ? expr.rhs : TryUnwrapSimdSplatScalarArg(*expr.rhs, symbols);
+            if(rhsScalar && IsNegativeUnitFloatLiteral(*rhsScalar, &symbols))
+                return expr.lhs;
+        }
+    }
+    if(
+        expr.kind == ExprKind::Call
+        && expr.lhs
+        && expr.lhs->kind == ExprKind::Identifier
+        && expr.arguments.size() == 4u
+        && symbols.resolveBaseTypeName(expr.lhs->text) == simdType
+    ){
+        const Expr* negBase = nullptr;
+        for(u32 i = 0u; i < 4u; ++i){
+            const Expr* curBase = nullptr;
+            u32 curLane = 0u;
+            if(!TryMatchNegatedSingleLaneAccess(expr.arguments[i], curBase, curLane) || !curBase || curBase->resolvedSimdType != simdType || curLane != i)
+                return nullptr;
+            if(!negBase)
+                negBase = curBase;
+            else if(!AreSamePureSimdExpr(*negBase, *curBase))
+                return nullptr;
+        }
+        return negBase;
+    }
+    return nullptr;
+}
+
+[[nodiscard]] b8 TryMatchSimdNegatedMulExpr(
+    const Expr* expr,
+    const MStringView simdType,
+    const Expr*& outA,
+    const Expr*& outB,
+    const SymbolTable& symbols
+)noexcept{
+    if(!expr)
+        return false;
+    if(const Expr* negInner = TryUnwrapSimdNegatedVecExpr(*expr, simdType, symbols)){
+        if(IsSimdMulExpr(negInner, outA, outB, &symbols))
+            return true;
+    }
+    const Expr* mulA = nullptr;
+    const Expr* mulB = nullptr;
+    if(!IsSimdMulExpr(expr, mulA, mulB, &symbols) || !mulA || !mulB)
+        return false;
+    const Expr* negA = TryUnwrapSimdNegatedVecExpr(*mulA, simdType, symbols);
+    const Expr* negB = TryUnwrapSimdNegatedVecExpr(*mulB, simdType, symbols);
+    if(negA && !negB){
+        outA = negA;
+        outB = mulB;
+        return true;
+    }
+    if(!negA && negB){
+        outA = mulA;
+        outB = negB;
+        return true;
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -389,12 +468,72 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
 
     const Expr* mulA = nullptr;
     const Expr* mulB = nullptr;
+    if(!isInt && (binaryOp == TokenType::Plus || binaryOp == TokenType::Minus || binaryOp == TokenType::Star || binaryOp == TokenType::Slash)){
+        const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
+        const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
+        if(
+            lhsScalar
+            && rhsScalar
+            && !CanEmitScalarAsSimdVectorWithoutReplicate(*lhsScalar, simdType, m_symbols)
+            && !CanEmitScalarAsSimdVectorWithoutReplicate(*rhsScalar, simdType, m_symbols)
+        ){
+            const b8 skipForUnitOrNegUnit = (binaryOp == TokenType::Star && (IsUnitFloatLiteral(*lhsScalar, &m_symbols) || IsNegativeUnitFloatLiteral(*lhsScalar, &m_symbols) || IsUnitFloatLiteral(*rhsScalar, &m_symbols) || IsNegativeUnitFloatLiteral(*rhsScalar, &m_symbols)))
+                || (binaryOp == TokenType::Slash && (IsUnitFloatLiteral(*rhsScalar, &m_symbols) || IsNegativeUnitFloatLiteral(*rhsScalar, &m_symbols)));
+            if(!skipForUnitOrNegUnit){
+                const MStringView opSym = SimdBinaryScalarOpSymbol(binaryOp);
+                out.append(isDouble ? "::VectorDoubleReplicate((" : "::VectorReplicate((");
+                emitExpr(out, *lhsScalar);
+                out.append(opSym.data(), opSym.size());
+                emitExpr(out, *rhsScalar);
+                out.append("))");
+                return true;
+            }
+        }
+    }
     if(binaryOp == TokenType::Plus){
         if(!isInt){
+            const Expr* negMulA = nullptr;
+            const Expr* negMulB = nullptr;
+            if(TryMatchSimdNegatedMulExpr(&lhs, simdType, negMulA, negMulB, m_symbols)){
+                emitTernaryRegCall(isDouble ? "::VectorDoubleNegativeMultiplySubtract(" : "::VectorNegativeMultiplySubtract(", *negMulA, *negMulB, rhs);
+                return true;
+            }
+            if(TryMatchSimdNegatedMulExpr(&rhs, simdType, negMulA, negMulB, m_symbols)){
+                emitTernaryRegCall(isDouble ? "::VectorDoubleNegativeMultiplySubtract(" : "::VectorNegativeMultiplySubtract(", *negMulA, *negMulB, lhs);
+                return true;
+            }
             const Expr* rhsMulA = nullptr;
             const Expr* rhsMulB = nullptr;
             const b8 lhsIsMul = IsSimdMulExpr(&lhs, mulA, mulB, &m_symbols);
             const b8 rhsIsMul = IsSimdMulExpr(&rhs, rhsMulA, rhsMulB, &m_symbols);
+            if(lhsIsMul){
+                const Expr* negA = TryUnwrapSimdNegatedVecExpr(*mulA, simdType, m_symbols);
+                const Expr* negB = TryUnwrapSimdNegatedVecExpr(*mulB, simdType, m_symbols);
+                if(negA && negB){
+                    mulA = negA;
+                    mulB = negB;
+                }
+            }
+            if(rhsIsMul){
+                const Expr* negA = TryUnwrapSimdNegatedVecExpr(*rhsMulA, simdType, m_symbols);
+                const Expr* negB = TryUnwrapSimdNegatedVecExpr(*rhsMulB, simdType, m_symbols);
+                if(negA && negB){
+                    rhsMulA = negA;
+                    rhsMulB = negB;
+                }
+            }
+            if(lhsIsMul){
+                if(const Expr* negRhs = TryUnwrapSimdNegatedVecExpr(rhs, simdType, m_symbols)){
+                    emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplySubtract(" : "::VectorMultiplySubtract(", *mulA, *mulB, *negRhs);
+                    return true;
+                }
+            }
+            if(rhsIsMul){
+                if(const Expr* negLhs = TryUnwrapSimdNegatedVecExpr(lhs, simdType, m_symbols)){
+                    emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplySubtract(" : "::VectorMultiplySubtract(", *rhsMulA, *rhsMulB, *negLhs);
+                    return true;
+                }
+            }
             if(lhsIsMul && rhsIsMul){
                 const b8 lhsNeedsRep = WouldSimdMulOperandRequireReplicateInFma(*mulA, simdType, m_symbols)
                     || WouldSimdMulOperandRequireReplicateInFma(*mulB, simdType, m_symbols);
@@ -411,6 +550,14 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
             }
             if(rhsIsMul){
                 emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplyAdd(" : "::VectorMultiplyAdd(", *rhsMulA, *rhsMulB, lhs);
+                return true;
+            }
+            if(const Expr* negRhs = TryUnwrapSimdNegatedVecExpr(rhs, simdType, m_symbols)){
+                emitBinaryRegCall(isDouble ? "::VectorDoubleSubtract(" : "::VectorSubtract(", lhs, *negRhs);
+                return true;
+            }
+            if(const Expr* negLhs = TryUnwrapSimdNegatedVecExpr(lhs, simdType, m_symbols)){
+                emitBinaryRegCall(isDouble ? "::VectorDoubleSubtract(" : "::VectorSubtract(", rhs, *negLhs);
                 return true;
             }
         }
@@ -431,12 +578,36 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
             out.push_back(')');
             return true;
         }
-        if(IsSimdMulExpr(&lhs, mulA, mulB, &m_symbols)){
+        if(TryMatchSimdNegatedMulExpr(&rhs, simdType, mulA, mulB, m_symbols)){
+            emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplyAdd(" : "::VectorMultiplyAdd(", *mulA, *mulB, lhs);
+            return true;
+        }
+        if(IsSimdMulExpr(&lhs, mulA, mulB, &m_symbols) && !TryMatchSimdNegatedMulExpr(&lhs, simdType, mulA, mulB, m_symbols)){
+            const Expr* negA = TryUnwrapSimdNegatedVecExpr(*mulA, simdType, m_symbols);
+            const Expr* negB = TryUnwrapSimdNegatedVecExpr(*mulB, simdType, m_symbols);
+            if(negA && negB){
+                mulA = negA;
+                mulB = negB;
+            }
+            if(const Expr* negRhs = TryUnwrapSimdNegatedVecExpr(rhs, simdType, m_symbols)){
+                emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplyAdd(" : "::VectorMultiplyAdd(", *mulA, *mulB, *negRhs);
+                return true;
+            }
             emitTernaryRegCall(isDouble ? "::VectorDoubleMultiplySubtract(" : "::VectorMultiplySubtract(", *mulA, *mulB, rhs);
             return true;
         }
         if(IsSimdMulExpr(&rhs, mulA, mulB, &m_symbols)){
+            const Expr* negA = TryUnwrapSimdNegatedVecExpr(*mulA, simdType, m_symbols);
+            const Expr* negB = TryUnwrapSimdNegatedVecExpr(*mulB, simdType, m_symbols);
+            if(negA && negB){
+                mulA = negA;
+                mulB = negB;
+            }
             emitTernaryRegCall(isDouble ? "::VectorDoubleNegativeMultiplySubtract(" : "::VectorNegativeMultiplySubtract(", *mulA, *mulB, lhs);
+            return true;
+        }
+        if(const Expr* negRhs = TryUnwrapSimdNegatedVecExpr(rhs, simdType, m_symbols)){
+            emitBinaryRegCall(isDouble ? "::VectorDoubleAdd(" : "::VectorAdd(", lhs, *negRhs);
             return true;
         }
         emitBinaryRegCall(isDouble ? "::VectorDoubleSubtract(" : "::VectorSubtract(", lhs, rhs);
@@ -473,6 +644,10 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
     }
     if(binaryOp == TokenType::Star){
         if(!isInt){
+            const Expr* negLhs = TryUnwrapSimdNegatedVecExpr(lhs, simdType, m_symbols);
+            const Expr* negRhs = TryUnwrapSimdNegatedVecExpr(rhs, simdType, m_symbols);
+            if(negLhs && negRhs)
+                return tryEmitSimdBinaryOpReg(out, binaryOp, *negLhs, *negRhs, simdType);
             const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
             if(!lhs.resolvedSimdType.empty() && rhsScalar){
                 if(IsUnitFloatLiteral(*rhsScalar, &m_symbols)){
@@ -520,6 +695,12 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
         return true;
     }
     if(binaryOp == TokenType::Slash){
+        if(!isInt){
+            const Expr* negLhs = TryUnwrapSimdNegatedVecExpr(lhs, simdType, m_symbols);
+            const Expr* negRhs = TryUnwrapSimdNegatedVecExpr(rhs, simdType, m_symbols);
+            if(negLhs && negRhs)
+                return tryEmitSimdBinaryOpReg(out, binaryOp, *negLhs, *negRhs, simdType);
+        }
         const Expr* rhsScalar = rhs.resolvedSimdType.empty() ? &rhs : TryUnwrapSimdSplatScalarArg(rhs, m_symbols);
         if(!isInt && !lhs.resolvedSimdType.empty() && rhsScalar){
             if(IsUnitFloatLiteral(*rhsScalar, &m_symbols)){
@@ -536,7 +717,7 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
         const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
         if(!isInt && lhsScalar && IsUnitFloatLiteral(*lhsScalar, &m_symbols) && !rhs.resolvedSimdType.empty()){
             if(const Expr* lenVec = TryMatchSimdLengthVecArg(&rhs, isDouble, m_symbols)){
-                const u32 effLanes = InferEffectiveSimdLanes(*lenVec);
+                const u32 effLanes = InferEffectiveSimdLanes(*lenVec, &m_symbols);
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
                 emitSimdRegExpr(out, *lenVec, lenVec->resolvedSimdType);
                 out.push_back(')');
@@ -597,7 +778,12 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 if(!scalarReductionSuffix.empty() && !expr.arguments.empty() && expr.arguments[0] && IsRegisterPromotableSimdType(expr.arguments[0]->resolvedSimdType)){
                     const MStringView argSimd = expr.arguments[0]->resolvedSimdType;
                     if(IsDoubleSimdType(argSimd) == isDouble){
-                        const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
+                        u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0], &m_symbols);
+                        if(expr.arguments.size() == 2u && expr.arguments[1]){
+                            const u32 effLanes1 = InferEffectiveSimdLanes(*expr.arguments[1], &m_symbols);
+                            if(effLanes1 < effLanes)
+                                effLanes = effLanes1;
+                        }
                         AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
                         for(usize i = 0u; i < expr.arguments.size(); ++i){
                             if(i > 0u)
@@ -611,7 +797,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 }
                 if(callee == "rsqrt" && expr.arguments.size() == 1u){
                     if(const Expr* lenSqVec = TryMatchSimdLengthSqVecArg(expr.arguments[0], isDouble, m_symbols)){
-                        const u32 effLanes = InferEffectiveSimdLanes(*lenSqVec);
+                        const u32 effLanes = InferEffectiveSimdLanes(*lenSqVec, &m_symbols);
                         AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
                         emitSimdRegExpr(out, *lenSqVec, lenSqVec->resolvedSimdType);
                         out.push_back(')');
@@ -621,7 +807,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
             }
             if(expr.kind == ExprKind::Binary && expr.op == TokenType::Slash && expr.lhs && expr.rhs && IsUnitFloatLiteral(*expr.lhs, &m_symbols)){
                 if(const Expr* lenVec = TryMatchSimdLengthVecArg(expr.rhs, isDouble, m_symbols)){
-                    const u32 effLanes = InferEffectiveSimdLanes(*lenVec);
+                    const u32 effLanes = InferEffectiveSimdLanes(*lenVec, &m_symbols);
                     AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
                     emitSimdRegExpr(out, *lenVec, lenVec->resolvedSimdType);
                     out.push_back(')');
@@ -729,6 +915,30 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                     EmitSimdIntTwosComplementNegateSuffix(out, isDouble);
                     return;
                 }
+                if(const Expr* innerVec = TryUnwrapSimdNegatedVecExpr(*expr.lhs, simdType, m_symbols)){
+                    emitSimdRegExpr(out, *innerVec, simdType);
+                    return;
+                }
+                if(const Expr* splatScalar = TryUnwrapSimdSplatScalarArg(*expr.lhs, m_symbols)){
+                    if(IsZeroScalarLiteral(*splatScalar, &m_symbols)){
+                        out.append(isDouble ? "::VectorDoubleZero()" : "::VectorZero()");
+                        return;
+                    }
+                    if(IsUnitFloatLiteral(*splatScalar, &m_symbols)){
+                        out.append(isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne");
+                        return;
+                    }
+                    if(IsNegativeUnitFloatLiteral(*splatScalar, &m_symbols)){
+                        out.append(isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne");
+                        return;
+                    }
+                    if(!CanEmitScalarAsSimdVectorWithoutReplicate(*splatScalar, simdType, m_symbols)){
+                        out.append(isDouble ? "::VectorDoubleReplicate(-(" : "::VectorReplicate(-(");
+                        emitExpr(out, *splatScalar);
+                        out.append("))");
+                        return;
+                    }
+                }
                 out.append(isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(");
                 emitSimdRegExpr(out, *expr.lhs, simdType);
                 out.push_back(')');
@@ -807,7 +1017,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
 
             if(!isInt && callee == "rsqrt" && expr.arguments.size() == 1u){
                 if(const Expr* lenSqVec = TryMatchSimdLengthSqVecArg(expr.arguments[0], isDouble, m_symbols)){
-                    const u32 effLanes = InferEffectiveSimdLanes(*lenSqVec);
+                    const u32 effLanes = InferEffectiveSimdLanes(*lenSqVec, &m_symbols);
                     AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
                     emitSimdRegExpr(out, *lenSqVec, lenSqVec->resolvedSimdType);
                     out.push_back(')');
@@ -865,7 +1075,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_SIMD_LANE_VECTOR_INTRINSIC
             if(!laneVectorSuffix.empty() && !expr.arguments.empty() && expr.arguments[0]){
-                const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
+                const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0], &m_symbols);
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes > maxVectorLanes ? maxVectorLanes : effLanes, laneVectorSuffix);
                 emitSimdCallRegArgsAndClose(expr.arguments);
                 return;

@@ -854,17 +854,61 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         }
     }
 
-    if(
-        arguments.size() == 4u
-        && arguments[0] && arguments[1] && arguments[2] && arguments[3]
-        && arguments[0]->resolvedSimdType.empty()
-        && IsPureSimdAddressExpr(*arguments[0])
-        && AreSamePureSimdExpr(*arguments[0], *arguments[1])
-        && AreSamePureSimdExpr(*arguments[0], *arguments[2])
-        && AreSamePureSimdExpr(*arguments[0], *arguments[3])
-    ){
-        emitSimdRegExpr(out, *arguments[0], simdType);
-        return;
+    if(arguments.size() == 3u || arguments.size() == 4u){
+        const Expr* repeatedScalar = nullptr;
+        u8 nonZeroMask = 0u;
+        u32 nonZeroCount = 0u;
+        b8 sameOrZero = true;
+        for(u32 i = 0u; i < 4u; ++i){
+            if(i >= arguments.size() || (arguments[i] && IsZeroScalarLiteral(*arguments[i], &m_symbols)))
+                continue;
+            if(
+                arguments[i]
+                && arguments[i]->resolvedSimdType.empty()
+                && arguments[i]->resolvedUnalignedType.empty()
+                && IsPureSimdAddressExpr(*arguments[i])
+            ){
+                if(!repeatedScalar){
+                    repeatedScalar = arguments[i];
+                }
+                else if(!AreSamePureSimdExpr(*repeatedScalar, *arguments[i])){
+                    sameOrZero = false;
+                    break;
+                }
+                nonZeroMask |= static_cast<u8>(1u << i);
+                ++nonZeroCount;
+            }
+            else{
+                sameOrZero = false;
+                break;
+            }
+        }
+        if(sameOrZero && repeatedScalar){
+            if(nonZeroMask == 0xFu){
+                emitSimdRegExpr(out, *repeatedScalar, simdType);
+                return;
+            }
+            if(!isInt && nonZeroCount >= 2u){
+                const MStringView maskConst = SimdInPlaceLaneMaskConstant(nonZeroMask, isDouble);
+                if(!maskConst.empty()){
+                    out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
+                    emitSimdRegExpr(out, *repeatedScalar, simdType);
+                    out.append(", ");
+                    out.append(maskConst.data(), maskConst.size());
+                    out.push_back(')');
+                    return;
+                }
+                const MStringView clearMaskConst = SimdInPlaceLaneMaskConstant(static_cast<u8>(0xFu ^ nonZeroMask), isDouble);
+                if(!clearMaskConst.empty()){
+                    out.append(isDouble ? "::VectorDoubleAndCInt(" : "::VectorAndCInt(");
+                    emitSimdRegExpr(out, *repeatedScalar, simdType);
+                    out.append(", ");
+                    out.append(clearMaskConst.data(), clearMaskConst.size());
+                    out.push_back(')');
+                    return;
+                }
+            }
+        }
     }
 
     if(isInt){

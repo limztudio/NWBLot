@@ -177,9 +177,34 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     out.append("))");
 }
 
-[[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr)noexcept{
+[[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr, const SymbolTable* const symbols)noexcept{
     if(expr.kind == ExprKind::MemberAccess && expr.isSwizzle && expr.text.size() >= 2u && expr.text.size() <= 4u)
         return static_cast<u32>(expr.text.size());
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        const MStringView baseCallee = symbols ? symbols->resolveBaseTypeName(expr.lhs->text) : expr.lhs->text;
+        if(SymbolTable::IsSimdRegisterVectorType(baseCallee)){
+            if(expr.arguments.size() == 1u && expr.arguments[0]){
+                MStringView regType;
+                MStringView loadFn;
+                u32 zeroedAbove = 4u;
+                if(TryGetFloatVectorSourceInfo(*expr.arguments[0], IsDoubleSimdType(baseCallee), regType, loadFn, zeroedAbove) && zeroedAbove >= 2u && zeroedAbove <= 3u)
+                    return zeroedAbove;
+            }
+            else if(expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1] && expr.arguments[1]->resolvedSimdType.empty() && IsZeroScalarLiteral(*expr.arguments[1], symbols)){
+                return 3u;
+            }
+            else if(expr.arguments.size() == 3u){
+                if(expr.arguments[2] && expr.arguments[2]->resolvedSimdType.empty() && IsZeroScalarLiteral(*expr.arguments[2], symbols))
+                    return 2u;
+                return 3u;
+            }
+            else if(expr.arguments.size() == 4u && expr.arguments[3] && expr.arguments[3]->resolvedSimdType.empty() && IsZeroScalarLiteral(*expr.arguments[3], symbols)){
+                if(expr.arguments[2] && expr.arguments[2]->resolvedSimdType.empty() && IsZeroScalarLiteral(*expr.arguments[2], symbols))
+                    return 2u;
+                return 3u;
+            }
+        }
+    }
     u32 lanes = 4u;
     if(SymbolTable::IsSimdVectorType(expr.resolvedSimdType, lanes))
         return lanes;

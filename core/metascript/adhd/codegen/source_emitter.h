@@ -65,6 +65,7 @@ private:
     const SymbolTable& m_symbols;
     CppTypeEmitter m_typeEmitter;
     mutable u32 m_activeSwitchBreakLabelLine = 0u;
+    mutable TokenType::Enum m_unfusedLogicOp = TokenType::EndOfFile;
     mutable const MVector<const Expr*>* m_skippedCtorAssignExprs = nullptr;
 };
 

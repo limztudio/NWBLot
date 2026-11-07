@@ -253,6 +253,13 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
     CollectLogicChainTerms(expr, expr.op, terms);
     if(terms.size() < 2u)
         return false;
+    usize simdTermCount = 0u;
+    for(const Expr* term : terms){
+        if(IsPureSimdLaneLogicTerm(term, isOrChain))
+            ++simdTermCount;
+    }
+    if(simdTermCount < 2u)
+        return false;
 
     struct FusedSegment{
         u8 kind = 0u;
@@ -616,6 +623,10 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
 }
 
 void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterBinaryParens)const{
+    const TokenType::Enum prevUnfusedLogicOp = m_unfusedLogicOp;
+    if(expr.kind != ExprKind::Binary || expr.op != prevUnfusedLogicOp)
+        m_unfusedLogicOp = TokenType::EndOfFile;
+
     if(expr.wrapInSimdResult){
         out.append(IsDoubleSimdType(expr.resolvedSimdType) ? "::SIMDVectorDoubleResult{ " : "::SIMDVectorSingleResult{ ");
         Expr unwrapped = expr;
@@ -807,7 +818,12 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             if(!scalarReductionSuffix.empty() && !expr.arguments.empty() && expr.arguments[0] && IsRegisterPromotableSimdType(expr.arguments[0]->resolvedSimdType)){
                 const MStringView argSimd = expr.arguments[0]->resolvedSimdType;
                 const b8 isDouble = IsDoubleSimdType(argSimd);
-                const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
+                u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0], &m_symbols);
+                if(expr.arguments.size() == 2u && expr.arguments[1]){
+                    const u32 effLanes1 = InferEffectiveSimdLanes(*expr.arguments[1], &m_symbols);
+                    if(effLanes1 < effLanes)
+                        effLanes = effLanes1;
+                }
                 out.append(isDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
                 for(usize i = 0u; i < expr.arguments.size(); ++i){
@@ -921,8 +937,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append(omitOuterBinaryParens ? "))" : ")))");
             break;
         }
-        if((expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe) && tryEmitFusedSimdLogicChain(out, expr, omitOuterBinaryParens))
-            break;
+        if(expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe){
+            if(prevUnfusedLogicOp != expr.op && tryEmitFusedSimdLogicChain(out, expr, omitOuterBinaryParens))
+                break;
+            m_unfusedLogicOp = expr.op;
+        }
         if(!omitOuterBinaryParens)
             out.push_back('(');
         if(expr.lhs)
@@ -930,8 +949,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         out.push_back(' ');
         out.append(expr.text.data(), expr.text.size());
         out.push_back(' ');
-        if(expr.rhs)
+        if(expr.rhs){
+            m_unfusedLogicOp = (expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe) ? expr.op : TokenType::EndOfFile;
             emitExpr(out, *expr.rhs);
+        }
+        m_unfusedLogicOp = TokenType::EndOfFile;
         if(!omitOuterBinaryParens)
             out.push_back(')');
         break;

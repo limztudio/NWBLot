@@ -256,6 +256,10 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "        0.0f, 0.0f, 1.0f, 0.0f\r\n"
         "    );\r\n"
         "    const VectorSingle unitMul = (a * 1.0f) + (b * -1.0f);\r\n"
+        "    const VectorSingle negFma = (-a) * b + unitMul;\r\n"
+        "    const VectorSingle splatMul = VectorSingle(scale) * 2.0f;\r\n"
+        "    const VectorSingle pad3 = VectorSingle(scale, scale, scale, 0.0f);\r\n"
+        "    const f32 dot3ZeroW = dot(a, VectorSingle(1.0f, 2.0f, 3.0f, 0.0f));\r\n"
         "    const VectorSingle unitVec = VectorSingle(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
         "    const VectorSingle halfVec = VectorSingle(0.5f);\r\n"
         "    const VectorSingle axisW = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
@@ -289,7 +293,7 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "        return unitVec;\r\n"
         "    if(a.x <= a.z && a.y <= a.w && isFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n"
         "        return halfVec + axisW + VectorSingle(xyUnitZW);\r\n"
-        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + proj + scaled + invLen + pt + pt2 + nrm;\r\n"
+        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + proj + scaled + invLen + pt + pt2 + nrm + negFma + splatMul + pad3 + VectorSingle(dot3ZeroW);\r\n"
         "}\r\n";
 
     CompileResult optRes(arena.arena);
@@ -299,7 +303,11 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("::MatrixIdentity()"), MStringView::npos);
     EXPECT_EQ(optView.find("for(usize __i = 0u; __i < 4u; ++__i)"), MStringView::npos);
     EXPECT_NE(optView.find("::SIMDMatrix{ .v = { ::VectorAndInt(a, ::s_SIMDMaskX), ::VectorAndInt(a, ::s_SIMDMaskY), ::VectorAndCInt(a, ::s_SIMDMaskXY), ::s_SIMDIdentityR2 } }"), MStringView::npos);
-    EXPECT_NE(optView.find("const ::SIMDVectorSingle unitMul = ::VectorAdd(a, ::VectorNegate(b));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle unitMul = ::VectorSubtract(a, b);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negFma = ::VectorNegativeMultiplySubtract(a, b, unitMul);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle splatMul = ::VectorReplicate((scale * 2.0f));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle pad3 = ::VectorAndInt(::VectorReplicate(scale), ::s_SIMDMask3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 dot3ZeroW = ::VectorGetX(::Vector3Dot(a, ::VectorSet(1.0f, 2.0f, 3.0f, 0.0f)));"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDOne"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDOneHalf"), MStringView::npos);
     EXPECT_NE(optView.find("::s_SIMDIdentityR3"), MStringView::npos);

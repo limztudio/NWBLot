@@ -160,6 +160,10 @@ namespace __hidden_adhd_type_checker_infer{
 
 
 MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+    if(!expr.resolvedSimdType.empty())
+        return expr.resolvedSimdType;
+    if(!expr.resolvedUnalignedType.empty())
+        return expr.resolvedUnalignedType;
     if(expr.kind == ExprKind::Identifier){
         if(const ScopedVarInfo* local = FindScopedVar(scope, expr.text))
             return resolveScopedVarBaseType(*local);
@@ -194,29 +198,13 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             return matInfo->rowVectorType;
     }
 
+    if(expr.kind == ExprKind::Unary && expr.lhs)
+        return inferExprBaseType(ownerClass, method, expr, scope, nullptr);
+    if(expr.kind == ExprKind::Binary)
+        return inferExprBaseType(ownerClass, method, expr, scope, nullptr);
+
     if(const TypeRef* resolvedRef = inferExprTypeRef(ownerClass, method, expr, scope))
         return m_symbols.resolveBaseTypeName(resolvedRef->name);
-
-    if(expr.kind == ExprKind::Unary && expr.lhs){
-        if(IsBoolReturnOperatorToken(expr.op))
-            return "b8";
-        return inferExprTypeName(ownerClass, method, *expr.lhs, scope);
-    }
-    if(expr.kind == ExprKind::Binary){
-        if(IsBoolReturnOperatorToken(expr.op))
-            return "b8";
-        const MStringView lhsT = expr.lhs ? inferExprTypeName(ownerClass, method, *expr.lhs, scope) : MStringView{};
-        const MStringView rhsT = expr.rhs ? inferExprTypeName(ownerClass, method, *expr.rhs, scope) : MStringView{};
-        if(SymbolTable::IsSimdType(lhsT))
-            return lhsT;
-        if(SymbolTable::IsSimdType(rhsT))
-            return rhsT;
-        if(m_symbols.findEnum(lhsT))
-            return lhsT;
-        if(m_symbols.findEnum(rhsT))
-            return rhsT;
-        return !lhsT.empty() ? lhsT : rhsT;
-    }
     if(expr.kind == ExprKind::Call && expr.lhs){
         if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const MStringView recvBase = inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
@@ -362,20 +350,24 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
         }
     }
     else if((expr.kind == ExprKind::Unary || expr.kind == ExprKind::Binary) && expr.lhs && expr.op != TokenType::Equal){
+        if(!expr.resolvedSimdType.empty() || !expr.resolvedUnalignedType.empty())
+            return nullptr;
         const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
         if(!opSym.empty()){
             const TypeRef* lhsTypeRef = nullptr;
             const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
-            const usize opArity = (expr.kind == ExprKind::Unary) ? 0u : 1u;
-            const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
-            const ClassDecl* opDeclCls = nullptr;
-            if(const MethodDecl* opMethod = resolveCustomOperator(ownerClass, method, lhsTypeRef, lhsType, opSym, opArity, recvIsConst, &opDeclCls)){
-                if(!opMethod->returnType)
-                    return nullptr;
-                const TypeRef* rt = opDeclCls
-                    ? m_symbols.substituteTypeParams(opMethod->returnType, opDeclCls->templateParams, lhsTypeRef)
-                    : opMethod->returnType;
-                return m_symbols.unwrapTypeAlias(rt);
+            if(m_symbols.findClass(lhsType) || m_symbols.findInterface(lhsType) || FindTemplateParam(ownerClass, method, lhsType)){
+                const usize opArity = (expr.kind == ExprKind::Unary) ? 0u : 1u;
+                const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
+                const ClassDecl* opDeclCls = nullptr;
+                if(const MethodDecl* opMethod = resolveCustomOperator(ownerClass, method, lhsTypeRef, lhsType, opSym, opArity, recvIsConst, &opDeclCls)){
+                    if(!opMethod->returnType)
+                        return nullptr;
+                    const TypeRef* rt = opDeclCls
+                        ? m_symbols.substituteTypeParams(opMethod->returnType, opDeclCls->templateParams, lhsTypeRef)
+                        : opMethod->returnType;
+                    return m_symbols.unwrapTypeAlias(rt);
+                }
             }
         }
     }
@@ -534,6 +526,63 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
 }
 
 MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef)const noexcept{
+    if(!expr.resolvedSimdType.empty()){
+        if(outTypeRef)
+            *outTypeRef = nullptr;
+        return expr.resolvedSimdType;
+    }
+    if(!expr.resolvedUnalignedType.empty()){
+        if(outTypeRef)
+            *outTypeRef = nullptr;
+        return expr.resolvedUnalignedType;
+    }
+    if((expr.kind == ExprKind::Unary && expr.lhs) || expr.kind == ExprKind::Binary){
+        const TypeRef* lhsTypeRef = nullptr;
+        const MStringView lhsT = expr.lhs ? inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef) : MStringView{};
+        if(expr.lhs && expr.op != TokenType::Equal){
+            const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
+            if(!opSym.empty() && (m_symbols.findClass(lhsT) || m_symbols.findInterface(lhsT) || FindTemplateParam(ownerClass, method, lhsT))){
+                const usize opArity = (expr.kind == ExprKind::Unary) ? 0u : 1u;
+                const b8 recvIsConst = method ? isReceiverConst(ownerClass, *method, *expr.lhs, scope) : false;
+                const ClassDecl* opDeclCls = nullptr;
+                if(const MethodDecl* opMethod = resolveCustomOperator(ownerClass, method, lhsTypeRef, lhsT, opSym, opArity, recvIsConst, &opDeclCls)){
+                    const TypeRef* unwrapped = nullptr;
+                    if(opMethod->returnType){
+                        const TypeRef* rt = opDeclCls
+                            ? m_symbols.substituteTypeParams(opMethod->returnType, opDeclCls->templateParams, lhsTypeRef)
+                            : opMethod->returnType;
+                        unwrapped = m_symbols.unwrapTypeAlias(rt);
+                    }
+                    if(outTypeRef)
+                        *outTypeRef = unwrapped;
+                    return unwrapped ? m_symbols.resolveBaseTypeName(unwrapped->name) : MStringView{};
+                }
+            }
+        }
+        if(outTypeRef)
+            *outTypeRef = nullptr;
+        if(IsBoolReturnOperatorToken(expr.op))
+            return "b8";
+        if(expr.kind == ExprKind::Unary){
+            if(SymbolTable::IsSimdType(lhsT))
+                const_cast<Expr&>(expr).resolvedSimdType = lhsT;
+            return lhsT;
+        }
+        if(SymbolTable::IsSimdType(lhsT)){
+            const_cast<Expr&>(expr).resolvedSimdType = lhsT;
+            return lhsT;
+        }
+        const MStringView rhsT = expr.rhs ? inferExprTypeName(ownerClass, method, *expr.rhs, scope) : MStringView{};
+        if(SymbolTable::IsSimdType(rhsT)){
+            const_cast<Expr&>(expr).resolvedSimdType = rhsT;
+            return rhsT;
+        }
+        if(m_symbols.findEnum(lhsT))
+            return lhsT;
+        if(m_symbols.findEnum(rhsT))
+            return rhsT;
+        return !lhsT.empty() ? lhsT : rhsT;
+    }
     const TypeRef* typeRef = inferExprTypeRef(ownerClass, method, expr, scope);
     if(outTypeRef)
         *outTypeRef = typeRef;
@@ -543,12 +592,10 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
 }
 
 b8 TypeChecker::isTemporaryOwnerExpr(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
-    const TypeRef* exprTypeRef = inferExprTypeRef(ownerClass, method, expr, scope);
+    const TypeRef* exprTypeRef = nullptr;
+    const MStringView baseType = inferExprBaseType(ownerClass, method, expr, scope, &exprTypeRef);
     if(m_symbols.resolveRefMode(exprTypeRef) != ParamPassingMode::None)
         return false;
-    const MStringView baseType = exprTypeRef
-        ? m_symbols.resolveBaseTypeName(exprTypeRef->name)
-        : inferExprTypeName(ownerClass, method, expr, scope);
     if(IsBorrowViewType(baseType))
         return false;
 
@@ -798,15 +845,17 @@ void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, 
         if(local.isParam || local.isConst || (local.type && m_symbols.resolveRefMode(local.type) != ParamPassingMode::None))
             continue;
 
-        usize lastUseIndex = statements.size();
-        for(usize s = 0u; s < statements.size(); ++s){
-            if(__hidden_adhd_type_checker_infer::StmtReferencesIdentifier(statements[s], local.name))
-                lastUseIndex = s;
-        }
-
         const MStringView localBaseType = resolveScopedVarBaseType(local);
         if(SymbolTable::IsSimdType(localBaseType) || m_symbols.isSmallValueType(localBaseType))
             continue;
+
+        usize lastUseIndex = statements.size();
+        for(usize s = statements.size(); s > 0u; --s){
+            if(__hidden_adhd_type_checker_infer::StmtReferencesIdentifier(statements[s - 1u], local.name)){
+                lastUseIndex = s - 1u;
+                break;
+            }
+        }
 
         b8 capturedOrAsyncOrAliased = false;
         for(usize j = 0u; j < scope.size(); ++j){

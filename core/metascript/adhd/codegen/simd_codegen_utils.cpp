@@ -41,26 +41,40 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
     "::VectorDoubleSplatW(",
 };
 
+[[nodiscard]] Span<const Expr* const> ExtractGlobalConstCtorArgs(const Stmt& globalConst)noexcept{
+    if(globalConst.isCtorInit && !globalConst.arguments.empty())
+        return Span<const Expr* const>(globalConst.arguments.data(), globalConst.arguments.size());
+    if(globalConst.expr && globalConst.expr->kind == ExprKind::Call && !globalConst.expr->arguments.empty())
+        return Span<const Expr* const>(globalConst.expr->arguments.data(), globalConst.expr->arguments.size());
+    return {};
+}
+
 [[nodiscard]] b8 IsIdentityMatrixRowCtorExpr(const Expr& expr, const u32 rowIndex, const SymbolTable& symbols)noexcept{
-    if(expr.kind != ExprKind::Call || !expr.lhs || expr.lhs->kind != ExprKind::Identifier)
-        return false;
-    const MStringView baseCallee = symbols.resolveBaseTypeName(expr.lhs->text);
-    if(!SymbolTable::IsSimdRegisterVectorType(baseCallee))
-        return false;
-    const usize argCount = expr.arguments.size();
+    Span<const Expr* const> rowArgs;
+    if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        const MStringView baseCallee = symbols.resolveBaseTypeName(expr.lhs->text);
+        if(!SymbolTable::IsSimdRegisterVectorType(baseCallee))
+            return false;
+        rowArgs = Span<const Expr* const>(expr.arguments.data(), expr.arguments.size());
+    }
+    else if(expr.kind == ExprKind::Identifier){
+        if(const Stmt* globalConst = symbols.findGlobalConstant(expr.text))
+            rowArgs = ExtractGlobalConstCtorArgs(*globalConst);
+    }
+    const usize argCount = rowArgs.size();
     if(argCount != 3u && argCount != 4u)
         return false;
     if(rowIndex >= argCount)
         return false;
     for(usize i = 0u; i < argCount; ++i){
-        const Expr* arg = expr.arguments[i];
+        const Expr* arg = rowArgs[i];
         if(!arg)
             return false;
         if(i == rowIndex){
-            if(!IsUnitFloatLiteral(*arg))
+            if(!IsUnitFloatLiteral(*arg, &symbols))
                 return false;
         }
-        else if(!IsZeroScalarLiteral(*arg)){
+        else if(!IsZeroScalarLiteral(*arg, &symbols)){
             return false;
         }
     }
@@ -129,6 +143,20 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
     }
 }
 
+[[nodiscard]] MStringView SimdInPlaceSignFlipMaskConstant(const u8 negMask, const b8 isDouble)noexcept{
+    if(negMask == 0x7u)
+        return isDouble ? "::s_DoubleSIMDNegate3" : "::s_SIMDNegate3";
+    if(isDouble)
+        return {};
+    switch(negMask){
+    case 0x2u: return "::s_SIMDFlipY";
+    case 0x4u: return "::s_SIMDFlipZ";
+    case 0x8u: return "::s_SIMDFlipW";
+    case 0xAu: return "::s_SIMDFlipYW";
+    default: return {};
+    }
+}
+
 [[nodiscard]] MStringView SimdComponentMaskConstant(const u8 laneMask, const b8 isDouble)noexcept{
     switch(laneMask){
     case 0x3u: return isDouble ? "::VectorDoubleComponentMask::s_DoubleXY" : "::VectorComponentMask::s_XY";
@@ -158,15 +186,78 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     return 4u;
 }
 
-[[nodiscard]] MStringView TryMatchKnownSimdFloatVectorConstant(const Span<const Expr* const> arguments, const b8 isDouble)noexcept{
-    if(arguments.size() == 1u && arguments[0] && arguments[0]->resolvedSimdType.empty() && arguments[0]->resolvedUnalignedType.empty()){
+[[nodiscard]] const Expr& UnwrapConstScalarExpr(const Expr& expr, const SymbolTable* const symbols)noexcept{
+    const Expr* cur = &expr;
+    if(!symbols)
+        return *cur;
+    for(u32 depth = 0u; depth < 4u; ++depth){
+        if(cur->kind != ExprKind::Identifier || !cur->resolvedSimdType.empty() || !cur->resolvedUnalignedType.empty())
+            break;
+        const Stmt* globalConst = symbols->findGlobalConstant(cur->text);
+        if(!globalConst)
+            break;
+        if(globalConst->expr){
+            cur = globalConst->expr;
+        }
+        else if(globalConst->isCtorInit && globalConst->arguments.size() == 1u && globalConst->arguments[0]){
+            cur = globalConst->arguments[0];
+        }
+        else{
+            break;
+        }
+    }
+    return *cur;
+}
+
+[[nodiscard]] b8 IsUnitFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
+    const Expr& unwrapped = UnwrapConstScalarExpr(expr, symbols);
+    return (unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral)
+        && (unwrapped.text == "1.0f" || unwrapped.text == "1.0" || unwrapped.text == "1.f" || unwrapped.text == "1.0F" || unwrapped.text == "1.F");
+}
+
+[[nodiscard]] b8 IsNegativeUnitFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
+    const Expr& unwrapped = UnwrapConstScalarExpr(expr, symbols);
+    if(unwrapped.kind == ExprKind::Unary && !unwrapped.isPostfix && unwrapped.op == TokenType::Minus && unwrapped.lhs)
+        return IsUnitFloatLiteral(*unwrapped.lhs, symbols);
+    return (unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral)
+        && (unwrapped.text == "-1.0f" || unwrapped.text == "-1.0" || unwrapped.text == "-1.f" || unwrapped.text == "-1.0F" || unwrapped.text == "-1.F");
+}
+
+[[nodiscard]] b8 IsHalfFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
+    const Expr& unwrapped = UnwrapConstScalarExpr(expr, symbols);
+    return (unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral)
+        && (unwrapped.text == "0.5f" || unwrapped.text == "0.5" || unwrapped.text == ".5f" || unwrapped.text == ".5" || unwrapped.text == "0.5F" || unwrapped.text == ".5F");
+}
+
+[[nodiscard]] MStringView TryMatchKnownSimdFloatVectorConstant(const Span<const Expr* const> arguments, const b8 isDouble, const SymbolTable* const symbols)noexcept{
+    if(arguments.size() == 1u && arguments[0]){
         const Expr& a0 = *arguments[0];
-        if(IsUnitFloatLiteral(a0))
-            return isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne";
-        if(IsNegativeUnitFloatLiteral(a0))
-            return isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne";
-        if(IsHalfFloatLiteral(a0))
-            return isDouble ? "::s_DoubleSIMDOneHalf" : "::s_SIMDOneHalf";
+        if(a0.resolvedSimdType.empty() && a0.resolvedUnalignedType.empty()){
+            if(IsUnitFloatLiteral(a0, symbols))
+                return isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne";
+            if(IsNegativeUnitFloatLiteral(a0, symbols))
+                return isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne";
+            if(IsHalfFloatLiteral(a0, symbols))
+                return isDouble ? "::s_DoubleSIMDOneHalf" : "::s_SIMDOneHalf";
+            return {};
+        }
+        if(symbols && a0.kind == ExprKind::Identifier){
+            if(const Stmt* globalConst = symbols->findGlobalConstant(a0.text)){
+                const Span<const Expr* const> constArgs = __hidden_adhd_simd_codegen_utils::ExtractGlobalConstCtorArgs(*globalConst);
+                if(!constArgs.empty()){
+                    b8 allZero = true;
+                    for(const Expr* cArg : constArgs){
+                        if(!cArg || !IsZeroScalarLiteral(*cArg, symbols)){
+                            allZero = false;
+                            break;
+                        }
+                    }
+                    if(allZero)
+                        return isDouble ? "::VectorDoubleZero()" : "::VectorZero()";
+                    return TryMatchKnownSimdFloatVectorConstant(constArgs, isDouble, symbols);
+                }
+            }
+        }
         return {};
     }
     if(arguments.size() != 3u && arguments.size() != 4u)
@@ -176,14 +267,14 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
             return {};
     }
     const b8 hasW = (arguments.size() == 4u);
-    const b8 u0 = IsUnitFloatLiteral(*arguments[0]);
-    const b8 u1 = IsUnitFloatLiteral(*arguments[1]);
-    const b8 u2 = IsUnitFloatLiteral(*arguments[2]);
-    const b8 u3 = hasW && IsUnitFloatLiteral(*arguments[3]);
-    const b8 z0 = IsZeroScalarLiteral(*arguments[0]);
-    const b8 z1 = IsZeroScalarLiteral(*arguments[1]);
-    const b8 z2 = IsZeroScalarLiteral(*arguments[2]);
-    const b8 z3 = !hasW || IsZeroScalarLiteral(*arguments[3]);
+    const b8 u0 = IsUnitFloatLiteral(*arguments[0], symbols);
+    const b8 u1 = IsUnitFloatLiteral(*arguments[1], symbols);
+    const b8 u2 = IsUnitFloatLiteral(*arguments[2], symbols);
+    const b8 u3 = hasW && IsUnitFloatLiteral(*arguments[3], symbols);
+    const b8 z0 = IsZeroScalarLiteral(*arguments[0], symbols);
+    const b8 z1 = IsZeroScalarLiteral(*arguments[1], symbols);
+    const b8 z2 = IsZeroScalarLiteral(*arguments[2], symbols);
+    const b8 z3 = !hasW || IsZeroScalarLiteral(*arguments[3], symbols);
 
     if(u0 && u1 && u2 && u3)
         return isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne";
@@ -200,19 +291,19 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
 
     if(
         hasW
-        && IsNegativeUnitFloatLiteral(*arguments[0])
-        && IsNegativeUnitFloatLiteral(*arguments[1])
-        && IsNegativeUnitFloatLiteral(*arguments[2])
-        && IsNegativeUnitFloatLiteral(*arguments[3])
+        && IsNegativeUnitFloatLiteral(*arguments[0], symbols)
+        && IsNegativeUnitFloatLiteral(*arguments[1], symbols)
+        && IsNegativeUnitFloatLiteral(*arguments[2], symbols)
+        && IsNegativeUnitFloatLiteral(*arguments[3], symbols)
     ){
         return isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne";
     }
     if(
         hasW
-        && IsHalfFloatLiteral(*arguments[0])
-        && IsHalfFloatLiteral(*arguments[1])
-        && IsHalfFloatLiteral(*arguments[2])
-        && IsHalfFloatLiteral(*arguments[3])
+        && IsHalfFloatLiteral(*arguments[0], symbols)
+        && IsHalfFloatLiteral(*arguments[1], symbols)
+        && IsHalfFloatLiteral(*arguments[2], symbols)
+        && IsHalfFloatLiteral(*arguments[3], symbols)
     ){
         return isDouble ? "::s_DoubleSIMDOneHalf" : "::s_SIMDOneHalf";
     }
@@ -221,6 +312,14 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
 
 [[nodiscard]] b8 IsIdentityMatrixCtorArgs(const Span<const Expr* const> arguments, const SymbolTable& symbols)noexcept{
     const usize count = arguments.size();
+    if(count == 1u && arguments[0] && arguments[0]->kind == ExprKind::Identifier){
+        if(const Stmt* globalConst = symbols.findGlobalConstant(arguments[0]->text)){
+            const Span<const Expr* const> constArgs = __hidden_adhd_simd_codegen_utils::ExtractGlobalConstCtorArgs(*globalConst);
+            if(!constArgs.empty())
+                return IsIdentityMatrixCtorArgs(constArgs, symbols);
+        }
+        return false;
+    }
     if(count == 3u || count == 4u){
         for(usize r = 0u; r < count; ++r){
             if(!arguments[r] || !__hidden_adhd_simd_codegen_utils::IsIdentityMatrixRowCtorExpr(*arguments[r], static_cast<u32>(r), symbols))
@@ -235,13 +334,89 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
                 return false;
             const b8 isDiag = (i % stride == 0u);
             if(isDiag){
-                if(!IsUnitFloatLiteral(*arguments[i]))
+                if(!IsUnitFloatLiteral(*arguments[i], &symbols))
                     return false;
             }
-            else if(!IsZeroScalarLiteral(*arguments[i])){
+            else if(!IsZeroScalarLiteral(*arguments[i], &symbols)){
                 return false;
             }
         }
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 TryGetStorageVectorLoadInfo(const Expr& srcExpr, const b8 targetIsDouble, MStringView& outLoadFn, u32& outLanes)noexcept{
+    if(!srcExpr.resolvedSimdType.empty() && SymbolTable::IsSimdStorageVectorType(srcExpr.resolvedSimdType, outLanes)){
+        const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(srcExpr.resolvedSimdType);
+        if(!vecInfo || vecInfo->isDoubleReg != targetIsDouble)
+            return false;
+        if(vecInfo->isMixed){
+            outLoadFn = vecInfo->isDoubleReg ? "::LoadDoubleInt" : "::LoadFloatInt";
+            outLanes = 3u;
+            return true;
+        }
+        outLoadFn = vecInfo->loadCppFunc;
+        return !outLoadFn.empty();
+    }
+    if(!srcExpr.resolvedUnalignedType.empty()){
+        const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(srcExpr.resolvedUnalignedType);
+        if(!unalignedInfo)
+            return false;
+        outLanes = unalignedInfo->lanes;
+        if(unalignedInfo->isHalfFloat){
+            outLoadFn = targetIsDouble ? "::LoadDouble" : "::LoadHalf";
+            return true;
+        }
+        const b8 srcIsDouble = (unalignedInfo->laneScalarType == "f64" || unalignedInfo->laneScalarType == "i64" || unalignedInfo->laneScalarType == "u64");
+        if(srcIsDouble != targetIsDouble)
+            return false;
+        const b8 srcIsInt = IsIntegerScalarType(unalignedInfo->laneScalarType);
+        outLoadFn = srcIsDouble ? (srcIsInt ? "::LoadDoubleInt" : "::LoadDouble") : (srcIsInt ? "::LoadInt" : "::LoadFloat");
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 TryGetFloatVectorSourceInfo(const Expr& srcExpr, const b8 targetIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept{
+    outRegSimdType = {};
+    outStorageLoadFn = {};
+    outEffectiveZeroedAboveLane = 4u;
+    const MStringView expectedRegType = targetIsDouble ? "VectorDouble" : "VectorSingle";
+    if(srcExpr.resolvedSimdType == expectedRegType){
+        outRegSimdType = expectedRegType;
+        return true;
+    }
+    u32 storageLanes = 0u;
+    if(!srcExpr.resolvedSimdType.empty() && SymbolTable::IsSimdStorageVectorType(srcExpr.resolvedSimdType, storageLanes)){
+        const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(srcExpr.resolvedSimdType);
+        if(!vecInfo || !vecInfo->isFloatReg || vecInfo->isIntReg || vecInfo->isMixed || vecInfo->isDoubleReg != targetIsDouble || vecInfo->loadCppFunc.empty())
+            return false;
+        outStorageLoadFn = vecInfo->loadCppFunc;
+        outEffectiveZeroedAboveLane = storageLanes;
+        return true;
+    }
+    if(!srcExpr.resolvedUnalignedType.empty()){
+        const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(srcExpr.resolvedUnalignedType);
+        if(!unalignedInfo || unalignedInfo->isHalfFloat || IsIntegerScalarType(unalignedInfo->laneScalarType))
+            return false;
+        const b8 srcIsDouble = (unalignedInfo->laneScalarType == "f64");
+        if(srcIsDouble != targetIsDouble)
+            return false;
+        outStorageLoadFn = srcIsDouble ? "::LoadDouble" : "::LoadFloat";
+        outEffectiveZeroedAboveLane = unalignedInfo->lanes;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 TryGetAnyFloatVectorSourceInfo(const Expr& srcExpr, b8& outIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept{
+    if(TryGetFloatVectorSourceInfo(srcExpr, false, outRegSimdType, outStorageLoadFn, outEffectiveZeroedAboveLane)){
+        outIsDouble = false;
+        return true;
+    }
+    if(TryGetFloatVectorSourceInfo(srcExpr, true, outRegSimdType, outStorageLoadFn, outEffectiveZeroedAboveLane)){
+        outIsDouble = true;
         return true;
     }
     return false;
@@ -374,14 +549,15 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     return arg0;
 }
 
-[[nodiscard]] b8 IsZeroScalarLiteral(const Expr& expr)noexcept{
-    if(expr.text.empty())
+[[nodiscard]] b8 IsZeroScalarLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
+    const Expr& unwrapped = UnwrapConstScalarExpr(expr, symbols);
+    if(unwrapped.text.empty())
         return false;
-    if(expr.kind == ExprKind::IntegerLiteral){
+    if(unwrapped.kind == ExprKind::IntegerLiteral){
         b8 sawZero = false;
-        const b8 isHex = expr.text.size() >= 2u && expr.text[0] == '0' && (expr.text[1] == 'x' || expr.text[1] == 'X');
-        for(usize i = isHex ? 2u : 0u; i < expr.text.size(); ++i){
-            const char c = expr.text[i];
+        const b8 isHex = unwrapped.text.size() >= 2u && unwrapped.text[0] == '0' && (unwrapped.text[1] == 'x' || unwrapped.text[1] == 'X');
+        for(usize i = isHex ? 2u : 0u; i < unwrapped.text.size(); ++i){
+            const char c = unwrapped.text[i];
             if(c == '0'){
                 sawZero = true;
                 continue;
@@ -392,10 +568,10 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
         }
         return sawZero;
     }
-    if(expr.kind == ExprKind::FloatLiteral || expr.kind == ExprKind::DoubleLiteral){
+    if(unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral){
         b8 sawZero = false;
-        for(usize i = 0u; i < expr.text.size(); ++i){
-            const char c = expr.text[i];
+        for(usize i = 0u; i < unwrapped.text.size(); ++i){
+            const char c = unwrapped.text[i];
             if(c == 'e' || c == 'E')
                 break;
             if(c == '0'){
@@ -426,13 +602,32 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
         return !expr.isMutArg && expr.lhs && IsPureSimdAddressExpr(*expr.lhs);
     case ExprKind::Index:
         return !expr.isMutArg && expr.lhs && expr.rhs && IsPureSimdAddressExpr(*expr.lhs) && IsPureSimdAddressExpr(*expr.rhs);
+    case ExprKind::Unary:
+        return !expr.isMutArg && !expr.isPostfix
+            && (expr.op == TokenType::Minus || expr.op == TokenType::Plus || expr.op == TokenType::Tilde || expr.op == TokenType::Bang)
+            && expr.lhs && IsPureSimdAddressExpr(*expr.lhs);
+    case ExprKind::Cast:
+        return !expr.isMutArg && expr.targetType && expr.targetType->refMode == ParamPassingMode::None
+            && expr.targetType->templateArgs.empty() && expr.lhs && IsPureSimdAddressExpr(*expr.lhs);
     default:
         return false;
     }
 }
 
 [[nodiscard]] b8 AreSamePureSimdExpr(const Expr& a, const Expr& b)noexcept{
-    if(a.kind != b.kind || a.text != b.text || a.op != b.op || a.isSwizzle != b.isSwizzle || a.isPointerMemberAccess != b.isPointerMemberAccess)
+    if(
+        a.kind != b.kind
+        || a.text != b.text
+        || a.op != b.op
+        || a.isPostfix != b.isPostfix
+        || a.isSwizzle != b.isSwizzle
+        || a.isPointerMemberAccess != b.isPointerMemberAccess
+    ){
+        return false;
+    }
+    if((a.targetType != nullptr) != (b.targetType != nullptr))
+        return false;
+    if(a.targetType && (a.targetType->name != b.targetType->name || a.targetType->refMode != b.targetType->refMode || a.targetType->templateArgs.size() != b.targetType->templateArgs.size()))
         return false;
     if(a.scopeChain.size() != b.scopeChain.size())
         return false;
@@ -495,64 +690,6 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     if(stmt.expr && IsRegisterPromotableSimdType(stmt.expr->resolvedSimdType))
         return stmt.expr->resolvedSimdType;
     return {};
-}
-
-[[nodiscard]] b8 ExprContainsSimdMath(const Expr* expr, const SymbolTable& symbols)noexcept{
-    if(!expr)
-        return false;
-
-    if(expr->kind == ExprKind::MemberAccess && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)){
-        u32 lane = 0u;
-        if(expr->isSwizzle || IsSingleSwizzleLane(expr->text, lane))
-            return true;
-    }
-
-    if(expr->kind == ExprKind::Index && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType))
-        return true;
-
-    if(expr->kind == ExprKind::Unary && IsRegisterPromotableSimdType(expr->resolvedSimdType))
-        return true;
-
-    if(expr->kind == ExprKind::Binary && IsRegisterPromotableSimdType(expr->resolvedSimdType)){
-        if(expr->op != TokenType::Equal)
-            return true;
-        if(ExprContainsSimdMath(expr->rhs, symbols))
-            return true;
-    }
-
-    if(expr->kind == ExprKind::Binary && IsCompoundOrSimpleAssignment(expr->op) && expr->lhs){
-        u32 lane = 0u;
-        if(expr->lhs->kind == ExprKind::MemberAccess && expr->lhs->lhs && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType) && IsSingleSwizzleLane(expr->lhs->text, lane))
-            return true;
-        if(expr->lhs->kind == ExprKind::Index && expr->lhs->lhs && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType))
-            return true;
-    }
-
-    if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
-        const MStringView callee = expr->lhs->text;
-        const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
-        if(SymbolTable::IsSimdType(baseCallee) && IsRegisterPromotableSimdType(expr->resolvedSimdType))
-            return true;
-        if(expr->isBuiltinCall){
-            if(IsRegisterPromotableSimdType(expr->resolvedSimdType))
-                return true;
-            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || callee == "isFinite"){
-                for(const Expr* arg : expr->arguments){
-                    if(arg && IsRegisterPromotableSimdType(arg->resolvedSimdType))
-                        return true;
-                }
-            }
-        }
-    }
-
-    if(ExprContainsSimdMath(expr->lhs, symbols) || ExprContainsSimdMath(expr->rhs, symbols))
-        return true;
-
-    for(const Expr* arg : expr->arguments){
-        if(ExprContainsSimdMath(arg, symbols))
-            return true;
-    }
-    return false;
 }
 
 

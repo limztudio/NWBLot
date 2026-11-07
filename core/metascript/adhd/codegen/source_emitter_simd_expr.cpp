@@ -129,7 +129,7 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
             return true;
     }
     if(scalarExpr.kind == ExprKind::Binary && scalarExpr.op == TokenType::Slash && scalarExpr.lhs && scalarExpr.rhs){
-        if(IsUnitFloatLiteral(*scalarExpr.lhs) && TryMatchSimdLengthVecArg(scalarExpr.rhs, isDouble, symbols))
+        if(IsUnitFloatLiteral(*scalarExpr.lhs, &symbols) && TryMatchSimdLengthVecArg(scalarExpr.rhs, isDouble, symbols))
             return true;
     }
     return false;
@@ -141,26 +141,56 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
     const Expr* scalarExpr = operand.resolvedSimdType.empty() ? &operand : TryUnwrapSimdSplatScalarArg(operand, symbols);
     if(!scalarExpr)
         return false;
-    if(IsZeroScalarLiteral(*scalarExpr) || IsUnitFloatLiteral(*scalarExpr) || IsNegativeUnitFloatLiteral(*scalarExpr) || IsHalfFloatLiteral(*scalarExpr))
+    if(
+        IsZeroScalarLiteral(*scalarExpr, &symbols)
+        || IsUnitFloatLiteral(*scalarExpr, &symbols)
+        || IsNegativeUnitFloatLiteral(*scalarExpr, &symbols)
+        || IsHalfFloatLiteral(*scalarExpr, &symbols)
+    ){
         return false;
+    }
     return !CanEmitScalarAsSimdVectorWithoutReplicate(*scalarExpr, simdType, symbols);
 }
 
-[[nodiscard]] b8 TryMatchSimdTransform3Arg(const Expr& vecExpr, const MStringView simdType, const SymbolTable& symbols, const Expr*& outBaseVec, b8& outIsNormal)noexcept{
+[[nodiscard]] b8 TryMatchSimdTransform3Arg(
+    const Expr& vecExpr,
+    const MStringView simdType,
+    const SymbolTable& symbols,
+    const Expr*& outBaseVec,
+    MStringView& outBaseRegType,
+    MStringView& outBaseLoadFn,
+    u32& outTransformLanes,
+    b8& outIsNormal
+)noexcept{
     if(vecExpr.kind != ExprKind::Call || !vecExpr.lhs || vecExpr.lhs->kind != ExprKind::Identifier)
         return false;
     const MStringView baseCallee = symbols.resolveBaseTypeName(vecExpr.lhs->text);
     if(baseCallee != simdType)
         return false;
+    const b8 isDouble = IsDoubleSimdType(simdType);
     if(vecExpr.arguments.size() == 2u && vecExpr.arguments[0] && vecExpr.arguments[1]){
-        if(vecExpr.arguments[0]->resolvedSimdType == simdType && vecExpr.arguments[1]->resolvedSimdType.empty()){
-            if(IsUnitFloatLiteral(*vecExpr.arguments[1])){
+        MStringView regType;
+        MStringView loadFn;
+        u32 zeroedAbove = 4u;
+        if(
+            TryGetFloatVectorSourceInfo(*vecExpr.arguments[0], isDouble, regType, loadFn, zeroedAbove)
+            && zeroedAbove >= 3u
+            && vecExpr.arguments[1]->resolvedSimdType.empty()
+            && vecExpr.arguments[1]->resolvedUnalignedType.empty()
+        ){
+            if(IsUnitFloatLiteral(*vecExpr.arguments[1], &symbols)){
                 outBaseVec = vecExpr.arguments[0];
+                outBaseRegType = regType;
+                outBaseLoadFn = loadFn;
+                outTransformLanes = 3u;
                 outIsNormal = false;
                 return true;
             }
-            if(IsZeroScalarLiteral(*vecExpr.arguments[1])){
+            if(IsZeroScalarLiteral(*vecExpr.arguments[1], &symbols)){
                 outBaseVec = vecExpr.arguments[0];
+                outBaseRegType = regType;
+                outBaseLoadFn = loadFn;
+                outTransformLanes = 3u;
                 outIsNormal = true;
                 return true;
             }
@@ -169,31 +199,72 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
     }
     if((vecExpr.arguments.size() == 3u || vecExpr.arguments.size() == 4u) && vecExpr.arguments[0] && vecExpr.arguments[1] && vecExpr.arguments[2]){
         const Expr* baseVec = nullptr;
-        for(u32 i = 0u; i < 3u; ++i){
+        for(u32 i = 0u; i < 2u; ++i){
             const Expr* laneBase = nullptr;
             u32 laneIdx = 0u;
-            if(!TryMatchSingleLaneAccess(vecExpr.arguments[i], laneBase, laneIdx) || laneIdx != i || !laneBase || laneBase->resolvedSimdType != simdType)
+            if(!TryMatchSingleLaneAccess(vecExpr.arguments[i], laneBase, laneIdx) || laneIdx != i || !laneBase)
                 return false;
             if(!baseVec)
                 baseVec = laneBase;
             else if(!AreSamePureSimdExpr(*baseVec, *laneBase))
                 return false;
         }
-        if(!baseVec)
+        MStringView regType;
+        MStringView loadFn;
+        u32 zeroedAbove = 4u;
+        if(!baseVec || !TryGetFloatVectorSourceInfo(*baseVec, isDouble, regType, loadFn, zeroedAbove))
             return false;
+        if(
+            vecExpr.arguments.size() == 4u
+            && vecExpr.arguments[3]
+            && zeroedAbove >= 2u
+            && vecExpr.arguments[2]->resolvedSimdType.empty()
+            && vecExpr.arguments[2]->resolvedUnalignedType.empty()
+            && vecExpr.arguments[3]->resolvedSimdType.empty()
+            && vecExpr.arguments[3]->resolvedUnalignedType.empty()
+            && IsZeroScalarLiteral(*vecExpr.arguments[2], &symbols)
+            && IsUnitFloatLiteral(*vecExpr.arguments[3], &symbols)
+        ){
+            outBaseVec = baseVec;
+            outBaseRegType = regType;
+            outBaseLoadFn = loadFn;
+            outTransformLanes = 2u;
+            outIsNormal = false;
+            return true;
+        }
+        const Expr* lane2Base = nullptr;
+        u32 lane2Idx = 0u;
+        if(
+            zeroedAbove < 3u
+            || !TryMatchSingleLaneAccess(vecExpr.arguments[2], lane2Base, lane2Idx)
+            || lane2Idx != 2u
+            || !lane2Base
+            || !AreSamePureSimdExpr(*baseVec, *lane2Base)
+        ){
+            return false;
+        }
         if(vecExpr.arguments.size() == 3u){
             outBaseVec = baseVec;
+            outBaseRegType = regType;
+            outBaseLoadFn = loadFn;
+            outTransformLanes = 3u;
             outIsNormal = true;
             return true;
         }
-        if(vecExpr.arguments[3] && vecExpr.arguments[3]->resolvedSimdType.empty()){
-            if(IsUnitFloatLiteral(*vecExpr.arguments[3])){
+        if(vecExpr.arguments[3] && vecExpr.arguments[3]->resolvedSimdType.empty() && vecExpr.arguments[3]->resolvedUnalignedType.empty()){
+            if(IsUnitFloatLiteral(*vecExpr.arguments[3], &symbols)){
                 outBaseVec = baseVec;
+                outBaseRegType = regType;
+                outBaseLoadFn = loadFn;
+                outTransformLanes = 3u;
                 outIsNormal = false;
                 return true;
             }
-            if(IsZeroScalarLiteral(*vecExpr.arguments[3])){
+            if(IsZeroScalarLiteral(*vecExpr.arguments[3], &symbols)){
                 outBaseVec = baseVec;
+                outBaseRegType = regType;
+                outBaseLoadFn = loadFn;
+                outTransformLanes = 3u;
                 outIsNormal = true;
                 return true;
             }
@@ -426,7 +497,7 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum bin
     }
     if(binaryOp == TokenType::Slash){
         const Expr* lhsScalar = lhs.resolvedSimdType.empty() ? &lhs : TryUnwrapSimdSplatScalarArg(lhs, m_symbols);
-        if(!isInt && lhsScalar && IsUnitFloatLiteral(*lhsScalar) && !rhs.resolvedSimdType.empty()){
+        if(!isInt && lhsScalar && IsUnitFloatLiteral(*lhsScalar, &m_symbols) && !rhs.resolvedSimdType.empty()){
             if(const Expr* lenVec = TryMatchSimdLengthVecArg(&rhs, isDouble, m_symbols)){
                 const u32 effLanes = InferEffectiveSimdLanes(*lenVec);
                 AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
@@ -511,7 +582,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                     }
                 }
             }
-            if(expr.kind == ExprKind::Binary && expr.op == TokenType::Slash && expr.lhs && expr.rhs && IsUnitFloatLiteral(*expr.lhs)){
+            if(expr.kind == ExprKind::Binary && expr.op == TokenType::Slash && expr.lhs && expr.rhs && IsUnitFloatLiteral(*expr.lhs, &m_symbols)){
                 if(const Expr* lenVec = TryMatchSimdLengthVecArg(expr.rhs, isDouble, m_symbols)){
                     const u32 effLanes = InferEffectiveSimdLanes(*lenVec);
                     AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
@@ -520,25 +591,25 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                     return;
                 }
             }
-            if(IsZeroScalarLiteral(expr)){
+            if(IsZeroScalarLiteral(expr, &m_symbols)){
                 out.append(isDouble ? "::VectorDoubleZero()" : "::VectorZero()");
                 return;
             }
-            if(IsUnitFloatLiteral(expr)){
+            if(IsUnitFloatLiteral(expr, &m_symbols)){
                 out.append(isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne");
                 return;
             }
-            if(IsNegativeUnitFloatLiteral(expr)){
+            if(IsNegativeUnitFloatLiteral(expr, &m_symbols)){
                 out.append(isDouble ? "::s_DoubleSIMDNegativeOne" : "::s_SIMDNegativeOne");
                 return;
             }
-            if(IsHalfFloatLiteral(expr)){
+            if(IsHalfFloatLiteral(expr, &m_symbols)){
                 out.append(isDouble ? "::s_DoubleSIMDOneHalf" : "::s_SIMDOneHalf");
                 return;
             }
         }
         if(isInt){
-            if(IsZeroScalarLiteral(expr)){
+            if(IsZeroScalarLiteral(expr, &m_symbols)){
                 out.append(isDouble ? "::VectorDoubleFalseInt()" : "::VectorFalseInt()");
                 return;
             }
@@ -777,14 +848,27 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 }
                 const Expr& vecExpr = lhsIsMat ? *expr.arguments[1] : *expr.arguments[0];
                 const Expr& matExpr = lhsIsMat ? *expr.arguments[0] : *expr.arguments[1];
-                const Expr* transform3BaseVec = nullptr;
+                const Expr* transformBaseVec = nullptr;
+                MStringView transformRegType;
+                MStringView transformLoadFn;
+                u32 transformLanes = 3u;
                 b8 isNormalTransform = false;
-                if(!isInt && TryMatchSimdTransform3Arg(vecExpr, vecExpr.resolvedSimdType, m_symbols, transform3BaseVec, isNormalTransform) && transform3BaseVec){
-                    if(isNormalTransform)
+                if(!isInt && TryMatchSimdTransform3Arg(vecExpr, vecExpr.resolvedSimdType, m_symbols, transformBaseVec, transformRegType, transformLoadFn, transformLanes, isNormalTransform) && transformBaseVec){
+                    if(transformLanes == 2u)
+                        out.append(isDouble ? "::VectorDouble2Transform(" : "::Vector2Transform(");
+                    else if(isNormalTransform)
                         out.append(isDouble ? "::VectorDouble3TransformNormal(" : "::Vector3TransformNormal(");
                     else
                         out.append(isDouble ? "::VectorDouble3Transform(" : "::Vector3Transform(");
-                    emitSimdRegExpr(out, *transform3BaseVec, vecExpr.resolvedSimdType);
+                    if(!transformRegType.empty()){
+                        emitSimdRegExpr(out, *transformBaseVec, transformRegType);
+                    }
+                    else{
+                        out.append(transformLoadFn.data(), transformLoadFn.size());
+                        out.push_back('(');
+                        emitExpr(out, *transformBaseVec);
+                        out.push_back(')');
+                    }
                     out.append(", ");
                     emitSimdRegExpr(out, matExpr, matExpr.resolvedSimdType);
                     out.push_back(')');

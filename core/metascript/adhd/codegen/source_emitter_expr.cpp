@@ -29,11 +29,7 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
     outTerms.push_back(&expr);
 }
 
-[[nodiscard]] b8 IsFloatSimdRegisterVectorType(const MStringView simdType)noexcept{
-    return simdType == "VectorSingle" || simdType == "VectorDouble";
-}
-
-[[nodiscard]] b8 TryMatchIsFiniteLaneTerm(const Expr* term, const b8 expectNegated, const Expr*& outBase, u32& outLane)noexcept{
+[[nodiscard]] b8 TryMatchIsFiniteLaneTerm(const Expr* term, const b8 expectNegated, const Expr*& outBase, b8& outIsDouble, u32& outLane)noexcept{
     if(!term)
         return false;
     const Expr* callExpr = term;
@@ -55,7 +51,12 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
     }
     if(!TryMatchSingleLaneAccess(callExpr->arguments[0], outBase, outLane) || !outBase)
         return false;
-    return IsFloatSimdRegisterVectorType(outBase->resolvedSimdType) && IsPureSimdAddressExpr(*outBase);
+    MStringView regType;
+    MStringView loadFn;
+    u32 zeroedAbove = 0u;
+    return TryGetAnyFloatVectorSourceInfo(*outBase, outIsDouble, regType, loadFn, zeroedAbove)
+        && outLane < zeroedAbove
+        && IsPureSimdAddressExpr(*outBase);
 }
 
 [[nodiscard]] constexpr b8 IsSimdComparisonOp(const TokenType::Enum op)noexcept{
@@ -77,57 +78,130 @@ void CollectLogicChainTerms(const Expr& expr, const TokenType::Enum op, MVector<
     }
 }
 
+[[nodiscard]] b8 TryMatchSimdLaneOrAbsAccess(
+    const Expr* expr,
+    const Expr*& outBase,
+    b8& outIsDouble,
+    u32& outLane,
+    b8& outIsAbs
+)noexcept{
+    outIsAbs = false;
+    const Expr* laneExpr = expr;
+    if(
+        expr
+        && expr->kind == ExprKind::Call
+        && expr->isBuiltinCall
+        && expr->lhs
+        && expr->lhs->kind == ExprKind::Identifier
+        && expr->lhs->text == "abs"
+        && expr->arguments.size() == 1u
+        && expr->arguments[0]
+    ){
+        laneExpr = expr->arguments[0];
+        outIsAbs = true;
+    }
+    if(!TryMatchSingleLaneAccess(laneExpr, outBase, outLane) || !outBase)
+        return false;
+    MStringView regType;
+    MStringView loadFn;
+    u32 zeroedAbove = 0u;
+    return TryGetAnyFloatVectorSourceInfo(*outBase, outIsDouble, regType, loadFn, zeroedAbove)
+        && outLane < zeroedAbove
+        && IsPureSimdAddressExpr(*outBase);
+}
+
 [[nodiscard]] b8 TryMatchSimdLaneComparisonTerm(
     const Expr* term,
     TokenType::Enum& outCmpOp,
     const Expr*& outLhsBase,
     const Expr*& outRhsBase,
     const Expr*& outRhsScalar,
-    u32& outLane
+    b8& outIsDouble,
+    b8& outLhsAbs,
+    b8& outRhsAbs,
+    u32& outLane,
+    u32& outRhsLane
 )noexcept{
+    outRhsLane = 0u;
     if(!term || term->kind != ExprKind::Binary || !IsSimdComparisonOp(term->op) || !term->lhs || !term->rhs)
         return false;
 
     const Expr* lhsBase = nullptr;
+    b8 lhsIsDouble = false;
     u32 lhsLane = 0u;
+    b8 lhsAbs = false;
+    const b8 lhsIsLane = TryMatchSimdLaneOrAbsAccess(term->lhs, lhsBase, lhsIsDouble, lhsLane, lhsAbs);
+
     const Expr* rhsBase = nullptr;
+    b8 rhsIsDouble = false;
     u32 rhsLane = 0u;
-    const b8 lhsIsLane = TryMatchSingleLaneAccess(term->lhs, lhsBase, lhsLane)
-        && lhsBase
-        && IsFloatSimdRegisterVectorType(lhsBase->resolvedSimdType)
-        && IsPureSimdAddressExpr(*lhsBase);
-    const b8 rhsIsLane = TryMatchSingleLaneAccess(term->rhs, rhsBase, rhsLane)
-        && rhsBase
-        && IsFloatSimdRegisterVectorType(rhsBase->resolvedSimdType)
-        && IsPureSimdAddressExpr(*rhsBase);
+    b8 rhsAbs = false;
+    const b8 rhsIsLane = TryMatchSimdLaneOrAbsAccess(term->rhs, rhsBase, rhsIsDouble, rhsLane, rhsAbs);
 
     if(lhsIsLane && rhsIsLane){
-        if(lhsLane != rhsLane || lhsBase->resolvedSimdType != rhsBase->resolvedSimdType)
+        if(lhsIsDouble != rhsIsDouble)
             return false;
+        if(lhsLane > rhsLane && lhsAbs == rhsAbs && AreSamePureSimdExpr(*lhsBase, *rhsBase)){
+            outCmpOp = FlipComparisonOp(term->op);
+            outLhsBase = rhsBase;
+            outRhsBase = lhsBase;
+            outRhsScalar = nullptr;
+            outIsDouble = lhsIsDouble;
+            outLhsAbs = rhsAbs;
+            outRhsAbs = lhsAbs;
+            outLane = rhsLane;
+            outRhsLane = lhsLane;
+            return true;
+        }
         outCmpOp = term->op;
         outLhsBase = lhsBase;
         outRhsBase = rhsBase;
         outRhsScalar = nullptr;
+        outIsDouble = lhsIsDouble;
+        outLhsAbs = lhsAbs;
+        outRhsAbs = rhsAbs;
         outLane = lhsLane;
+        outRhsLane = rhsLane;
         return true;
     }
-    if(lhsIsLane && term->rhs->resolvedSimdType.empty() && IsPureSimdAddressExpr(*term->rhs)){
+    if(lhsIsLane && term->rhs->resolvedSimdType.empty() && term->rhs->resolvedUnalignedType.empty() && IsPureSimdAddressExpr(*term->rhs)){
         outCmpOp = term->op;
         outLhsBase = lhsBase;
         outRhsBase = nullptr;
         outRhsScalar = term->rhs;
+        outIsDouble = lhsIsDouble;
+        outLhsAbs = lhsAbs;
+        outRhsAbs = false;
         outLane = lhsLane;
         return true;
     }
-    if(rhsIsLane && term->lhs->resolvedSimdType.empty() && IsPureSimdAddressExpr(*term->lhs)){
+    if(rhsIsLane && term->lhs->resolvedSimdType.empty() && term->lhs->resolvedUnalignedType.empty() && IsPureSimdAddressExpr(*term->lhs)){
         outCmpOp = FlipComparisonOp(term->op);
         outLhsBase = rhsBase;
         outRhsBase = nullptr;
         outRhsScalar = term->lhs;
+        outIsDouble = rhsIsDouble;
+        outLhsAbs = rhsAbs;
+        outRhsAbs = false;
         outLane = rhsLane;
         return true;
     }
     return false;
+}
+
+[[nodiscard]] b8 IsPureSimdLaneLogicTerm(const Expr* term, const b8 isOrChain)noexcept{
+    const Expr* base0 = nullptr;
+    b8 isDouble = false;
+    u32 lane0 = 0u;
+    if(TryMatchIsFiniteLaneTerm(term, isOrChain, base0, isDouble, lane0))
+        return true;
+    TokenType::Enum cmpOp = TokenType::EndOfFile;
+    const Expr* rhsBase = nullptr;
+    const Expr* rhsScalar = nullptr;
+    b8 lhsAbs = false;
+    b8 rhsAbs = false;
+    u32 rhsLane = 0u;
+    return TryMatchSimdLaneComparisonTerm(term, cmpOp, base0, rhsBase, rhsScalar, isDouble, lhsAbs, rhsAbs, lane0, rhsLane);
 }
 
 [[nodiscard]] constexpr u32 CountMaskBits4(const u8 mask)noexcept{
@@ -183,48 +257,67 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
     struct FusedSegment{
         u8 kind = 0u;
         usize start = 0u;
-        usize end = 0u;
         u8 laneMask = 0u;
+        b8 isDouble = false;
+        b8 lhsAbs = false;
+        b8 rhsAbs = false;
         TokenType::Enum cmpOp = TokenType::EndOfFile;
         const Expr* lhsBase = nullptr;
         const Expr* rhsBase = nullptr;
         const Expr* rhsScalar = nullptr;
+        Array<u32, 4> rhsSwizzle{0u, 1u, 2u, 3u};
     };
 
     MVector<FusedSegment> segments(m_arena);
+    MVector<b8> consumed(terms.size(), false, m_arena);
     b8 anyFused = false;
-    usize idx = 0u;
-    while(idx < terms.size()){
+    for(usize idx = 0u; idx < terms.size(); ++idx){
+        if(consumed[idx])
+            continue;
+
         const Expr* finBase = nullptr;
+        b8 finIsDouble = false;
         u32 finLane = 0u;
-        if(TryMatchIsFiniteLaneTerm(terms[idx], isOrChain, finBase, finLane)){
-            const b8 isDouble = IsDoubleSimdType(finBase->resolvedSimdType);
+        if(TryMatchIsFiniteLaneTerm(terms[idx], isOrChain, finBase, finIsDouble, finLane)){
             u8 accMask = static_cast<u8>(1u << finLane);
-            usize bestEnd = 0u;
+            MVector<usize> matchedIndices(m_arena);
+            matchedIndices.push_back(idx);
+            usize bestCount = 0u;
             u8 bestMask = 0u;
-            usize scan = idx + 1u;
-            while(scan < terms.size()){
+            for(usize scan = idx + 1u; scan < terms.size(); ++scan){
+                if(consumed[scan])
+                    continue;
                 const Expr* nextBase = nullptr;
+                b8 nextIsDouble = false;
                 u32 nextLane = 0u;
-                if(!TryMatchIsFiniteLaneTerm(terms[scan], isOrChain, nextBase, nextLane) || !AreSamePureSimdExpr(*finBase, *nextBase))
-                    break;
-                accMask |= static_cast<u8>(1u << nextLane);
-                ++scan;
-                if(!SimdComponentMaskConstant(accMask, isDouble).empty()){
-                    bestEnd = scan;
-                    bestMask = accMask;
+                if(
+                    TryMatchIsFiniteLaneTerm(terms[scan], isOrChain, nextBase, nextIsDouble, nextLane)
+                    && nextIsDouble == finIsDouble
+                    && AreSamePureSimdExpr(*finBase, *nextBase)
+                    && (accMask & static_cast<u8>(1u << nextLane)) == 0u
+                ){
+                    accMask |= static_cast<u8>(1u << nextLane);
+                    matchedIndices.push_back(scan);
+                    if(!SimdComponentMaskConstant(accMask, finIsDouble).empty()){
+                        bestCount = matchedIndices.size();
+                        bestMask = accMask;
+                    }
+                    continue;
                 }
+                if(!IsPureSimdLaneLogicTerm(terms[scan], isOrChain))
+                    break;
             }
-            if(bestEnd >= idx + 2u){
+            if(bestCount >= 2u){
+                for(usize k = 0u; k < bestCount; ++k)
+                    consumed[matchedIndices[k]] = true;
                 FusedSegment seg;
                 seg.kind = 1u;
                 seg.start = idx;
-                seg.end = bestEnd;
                 seg.laneMask = bestMask;
+                seg.isDouble = finIsDouble;
                 seg.lhsBase = finBase;
                 segments.push_back(seg);
                 anyFused = true;
-                idx = bestEnd;
                 continue;
             }
         }
@@ -233,64 +326,156 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
         const Expr* lhsBase = nullptr;
         const Expr* rhsBase = nullptr;
         const Expr* rhsScalar = nullptr;
+        b8 cmpIsDouble = false;
+        b8 lhsAbs = false;
+        b8 rhsAbs = false;
         u32 cmpLane = 0u;
-        if(TryMatchSimdLaneComparisonTerm(terms[idx], cmpOp, lhsBase, rhsBase, rhsScalar, cmpLane)){
+        u32 cmpRhsLane = 0u;
+        if(TryMatchSimdLaneComparisonTerm(terms[idx], cmpOp, lhsBase, rhsBase, rhsScalar, cmpIsDouble, lhsAbs, rhsAbs, cmpLane, cmpRhsLane)){
             u8 accMask = static_cast<u8>(1u << cmpLane);
-            usize scan = idx + 1u;
-            while(scan < terms.size()){
+            Array<u32, 4> rhsSwizzle{0u, 1u, 2u, 3u};
+            rhsSwizzle[cmpLane] = cmpRhsLane;
+            MVector<usize> matchedIndices(m_arena);
+            matchedIndices.push_back(idx);
+            for(usize scan = idx + 1u; scan < terms.size(); ++scan){
+                if(consumed[scan])
+                    continue;
                 TokenType::Enum nextCmpOp = TokenType::EndOfFile;
                 const Expr* nextLhsBase = nullptr;
                 const Expr* nextRhsBase = nullptr;
                 const Expr* nextRhsScalar = nullptr;
+                b8 nextIsDouble = false;
+                b8 nextLhsAbs = false;
+                b8 nextRhsAbs = false;
                 u32 nextLane = 0u;
-                if(!TryMatchSimdLaneComparisonTerm(terms[scan], nextCmpOp, nextLhsBase, nextRhsBase, nextRhsScalar, nextLane))
-                    break;
-                if(nextCmpOp != cmpOp || !AreSamePureSimdExpr(*lhsBase, *nextLhsBase))
-                    break;
-                if(rhsBase){
-                    if(!nextRhsBase || !AreSamePureSimdExpr(*rhsBase, *nextRhsBase))
-                        break;
+                u32 nextRhsLane = 0u;
+                if(TryMatchSimdLaneComparisonTerm(terms[scan], nextCmpOp, nextLhsBase, nextRhsBase, nextRhsScalar, nextIsDouble, nextLhsAbs, nextRhsAbs, nextLane, nextRhsLane)){
+                    const b8 sameRhs = rhsBase
+                        ? (nextRhsBase && AreSamePureSimdExpr(*rhsBase, *nextRhsBase))
+                        : (nextRhsScalar && AreSamePureSimdExpr(*rhsScalar, *nextRhsScalar));
+                    if(
+                        nextCmpOp == cmpOp
+                        && nextIsDouble == cmpIsDouble
+                        && nextLhsAbs == lhsAbs
+                        && nextRhsAbs == rhsAbs
+                        && (accMask & static_cast<u8>(1u << nextLane)) == 0u
+                        && AreSamePureSimdExpr(*lhsBase, *nextLhsBase)
+                        && sameRhs
+                    ){
+                        accMask |= static_cast<u8>(1u << nextLane);
+                        rhsSwizzle[nextLane] = nextRhsLane;
+                        matchedIndices.push_back(scan);
+                    }
+                    continue;
                 }
-                else{
-                    if(!nextRhsScalar || !AreSamePureSimdExpr(*rhsScalar, *nextRhsScalar))
-                        break;
-                }
-                accMask |= static_cast<u8>(1u << nextLane);
-                ++scan;
+                if(!IsPureSimdLaneLogicTerm(terms[scan], isOrChain))
+                    break;
             }
-            if(scan >= idx + 2u && CountMaskBits4(accMask) >= 2u){
+            if(matchedIndices.size() >= 2u && CountMaskBits4(accMask) >= 2u){
+                for(const usize matchedIdx : matchedIndices)
+                    consumed[matchedIdx] = true;
                 FusedSegment seg;
                 seg.kind = 2u;
                 seg.start = idx;
-                seg.end = scan;
                 seg.laneMask = accMask;
+                seg.isDouble = cmpIsDouble;
+                seg.lhsAbs = lhsAbs;
+                seg.rhsAbs = rhsAbs;
                 seg.cmpOp = cmpOp;
                 seg.lhsBase = lhsBase;
                 seg.rhsBase = rhsBase;
                 seg.rhsScalar = rhsScalar;
+                seg.rhsSwizzle = rhsSwizzle;
                 segments.push_back(seg);
                 anyFused = true;
-                idx = scan;
                 continue;
             }
         }
 
+        consumed[idx] = true;
         FusedSegment rawSeg;
         rawSeg.kind = 0u;
         rawSeg.start = idx;
-        rawSeg.end = idx + 1u;
         segments.push_back(rawSeg);
-        ++idx;
     }
 
     if(!anyFused)
         return false;
 
-    const auto emitCmpSecondArg = [&](const FusedSegment& seg, const MStringView simdType){
-        if(seg.rhsBase)
-            emitSimdRegExpr(out, *seg.rhsBase, simdType);
-        else
-            emitSimdRegExpr(out, *seg.rhsScalar, simdType);
+    const auto emitFusedVecOperand = [&](const Expr& baseExpr, const b8 wrapAbs){
+        b8 vecIsDouble = false;
+        MStringView regType;
+        MStringView loadFn;
+        u32 zeroedAbove = 4u;
+        (void)TryGetAnyFloatVectorSourceInfo(baseExpr, vecIsDouble, regType, loadFn, zeroedAbove);
+        if(wrapAbs)
+            out.append(vecIsDouble ? "::VectorDoubleAbs(" : "::VectorAbs(");
+        if(!regType.empty()){
+            emitSimdRegExpr(out, baseExpr, regType);
+        }
+        else{
+            out.append(loadFn.data(), loadFn.size());
+            out.push_back('(');
+            emitExpr(out, baseExpr);
+            out.push_back(')');
+        }
+        if(wrapAbs)
+            out.push_back(')');
+    };
+
+    const auto emitCmpSecondArg = [&](const FusedSegment& seg){
+        if(seg.rhsBase){
+            b8 needsSwizzle = false;
+            u32 firstRhsLane = 0u;
+            b8 allSameRhsLane = true;
+            b8 sawActive = false;
+            for(u32 i = 0u; i < 4u; ++i){
+                if((seg.laneMask & static_cast<u8>(1u << i)) != 0u){
+                    if(seg.rhsSwizzle[i] != i)
+                        needsSwizzle = true;
+                    if(!sawActive){
+                        firstRhsLane = seg.rhsSwizzle[i];
+                        sawActive = true;
+                    }
+                    else if(seg.rhsSwizzle[i] != firstRhsLane){
+                        allSameRhsLane = false;
+                    }
+                }
+            }
+            if(!needsSwizzle){
+                emitFusedVecOperand(*seg.rhsBase, seg.rhsAbs);
+                return;
+            }
+            if(allSameRhsLane){
+                const MStringView splatPrefix = SimdSplatIntrinsic(firstRhsLane, seg.isDouble);
+                out.append(splatPrefix.data(), splatPrefix.size());
+                emitFusedVecOperand(*seg.rhsBase, seg.rhsAbs);
+                out.push_back(')');
+                return;
+            }
+            Array<u32, 4> swiz = seg.rhsSwizzle;
+            if(seg.laneMask == 0x3u){
+                swiz[2] = swiz[0];
+                swiz[3] = swiz[1];
+            }
+            else if(seg.laneMask == 0xCu){
+                swiz[0] = swiz[2];
+                swiz[1] = swiz[3];
+            }
+            out.append(seg.isDouble ? "::VectorDoubleSwizzle<" : "::VectorSwizzle<");
+            for(u32 i = 0u; i < 4u; ++i){
+                if(i > 0u)
+                    out.append(", ");
+                AppendUnsignedDecimal(out, swiz[i]);
+                out.push_back('u');
+            }
+            out.append(">(");
+            emitFusedVecOperand(*seg.rhsBase, seg.rhsAbs);
+            out.push_back(')');
+        }
+        else{
+            emitSimdRegExpr(out, *seg.rhsScalar, seg.isDouble ? "VectorDouble" : "VectorSingle");
+        }
     };
 
     const auto emitSegment = [&](const FusedSegment& seg){
@@ -298,14 +483,13 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
             emitExpr(out, *terms[seg.start]);
             return;
         }
-        const MStringView simdType = seg.lhsBase->resolvedSimdType;
-        const b8 isDouble = IsDoubleSimdType(simdType);
+        const b8 isDouble = seg.isDouble;
         if(seg.kind == 1u){
             const MStringView maskConst = SimdComponentMaskConstant(seg.laneMask, isDouble);
             if(isOrChain)
                 out.push_back('!');
             out.append(isDouble ? "::VectorDoubleIsFinite(" : "::VectorIsFinite(");
-            emitSimdRegExpr(out, *seg.lhsBase, simdType);
+            emitFusedVecOperand(*seg.lhsBase, false);
             out.append(", ");
             out.append(maskConst.data(), maskConst.size());
             out.push_back(')');
@@ -331,14 +515,14 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
                 if(!fnPrefix.empty()){
                     out.append(fnPrefix.data(), fnPrefix.size());
                     if(swapOperands){
-                        emitCmpSecondArg(seg, simdType);
+                        emitCmpSecondArg(seg);
                         out.append(", ");
-                        emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                        emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
                     }
                     else{
-                        emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                        emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
                         out.append(", ");
-                        emitCmpSecondArg(seg, simdType);
+                        emitCmpSecondArg(seg);
                     }
                     out.push_back(')');
                     return;
@@ -357,24 +541,32 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
                 }
                 if(!fnPrefix.empty()){
                     out.append(fnPrefix.data(), fnPrefix.size());
-                    emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                    emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
                     out.append(", ");
-                    emitCmpSecondArg(seg, simdType);
+                    emitCmpSecondArg(seg);
                     out.push_back(')');
                     return;
                 }
             }
             if(seg.laneMask == 0x3u && (seg.cmpOp == TokenType::GreaterEqual || seg.cmpOp == TokenType::LessEqual)){
+                if(!isDouble && seg.cmpOp == TokenType::LessEqual){
+                    out.append("::Vector2LessOrEqual(");
+                    emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
+                    out.append(", ");
+                    emitCmpSecondArg(seg);
+                    out.push_back(')');
+                    return;
+                }
                 out.append(isDouble ? "::VectorDouble2GreaterOrEqual(" : "::Vector2GreaterOrEqual(");
                 if(seg.cmpOp == TokenType::LessEqual){
-                    emitCmpSecondArg(seg, simdType);
+                    emitCmpSecondArg(seg);
                     out.append(", ");
-                    emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                    emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
                 }
                 else{
-                    emitSimdRegExpr(out, *seg.lhsBase, simdType);
+                    emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
                     out.append(", ");
-                    emitCmpSecondArg(seg, simdType);
+                    emitCmpSecondArg(seg);
                 }
                 out.push_back(')');
                 return;
@@ -385,9 +577,9 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
                 out.append(isDouble ? "!::VectorDouble3Equal(" : "!::Vector3Equal(");
             else
                 out.append(isDouble ? "!::VectorDouble4Equal(" : "!::Vector4Equal(");
-            emitSimdRegExpr(out, *seg.lhsBase, simdType);
+            emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
             out.append(", ");
-            emitCmpSecondArg(seg, simdType);
+            emitCmpSecondArg(seg);
             out.push_back(')');
             return;
         }
@@ -395,9 +587,9 @@ b8 SourceEmitter::tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, con
         const MStringView cmpPrefix = MapSimdVectorCompareIntrinsicPrefix(seg.cmpOp, isDouble);
         out.append(isDouble ? "((::VectorDoubleMoveMask(" : "((::VectorMoveMask(");
         out.append(cmpPrefix.data(), cmpPrefix.size());
-        emitSimdRegExpr(out, *seg.lhsBase, simdType);
+        emitFusedVecOperand(*seg.lhsBase, seg.lhsAbs);
         out.append(", ");
-        emitCmpSecondArg(seg, simdType);
+        emitCmpSecondArg(seg);
         out.append(")) & ");
         AppendSimdMoveMaskHexOrConstant(out, seg.laneMask, isDouble);
         if(isOrChain){

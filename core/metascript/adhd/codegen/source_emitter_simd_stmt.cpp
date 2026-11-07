@@ -14,95 +14,17 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_simd_stmt{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 TryGetStorageVectorLoadInfo(const Expr& srcExpr, const b8 targetIsDouble, MStringView& outLoadFn, u32& outLanes)noexcept{
-    if(!srcExpr.resolvedSimdType.empty() && SymbolTable::IsSimdStorageVectorType(srcExpr.resolvedSimdType, outLanes)){
-        const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(srcExpr.resolvedSimdType);
-        if(!vecInfo || vecInfo->isDoubleReg != targetIsDouble)
-            return false;
-        if(vecInfo->isMixed){
-            outLoadFn = vecInfo->isDoubleReg ? "::LoadDoubleInt" : "::LoadFloatInt";
-            outLanes = 3u;
-            return true;
-        }
-        outLoadFn = vecInfo->loadCppFunc;
-        return !outLoadFn.empty();
-    }
-    if(!srcExpr.resolvedUnalignedType.empty()){
-        const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(srcExpr.resolvedUnalignedType);
-        if(!unalignedInfo)
-            return false;
-        outLanes = unalignedInfo->lanes;
-        if(unalignedInfo->isHalfFloat){
-            outLoadFn = targetIsDouble ? "::LoadDouble" : "::LoadHalf";
-            return true;
-        }
-        const b8 srcIsDouble = (unalignedInfo->laneScalarType == "f64" || unalignedInfo->laneScalarType == "i64" || unalignedInfo->laneScalarType == "u64");
-        if(srcIsDouble != targetIsDouble)
-            return false;
-        const b8 srcIsInt = IsIntegerScalarType(unalignedInfo->laneScalarType);
-        outLoadFn = srcIsDouble ? (srcIsInt ? "::LoadDoubleInt" : "::LoadDouble") : (srcIsInt ? "::LoadInt" : "::LoadFloat");
-        return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 TryGetFloatVectorSourceInfo(const Expr& srcExpr, const b8 targetIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept{
-    outRegSimdType = {};
-    outStorageLoadFn = {};
-    outEffectiveZeroedAboveLane = 4u;
-    const MStringView expectedRegType = targetIsDouble ? "VectorDouble" : "VectorSingle";
-    if(srcExpr.resolvedSimdType == expectedRegType){
-        outRegSimdType = expectedRegType;
-        return true;
-    }
-    u32 storageLanes = 0u;
-    if(!srcExpr.resolvedSimdType.empty() && SymbolTable::IsSimdStorageVectorType(srcExpr.resolvedSimdType, storageLanes)){
-        const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(srcExpr.resolvedSimdType);
-        if(!vecInfo || !vecInfo->isFloatReg || vecInfo->isIntReg || vecInfo->isMixed || vecInfo->isDoubleReg != targetIsDouble || vecInfo->loadCppFunc.empty())
-            return false;
-        outStorageLoadFn = vecInfo->loadCppFunc;
-        outEffectiveZeroedAboveLane = storageLanes;
-        return true;
-    }
-    if(!srcExpr.resolvedUnalignedType.empty()){
-        const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(srcExpr.resolvedUnalignedType);
-        if(!unalignedInfo || unalignedInfo->isHalfFloat || IsIntegerScalarType(unalignedInfo->laneScalarType))
-            return false;
-        const b8 srcIsDouble = (unalignedInfo->laneScalarType == "f64");
-        if(srcIsDouble != targetIsDouble)
-            return false;
-        outStorageLoadFn = srcIsDouble ? "::LoadDouble" : "::LoadFloat";
-        outEffectiveZeroedAboveLane = unalignedInfo->lanes;
-        return true;
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdType, const Span<const Expr* const> arguments)const{
-    using namespace __hidden_adhd_simd_stmt;
-
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
 
     if(SymbolTable::IsSimdMatrixType(simdType)){
         if(arguments.empty()){
             out.append(isDouble ? "::SIMDMatrixDouble{}" : "::SIMDMatrix{}");
+            return;
+        }
+        if(IsIdentityMatrixCtorArgs(arguments, m_symbols)){
+            out.append(isDouble ? "::MatrixDoubleIdentity()" : "::MatrixIdentity()");
             return;
         }
         if(arguments.size() == 1u && arguments[0] && !arguments[0]->resolvedSimdType.empty()){
@@ -116,10 +38,6 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 return;
             }
             emitSimdRegExpr(out, *arguments[0], simdType);
-            return;
-        }
-        if(IsIdentityMatrixCtorArgs(arguments, m_symbols)){
-            out.append(isDouble ? "::MatrixDoubleIdentity()" : "::MatrixIdentity()");
             return;
         }
         if((arguments.size() == 3u || arguments.size() == 4u) && arguments[0] && SymbolTable::IsSimdRegisterVectorType(arguments[0]->resolvedSimdType)){
@@ -176,7 +94,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
 
     b8 allZeroArgs = true;
     for(const Expr* arg : arguments){
-        if(!arg || !IsZeroScalarLiteral(*arg)){
+        if(!arg || !IsZeroScalarLiteral(*arg, &m_symbols)){
             allZeroArgs = false;
             break;
         }
@@ -189,7 +107,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         return;
     }
     if(!isInt){
-        const MStringView knownConst = TryMatchKnownSimdFloatVectorConstant(arguments, isDouble);
+        const MStringView knownConst = TryMatchKnownSimdFloatVectorConstant(arguments, isDouble, &m_symbols);
         if(!knownConst.empty()){
             out.append(knownConst.data(), knownConst.size());
             return;
@@ -215,22 +133,40 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         return;
     }
     if(arguments.size() == 2u && arguments[0] && arguments[1] && arguments[1]->resolvedSimdType.empty()){
+        const Expr* wLaneBase = nullptr;
+        u32 wLaneIdx = 0u;
+        const b8 wIsSimdLane = TryMatchSingleLaneAccess(arguments[1], wLaneBase, wLaneIdx)
+            && wLaneBase
+            && wLaneBase->resolvedSimdType == simdType;
+
         MStringView loadFn;
         u32 srcLanes = 0u;
         if(TryGetStorageVectorLoadInfo(*arguments[0], isDouble, loadFn, srcLanes)){
-            if(srcLanes <= 3u && IsZeroScalarLiteral(*arguments[1])){
+            if(srcLanes <= 3u && IsZeroScalarLiteral(*arguments[1], &m_symbols)){
                 out.append(loadFn.data(), loadFn.size());
                 out.push_back('(');
                 emitExpr(out, *arguments[0]);
                 out.push_back(')');
                 return;
             }
-            if(!isInt && IsZeroScalarLiteral(*arguments[1])){
+            if(!isInt && IsZeroScalarLiteral(*arguments[1], &m_symbols)){
                 out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
                 out.append(loadFn.data(), loadFn.size());
                 out.push_back('(');
                 emitExpr(out, *arguments[0]);
                 out.append(isDouble ? "), ::s_DoubleSIMDMask3)" : "), ::s_SIMDMask3)");
+                return;
+            }
+            if(wIsSimdLane){
+                out.append(isDouble ? "::VectorDoublePermute<0u, 1u, 2u, " : "::VectorPermute<0u, 1u, 2u, ");
+                AppendUnsignedDecimal(out, 4u + wLaneIdx);
+                out.append("u>(");
+                out.append(loadFn.data(), loadFn.size());
+                out.push_back('(');
+                emitExpr(out, *arguments[0]);
+                out.append("), ");
+                emitSimdRegExpr(out, *wLaneBase, simdType);
+                out.push_back(')');
                 return;
             }
             out.append(isDouble ? "::VectorDoubleSetW(" : "::VectorSetW(");
@@ -243,10 +179,32 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             return;
         }
         if(arguments[0]->resolvedSimdType == simdType){
-            if(!isInt && IsZeroScalarLiteral(*arguments[1])){
+            if(!isInt && IsZeroScalarLiteral(*arguments[1], &m_symbols)){
                 out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
                 emitSimdRegExpr(out, *arguments[0], simdType);
                 out.append(isDouble ? ", ::s_DoubleSIMDMask3)" : ", ::s_SIMDMask3)");
+                return;
+            }
+            if(wIsSimdLane){
+                if(AreSamePureSimdExpr(*arguments[0], *wLaneBase)){
+                    if(wLaneIdx == 3u){
+                        emitSimdRegExpr(out, *arguments[0], simdType);
+                        return;
+                    }
+                    out.append(isDouble ? "::VectorDoubleSwizzle<0u, 1u, 2u, " : "::VectorSwizzle<0u, 1u, 2u, ");
+                    AppendUnsignedDecimal(out, wLaneIdx);
+                    out.append("u>(");
+                    emitSimdRegExpr(out, *arguments[0], simdType);
+                    out.push_back(')');
+                    return;
+                }
+                out.append(isDouble ? "::VectorDoublePermute<0u, 1u, 2u, " : "::VectorPermute<0u, 1u, 2u, ");
+                AppendUnsignedDecimal(out, 4u + wLaneIdx);
+                out.append("u>(");
+                emitSimdRegExpr(out, *arguments[0], simdType);
+                out.append(", ");
+                emitSimdRegExpr(out, *wLaneBase, simdType);
+                out.push_back(')');
                 return;
             }
             out.append(isDouble ? "::VectorDoubleSetW(" : "::VectorSetW(");
@@ -284,7 +242,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         if(matchesStoragePrefix){
             b8 trailingAllZero = true;
             for(usize i = prefixStorageLanes; i < arguments.size(); ++i){
-                if(!arguments[i] || !IsZeroScalarLiteral(*arguments[i])){
+                if(!arguments[i] || !IsZeroScalarLiteral(*arguments[i], &m_symbols)){
                     trailingAllZero = false;
                     break;
                 }
@@ -297,6 +255,20 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 return;
             }
             if(prefixStorageLanes == 3u && arguments.size() == 4u && arguments[3]){
+                const Expr* wLaneBase = nullptr;
+                u32 wLaneIdx = 0u;
+                if(TryMatchSingleLaneAccess(arguments[3], wLaneBase, wLaneIdx) && wLaneBase && wLaneBase->resolvedSimdType == simdType){
+                    out.append(isDouble ? "::VectorDoublePermute<0u, 1u, 2u, " : "::VectorPermute<0u, 1u, 2u, ");
+                    AppendUnsignedDecimal(out, 4u + wLaneIdx);
+                    out.append("u>(");
+                    out.append(prefixLoadFn.data(), prefixLoadFn.size());
+                    out.push_back('(');
+                    emitExpr(out, *storageBase);
+                    out.append("), ");
+                    emitSimdRegExpr(out, *wLaneBase, simdType);
+                    out.push_back(')');
+                    return;
+                }
                 if(isInt)
                     out.append(isDouble ? "::VectorDoubleSetIntW(" : "::VectorSetIntW(");
                 else
@@ -375,7 +347,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                     break;
                 }
             }
-            else if(!cV1 && (i >= arguments.size() || (arguments[i] && IsZeroScalarLiteral(*arguments[i])))){
+            else if(!cV1 && (i >= arguments.size() || (arguments[i] && IsZeroScalarLiteral(*arguments[i], &m_symbols)))){
                 cHasZeroLane = true;
                 cPermIdx[i] = 4u + i;
             }
@@ -410,6 +382,15 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                     emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
                     out.append("), ");
                     out.append(maskConst.data(), maskConst.size());
+                    out.push_back(')');
+                    return;
+                }
+                const MStringView clearMaskConst = SimdInPlaceLaneMaskConstant(static_cast<u8>(0xFu ^ cInPlaceMask), isDouble);
+                if(!clearMaskConst.empty()){
+                    out.append(isDouble ? "::VectorDoubleAndCInt(::ConvertVectorSingleToDouble(" : "::VectorAndCInt(::ConvertVectorDoubleToSingle(");
+                    emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
+                    out.append("), ");
+                    out.append(clearMaskConst.data(), clearMaskConst.size());
                     out.push_back(')');
                     return;
                 }
@@ -448,6 +429,97 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         }
     }
 
+    if(!isInt && (arguments.size() == 3u || arguments.size() == 4u) && arguments[0] && arguments[0]->kind == ExprKind::Binary){
+        const TokenType::Enum binOp = arguments[0]->op;
+        if(binOp == TokenType::Plus || binOp == TokenType::Minus || binOp == TokenType::Star || binOp == TokenType::Slash){
+            u32 activeLanes = 0u;
+            const Expr* lhsVec = nullptr;
+            const Expr* lhsScalar = nullptr;
+            const Expr* rhsVec = nullptr;
+            const Expr* rhsScalar = nullptr;
+            b8 binMatch = true;
+            for(u32 i = 0u; i < static_cast<u32>(arguments.size()); ++i){
+                const Expr* arg = arguments[i];
+                if(!arg){
+                    binMatch = false;
+                    break;
+                }
+                if(IsZeroScalarLiteral(*arg, &m_symbols)){
+                    for(u32 j = i + 1u; j < static_cast<u32>(arguments.size()); ++j){
+                        if(!arguments[j] || !IsZeroScalarLiteral(*arguments[j], &m_symbols)){
+                            binMatch = false;
+                            break;
+                        }
+                    }
+                    break;
+                }
+                if(arg->kind != ExprKind::Binary || arg->op != binOp || !arg->lhs || !arg->rhs){
+                    binMatch = false;
+                    break;
+                }
+                const Expr* curLhsBase = nullptr;
+                u32 curLhsLane = 0u;
+                if(TryMatchSingleLaneAccess(arg->lhs, curLhsBase, curLhsLane) && curLhsBase && curLhsBase->resolvedSimdType == simdType && curLhsLane == i){
+                    if(lhsScalar || (lhsVec && !AreSamePureSimdExpr(*lhsVec, *curLhsBase))){
+                        binMatch = false;
+                        break;
+                    }
+                    lhsVec = curLhsBase;
+                }
+                else if(!lhsVec && arg->lhs->resolvedSimdType.empty() && arg->lhs->resolvedUnalignedType.empty() && IsPureSimdAddressExpr(*arg->lhs)){
+                    if(lhsScalar && !AreSamePureSimdExpr(*lhsScalar, *arg->lhs)){
+                        binMatch = false;
+                        break;
+                    }
+                    lhsScalar = arg->lhs;
+                }
+                else{
+                    binMatch = false;
+                    break;
+                }
+
+                const Expr* curRhsBase = nullptr;
+                u32 curRhsLane = 0u;
+                if(TryMatchSingleLaneAccess(arg->rhs, curRhsBase, curRhsLane) && curRhsBase && curRhsBase->resolvedSimdType == simdType && curRhsLane == i){
+                    if(rhsScalar || (rhsVec && !AreSamePureSimdExpr(*rhsVec, *curRhsBase))){
+                        binMatch = false;
+                        break;
+                    }
+                    rhsVec = curRhsBase;
+                }
+                else if(!rhsVec && arg->rhs->resolvedSimdType.empty() && arg->rhs->resolvedUnalignedType.empty() && IsPureSimdAddressExpr(*arg->rhs)){
+                    if(rhsScalar && !AreSamePureSimdExpr(*rhsScalar, *arg->rhs)){
+                        binMatch = false;
+                        break;
+                    }
+                    rhsScalar = arg->rhs;
+                }
+                else{
+                    binMatch = false;
+                    break;
+                }
+                ++activeLanes;
+            }
+            if(binMatch && activeLanes >= 2u && (lhsVec || rhsVec)){
+                const u8 activeMask = static_cast<u8>((1u << activeLanes) - 1u);
+                const MStringView maskConst = (activeLanes < 4u) ? SimdInPlaceLaneMaskConstant(activeMask, isDouble) : MStringView{};
+                if(activeLanes == 4u || !maskConst.empty()){
+                    if(activeLanes < 4u)
+                        out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
+                    const Expr& emitLhs = lhsVec ? *lhsVec : *lhsScalar;
+                    const Expr& emitRhs = rhsVec ? *rhsVec : *rhsScalar;
+                    (void)tryEmitSimdBinaryOpReg(out, binOp, emitLhs, emitRhs, simdType);
+                    if(activeLanes < 4u){
+                        out.append(", ");
+                        out.append(maskConst.data(), maskConst.size());
+                        out.push_back(')');
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
     Array<const Expr*, 4> laneBases{};
     Array<u32, 4> laneIndices{};
     for(usize i = 0u; i < 4u && i < arguments.size(); ++i){
@@ -461,38 +533,84 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
 
     if(!isInt){
         const Expr* inPlaceBase = nullptr;
+        MStringView inPlaceRegType;
+        MStringView inPlaceLoadFn;
+        u32 inPlaceZeroedAbove = 4u;
         u8 inPlaceMask = 0u;
         b8 allInPlaceOrZero = true;
         for(u32 i = 0u; i < 4u; ++i){
-            if(laneBases[i]){
-                if(laneIndices[i] != i){
+            const Expr* base = nullptr;
+            u32 idx = 0u;
+            if(i < arguments.size() && TryMatchSingleLaneAccess(arguments[i], base, idx) && base){
+                MStringView baseRegType;
+                MStringView baseLoadFn;
+                u32 baseZeroedAbove = 4u;
+                if(idx != i || !TryGetFloatVectorSourceInfo(*base, isDouble, baseRegType, baseLoadFn, baseZeroedAbove) || idx >= baseZeroedAbove){
                     allInPlaceOrZero = false;
                     break;
                 }
-                if(!inPlaceBase)
-                    inPlaceBase = laneBases[i];
-                else if(!AreSamePureSimdExpr(*inPlaceBase, *laneBases[i])){
+                if(!inPlaceBase){
+                    inPlaceBase = base;
+                    inPlaceRegType = baseRegType;
+                    inPlaceLoadFn = baseLoadFn;
+                    inPlaceZeroedAbove = baseZeroedAbove;
+                }
+                else if(!AreSamePureSimdExpr(*inPlaceBase, *base)){
                     allInPlaceOrZero = false;
                     break;
                 }
                 inPlaceMask |= static_cast<u8>(1u << i);
             }
-            else if(i < arguments.size() && (!arguments[i] || !IsZeroScalarLiteral(*arguments[i]))){
+            else if(i < arguments.size() && (!arguments[i] || !IsZeroScalarLiteral(*arguments[i], &m_symbols))){
                 allInPlaceOrZero = false;
                 break;
             }
         }
-        if(allInPlaceOrZero && inPlaceBase){
-            if(inPlaceMask == 0xFu){
-                emitSimdRegExpr(out, *inPlaceBase, simdType);
+        if(allInPlaceOrZero && inPlaceBase && (!inPlaceRegType.empty() || inPlaceMask == 0x3u || inPlaceMask == 0x7u || inPlaceMask == 0xFu)){
+            const u8 naturalLoadMask = static_cast<u8>((1u << inPlaceZeroedAbove) - 1u);
+            if(inPlaceMask == 0xFu || inPlaceMask == naturalLoadMask){
+                if(!inPlaceRegType.empty()){
+                    emitSimdRegExpr(out, *inPlaceBase, simdType);
+                }
+                else{
+                    out.append(inPlaceLoadFn.data(), inPlaceLoadFn.size());
+                    out.push_back('(');
+                    emitExpr(out, *inPlaceBase);
+                    out.push_back(')');
+                }
                 return;
             }
             const MStringView maskConst = SimdInPlaceLaneMaskConstant(inPlaceMask, isDouble);
             if(!maskConst.empty()){
                 out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
-                emitSimdRegExpr(out, *inPlaceBase, simdType);
+                if(!inPlaceRegType.empty()){
+                    emitSimdRegExpr(out, *inPlaceBase, simdType);
+                }
+                else{
+                    out.append(inPlaceLoadFn.data(), inPlaceLoadFn.size());
+                    out.push_back('(');
+                    emitExpr(out, *inPlaceBase);
+                    out.push_back(')');
+                }
                 out.append(", ");
                 out.append(maskConst.data(), maskConst.size());
+                out.push_back(')');
+                return;
+            }
+            const MStringView clearMaskConst = SimdInPlaceLaneMaskConstant(static_cast<u8>(0xFu ^ inPlaceMask), isDouble);
+            if(!clearMaskConst.empty()){
+                out.append(isDouble ? "::VectorDoubleAndCInt(" : "::VectorAndCInt(");
+                if(!inPlaceRegType.empty()){
+                    emitSimdRegExpr(out, *inPlaceBase, simdType);
+                }
+                else{
+                    out.append(inPlaceLoadFn.data(), inPlaceLoadFn.size());
+                    out.push_back('(');
+                    emitExpr(out, *inPlaceBase);
+                    out.push_back(')');
+                }
+                out.append(", ");
+                out.append(clearMaskConst.data(), clearMaskConst.size());
                 out.push_back(')');
                 return;
             }
@@ -523,7 +641,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 }
                 posMask |= static_cast<u8>(1u << i);
             }
-            else if(i < arguments.size() && (!arguments[i] || !IsZeroScalarLiteral(*arguments[i]))){
+            else if(i < arguments.size() && (!arguments[i] || !IsZeroScalarLiteral(*arguments[i], &m_symbols))){
                 allNegInPlaceOrZero = false;
                 break;
             }
@@ -535,11 +653,16 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 out.push_back(')');
                 return;
             }
-            if(negMask == 0x7u && posMask == 0x8u){
-                out.append(isDouble ? "::VectorDoubleXorInt(" : "::VectorXorInt(");
-                emitSimdRegExpr(out, *negBase, simdType);
-                out.append(isDouble ? ", ::s_DoubleSIMDNegate3)" : ", ::s_SIMDNegate3)");
-                return;
+            if((negMask | posMask) == 0xFu){
+                const MStringView flipConst = SimdInPlaceSignFlipMaskConstant(negMask, isDouble);
+                if(!flipConst.empty()){
+                    out.append(isDouble ? "::VectorDoubleXorInt(" : "::VectorXorInt(");
+                    emitSimdRegExpr(out, *negBase, simdType);
+                    out.append(", ");
+                    out.append(flipConst.data(), flipConst.size());
+                    out.push_back(')');
+                    return;
+                }
             }
             if(posMask == 0u){
                 const MStringView maskConst = SimdInPlaceLaneMaskConstant(negMask, isDouble);
@@ -548,6 +671,15 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                     emitSimdRegExpr(out, *negBase, simdType);
                     out.append("), ");
                     out.append(maskConst.data(), maskConst.size());
+                    out.push_back(')');
+                    return;
+                }
+                const MStringView clearMaskConst = SimdInPlaceLaneMaskConstant(static_cast<u8>(0xFu ^ negMask), isDouble);
+                if(!clearMaskConst.empty()){
+                    out.append(isDouble ? "::VectorDoubleAndCInt(::VectorDoubleNegate(" : "::VectorAndCInt(::VectorNegate(");
+                    emitSimdRegExpr(out, *negBase, simdType);
+                    out.append("), ");
+                    out.append(clearMaskConst.data(), clearMaskConst.size());
                     out.push_back(')');
                     return;
                 }
@@ -599,7 +731,8 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
         const Expr* v0 = nullptr;
         const Expr* v1 = nullptr;
         Array<u32, 4> permIdx{};
-        b8 hasZeroLane = false;
+        u8 zeroLaneMask = 0u;
+        u8 unitLaneMask = 0u;
         b8 canSwizzleOrPermute = true;
         for(u32 i = 0u; i < 4u; ++i){
             if(laneBases[i]){
@@ -610,7 +743,7 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 else if(AreSamePureSimdExpr(*v0, *laneBases[i])){
                     permIdx[i] = laneIndices[i];
                 }
-                else if(!v1 && !hasZeroLane){
+                else if(!v1 && zeroLaneMask == 0u && unitLaneMask == 0u){
                     v1 = laneBases[i];
                     permIdx[i] = 4u + laneIndices[i];
                 }
@@ -622,8 +755,16 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                     break;
                 }
             }
-            else if(!v1 && (i >= arguments.size() || (arguments[i] && IsZeroScalarLiteral(*arguments[i])))){
-                hasZeroLane = true;
+            else if(!v1 && (i >= arguments.size() || (arguments[i] && IsZeroScalarLiteral(*arguments[i], &m_symbols)))){
+                if(isInt && unitLaneMask != 0u){
+                    canSwizzleOrPermute = false;
+                    break;
+                }
+                zeroLaneMask |= static_cast<u8>(1u << i);
+                permIdx[i] = 4u + i;
+            }
+            else if(!isInt && !v1 && i < arguments.size() && arguments[i] && IsUnitFloatLiteral(*arguments[i], &m_symbols)){
+                unitLaneMask |= static_cast<u8>(1u << i);
                 permIdx[i] = 4u + i;
             }
             else{
@@ -631,8 +772,37 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
                 break;
             }
         }
+        MStringView constSecondVec;
+        if(canSwizzleOrPermute && v0 && !v1 && (zeroLaneMask != 0u || unitLaneMask != 0u)){
+            if(unitLaneMask == 0u){
+                constSecondVec = isInt
+                    ? (isDouble ? "::VectorDoubleFalseInt()" : "::VectorFalseInt()")
+                    : (isDouble ? "::VectorDoubleZero()" : "::VectorZero()");
+            }
+            else if(zeroLaneMask == 0u){
+                constSecondVec = isDouble ? "::s_DoubleSIMDOne" : "::s_SIMDOne";
+            }
+            else if(unitLaneMask == 0x1u){
+                constSecondVec = isDouble ? "::s_DoubleSIMDIdentityR0" : "::s_SIMDIdentityR0";
+            }
+            else if(unitLaneMask == 0x2u){
+                constSecondVec = isDouble ? "::s_DoubleSIMDIdentityR1" : "::s_SIMDIdentityR1";
+            }
+            else if(unitLaneMask == 0x4u){
+                constSecondVec = isDouble ? "::s_DoubleSIMDIdentityR2" : "::s_SIMDIdentityR2";
+            }
+            else if(unitLaneMask == 0x8u){
+                constSecondVec = isDouble ? "::s_DoubleSIMDIdentityR3" : "::s_SIMDIdentityR3";
+            }
+            else if(zeroLaneMask == 0x8u){
+                constSecondVec = isDouble ? "::s_DoubleSIMDOne3" : "::s_SIMDOne3";
+            }
+            else{
+                canSwizzleOrPermute = false;
+            }
+        }
         if(canSwizzleOrPermute && v0){
-            if(!v1 && !hasZeroLane){
+            if(!v1 && zeroLaneMask == 0u && unitLaneMask == 0u){
                 if(permIdx[0] == 0u && permIdx[1] == 1u && permIdx[2] == 2u && permIdx[3] == 3u){
                     emitSimdRegExpr(out, *v0, simdType);
                     return;
@@ -666,15 +836,10 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             out.append(">(");
             emitSimdRegExpr(out, *v0, simdType);
             out.append(", ");
-            if(v1){
+            if(v1)
                 emitSimdRegExpr(out, *v1, simdType);
-            }
-            else if(isInt){
-                out.append(isDouble ? "::VectorDoubleFalseInt()" : "::VectorFalseInt()");
-            }
-            else{
-                out.append(isDouble ? "::VectorDoubleZero()" : "::VectorZero()");
-            }
+            else
+                out.append(constSecondVec.data(), constSecondVec.size());
             out.push_back(')');
             return;
         }
@@ -802,6 +967,52 @@ b8 SourceEmitter::tryEmitStorageStoreFromSimdArgs(MString& out, const MStringVie
     if(storeFn.empty())
         return false;
 
+    const auto emitStoreVecWithReplacementW = [&](const Expr& baseVec, const Expr& wArg){
+        const MStringView baseSimdType = baseVec.resolvedSimdType;
+        out.append(storeFn.data(), storeFn.size());
+        out.push_back('(');
+        const Expr* wLaneBase = nullptr;
+        u32 wLaneIdx = 0u;
+        if(TryMatchSingleLaneAccess(&wArg, wLaneBase, wLaneIdx) && wLaneBase && wLaneBase->resolvedSimdType == baseSimdType){
+            if(AreSamePureSimdExpr(baseVec, *wLaneBase)){
+                if(wLaneIdx == 3u){
+                    emitSimdRegExpr(out, baseVec, baseSimdType);
+                }
+                else{
+                    out.append(isDouble ? "::VectorDoubleSwizzle<0u, 1u, 2u, " : "::VectorSwizzle<0u, 1u, 2u, ");
+                    AppendUnsignedDecimal(out, wLaneIdx);
+                    out.append("u>(");
+                    emitSimdRegExpr(out, baseVec, baseSimdType);
+                    out.push_back(')');
+                }
+            }
+            else{
+                out.append(isDouble ? "::VectorDoublePermute<0u, 1u, 2u, " : "::VectorPermute<0u, 1u, 2u, ");
+                AppendUnsignedDecimal(out, 4u + wLaneIdx);
+                out.append("u>(");
+                emitSimdRegExpr(out, baseVec, baseSimdType);
+                out.append(", ");
+                emitSimdRegExpr(out, *wLaneBase, baseSimdType);
+                out.push_back(')');
+            }
+            out.append(", ");
+        }
+        else if(!IsIntSimdType(baseSimdType) && IsZeroScalarLiteral(wArg, &m_symbols)){
+            out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
+            emitSimdRegExpr(out, baseVec, baseSimdType);
+            out.append(isDouble ? ", ::s_DoubleSIMDMask3), " : ", ::s_SIMDMask3), ");
+        }
+        else{
+            out.append(isDouble ? "::VectorDoubleSetW(" : "::VectorSetW(");
+            emitSimdRegExpr(out, baseVec, baseSimdType);
+            out.append(", ");
+            emitExpr(out, wArg);
+            out.append("), ");
+        }
+        out.append(dstExprText.data(), dstExprText.size());
+        out.push_back(')');
+    };
+
     if(arguments.size() == 1u && arguments[0] && SymbolTable::IsSimdRegisterVectorType(arguments[0]->resolvedSimdType) && IsDoubleSimdType(arguments[0]->resolvedSimdType) == isDouble){
         out.append(storeFn.data(), storeFn.size());
         out.push_back('(');
@@ -812,22 +1023,7 @@ b8 SourceEmitter::tryEmitStorageStoreFromSimdArgs(MString& out, const MStringVie
         return true;
     }
     if(lanes == 4u && arguments.size() == 2u && arguments[0] && arguments[1] && SymbolTable::IsSimdRegisterVectorType(arguments[0]->resolvedSimdType) && IsDoubleSimdType(arguments[0]->resolvedSimdType) == isDouble && arguments[1]->resolvedSimdType.empty()){
-        out.append(storeFn.data(), storeFn.size());
-        out.push_back('(');
-        if(!IsIntSimdType(arguments[0]->resolvedSimdType) && IsZeroScalarLiteral(*arguments[1])){
-            out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
-            emitSimdRegExpr(out, *arguments[0], arguments[0]->resolvedSimdType);
-            out.append(isDouble ? ", ::s_DoubleSIMDMask3), " : ", ::s_SIMDMask3), ");
-        }
-        else{
-            out.append(isDouble ? "::VectorDoubleSetW(" : "::VectorSetW(");
-            emitSimdRegExpr(out, *arguments[0], arguments[0]->resolvedSimdType);
-            out.append(", ");
-            emitExpr(out, *arguments[1]);
-            out.append("), ");
-        }
-        out.append(dstExprText.data(), dstExprText.size());
-        out.push_back(')');
+        emitStoreVecWithReplacementW(*arguments[0], *arguments[1]);
         return true;
     }
     if(arguments.size() == lanes && lanes >= 2u && lanes <= 4u){
@@ -858,34 +1054,8 @@ b8 SourceEmitter::tryEmitStorageStoreFromSimdArgs(MString& out, const MStringVie
                 out.push_back(')');
                 return true;
             }
-            const Expr* wLaneBase = nullptr;
-            u32 wLaneIdx = 0u;
-            if(TryMatchSingleLaneAccess(arguments[3], wLaneBase, wLaneIdx) && wLaneIdx == 3u && wLaneBase && AreSamePureSimdExpr(*srcSimdVec, *wLaneBase)){
-                out.append(storeFn.data(), storeFn.size());
-                out.push_back('(');
-                emitSimdRegExpr(out, *srcSimdVec, srcSimdVec->resolvedSimdType);
-                out.append(", ");
-                out.append(dstExprText.data(), dstExprText.size());
-                out.push_back(')');
-                return true;
-            }
             if(arguments[3] && arguments[3]->resolvedSimdType.empty()){
-                out.append(storeFn.data(), storeFn.size());
-                out.push_back('(');
-                if(!IsIntSimdType(srcSimdVec->resolvedSimdType) && IsZeroScalarLiteral(*arguments[3])){
-                    out.append(isDouble ? "::VectorDoubleAndInt(" : "::VectorAndInt(");
-                    emitSimdRegExpr(out, *srcSimdVec, srcSimdVec->resolvedSimdType);
-                    out.append(isDouble ? ", ::s_DoubleSIMDMask3), " : ", ::s_SIMDMask3), ");
-                }
-                else{
-                    out.append(isDouble ? "::VectorDoubleSetW(" : "::VectorSetW(");
-                    emitSimdRegExpr(out, *srcSimdVec, srcSimdVec->resolvedSimdType);
-                    out.append(", ");
-                    emitExpr(out, *arguments[3]);
-                    out.append("), ");
-                }
-                out.append(dstExprText.data(), dstExprText.size());
-                out.push_back(')');
+                emitStoreVecWithReplacementW(*srcSimdVec, *arguments[3]);
                 return true;
             }
         }

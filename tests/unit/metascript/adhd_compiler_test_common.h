@@ -6,7 +6,6 @@
 
 
 #include <core/metascript/adhd/compiler.h>
-#include <core/metascript/parser.h>
 
 #include <tests/common/test_context.h>
 

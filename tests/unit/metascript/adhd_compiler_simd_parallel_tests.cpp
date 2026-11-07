@@ -309,6 +309,12 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "    const VectorSingle matCol0 = mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), m);\r\n"
         "    const VectorSingle norm3 = normalize(a.xyz);\r\n"
         "    const VectorSingle norm3ZeroW = VectorSingle(norm3, 0.0f);\r\n"
+        "    const VectorSingle scaledNorm3 = norm3 * 2.0f;\r\n"
+        "    const VectorSingle scaledNorm3Swiz = VectorSingle(scaledNorm3.y, scaledNorm3.z, scaledNorm3.x, 0.0f);\r\n"
+        "    const VectorDouble mixedBounds = VectorDouble(min(d.x, 1.0), min(d.y, 2.0), max(d.z, 3.0), max(d.w, 4.0));\r\n"
+        "    const VectorSingle nonUniformAdd = VectorSingle(a.x + scale, a.y + 1.0f, a.z + 2.0f, a.w + 3.0f);\r\n"
+        "    const VectorSingle mixedAddSub = VectorSingle(a.x + b.x, a.y - b.y, a.z + b.z, a.w - b.w);\r\n"
+        "    const VectorSingle uniformLaneMul = VectorSingle(a.x * b.y, a.y * b.y, a.z * b.y, a.w * b.y);\r\n"
         "    const VectorDouble minD(cast<f64>(a.x), cast<f64>(a.y), 0.0, 0.0);\r\n"
         "    const VectorDouble divD = VectorDouble(d.x, d.y, 0.0, 0.0) / xyUnitZW;\r\n"
         "    const VectorDouble maxD = max(minD, divD);\r\n"
@@ -321,13 +327,18 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "    if(!isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z) || !isFinite(a.w) || a.x < 0.0f || a.y < 0.0f || a.z < 0.0f || a.w < 0.0f)\r\n"
         "        return unitVec;\r\n"
         "    if(a.x <= a.z && a.y <= a.w && isFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n"
-        "        return halfVec + axisW + VectorSingle(xyUnitZW);\r\n"
-        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + narrowXY + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
+        "        return halfVec + axisW + VectorSingle(xyUnitZW) + VectorSingle(mixedBounds);\r\n"
+        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + narrowXY + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
         "}\r\n";
 
     CompileResult optRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_SimdOptSource, "impl/sim/simd_opt.adhd", arena.arena, optRes));
     const MStringView optView(optRes.generatedSource.data(), optRes.generatedSource.size());
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle scaledNorm3Swiz = ::VectorSwizzle<1u, 2u, 0u, 3u>(scaledNorm3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorDouble mixedBounds = ::VectorDoublePermute<0u, 1u, 6u, 7u>(::VectorDoubleMin(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)), ::VectorDoubleMax(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle nonUniformAdd = ::VectorAdd(a, ::VectorSet(scale, 1.0f, 2.0f, 3.0f));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle mixedAddSub = ::VectorAdd(a, ::VectorXorInt(b, ::s_SIMDFlipYW));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle uniformLaneMul = ::VectorMultiply(a, ::VectorSplatY(b));"), MStringView::npos);
 
     EXPECT_NE(optView.find("::MatrixIdentity()"), MStringView::npos);
     EXPECT_EQ(optView.find("for(usize __i = 0u; __i < 4u; ++__i)"), MStringView::npos);

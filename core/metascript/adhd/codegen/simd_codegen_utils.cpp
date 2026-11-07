@@ -162,15 +162,38 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
     return 4u;
 }
 
-[[nodiscard]] b8 HasUnitFloatTailLanes(
+[[nodiscard]] b8 IsNonNegativeFiniteFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
+    const Expr& unwrapped = UnwrapConstScalarExpr(expr, symbols);
+    return (unwrapped.kind == ExprKind::FloatLiteral || unwrapped.kind == ExprKind::DoubleLiteral)
+        && !unwrapped.text.empty()
+        && unwrapped.text.front() != '-';
+}
+
+[[nodiscard]] b8 IsPositiveFiniteFloatLiteral(const Expr& expr, const SymbolTable* const symbols)noexcept{
+    return IsNonNegativeFiniteFloatLiteral(expr, symbols) && !IsZeroScalarLiteral(expr, symbols);
+}
+
+[[nodiscard]] b8 HasFloatConstantTailLanes(
     const Expr& expr,
     const b8 isDouble,
     const u32 fromLane,
+    const b8 allowZero,
     const SymbolTable* const symbols,
     const Span<const Stmt* const> localVarDecls
 )noexcept{
-    if(IsSimdUnitFloatVectorExpr(expr, isDouble, symbols))
+    const auto matchesScalar = [&](const Expr& scalarExpr)noexcept -> b8{
+        return allowZero
+            ? IsNonNegativeFiniteFloatLiteral(scalarExpr, symbols)
+            : IsPositiveFiniteFloatLiteral(scalarExpr, symbols);
+    };
+    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
+        return matchesScalar(expr);
+    if(IsSimdUnitFloatVectorExpr(expr, isDouble, symbols) || (allowZero && IsSimdZeroFloatVectorExpr(expr, isDouble, symbols)))
         return true;
+    if(symbols){
+        if(const Expr* splatScalar = TryUnwrapSimdSplatScalarArg(expr, *symbols))
+            return matchesScalar(*splatScalar);
+    }
     const MStringView expectedSimd = isDouble ? "VectorDouble" : "VectorSingle";
     Span<const Expr* const> ctorArgs;
     if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
@@ -182,9 +205,9 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
         if(const Stmt* localConst = FindLocalConstVarDecl(expr.text, localVarDecls))
             ctorArgs = ExtractGlobalConstCtorArgs(*localConst);
     }
-    if(ctorArgs.size() == 4u){
-        for(u32 i = fromLane; i < 4u; ++i){
-            if(!ctorArgs[i] || !IsUnitFloatLiteral(*ctorArgs[i], symbols))
+    if(ctorArgs.size() == 4u || (allowZero && ctorArgs.size() == 3u)){
+        for(u32 i = fromLane; i < static_cast<u32>(ctorArgs.size()); ++i){
+            if(!ctorArgs[i] || !matchesScalar(*ctorArgs[i]))
                 return false;
         }
         return true;
@@ -234,6 +257,8 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
                     return effLanes;
                 return 4u;
             }
+            if(callee == "unfoldOctahedralAxis" && expr.arguments.size() == 1u && expr.arguments[0])
+                return 3u;
             if(callee == "cross" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                 const u32 eff0 = InferEffectiveSimdLanes(*expr.arguments[0], symbols);
                 const u32 eff1 = InferEffectiveSimdLanes(*expr.arguments[1], symbols);
@@ -243,7 +268,21 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
                 return 4u;
             }
             if(
-                (callee == "abs" || callee == "sqrt" || callee == "floor" || callee == "ceil" || callee == "round" || callee == "trunc" || callee == "frac" || callee == "saturate")
+                (
+                    callee == "abs"
+                    || callee == "sqrt"
+                    || callee == "floor"
+                    || callee == "ceil"
+                    || callee == "round"
+                    || callee == "trunc"
+                    || callee == "frac"
+                    || callee == "saturate"
+                    || callee == "sin"
+                    || callee == "tan"
+                    || callee == "asin"
+                    || callee == "atan"
+                    || callee == "foldOctahedralAxis"
+                )
                 && expr.arguments.size() == 1u
                 && expr.arguments[0]
             ){
@@ -268,9 +307,19 @@ inline constexpr Array<MStringView, 4> s_DoubleSplatIntrinsics = {
             const u32 z1 = InferSimdRegZeroedAboveLaneImpl(*expr.rhs, isDouble, symbols, localVarDecls, depth + 1u);
             return z0 > z1 ? z0 : z1;
         }
+        if(expr.op == TokenType::Star){
+            const u32 z0 = InferSimdRegZeroedAboveLaneImpl(*expr.lhs, isDouble, symbols, localVarDecls, depth + 1u);
+            const u32 z1 = InferSimdRegZeroedAboveLaneImpl(*expr.rhs, isDouble, symbols, localVarDecls, depth + 1u);
+            if(z0 <= 3u && z1 <= 3u)
+                return z0 > z1 ? z0 : z1;
+            if(z0 <= 3u && HasFloatConstantTailLanes(*expr.rhs, isDouble, z0, true, symbols, localVarDecls))
+                return z0;
+            if(z1 <= 3u && HasFloatConstantTailLanes(*expr.lhs, isDouble, z1, true, symbols, localVarDecls))
+                return z1;
+        }
         if(expr.op == TokenType::Slash){
             const u32 z0 = InferSimdRegZeroedAboveLaneImpl(*expr.lhs, isDouble, symbols, localVarDecls, depth + 1u);
-            if(z0 <= 3u && HasUnitFloatTailLanes(*expr.rhs, isDouble, z0, symbols, localVarDecls))
+            if(z0 <= 3u && HasFloatConstantTailLanes(*expr.rhs, isDouble, z0, false, symbols, localVarDecls))
                 return z0;
         }
     }

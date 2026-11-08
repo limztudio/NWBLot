@@ -36,7 +36,7 @@ The final target remains 16.67 ms per frame. No step is assumed to reach 60 FPS 
 
 ## Step 18: reliable presentation measurement
 
-`GraphicsRuntime::getSuccessfulPresentationCount()` counts native `VK_SUCCESS` and `VK_SUBOPTIMAL_KHR` acceptance. The backend exposes that outcome separately from its continuation/recovery result: out-of-date presentation is not counted, while an accepted presentation remains counted if later synchronization fails. The runtime-lifetime counter survives resize and device recreation and does not depend on GPU timing capacity.
+`GraphicsRuntime::getSuccessfulPresentationCount()` counts native `VK_SUCCESS` and `VK_SUBOPTIMAL_KHR` acceptance. The backend exposes that outcome separately from its continuation/recovery result: out-of-date presentation is not counted. While An accepted presentation remains counted if later synchronization fails. The runtime-lifetime counter survives resize and device recreation and does not depend on GPU timing capacity.
 
 Ordinary stress FPS now observes that count against the steady clock. `NWB_STRESS_SMOKE_TIMING=1` additionally uses the existing AVBOIT timing render pass, reserves its 32 in-flight ranges, permits unfocused rendering, measures after five wall-clock seconds of warm-up for at least 30 seconds, and exits normally. Animation delta does not provide elapsed FPS time. Long stalls remain in the denominator. Repeated idle callbacks add no frames. Capture-freeze controls are incompatible with this continuous mode and are rejected.
 

@@ -26,11 +26,11 @@ flag uses its default with no ask:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
-    assets/models/crate.fbx \
-    --output assets/models/crate.nwb \
-    --asset-type bunch \
-    --normal-mode imported \
-    --yes
+ assets/models/crate.fbx \
+ --output assets/models/crate.nwb \
+ --asset-type bunch \
+ --normal-mode imported \
+ --yes
 ```
 
 With no `--output`, the out path is the in path with its tail set to `.nwb`.
@@ -54,11 +54,11 @@ For example, this writes one still mesh file from the first copy:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
-    assets/props/crate.fbx \
-    --output assets/meshes/crate.nwb \
-    --asset-type mesh \
-    --mesh first \
-    --yes
+ assets/props/crate.fbx \
+ --output assets/meshes/crate.nwb \
+ --asset-type mesh \
+ --mesh first \
+ --yes
 ```
 
 Picked copies join into one out mesh. Flat faces turn into tris, and bad tris
@@ -120,7 +120,7 @@ files in a folder named for the out stem:
 assets/characters/hero.nwb
 assets/characters/hero/mesh.nwb
 assets/characters/hero/skeleton.nwb  # skinned sources only
-assets/characters/hero/skin.nwb      # skinned sources only
+assets/characters/hero/skin.nwb # skinned sources only
 ```
 
 For `bunch`, `model`, `skeleton`, and `skin` outs, one source pick cannot mix
@@ -141,17 +141,17 @@ To make a plain copy:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
-    assets/meshes/crate.nwb \
-    --output assets/meshes/crate_canonical.nwb \
-    --yes
+ assets/meshes/crate.nwb \
+ --output assets/meshes/crate_canonical.nwb \
+ --yes
 ```
 
 To swap the input in place, say yes to the swap in a clear way:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
-    assets/meshes/crate.nwb \
-    --yes --force
+ assets/meshes/crate.nwb \
+ --yes --force
 ```
 
 Refresh refuses a file with unknown mesh fields or bad lists. It never bakes

@@ -24,23 +24,23 @@ TESTBED_BEGIN
 
 namespace __hidden_testbed_startup{
 static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
-    if(!context.graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
-        return false;
+ if(!context.graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
+ return false;
 
-    context.filesystemFactory = [](NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Filesystem::VolumeMountDesc& desc)
-        -> Expected<UniquePtr<NWB::Core::Filesystem::IFilesystem>>{
-        if(desc.volumeName.view() == AStringView("graphics"))
-            return MakeUnique<ProjectPatchFilesystem>(arena);
-        return MakeUnique<NWB::Core::Filesystem::VolumeFileSystem>(arena);
-    };
-    return true;
+ context.filesystemFactory = [](NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Filesystem::VolumeMountDesc& desc)
+ -> Expected<UniquePtr<NWB::Core::Filesystem::IFilesystem>>{
+ if(desc.volumeName.view() == AStringView("graphics"))
+ return MakeUnique<ProjectPatchFilesystem>(arena);
+ return MakeUnique<NWB::Core::Filesystem::VolumeFileSystem>(arena);
+ };
+ return true;
 }
 };
 
 TESTBED_END
 
 bool NWB::ConfigureProjectRuntime(NWB::ProjectStartupContext& context){
-    return Testbed::__hidden_testbed_startup::ConfigureRuntime(context);
+ return Testbed::__hidden_testbed_startup::ConfigureRuntime(context);
 }
 ```
 

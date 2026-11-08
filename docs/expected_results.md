@@ -30,12 +30,12 @@ For example, this read takes a good count with no out flag:
 #include <global/numeric_text.h>
 
 Expected<u64> ParsePositiveCount(const AStringView text)noexcept{
-    const auto count = ParseU64(text);
-    if(!count)
-        return MakeUnexpected(count.error());
-    if(*count == 0u)
-        return MakeUnexpected(Failure{});
-    return *count;
+ const auto count = ParseU64(text);
+ if(!count)
+ return MakeUnexpected(count.error());
+ if(*count == 0u)
+ return MakeUnexpected(Failure{});
+ return *count;
 }
 ```
 

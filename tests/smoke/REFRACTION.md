@@ -124,23 +124,23 @@ independent image and GPU-validation gates pass. Prepare two frozen arms from
 the same fixture and toolchain before launching either arm:
 
 1. Build and cook the tiled candidate normally, then copy its executable,
-   sibling loader dependencies and crash helper, logserver, name-symbol file,
-   and complete runtime `res` tree into a separate candidate directory.
+ sibling loader dependencies and crash helper, logserver, name-symbol file,
+ and complete runtime `res` tree into a separate candidate directory.
 2. Check and apply `tests/smoke/refraction_direct_reference.patch` to the same
-   renderer sources, rebuild and recook with the same configuration, and copy
-   those outputs into a distinct baseline directory. The patch removes tile
-   clear/classification graph tasks and their queue/argument resource uses. It
-   directly dispatches the prepared dense kernel over the full framebuffer grid,
-   retaining both arms' pipeline preparation, snapshots, and resource lifetimes.
-   Optical shaders, AVBOIT, current-depth compositing,
-   the density fixture, and target allocation remain common to both arms.
+ renderer sources, rebuild and recook with the same configuration, and copy
+ those outputs into a distinct baseline directory. The patch removes tile
+ clear/classification graph tasks and their queue/argument resource uses. It
+ directly dispatches the prepared dense kernel over the full framebuffer grid,
+ retaining both arms' pipeline preparation, snapshots, and resource lifetimes.
+ Optical shaders, AVBOIT, current-depth compositing,
+ the density fixture, and target allocation remain common to both arms.
 3. Save each arm's compiled source bytes and a manifest with a nonempty
-   `revision` string and `files` object mapping relative paths to SHA256 hashes.
-   Include the exact renderer patch and the compiled fixture files
-   `tests/smoke/refraction_project.cpp` and
-   `tests/smoke/avboit_timing_render_pass.cpp`. Restore the tiled sources with
-   `git apply -R tests/smoke/refraction_direct_reference.patch` after freezing the
-   reference. Keep compilation and cooking separate from measured acquisition.
+ `revision` string and `files` object mapping relative paths to SHA256 hashes.
+ Include the exact renderer patch and the compiled fixture files
+ `tests/smoke/refraction_project.cpp` and
+ `tests/smoke/avboit_timing_render_pass.cpp`. Restore the tiled sources with
+ `git apply -R tests/smoke/refraction_direct_reference.patch` after freezing the
+ reference. Keep compilation and cooking separate from measured acquisition.
 
 Use `git apply --check tests/smoke/refraction_direct_reference.patch` before
 applying the reference; a context failure requires updating and reviewing that

@@ -9,34 +9,34 @@ asset.texture = "engine/ui/skins/default/texture";
 asset.atlas_extent = [256, 256];
 asset.reference_density = 1.0;
 asset.regions = [
-    {
-        "name": "panel.normal",
-        "rect": [2, 2, 32, 32],
-        "draw_mode": "nine_slice",
-        "slice": [4, 4, 4, 4],
-        "padding": [8.0, 8.0, 8.0, 8.0],
-        "minimum_size": [16.0, 16.0]
-    },
-    { "name": "combo.arrow", "rect": [36, 2, 12, 12] }
+ {
+ "name": "panel.normal",
+ "rect": [2, 2, 32, 32],
+ "draw_mode": "nine_slice",
+ "slice": [4, 4, 4, 4],
+ "padding": [8.0, 8.0, 8.0, 8.0],
+ "minimum_size": [16.0, 16.0]
+ },
+ { "name": "combo.arrow", "rect": [36, 2, 12, 12] }
 ];
 asset.colors = [
-    {"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]},
-    {"name": "text.disabled", "rgba": [0.48, 0.5, 0.55, 1.0]},
-    {"name": "text.tooltip", "rgba": [1.0, 1.0, 1.0, 1.0]},
-    {"name": "edit.background", "rgba": [0.08, 0.1, 0.14, 1.0]},
-    {"name": "edit.selection", "rgba": [0.2, 0.4, 0.78, 0.75]},
-    {"name": "edit.inactive_selection", "rgba": [0.28, 0.31, 0.38, 0.55]},
-    {"name": "edit.caret", "rgba": [0.95, 0.97, 1.0, 1.0]},
-    {"name": "edit.preedit", "rgba": [0.5, 0.72, 1.0, 1.0]},
-    {"name": "scrollbar.track", "rgba": [0.08, 0.1, 0.14, 1.0]},
-    {"name": "scrollbar.thumb", "rgba": [0.35, 0.4, 0.48, 1.0]},
-    {"name": "scrollbar.disabled", "rgba": [0.25, 0.28, 0.32, 1.0]},
-    {"name": "popup.backdrop", "rgba": [0.0, 0.0, 0.0, 0.4]},
-    {"name": "control.hover_tint", "rgba": [1.08, 1.08, 1.08, 1.0]},
-    {"name": "control.pressed_tint", "rgba": [0.85, 0.85, 0.85, 1.0]},
-    {"name": "control.disabled_tint", "rgba": [0.55, 0.55, 0.55, 0.6]},
-    {"name": "progress.track_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
-    {"name": "progress.fill_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
+ {"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]},
+ {"name": "text.disabled", "rgba": [0.48, 0.5, 0.55, 1.0]},
+ {"name": "text.tooltip", "rgba": [1.0, 1.0, 1.0, 1.0]},
+ {"name": "edit.background", "rgba": [0.08, 0.1, 0.14, 1.0]},
+ {"name": "edit.selection", "rgba": [0.2, 0.4, 0.78, 0.75]},
+ {"name": "edit.inactive_selection", "rgba": [0.28, 0.31, 0.38, 0.55]},
+ {"name": "edit.caret", "rgba": [0.95, 0.97, 1.0, 1.0]},
+ {"name": "edit.preedit", "rgba": [0.5, 0.72, 1.0, 1.0]},
+ {"name": "scrollbar.track", "rgba": [0.08, 0.1, 0.14, 1.0]},
+ {"name": "scrollbar.thumb", "rgba": [0.35, 0.4, 0.48, 1.0]},
+ {"name": "scrollbar.disabled", "rgba": [0.25, 0.28, 0.32, 1.0]},
+ {"name": "popup.backdrop", "rgba": [0.0, 0.0, 0.0, 0.4]},
+ {"name": "control.hover_tint", "rgba": [1.08, 1.08, 1.08, 1.0]},
+ {"name": "control.pressed_tint", "rgba": [0.85, 0.85, 0.85, 1.0]},
+ {"name": "control.disabled_tint", "rgba": [0.55, 0.55, 0.55, 0.6]},
+ {"name": "progress.track_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
+ {"name": "progress.fill_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
 ];
 asset.typography = {"default_font_size": 16.0};
 ```

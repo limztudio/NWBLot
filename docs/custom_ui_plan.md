@@ -10,35 +10,35 @@ Current domain READMEs define detailed public APIs: [CPU toolkit](../impl/ecs_ui
 
 ```text
 core/
-  os/                         nwb_os: reusable OS services, no UI/ECS dependency
-    text_input.h              composition sessions/events and caret geometry
-    clipboard_service.h       clipboard/native selection exchange
-    win32/                    native implementations
-    linux/x11/                native X11 implementations
-    linux/wayland/            native Wayland implementations
-  frame/                      native window/event-loop owner; hosts OS services
+  os/ nwb_os: reusable OS services, no UI/ECS dependency
+ text_input.h composition sessions/events and caret geometry
+ clipboard_service.h clipboard/native selection exchange
+ win32/ native implementations
+ linux/x11/ native X11 implementations
+ linux/wayland/ native Wayland implementations
+  frame/ native window/event-loop owner; hosts OS services
 impl/
-  ecs_ui/                     nwb_ecs_ui: world callbacks and runtime adapter
-    toolkit/                  nwb_ui: CPU toolkit, no ECS or GPU dependency
-      context.{h,cpp}          identity, state, frame lifecycle, actions
-      layout/                 measure/arrange, containers, scrolling
-      input/                  hit testing, focus, capture, navigation
-      text/                   fonts, shaping, text layout
-      edit/                   Unicode model, commands, navigation, history, composition
-      paint.h, paint*.cpp      primitives and immutable paint output
-      widgets/                controls composed from the above services
-      images/                 immutable owned texture sources
-      widgets/*_style.adhd     skin region resolution, metrics, control states
-      gpu/                    nwb_ui_gpu: uploads, atlases, raster, resources
-  assets_ui_skin/             typed skin/atlas asset, author fields, cook, runtime load
-  assets/graphics/ui/          raster shaders and .nwb metadata
-  assets/ui/skins/default/     one default skin texture and atlas .nwb
+  ecs_ui/ nwb_ecs_ui: world callbacks and runtime adapter
+ toolkit/ nwb_ui: CPU toolkit, no ECS or GPU dependency
+ context.{h,cpp} identity, state, frame lifecycle, actions
+ layout/ measure/arrange, containers, scrolling
+ input/ hit testing, focus, capture, navigation
+ text/ fonts, shaping, text layout
+ edit/ Unicode model, commands, navigation, history, composition
+ paint.h, paint*.cpp primitives and immutable paint output
+ widgets/ controls composed from the above services
+ images/ immutable owned texture sources
+ widgets/*_style.adhd skin region resolution, metrics, control states
+ gpu/ nwb_ui_gpu: uploads, atlases, raster, resources
+  assets_ui_skin/ typed skin/atlas asset, author fields, cook, runtime load
+  assets/graphics/ui/ raster shaders and .nwb metadata
+  assets/ui/skins/default/ one default skin texture and atlas .nwb
 tests/
-  unit/os/                    service/session contracts using test doubles
-  unit/ui/                    CPU toolkit edge-case tests
-  unit/ecs_ui/                borrowed native/edit host contracts
-  unit/ecs_graphics/          renderer/UI integration contracts
-  smoke/                      interactive gallery and GPU captures
+  unit/os/ service/session contracts using test doubles
+  unit/ui/ CPU toolkit edge-case tests
+  unit/ecs_ui/ borrowed native/edit host contracts
+  unit/ecs_graphics/ renderer/UI integration contracts
+  smoke/ interactive gallery and GPU captures
 ```
 
 `nwb_ecs_ui` depends on `nwb_ui`, `nwb_ui_gpu`, the OS service interfaces, and the existing ECS/input/runtime modules. `nwb_ui_gpu` depends on the CPU paint contract and existing graphics, asset, and task modules. The renderer consumes a generic prepared presentation layer, never widget classes. `nwb_os` has no dependency on `impl/`, ECS, or graphics. Widget/layout policy stays in `impl/`.
@@ -79,14 +79,14 @@ Automatic mixed-script paragraph layout is not implied.
 
 ```mermaid
 flowchart LR
-    A[UI input and model actions] --> B[Build, layout, paint snapshot]
-    B --> C[UI geometry and glyph uploads]
-    C --> D[UI raster into transparent layer]
-    E[Scene rendering and effects] --> F[Linear scene composite]
-    F --> G[Final scene display mapping, UI composition, output encoding]
-    D --> G
-    H[Acquired backbuffer availability] --> G
-    G --> I[Final timing and presentation endpoint]
+ A[UI input and model actions] --> B[Build, layout, paint snapshot]
+ B --> C[UI geometry and glyph uploads]
+ C --> D[UI raster into transparent layer]
+ E[Scene rendering and effects] --> F[Linear scene composite]
+ F --> G[Final scene display mapping, UI composition, output encoding]
+ D --> G
+ H[Acquired backbuffer availability] --> G
+ G --> I[Final timing and presentation endpoint]
 ```
 
 Use separate tasks in the existing frame graph. Keep scheduling and submission in the existing lifecycle owner. UI raster requires Graphics capability. Uploads use the existing built-ins. Let the compiler choose legal queues and packet placement. A separate task makes independent scheduling possible but does not promise simultaneous execution on a GPU with one graphics queue. Measure actual overlap with scene compute work before claiming a speedup.

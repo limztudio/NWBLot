@@ -8,9 +8,9 @@ On the tested Qualcomm Adreno X2-90, Hardware mode was faster than Hybrid in the
 
 Spatial filtering is a substantial quality cost in the roughness fixture: approximately 0.78–0.80 ms in its dispatch and 0.83 ms added to the frame relative to raw Hardware. Temporal-only accumulation has a measured dispatch cost near 0.060 ms. Its total-frame difference is unresolved. Which does not mean it is free. Temporal reuse requires trusted, unchanged view/content/settings and is not general motion-reprojected denoising.
 
-**Bounded secondary optical transport remains a significant performance limitation.** In the clear-volume stress scene, Hardware averages 52.42 ms for `render.frame`, with 37.22 ms inside the hardware-reflection resolve alone. That resolve costs 36.92–37.63 ms across all six Hardware trials. All optical frame comparisons are control-uncertain, so the report does not certify the entire active-minus-disabled difference as a feature-only effect. Even so, the directly measured resolve cost identifies an expensive path. This scene is not performance-qualified for a typical real-time frame budget on this adapter.
+**Bounded secondary optical transport remains a significant performance limitation.** In the clear-volume stress scene, Hardware averages 52.42 ms for `render.frame`, with 37.22 ms inside the hardware-reflection resolve alone. That resolve costs 36.92–37.63 ms across all six Hardware trials. All optical frame comparisons are control-uncertain. So the Report does not certify the entire active-minus-disabled difference as a feature-only effect. Even so, the directly measured resolve cost identifies an expensive path. This scene is not performance-qualified for a typical real-time frame budget on this adapter.
 
-The optical fixture reflects a 31-stripe chart through one authored closed IOR-1.5 slab. Separate optical correctness evidence reports 217,668 transmitted paths and five scene queries per path, with no unsupported, limited, ambiguous, or overflowing paths. Those receivers already fit below the ordinary 262,144-ray default, so the benchmark's larger admission cap does not explain this cost. The optical matrix contains no matched box-free reference: its resolve timing is the whole optical-scene kernel, not an isolated per-interface cost. No register-pressure, spilling, or driver-cause claim is established by these measurements. Two slower Hybrid trials remain included in the reported interval.
+The optical fixture reflects a 31-stripe chart through one authored closed IOR-1.5 slab. Separate optical correctness evidence reports 217,668 transmitted paths and five scene queries per path, with no unsupported, limited, ambiguous, or overflowing paths. Those receivers already fit below the ordinary 262,144-ray default. So the Benchmark's larger admission cap does not explain this cost. The optical matrix contains no matched box-free reference: its resolve timing is the whole optical-scene kernel, not an isolated per-interface cost. No register-pressure, spilling, or driver-cause claim is established by these measurements. Two slower Hybrid trials remain included in the reported interval.
 
 ## Build, hardware, and validation evidence
 
@@ -60,17 +60,17 @@ $reflectionExe = '__exec/windows/arm64/full/opt/reflection_smoke.exe'
 $reflectionRuntime = '__cmake/build/windows-clang-arm64/Testing/smoke_runtime/opt'
 $reflectionLogserver = '__exec/windows/arm64/full/opt/logserver.exe'
 $reflectionChecks = @('--executable', $reflectionExe, '--working-directory', $reflectionRuntime,
-    '--logserver-executable', $reflectionLogserver, '--require-hardware', '--application-arg=--gpudbg')
+ '--logserver-executable', $reflectionLogserver, '--require-hardware', '--application-arg=--gpudbg')
 python tests/smoke/reflection_smoke.py @reflectionChecks --suite feedback --feedback-cases long_miss_baseline,long_miss_feedback,long_miss_geometry --output-directory "$reflectionResults/qualification"
 if($LASTEXITCODE -ne 0){ throw 'Long-miss qualification failed' }
 python tests/smoke/reflection_smoke.py @reflectionChecks --suite feedback-diagnostics-off --output-directory "$reflectionResults/diagnostics_off"
 if($LASTEXITCODE -ne 0){ throw 'Diagnostics-off image checks failed' }
 
 $reflectionBenchmarkArgs = @('--executable', $reflectionExe, '--working-directory', $reflectionRuntime,
-    '--logserver-executable', $reflectionLogserver, '--require-hardware',
-    '--width', '960', '--height', '720', '--ray-budget', '1382400', '--sampling-seed', '0',
-    '--optical-queries', '16', '--warmup-intervals', '2', '--sample-intervals', '11',
-    '--minimum-frame-samples', '100', '--timeout', '90', '--order-seed', '0', '--analysis-seed', '0')
+ '--logserver-executable', $reflectionLogserver, '--require-hardware',
+ '--width', '960', '--height', '720', '--ray-budget', '1382400', '--sampling-seed', '0',
+ '--optical-queries', '16', '--warmup-intervals', '2', '--sample-intervals', '11',
+ '--minimum-frame-samples', '100', '--timeout', '90', '--order-seed', '0', '--analysis-seed', '0')
 python tests/smoke/reflection_benchmark.py @reflectionBenchmarkArgs --family offscreen --include-feedback --blocks 8 --screen-steps 96 --output-directory "$reflectionResults/timing_offscreen"
 if($LASTEXITCODE -ne 0){ throw 'Offscreen timing failed' }
 python tests/smoke/reflection_benchmark.py @reflectionBenchmarkArgs --family feedback_long_miss --include-feedback --blocks 8 --screen-steps 16 --qualification "$reflectionResults/qualification/reflection_feedback_manifest.json" --output-directory "$reflectionResults/timing_long_miss"

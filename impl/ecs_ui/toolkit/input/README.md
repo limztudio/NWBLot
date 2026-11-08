@@ -38,9 +38,9 @@ The default profile retains Tab/Shift+Tab traversal, Enter acceptance, Ctrl+Ente
 
 ```cpp
 const Ui::InputKeyBinding profile[] = {
-    { .key = Core::Key::W, .command = Ui::InputCommand::Up },
-    { .key = Core::Key::S, .command = Ui::InputCommand::Down },
-    { .key = Core::Key::F8, .command = Ui::InputCommand::FocusNext },
+ { .key = Core::Key::W, .command = Ui::InputCommand::Up },
+ { .key = Core::Key::S, .command = Ui::InputCommand::Down },
+ { .key = Core::Key::F8, .command = Ui::InputCommand::FocusNext },
 };
 const b8 accepted = uiLayer.setInputBindings(profile, LengthOf(profile));
 ```

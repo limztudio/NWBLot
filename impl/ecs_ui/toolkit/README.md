@@ -31,9 +31,9 @@ paint.begin({ 800.0f, 600.0f, 1.5f, 1.5f }, 1u, 1u, skinRef, skin);
 paint.reserve(9u);
 paint.pushClip({ 20.0f, 20.0f, 300.0f, 180.0f });
 if(!paint.drawRegion(Name("panel.normal"), { 20.0f, 20.0f, 300.0f, 180.0f }))
-    paint.fillRect({ 20.0f, 20.0f, 300.0f, 180.0f }, { 0.1f, 0.1f, 0.1f, 1.0f });
+ paint.fillRect({ 20.0f, 20.0f, 300.0f, 180.0f }, { 0.1f, 0.1f, 0.1f, 1.0f });
 if(!paint.popClip())
-    NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("The panel clip must be present"));
+ NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("The panel clip must be present"));
 Ui::DrawSnapshot snapshot = paint.freeze();
 // Keep uiArena alive while snapshot or any submitted consumer remains alive.
 ```
@@ -90,16 +90,16 @@ A host begins a uniquely numbered frame and a generational `WidgetRoot`, then de
 
 ```cpp
 if(ui.beginPanel("settings", { 18.0f, 18.0f, 320.0f, 220.0f })){
-    if(!ui.label("caption", "Settings"))
-        context.fail();
-    if(ui.checkbox("enabled", "Enabled", enabled))
-        SaveEnabledValue(enabled);
-    Ui::WidgetOptions options;
-    options.enabled = enabled;
-    if(ui.button("apply", "Apply", options))
-        ApplySettings();
-    if(!ui.endPanel())
-        context.fail();
+ if(!ui.label("caption", "Settings"))
+ context.fail();
+ if(ui.checkbox("enabled", "Enabled", enabled))
+ SaveEnabledValue(enabled);
+ Ui::WidgetOptions options;
+ options.enabled = enabled;
+ if(ui.button("apply", "Apply", options))
+ ApplySettings();
+ if(!ui.endPanel())
+ context.fail();
 }
 ```
 
@@ -161,12 +161,12 @@ Ui::PopupOptions options;
 options.anchor = triggerRectangle;
 options.size = { 220.0f, 160.0f };
 if(ui.beginPopup("menu", menuState, options)){
-    if(ui.button("first", "First choice")){
-        selectedChoice = 1u;
-        menuState.close();
-    }
-    if(!ui.endPopup())
-        context.fail();
+ if(ui.button("first", "First choice")){
+ selectedChoice = 1u;
+ menuState.close();
+ }
+ if(!ui.endPopup())
+ context.fail();
 }
 ```
 
@@ -193,9 +193,9 @@ Ui::EditBoxOptions options;
 options.height = { Ui::LayoutSizePolicy::Fixed, 40.0f };
 const Ui::EditBoxResult result = ui.editBox("name", nameModel, nameState, options);
 if(!result.valid)
-    context.fail();
+ context.fail();
 if(result.submitted)
-    SaveName(nameModel.text());
+ SaveName(nameModel.text());
 ```
 
 `EditModel` stores UTF8 bytes and grapheme selections. Each instance has a stable lifetime generation; accepted external `setText()` calls also advance an external revision, even when the bytes are unchanged. This fences queued input after replacement or an set reset. `EditBoxState` stores scroll, blink state and the newly prepared placement. Its `placement` becomes available after the matching container end. The ECS adapter keeps a separate displayed copy and admits it for pointer/IME geometry only after the exact matching presentation is accepted.

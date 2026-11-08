@@ -177,25 +177,25 @@ loaded:
 Core::Alloc::GlobalArena uiArena(Name("runtime/ui"));
 Ui::TextService text(uiArena);
 const Ui::FontSource fonts[]{
-    { latinRef, latinFont, latinGeneration, &latinAtlas },
-    { koreanRef, koreanFont, koreanGeneration, &koreanAtlas },
+ { latinRef, latinFont, latinGeneration, &latinAtlas },
+ { koreanRef, koreanFont, koreanGeneration, &koreanAtlas },
 };
 Core::Alloc::ScratchArena setupScratch(Name("runtime/ui/setup"));
 if(!text.setFonts(setupScratch, fonts, 2u))
-    return false;
+ return false;
 
 Ui::ShapeRequest request{ "Hello, custom UI" };
 auto label = text.layout(request);
 if(!label)
-    return false;
+ return false;
 
 Ui::PaintBuilder paint(uiArena);
 paint.begin({ 800.0f, 600.0f, 1.5f, 1.5f }, frameGeneration, skinGeneration, skinRef, skin);
 paint.pushClip({ 20.0f, 20.0f, 300.0f, 100.0f });
 if(!text.paint(paint, *label, { 24.0f, 24.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }))
-    return false;
+ return false;
 if(!paint.popClip())
-    return false;
+ return false;
 Ui::DrawSnapshot snapshot = paint.freeze();
 // The owner keeps uiArena alive until every submitted consumer of snapshot completes.
 ```

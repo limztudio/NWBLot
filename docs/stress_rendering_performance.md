@@ -20,7 +20,7 @@ Eligible engine-owned shared mesh programs cache decoded object-space geometry a
 
 On the software route, eligible directional lights use one light-space view and point lights use six. Indexed rasterization captures opaque D32 depth and transparent crossings. Compute shades and sorts transparent records once, then resolves receivers. Crossings retain instance and primitive identity, and per-instance integration preserves thickness and overlapping optical boundaries. The budget is sixteen events per texel, twenty bytes per event. Receiver-plane correction handles discrete map self-shadowing.
 
-Invalid views, missing point faces, invalid events, unstable receivers, overflow, unsupported features, and lights outside the map budget retain software BVH traversal. Map resolve and fallback use separate kernels so successful map receivers avoid the traversal working set. Storage admission respects checked addressing, memory budget, and the device's storage-buffer descriptor range. Per-view culling retains uncertain draws.
+Invalid views, missing point faces, invalid events, unstable receivers, overflow, unsupported features, and lights outside the map budget retain software BVH traversal. Map resolve and fallback use separate kernels so successful map receivers avoid the traversal working set. Storage admission respects checked addressing, memory budget. The Device's storage-buffer descriptor range. Per-view culling retains uncertain draws.
 
 `ReuseOneFrame` retains depth, counts, shaded events, and GPU-fitted views together for one subsequent accepted frame. It skips upload/clear/fit/capture/shade while still shading current receivers and declaring current BVH/material fallback inputs. The following accepted frame refreshes. Only world transforms may lag. Changed geometry revisions, material bytes, light data, instance/boundary ordering, layout, resources, and invalid history force capture. Runtime geometry without an accepted content revision and CSG cannot reuse. Bind-pose world rotation preserves the accepted object-space revision, making this stress scene eligible after initialization.
 
@@ -62,11 +62,11 @@ $perfOutput = '__artifacts/stress_rendering_reproduction'
 & $perfPython -m launcher build nwb_stress_test_smoke nwb_caustic_sphere_smoke nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_skinned_caustic_smoke nwb_gi_test_smoke nwb_ecs_graphics_tests nwb_gpu_task_tests --configure-preset windows-clang-arm64 --build-dir $perfBuild --config opt --jobs 8 --configure always
 ctest --test-dir $perfBuild -C opt -j 1 -R '^(nwb_ecs_graphics_tests|nwb_gpu_task_tests|nwb_stress_presentation_timing_analysis_unit|nwb_smoke_cpu_gpu_timing_analysis_unit)$' --output-on-failure
 $perfCommon = @('--executable', $perfExe, '--working-directory', $perfRuntime, '--no-logserver',
-    '--animate', '--characters-per-class', '10', '--software-shadow-backend', 'automatic',
-    '--software-shadow-budget-mib', '256', '--software-shadow-directional-resolution', '512',
-    '--software-shadow-point-resolution', '256', '--software-shadow-coverage', 'fitted_volume',
-    '--software-shadow-blocker-search', 'compact_cross5', '--shadow-transparent-sampling', 'temporal_one',
-    '--reflection-screen-steps', '96')
+ '--animate', '--characters-per-class', '10', '--software-shadow-backend', 'automatic',
+ '--software-shadow-budget-mib', '256', '--software-shadow-directional-resolution', '512',
+ '--software-shadow-point-resolution', '256', '--software-shadow-coverage', 'fitted_volume',
+ '--software-shadow-blocker-search', 'compact_cross5', '--shadow-transparent-sampling', 'temporal_one',
+ '--reflection-screen-steps', '96')
 & $perfPython -B tests/smoke/stress_timing_smoke.py @perfCommon --caustic-photon-grid-divisor 2 --software-shadow-capture-cadence every_frame --minimum-fps 60 --output-directory "$perfOutput/hardware"
 & $perfPython -B tests/smoke/stress_timing_smoke.py @perfCommon --application-arg=--disable-hardware-ray-tracing --caustic-photon-grid-divisor 4 --software-shadow-capture-cadence reuse_one_frame --minimum-fps 60 --output-directory "$perfOutput/software"
 ctest --test-dir $perfBuild -C opt -j 1 -L software_raytracing --output-on-failure

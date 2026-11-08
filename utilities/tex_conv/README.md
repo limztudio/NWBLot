@@ -6,17 +6,17 @@ asset cooker checks the text data and packs the raw block bytes.
 
 The folder launcher is found on its own by the repo root:
 
-    python -m launcher tex-conv --build-only --config dbg
-    python -m launcher tex-conv --working-directory . -- --help
-    python -m launcher tex-conv --working-directory . -- assets/textures/foobar.png
+ python -m launcher tex-conv --build-only --config dbg
+ python -m launcher tex-conv --working-directory . -- --help
+ python -m launcher tex-conv --working-directory . -- assets/textures/foobar.png
 
 The build-only form readies the tool with no image work. The launcher sets up
 and builds as needed. See [the launcher guide](../../launcher/README.md).
 
 One image in gives a 2D texture. Cube maps and volumes use clear face lists:
 
-    python -m launcher tex-conv --working-directory . -- --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
-    python -m launcher tex-conv --working-directory . -- --volume z0.png z1.png z2.png z3.png --output fog
+ python -m launcher tex-conv --working-directory . -- --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
+ python -m launcher tex-conv --working-directory . -- --volume z0.png z1.png z2.png z3.png --output fog
 
 `--cube` takes six square faces in `+X, -X, +Y, -Y, +Z, -Z` order. `--volume`
 takes one or more same-size slices in low-to-high Z order. The tool writes
@@ -49,9 +49,9 @@ other color textures.
 
 Use `--alpha` to pick alpha apart from RGB:
 
-    python -m launcher tex-conv --working-directory . -- rgb.png --alpha opacity.png
-    python -m launcher tex-conv --working-directory . -- rgb.exr --alpha black
-    python -m launcher tex-conv --working-directory . -- rgb.hdr --alpha white
+ python -m launcher tex-conv --working-directory . -- rgb.png --alpha opacity.png
+ python -m launcher tex-conv --working-directory . -- rgb.exr --alpha black
+ python -m launcher tex-conv --working-directory . -- rgb.hdr --alpha white
 
 `--alpha path` takes the mask red lane, cut to `[0, 1]`. The mask must match
 the source width and height. The same mask fits each cube face or volume

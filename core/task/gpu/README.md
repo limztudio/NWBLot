@@ -50,7 +50,7 @@ A plain noted task states its code needs once:
 
 ```cpp
 struct ExampleComputeTask{
-    static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::Compute };
+ static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::Compute };
 };
 ```
 
@@ -91,10 +91,10 @@ GPU tasks line up the byte spans noted in
 
 ```cpp
 const GpuTaskResourceUse use{
-    .resource = bufferResource,
-    .range = GpuTaskResourceRange{ .bufferRange = BufferRange(256u, 128u) },
-    .requiredState = ResourceStates::UnorderedAccess,
-    .access = GpuTaskResourceAccess::Write,
+ .resource = bufferResource,
+ .range = GpuTaskResourceRange{ .bufferRange = BufferRange(256u, 128u) },
+ .requiredState = ResourceStates::UnorderedAccess,
+ .access = GpuTaskResourceAccess::Write,
 };
 ```
 

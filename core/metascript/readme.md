@@ -76,8 +76,8 @@ On the right hand side, identifiers produce `Reference` values containing the do
 example asset;
 texture albedo;
 
-asset.texture = albedo;             // Reference text: "albedo"
-asset.source = albedo.source;       // Reference text: "albedo.source"
+asset.texture = albedo; // Reference text: "albedo"
+asset.source = albedo.source; // Reference text: "albedo.source"
 ```
 
 Only the root variable must exist at parse time. The parser does not validate the referenced fields or resolve the reference. Resolution belongs to the consumer. For the same reason, `number count = 2; asset.width = count + 1;` fails: `count` is a reference operand, not an integer expression. Use literal arithmetic or compound assignment on an initialized numeric target.
@@ -92,25 +92,25 @@ Construct a `Document` with a caller-owned `MetaArena`, which aliases `NWB::Core
 namespace Meta = NWB::Core::Metascript;
 
 bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
-    Meta::Document document(arena);
-    if(!document.parse(LiteralView(R"(
-        example settings;
-        settings.width = 256 * 2;
-    )"))){
-        // Inspect document.errors() here for line, column, and message.
-        return false;
-    }
+ Meta::Document document(arena);
+ if(!document.parse(LiteralView(R"(
+ example settings;
+ settings.width = 256 * 2;
+ )"))){
+ // Inspect document.errors() here for line, column, and message.
+ return false;
+ }
 
-    const Meta::Value* settings = document.findVariable(LiteralView("settings"));
-    if(!settings || !settings->isMap())
-        return false;
+ const Meta::Value* settings = document.findVariable(LiteralView("settings"));
+ if(!settings || !settings->isMap())
+ return false;
 
-    const Meta::Value* width = settings->findField(LiteralView("width"));
-    if(!width || !width->isInteger())
-        return false;
+ const Meta::Value* width = settings->findField(LiteralView("width"));
+ if(!width || !width->isInteger())
+ return false;
 
-    outWidth = width->asInteger();
-    return true;
+ outWidth = width->asInteger();
+ return true;
 }
 ```
 
@@ -149,8 +149,8 @@ Struct declarations describe fields and attributes as metadata:
 ```text
 [mutable]
 struct Parameters {
-    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
-    half4 tint;
+ [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
+ half4 tint;
 };
 
 Parameters runtime;
@@ -162,11 +162,11 @@ Struct definitions have their own namespace and require no variable declaration 
 
 ```text
 Parameters:
-    attributes: [{"name": "mutable", "arguments": []}]
-    fields:
-        - {"type": "half4", "name": "tint",
-           "attributes": [{"name": "default",
-                           "arguments": ["half4(1.0h, 1.0h, 1.0h, 1.0h)"]}]}
+ attributes: [{"name": "mutable", "arguments": []}]
+ fields:
+ - {"type": "half4", "name": "tint",
+ "attributes": [{"name": "default",
+ "arguments": ["half4(1.0h, 1.0h, 1.0h, 1.0h)"]}]}
 ```
 
 `Parameters runtime;` is an ordinary variable declaration: `document.findDeclaration("runtime")` records the type `Parameters`, and `document.findVariable("runtime")` returns its initially `Null` value. Initializers and assignments follow the same rules as any other variable. The parser does not instantiate fields, check whether a declared type names a struct, or enforce a struct's field schema. Struct definitions can appear before or after variable declarations.

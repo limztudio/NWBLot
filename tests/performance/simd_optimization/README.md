@@ -10,7 +10,7 @@ Run the following from the repository root on Linux x64, with the normal project
 set -euo pipefail
 cmake --preset linux-clang-x64 -DNWB_BUILD_SIMD_BENCHMARKS=ON
 cmake --build --preset linux-clang-opt --target nwb_math_tests nwb_simd_vector_benchmark nwb_simd_geometry_benchmark nwb_simd_memory_storage_benchmark nwb_simd_replicated_benchmark \
-    nwb_simd_mask_benchmark nwb_simd_box_normal_benchmark nwb_simd_pow_qualification
+ nwb_simd_mask_benchmark nwb_simd_box_normal_benchmark nwb_simd_pow_qualification
 
 simd_cpu=4
 simd_bin_dir=__exec/linux/x64/full/opt
@@ -87,25 +87,25 @@ binary, cpu, output = sys.argv[1:]
 operations = ("ln", "exp", "normals2", "normals3", "normals4", "vectors2", "vectors3", "vectors4", "slerp", "length2", "length3", "length4", "reciprocal2", "reciprocal3", "reciprocal4", "normalize2", "normalize3", "normalize4", "clamp2", "clamp3", "clamp4")
 
 def measure(operation, variant, iterations):
-    command = ["taskset", "-c", cpu, binary, "--measure", operation, variant, str(iterations), "throughput"]
-    completed = subprocess.run(command, check=True, capture_output=True, text=True)
-    return json.loads(completed.stdout)
+ command = ["taskset", "-c", cpu, binary, "--measure", operation, variant, str(iterations), "throughput"]
+ completed = subprocess.run(command, check=True, capture_output=True, text=True)
+ return json.loads(completed.stdout)
 
 with open(output, "w", encoding="utf-8") as raw:
-    for operation in operations:
-        for variant in ("baseline", "candidate"):
-            measure(operation, variant, 10000)
-        for sample in range(7):
-            order = ("baseline", "candidate") if sample % 2 == 0 else ("candidate", "baseline")
-            pair = {}
-            for variant in order:
-                record = measure(operation, variant, 500000)
-                record.update(cpu=int(cpu), profile="engine_o2", sample=sample)
-                raw.write(json.dumps(record) + "\n")
-                raw.flush()
-                pair[variant] = record
-            if pair["baseline"]["checksum"] != pair["candidate"]["checksum"]:
-                raise RuntimeError(f"checksum mismatch: {operation}, sample {sample}")
+ for operation in operations:
+ for variant in ("baseline", "candidate"):
+ measure(operation, variant, 10000)
+ for sample in range(7):
+ order = ("baseline", "candidate") if sample % 2 == 0 else ("candidate", "baseline")
+ pair = {}
+ for variant in order:
+ record = measure(operation, variant, 500000)
+ record.update(cpu=int(cpu), profile="engine_o2", sample=sample)
+ raw.write(json.dumps(record) + "\n")
+ raw.flush()
+ pair[variant] = record
+ if pair["baseline"]["checksum"] != pair["candidate"]["checksum"]:
+ raise RuntimeError(f"checksum mismatch: {operation}, sample {sample}")
 PY
 ```
 
@@ -170,7 +170,7 @@ On Windows ARM64, configure `windows-clang-arm64` with `NWB_BUILD_SIMD_BENCHMARK
 
 On Windows, the existing geometry probe checks masked exception flags. Its enabled-trap subprocess checks and the memory probe's protected-page checks are Linux-only. Their generic success banners do not establish those unavailable branches. The separate power qualifier implements its own Windows SEH controls.
 
-Box-normal length reuse is restricted to NEON64. Other profiles retain their original arithmetic order and reductions. Exception verification must distinguish masked flags, trap/no-trap behavior, and the first enabled exception category. A host or emulator that does not deliver distinguishable enabled traps cannot establish mixed-category trap priority.
+Box-normal length reuse is restricted to NEON64. Other profiles retain their original arithmetic order and reductions. Exception verification must distinguish masked flags, trap/no-trap behavior. The First enabled exception category. A host or emulator that does not deliver distinguishable enabled traps cannot establish mixed-category trap priority.
 
 Recorded native measurements and review evidence are retained in the separate [qualification report](qualification_history.md).
 
@@ -178,7 +178,7 @@ Recorded native measurements and review evidence are retained in the separate [q
 
 Public `VectorPow` uses a packed table/FMA implementation with the release CRT on native Windows ARM64, excluding ARM64EC and `_DEBUG` CRT linkage. Its four lanes reduce the logarithm and exponential in binary64 SIMD pairs and narrow once to binary32. Packed integer admission selects a bounded ordinary path when x lies in [2^-16, 2^16] and |y| <= 4, with neutralized exact zero/one shortcuts. Other inputs use the generic packed path. Loads, table indices and lane-control branches do not move the numerical intermediates out of the SIMD domain.
 
-The implementation preserves the measured Windows CRT operation order and special-value side effects, including normalization before the subnormal-base y == 1 return. Enabled standard floating-point exceptions use lane-ordered packed primitives with per-operation state restoration and exception replay. Exact tiny arithmetic results can trap underflow without setting a masked sticky flag. Narrowing checks tininess before rounding and inexact, while excluding binary64 subnormals consumed as zero by flush mode. Native ARM input-denormal exceptions select the original four scalar calls because the available packed instruction delivers a different exception category. Debug CRT linkage (`_DEBUG`) retains the original scalar expression under its unoptimized inline policy. Other architectures and platforms retain the original scalar implementation. These are explicit remaining scalar paths, not a universal powf replacement. Provider-specific behavior must be requalified on a different CRT or execution environment.
+The implementation preserves the measured Windows CRT operation order and special-value side effects, including normalization before the subnormal-base y == 1 return. Enabled standard floating-point exceptions use lane-ordered packed primitives with per-operation state restoration and exception replay. Exact tiny arithmetic results can trap underflow without setting a masked sticky flag. Narrowing checks tininess before rounding and inexact. While Excluding binary64 subnormals consumed as zero by flush mode. Native ARM input-denormal exceptions select the original four scalar calls because the available packed instruction delivers a different exception category. Debug CRT linkage (`_DEBUG`) retains the original scalar expression under its unoptimized inline policy. Other architectures and platforms retain the original scalar implementation. These are explicit remaining scalar paths, not a universal powf replacement. Provider-specific behavior must be requalified on a different CRT or execution environment.
 
 The default math edge tests compare the public API with the frozen formula across directed rounding, mixed special values, adjacent sRGB boundaries, seeded flags/errno, and native Windows ARM64 denormal modes/status. The opt-in corpus below provides broader numerical qualification. Neither finite corpus admission nor local CPU timing proves equivalence or speed on every supported provider. The separate [power qualification report](pow_qualification_report.md) records the measured scope and limits.
 

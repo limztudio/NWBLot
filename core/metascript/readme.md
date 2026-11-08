@@ -48,7 +48,7 @@ Identifiers use ASCII letters, digits, and underscores, with a letter or undersc
 | `List` | `[1, 2]`, `{1, 2}`, `[]`, `{}` | Ordered values; square and brace list forms are both accepted. |
 | `Map` | `{"name": "example", "width": 512}` | Dictionary with string keys. |
 
-Lists and maps allow trailing commas. Duplicate dictionary keys replace earlier values. **`{}` is an empty list.** Maps can be created through dotted assignment or a nonempty dictionary literal; there is no empty map literal.
+Lists and maps allow trailing commas. Duplicate dictionary keys replace earlier values. **`{}` is an empty list.** Maps can be created through dotted assignment or a nonempty dictionary literal. There is no empty map literal.
 
 String contents retain backslashes verbatim. For example, `"a\nb"` contains a backslash and `n`, rather than a newline. A backslash lets the lexer skip the following character while finding the closing quote, but the parser does not decode escapes. Use forward slashes for asset paths.
 
@@ -80,7 +80,7 @@ asset.texture = albedo;             // Reference text: "albedo"
 asset.source = albedo.source;       // Reference text: "albedo.source"
 ```
 
-Only the root variable must exist at parse time; the parser does not validate the referenced fields or resolve the reference. Resolution belongs to the consumer. For the same reason, `number count = 2; asset.width = count + 1;` fails: `count` is a reference operand, not an integer expression. Use literal arithmetic or compound assignment on an initialized numeric target.
+Only the root variable must exist at parse time. The parser does not validate the referenced fields or resolve the reference. Resolution belongs to the consumer. For the same reason, `number count = 2; asset.width = count + 1;` fails: `count` is a reference operand, not an integer expression. Use literal arithmetic or compound assignment on an initialized numeric target.
 
 ## Using the C++ API
 
@@ -128,7 +128,7 @@ bool ReadExampleWidth(Meta::MetaArena& arena, i64& outWidth){
 | `structs()` | Returns the independent struct definition map, keyed by struct name. Each value describes its attributes and fields. |
 | `hasErrors()`, `errors()` | Exposes parse diagnostics containing `line`, `column`, and `message`. |
 
-Each parse call clears the previous document contents and diagnostics. A failed parse can leave partially populated values; consume the result only when parsing returns `true`. Source diagnostics use one-based line and column positions; reader failures use `(0, 0)`.
+Each parse call clears the previous document contents and diagnostics. A failed parse can leave partially populated values. Consume the result only when parsing returns `true`. Source diagnostics use one-based line and column positions; reader failures use `(0, 0)`.
 
 `IMetaReader::read(buffer, maxBytes)` returns `Expected<usize>`. Return a positive byte count for data, zero for EOF, or an unexpected result for a read failure. The document requests chunks of 4096 bytes and buffers all input before parsing. A failure reports `"read error"`; a count larger than requested reports `"reader returned more bytes than requested"`. Exceptions from readers or allocations propagate to the caller.
 
@@ -140,7 +140,7 @@ For programmatic construction, `field(name)` promotes `Null` to a map and create
 
 The source buffer needs to remain valid only during the synchronous parse. Parsed text, keys, reference paths, declarations, and diagnostics are copied into the supplied arena. Keep the arena alive for the document and every value or copied string allocated from it. Views and pointers returned by the API borrow their underlying storage and can be invalidated by mutation, reparsing, or destruction.
 
-A `Value` copy constructor uses the source arena. Copy and move assignment retain the destination arena and recursively copy across different arenas; a cross-arena move clears the source after copying. To transfer data into another arena, construct a destination `Value` with that arena and assign into it.
+A `Value` copy constructor uses the source arena. Copy and move assignment retain the destination arena and recursively copy across different arenas. A cross-arena move clears the source after copying. To transfer data into another arena, construct a destination `Value` with that arena and assign into it.
 
 ## Structs and attributes
 
@@ -156,7 +156,7 @@ struct Parameters {
 Parameters runtime;
 ```
 
-Attributes can appear on structs and fields. Each attribute accepts zero or more string arguments, for example `[flag]`, `[flag()]`, or `[name("a", "b")]`; attribute argument lists do not allow a trailing comma. Field declarations consist of a type and name followed by a semicolon.
+Attributes can appear on structs and fields. Each attribute accepts zero or more string arguments, for example `[flag]`, `[flag()]`, or `[name("a", "b")]`. Attribute argument lists do not allow a trailing comma. Field declarations consist of a type and name followed by a semicolon.
 
 Struct definitions have their own namespace and require no variable declaration or selected root. The example records this descriptor in `document.structs()`:
 

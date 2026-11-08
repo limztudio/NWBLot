@@ -18,15 +18,15 @@ atlas.font = face;
 asset_bunch bunch = [face, atlas];
 ```
 
-The Font declaration has no authored fields. The cooker derives its face index and metrics from the paired prepared SFNT; copied face facts, source filenames, and version/revision fields are rejected. Bake settings, editable layout metrics, and glyph mappings belong to the separate FontAtlas declaration. Image dimensions and channel counts come from the prepared source directory.
+The Font declaration has no authored fields. The cooker derives its face index and metrics from the paired prepared SFNT. copied face facts, source filenames, and version/revision fields are rejected. Bake settings, editable layout metrics, and glyph mappings belong to the separate FontAtlas declaration. Image dimensions and channel counts come from the prepared source directory.
 
 For `latin.nwb`, the bunch publishes `<virtual directory>/latin/face` and `<virtual directory>/latin/atlas`. Its local `atlas.font = face` reference resolves to a typed `AssetRef<Font>` before either importer consumes it. Both assets derive `latin.font` from the original metadata path, so there are no authored source filenames or hash fields.
 
-A standalone `font asset;` document also has no fields and finds its sibling `.font` by replacing the document extension. Its identity follows the metadata path. Font-only import validates the complete FON2 directory and file length, verifies the SFNT integrity hash, and reads only SFNT bytes; it does not allocate atlas image pixels. Missing, truncated, malformed, or corrupt source data preserves the previously parsed entry.
+A standalone `font asset;` document also has no fields and finds its sibling `.font` by replacing the document extension. Its identity follows the metadata path. Font-only import validates the complete FON2 directory and file length, verifies the SFNT integrity hash, and reads only SFNT bytes. It does not allocate atlas image pixels. Missing, truncated, malformed, or corrupt source data preserves the previously parsed entry.
 
 ## Prepared source and runtime payload
 
-The FON2 authoring container retains exact shaping SFNT bytes and compact image groups with internal integrity hashes. It stores a 56-byte header, 48-byte image directory entries, the exact SFNT, then tightly interleaved compact image bytes. Readable atlas mappings stay in `.nwb`; source cooking reconstructs the independent runtime assets from the pair. The prepared source supports one static scalable SFNT face with Unicode character mapping: TrueType outlines or CFF outlines, with face index zero. Font collections, variable fonts (`fvar`/`CFF2`), compressed web fonts, bitmap-only faces, and non-Unicode faces are unsupported.
+The FON2 authoring container retains exact shaping SFNT bytes and compact image groups with internal integrity hashes. It stores a 56-byte header, 48-byte image directory entries, the exact SFNT, then tightly interleaved compact image bytes. Readable atlas mappings stay in `.nwb`. Source cooking reconstructs the independent runtime assets from the pair. The prepared source supports one static scalable SFNT face with Unicode character mapping: TrueType outlines or CFF outlines, with face index zero. Font collections, variable fonts (`fvar`/`CFF2`), compressed web fonts, bitmap-only faces, and non-Unicode faces are unsupported.
 
 SFNT bytes must be nonempty and at most 32 MiB. Directories must have 1..256 distinct tables whose ranges stay inside the source buffer. Required outline and metrics tables are checked before FreeType opens the face. Native validation uses the source buffer's explicit asset arena for temporary allocations.
 
@@ -34,4 +34,4 @@ The cooked Font runtime payload remains a packed 24-byte `FON1` header followed 
 
 ## Dependencies
 
-FreeType 2.14.3 and HarfBuzz 14.5.0 are pinned static packages exposed as `nwb::freetype` and `nwb::harfbuzz`. FreeType builds the TrueType/CFF/SFNT drivers with raster, smoothing, and autohint modules; optional compression/image/shaping integrations are disabled. HarfBuzz uses its internal Unicode implementation and OpenType font/shaping functions without linking FreeType or platform text libraries. This software uses the FreeType library under its FreeType License; the upstream licence texts are preserved in `3rd_parties/freetype`.
+FreeType 2.14.3 and HarfBuzz 14.5.0 are pinned static packages exposed as `nwb::freetype` and `nwb::harfbuzz`. FreeType builds the TrueType/CFF/SFNT drivers with raster, smoothing, and autohint modules. Optional compression/image/shaping integrations are disabled. HarfBuzz uses its internal Unicode implementation and OpenType font/shaping functions without linking FreeType or platform text libraries. This software uses the FreeType library under its FreeType License. The upstream licence texts are preserved in `3rd_parties/freetype`.

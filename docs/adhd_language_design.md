@@ -276,10 +276,10 @@
 | `void` | `void` | — | Return-only empty type |
 
 ### 5.2 SIMD Calculation Types vs. Memory-Layout Types (`VectorSingle`/`MatrixSingle` vs. `f32x4~`)
-- **Rule**: `.adhd` strictly separates **SIMD calculation/register types** (`VectorSingle`, `VectorDouble`, `MatrixSingle`, `MatrixDouble`) from **memory-layout storage types** (`f32x4~` and unaligned `*u` types):
+- **Rule**: `.adhd` keeps **SIMD math types** (`VectorSingle`, `VectorDouble`, `MatrixSingle`, `MatrixDouble`) apart from **store types** (`f32x4~` and raw `*u` types):
   - **SIMD Calculation & Parameter Types** (`type_register.h`, `result.h`):
     - `VectorSingle` (`::SIMDVectorSingle`, passed by value on `in`), `VectorDouble` (`::SIMDVectorDouble`, passed by value on `in`), `MatrixSingle` (`::SIMDMatrix`, passed by `const &` on `in`), `MatrixDouble` (`::SIMDMatrixDouble`, passed by `const &` on `in`). Inside `Expected<...>` and `Optional<...>`, `VectorSingle` and `VectorDouble` lower to `::SIMDVectorSingleResult` and `::SIMDVectorDoubleResult`.
-    - All SIMD arithmetic, multi-lane swizzling, SIMD math intrinsics, and SIMD function/method/lambda/`Func` parameters must use `VectorSingle`, `VectorDouble`, `MatrixSingle`, or `MatrixDouble`. They cannot be held in memory as `class` member fields, container/array/span elements, or file-scope `const` declarations.
+    - All SIMD math, multi-lane swizzle, SIMD math calls, and SIMD func/method/lambda/`Func` args must use `VectorSingle`, `VectorDouble`, `MatrixSingle`, or `MatrixDouble`. They cannot sit in store as `class` fields, box/array/span items, or file `const` notes.
   - **Aligned Memory-Layout Types** (`type_vector_aligned.h`, `type_matrix_storage.h`):
     - **16-byte Aligned (`alignas(16)`)**: `f32x4` (`Float4`), `i32x4` (`Int4`), `u32x4` (`UInt4`), `f32x3_i32` (`Float3Int`), `f32x3_u32` (`Float3UInt`), `f32x3x4` (`Float34`), `f32x4x4` (`Float44`).
     - **32-byte Aligned (`alignas(32)`)**: `f64x2` (`Double2`), `f64x3` (`Double3`), `f64x4` (`Double4`), `i64x4` (`Int64x4`), `u64x4` (`UInt64x4`), `f64x3_i64` (`Double3Int`), `f64x3_u64` (`Double3UInt`), `f64x3x3` (`Double33`), `f64x3x4` (`Double34`), `f64x4x4` (`Double44`).
@@ -321,7 +321,7 @@ All owning containers are automatically bound to the enclosing class's static ar
   - `Path` (`Path`)
   - `String` (`BasicString<char, ArenaAllocator<...>>`)
   - `CompactString` (`ACompactString`)
-  - **Automatic String Literal (`"..."`) & UTF-8 Bridge**: Programmers write plain UTF-8 `"..."` literals everywhere in `.adhd` (never `NWB_TEXT("...")`). The `adhd` compiler emits UTF-8 `"..."` for `String`, `StringView`, `CompactString`, and `Name`, and automatically adapts/converts UTF-8 strings (`NWB_TEXT("...")` / `ConvertString` in `global/basic_string.h`) when passed to `assert`, `info`, `warning`, `error`, or `Path`.
+  - **Auto text form (`"..."`) and UTF-8 bridge**: Coders write plain UTF-8 `"..."` text in all `.adhd` (never `NWB_TEXT("...")`). The `adhd` tool puts out UTF-8 `"..."` for `String`, `StringView`, `CompactString`, and `Name`. It auto fits UTF-8 text (`NWB_TEXT("...")` / `ConvertString` in `global/basic_string.h`) when sent to `assert`, `info`, `warning`, `error`, or `Path`.
 - **Views, Value Wrappers, Callables & References**:
   - `Span<T>`, `StringView` (`AStringView`)
   - `Optional<T>`, `Expected<T, E>`
@@ -394,7 +394,7 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 8. Preprocessor & Macro System
-- `adhd` supports a C/C++-style preprocessor before AST parsing, layout optimization, and reflection generation (no `#pragma` needed in `.adhd`; the `adhd` compiler deduplicates `#include` automatically and emits `#pragma once` in generated C++ headers):
+- `adhd` takes a C/C++-form pre pass before tree read, plan fix, and tag make (no `#pragma` needed in `.adhd`; the `adhd` tool drops repeat `#include` on its own and puts `#pragma once` in made C++ heads):
   - **File Inclusion (`.adhd` vs C++)**:
     - Outside `native {}`, `#include "..."` / `#include <...>` includes **`.adhd` files only**.
     - C++-side `#include` directives must be placed inside a `native { ... }` block.
@@ -488,12 +488,12 @@ All owning containers are automatically bound to the enclosing class's static ar
 - **Benefits of `native(in ..., mut ...) { ... }`**:
   - Clearly separates `.adhd` `#include`s (parsed by the `adhd` compiler) from C++ `#include`s (emitted into the generated C++ file).
   - Clearly isolates raw C++ engine calls from pure `adhd` code (similar to `unsafe` blocks in Rust/C#).
-  - Because `native(in ..., mut ...)` declares which `.adhd` variables are read (`in`) vs. mutated (`mut`), the `adhd` compiler can still enforce `in`/`mut` parameter safety, `const` method rules, and `parallel` data-race checks without needing a full C++ parser inside `{ ... }`.
+  - Because `native(in ..., mut ...)` declares which `.adhd` variables are read (`in`) vs. Mutated (`mut`), the `adhd` compiler can still enforce `in`/`mut` parameter safety, `const` method rules, and `parallel` data-race checks without needing a full C++ parser inside `{ ... }`.
 
 ---
 
 ## 11. Templates & Generics (`<T>`, `<T : IInterface>`, `<T, const usize N>`)
-- `adhd` uses Rust-style inline `<...>` type parameters (no `template<typename ...>` keyword prefix):
+- `adhd` uses Rust-form in-line `<...>` kind args (no `template<typename ...>` head word):
   1. **Inline `<T>` Syntax on Classes, Interfaces & Functions**:
      ```cpp
      class Pair<T, U> {
@@ -537,7 +537,7 @@ All owning containers are automatically bound to the enclosing class's static ar
 ---
 
 ## 12. Compiler Architecture & Domain-Split Module Layout (`core/metascript` & `pipeline/adhd_compiler`)
-Every source and header file is strictly split by domain responsibility so that no single file becomes monolithic:
+Each source and head file is split firm by field job, so no one file grows too big:
 
 1. **Shared Foundation & `.nwb` Evaluation (`core/metascript/`)**:
    - `lexer.h` / `lexer.cpp`: Unified lexical scanner and token definitions.

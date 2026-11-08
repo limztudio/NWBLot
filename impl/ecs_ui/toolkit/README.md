@@ -2,8 +2,7 @@
 
 `nwb_ui` provides `NWB::Impl::Ui::PaintBuilder` and `DrawSnapshot` through `paint.h`.
 The caller supplies a `Core::Alloc::GlobalArena` that outlives the builder, every frozen snapshot,
-and all consumers of those snapshots. Storage that crosses an asynchronous task boundary must have
-an owning lifetime covering the complete task; use the UI owner's arena for that work.
+and all consumers of those snapshots. Store that crosses a far job edge must live through the full job. Use the UI hold arena for that work.
 
 Call `begin()` with display metrics, a frame generation, a skin generation, an already loaded and
 validated `UiSkin`, and its matching typed `AssetRef<UiSkin>`. The builder copies the skin's region
@@ -13,9 +12,7 @@ a complete nine-slice can emit nine quads.
 Positions, dimensions, and clip rectangles use logical units with a top-left origin. The initial
 clip is the logical display extent. `pushClip()` intersects its rectangle with the current clip;
 every push must have a matching `popClip()` before `freeze()`. A pop at the initial clip returns
-`false`. Geometry is trimmed to the current clip and UVs are interpolated to match. The snapshot
-also records each command's logical clip and the display's pixel scales; the GPU renderer applies
-those scales when converting positions and scissors to framebuffer pixels.
+`false`. Geometry is trimmed to the current clip and UVs are interpolated to match. The snap also notes each call clip and the show pixel scales. The card draw sets those scales when it turns spots and cut boxes to frame pixels.
 
 This example belongs in the owning UI caller after loading `skin` and `skinRef`:
 
@@ -59,9 +56,7 @@ before painting again. Reusing the builder or changing the original skin cannot 
 snap. Only side-by-side draws with same coat, mat, and clip join. Draw rank stays in each coat. `freeze()` ranks call spans by coat.
 
 The saved `AssetRef<UiSkin>` and `AssetRef<Texture>` identify assets. They do not retain loaded asset
-objects or resolved GPU resources. The set skin generation identifies the metadata revision;
-the GPU layer retains the matching resolved texture revision, descriptors, and upload
-storage until GPU completion.
+objects or resolved GPU resources. The set skin age marks the tag form. The card coat keeps the match made art form, notes, and send store until card completion.
 
 The CPU toolkit also provides scoped stable IDs, retained declaration lifetimes (`state/`),
 row/column/overlay measure and arrange (`layout/`), committed-layout input routing (`input/`),
@@ -79,7 +74,7 @@ text service and loaded skin; neither CPU type knows ECS, native windows or ImGu
 `nwb_ui_widgets` contains the builder and control painting, while `nwb_ui` owns ID/state/layout/input.
 The same UI arena outlives these objects, text/font pages and every frozen draw snapshot.
 
-`Builder::setSkin()` applies the current skin's 17 linear RGBA palette roles and default logical font size. Authoring metadata has no version or revision field and requires complete palette and typography sections. The runtime codec accepts only internal binary payload version 3. Programmatic skins carry complete engine defaults from construction. The builder adopts a new skin default when its current font size is still the previous skin default. While an application-set `Builder::style().fontSize` value that differs from that default remains in effect. Spacing, region names, and other style metrics are unchanged. The ECS host binds its selected skin before calling the application each frame, so style overrides made inside that callback take precedence for its widget declarations.
+`Builder::setSkin()` applies the current skin's 17 linear RGBA palette roles and default logical font size. Authoring metadata has no version or revision field and requires complete palette and typography sections. The runtime codec accepts only internal binary payload version 3. Programmatic skins carry complete engine defaults from construction. The builder adopts a new skin default when its current font size is still the previous skin default. While an application-set `Builder::style().fontSize` value that differs from that default remains in effect. Spacing, region names, and other style metrics are unchanged. The ECS host ties its picked skin first each frame, with no app call yet. So style swaps made in that call win for its knob notes.
 
 `Builder::setTextShaping(scriptTag, language)` selects an set left-to-right ISO 15924 script and ASCII language for stock widget text, including labels, edit boxes, text areas, list and combo rows, radio labels, window titles, tooltips, and text-area vertical navigation. It copies the language bytes, preserves the last valid policy across `reset()`, and defaults to `Latn/en`. Call it while the builder is balanced, before opening a panel, window, or popup. A policy change during a declaration scope is rejected so deferred text uses the same policy. The API does not infer mixed scripts or paragraph direction. Standalone `Label::setText(ShapeRequest)` retains its own set shaping policy. `Label::paint` takes a dedicated logical content rectangle: its top-left anchors the measured visual content, and glyph ink is intersected with that rectangle and the current parent clip. Resizing the region changes clipping without invalidating cached shaping. `Label::measure(text, display)` exposes the same visual extent used for placement. `TextLayout::measure()` retains logical advances and line metrics for carets; `TextService::measure(layout, display)` unions those metrics, shaped ink overhangs, and rendered coverage at the current display scale. Native coverage uses the rasterizer’s bitmap bearings and dimensions with the derived half-physical-pixel origin-snapping envelope. SDF coverage uses atlas samples, bilinear support. The shader’s derivative threshold. It does not reserve the atlas’s transparent distance-field spread. Natural control sizes use the resulting width/height plus skin padding, and painting subtracts the measured minimum so negative bearings and combining marks remain inside that content rectangle. Stock controls likewise clip text to their padded content and icon reservations. Backgrounds, focus decorations, and hit targets retain their full control bounds. Popup overlays prove their own clip before applying these local text regions.
 

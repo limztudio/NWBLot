@@ -166,9 +166,7 @@ The service admits every glyph and page binding before emitting any label quads.
 Capacity or raster failure leaves existing builder geometry and page bindings intact,
 although successful cache preparation may remain available for a retry. Limits are
 eight configured faces, 1 MiB per text request, 4096 cached glyph entries, and sixteen
-512 x 512 atlas pages. Exceeding a limit returns failure. Input tint is linear straight
-RGBA; the paint builder premultiplies vertices, and the glyph shader multiplies their
-premultiplied color and alpha by sampled coverage.
+512 x 512 atlas pages. Exceeding a limit returns failure. In tint is straight plain RGBA. The paint make pre-times spots. The mark shader times their pre-timed tint and clear by tried coverage.
 
 This example assumes the matching font/skin assets and typed identities are already
 loaded:

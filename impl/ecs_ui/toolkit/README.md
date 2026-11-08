@@ -56,8 +56,7 @@ and tint consistently with this premultiplied vertex contract.
 `freeze()` moves the geometry, indices, ordered commands, display metrics, frame generation, and
 skin binding into a move-only snapshot exposed through const views. Start a new frame with `begin()`
 before painting again. Reusing the builder or changing the original skin cannot alter a frozen
-snapshot. Only adjacent draws with identical layer, material and clip merge; painter order is preserved
-within each layer, and `freeze()` orders command ranges by layer.
+snap. Only side-by-side draws with same coat, mat, and clip join. Draw rank stays in each coat. `freeze()` ranks call spans by coat.
 
 The saved `AssetRef<UiSkin>` and `AssetRef<Texture>` identify assets. They do not retain loaded asset
 objects or resolved GPU resources. The set skin generation identifies the metadata revision;

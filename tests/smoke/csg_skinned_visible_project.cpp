@@ -70,9 +70,9 @@ static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/transpa
 #else
 static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial{"project/smoke/csg_visible/materials/solid"};
 #endif
-static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
+using NWB::Tests::Smoke::s_SmokeSurfaceMaterialInterface;
 static constexpr Name s_ReceiverGroup = NWB::Tests::Smoke::s_SmokeNameProjectSmokeCsgSkinnedVisibleFemaleReceiver;
-static constexpr Name s_ModelMeshObject = NWB::Tests::Smoke::s_SmokeNameMesh;
+using NWB::Tests::Smoke::s_SmokeNameMesh;
 static constexpr Name s_CutterAnchorBoneName = NWB::Tests::Smoke::s_SmokeNameHip;
 static constexpr f32 s_CameraDistance = 1.75f;
 static constexpr f32 s_CameraHeight = 0.92f;
@@ -81,7 +81,7 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.54f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 static constexpr f32 s_CutterAnimationSpeed = 0.18f;
 static constexpr f32 s_ReceiverYawSpeed = 0.92f;
-static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
+constexpr f32 s_MaxAnimationDelta = NWB::Tests::Smoke::s_SmokeSpinMaxDelta;
 static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
 static constexpr u16 s_FrameClientWidth = 1280u;
 static constexpr u16 s_FrameClientHeight = 900u;
@@ -246,7 +246,7 @@ private:
     }
 
     [[nodiscard]] b8 installCsgReceiverOnSpawnedModelObject(){
-        m_receiverObject = FindSpawnedModelObject(m_receiver, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
+        m_receiverObject = FindSpawnedModelObject(m_receiver, s_SmokeNameMesh, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         if(!m_receiverObject.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
             return false;

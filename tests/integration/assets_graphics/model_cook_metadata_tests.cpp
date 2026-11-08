@@ -35,8 +35,8 @@ static constexpr AStringView s_MeshVirtualPath = "tests/model_cook_metadata/mesh
 static constexpr TStringView s_TargetsAMissingSkeletonObject = NWB_TEXT("targets a missing skeleton object");
 static constexpr AStringView s_RigA = "rig_a";
 static constexpr AStringView s_RigB = "rig_b";
-static constexpr AStringView s_Rig = "rig";
-static constexpr AStringView s_Body = "body";
+using NWB::Tests::AssetsGraphicsFixture::s_ModelRigSegment;
+using NWB::Tests::AssetsGraphicsFixture::s_ModelBodySegment;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,12 +148,12 @@ TEST(ModelCookMetadata, SharedAssetPathCannotSelectAmongLocalSkeletonObjects){
     ModelMetadata metadata;
     metadata.addSkeleton(s_RigA, s_SharedModelPath);
     metadata.addSkeleton(s_RigB, "TESTS/MODEL_COOK_METADATA/SHARED");
-    metadata.addSkinnedMesh(s_Body, s_SharedModelPath, s_SharedModelPath);
+    metadata.addSkinnedMesh(s_ModelBodySegment, s_SharedModelPath, s_SharedModelPath);
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_TRUE(logger.sawErrorContaining(s_TargetsAMissingSkeletonObject));
-    metadata.asset.field(s_SkinnedMeshes).field(s_Body).field(s_Skeleton).setString(s_RigA);
-    metadata.expectedSkeletons.at(Name(s_Body)) = Name(s_RigA);
+    metadata.asset.field(s_SkinnedMeshes).field(s_ModelBodySegment).field(s_Skeleton).setString(s_RigA);
+    metadata.expectedSkeletons.at(Name(s_ModelBodySegment)) = Name(s_RigA);
     ASSERT_TRUE(metadata.parse());
     metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -163,8 +163,8 @@ TEST(ModelCookMetadata, UnknownObjectReferencesRemainValidatorErrors){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton(s_Rig, "tests/model_cook_metadata/known");
-    metadata.addSkinnedMesh(s_Body, s_UnknownModelPath, s_UnknownModelPath);
+    metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/known");
+    metadata.addSkinnedMesh(s_ModelBodySegment, s_UnknownModelPath, s_UnknownModelPath);
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -175,9 +175,9 @@ TEST(ModelCookMetadata, CanonicalDuplicateObjectNamesRemainValidatorErrors){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton(s_Rig, "tests/model_cook_metadata/first");
+    metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/first");
     metadata.addSkeleton("RIG", "tests/model_cook_metadata/second");
-    metadata.addSkinnedMesh(s_Body, "RiG", s_Rig);
+    metadata.addSkinnedMesh(s_ModelBodySegment, "RiG", s_ModelRigSegment);
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -192,7 +192,7 @@ TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
     ASSERT_TRUE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skeletonObjects.empty());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-    metadata.addSkinnedMesh(s_Body, "missing", "missing");
+    metadata.addSkinnedMesh(s_ModelBodySegment, "missing", "missing");
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -203,12 +203,12 @@ TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyRefere
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton(s_Rig, "tests/model_cook_metadata/skeleton");
-    metadata.addSkinnedMesh(s_Body, s_Rig, s_Rig);
+    metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/skeleton");
+    metadata.addSkinnedMesh(s_ModelBodySegment, s_ModelRigSegment, s_ModelRigSegment);
     ASSERT_TRUE(metadata.parse());
     metadata.verifyObjectReferences();
 
-    Value& object = metadata.asset.field(s_SkinnedMeshes).field(s_Body);
+    Value& object = metadata.asset.field(s_SkinnedMeshes).field(s_ModelBodySegment);
     object.field(s_MeshField).setString(s_MeshVirtualPath);
     EXPECT_FALSE(metadata.parse());
     metadata.verifyObjectReferences();

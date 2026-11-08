@@ -8,6 +8,8 @@
 #include "presentation_fps_probe.h"
 #include "smoke_cpu_gpu_timing_probe.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <core/graphics/runtime/render_pass.h>
@@ -54,14 +56,14 @@ private:
     static constexpr usize s_GpuScopeCount = 6u;
     static constexpr usize s_CpuScopeCount = 5u;
     static constexpr usize s_ScopeCount = s_GpuScopeCount + s_CpuScopeCount;
-    static constexpr usize s_MaxRecords = 262144u;
+    static constexpr usize s_MaxRecords = NWB::Tests::Smoke::s_SmokeTimingMaxRecords;
     static constexpr usize s_MaxIntervals = 2048u;
     static constexpr usize s_MaxNativeEndpoints = 131072u;
-    static constexpr f64 s_ReportIntervalSeconds = 0.5;
+    static constexpr f64 s_ReportIntervalSeconds = NWB::Tests::Smoke::s_SmokeProbeReportIntervalSeconds;
     static constexpr u64 s_PreparationPresentations = 64u;
-    static constexpr u64 s_MinimumPresentations = 100u;
+    static constexpr u64 s_MinimumPresentations = NWB::Tests::Smoke::s_SmokeProbeMinimumPresentations;
     static constexpr u32 s_MinimumPositiveIntervals = 11u;
-    static constexpr f64 s_MinimumMeasurementSeconds = 30.0;
+    static constexpr f64 s_MinimumMeasurementSeconds = NWB::Tests::Smoke::s_SmokeProbeMinimumMeasurementSeconds;
 
 
 public:

@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_graphics/components.adhd.h>
 
 #include <core/assets/input_list.h>
@@ -46,17 +48,7 @@ constexpr AStringView s_AssetsDirectory = AssetsGraphicsFixture::s_AssetsDirecto
 constexpr AStringView s_TestsConfiguration = AssetsGraphicsFixture::s_TestsConfiguration;
 constexpr AStringView s_FirstSamplerPath = AssetsGraphicsFixture::s_FirstSamplerPath;
 constexpr AStringView s_SecondSamplerPath = AssetsGraphicsFixture::s_SecondSamplerPath;
-static constexpr AStringView s_SamplerMetadata =
-    "sampler asset;\n"
-    "asset.min_filter = \"linear\";\n"
-    "asset.mag_filter = \"linear\";\n"
-    "asset.mip_filter = \"linear\";\n"
-    "asset.address_u = \"wrap\";\n"
-    "asset.address_v = \"wrap\";\n"
-    "asset.address_w = \"wrap\";\n"
-    "asset.reduction = \"standard\";\n"
-    "asset.max_anisotropy = 1.0;\n"
-    "asset.mip_bias = 0.0;\n";
+using NWB::Tests::AssetsGraphicsFixture::s_LinearWrapSamplerMetadata;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,8 +160,8 @@ TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDi
     const Path& root = cookCase->root;
     const Path& outputDirectory = cookCase->outputDirectory;
     const Path assetRoot = root / s_AssetsDirectory;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_SamplerMetadata));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_SamplerMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "first.nwb", s_LinearWrapSamplerMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "second.nwb", s_LinearWrapSamplerMetadata));
 
     // A 200-character directory leaves room for compact artifacts within the traditional Windows path limit.
     const usize rootTextLength = PathToString(testArena.arena, root).size();

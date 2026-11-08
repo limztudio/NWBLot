@@ -100,7 +100,7 @@ TEST(AssetsUiSkinRegionIndex, CanonicalDuplicateKeepsFirstAuthoredMatchAndFailsA
     UiSkin skin(owner.arena, Name(s_SkinPath));
     UiSkin::RegionVector regions(owner.arena);
     regions.push_back(MakeRegion(Name("Button\\Normal"), 0u));
-    regions.push_back(MakeRegion(Name("panel.normal"), 1u));
+    regions.push_back(MakeRegion(Name(NWB::Tests::UiSkinCases::s_UiTestPanelNormal), 1u));
     regions.push_back(MakeRegion(Name("button/normal"), 2u));
     SetRegions(skin, Move(regions));
     EXPECT_EQ(skin.findRegion(Name("BUTTON/NORMAL")), &skin.regions()[0u]);

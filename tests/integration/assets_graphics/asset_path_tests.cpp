@@ -24,7 +24,7 @@ namespace __hidden_asset_path_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_Project = "project";
+using NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
 static constexpr AStringView s_StaleOutput = "stale/output";
 
 
@@ -156,7 +156,7 @@ TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText
     ASSERT_TRUE(output);
     EXPECT_EQ(AStringView(*output), "MiXeD/Root/models/hero.lod0");
     const NWB::Path hiddenSource = fixture.assetRoot / "Folder.Name/.Hidden";
-    const auto hiddenOutput = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), hiddenSource, scratchArena, scratchArena);
+    const auto hiddenOutput = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), hiddenSource, scratchArena, scratchArena);
     ASSERT_TRUE(hiddenOutput);
     EXPECT_EQ(AStringView(*hiddenOutput), "project/folder.name/.hidden");
     const NWB::Path extensionlessSource = fixture.assetRoot / "Folder/NoExtension";
@@ -172,7 +172,7 @@ TEST(AssetPaths, DerivedOwningTextOutlivesBorrowedScratchSourcePath){
     {
         Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathBorrowedSourceScratch)};
         const ::Path<Alloc::ScratchArena> source = ::Path<Alloc::ScratchArena>(scratchArena, fixture.assetRoot) / "Models/Hero.LOD0.NWB";
-        auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), source, fixture.arena, scratchArena);
+        auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), source, fixture.arena, scratchArena);
         ASSERT_TRUE(output);
         retained = Move(*output);
     }
@@ -186,10 +186,10 @@ TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
     PathFixture fixture;
     Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRejectionScratch)};
     const NWB::Path outside = fixture.assetRoot / "../Elsewhere/Model.NWB";
-    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), outside, scratchArena, scratchArena));
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_Project), outside, scratchArena));
-    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), fixture.assetRoot, scratchArena, scratchArena));
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_Project), fixture.assetRoot, scratchArena));
+    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), outside, scratchArena, scratchArena));
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), outside, scratchArena));
+    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), fixture.assetRoot, scratchArena, scratchArena));
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_ProjectVirtualRoot), fixture.assetRoot, scratchArena));
     EXPECT_EQ(logger.errorCount(), 4u);
 }
 

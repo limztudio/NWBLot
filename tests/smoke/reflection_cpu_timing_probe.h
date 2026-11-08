@@ -8,6 +8,8 @@
 #include "presentation_fps_probe.h"
 #include "smoke_cpu_gpu_timing_probe.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <core/alloc/scratch.h>
@@ -25,9 +27,9 @@ namespace NWB::Tests::Smoke{
 class ReflectionCpuTimingProbe final{
 private:
     static constexpr u64 s_PreparationPresentations = 64u;
-    static constexpr u64 s_MinimumPresentations = 100u;
+    static constexpr u64 s_MinimumPresentations = NWB::Tests::Smoke::s_SmokeProbeMinimumPresentations;
     static constexpr u32 s_MinimumPositiveIntervals = 11u;
-    static constexpr f64 s_MinimumMeasurementSeconds = 30.0;
+    static constexpr f64 s_MinimumMeasurementSeconds = NWB::Tests::Smoke::s_SmokeProbeMinimumMeasurementSeconds;
 
 
 public:

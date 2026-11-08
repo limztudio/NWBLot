@@ -35,7 +35,7 @@ namespace __hidden_stress_csg_scene{
 
 
 static constexpr Array<Name, 2> s_Groups = { Name(NWB::Tests::Smoke::s_SmokeNameStressCsgTransparent), Name(NWB::Tests::Smoke::s_SmokeNameStressCsgOpaque) };
-static constexpr Name s_MeshObject = NWB::Tests::Smoke::s_SmokeNameMesh;
+using NWB::Tests::Smoke::s_SmokeNameMesh;
 static constexpr usize s_BodyCount = 20u;
 static constexpr Float4 s_CutterHalfExtents(4.5f, 0.08f, 0.65f, 0.0f);
 static constexpr f32 s_CutterHeight = 0.9f;
@@ -67,7 +67,7 @@ b8 StressCsgScene::initialize(const Span<const Core::ECS::EntityID> owners, cons
     }
     Array<Core::ECS::EntityID, __hidden_stress_csg_scene::s_BodyCount> meshes = {};
     for(usize index = 0u; index < ownerCount; ++index){
-        meshes[index] = FindSpawnedModelObject(owners[index], __hidden_stress_csg_scene::s_MeshObject, Impl::ModelObjectKind::SkinnedMesh, world);
+        meshes[index] = FindSpawnedModelObject(owners[index], __hidden_stress_csg_scene::s_SmokeNameMesh, Impl::ModelObjectKind::SkinnedMesh, world);
         if(!meshes[index].valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG receiver mesh child missing for body {}"), index);
             return false;

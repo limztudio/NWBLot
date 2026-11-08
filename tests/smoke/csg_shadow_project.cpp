@@ -44,10 +44,10 @@ namespace __hidden_csg_shadow_smoke{
 
 constexpr TStringView s_ProjectName = NWB_TEXT("CsgShadowSmokeProject");
 
-static constexpr AStringView s_Directional = NWB::Tests::Smoke::s_ShadowSmokeDirectional;
-static constexpr AStringView s_Point = NWB::Tests::Smoke::s_ShadowSmokePoint;
-static constexpr AStringView s_Hard = NWB::Tests::Smoke::s_ShadowSmokeHard;
-static constexpr AStringView s_Finite = NWB::Tests::Smoke::s_ShadowSmokeFinite;
+using NWB::Tests::Smoke::s_ShadowSmokeDirectional;
+using NWB::Tests::Smoke::s_ShadowSmokePoint;
+using NWB::Tests::Smoke::s_ShadowSmokeHard;
+using NWB::Tests::Smoke::s_ShadowSmokeFinite;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,7 +129,7 @@ public:
         lightComponent.enableCaustics = false;
 #endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , ConvertString(m_mode.finiteLightSource ? s_Finite : s_Hard)
+            , ConvertString(m_mode.finiteLightSource ? s_ShadowSmokeFinite : s_ShadowSmokeHard)
             , static_cast<f64>(lightComponent.angularRadius)
             , static_cast<f64>(lightComponent.sourceRadius)
         );
@@ -138,7 +138,7 @@ public:
         const b8 hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
             , static_cast<u32>(m_mode.arm)
-            , ConvertString(m_mode.pointLight ? s_Point : s_Directional)
+            , ConvertString(m_mode.pointLight ? s_ShadowSmokePoint : s_ShadowSmokeDirectional)
             , hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );

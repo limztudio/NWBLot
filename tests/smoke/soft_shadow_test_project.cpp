@@ -12,6 +12,8 @@
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.h>
@@ -59,7 +61,7 @@ using NWB::Tests::Smoke::TickSmokeWorld;
 static constexpr f32 s_DefaultAngularRadius = 0.03f;
 static constexpr f32 s_DefaultSourceRadius = 0.15f;
 
-static constexpr f32 s_SpinSpeed = 0.5f;
+constexpr f32 s_SpinSpeed = NWB::Tests::Smoke::s_SmokeSpinSpeed;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 

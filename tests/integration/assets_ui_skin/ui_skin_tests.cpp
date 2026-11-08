@@ -222,7 +222,7 @@ TEST(AssetsUiSkin, PaletteRejectsMalformedFooterWithoutReplacingSkin){
             binary.push_back(0u);
         EXPECT_FALSE(skin.loadBinary(binary)) << variant;
         ASSERT_EQ(skin.regions().size(), 1u);
-        EXPECT_EQ(skin.regions().front().name, Name("panel.normal"));
+        EXPECT_EQ(skin.regions().front().name, Name(UiSkinCases::s_UiTestPanelNormal));
         EXPECT_FLOAT_EQ(skin.palette().colors[UiSkinColorRole::TextNormal].r, 0.25f);
     }
 }
@@ -340,7 +340,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     EXPECT_FALSE(skin.loadBinary(binary));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096")));
     ASSERT_EQ(skin.regions().size(), 1u);
-    EXPECT_EQ(skin.regions().front().name, Name("panel.normal"));
+    EXPECT_EQ(skin.regions().front().name, Name(UiSkinCases::s_UiTestPanelNormal));
 
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(PaletteMetadata()));

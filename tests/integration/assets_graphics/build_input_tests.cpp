@@ -23,8 +23,8 @@ namespace __hidden_build_input_tests{
 
 
 static constexpr AStringView s_ANwb = "a.nwb";
-static constexpr AStringView s_Assets = "assets";
-static constexpr AStringView s_Project = "project";
+using NWB::Tests::AssetsGraphicsFixture::s_AssetsDirectory;
+using NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
 static constexpr AStringView s_AssetsANwb = "assets/a.nwb";
 
 
@@ -44,9 +44,9 @@ public:
 protected:
     virtual void SetUp()override{
         m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__) / "__build_obj" / "build_input_tests";
-        ASSERT_TRUE(EnsureDirectories(m_root / s_Assets / "empty"));
+        ASSERT_TRUE(EnsureDirectories(m_root / s_AssetsDirectory / "empty"));
         m_paths.repoRoot = m_root;
-        m_paths.assetRoots.emplace_back(m_root / s_Assets, s_Project);
+        m_paths.assetRoots.emplace_back(m_root / s_AssetsDirectory, s_ProjectVirtualRoot);
     }
 
     virtual void TearDown()override{
@@ -62,7 +62,7 @@ protected:
         ASSERT_TRUE(stream);
         Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexicallyNormal());
         CanonicalizeTextInPlace(normalized);
-        m_files.emplace_back(m_testArena.arena, m_root / s_Assets, path, normalized, s_Project);
+        m_files.emplace_back(m_testArena.arena, m_root / s_AssetsDirectory, path, normalized, s_ProjectVirtualRoot);
     }
 
     void addInput(AStringView relativePath){
@@ -176,28 +176,28 @@ TEST_F(BuildInputSelection, InferredRootsDeduplicateAssetsAncestorsWithoutDroppi
     const auto roots = Assets::ResolveAssetRoots(m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(roots);
     ASSERT_EQ(roots->size(), 3u);
-    EXPECT_EQ((*roots)[0].path, (m_root / s_Assets).lexicallyNormal());
-    EXPECT_EQ((*roots)[0].virtualRoot.view(), s_Project);
-    EXPECT_EQ((*roots)[1].path, (m_root / "impl" / s_Assets).lexicallyNormal());
+    EXPECT_EQ((*roots)[0].path, (m_root / s_AssetsDirectory).lexicallyNormal());
+    EXPECT_EQ((*roots)[0].virtualRoot.view(), s_ProjectVirtualRoot);
+    EXPECT_EQ((*roots)[1].path, (m_root / "impl" / s_AssetsDirectory).lexicallyNormal());
     EXPECT_EQ((*roots)[1].virtualRoot.view(), "engine");
     EXPECT_EQ((*roots)[2].path, (m_root / "loose").lexicallyNormal());
-    EXPECT_EQ((*roots)[2].virtualRoot.view(), s_Project);
+    EXPECT_EQ((*roots)[2].virtualRoot.view(), s_ProjectVirtualRoot);
 }
 
 TEST_F(BuildInputSelection, ExplicitRootsPreserveFirstSpellingAndCallerDuplicatePolicy){
     Assets::CookVector<Assets::CookString> sources(m_testArena.arena);
     for(const AStringView source : { "assets/./Case", "assets/Case", "assets/case", "impl/assets/graphics" })
         sources.emplace_back(source, m_testArena.arena);
-    sources.push_back(PathToString(m_testArena.arena, m_root / s_Assets / "Case"));
+    sources.push_back(PathToString(m_testArena.arena, m_root / s_AssetsDirectory / "Case"));
     Assets::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetsExplicitRoots)};
     const auto exact = Assets::ResolveAssetRoots(m_root, sources, false, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(exact);
     ASSERT_EQ(exact->size(), 3u);
-    EXPECT_EQ((*exact)[0].path, (m_root / s_Assets / "Case").lexicallyNormal());
-    EXPECT_EQ((*exact)[1].path, (m_root / s_Assets / "case").lexicallyNormal());
+    EXPECT_EQ((*exact)[0].path, (m_root / s_AssetsDirectory / "Case").lexicallyNormal());
+    EXPECT_EQ((*exact)[1].path, (m_root / s_AssetsDirectory / "case").lexicallyNormal());
     // Explicit roots remain exact directories rather than climbing to their assets ancestor.
-    EXPECT_EQ((*exact)[2].path, (m_root / "impl" / s_Assets / "graphics").lexicallyNormal());
-    EXPECT_EQ((*exact)[2].virtualRoot.view(), s_Project);
+    EXPECT_EQ((*exact)[2].path, (m_root / "impl" / s_AssetsDirectory / "graphics").lexicallyNormal());
+    EXPECT_EQ((*exact)[2].virtualRoot.view(), s_ProjectVirtualRoot);
     const auto host = Assets::ResolveAssetRoots(m_root, sources, false, Assets::AssetRootDuplicatePolicy::HostFilesystem, scratchArena);
     ASSERT_TRUE(host);
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -225,7 +225,7 @@ TEST_F(BuildInputSelection, RootResolutionFailureRetainsSourceIndexWithoutPublis
     const auto recovered = Assets::ResolveAssetRoots(m_root, sources, true, Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     ASSERT_TRUE(recovered);
     ASSERT_EQ(recovered->size(), 1u);
-    EXPECT_EQ((*recovered)[0].path, (m_root / s_Assets).lexicallyNormal());
+    EXPECT_EQ((*recovered)[0].path, (m_root / s_AssetsDirectory).lexicallyNormal());
 }
 
 

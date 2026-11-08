@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_graphics/components.adhd.h>
 
 #include <core/assets/input_list.h>
@@ -43,17 +45,7 @@ namespace __hidden_assets_graphics_asset_cache_tests{
 
 constexpr AStringView s_AssetsDirectory = AssetsGraphicsFixture::s_AssetsDirectory;
 constexpr AStringView s_TestsConfiguration = AssetsGraphicsFixture::s_TestsConfiguration;
-static constexpr AStringView s_SamplerMetadata =
-    "sampler asset;\n"
-    "asset.min_filter = \"linear\";\n"
-    "asset.mag_filter = \"linear\";\n"
-    "asset.mip_filter = \"linear\";\n"
-    "asset.address_u = \"wrap\";\n"
-    "asset.address_v = \"wrap\";\n"
-    "asset.address_w = \"wrap\";\n"
-    "asset.reduction = \"standard\";\n"
-    "asset.max_anisotropy = 1.0;\n"
-    "asset.mip_bias = 0.0;\n";
+using NWB::Tests::AssetsGraphicsFixture::s_LinearWrapSamplerMetadata;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,7 +107,7 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
         return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
     };
 
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(mixedCaseNwbPath, s_SamplerMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(mixedCaseNwbPath, s_LinearWrapSamplerMetadata));
     ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_first", cookCase->outputDirectory));
 
     const Sha1Digest expectedDigest = ComputeSha1Text("assets/samplers/first_sampler.nwb");
@@ -149,8 +141,8 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
         NWB::Core::Assets::NwbFileAssetCacheRecord staleProducer(testArena.arena);
         NWB::Core::Assets::ScratchString relativePath(scratchArena);
         NWB::Core::Assets::ScratchString cacheName(scratchArena);
-        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_SamplerMetadata, producer, scratchArena, relativePath, cacheName, originalProducer);
-        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_SamplerMetadata, otherProducer, scratchArena, relativePath, cacheName, staleProducer);
+        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_LinearWrapSamplerMetadata, producer, scratchArena, relativePath, cacheName, originalProducer);
+        NWB::Core::Assets::CookMetadataDetail::PrepareNwbFileAssetCacheRecord(root, root / "__asset_cache", discovered, s_LinearWrapSamplerMetadata, otherProducer, scratchArena, relativePath, cacheName, staleProducer);
         ASSERT_TRUE(originalProducer.canWriteCache);
         ASSERT_TRUE(staleProducer.canWriteCache);
         EXPECT_EQ(originalProducer.paramSha256, initialHeader->paramSha256);

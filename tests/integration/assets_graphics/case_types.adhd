@@ -184,6 +184,14 @@ const usize s_MetadataRegistrySamplerCount = 65u;
 const StringView s_ShaderStagePs = "ps";
 const StringView s_ProjectShadersTestShader = "project/shaders/test_shader";
 const StringView s_ShaderEntryMain = "main";
+const StringView s_MaterialsDirectory = "materials";
+const StringView s_ProjectMaterialInterfacesTestSurface = "project/material_interfaces/test_surface";
+const StringView s_ProjectMaterialsTestMaterial = "project/materials/test_material";
+const StringView s_EngineSamplersLinearClampPath = "engine/samplers/linear_clamp";
+const StringView s_MaterialBindIncludesDirectory = "material_bind_includes";
+const StringView s_ModelRigSegment = "rig";
+const StringView s_ModelBodySegment = "body";
+const StringView s_FieldTarget = "target";
 
 
 class ShaderMetadataCase{
@@ -214,6 +222,9 @@ class TextureMipCorruptionCase{
     public usize fieldOffset = 0u;
     public u32 value = 0u;
 }
+
+
+const StringView s_LinearWrapSamplerMetadata = "sampler asset;\nasset.min_filter = \"linear\";\nasset.mag_filter = \"linear\";\nasset.mip_filter = \"linear\";\nasset.address_u = \"wrap\";\nasset.address_v = \"wrap\";\nasset.address_w = \"wrap\";\nasset.reduction = \"standard\";\nasset.max_anisotropy = 1.0;\nasset.mip_bias = 0.0;\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

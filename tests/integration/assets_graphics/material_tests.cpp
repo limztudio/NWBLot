@@ -5,6 +5,8 @@
 #include "assets_graphics_fixture.h"
 #include "assets_graphics_material_bind_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <gtest/gtest.h>
 
 
@@ -36,15 +38,15 @@ namespace __hidden_assets_graphics_material_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_ProjectMaterialInterfacesTestSurface = "project/material_interfaces/test_surface";
+using NWB::Tests::AssetsGraphicsFixture::s_AssetsDirectory;
+using NWB::Tests::AssetsGraphicsFixture::s_MaterialsDirectory;
+using NWB::Tests::AssetsGraphicsFixture::s_ProjectMaterialInterfacesTestSurface;
+using NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
 #if defined(NWB_FINAL)
 static constexpr AStringView s_GeneratedAvboitAccumulatePsProjectM = "generated/avboit_accumulate_ps/project/materials/test_material";
 static constexpr AStringView s_GeneratedAvboitOccupancyPsProjectMa = "generated/avboit_occupancy_ps/project/materials/test_material";
 static constexpr AStringView s_GeneratedAvboitExtinctionPsProjectM = "generated/avboit_extinction_ps/project/materials/test_material";
 #endif
-static constexpr AStringView s_Project = "project";
-static constexpr AStringView s_AssetsDir = "assets";
-static constexpr AStringView s_Materials = "materials";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,9 +63,9 @@ static Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(con
     if(!doc.parse(metaText))
         return MakeUnexpected(Failure{});
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_AssetsDir;
-    const Path nwbFilePath = assetRoot / s_Materials / "test_material.nwb";
-    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_Project, nwbFilePath, doc, testArena.arena, scratchArena);
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_AssetsDirectory;
+    const Path nwbFilePath = assetRoot / s_MaterialsDirectory / "test_material.nwb";
+    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_ProjectVirtualRoot, nwbFilePath, doc, testArena.arena, scratchArena);
 }
 
 static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringView bindText, const AStringView materialText, const AStringView caseName, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){

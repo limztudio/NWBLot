@@ -93,7 +93,7 @@ static constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial{"project/smoke
 static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
 static constexpr StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
 static constexpr StringView s_GpuTimingEnv = "NWB_SKINNING_CULLING_GPU_TIMING";
-static constexpr Name s_ModelSkeletonObject = NWB::Tests::Smoke::s_SmokeNameSkeleton;
+using NWB::Tests::Smoke::s_SmokeNameSkeleton;
 
 static constexpr Array<BenchmarkCase, 12> s_BenchmarkCases = {{
     { BenchmarkMode::NoCulling, BenchmarkView::Front },
@@ -161,7 +161,7 @@ public:
         if(m_gpuTimingEnabled)
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
-        auto bindJoints = LoadSmokeSkeletonBindJoints(s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true, m_context.objectArena, m_context.assetManager);
+        auto bindJoints = LoadSmokeSkeletonBindJoints(s_BenchmarkModel, s_ProjectName, s_SmokeNameSkeleton, true, m_context.objectArena, m_context.assetManager);
         if(!bindJoints){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
             requestQuit();
@@ -175,7 +175,7 @@ public:
 
         const u32 characterCount = m_staticPreview ? 1u : (m_fastSmoke ? s_FastSmokeCharacterCount : s_CharacterCount);
         if(!NWB::Tests::Smoke::SkinningBenchmarkScene::Populate(characterCount, m_staticPreview, s_BenchmarkModel, s_SkinningBenchmarkMaterial,
-            s_ModelSkeletonObject, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f), *m_world, m_entities, m_cameraEntity)){
+            s_SmokeNameSkeleton, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f), *m_world, m_entities, m_cameraEntity)){
             requestQuit();
             return true;
         }

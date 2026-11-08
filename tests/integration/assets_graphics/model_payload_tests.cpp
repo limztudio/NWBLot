@@ -23,9 +23,9 @@ namespace __hidden_model_payload_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_Rig = "rig";
+using NWB::Tests::AssetsGraphicsFixture::s_ModelRigSegment;
 static constexpr AStringView s_Prop = "prop";
-static constexpr AStringView s_Body = "body";
+using NWB::Tests::AssetsGraphicsFixture::s_ModelBodySegment;
 static constexpr AStringView s_ReplacementRig = "replacement_rig";
 static constexpr AStringView s_TestsModelPayloadMesh = "tests/model_payload/mesh";
 
@@ -48,9 +48,9 @@ struct ModelInputs{
 
 public:
     ModelInputs(){
-        skeletonObjects.push_back(ModelSkeletonObject{ .name = Name(s_Rig), .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton") });
-        staticMeshObjects.push_back(ModelStaticMeshObject{ .name = Name(s_Prop), .mesh = Core::Assets::AssetRef<Mesh>(s_TestsModelPayloadMesh.data()), .material = {}, .parentObject = Name(s_Rig), .parentJoint = Name(AssetCases::s_AssetCaseHand) });
-        skinnedMeshObjects.push_back(ModelSkinnedMeshObject{ .name = Name(s_Body), .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"), .material = {}, .skeletonObject = Name(s_Rig) });
+        skeletonObjects.push_back(ModelSkeletonObject{ .name = Name(s_ModelRigSegment), .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton") });
+        staticMeshObjects.push_back(ModelStaticMeshObject{ .name = Name(s_Prop), .mesh = Core::Assets::AssetRef<Mesh>(s_TestsModelPayloadMesh.data()), .material = {}, .parentObject = Name(s_ModelRigSegment), .parentJoint = Name(AssetCases::s_AssetCaseHand) });
+        skinnedMeshObjects.push_back(ModelSkinnedMeshObject{ .name = Name(s_ModelBodySegment), .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"), .material = {}, .skeletonObject = Name(s_ModelRigSegment) });
         publish();
     }
 
@@ -120,11 +120,11 @@ TEST(ModelPayload, RejectsMissingOrWrongKindParents){
         switch(invalidCase){
         case 0u: inputs.staticMeshObjects.front().parentObject = Name(AssetCases::s_AssetCaseMissing); break;
         case 1u: inputs.staticMeshObjects.front().parentObject = Name(s_Prop); break;
-        case 2u: inputs.staticMeshObjects.front().parentObject = Name(s_Body); break;
+        case 2u: inputs.staticMeshObjects.front().parentObject = Name(s_ModelBodySegment); break;
         case 3u: inputs.staticMeshObjects.front().parentObject = s_NameNone; break;
         case 4u: inputs.skinnedMeshObjects.front().skeletonObject = Name(AssetCases::s_AssetCaseMissing); break;
         case 5u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_Prop); break;
-        case 6u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_Body); break;
+        case 6u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_ModelBodySegment); break;
         }
         inputs.publish();
         EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena)) << invalidCase;
@@ -177,7 +177,7 @@ TEST(ModelPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejecti
     ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
     const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
     for(usize iteration = 0u; iteration < 16u; ++iteration){
-        inputs.skinnedMeshObjects.front().name = iteration % 2u == 0u ? Name(s_Body) : Name(s_Prop);
+        inputs.skinnedMeshObjects.front().name = iteration % 2u == 0u ? Name(s_ModelBodySegment) : Name(s_Prop);
         inputs.publish();
         EXPECT_EQ(inputs.model.validatePayload(inputs.scratchArena), iteration % 2u == 0u);
         const ArenaMemoryStats current = inputs.scratchArena.memoryStats();
@@ -208,12 +208,12 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     malformed = binary;
     ModelStaticMeshObjectBinary staticObject;
     NWB_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
-    staticObject.parentObjectNameHash = Name(s_Body).hash();
+    staticObject.parentObjectNameHash = Name(s_ModelBodySegment).hash();
     NWB_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.loadBinary(binary));
 
-    inputs.skinnedMeshObjects.front().name = Name(s_Rig);
+    inputs.skinnedMeshObjects.front().name = Name(s_ModelRigSegment);
     inputs.publish();
     EXPECT_FALSE(codec.serialize(inputs.model, malformed));
     EXPECT_TRUE(loaded.validatePayload(inputs.scratchArena));
@@ -248,7 +248,7 @@ TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloads
     ASSERT_TRUE(loaded.loadBinary(binary));
     ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
     EXPECT_EQ(loaded.skinnedMeshObjects().front().skin.name(), inputs.skinnedMeshObjects.front().skin.name());
-    EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_Rig));
+    EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_ModelRigSegment));
     EXPECT_EQ(logger.errorCount(), 2u);
 }
 

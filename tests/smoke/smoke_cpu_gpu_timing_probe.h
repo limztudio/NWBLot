@@ -30,7 +30,7 @@ namespace Tests::Smoke{
 class SmokeCpuGpuTimingProbe final{
 private:
     static constexpr usize s_MaxScopesPerDomain = 512u;
-    static constexpr usize s_MaxRecords = 262144u;
+    static constexpr usize s_MaxRecords = NWB::Tests::Smoke::s_SmokeTimingMaxRecords;
 
 
 private:

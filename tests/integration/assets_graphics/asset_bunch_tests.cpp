@@ -30,8 +30,8 @@ constexpr AStringView s_ItemsField = "items";
 constexpr AStringView s_ValuesField = "values";
 constexpr AStringView s_IdField = "id";
 
-static constexpr AStringView s_Target = "target";
-static constexpr AStringView s_Project = "project";
+using NWB::Tests::AssetsGraphicsFixture::s_FieldTarget;
+using NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
 static constexpr AStringView s_ProjectFixturesBundleFirst = "project/fixtures/bundle/first";
 static constexpr AStringView s_Local = "local";
 static constexpr AStringView s_Label = "label";
@@ -83,12 +83,12 @@ static void VerifyOwnedOutput(const Span<const ExpandedAssetMetadata> output, co
     const Value* const label = items->asList()[0u].findField(s_Label);
     ASSERT_NE(label, nullptr);
     EXPECT_EQ(label->asString(), s_ASeparatelyOwnedMetadataString);
-    const Value* const target = items->asList()[1u].findField(s_Target);
+    const Value* const target = items->asList()[1u].findField(s_FieldTarget);
     ASSERT_NE(target, nullptr);
     EXPECT_EQ(target->asString(), s_ProjectFixturesBundleFirst);
     const Value* const first = document.findVariable("first");
     ASSERT_NE(first, nullptr);
-    const Value* const sourceTarget = first->findField(s_Target);
+    const Value* const sourceTarget = first->findField(s_FieldTarget);
     ASSERT_NE(sourceTarget, nullptr);
     EXPECT_TRUE(sourceTarget->isReference());
     EXPECT_EQ(sourceTarget->asReference(), "second");
@@ -119,7 +119,7 @@ TEST(AssetBunchOwnership, ClearReplacementAndDestructionReleaseAllResolvedValues
         ExpandedAssetMetadataVector output(fixture.scratchArena);
         for(usize iteration = 0u; iteration < 8u; ++iteration){
             {
-                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena);
+                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
                 ASSERT_TRUE(expandedResult);
                 output = Move(*expandedResult);
             }
@@ -127,7 +127,7 @@ TEST(AssetBunchOwnership, ClearReplacementAndDestructionReleaseAllResolvedValues
             const ArenaMemoryStats liveMetadata = fixture.metadataArena.memoryStats();
             EXPECT_GT(liveMetadata.usedBytes, baselineMetadata.usedBytes);
             {
-                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena);
+                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
                 ASSERT_TRUE(expandedResult);
                 output = Move(*expandedResult);
             }
@@ -137,7 +137,7 @@ TEST(AssetBunchOwnership, ClearReplacementAndDestructionReleaseAllResolvedValues
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         }
         {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena);
+            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
             ASSERT_TRUE(expandedResult);
             output = Move(*expandedResult);
         }
@@ -153,7 +153,7 @@ TEST(AssetBunchOwnership, OutputMoveAndGrowthPreserveValuesUntilTheirFinalOwnerD
     {
         ExpandedAssetMetadataVector source(fixture.scratchArena);
         {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena);
+            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
             ASSERT_TRUE(expandedResult);
             source = Move(*expandedResult);
         }
@@ -218,11 +218,11 @@ TEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReus
                 ASSERT_NE(nested, nullptr);
                 ASSERT_TRUE(nested->isList());
                 ASSERT_EQ(nested->asList().size(), 1u);
-                const Value* const nestedTarget = nested->asList()[0u].findField(s_Target);
+                const Value* const nestedTarget = nested->asList()[0u].findField(s_FieldTarget);
                 ASSERT_NE(nestedTarget, nullptr);
                 ASSERT_TRUE(nestedTarget->isString());
                 EXPECT_EQ(nestedTarget->asString(), AStringView(firstPath));
-                const Value* const target = output[1u].value.findField(s_Target);
+                const Value* const target = output[1u].value.findField(s_FieldTarget);
                 ASSERT_NE(target, nullptr);
                 ASSERT_TRUE(target->isString());
                 EXPECT_EQ(target->asString(), AStringView(secondPath));
@@ -252,7 +252,7 @@ TEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAl
             Metascript::Document sourceDocument(fixture.metadataArena);
             ASSERT_TRUE(sourceDocument.parse(s_OwnershipMetadata));
             {
-                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, sourceDocument, fixture.scratchArena);
+                auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, sourceDocument, fixture.scratchArena);
                 ASSERT_TRUE(expandedResult);
                 output = Move(*expandedResult);
             }
@@ -266,7 +266,7 @@ TEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAl
         const Value* const label = items->asList()[0u].findField(s_Label);
         ASSERT_NE(label, nullptr);
         EXPECT_EQ(label->asString(), s_ASeparatelyOwnedMetadataString);
-        const Value* const target = items->asList()[1u].findField(s_Target);
+        const Value* const target = items->asList()[1u].findField(s_FieldTarget);
         ASSERT_NE(target, nullptr);
         EXPECT_EQ(target->asString(), s_ProjectFixturesBundleFirst);
     }
@@ -281,7 +281,7 @@ TEST(AssetBunchOwnership, CallerUnwindDestroysEveryPublishedResolvedValue){
     EXPECT_THROW({
         ExpandedAssetMetadataVector output(fixture.scratchArena);
         {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena);
+            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
             ASSERT_TRUE(expandedResult);
             output = Move(*expandedResult);
         }
@@ -310,10 +310,10 @@ asset_bunch bunch = [first, second];
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     {
         for(usize iteration = 0u; iteration < 8u; ++iteration){
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         }
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
@@ -334,7 +334,7 @@ asset_bunch bunch = [first, second];
     );
     const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
     {
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
@@ -346,7 +346,7 @@ TEST(AssetBunchOwnership, RegisteredExpanderDistinguishesUnsupportedDocumentsFro
     Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     BunchFixture fixture;
     ASSERT_TRUE(fixture.document.parse("probe first;"));
-    const AssetBunchExpandContext context{ fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena };
+    const AssetBunchExpandContext context{ fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena };
     const auto unsupported = TryAutoCollectedAssetBunchExpanders(context);
     ASSERT_FALSE(unsupported);
     EXPECT_EQ(unsupported.error(), AssetBunchExpandFailure::Unsupported);
@@ -374,7 +374,7 @@ asset_bunch bunch = [model];
     Impl::ModelCookEntry entry(fixture.outputArena);
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
-        AssetBunchExpandContext context{ fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena };
+        AssetBunchExpandContext context{ fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena };
         auto expandedResult = TryAutoCollectedAssetBunchExpanders(context);
         ASSERT_TRUE(expandedResult);
         output = Move(*expandedResult);
@@ -398,7 +398,7 @@ TEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContr
     Impl::ModelCookEntry entry(fixture.outputArena);
     {
         ExpandedAssetMetadataVector output(fixture.scratchArena);
-        AssetBunchExpandContext context{ fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena };
+        AssetBunchExpandContext context{ fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena };
         auto expandedResult = TryAutoCollectedAssetBunchExpanders(context);
         ASSERT_TRUE(expandedResult);
         output = Move(*expandedResult);
@@ -425,7 +425,7 @@ ASSET_BUNCH bunch = [second, first];
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
         ExpandedAssetMetadataVector output(fixture.scratchArena);
         {
-            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena);
+            auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena);
             ASSERT_TRUE(expandedResult);
             output = Move(*expandedResult);
         }
@@ -467,7 +467,7 @@ asset_bunch bunch = [Asset, asset];
 )", unusedDeclarations, fixture
         )
         );
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(logger.errorCount(), 1u);
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'asset' is listed more than once")));
         EXPECT_FALSE(logger.sawErrorContaining(s_DoesNotTargetADeclaredAsset));
@@ -489,7 +489,7 @@ asset_bunch bunch = [asset];
         )
         );
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+        EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         EXPECT_EQ(logger.errorCount(), 1u);
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference 'local'")));
@@ -505,7 +505,7 @@ TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceL
             BunchFixture fixture;
             ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'bunch'")) : TStringView(NWB_TEXT("reference 'bunch' does not target a declared asset"))));
@@ -521,7 +521,7 @@ TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
             Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
             BunchFixture fixture;
             ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'known.missing'")) : TStringView(NWB_TEXT("item 0 must be a declared asset reference"))));
         }
@@ -542,7 +542,7 @@ TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
             BunchFixture fixture;
             ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
-            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
+            EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_ProjectVirtualRoot, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_EQ(logger.sawErrorContaining(s_DoesNotTargetADeclaredAsset), caseIndex == 0u);

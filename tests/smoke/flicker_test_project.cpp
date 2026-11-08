@@ -11,6 +11,8 @@
 
 #include <tests/smoke/presentation_types.adhd.h>
 
+#include <tests/smoke/scene_types.adhd.h>
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.h>
@@ -88,7 +90,7 @@ static constexpr f32 s_PointLightHeight = 2.6f;
 static constexpr f32 s_PointLightIntensity = 9.0f;
 static constexpr f32 s_PointLightRange = 16.0f;
 
-static constexpr f32 s_SpinSpeed = 0.5f;
+constexpr f32 s_SpinSpeed = NWB::Tests::Smoke::s_SmokeSpinSpeed;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 

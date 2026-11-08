@@ -1,0 +1,32 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_EcsTestSystemCompletionTimeoutMS = 2000u;
+const u32 s_EcsTestPollIntervalMS = 1u;
+const u32 s_EcsTestEntityWaitIntervalMS = 25u;
+const u32 s_EcsTestNestedEntityCount = 64u;
+const usize s_EcsTestNestedOuterCount = 4u;
+const usize s_EcsTestDependentQueryEntityCount = 512u;
+const Name s_EcsTestParallelArenaName = "tests/ecs_parallel";
+
+
+class PositionComponent{
+    public i32 x = 0;
+    public i32 y = 0;
+}
+
+
+class VelocityComponent{
+    public i32 x = 0;
+    public i32 y = 0;
+}
+
+
+class PoolSlotComponent<const usize I>{
+    public usize value = I;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

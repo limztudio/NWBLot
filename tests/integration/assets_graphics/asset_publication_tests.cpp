@@ -42,10 +42,10 @@ namespace __hidden_assets_graphics_asset_publication_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_AssetsDirectory = "assets";
-constexpr AStringView s_TestsConfiguration = "tests";
-constexpr AStringView s_FirstSamplerPath = "project/samplers/first";
-constexpr AStringView s_SecondSamplerPath = "project/samplers/second";
+constexpr AStringView s_AssetsDirectory = AssetsGraphicsFixture::s_AssetsDirectory;
+constexpr AStringView s_TestsConfiguration = AssetsGraphicsFixture::s_TestsConfiguration;
+constexpr AStringView s_FirstSamplerPath = AssetsGraphicsFixture::s_FirstSamplerPath;
+constexpr AStringView s_SecondSamplerPath = AssetsGraphicsFixture::s_SecondSamplerPath;
 static constexpr AStringView s_SamplerMetadata =
     "sampler asset;\n"
     "asset.min_filter = \"linear\";\n"
@@ -134,7 +134,7 @@ TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
             payload.push_back(3u);
             payload.push_back(4u);
 
-            const Name virtualPath("project/tests/scratch_payload");
+            const Name virtualPath = NWB::Tests::AssetsGraphicsFixture::s_ProjectTestsScratchPayload;
             const b8 pushed = filesystem->writeFileDeferred(virtualPath, payload);
             EXPECT_TRUE(pushed);
             if(pushed){
@@ -215,7 +215,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     const NWB::Impl::SamplerAssetCodec samplerCodec;
     NWB::Core::Assets::AssetBytes samplerPayload(testArena.arena);
     ASSERT_TRUE(samplerCodec.serialize(samplerAsset, samplerPayload));
-    constexpr u64 s_SharedCookKeyHash = 0x123456789abcdef0ull;
+    constexpr u64 s_SharedCookKeyHash = AssetsGraphicsFixture::s_SharedCookKeyHash;
 
     Pack::AssetVolumePackManifest initial(testArena.arena);
     ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(2u, initial));
@@ -239,7 +239,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(secondPath, samplerPayload, reordered, s_SharedCookKeyHash));
     ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(firstPath, samplerPayload, reordered, s_SharedCookKeyHash));
     // Reorder both shared-payload entries before failing, so publication also has to create a new artifact slot.
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(Name("project/samplers/failing"), samplerPayload, reordered, s_SharedCookKeyHash));
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetInputNameProjectSamplersFailing), samplerPayload, reordered, s_SharedCookKeyHash));
     reordered.entries.back().identity.payloadHash ^= 1u;
     EXPECT_FALSE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, reordered, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid payload identity")));

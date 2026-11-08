@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_model/cook.h>
 
-#include <tests/common/capturing_logger.h>
-
 #include <global/text_utils.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -48,9 +48,9 @@ using Core::Metascript::Value;
 
 
 struct ModelMetadata{
-    Core::Metascript::MetaArena metadataArena{ Name("tests/model_cook_metadata/metadata") };
-    Core::Assets::AssetArena outputArena{ Name("tests/model_cook_metadata/output") };
-    Core::Alloc::ScratchArena scratchArena{ Name("tests/model_cook_metadata/scratch") };
+    Core::Metascript::MetaArena metadataArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsModelCookMetadataMetadata) };
+    Core::Assets::AssetArena outputArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsModelCookMetadataOutput) };
+    Core::Alloc::ScratchArena scratchArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsModelCookMetadataScratch) };
     Value asset{ metadataArena };
     ModelCookEntry entry{ outputArena };
     HashMap<Name, Name, Core::Metascript::MetaArena> expectedSkeletons{ metadataArena };
@@ -81,7 +81,7 @@ public:
     }
 
     [[nodiscard]] b8 parse(){
-        auto result = ParseModelCookMetadata(Name("tests/model_cook_metadata/model"), path, asset, outputArena, scratchArena);
+        auto result = ParseModelCookMetadata(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsModelCookMetadataModel), path, asset, outputArena, scratchArena);
         if(!result)
             return false;
         entry = Move(*result);

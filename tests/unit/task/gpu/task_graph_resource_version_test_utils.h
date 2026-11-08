@@ -5,13 +5,13 @@
 #pragma once
 
 
-#include <tests/common/test_context.h>
-
 #include "task_graph_test_utils.h"
 
-#include <gtest/gtest.h>
+#include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +38,7 @@ namespace TaskGraphResourceVersionTestUtils{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphResourceVersionTestsTag>;
 using TaskGraphTestUtils::Assign;
 
-inline constexpr Name s_ResourceVersionScratchArena("tests/task/gpu/resource_version_scratch");
+inline constexpr Name s_ResourceVersionScratchArena = NWB::Tests::TaskGraphTestUtils::s_TaskGpuResourceVersionScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

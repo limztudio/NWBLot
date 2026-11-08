@@ -2,15 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
 
-#include <tests/common/capturing_logger.h>
-
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -37,7 +37,7 @@ using namespace NWB::Core::Assets;
 
 
 struct PathFixture{
-    AssetArena arena{ Name("tests/asset_path/inputs") };
+    AssetArena arena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathInputs) };
     const NWB::Path assetRoot{ arena, "tests/asset_path/assets" };
     AString<AssetArena> relativeText{ arena };
     AString<AssetArena> expectedRelative{ arena };
@@ -85,7 +85,7 @@ static void PrepareWorkload(const usize directoryCount, const AStringView direct
 
 
 TEST(AssetPaths, MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclarationOrder){
-    AssetArena arena(Name("tests/asset_path/metadata_declaration"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathMetadataDeclaration)};
     Metascript::Document document(arena);
     ASSERT_TRUE(document.parse("metadata helper; sampler decoy; texture asset;"));
     const Metascript::Document::Declaration* const asset = document.findDeclaration(s_MetadataAssetVariable);
@@ -100,8 +100,8 @@ TEST(AssetPaths, MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclaratio
 }
 
 TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
-    AssetArena inputArena(Name("tests/asset_path/relative_inputs"));
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/relative_scratch"));
+    AssetArena inputArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRelativeInputs)};
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRelativeScratch)};
     constexpr Array<RelativeCase, 10u> s_Cases = {{
         { "Models//./Hero.LOD0.NWB///", "models/hero.lod0.nwb", true },
         { "./.Hidden/../Ignored", ".hidden", false },
@@ -128,8 +128,8 @@ TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
 }
 
 TEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalization){
-    AssetArena inputArena(Name("tests/asset_path/separator_inputs"));
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/separator_scratch"));
+    AssetArena inputArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathSeparatorInputs)};
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathSeparatorScratch)};
     AString<Alloc::ScratchArena> output(scratchArena);
     const NWB::Path path(inputArena, "Prefix/Upper\\Name//./File");
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -150,7 +150,7 @@ TEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalizati
 
 TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText){
     PathFixture fixture;
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/derived_scratch"));
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathDerivedScratch)};
     const NWB::Path source = fixture.assetRoot / "Models//./Hero.LOD0.NWB";
     const auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView("MiXeD/Root"), source, scratchArena, scratchArena);
     ASSERT_TRUE(output);
@@ -170,7 +170,7 @@ TEST(AssetPaths, DerivedOwningTextOutlivesBorrowedScratchSourcePath){
     PathFixture fixture;
     AString<AssetArena> retained(fixture.arena);
     {
-        Alloc::ScratchArena scratchArena(Name("tests/asset_path/borrowed_source_scratch"));
+        Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathBorrowedSourceScratch)};
         const ::Path<Alloc::ScratchArena> source = ::Path<Alloc::ScratchArena>(scratchArena, fixture.assetRoot) / "Models/Hero.LOD0.NWB";
         auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), source, fixture.arena, scratchArena);
         ASSERT_TRUE(output);
@@ -184,7 +184,7 @@ TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     PathFixture fixture;
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/rejection_scratch"));
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRejectionScratch)};
     const NWB::Path outside = fixture.assetRoot / "../Elsewhere/Model.NWB";
     EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), outside, scratchArena, scratchArena));
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_Project), outside, scratchArena));
@@ -197,7 +197,7 @@ TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaU
     for(const b8 unicode : { false, true }){
         PathFixture fixture;
         PrepareWorkload(8u, unicode ? AStringView("ÉTAGE_한글_東京_😀_") : AStringView("Long_COMPONENT_"), unicode ? 8u : 12u, fixture);
-        Alloc::ScratchArena scratchArena(Name("tests/asset_path/repeated_scratch"), 65536u);
+        Alloc::ScratchArena scratchArena(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathRepeatedScratch), 65536u);
         auto* const sentinel = static_cast<u8*>(scratchArena.allocate(1u, 64u));
         ASSERT_NE(sentinel, nullptr);
         for(usize index = 0u; index < 64u; ++index)
@@ -250,7 +250,7 @@ TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaU
 
 
 TEST(AssetPaths, RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStorage){
-    AssetArena inputArena(Name("tests/asset_path/unicode_prefix_inputs"));
+    AssetArena inputArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathUnicodePrefixInputs)};
     AString<AssetArena> expected(inputArena);
     expected.reserve(512u);
     for(usize index = 0u; index < 8u; ++index)
@@ -258,7 +258,7 @@ TEST(AssetPaths, RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStor
     AString<AssetArena> input(expected, inputArena);
     input += "/./../Ignored/After";
     const NWB::Path path(inputArena, AStringView(input));
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/unicode_prefix_scratch"), 65536u);
+    Alloc::ScratchArena scratchArena(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathUnicodePrefixScratch), 65536u);
     for(usize call = 0u; call < 16u; ++call){
         {
             AString<Alloc::ScratchArena> output(scratchArena);
@@ -271,7 +271,7 @@ TEST(AssetPaths, RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStor
 }
 
 TEST(AssetPaths, StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots){
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/native_filename_spans"));
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetPathNativeFilenameSpans)};
     constexpr Array<Array<AStringView, 3u>, 6u> s_Cases = {{
         { "foo.bar/", "foo", ".bar" },
         { "Folder/.Hidden///", ".Hidden", "" },

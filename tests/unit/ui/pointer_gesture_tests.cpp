@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/context.h>
 
@@ -43,7 +44,7 @@ InputEvent PointerEvent(const InputEventType::Enum type, const Point& position =
 class UiPointerGestureTests : public UiTestSupport::RouterTestFixture{
 public:
     UiPointerGestureTests()
-        : RouterTestFixture(Name("tests/ui/pointer_gesture"))
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerGesture))
         , m_context(m_arena)
     {}
 

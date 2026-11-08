@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/context.h>
 
@@ -39,7 +40,7 @@ struct PopupDeclaration{
 class UiNestedPopupContextTests : public UiTestSupport::ContextTestFixture{
 public:
     UiNestedPopupContextTests()
-        : ContextTestFixture(Name("tests/ui/nested_popup_context"))
+        : ContextTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiNestedPopupContext))
     {}
 
 

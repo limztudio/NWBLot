@@ -2,15 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
+#include <tests/unit/mesh/skinning_name_cases.adhd.h>
+
 #include <impl/ecs_mesh/skinning/skin_payload.h>
 #include <impl/ecs_mesh/skinning/deformation_state.h>
 
 #include <core/alloc/general.h>
 
 #include <global/bit.h>
-
-#include <tests/common/capturing_logger.h>
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -24,7 +25,7 @@ namespace __hidden_skinning_payload_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_ScratchArena("tests/skinning_payload/scratch");
+inline constexpr Name s_ScratchArena = NWB::Tests::SkinningCases::s_OneOffNameTestsSkinningPayloadScratch;
 
 using NWB::Impl::MeshSkinningPayload::BuildRuntimeSkinPayload;
 
@@ -147,7 +148,7 @@ TEST(SkinningPayload, RuntimePayloadFollowsReplacementMeshAndJointCounts){
     auto& arena = NWB::Tests::TestDetail::Arena();
     NWB::Impl::MeshSkinningRuntimeInstance instance(arena);
     instance.handle.value = 13u;
-    instance.sourceName = Name("tests/skinning_payload/first_source");
+    instance.sourceName = Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningPayloadFirstSource);
     instance.skin.assign(3u, MakeSkinInfluence(0u));
     instance.skeletonJointCount = 1u;
     NWB::Impl::SkeletonJointPaletteComponent palette;
@@ -158,7 +159,7 @@ TEST(SkinningPayload, RuntimePayloadFollowsReplacementMeshAndJointCounts){
     ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
     ASSERT_EQ(payload.jointMatrices.size(), 1u);
 
-    instance.sourceName = Name("tests/skinning_payload/replacement_source");
+    instance.sourceName = Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningPayloadReplacementSource);
     ++instance.editRevision;
     instance.skin.assign(9u, MakeSkinInfluence(2u));
     instance.skeletonJointCount = 3u;
@@ -456,7 +457,7 @@ TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers)
 TEST(SkinningDeformation, MissingResourceRejectsWithoutCandidateOrArenaPublication){
     NWB::Tests::CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistration(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    NWB::Core::Alloc::GlobalArena arena{ Name("tests/skinning_deformation/rejected_candidate") };
+    NWB::Core::Alloc::GlobalArena arena{ Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningDeformationRejectedCandidate) };
     NWB::Impl::MeshSkinningDeformationState state(arena);
     const auto before = arena.memoryStats();
     const auto rejected = state.stage(NWB::Impl::MeshSkinningDeformationInputs{}, {});

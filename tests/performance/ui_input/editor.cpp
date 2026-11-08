@@ -4,6 +4,8 @@
 
 #include "benchmark.h"
 
+#include <tests/performance/ui_input/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/edit_box_host.h>
 
@@ -74,7 +76,7 @@ protected:
 class PublicationCase final{
 public:
     explicit PublicationCase(const usize stops)
-        : m_arena(Name("tests/performance/ui_input/publication"))
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputPublication))
         , m_context(m_arena)
         , m_textInput(m_arena)
         , m_clipboard(m_arena)
@@ -164,7 +166,7 @@ private:
 class EmptySelectionCase final{
 public:
     explicit EmptySelectionCase(const usize lines)
-        : m_arena(Name("tests/performance/ui_input/empty_selection"))
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputEmptySelection))
         , m_skin(m_arena, Name(s_SkinPath))
         , m_model(m_arena, { lines, 0u, 0u }, EditTextMode::Multiline)
         , m_shaper(m_arena)

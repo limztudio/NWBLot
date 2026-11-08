@@ -6,6 +6,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -32,23 +33,23 @@ TEST(MaterialInstanceMutableCacheTests, RevisionChangesAndClearInvalidatePrepare
     Tests::EcsTestWorld context;
     MaterialInstanceMutableCache cache(context.arena);
     MaterialSurfaceInfo surface(context.arena);
-    surface.materialName = Name("test/material");
-    surface.materialInterface = Name("test/interface");
+    surface.materialName = Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsOverrideMaterial);
+    surface.materialInterface = Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsOverrideInterface);
     surface.typedLayoutHash = 7u;
     surface.mutableDefaultTypedBytes.resize(4u);
     MaterialTypedLayoutBlock block;
-    block.blockName = Name("runtime");
+    block.blockName = Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsOverrideBlock);
     block.blockClass = MaterialBlockClass::MaterialMutable;
     block.fieldCount = 1u;
     block.byteSize = 4u;
     surface.typedLayoutBlocks.push_back(block);
     MaterialTypedLayoutField field;
-    field.fieldName = Name("value");
+    field.fieldName = Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsMutableValue);
     field.fieldType = MaterialLayoutFieldType::u32;
     surface.typedLayoutFields.push_back(field);
     MaterialInstanceComponent instance(surface.materialInterface);
     MaterialInstanceParameter parameter;
-    parameter.parameterName = Name("runtime.value");
+    parameter.parameterName = Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsMutableParameter);
     parameter.blockName = block.blockName;
     parameter.fieldName = field.fieldName;
     parameter.fieldType = field.fieldType;
@@ -83,3 +84,4 @@ TEST(MaterialInstanceMutableCacheTests, RevisionChangesAndClearInvalidatePrepare
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

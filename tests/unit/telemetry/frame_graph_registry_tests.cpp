@@ -3,12 +3,13 @@
 
 
 #include "telemetry_test_helpers.h"
-
-#include <gtest/gtest.h>
-
 #include "frame_graph_test_helpers.h"
 
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
 #include <core/telemetry/frame_graph_registry.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,6 +20,8 @@ namespace __hidden_telemetry_frame_graph_registry_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace TestCases = NWB::Tests::TelemetryCases;
 
 static constexpr AStringView s_Target = "target";
 
@@ -31,14 +34,14 @@ using namespace TelemetryTestDetail;
 class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
 public:
     virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name("source"), "Source");
+        const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name(TestCases::s_TelemetryCaseSource), "Source");
         const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_Target), "Target");
         const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_Target), "Duplicate Target");
         if(!target.valid() || !duplicateTarget.valid())
             return false;
 
         builder.dependsOnByName(source, Name(s_Target), 7u);
-        builder.dependsOnByName(source, Name("missing"), 9u);
+        builder.dependsOnByName(source, Name(TestCases::s_TelemetryCaseMissing), 9u);
         return true;
     }
 };
@@ -49,7 +52,7 @@ class LocalLabelContributor final : public Telemetry::IFrameGraphContributor{
 public:
     virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         char label[] = "local label";
-        const auto node = builder.addPass(Name("local_label"), AStringView(label));
+        const auto node = builder.addPass(Name(TestCases::s_TelemetryCaseLocalLabel), AStringView(label));
         label[0u] = 'X';
         return node.valid();
     }
@@ -63,7 +66,7 @@ public:
 
     virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         ++calls;
-        const auto node = builder.addPass(Name("mutation"), "mutation");
+        const auto node = builder.addPass(Name(TestCases::s_TelemetryCaseMutation), "mutation");
         if(clearRegistry)
             m_registry.clear();
         if(removeSelf)
@@ -96,7 +99,7 @@ public:
     {}
 
     virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        const auto node = builder.addPass(Name("owned_label"), AStringView(m_label));
+        const auto node = builder.addPass(Name(TestCases::s_TelemetryCaseOwnedLabel), AStringView(m_label));
         m_registry.unregisterContributor(*this);
         return node.valid();
     }
@@ -114,7 +117,7 @@ public:
 
     virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         m_target.reset();
-        return builder.addPass(Name("destroyer"), "destroyer").valid();
+        return builder.addPass(Name(TestCases::s_TelemetryCaseDestroyer), "destroyer").valid();
     }
 
 private:
@@ -132,7 +135,7 @@ public:
 
 public:
     virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        if(!builder.addPass(Name("cache_lifetime"), AStringView(m_label)).valid())
+        if(!builder.addPass(Name(TestCases::s_TelemetryCaseCacheLifetime), AStringView(m_label)).valid())
             return false;
         if(m_throwNext){
             m_throwNext = false;
@@ -324,7 +327,7 @@ TEST(Telemetry, PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCounts)
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
     Telemetry::FrameGraphBuilder builder(testArena.scratchArena, nodes, edges, pendingNameEdges, records, 915u);
 
-    const Telemetry::FrameGraphNodeHandle owner = builder.addPass(Name("runtime_owner"), "Runtime owner", Telemetry::FrameGraphPassMetadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = MakeFrameGraphRuntimeStatistics(), });
+    const Telemetry::FrameGraphNodeHandle owner = builder.addPass(Name(TestCases::s_RuntimeOwner), "Runtime owner", Telemetry::FrameGraphPassMetadata{ .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = MakeFrameGraphRuntimeStatistics(), });
     Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, statistics));
     statistics.compile.taskCount = 0u;

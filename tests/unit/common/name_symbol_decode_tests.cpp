@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/common/name_cases.adhd.h>
+
 #include <core/common/name_symbols.h>
 
 #include <global/name_hash_text.h>
@@ -129,7 +131,7 @@ TEST(NameSymbolDecodeTests, EscapedDocumentRoundTripsAndMalformedRecordsStayUnpu
         NameSymbols::UninstallRuntimeRegistry();
     });
     Arena arena("Tests/NameSymbols/EscapedDocument");
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("Tests/NameSymbols/Scratch"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::CommonNameCases::s_CommonNameTestsNameSymbolsScratch)};
     constexpr AStringView s_Original = "symbols/line\ncarriage\rtab\tend";
     const Name stored(s_Original);
     const NameHash invalidHash = ComputeNameHash(MakeNotNull("symbols/invalid_escape_record"));
@@ -155,7 +157,7 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
     NameSymbols::InstallRuntimeRegistry();
     NameSymbols::ClearRuntimeSymbols();
     NWB::Core::Alloc::GlobalArena arena("Tests/NameSymbols/DocumentAdmission");
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("Tests/NameSymbols/Scratch"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::CommonNameCases::s_CommonNameTestsNameSymbolsScratch)};
     const Name retained(AStringView("admission/retained"));
     const NameHash incomingHash = ComputeNameHash(MakeNotNull("admission/incoming"));
     Array<char, NameHashTextCodec::s_TextLength + 1u> incomingToken = {};
@@ -187,7 +189,7 @@ TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbo
 
 TEST(NameSymbolDecodeTests, FileLoadSeparatesHeaderAnswerFromNativeReadFailure){
     NWB::Core::Alloc::GlobalArena arena("Tests/NameSymbols/FileAdmission");
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("Tests/NameSymbols/Scratch"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::CommonNameCases::s_CommonNameTestsNameSymbolsScratch)};
     const ::Path<NWB::Core::Alloc::GlobalArena> path(arena, "name_symbol_expected_file_unit.namesym");
     ASSERT_TRUE(RemoveAllIfExists(path));
     ScopeExit cleanup([&]()noexcept{
@@ -233,8 +235,8 @@ static constexpr AStringView s_GlobalArenaMemoryHeapBacking = "global/arena_memo
 
 
 TEST(NameSymbolDecodeTests, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
-    constexpr Name s_LiveOwner{"Tests/NameSymbols/Before_Registry_Live"};
-    constexpr Name s_RetiredOwner{"Tests/NameSymbols/Before_Registry_Retired"};
+    constexpr Name s_LiveOwner = NWB::Tests::CommonNameCases::s_CommonNameTestsNameSymbolsBeforeRegistryLive;
+    constexpr Name s_RetiredOwner = NWB::Tests::CommonNameCases::s_CommonNameTestsNameSymbolsBeforeRegistryRetired;
     constexpr NameHash s_LiveHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_live"));
     constexpr NameHash s_RetiredHash = ComputeNameHash(MakeNotNull("tests/namesymbols/before_registry_retired"));
     constexpr NameHash s_HeapHash = ComputeNameHash(MakeNotNull("global/arena_memory/heap_backing"));

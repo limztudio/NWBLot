@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <gtest/gtest.h>
+#include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 
-#include <tests/common/test_context.h>
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +28,7 @@ TEST(EcsGraphics, RaySceneSnapshotDoesNotTreatMissingResourcesAsHardwareAvailabi
 TEST(EcsGraphics, RaySceneGraphReadsMissingResourcesRetainScratchArena){
     NWB::Tests::TestArena<struct RaySceneGraphReadsTestsTag> testArena;
     NWB::Core::GpuTaskGraph graph(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ray_scene_graph_reads/scratch"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsRaySceneGraphReadsScratch)};
     NWB::Impl::RayTracingSceneGraphResources resources;
     const auto scratchBefore = scratchArena.memoryStats();
     const auto reads = NWB::Impl::ImportRayTracingSceneGraphReads(resources, NWB::Core::ResourceStates::Common, {}, graph, scratchArena);

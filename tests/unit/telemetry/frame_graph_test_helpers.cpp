@@ -4,6 +4,8 @@
 
 #include "frame_graph_test_helpers.h"
 
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,13 +16,15 @@ namespace TelemetryTestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace TestCases = NWB::Tests::TelemetryCases;
+
 void BuildTestFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
     nodes = Telemetry::FrameGraphNodeDescs(arena);
     edges = Telemetry::FrameGraphEdgeDescs(arena);
 
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("gbuffer"), .label = AStringView("GBuffer Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 1u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("albedo"), .label = AStringView("Albedo Texture"), .kind = Telemetry::FrameGraphNodeKind::Resource, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("lighting"), .label = AStringView("Lighting Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_Gbuffer), .label = AStringView("GBuffer Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 1u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_Albedo), .label = AStringView("Albedo Texture"), .kind = Telemetry::FrameGraphNodeKind::Resource, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
+    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_Lighting), .label = AStringView("Lighting Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
 
     edges.push_back(Telemetry::FrameGraphEdgeDesc{ .fromNodeIndex = 0u, .toNodeIndex = 1u, .kind = Telemetry::FrameGraphEdgeKind::Writes, });
     edges.push_back(Telemetry::FrameGraphEdgeDesc{ .fromNodeIndex = 1u, .toNodeIndex = 2u, .kind = Telemetry::FrameGraphEdgeKind::Reads, .flags = 2u, });
@@ -341,7 +345,7 @@ void BuildTestPacketSubmissionFrameGraph(
     runtimeStatistics.present = true;
 
     Telemetry::FrameGraphNodeDesc owner;
-    owner.name = Name("packet_submission_pass");
+    owner.name = Name(TestCases::s_TelemetryCasePacketSubmissionPass);
     owner.label = "Packet Submission Pass";
     owner.kind = Telemetry::FrameGraphNodeKind::Pass;
     owner.runtimeStatistics = runtimeStatistics;

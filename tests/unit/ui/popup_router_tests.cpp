@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -78,7 +79,7 @@ Array<HitTarget, 5u> Targets(const PopupScope& scope)noexcept{
 class UiPopupRouterTests : public UiTestSupport::RouterTestFixture{
 public:
     UiPopupRouterTests()
-        : RouterTestFixture(Name("tests/ui/popup_router"))
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPopupRouter))
     {}
 
 

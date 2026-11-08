@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
 
 #include <impl/ecs_render/shadow/shadow_visibility_merge_validator.h>
 
@@ -49,10 +50,10 @@ public:
 public:
     [[nodiscard]] b8 build(const b8 combinedUpsample, const b8 temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const b8 combinedWavelet = false, const b8 combinedTemporal = false, const b8 diagnostics = false){
         const Array<Name, 8> identities = {
-            Name("tests/shadow_packet/opaque"), Name("tests/shadow_packet/opaque_wavelet"),
-            Name("tests/shadow_packet/opaque_upsample"), Name("tests/shadow_packet/transparent_trace"),
-            Name("tests/shadow_packet/transparent_temporal"), Name("tests/shadow_packet/transparent_wavelet"),
-            Name("tests/shadow_packet/terminal"), Name("tests/shadow_packet/diagnostics")
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaque), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaqueWavelet),
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketOpaqueUpsample), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentTrace),
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentTemporal), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTransparentWavelet),
+            Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketTerminal), Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketDiagnostics)
         };
         constexpr Array<AStringView, 8> s_Labels = { "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace", "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics" };
         static_assert(s_Labels.size() == identities.size());
@@ -70,8 +71,7 @@ public:
                     .setMarkerLabel(s_Labels[index])
                     .setScheduling(scheduling)
                     .setDependencies({ previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u }),
-                Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics }
-            );
+                Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics });
             if(!stageResult){
                 ADD_FAILURE() << "stage declaration=" << index;
                 return false;
@@ -79,14 +79,17 @@ public:
             stages[index] = *stageResult;
             previous = stages[index];
         }
-        tasks = {
-            .terminal = stages[6], .opaque = stages[0], .opaqueFirstWavelet = stages[1], .opaqueResolve = stages[2],
-            .transparentTrace = stages[3], .transparentTemporalMerge = stages[4], .transparentFirstWavelet = stages[5],
-            .diagnostics = stages[7],
-            .combinedUpsample = combinedUpsample,
-            .combinedWavelet = combinedWavelet,
-            .combinedTemporal = combinedTemporal,
-        };
+        tasks.terminal = stages[6];
+        tasks.opaque = stages[0];
+        tasks.opaqueFirstWavelet = stages[1];
+        tasks.opaqueResolve = stages[2];
+        tasks.transparentTrace = stages[3];
+        tasks.transparentTemporalMerge = stages[4];
+        tasks.transparentFirstWavelet = stages[5];
+        tasks.diagnostics = stages[7];
+        tasks.combinedUpsample = combinedUpsample;
+        tasks.combinedWavelet = combinedWavelet;
+        tasks.combinedTemporal = combinedTemporal;
         const Core::GpuPhysicalQueueInfo queue{
             .familyIndex = 0u,
             .queueIndex = 0u,
@@ -97,7 +100,7 @@ public:
         const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Core::GpuTaskGraphAnalysis analysis(testArena.arena);
         Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Core::Alloc::ScratchArena scratchArena(Name("tests/shadow_packet/scratch"));
+        Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsShadowPacketScratch)};
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         const Core::GpuTaskGraphCompiler compiler;
         Core::GpuTaskGraphCompileOptions options;
@@ -113,6 +116,16 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(ShadowVisibilityMergeValidator, CombinedTemporalSelectsOpaqueEvenWhenUpsampleIsCombined){
+    const Core::GpuTaskId opaque{ .generation = 1u, .index = 1u };
+    const Core::GpuTaskId wavelet{ .generation = 1u, .index = 2u };
+    const Core::GpuTaskId resolve{ .generation = 1u, .index = 3u };
+    EXPECT_EQ(Impl::SelectOpaqueShadowCompletion(true, true, opaque, wavelet, resolve), opaque);
+    EXPECT_EQ(Impl::SelectOpaqueShadowCompletion(false, true, opaque, wavelet, resolve), wavelet);
+    EXPECT_EQ(Impl::SelectOpaqueShadowCompletion(false, false, opaque, wavelet, resolve), resolve);
+    EXPECT_FALSE(Impl::SelectOpaqueShadowCompletion(true, false, {}, wavelet, resolve).valid());
+}
 
 TEST(ShadowVisibilityMergeValidator, FusionOmitsOnlyOpaqueUpsampleAndKeepsOptionalTemporalMerge){
     for(const b8 temporalMerge : { false, true }){

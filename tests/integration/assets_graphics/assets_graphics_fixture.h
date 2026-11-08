@@ -11,6 +11,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
 
 #include <pipeline/asset_builder/build.h>
 #include <pipeline/asset_gatherer/gather.h>
@@ -84,20 +85,15 @@ struct CookCase{
     Path outputDirectory;
 };
 
-struct MaterialBinaryTypedLayoutOffsets{
-    usize layoutHashOffset = 0u;
-    usize blockByteCountOffset = 0u;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_MaterialScratchArena = Name("tests/integration/assets_graphics/material");
-inline constexpr Name s_ShaderScratchArena = Name("tests/integration/assets_graphics/shader");
-inline constexpr Name s_CodecScratchArena = Name("tests/integration/assets_graphics/codec");
-inline constexpr Name s_BuildScratchArena = Name("tests/integration/assets_graphics/build");
-inline constexpr Name s_GatherScratchArena = Name("tests/integration/assets_graphics/gather");
+inline constexpr Name s_MaterialScratchArena = NWB::Tests::AssetsGraphicsFixture::s_IntegrationAssetsGraphicsMaterial;
+inline constexpr Name s_ShaderScratchArena = NWB::Tests::AssetsGraphicsFixture::s_IntegrationAssetsGraphicsShader;
+inline constexpr Name s_CodecScratchArena = NWB::Tests::AssetsGraphicsFixture::s_IntegrationAssetsGraphicsCodec;
+inline constexpr Name s_BuildScratchArena = NWB::Tests::AssetsGraphicsFixture::s_IntegrationAssetsGraphicsBuild;
+inline constexpr Name s_GatherScratchArena = NWB::Tests::AssetsGraphicsFixture::s_IntegrationAssetsGraphicsGather;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

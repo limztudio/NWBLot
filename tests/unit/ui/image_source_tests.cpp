@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/images/image_source.h>
-
 #include <tests/common/capturing_logger.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/images/image_source.h>
 
 #include <gtest/gtest.h>
 
@@ -88,8 +89,8 @@ protected:
 protected:
     UiImageSourceTests()
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
-        , m_inputArena(Name("tests/ui/image_source/input"))
-        , m_sourceArena(Name("tests/ui/image_source/owned"))
+        , m_inputArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceInput))
+        , m_sourceArena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceOwned))
     {}
 
 
@@ -112,7 +113,7 @@ static_assert(!IsAssignable_V<ImageSource&, ImageSource&&>);
 
 
 TEST_F(UiImageSourceTests, NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds){
-    Texture texture(m_inputArena, Name("tests/ui/image/paint"));
+    Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImagePaint));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
     ASSERT_TRUE(texture.validatePayload());
     auto sourceResult = MakeImageSource(m_sourceArena, texture);
@@ -137,8 +138,8 @@ TEST_F(UiImageSourceTests, NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds){
 TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsArena){
     SharedImageSource source;
     {
-        Core::Alloc::GlobalArena callerArena(Name("tests/ui/image_source/temporary"));
-        Texture texture(callerArena, Name("tests/ui/image/temporary"));
+        Core::Alloc::GlobalArena callerArena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSourceTemporary)};
+        Texture texture(callerArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageTemporary));
         ASSERT_TRUE(Prepare(callerArena, texture));
         auto sourceReplacement = MakeImageSource(m_sourceArena, texture);
         ASSERT_TRUE(sourceReplacement);
@@ -165,7 +166,7 @@ TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsA
 }
 
 TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGenerations){
-    Texture texture(m_inputArena, Name("tests/ui/image/shared_path"));
+    Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSharedPath));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
     auto originalResult = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(originalResult);
@@ -194,7 +195,7 @@ TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGener
 }
 
 TEST_F(UiImageSourceTests, CopiedSharedHandleRetainsTheSameImmutableVersionAfterOriginalRelease){
-    Texture texture(m_inputArena, Name("tests/ui/image/retained"));
+    Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageRetained));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
     auto originalResult = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(originalResult);
@@ -214,7 +215,7 @@ TEST_F(UiImageSourceTests, SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream)
     TextureDescription description;
     description.format = TexturePayloadFormat::UastcHdr4x4;
     description.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
-    Texture texture(m_inputArena, Name("tests/ui/image/hdr"));
+    Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageHdr));
     ASSERT_TRUE(Prepare(m_inputArena, texture, description));
     ASSERT_TRUE(texture.validatePayload());
     auto sourceResult = MakeImageSource(m_sourceArena, texture);
@@ -236,7 +237,7 @@ TEST_F(UiImageSourceTests, RejectsValidCubeAndVolumeAssetsRatherThanFlatteningTh
         description.dimension = dimension;
         description.height = dimension == TextureDimension::TextureCube ? 9u : 5u;
         description.depth = dimension == TextureDimension::Texture3D ? 4u : 1u;
-        Texture texture(m_inputArena, Name("tests/ui/image/spatial"));
+        Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageSpatial));
         ASSERT_TRUE(Prepare(m_inputArena, texture, description));
         ASSERT_TRUE(texture.validatePayload());
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture));
@@ -247,9 +248,9 @@ TEST_F(UiImageSourceTests, RejectsMissingAssetIdentityAndEmptyTexturePayload){
     Texture unnamed(m_inputArena);
     ASSERT_TRUE(Prepare(m_inputArena, unnamed));
     EXPECT_FALSE(MakeImageSource(m_sourceArena, unnamed));
-    Texture empty(m_inputArena, Name("tests/ui/image/empty"));
+    Texture empty(m_inputArena, Name(NWB::Tests::UiCases::s_UiFixtureNameTestsUiImageEmpty));
     EXPECT_FALSE(MakeImageSource(m_sourceArena, empty));
-    Texture texture(m_inputArena, Name("tests/ui/image/no_bytes"));
+    Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiFixtureNameTestsUiImageNoBytes));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
     Texture::MipLevelVector mips(m_inputArena);
     mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
@@ -260,7 +261,7 @@ TEST_F(UiImageSourceTests, RejectsMissingAssetIdentityAndEmptyTexturePayload){
 
 TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUsableVersions){
     for(u32 variant = 0u; variant < 7u; ++variant){
-        Texture texture(m_inputArena, Name("tests/ui/image/invalid_metadata"));
+        Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageInvalidMetadata));
         ASSERT_TRUE(Prepare(m_inputArena, texture));
         TextureDescription description;
         switch(variant){
@@ -283,7 +284,7 @@ TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUs
 
 TEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata){
     for(u32 variant = 0u; variant < 7u; ++variant){
-        Texture texture(m_inputArena, Name("tests/ui/image/invalid_mips"));
+        Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageInvalidMips));
         ASSERT_TRUE(Prepare(m_inputArena, texture));
         Texture::MipLevelVector mips(m_inputArena);
         mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
@@ -305,7 +306,7 @@ TEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata)
 
 TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
     for(u32 variant = 0u; variant < 6u; ++variant){
-        Texture texture(m_inputArena, Name("tests/ui/image/invalid_transport"));
+        Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageInvalidTransport));
         ASSERT_TRUE(Prepare(m_inputArena, texture));
         TextureDescription description;
         Texture::MipLevelVector mips(m_inputArena);
@@ -332,7 +333,7 @@ TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
 }
 
 TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAcceptedOwnedVersion){
-    Texture texture(m_inputArena, Name("tests/ui/image/replace"));
+    Texture texture(m_inputArena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiImageReplace));
     ASSERT_TRUE(Prepare(m_inputArena, texture));
     auto acceptedResult = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(acceptedResult);

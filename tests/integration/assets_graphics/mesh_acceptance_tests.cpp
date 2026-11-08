@@ -167,7 +167,7 @@ static void RunSmokeMeshAcceptance(AStringView assetFilename, const AStringView 
 }
 
 TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
-    RunSmokeMeshAcceptance("cube_hard_edges.nwb", "hard_edge_cube", Name("project/meshes/cube_hard_edges"), [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("cube_hard_edges.nwb", "hard_edge_cube", Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesCubeHardEdges), [](const NWB::Impl::Mesh& loadedMesh){
         ASSERT_EQ(loadedMesh.meshlets().size(), 1u);
         const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0];
         const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
@@ -180,14 +180,14 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
 }
 
 TEST(AssetsGraphics, OpposedSphereNormalsDisableMeshletCone){
-    RunSmokeMeshAcceptance("sphere_smooth.nwb", "sphere_smooth", Name("project/meshes/sphere_smooth"), [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("sphere_smooth.nwb", "sphere_smooth", Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesSphereSmooth), [](const NWB::Impl::Mesh& loadedMesh){
         ASSERT_EQ(loadedMesh.meshletBounds().size(), 1u);
         EXPECT_FALSE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
     });
 }
 
 TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
-    RunSmokeMeshAcceptance("uv_seam_quad.nwb", "uv_seam_quad", Name("project/meshes/uv_seam_quad"), [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("uv_seam_quad.nwb", "uv_seam_quad", Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesUvSeamQuad), [](const NWB::Impl::Mesh& loadedMesh){
         ASSERT_EQ(loadedMesh.meshlets().size(), 1u);
         ASSERT_GE(loadedMesh.meshletLocalVertexRefs().size(), 5u);
         const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
@@ -217,7 +217,7 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
 }
 
 TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
-    RunSmokeMeshAcceptance("mirrored_uv_quad.nwb", "mirrored_uv_quad", Name("project/meshes/mirrored_uv_quad"), [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("mirrored_uv_quad.nwb", "mirrored_uv_quad", Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesMirroredUvQuad), [](const NWB::Impl::Mesh& loadedMesh){
         EXPECT_EQ(loadedMesh.tangentStream().size(), 2u);
         EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[0u]).w, 1.0f);
         EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[1u]).w, -1.0f);
@@ -234,7 +234,7 @@ TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
 }
 
 TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
-    RunSmokeMeshAcceptance("two_sided_plane.nwb", "two_sided_plane", Name("project/meshes/two_sided_plane"), [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("two_sided_plane.nwb", "two_sided_plane", Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesTwoSidedPlane), [](const NWB::Impl::Mesh& loadedMesh){
         EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 3u);
         EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);
         EXPECT_FALSE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
@@ -242,7 +242,7 @@ TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
 }
 
 TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
-    RunSmokeMeshAcceptance("large_mesh_many_meshlets.nwb", "large_mesh_many_meshlets", Name("project/meshes/large_mesh_many_meshlets"), [](const NWB::Impl::Mesh& loadedMesh){
+    RunSmokeMeshAcceptance("large_mesh_many_meshlets.nwb", "large_mesh_many_meshlets", Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesLargeMeshManyMeshlets), [](const NWB::Impl::Mesh& loadedMesh){
         const usize expectedPrimitiveCount = static_cast<usize>(NWB::Impl::s_MeshMaxMeshletTriangles) + 1u;
         const usize expectedMeshletCount = 2u;
         EXPECT_EQ(loadedMesh.meshlets().size(), 2u);
@@ -261,7 +261,7 @@ TEST(AssetsGraphics, MeshFailedReloadPreservesEveryPreviouslyPublishedStream){
     TestArena testArena;
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "mesh_failed_reload");
     ASSERT_TRUE(cookCase);
-    auto result = CookAndLoadSmokeMesh("uv_seam_quad.nwb", Name("project/meshes/uv_seam_quad"), *cookCase, testArena);
+    auto result = CookAndLoadSmokeMesh("uv_seam_quad.nwb", Name(AssetsGraphicsFixture::s_AssetCaseProjectMeshesUvSeamQuad), *cookCase, testArena);
     ASSERT_TRUE(result);
     auto& mesh = static_cast<Impl::Mesh&>(**result);
     Impl::MeshAssetCodec codec;

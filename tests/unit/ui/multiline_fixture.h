@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/model.h>
 #include <impl/ecs_ui/toolkit/edit/grapheme.h>
@@ -62,7 +64,7 @@ private:
 class MultilineFixture : public testing::Test{
 public:
     MultilineFixture()
-        : m_arena(Name("tests/ui/multiline"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiMultilineFixture))
         , m_model(m_arena, {}, EditTextMode::Multiline)
     {}
 

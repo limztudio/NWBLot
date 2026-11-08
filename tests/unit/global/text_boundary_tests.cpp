@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/name_case_types.adhd.h>
+
 #include <gtest/gtest.h>
 
 #include <global/basic_string.h>
@@ -22,7 +24,7 @@ namespace __hidden_global_text_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_Alpha = "alpha";
+static constexpr AStringView s_Alpha = NWB::Tests::GlobalCases::s_GlobalTestTableAlpha;
 
 template<typename T>
 concept CanTrimView = requires{ TrimView(DeclVal<T>()); TrimLeftView(DeclVal<T>()); };

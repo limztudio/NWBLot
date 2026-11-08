@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/global/algorithm_case_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 

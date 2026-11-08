@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_FontBakeNameTestsFontAtlasOptions = "tests/font_atlas/options";
+const Name s_FontBakeNameTestsFontAtlasPacking = "tests/font_atlas/packing";
+const Name s_FontBakeNameTestsFontAtlasPackingScratch = "tests/font_atlas/packing/scratch";
+const Name s_FontBakeNameTestsFontAtlasCapacity = "tests/font_atlas/capacity";
+const Name s_FontBakeNameTestsFontAtlasCapacityScratch = "tests/font_atlas/capacity/scratch";
+const Name s_FontBakeNameTestsFontAtlasKern = "tests/font_atlas/kern";
+const Name s_FontBakeNameTestsFontAtlasGpos = "tests/font_atlas/gpos";
+const Name s_FontBakeNameTestsFontAtlasGdefTruncated = "tests/font_atlas/gdef_truncated";
+const Name s_FontBakeNameTestsFontAtlasGposMalformed = "tests/font_atlas/gpos_malformed";
+const Name s_FontBakeNameTestsFontAtlasGposDevice = "tests/font_atlas/gpos_device";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

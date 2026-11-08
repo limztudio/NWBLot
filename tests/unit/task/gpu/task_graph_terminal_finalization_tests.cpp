@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,7 +39,7 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuGraphResourceDesc resourceDesc;
     resourceDesc
-        .setIdentity(Name("tests/task_graph/ordered_terminal_finalization_resource"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOrderedTerminalFinalizationResource))
         .setMarkerLabel("Ordered Terminal Finalization Resource")
         .setType(Core::GpuGraphResourceType::Texture)
         .setInitialState(Core::ResourceStates::ShaderResource)
@@ -62,7 +64,7 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     };
 
     Array<Core::GpuTaskId, 4u> readers = {};
-    const Name readerBaseName("tests/task_graph/ordered_terminal_finalization_reader_");
+    const Name readerBaseName = NWB::Tests::TaskGraphTestUtils::s_TaskGraphOrderedTerminalFinalizationReader;
     for(usize readerIndex = 0u; readerIndex < LengthOf(readers); ++readerIndex){
         Core::GpuTaskDesc readerDesc;
         const auto readerNameResult = IndexedName(readerBaseName, readerIndex);
@@ -143,7 +145,7 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         Core::GpuTaskSchedulingHint prefixScheduling;
         prefixScheduling.forceSubmissionBoundary = true;
         prefixScheduling.allowPacketMerge = false;
-        const Name prefixBaseName("tests/task_graph/terminal_packed_reachability_prefix_");
+        const Name prefixBaseName = NWB::Tests::TaskGraphTestUtils::s_TaskGraphTerminalPackedReachabilityPrefix;
         for(usize taskIndex = 0u; taskIndex < prefixPacketCount; ++taskIndex){
             const auto prefixNameResult = IndexedName(prefixBaseName, taskIndex);
             ASSERT_TRUE(prefixNameResult);
@@ -163,8 +165,7 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
             false,
             true,
-            {}
-        );
+            {});
         ASSERT_TRUE(pairResult);
         const ExternalFinalReadPair pair = *pairResult;
         ASSERT_TRUE(pair.resource.valid());
@@ -177,7 +178,7 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         terminalScheduling.allowPacketMerge = false;
         Core::GpuTaskDesc terminalDesc;
         terminalDesc
-            .setIdentity(Name("tests/task_graph/terminal_packed_reachability_reader"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTerminalPackedReachabilityReader))
             .setMarkerLabel("Terminal Packed Reachability Reader")
             .setScheduling(terminalScheduling)
             .setDependencies(Span(&pair.finalizingReader, 1u))
@@ -223,7 +224,7 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues), };
     const auto textureResult = graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/external_final_fragmented_texture"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalFragmentedTexture))
             .setMarkerLabel("External Final Fragmented Texture")
             .setType(Core::GpuGraphResourceType::Texture)
             .setInitialState(Core::ResourceStates::Common)
@@ -245,9 +246,9 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     Core::GpuTaskDesc wholeWriterDesc;
-    wholeWriterDesc.setIdentity(Name("tests/task_graph/external_final_fragmented_whole_writer")).setMarkerLabel("External Final Fragmented Whole Writer").setScheduling(scheduling).setResourceUses(Span(&wholeWriterUse, 1u));
+    wholeWriterDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalFragmentedWholeWriter)).setMarkerLabel("External Final Fragmented Whole Writer").setScheduling(scheduling).setResourceUses(Span(&wholeWriterUse, 1u));
     Core::GpuTaskDesc partialWriterDesc;
-    partialWriterDesc.setIdentity(Name("tests/task_graph/external_final_fragmented_partial_writer")).setMarkerLabel("External Final Fragmented Partial Writer").setScheduling(scheduling).setResourceUses(Span(&partialWriterUse, 1u));
+    partialWriterDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalFragmentedPartialWriter)).setMarkerLabel("External Final Fragmented Partial Writer").setScheduling(scheduling).setResourceUses(Span(&partialWriterUse, 1u));
     const auto wholeWriterResult = graph.addTask(wholeWriterDesc, graphicsCommands);
     ASSERT_TRUE(wholeWriterResult);
     const Core::GpuTaskId wholeWriter = *wholeWriterResult;

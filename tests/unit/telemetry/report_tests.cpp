@@ -3,6 +3,9 @@
 
 
 #include "telemetry_test_helpers.h"
+#include "frame_graph_test_helpers.h"
+
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -11,8 +14,6 @@
 #include <global/text_utils.h>
 
 #include <gtest/gtest.h>
-
-#include "frame_graph_test_helpers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -286,8 +287,8 @@ TEST(Telemetry, TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow){
     timing.firstSampleFrameIndex = 70u;
     timing.lastSampleFrameIndex = 70u;
     for(const auto source : { Telemetry::PerfTimingSource::Cpu, Telemetry::PerfTimingSource::Gpu }){
-        ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, source, Name("large_first"), "large_first", timing));
-        ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, source, Name("large_second"), "large_second", timing));
+        ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, source, Name(NWB::Tests::TelemetryCases::s_TelemetryCaseLargeFirst), "large_first", timing));
+        ASSERT_TRUE(Telemetry::RecordPerfTiming(recorder, source, Name(NWB::Tests::TelemetryCases::s_TelemetryCaseLargeSecond), "large_second", timing));
     }
 
     const auto report = Log::BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);

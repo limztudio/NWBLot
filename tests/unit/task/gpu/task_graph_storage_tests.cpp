@@ -4,6 +4,7 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/task_graph.h>
@@ -36,7 +37,7 @@ constexpr AStringView s_CompletionLabel = "Storage Completion";
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphStorageTestsTag>;
 using TaskGraphTestUtils::IndexedName;
-inline constexpr Name s_StorageScratchArena("tests/task/gpu/storage_scratch");
+inline constexpr Name s_StorageScratchArena = NWB::Tests::TaskGraphTestUtils::s_TaskGpuStorageScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +50,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
     Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_TaskCount);
     for(usize index = 0u; index < s_TaskCount; ++index){
-        const auto derivedNameResult = IndexedName(Name("tests/graph_storage/task/"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseGraphStorageTask), index);
         ASSERT_TRUE(derivedNameResult);
         identities.push_back(*derivedNameResult);
     }
@@ -58,7 +59,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
     Core::GpuTaskId previousGenerationTask;
     for(usize pass = 0u; pass < 2u; ++pass){
         const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/graph_storage/input"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseGraphStorageInput))
             .setMarkerLabel("Storage Input")
             .setType(Core::GpuGraphResourceType::Buffer)
             .setInitialState(Core::ResourceStates::ShaderResource)
@@ -66,7 +67,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/graph_storage/completion")).setMarkerLabel(s_CompletionLabel));
+        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseGraphStorageCompletion)).setMarkerLabel(s_CompletionLabel));
         ASSERT_TRUE(completionResult);
         const Core::GpuExternalCompletionId completion = *completionResult;
         ASSERT_TRUE(completion.valid());
@@ -121,7 +122,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
     Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_RecordCount);
     for(usize index = 0u; index < s_RecordCount; ++index){
-        const auto derivedNameResult = IndexedName(Name("tests/graph_storage/record/"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseGraphStorageRecord), index);
         ASSERT_TRUE(derivedNameResult);
         identities.push_back(*derivedNameResult);
     }

@@ -4,6 +4,8 @@
 
 #include "task_graph_resource_version_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,7 +33,7 @@ TEST(GpuTaskGraphResourceVersion, PreservesProducedVersionUntilAllConsumersFinis
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/lifetime_resource"));
+    const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeResource));
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 64u));
@@ -43,19 +45,19 @@ TEST(GpuTaskGraphResourceVersion, PreservesProducedVersionUntilAllConsumersFinis
     const VersionProducerUses producerUses = ProducerUses(resource, version);
     const Core::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
     const Core::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
-    const auto producerResult = AddTask(Name("tests/task_graph_resource_version/lifetime_producer"), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
+    const auto producerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeProducer), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
 
     const Core::GpuTaskResourceUse clobberResourceUse = ResourceUse(resource, BufferRange(16u, 16u), Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write);
-    const auto clobberResult = AddTask(Name("tests/task_graph_resource_version/lifetime_clobber"), Span(&clobberResourceUse, 1u), {}, {}, {}, graph);
+    const auto clobberResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeClobber), Span(&clobberResourceUse, 1u), {}, {}, {}, graph);
     ASSERT_TRUE(clobberResult);
     const Core::GpuTaskId clobber = *clobberResult;
 
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
     const Core::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
     const Core::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
-    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/lifetime_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
+    const auto consumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeConsumer), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(producer.valid());
@@ -77,7 +79,7 @@ TEST(GpuTaskGraphResourceVersion, ReportsExplicitClobberCycleWithVersionLifetime
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/lifetime_cycle_resource"));
+    const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeCycleResource));
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 64u));
@@ -89,19 +91,19 @@ TEST(GpuTaskGraphResourceVersion, ReportsExplicitClobberCycleWithVersionLifetime
     const VersionProducerUses producerUses = ProducerUses(resource, version);
     const Core::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
     const Core::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
-    const auto producerResult = AddTask(Name("tests/task_graph_resource_version/lifetime_cycle_producer"), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
+    const auto producerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeCycleProducer), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
 
     const Core::GpuTaskResourceUse clobberResourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::CopyDest, Core::GpuTaskResourceAccess::Write);
-    const auto clobberResult = AddTask(Name("tests/task_graph_resource_version/lifetime_cycle_clobber"), Span(&clobberResourceUse, 1u), {}, Span(&producer, 1u), {}, graph);
+    const auto clobberResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeCycleClobber), Span(&clobberResourceUse, 1u), {}, Span(&producer, 1u), {}, graph);
     ASSERT_TRUE(clobberResult);
     const Core::GpuTaskId clobber = *clobberResult;
 
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
     const Core::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
     const Core::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
-    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/lifetime_cycle_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), Span(&clobber, 1u), {}, graph);
+    const auto consumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionLifetimeCycleConsumer), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), Span(&clobber, 1u), {}, graph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(producer.valid());
@@ -134,7 +136,7 @@ TEST(GpuTaskGraphResourceVersion, HonorsExplicitClobberBeforeVersionProducer){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/early_clobber_resource"));
+    const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionEarlyClobberResource));
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 64u));
@@ -144,21 +146,21 @@ TEST(GpuTaskGraphResourceVersion, HonorsExplicitClobberBeforeVersionProducer){
     ASSERT_TRUE(version.valid());
 
     const Core::GpuTaskResourceUse clobberResourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::CopyDest, Core::GpuTaskResourceAccess::Write);
-    const auto clobberResult = AddTask(Name("tests/task_graph_resource_version/early_clobber"), Span(&clobberResourceUse, 1u), {}, {}, {}, graph);
+    const auto clobberResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionEarlyClobber), Span(&clobberResourceUse, 1u), {}, {}, {}, graph);
     ASSERT_TRUE(clobberResult);
     const Core::GpuTaskId clobber = *clobberResult;
 
     const VersionProducerUses producerUses = ProducerUses(resource, version);
     const Core::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
     const Core::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
-    const auto producerResult = AddTask(Name("tests/task_graph_resource_version/early_clobber_producer"), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), Span(&clobber, 1u), {}, graph);
+    const auto producerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionEarlyClobberProducer), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), Span(&clobber, 1u), {}, graph);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
 
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
     const Core::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
     const Core::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
-    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/early_clobber_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
+    const auto consumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionEarlyClobberConsumer), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(clobber.valid());
@@ -179,7 +181,7 @@ TEST(GpuTaskGraphResourceVersion, ProtectsImportedRootConsumerFromLaterClobber){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/imported_lifetime_resource"));
+    const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedLifetimeResource));
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::ImportedRoot, BufferRange(0u, 64u));
@@ -191,11 +193,11 @@ TEST(GpuTaskGraphResourceVersion, ProtectsImportedRootConsumerFromLaterClobber){
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
     const Core::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
     const Core::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
-    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/imported_lifetime_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
+    const auto consumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedLifetimeConsumer), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     const Core::GpuTaskResourceUse clobberResourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write);
-    const auto clobberResult = AddTask(Name("tests/task_graph_resource_version/imported_lifetime_clobber"), Span(&clobberResourceUse, 1u), {}, {}, {}, graph);
+    const auto clobberResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedLifetimeClobber), Span(&clobberResourceUse, 1u), {}, {}, {}, graph);
     ASSERT_TRUE(clobberResult);
     const Core::GpuTaskId clobber = *clobberResult;
     ASSERT_TRUE(consumer.valid());
@@ -219,7 +221,7 @@ TEST(GpuTaskGraphResourceVersion, TreatsImportedRootLifetimeWriterAsPreBirthForP
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     const Core::GpuTaskResourceRange versionRange = BufferRange(0u, 64u);
-    const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/imported_prebirth_resource"));
+    const auto resourceResult = AddBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedPrebirthResource));
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     const auto importedVersionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::ImportedRoot, versionRange);
@@ -234,19 +236,19 @@ TEST(GpuTaskGraphResourceVersion, TreatsImportedRootLifetimeWriterAsPreBirthForP
 
     const Core::GpuTaskResourceUse importedConsumerResourceUse = ResourceUse(resource, versionRange, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::ReadWrite);
     const Core::GpuTaskResourceVersionUse importedConsumerVersionUse = VersionUse(importedVersion, Core::GpuTaskResourceVersionRole::Consume);
-    const auto importedConsumerResult = AddTask(Name("tests/task_graph_resource_version/imported_prebirth_consumer"), Span(&importedConsumerResourceUse, 1u), Span(&importedConsumerVersionUse, 1u), {}, {}, graph);
+    const auto importedConsumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedPrebirthConsumer), Span(&importedConsumerResourceUse, 1u), Span(&importedConsumerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(importedConsumerResult);
     const Core::GpuTaskId importedConsumer = *importedConsumerResult;
 
     const Core::GpuTaskResourceUse producerResourceUse = ResourceUse(resource, versionRange, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write);
     const Core::GpuTaskResourceVersionUse producerVersionUse = VersionUse(producedVersion, Core::GpuTaskResourceVersionRole::Produce);
-    const auto producerResult = AddTask(Name("tests/task_graph_resource_version/imported_prebirth_producer"), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
+    const auto producerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedPrebirthProducer), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
 
     const Core::GpuTaskResourceUse consumerResourceUse = ResourceUse(resource, versionRange, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
     const Core::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(producedVersion, Core::GpuTaskResourceVersionRole::Consume);
-    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/imported_prebirth_produced_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
+    const auto consumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphResourceVersionImportedPrebirthProducedConsumer), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(importedConsumer.valid());

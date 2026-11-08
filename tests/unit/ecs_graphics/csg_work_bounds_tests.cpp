@@ -112,8 +112,8 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     ASSERT_TRUE(foundShape4);
     shape = *foundShape4;
     NWB::Impl::CsgShapeTypeDesc custom = shape.desc;
-    custom.name = Name("tests/csg/finite_custom_cutter");
-    custom.shaderModule = Name("tests/csg/finite_custom_cutter_eval");
+    custom.name = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgFiniteCustomCutter);
+    custom.shaderModule = Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgFiniteCustomCutterEval);
     custom.shaderModuleInclude = "tests/csg/finite_custom_cutter_eval.slangi";
     const auto customId = registry.registerShapeType(custom);
     ASSERT_TRUE(customId);

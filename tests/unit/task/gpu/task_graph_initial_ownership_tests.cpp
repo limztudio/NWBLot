@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,11 +54,11 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_graphics"), "Initial Owner Graphics", queues[0u].id);
+        const auto resourceResult = addBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInitialOwnerGraphics), "Initial Owner Graphics", queues[0u].id);
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
-        const auto taskResult = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_graphics_use"), "Initial Owner Graphics Use", graphicsCommands);
+        const auto taskResult = addFirstUse(graph, resource, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInitialOwnerGraphicsUse), "Initial Owner Graphics Use", graphicsCommands);
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
@@ -74,12 +76,12 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_cross_queue"), "Initial Owner Cross Queue", queues[0u].id);
+        const auto resourceResult = addBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInitialOwnerCrossQueue), "Initial Owner Cross Queue", queues[0u].id);
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         {
-            const auto gpuTaskAdmission = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_compute_use"), "Initial Owner Compute Use", computeCommands);
+            const auto gpuTaskAdmission = addFirstUse(graph, resource, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInitialOwnerComputeUse), "Initial Owner Compute Use", computeCommands);
             ASSERT_TRUE(gpuTaskAdmission);
             ASSERT_TRUE(gpuTaskAdmission->valid());
         }
@@ -95,12 +97,12 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_stale"), "Initial Owner Stale", Core::GpuPhysicalQueueId{ .index = queues[0u].id.index, .deviceGeneration = static_cast<u16>(queues[0u].id.deviceGeneration + 1u) });
+        const auto resourceResult = addBuffer(graph, Name(TaskGraphTestUtils::s_GpuInitialOwnerStale), "Initial Owner Stale", Core::GpuPhysicalQueueId{ .index = queues[0u].id.index, .deviceGeneration = static_cast<u16>(queues[0u].id.deviceGeneration + 1u) });
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         {
-            const auto secondGpuTaskAdmission = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_stale_use"), "Initial Owner Stale Use", graphicsCommands);
+            const auto secondGpuTaskAdmission = addFirstUse(graph, resource, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInitialOwnerStaleUse), "Initial Owner Stale Use", graphicsCommands);
             ASSERT_TRUE(secondGpuTaskAdmission);
             ASSERT_TRUE(secondGpuTaskAdmission->valid());
         }
@@ -116,12 +118,12 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     {
         TestArena testArena;
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = addBuffer(graph, Name("tests/task_graph/initial_owner_concurrent"), "Initial Owner Concurrent", queues[0u].id, Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+        const auto resourceResult = addBuffer(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInitialOwnerConcurrent), "Initial Owner Concurrent", queues[0u].id, Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         {
-            const auto thirdGpuTaskAdmission = addFirstUse(graph, resource, Name("tests/task_graph/initial_owner_concurrent_use"), "Initial Owner Concurrent Use", graphicsCommands);
+            const auto thirdGpuTaskAdmission = addFirstUse(graph, resource, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInitialOwnerConcurrentUse), "Initial Owner Concurrent Use", graphicsCommands);
             ASSERT_TRUE(thirdGpuTaskAdmission);
             ASSERT_TRUE(thirdGpuTaskAdmission->valid());
         }
@@ -136,27 +138,15 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
 }
 
 TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAccelStruct){
-    struct ResourceCase{
-        Core::GpuGraphResourceType::Enum type;
-        Core::ResourceStates::Mask initialState;
-        Name identity;
-        AStringView markerLabel;
-    };
-
     const Core::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
     const Core::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
-    const Array<ResourceCase, 2> resourceCases = {
-        ResourceCase{ .type = Core::GpuGraphResourceType::Buffer, .initialState = Core::ResourceStates::ShaderResource, .identity = Name("tests/task_graph/invalid_initial_owner_buffer"), .markerLabel = "Invalid Initial Owner Buffer", },
-        ResourceCase{
-            .type = Core::GpuGraphResourceType::AccelStruct,
-            .initialState = Core::ResourceStates::AccelStructRead,
-            .identity = Name("tests/task_graph/invalid_initial_owner_accel_struct"),
-            .markerLabel = "Invalid Initial Owner Accel Struct",
-        },
+    const Array<GpuTaskInitialOwnerCase, 2> resourceCases = {
+        GpuTaskInitialOwnerCase(Core::GpuGraphResourceType::Buffer, Core::ResourceStates::ShaderResource, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInvalidInitialOwnerBuffer), "Invalid Initial Owner Buffer"),
+        GpuTaskInitialOwnerCase(Core::GpuGraphResourceType::AccelStruct, Core::ResourceStates::AccelStructRead, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInvalidInitialOwnerAccelStruct), "Invalid Initial Owner Accel Struct"),
     };
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_typed_initial_owner_completion")).setMarkerLabel("Invalid Typed Initial Owner Completion"));
+    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInvalidTypedInitialOwnerCompletion)).setMarkerLabel("Invalid Typed Initial Owner Completion"));
     ASSERT_TRUE(completionResult);
     const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
@@ -167,12 +157,12 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAcc
         Core::GpuGraphInitialOwnerHandoffSourceDesc{ .range = {}, .sourceQueue = sourceQueue.id, .destinationQueue = destinationQueue.id, .completion = completion, .minimumCompletionToken = minimumCompletionToken, .stateSource = &stateSource, },
     };
 
-    for(const ResourceCase& resourceCase : resourceCases){
+    for(const GpuTaskInitialOwnerCase& resourceCase : resourceCases){
         EXPECT_FALSE(graph.importResource(
             Core::GpuGraphResourceDesc{}
                 .setIdentity(resourceCase.identity)
                 .setMarkerLabel(resourceCase.markerLabel)
-                .setType(resourceCase.type)
+                .setType(resourceCase.resourceType)
                 .setInitialState(resourceCase.initialState)
                 .setInitialOwnerHandoffSources(sources)
         ).has_value()
@@ -188,7 +178,7 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
     const Core::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto sharedCompletionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/multi_owner_shared_completion")).setMarkerLabel("Multi Owner Shared Completion"));
+    const auto sharedCompletionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMultiOwnerSharedCompletion)).setMarkerLabel("Multi Owner Shared Completion"));
     ASSERT_TRUE(sharedCompletionResult);
     const Core::GpuExternalCompletionId sharedCompletion = *sharedCompletionResult;
     ASSERT_TRUE(sharedCompletion.valid());
@@ -214,7 +204,7 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
     };
     EXPECT_FALSE(graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/multi_owner_shared_completion_texture"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMultiOwnerSharedCompletionTexture))
             .setMarkerLabel("Multi Owner Shared Completion Texture")
             .setType(Core::GpuGraphResourceType::Texture)
             .setInitialState(Core::ResourceStates::ShaderResource)
@@ -224,7 +214,7 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
 
     EXPECT_FALSE(graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/concurrent_external_release_texture"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphConcurrentExternalReleaseTexture))
             .setMarkerLabel("Concurrent External Release Texture")
             .setType(Core::GpuGraphResourceType::Texture)
             .setInitialState(Core::ResourceStates::ShaderResource)
@@ -243,7 +233,7 @@ TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken
     Core::GpuTaskGraph graph(testArena.arena);
     const auto completionResult = graph.importExternalCompletion(
         Core::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/bound_invalid_initial_owner_completion"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphBoundInvalidInitialOwnerCompletion))
             .setMarkerLabel("Bound Invalid Initial Owner Completion")
             .setToken(completionToken)
     );
@@ -258,7 +248,7 @@ TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken
 
     EXPECT_FALSE(graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/bound_invalid_initial_owner_buffer"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphBoundInvalidInitialOwnerBuffer))
             .setMarkerLabel("Bound Invalid Initial Owner Buffer")
             .setType(Core::GpuGraphResourceType::Buffer)
             .setInitialState(Core::ResourceStates::Common)
@@ -276,10 +266,10 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
     const Core::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto graphicsCompletionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_multi_owner_graphics_completion")).setMarkerLabel("Invalid Multi Owner Graphics Completion"));
+    const auto graphicsCompletionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInvalidMultiOwnerGraphicsCompletion)).setMarkerLabel("Invalid Multi Owner Graphics Completion"));
     ASSERT_TRUE(graphicsCompletionResult);
     const Core::GpuExternalCompletionId graphicsCompletion = *graphicsCompletionResult;
-    const auto computeCompletionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/invalid_multi_owner_compute_completion")).setMarkerLabel("Invalid Multi Owner Compute Completion"));
+    const auto computeCompletionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInvalidMultiOwnerComputeCompletion)).setMarkerLabel("Invalid Multi Owner Compute Completion"));
     ASSERT_TRUE(computeCompletionResult);
     const Core::GpuExternalCompletionId computeCompletion = *computeCompletionResult;
     ASSERT_TRUE(graphicsCompletion.valid());
@@ -310,7 +300,7 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
 
     EXPECT_FALSE(graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/invalid_multi_owner_texture"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphInvalidMultiOwnerTexture))
             .setMarkerLabel("Invalid Multi Owner Texture")
             .setType(Core::GpuGraphResourceType::Texture)
             .setInitialState(Core::ResourceStates::ShaderResource)

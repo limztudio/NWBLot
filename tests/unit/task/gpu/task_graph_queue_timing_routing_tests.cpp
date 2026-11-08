@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +42,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         Core::GpuTaskCommandRequirements graphicsCommands;
         graphicsCommands.requiredCapabilities = Core::GpuQueueCapability::Graphics;
         if(staticCompute){
-            const auto independentGraphicsResult = AddTaskWithCommands(Name("tests/task_graph/cross_class_timing_independent_graphics"), "Cross Class Timing Independent Graphics", graphicsCommands, {}, {}, {}, graph);
+            const auto independentGraphicsResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossClassTimingIndependentGraphics), "Cross Class Timing Independent Graphics", graphicsCommands, {}, {}, {}, graph);
             ASSERT_TRUE(independentGraphicsResult);
             const Core::GpuTaskId independentGraphics = *independentGraphicsResult;
             ASSERT_TRUE(independentGraphics.valid());
@@ -145,7 +147,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
 
     Core::GpuTaskCommandRequirements graphicsCommands;
     graphicsCommands.requiredCapabilities = Core::GpuQueueCapability::Graphics;
-    const auto independentGraphicsResult = AddTaskWithCommands(Name("tests/task_graph/cross_class_calibration_independent_graphics"), "Cross Class Calibration Independent Graphics", graphicsCommands, {}, {}, {}, graph);
+    const auto independentGraphicsResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossClassCalibrationIndependentGraphics), "Cross Class Calibration Independent Graphics", graphicsCommands, {}, {}, {}, graph);
     ASSERT_TRUE(independentGraphicsResult);
     const Core::GpuTaskId independentGraphics = *independentGraphicsResult;
     ASSERT_TRUE(independentGraphics.valid());
@@ -157,7 +159,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     scheduling.allowCrossFamilySameClassQueueRouting = true;
     scheduling.allowTimingFeedbackRouting = true;
     scheduling.allowCrossClassTimingFeedbackRouting = true;
-    const Name taskIdentity("tests/task_graph/cross_class_timing_calibration");
+    const Name taskIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphCrossClassTimingCalibration;
     const Core::GpuTaskTimingMetadata timingMetadata{ .variant = 13u, .resolutionClass = 0x07800438u, };
     const auto taskResult = AddTaskWithCommands(taskIdentity, "Cross Class Timing Calibration", computeCommands, scheduling, timingMetadata, {}, graph);
     ASSERT_TRUE(taskResult);
@@ -253,7 +255,7 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
 
         Core::GpuTaskCommandRequirements graphicsCommands;
         graphicsCommands.requiredCapabilities = Core::GpuQueueCapability::Graphics;
-        const auto independentGraphicsResult = AddTaskWithCommands(Name("tests/task_graph/rejected_cross_class_independent_graphics"), "Rejected Cross Class Independent Graphics", graphicsCommands, {}, {}, {}, graph);
+        const auto independentGraphicsResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRejectedCrossClassIndependentGraphics), "Rejected Cross Class Independent Graphics", graphicsCommands, {}, {}, {}, graph);
         ASSERT_TRUE(independentGraphicsResult);
         const Core::GpuTaskId independentGraphics = *independentGraphicsResult;
         ASSERT_TRUE(independentGraphics.valid());
@@ -265,11 +267,11 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
         scheduling.allowCrossFamilySameClassQueueRouting = allowCrossFamilyRouting;
         scheduling.allowTimingFeedbackRouting = true;
         scheduling.allowCrossClassTimingFeedbackRouting = allowCrossClassRouting;
-        Name taskIdentity("tests/task_graph/rejected_capability_cross_class_timing");
+        Name taskIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphRejectedCapabilityCrossClassTiming;
         if(!allowCrossClassRouting)
-            taskIdentity = Name("tests/task_graph/rejected_missing_cross_class_timing_opt_in");
+            taskIdentity = Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRejectedMissingCrossClassTimingOptIn);
         else if(!allowCrossFamilyRouting)
-            taskIdentity = Name("tests/task_graph/rejected_cross_family_cross_class_timing");
+            taskIdentity = Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRejectedCrossFamilyCrossClassTiming);
         const auto taskResult = AddTaskWithCommands(taskIdentity, "Rejected Cross Class Timing", commands, scheduling, {}, {}, graph);
         ASSERT_TRUE(taskResult);
         const Core::GpuTaskId task = *taskResult;
@@ -342,7 +344,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFamily
     preloadScheduling.cost = Core::GpuTaskCostHint::Large;
     preloadScheduling.allowSameClassQueueRouting = true;
     preloadScheduling.preferNonPrimarySameClassQueue = true;
-    const auto preloadResult = AddTaskWithCommands(Name("tests/task_graph/timing_feedback_preload"), "Timing Feedback Preload", graphicsCommands, preloadScheduling, {}, {}, graph);
+    const auto preloadResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingFeedbackPreload), "Timing Feedback Preload", graphicsCommands, preloadScheduling, {}, {}, graph);
     ASSERT_TRUE(preloadResult);
     const Core::GpuTaskId preload = *preloadResult;
     ASSERT_TRUE(preload.valid());
@@ -350,7 +352,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFamily
     Core::GpuTaskSchedulingHint targetScheduling;
     targetScheduling.allowSameClassQueueRouting = true;
     targetScheduling.allowTimingFeedbackRouting = true;
-    const Name targetIdentity("tests/task_graph/timing_feedback_equal_candidates");
+    const Name targetIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphTimingFeedbackEqualCandidates;
     const auto targetResult = AddTaskWithCommands(targetIdentity, "Timing Feedback Equal Candidates", graphicsCommands, targetScheduling, {}, {}, graph);
     ASSERT_TRUE(targetResult);
     const Core::GpuTaskId target = *targetResult;
@@ -435,7 +437,7 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/timing_feedback_cross_family_buffer"), "Timing Feedback Cross Family Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingFeedbackCrossFamilyBuffer), "Timing Feedback Cross Family Buffer");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -445,7 +447,7 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
 
     const Core::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/timing_feedback_cross_family_producer")).setMarkerLabel("Timing Feedback Cross Family Producer").setResourceUses(Span(&producerUse, 1u));
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingFeedbackCrossFamilyProducer)).setMarkerLabel("Timing Feedback Cross Family Producer").setResourceUses(Span(&producerUse, 1u));
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
@@ -458,7 +460,7 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     consumerScheduling.allowTimingFeedbackRouting = true;
     const Array<Core::GpuTaskId, 1u> consumerDependencies = { producer };
     const Core::GpuTaskResourceUse consumerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, };
-    const Name consumerIdentity("tests/task_graph/timing_feedback_cross_family_consumer");
+    const Name consumerIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphTimingFeedbackCrossFamilyConsumer;
     Core::GpuTaskDesc consumerDesc;
     consumerDesc.setIdentity(consumerIdentity).setMarkerLabel("Timing Feedback Cross Family Consumer").setScheduling(consumerScheduling).setDependencies(consumerDependencies).setResourceUses(Span(&consumerUse, 1u));
     const auto consumerResult = graph.addTask(consumerDesc, graphicsCommands);

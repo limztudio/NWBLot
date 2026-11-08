@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +38,7 @@ TEST(GpuTaskGraph, AutomaticallyUsesTheOnlyQueueSupportingAllCommandKinds){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     const Core::GpuTaskCommandRequirements mixedCommands{ QueueCapabilities(Core::GpuQueueCapability::Graphics, Core::GpuQueueCapability::Compute) };
-    const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/mixed_commands"), "Mixed Commands", mixedCommands, {}, {}, {}, graph);
+    const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMixedCommands), "Mixed Commands", mixedCommands, {}, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
@@ -65,7 +67,7 @@ TEST(GpuTaskGraph, KeepsTaskOwnedPrimaryGraphicsRestrictionDuringAutomaticPlacem
     scheduling.allowSameClassQueueRouting = true;
     scheduling.preferNonPrimarySameClassQueue = true;
     const Core::GpuTaskCommandRequirements commands{ .requiredCapabilities = Core::GpuQueueCapability::Compute, .requiresPrimaryGraphicsQueue = true };
-    const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/primary_graphics_contract"), "Primary Graphics Contract", commands, scheduling, {}, {}, graph);
+    const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPrimaryGraphicsContract), "Primary Graphics Contract", commands, scheduling, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
@@ -90,15 +92,15 @@ TEST(GpuTaskGraph, ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork){
     graphicsCommands.requiredCapabilities = Core::GpuQueueCapability::Graphics;
     Core::GpuTaskSchedulingHint graphicsScheduling;
     graphicsScheduling.cost = Core::GpuTaskCostHint::Large;
-    const auto prefixResult = AddTaskWithCommands(Name("tests/task_graph/recovery_overlap_prefix"), "Recovery Overlap Prefix", graphicsCommands, graphicsScheduling, {}, {}, graph);
+    const auto prefixResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecoveryOverlapPrefix), "Recovery Overlap Prefix", graphicsCommands, graphicsScheduling, {}, {}, graph);
     ASSERT_TRUE(prefixResult);
     const Core::GpuTaskId prefix = *prefixResult;
     ASSERT_TRUE(prefix.valid());
-    const auto middleResult = AddTaskWithCommands(Name("tests/task_graph/recovery_overlap_middle"), "Recovery Overlap Middle", ComputeCommands(), {}, {}, Span(&prefix, 1u), graph);
+    const auto middleResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecoveryOverlapMiddle), "Recovery Overlap Middle", ComputeCommands(), {}, {}, Span(&prefix, 1u), graph);
     ASSERT_TRUE(middleResult);
     const Core::GpuTaskId middle = *middleResult;
     ASSERT_TRUE(middle.valid());
-    const auto suffixResult = AddTaskWithCommands(Name("tests/task_graph/recovery_overlap_suffix"), "Recovery Overlap Suffix", graphicsCommands, graphicsScheduling, {}, Span(&middle, 1u), graph);
+    const auto suffixResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecoveryOverlapSuffix), "Recovery Overlap Suffix", graphicsCommands, graphicsScheduling, {}, Span(&middle, 1u), graph);
     ASSERT_TRUE(suffixResult);
     const Core::GpuTaskId suffix = *suffixResult;
     ASSERT_TRUE(suffix.valid());
@@ -119,7 +121,7 @@ TEST(GpuTaskGraph, ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork){
     recoveryScheduling.allowPacketMerge = false;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
     recoveryScheduling.isRecoverySubmission = true;
-    const auto recoveryResult = AddTaskWithCommands(Name("tests/task_graph/recovery_overlap_fallback"), "Recovery Overlap Fallback", graphicsCommands, recoveryScheduling, {}, {}, graph);
+    const auto recoveryResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecoveryOverlapFallback), "Recovery Overlap Fallback", graphicsCommands, recoveryScheduling, {}, {}, graph);
     ASSERT_TRUE(recoveryResult);
     const Core::GpuTaskId recovery = *recoveryResult;
     ASSERT_TRUE(recovery.valid());
@@ -151,13 +153,13 @@ TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder
     graphicsCommands.requiredCapabilities = Core::GpuQueueCapability::Graphics;
     Core::GpuTaskSchedulingHint graphicsScheduling;
     graphicsScheduling.cost = Core::GpuTaskCostHint::Large;
-    const auto graphicsTaskResult = AddTaskWithCommands(Name("tests/task_graph/deterministic_graphics"), "Deterministic Graphics", graphicsCommands, graphicsScheduling, {}, {}, graph);
+    const auto graphicsTaskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphDeterministicGraphics), "Deterministic Graphics", graphicsCommands, graphicsScheduling, {}, {}, graph);
     ASSERT_TRUE(graphicsTaskResult);
     const Core::GpuTaskId graphicsTask = *graphicsTaskResult;
 
     Core::GpuTaskCommandRequirements transferCommands;
     transferCommands.requiredCapabilities = Core::GpuQueueCapability::Transfer;
-    const auto transferTaskResult = AddTaskWithCommands(Name("tests/task_graph/deterministic_transfer"), "Deterministic Transfer", transferCommands, {}, {}, {}, graph);
+    const auto transferTaskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphDeterministicTransfer), "Deterministic Transfer", transferCommands, {}, {}, {}, graph);
     ASSERT_TRUE(transferTaskResult);
     const Core::GpuTaskId transferTask = *transferTaskResult;
     ASSERT_TRUE(graphicsTask.valid());
@@ -195,14 +197,14 @@ TEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies){
     Core::GpuTaskCommandRequirements graphicsCommands;
     graphicsCommands.requiredCapabilities = Core::GpuQueueCapability::Graphics;
 
-    const auto producerResult = AddTaskWithCommands(Name("tests/task_graph/reduced_queue_score_producer"), "Reduced Queue Score Producer", computeCommands, {}, {}, {}, graph);
+    const auto producerResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphReducedQueueScoreProducer), "Reduced Queue Score Producer", computeCommands, {}, {}, {}, graph);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
-    const auto middleResult = AddTaskWithCommands(Name("tests/task_graph/reduced_queue_score_middle"), "Reduced Queue Score Middle", graphicsCommands, {}, {}, Span(&producer, 1u), graph);
+    const auto middleResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphReducedQueueScoreMiddle), "Reduced Queue Score Middle", graphicsCommands, {}, {}, Span(&producer, 1u), graph);
     ASSERT_TRUE(middleResult);
     const Core::GpuTaskId middle = *middleResult;
     const Array<Core::GpuTaskId, 2u> finalDependencies = { producer, middle };
-    const auto finalTaskResult = AddTaskWithCommands(Name("tests/task_graph/reduced_queue_score_final"), "Reduced Queue Score Final", graphicsCommands, {}, {}, Span(finalDependencies), graph);
+    const auto finalTaskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphReducedQueueScoreFinal), "Reduced Queue Score Final", graphicsCommands, {}, {}, Span(finalDependencies), graph);
     ASSERT_TRUE(finalTaskResult);
     const Core::GpuTaskId finalTask = *finalTaskResult;
     ASSERT_TRUE(producer.valid());
@@ -229,11 +231,11 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/ownership_score_texture"), "Ownership Score Texture");
+    const auto textureResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOwnershipScoreTexture), "Ownership Score Texture");
     ASSERT_TRUE(textureResult);
     const Core::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
-    const auto secondTextureResult = AddTextureMetadata(graph, Name("tests/task_graph/ownership_score_second_texture"), "Ownership Score Second Texture");
+    const auto secondTextureResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOwnershipScoreSecondTexture), "Ownership Score Second Texture");
     ASSERT_TRUE(secondTextureResult);
     const Core::GpuGraphResourceId secondTexture = *secondTextureResult;
     ASSERT_TRUE(secondTexture.valid());
@@ -250,19 +252,19 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     const Core::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
     const Core::GpuTaskCommandRequirements computeCommands = ComputeCommands();
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/ownership_score_producer")).setMarkerLabel("Ownership Score Producer").setResourceUses(producerUses);
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOwnershipScoreProducer)).setMarkerLabel("Ownership Score Producer").setResourceUses(producerUses);
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/ownership_score_consumer")).setMarkerLabel("Ownership Score Consumer").setResourceUses(consumerUses);
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOwnershipScoreConsumer)).setMarkerLabel("Ownership Score Consumer").setResourceUses(consumerUses);
     const auto consumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
     Core::GpuTaskDesc finalDesc;
-    finalDesc.setIdentity(Name("tests/task_graph/ownership_score_final_consumer")).setMarkerLabel("Ownership Score Final Consumer").setResourceUses(finalUses);
+    finalDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphOwnershipScoreFinalConsumer)).setMarkerLabel("Ownership Score Final Consumer").setResourceUses(finalUses);
     const auto finalConsumerResult = graph.addTask(finalDesc, graphicsCommands);
     ASSERT_TRUE(finalConsumerResult);
     const Core::GpuTaskId finalConsumer = *finalConsumerResult;
@@ -317,7 +319,7 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskCommandRequirements computeCommands;
     computeCommands.requiredCapabilities = Core::GpuQueueCapability::Compute;
-    const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/queue_diagnostic"), "Queue Diagnostic", computeCommands, {}, {}, {}, graph);
+    const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphQueueDiagnostic), "Queue Diagnostic", computeCommands, {}, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());

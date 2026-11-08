@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,16 +39,16 @@ TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGro
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    const auto graphicsResult = AddTaskWithCommands(Name("tests/task_graph/automatic_diagnostics_graphics"), "Automatic Diagnostics Graphics", GraphicsCommands(), scheduling, {}, {}, graph);
+    const auto graphicsResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticDiagnosticsGraphics), "Automatic Diagnostics Graphics", GraphicsCommands(), scheduling, {}, {}, graph);
     ASSERT_TRUE(graphicsResult);
     const Core::GpuTaskId graphics = *graphicsResult;
     ASSERT_TRUE(graphics.valid());
-    const auto firstComputeResult = AddTaskWithCommands(Name("tests/task_graph/automatic_diagnostics_first_compute"), "Automatic Diagnostics First Compute", ComputeCommands(), scheduling, {}, {}, graph);
+    const auto firstComputeResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticDiagnosticsFirstCompute), "Automatic Diagnostics First Compute", ComputeCommands(), scheduling, {}, {}, graph);
     ASSERT_TRUE(firstComputeResult);
     const Core::GpuTaskId firstCompute = *firstComputeResult;
     ASSERT_TRUE(firstCompute.valid());
     scheduling.mergeWithPrevious = true;
-    const auto secondComputeResult = AddTaskWithCommands(Name("tests/task_graph/automatic_diagnostics_second_compute"), "Automatic Diagnostics Second Compute", ComputeCommands(), scheduling, {}, {}, graph);
+    const auto secondComputeResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticDiagnosticsSecondCompute), "Automatic Diagnostics Second Compute", ComputeCommands(), scheduling, {}, {}, graph);
     ASSERT_TRUE(secondComputeResult);
     const Core::GpuTaskId secondCompute = *secondComputeResult;
     ASSERT_TRUE(secondCompute.valid());
@@ -87,17 +89,17 @@ TEST(GpuTaskGraph, ExtendsMergedGroupAfterLegalityWitnessFallsBackToGraphics){
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    const auto firstResult = AddTaskWithCommands(Name("tests/task_graph/automatic_witness_compute"), "Automatic Witness Compute", ComputeCommands(), scheduling, {}, {}, graph);
+    const auto firstResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticWitnessCompute), "Automatic Witness Compute", ComputeCommands(), scheduling, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
     scheduling.mergeWithPrevious = true;
     const Core::GpuTaskCommandRequirements primaryGraphicsCommands{ .requiredCapabilities = Core::GpuQueueCapability::Graphics, .requiresPrimaryGraphicsQueue = true, };
-    const auto graphicsResult = AddTaskWithCommands(Name("tests/task_graph/automatic_witness_graphics"), "Automatic Witness Graphics", primaryGraphicsCommands, scheduling, {}, Span(&first, 1u), graph);
+    const auto graphicsResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticWitnessGraphics), "Automatic Witness Graphics", primaryGraphicsCommands, scheduling, {}, Span(&first, 1u), graph);
     ASSERT_TRUE(graphicsResult);
     const Core::GpuTaskId graphics = *graphicsResult;
     ASSERT_TRUE(graphics.valid());
-    const auto lastResult = AddTaskWithCommands(Name("tests/task_graph/automatic_witness_final_compute"), "Automatic Witness Final Compute", ComputeCommands(), scheduling, {}, Span(&graphics, 1u), graph);
+    const auto lastResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticWitnessFinalCompute), "Automatic Witness Final Compute", ComputeCommands(), scheduling, {}, Span(&graphics, 1u), graph);
     ASSERT_TRUE(lastResult);
     const Core::GpuTaskId last = *lastResult;
     ASSERT_TRUE(last.valid());
@@ -132,13 +134,13 @@ TEST(GpuTaskGraph, SplitsMergedGroupForDisjointExternalQueueContracts){
     scheduling.cost = Core::GpuTaskCostHint::Large;
     Core::GpuTaskCommandRequirements commands = ComputeCommands();
     commands.externalQueue = queues[1u].id;
-    const auto firstResult = AddTaskWithCommands(Name("tests/task_graph/automatic_witness_external_compute"), "Automatic Witness External Compute", commands, scheduling, {}, {}, graph);
+    const auto firstResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticWitnessExternalCompute), "Automatic Witness External Compute", commands, scheduling, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
     scheduling.mergeWithPrevious = true;
     commands.externalQueue = queues[0u].id;
-    const auto secondResult = AddTaskWithCommands(Name("tests/task_graph/automatic_witness_external_graphics"), "Automatic Witness External Graphics", commands, scheduling, {}, Span(&first, 1u), graph);
+    const auto secondResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAutomaticWitnessExternalGraphics), "Automatic Witness External Graphics", commands, scheduling, {}, Span(&first, 1u), graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
     ASSERT_TRUE(second.valid());

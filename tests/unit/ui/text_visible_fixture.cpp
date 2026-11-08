@@ -4,6 +4,8 @@
 
 #include "text_visible_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +27,7 @@ Rect TextVisibleFixture::OutlineRectangle(const PlacedGlyph& glyph, const Point 
 }
 
 TextVisibleFixture::TextVisibleFixture()
-    : m_arena(Name("tests/ui/text/visible"))
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextVisible))
     , m_latin(m_arena, Name(s_TestLatinFontPath))
     , m_korean(m_arena, Name(s_TestKoreanFontPath))
     , m_text(m_arena)

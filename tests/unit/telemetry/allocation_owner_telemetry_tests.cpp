@@ -4,13 +4,14 @@
 
 #include <tests/common/test_context.h>
 #include <tests/unit/telemetry/telemetry_test_helpers.h>
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
+#include <logger/telemetry/report.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
 #include <core/perf/session.h>
 #include <core/telemetry/session.h>
-
-#include <logger/telemetry/report.h>
 
 #include <global/name_hash_text.h>
 #include <global/atomic.h>
@@ -27,6 +28,8 @@ namespace __hidden_allocation_owner_telemetry_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace TestCases = NWB::Tests::TelemetryCases;
 
 constexpr AStringView s_ArenaSourceRecord = "\"source\": \"arena\"";
 constexpr AStringView s_ReservedBytesField = "reservedBytes";
@@ -153,7 +156,7 @@ static void ExpectJsonNumber(Core::Alloc::ScratchArena& scratchArena, const AStr
 
 TEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue){
     TestArena testArena;
-    const Name owner("tests/telemetry/payload_validation_owner");
+    const Name owner = NWB::Tests::TelemetryCases::s_TelemetryPayloadValidationOwner;
     const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::Arena);
     const Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);
     Telemetry::TelemetryBytes bytes(testArena.arena);
@@ -203,7 +206,7 @@ TEST(AllocationOwnerTelemetry, SeparatesRecorderSourcesAndKeepsPreviousFrameDuri
     Perf::MemoryRecorder recorder(testArena.arena);
     recorder.setEnabled(true);
     const Perf::MemoryView view(recorder);
-    const Name owner("tests/telemetry/recorder_source_collision");
+    const Name owner = NWB::Tests::TelemetryCases::s_TelemetryRecorderSourceCollision;
     const Array<Perf::MemorySource::Enum, 3> sources = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking };
     Array<Perf::MemoryScopeId, LengthOf(sources)> scopes;
     Array<Perf::MemorySnapshot, LengthOf(sources)> previous;
@@ -255,10 +258,10 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     TestArena testArena;
     Array<char, 32u> sequenceText = {};
     const AStringView sequence = FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText);
-    const auto ownerNameResult = DeriveName(Name("tests/telemetry/automatic_owner/"), sequence);
+    const auto ownerNameResult = DeriveName(Name(TestCases::s_TelemetryCaseAutomaticOwner), sequence);
     ASSERT_TRUE(ownerNameResult);
     const Name ownerName = *ownerNameResult;
-    const auto scratchNameResult = DeriveName(Name("tests/telemetry/retired_scratch/"), sequence);
+    const auto scratchNameResult = DeriveName(Name(TestCases::s_TelemetryCaseRetiredScratch), sequence);
     ASSERT_TRUE(scratchNameResult);
     const Name scratchName = *scratchNameResult;
     Core::Alloc::GlobalArena owner(ownerName);
@@ -371,11 +374,11 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     ExpectSnapshot(parsed->snapshot, retired);
     ExpectDelta(parsed->delta, retiredDelta);
     EXPECT_NE(FindOwnerEvent(capture.view(), scratchName, Perf::MemorySource::Arena), nullptr);
-    const Name heapName("global/arena_memory/heap_backing");
+    const Name heapName = NWB::Tests::TelemetryCases::s_GlobalArenaMemoryHeapBacking;
     EXPECT_NE(FindOwnerEvent(capture.view(), heapName, Perf::MemorySource::HeapBacking), nullptr);
 
     Log::TelemetryReport report(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/json_checks"));
+    Core::Alloc::ScratchArena scratchArena{Name(TestCases::s_TelemetryCaseJsonChecks)};
     auto reportResult1 = Log::BuildTelemetryReport(capture.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult1);
     report = Move(*reportResult1);
@@ -409,7 +412,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
 TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndividualArenaPeak){
     TestArena testArena;
     Array<char, 32u> sequenceText = {};
-    const auto ownerNameResult = DeriveName(Name("tests/telemetry/shared_arena_peak/"), FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText));
+    const auto ownerNameResult = DeriveName(Name(NWB::Tests::TelemetryCases::s_TelemetryCaseTestsTelemetrySharedArenaPeak), FormatDecimal(s_OwnerSequence.fetch_add(1u, MemoryOrder::relaxed), sequenceText));
     ASSERT_TRUE(ownerNameResult);
     const Name ownerName = *ownerNameResult;
     Perf::Session perfSession(testArena.arena);
@@ -455,7 +458,7 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
     const Telemetry::PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
     Log::TelemetryReport report(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/shared_arena_peak_json_checks"));
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::TelemetryCases::s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks)};
     auto reportResult2 = Log::BuildTelemetryReport(capture.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
@@ -472,7 +475,7 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
-    const Name owner("tests/telemetry/shared_source_identity");
+    const Name owner = NWB::Tests::TelemetryCases::s_TelemetrySharedSourceIdentity;
     const Array<Perf::MemorySource::Enum, 3> sources = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking };
     for(usize sourceIndex = 0u; sourceIndex < LengthOf(sources); ++sourceIndex){
         Perf::MemorySnapshot snapshot = MakeSnapshot(owner, sources[sourceIndex]);
@@ -484,7 +487,7 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
         ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
     }
     Log::TelemetryReport report(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/heap_json_checks"));
+    Core::Alloc::ScratchArena scratchArena{Name(TestCases::s_TelemetryCaseHeapJsonChecks)};
     auto reportResult3 = Log::BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult3);
     report = Move(*reportResult3);
@@ -540,7 +543,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, firstOwner, "Producer Display Name", MakeSnapshot(firstOwner, Perf::MemorySource::ExplicitScope), TelemetryTestDetail::MakeTestMemoryDelta(-1), 93u));
     ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, unknownOwner, unknownHashText.data(), MakeSnapshot(unknownOwner, Perf::MemorySource::HeapBacking), TelemetryTestDetail::MakeTestMemoryDelta(-1), 94u));
     Log::TelemetryReport report(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/report_work"));
+    Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::TelemetryCases::s_TelemetryCaseTestsTelemetryReportWork)};
     auto reportResult4 = Log::BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult4);
     report = Move(*reportResult4);

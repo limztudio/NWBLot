@@ -18,6 +18,7 @@ LIT_UPLOAD_POLL_SECONDS = 0.02
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "smoke"))
 from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, collect_log_delta, ensure_process_running, launch_logserver, require_normal_process_exit)
+from window_capture_logs import full_log_scope
 from window_capture_validation import validate_expected_log_text
 
 LIT_LOOPBACK_HOST = "127.0.0.1"
@@ -122,7 +123,8 @@ def run(executable, output, timeout):
                 exit_code, tail = CaptureProcessTermination.terminate_process(second_process, "second logserver upload cleanup", rejected_output=STRICT_LOG_FAILURE_MESSAGES)
                 require_normal_process_exit(exit_code, tail, LIT_SECOND_LOGSERVER)
             if directory is not None:
-                logs = collect_log_delta(directory, baseline, pattern)
+                full_baseline, full_pattern = full_log_scope(baseline, pattern)
+                logs = collect_log_delta(directory, full_baseline, full_pattern)
                 (output / "logger.log").write_text(logs, encoding=LIT_UTF_8)
                 validate_expected_log_text(logs, (), STRICT_LOG_FAILURE_MESSAGES)
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding=LIT_UTF_8)

@@ -4,14 +4,15 @@
 
 #include "volume_test_fixture.h"
 
+#include <tests/common/test_context.h>
+#include <tests/common/capturing_logger.h>
+#include <tests/unit/filesystem/name_cases.adhd.h>
+
 #include <core/filesystem/factory.h>
 #include <core/filesystem/volume_file_system.h>
 #include <core/filesystem/volume_staging.h>
 #include <core/filesystem/volume_naming.h>
 #include <core/filesystem/volume_storage_detail.h>
-
-#include <tests/common/test_context.h>
-#include <tests/common/capturing_logger.h>
 
 #include <global/filesystem.h>
 #include <global/binary.h>
@@ -42,8 +43,8 @@ constexpr AStringView s_HeldFileSuffix = ".held";
 using namespace NWB::Core::Filesystem;
 using Path = NWB::Path;
 
-inline constexpr Name s_TestFile("project/tests/payload");
-inline constexpr Name s_TestArena("tests/filesystem");
+inline constexpr Name s_TestFile = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsPayload;
+inline constexpr Name s_TestArena = NWB::Tests::FilesystemCases::s_FilesystemNameTestsFilesystem;
 
 using NWB::Tests::FilesystemTest::BlockingRestoreLogger;
 using NWB::Tests::FilesystemTest::FilesystemVolumeTest;
@@ -97,7 +98,7 @@ TEST_F(FilesystemVolumeTest, SegmentCreatedAfterMountIsNotTruncated){
 }
 
 TEST_F(FilesystemVolumeTest, FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable){
-    constexpr Name s_Large("project/tests/large_growth");
+    constexpr Name s_Large = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsLargeGrowth;
     VolumeFileSystem filesystem(m_arena);
     ASSERT_TRUE(filesystem.mount(m_desc));
     const Array<u8, 3u> payload{ 1u, 2u, 3u };
@@ -137,7 +138,7 @@ TEST_F(FilesystemVolumeTest, GrowthDoesNotPadOverExternallyTruncatedLiveData){
     ASSERT_TRUE(ResizeFile(first, truncatedSize));
     NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
     Vector<u8, NWB::Core::Alloc::ScratchArena> large(5000u, 5u, scratchArena);
-    EXPECT_FALSE(filesystem.writeFile(Name("project/tests/new_growth"), large));
+    EXPECT_FALSE(filesystem.writeFile(Name(NWB::Tests::FilesystemCases::s_FilesystemInputNameProjectTestsNewGrowth), large));
     const auto size = FileSize(first);
     ASSERT_TRUE(size);
     EXPECT_EQ(*size, truncatedSize);
@@ -156,7 +157,7 @@ TEST_F(FilesystemVolumeTest, GrowthAtSegmentLimitDoesNotExpandTrimmedFile){
     ASSERT_TRUE(before);
     NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
     Vector<u8, NWB::Core::Alloc::ScratchArena> large(5000u, 5u, scratchArena);
-    EXPECT_FALSE(filesystem.writeFile(Name("project/tests/limited_growth"), large));
+    EXPECT_FALSE(filesystem.writeFile(Name(NWB::Tests::FilesystemCases::s_FilesystemInputNameProjectTestsLimitedGrowth), large));
     const auto after = FileSize(first);
     ASSERT_TRUE(after);
     EXPECT_EQ(*after, *before);
@@ -322,7 +323,7 @@ TEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles){
 }
 
 TEST_F(FilesystemVolumeTest, CompactionPreservesExistingRecoveryDirectories){
-    constexpr Name s_Gap("project/tests/recovery_gap");
+    constexpr Name s_Gap = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsRecoveryGap;
     VolumeFileSystem filesystem(m_arena);
     ASSERT_TRUE(filesystem.mount(m_desc));
     const Array<u8, 4u> payload{ 1u, 2u, 3u, 4u };
@@ -385,9 +386,9 @@ TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){
 #endif
 
 TEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBytes){
-    constexpr Name s_First("project/tests/compact_first");
-    constexpr Name s_Gap("project/tests/compact_gap");
-    constexpr Name s_Target("project/tests/compact_target");
+    constexpr Name s_First = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsCompactFirst;
+    constexpr Name s_Gap = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsCompactGap;
+    constexpr Name s_Target = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsCompactTarget;
     VolumeFileSystem filesystem(m_arena);
     ASSERT_TRUE(filesystem.mount(m_desc));
     NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
@@ -425,8 +426,8 @@ TEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBy
 
 #if NWB_OCCUR_WARNING
 TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership){
-    constexpr Name s_First("project/tests/mutation_first");
-    constexpr Name s_New("project/tests/mutation_new");
+    constexpr Name s_First = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsMutationFirst;
+    constexpr Name s_New = NWB::Tests::FilesystemCases::s_FilesystemNameProjectTestsMutationNew;
     VolumeFileSystem filesystem(m_arena);
     ASSERT_TRUE(filesystem.mount(m_desc));
     NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);

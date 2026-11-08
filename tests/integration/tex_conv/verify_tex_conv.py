@@ -164,6 +164,10 @@ def main() -> int:
     checker = tuple(((x * 37 + y * 11) & 255, (x * 17 + y * 53) & 255, (x * 71 + y * 29) & 255, 255 if (x + y) % 3 else 128) for y in range(5) for x in range(7))
     source_path = output_dir / "checker.png"
     TextureImageFixtures.write_png_pixels(source_path, 7, 5, 6, checker)
+    for arguments in ((), (str(source_path), LIT_VOLUME_2, str(source_path))):
+        invalid_modes = subprocess.run([args.tex_conv, *arguments], cwd=output_dir, text=True, capture_output=True)
+        if invalid_modes.returncode != 1 or "provide exactly one of a 2D input, --cube, or --volume" not in invalid_modes.stdout + invalid_modes.stderr:
+            raise AssertionError(f"invalid input modes were not rejected: {arguments}\n{invalid_modes.stdout}\n{invalid_modes.stderr}")
     prepared = run_conversion(args.tex_conv, output_dir, "checker", (source_path,))
     if PreparedTextureReader.read_raw_pair(prepared)[LIT_MIPS] != [(7, 5, 1), (3, 2, 1), (1, 1, 1)]:
         raise AssertionError("non-power-of-two preparation changed its complete mip chain")

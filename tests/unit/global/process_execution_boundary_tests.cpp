@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/global/name_case_types.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -35,14 +36,14 @@ namespace __hidden_process_execution_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_CombinedOutputFilename = "combined output.txt";
+constexpr AStringView s_CombinedOutputFilename = NWB::Tests::GlobalCases::s_GlobalProcessCombinedOutputFilename;
 using AString = NWB::Tests::TestAString;
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-static constexpr AStringView s_BinSh = "/bin/sh";
-static constexpr AStringView s_C = "-c";
+static constexpr AStringView s_BinSh = NWB::Tests::GlobalCases::s_GlobalProcessBinSh;
+static constexpr AStringView s_C = NWB::Tests::GlobalCases::s_GlobalProcessCFlag;
 #endif
 #if defined(NWB_PLATFORM_WINDOWS)
-static constexpr AStringView s_TrailingSuffix = ".trailing";
+static constexpr AStringView s_TrailingSuffix = NWB::Tests::GlobalCases::s_GlobalProcessTrailingSuffix;
 #endif
 
 
@@ -159,7 +160,7 @@ TEST(Global, CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwin
     const Array<AStringView, 3u> argv = { s_BinSh, s_C, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     ThrowingCaptureOutput output;
-    constexpr u32 s_CaptureTimeoutMS = 250u;
+    constexpr u32 s_CaptureTimeoutMS = NWB::Tests::GlobalCases::s_GlobalProcessCaptureTimeoutMS;
     EXPECT_THROW(EXPECT_FALSE(CaptureProcessOutput(output, testArena.arena, argv, 64u, 64u, s_CaptureTimeoutMS)), RuntimeException);
     ASSERT_GT(output.childPid, 0);
     int status = 0;
@@ -176,7 +177,7 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     const Array<AStringView, 3u> argv = { s_BinSh, s_C, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
-    constexpr u32 s_CaptureTimeoutMS = 250u;
+    constexpr u32 s_CaptureTimeoutMS = NWB::Tests::GlobalCases::s_GlobalProcessCaptureTimeoutMS;
     const auto captured = CaptureProcessOutput(output, testArena.arena, argv, 16u, 64u, s_CaptureTimeoutMS);
     ASSERT_FALSE(captured);
     EXPECT_TRUE(captured.error().outputTruncated);
@@ -207,7 +208,7 @@ TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
     AString output(testArena.arena);
     const auto startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
     ASSERT_TRUE(startMilliseconds);
-    constexpr u32 s_ContinuousOutputTimeoutMS = 100u;
+    constexpr u32 s_ContinuousOutputTimeoutMS = NWB::Tests::GlobalCases::s_GlobalProcessContinuousOutputTimeoutMS;
     const auto captured = CaptureProcessOutput(output, testArena.arena, argv, 64u, 64u, s_ContinuousOutputTimeoutMS);
     ASSERT_FALSE(captured);
     EXPECT_EQ(captured.error().kind, ProcessCaptureFailureKind::TimedOut);
@@ -216,7 +217,7 @@ TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
     ASSERT_TRUE(finishMilliseconds);
     ASSERT_GE(*finishMilliseconds, *startMilliseconds);
     const u64 elapsedMilliseconds = *finishMilliseconds - *startMilliseconds;
-    constexpr u32 s_MaximumCaptureElapsedMS = 1000u;
+    constexpr u32 s_MaximumCaptureElapsedMS = NWB::Tests::GlobalCases::s_GlobalProcessMaximumCaptureElapsedMS;
     EXPECT_LT(elapsedMilliseconds, s_MaximumCaptureElapsedMS);
 }
 
@@ -251,5 +252,4 @@ TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

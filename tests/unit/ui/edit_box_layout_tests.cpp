@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/edit_box.h>
-
 #include "fixture_text_shaping.h"
 
 #include <tests/common/font_fixture.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/widgets/edit_box.h>
 
 #include <global/filesystem.h>
 #include <global/simdmath.h>
@@ -31,7 +32,7 @@ using namespace NWB::Impl::Ui;
 constexpr AStringView s_EditBoxSkinPath = "tests/ui/edit_box/skin";
 constexpr AStringView s_EditBoxTexturePath = "tests/ui/edit_box/texture";
 constexpr AStringView s_EditBoxFontPath = "tests/ui/edit_box/font";
-constexpr Name s_FontScratchArenaName("tests/ui/fonts/operation_scratch");
+constexpr Name s_FontScratchArenaName = NWB::Tests::UiCases::s_UiCaseNameFontScratch;
 constexpr AStringView s_LatinFontFileName = "latin.font";
 
 using NWB::Tests::UiFixtureText::FixtureShaper;
@@ -39,7 +40,7 @@ using NWB::Tests::UiFixtureText::FixtureShaper;
 class EditBoxLayoutTests : public testing::Test{
 public:
     EditBoxLayoutTests()
-        : m_arena(Name("tests/ui/widgets/edit_box/layout"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseNameEditBoxLayout))
         , m_model(m_arena)
         , m_shaper(m_arena)
         , m_builder(m_arena, m_shaper)
@@ -371,7 +372,7 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
     ASSERT_TRUE(place());
     UiSkin skin(m_arena, Name(s_EditBoxSkinPath));
     UiSkin::RegionVector regions(m_arena);
-    regions.push_back({ Name("button.normal"), { 0u, 0u, 4u, 4u }, {}, {} });
+    regions.push_back({ Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal), { 0u, 0u, 4u, 4u }, {}, {} });
     skin.setAtlas(Core::Assets::AssetRef<Texture>(s_EditBoxTexturePath), 4u, 4u, 1.0f, Move(regions));
     PaintBuilder paint(m_arena);
     EditBoxPaintFlags flags;

@@ -10,6 +10,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
 
 #include <global/filesystem.h>
 #include <global/text_utils.h>
@@ -26,9 +27,9 @@ namespace __hidden_metadata_discovery_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_ProjectVirtualRoot = "project";
+constexpr AStringView s_ProjectVirtualRoot = NWB::Tests::AssetsGraphicsFixture::s_ProjectVirtualRoot;
 #if !defined(NWB_PLATFORM_WINDOWS)
-constexpr AStringView s_BuildDirectory = "__build_obj";
+constexpr AStringView s_BuildDirectory = NWB::Tests::AssetsGraphicsFixture::s_BuildDirectory;
 #endif
 
 
@@ -41,8 +42,8 @@ using namespace NWB::Core::Assets;
 
 
 TEST(MetadataDiscoveryAdmission, DuplicateRootsKeepFirstOwnerAndPaths){
-    AssetArena arena(Name("tests/metadata_discovery/duplicate_roots"));
-    ScratchArena scratchArena(Name("tests/metadata_discovery/duplicate_roots_scratch"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryDuplicateRoots)};
+    ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch)};
     const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / "tests" / "smoke" / "assets" / "textures";
     CookVector<ResolvedAssetRoot> roots(arena);
     roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
@@ -65,8 +66,8 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
 #if defined(NWB_PLATFORM_WINDOWS)
     GTEST_SKIP() << "The current Windows host identity folds physical path case";
 #else
-    AssetArena arena(Name("tests/metadata_discovery/case_identity"));
-    Alloc::ScratchArena scratchArena(Name("tests/metadata_discovery/case_identity_scratch"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryCaseIdentity)};
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch)};
     const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / s_BuildDirectory / "metadata_discovery_case_identity";
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     const NWB::Path upperPath = root / "Case.nwb";
@@ -91,8 +92,8 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
 
 
 TEST(MetadataDiscoveryAdmission, VirtualPathDoesNotSkipAnUninspectableEarlierRoot){
-    AssetArena arena(Name("tests/metadata_discovery/root_inspection"));
-    Alloc::ScratchArena scratchArena(Name("tests/metadata_discovery/root_inspection_scratch"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryRootInspection)};
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryRootInspectionScratch)};
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::ReportOnly);
     const NWB::Path repo = Tests::RepoRootOf(arena, __FILE__);
@@ -120,7 +121,7 @@ TEST(MetadataDiscoveryAdmission, VirtualPathDoesNotSkipAnUninspectableEarlierRoo
 
 
 TEST(MetadataDiscoveryAdmission, PathsInSameHashBucketKeepDistinctOwnedPaths){
-    ScratchArena scratchArena(Name("tests/metadata_discovery/colliding_paths"));
+    ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataDiscoveryCollidingPaths)};
     CookMetadataDetail::DiscoveredPathSet seen(0, Hasher<AStringView>(), EqualTo<>(), scratchArena);
     seen.reserve(2u);
     ScratchString first("a/first.asset.nwb", scratchArena);

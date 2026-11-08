@@ -4,6 +4,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
 
 #include <impl/assets_model/cook.h>
 
@@ -48,9 +49,9 @@ using Metascript::Value;
 
 
 struct BunchFixture{
-    Metascript::MetaArena metadataArena{ Name("tests/asset_bunch/metadata") };
-    AssetArena outputArena{ Name("tests/asset_bunch/output") };
-    Alloc::ScratchArena scratchArena{ Name("tests/asset_bunch/scratch") };
+    Metascript::MetaArena metadataArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchMetadata) };
+    AssetArena outputArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchOutput) };
+    Alloc::ScratchArena scratchArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchScratch) };
     Metascript::Document document{ metadataArena };
     const NWB::Path assetRoot{ outputArena, "tests/asset_bunch/assets" };
     const NWB::Path filePath{ outputArena, "tests/asset_bunch/assets/fixtures/bundle.nwb" };
@@ -198,7 +199,7 @@ TEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReus
         const ArenaMemoryStats retainedMetadata = fixture.metadataArena.memoryStats();
 
         // Keep this regression within one chunk per alignment so it isolates string growth from chunk-stack reuse.
-        Alloc::ScratchArena scratch(Name("tests/asset_bunch/long_path_scratch"), 65536u);
+        Alloc::ScratchArena scratch(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetBunchLongPathScratch), 65536u);
         auto* const sentinel = static_cast<u8*>(scratch.allocate(1u, 32u));
         ASSERT_NE(sentinel, nullptr);
         for(usize index = 0u; index < 32u; ++index)

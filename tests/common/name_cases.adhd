@@ -1,0 +1,13 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_CommonCaseNameTestsCommonCapturingLogger = "tests/common/capturing_logger";
+const Name s_CommonCaseNameTestsCommonEcsTestWorld = "tests/common/ecs_test_world";
+const Name s_CommonCaseNameTestsCommonTestArena = "tests/common/test_arena";
+const Name s_CommonCaseNameTestsCommonDefaultTestArena = "tests/common/default_test_arena";
+const Name s_CommonCaseNameRenderFrameRecovery = "render.frame_recovery";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

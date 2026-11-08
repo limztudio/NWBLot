@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/shadow/quality_settings.adhd.h>
+
+#include <global/limit.h>
 
 #include <gtest/gtest.h>
 
@@ -18,6 +21,14 @@ namespace __hidden_shadow_quality_settings_tests{
 
 using namespace NWB::Impl;
 
+
+TEST(ShadowQualitySettings, WrappingReceiverExtentPreservesOverflowAndZeroGroupBehavior){
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(11u, 2u, 4u), 2u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(9u, 2u, 4u), 2u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(Limit<u32>::s_Max, 2u, 4u), 0u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(0u, 2u, 4u), 0u);
+    EXPECT_EQ(ResolveWrappingRayTracingDispatchGroup(11u, 2u, 0u), 0u);
+}
 
 TEST(ShadowQualitySettings, UnknownModesAreRejectedAndCannotRemoveAllSamples){
     ShadowQualitySettings settings;

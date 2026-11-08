@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/text/layout.h>
 
 #include <gtest/gtest.h>
@@ -57,7 +59,7 @@ private:
 class TextLayoutInkTests : public testing::Test{
 public:
     TextLayoutInkTests()
-        : m_arena(Name("tests/ui/text/layout_ink"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextLayoutInk))
         , m_shaper(m_arena)
         , m_builder(m_arena, m_shaper)
         , m_layout(m_arena)

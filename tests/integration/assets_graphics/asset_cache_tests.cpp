@@ -41,8 +41,8 @@ namespace __hidden_assets_graphics_asset_cache_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_AssetsDirectory = "assets";
-constexpr AStringView s_TestsConfiguration = "tests";
+constexpr AStringView s_AssetsDirectory = AssetsGraphicsFixture::s_AssetsDirectory;
+constexpr AStringView s_TestsConfiguration = AssetsGraphicsFixture::s_TestsConfiguration;
 static constexpr AStringView s_SamplerMetadata =
     "sampler asset;\n"
     "asset.min_filter = \"linear\";\n"
@@ -94,7 +94,7 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     const Path& root = cookCase->root;
     const Path assetRoot = root / s_AssetsDirectory;
     const Path mixedCaseNwbPath = assetRoot / "Samplers" / "First_Sampler.nwb";
-    const Name virtualPath("project/samplers/first_sampler");
+    const Name virtualPath = NWB::Tests::AssetsGraphicsFixture::s_ProjectSamplersFirstSampler;
     NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(0u);
 
     const auto buildAndGatherWithRepoRoot = [&](const Path& builtDir, const Path& outDir) -> b8{

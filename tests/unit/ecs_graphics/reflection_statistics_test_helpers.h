@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/reflection/types.adhd.h>
 #include <impl/ecs_render/shared/statistics_readback_state.h>
 
@@ -36,7 +38,7 @@ template<typename ControlT, u16 DefaultDeviceGeneration = 1u>
 struct StatisticsContext{
     using Handle = RefCountPtr<ControlT, ArenaRefDeleter<ControlT, NWB::Core::Alloc::GlobalArena>>;
 
-    NWB::Core::Alloc::GlobalArena arena{Name("tests/statistics")};
+    NWB::Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsStatistics)};
     Handle control;
 
 

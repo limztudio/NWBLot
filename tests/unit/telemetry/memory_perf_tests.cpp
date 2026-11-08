@@ -4,6 +4,8 @@
 
 #include "telemetry_test_helpers.h"
 
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
 #include <global/binary.h>
 
 #include <gtest/gtest.h>
@@ -18,8 +20,10 @@ namespace __hidden_telemetry_memory_perf_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_MemoryProjectArena = "memory/project_arena";
-static constexpr AStringView s_ProjectArenaText = "Project Arena";
+namespace TestCases = NWB::Tests::TelemetryCases;
+
+static constexpr AStringView s_MemoryProjectArena = TestCases::s_TelemetryMemoryProjectArena;
+static constexpr AStringView s_ProjectArenaText = TestCases::s_TelemetryProjectArenaText;
 using namespace TelemetryTestDetail;
 
 
@@ -37,7 +41,7 @@ TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
 
     EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(scopeName, AStringView(), snapshot, delta, payload));
 
-    snapshot.scopeName = Name("memory/other_arena");
+    snapshot.scopeName = Name(TestCases::s_TelemetryCaseMemoryOtherArena);
     EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(scopeName, s_ProjectArenaText, snapshot, delta, payload));
 
     snapshot = MakeTestMemorySnapshot(scopeName);
@@ -49,22 +53,18 @@ TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
     using MemorySnapshot = NWB::Core::Perf::MemorySnapshot;
     constexpr u64 s_MaxSigned = static_cast<u64>(Limit<i64>::s_Max);
     constexpr u64 s_MinMagnitude = s_MaxSigned + 1u;
-    struct CounterCase{
-        u64 current;
-        u64 previous;
-        i64 expected;
-    };
+    using CounterCase = NWB::Tests::TelemetryCases::MemoryDifferenceCase;
     constexpr Array<CounterCase, 10> s_Cases = {{
-        { 0u, 0u, 0 },
-        { s_MaxSigned, 0u, Limit<i64>::s_Max },
-        { 0u, s_MaxSigned, -Limit<i64>::s_Max },
-        { 0u, s_MinMagnitude, Limit<i64>::s_Min },
-        { s_MinMagnitude - 1u, s_MinMagnitude, -1 },
-        { s_MinMagnitude + 5u, s_MinMagnitude - 5u, 10 },
-        { s_MinMagnitude - 5u, s_MinMagnitude + 5u, -10 },
-        { Limit<u64>::s_Max, Limit<u64>::s_Max - 17u, 17 },
-        { Limit<u64>::s_Max - 17u, Limit<u64>::s_Max, -17 },
-        { 0u, 128u, -128 },
+        { .current = 0u, .previous = 0u, .expected = 0 },
+        { .current = s_MaxSigned, .previous = 0u, .expected = Limit<i64>::s_Max },
+        { .current = 0u, .previous = s_MaxSigned, .expected = -Limit<i64>::s_Max },
+        { .current = 0u, .previous = s_MinMagnitude, .expected = Limit<i64>::s_Min },
+        { .current = s_MinMagnitude - 1u, .previous = s_MinMagnitude, .expected = -1 },
+        { .current = s_MinMagnitude + 5u, .previous = s_MinMagnitude - 5u, .expected = 10 },
+        { .current = s_MinMagnitude - 5u, .previous = s_MinMagnitude + 5u, .expected = -10 },
+        { .current = Limit<u64>::s_Max, .previous = Limit<u64>::s_Max - 17u, .expected = 17 },
+        { .current = Limit<u64>::s_Max - 17u, .previous = Limit<u64>::s_Max, .expected = -17 },
+        { .current = 0u, .previous = 128u, .expected = -128 },
     }};
     const Name scopeName(s_MemoryProjectArena);
     const auto makeSnapshot = [scopeName](const u64 counter, const u64 frame)noexcept{
@@ -99,16 +99,13 @@ TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
     using MemorySnapshot = NWB::Core::Perf::MemorySnapshot;
     using CounterField = u64 MemorySnapshot::*;
     constexpr Array<CounterField, 6> s_Fields = { &MemorySnapshot::reservedBytes, &MemorySnapshot::usedBytes, &MemorySnapshot::peakUsedBytes, &MemorySnapshot::allocationCount, &MemorySnapshot::reallocationCount, &MemorySnapshot::deallocationCount };
-    struct CounterCase{
-        u64 current;
-        u64 previous;
-    };
+    using CounterCase = NWB::Tests::TelemetryCases::MemoryUnrepresentableCase;
     constexpr u64 s_MinMagnitude = static_cast<u64>(Limit<i64>::s_Max) + 1u;
     constexpr Array<CounterCase, 4> s_Cases = {{
-        { s_MinMagnitude, 0u },
-        { 0u, s_MinMagnitude + 1u },
-        { Limit<u64>::s_Max, 0u },
-        { 0u, Limit<u64>::s_Max },
+        { .current = s_MinMagnitude, .previous = 0u },
+        { .current = 0u, .previous = s_MinMagnitude + 1u },
+        { .current = Limit<u64>::s_Max, .previous = 0u },
+        { .current = 0u, .previous = Limit<u64>::s_Max },
     }};
     TestArena testArena;
     const Name scopeName(s_MemoryProjectArena);
@@ -138,19 +135,14 @@ TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
 }
 
 TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualRecords){
-    struct DeltaCase{
-        i64 first;
-        i64 second;
-        i64 expected;
-        b8 valid;
-    };
+    using DeltaCase = NWB::Tests::TelemetryCases::MemoryDeltaCase;
     constexpr Array<DeltaCase, 6> s_Cases = {{
-        { Limit<i64>::s_Max, 1, 0, false },
-        { Limit<i64>::s_Min, -1, 0, false },
-        { Limit<i64>::s_Max - 1, 1, Limit<i64>::s_Max, true },
-        { Limit<i64>::s_Min + 1, -1, Limit<i64>::s_Min, true },
-        { Limit<i64>::s_Max, -Limit<i64>::s_Max, 0, true },
-        { Limit<i64>::s_Min, Limit<i64>::s_Max, -1, true },
+        { .first = Limit<i64>::s_Max, .second = 1, .expected = 0, .valid = false },
+        { .first = Limit<i64>::s_Min, .second = -1, .expected = 0, .valid = false },
+        { .first = Limit<i64>::s_Max - 1, .second = 1, .expected = Limit<i64>::s_Max, .valid = true },
+        { .first = Limit<i64>::s_Min + 1, .second = -1, .expected = Limit<i64>::s_Min, .valid = true },
+        { .first = Limit<i64>::s_Max, .second = -Limit<i64>::s_Max, .expected = 0, .valid = true },
+        { .first = Limit<i64>::s_Min, .second = Limit<i64>::s_Max, .expected = -1, .valid = true },
     }};
     TestArena testArena;
     const Name scopeName(s_MemoryProjectArena);
@@ -219,3 +211,4 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

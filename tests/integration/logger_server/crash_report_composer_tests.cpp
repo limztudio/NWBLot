@@ -4,6 +4,7 @@
 
 #include <logger/server/crash_report_composer.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/logger_server/name_cases.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -19,7 +20,7 @@ using namespace NWB;
 
 TEST(CrashReportComposerTests, TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText){
     Tests::TestArena<> arena;
-    Core::Alloc::ScratchArena scratch(Name("tests/crash_report_composer/scratch"));
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::LoggerCrashCases::s_LoggerCrashReportComposerScratch) };
     Log::CrashPackageSummary summary(arena.arena);
     summary.triggerMessage = "fault";
     Log::CrashReportText details(arena.arena);
@@ -31,7 +32,7 @@ TEST(CrashReportComposerTests, TombstoneStackMovesBeforeDetailsWithoutBorrowingC
 
 TEST(CrashReportComposerTests, EmptyPrimaryStackTakesPrecedenceOverTombstone){
     Tests::TestArena<> arena;
-    Core::Alloc::ScratchArena scratch(Name("tests/crash_report_composer/scratch"));
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::LoggerCrashCases::s_LoggerCrashReportComposerScratch) };
     Log::CrashPackageSummary summary(arena.arena);
     Log::CrashReportText details(arena.arena);
     details += "[callstack]\n\n[tombstone_callstack]\nfallback\n";
@@ -48,3 +49,4 @@ TEST(CrashReportComposerTests, EmptyPrimaryStackTakesPrecedenceOverTombstone){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

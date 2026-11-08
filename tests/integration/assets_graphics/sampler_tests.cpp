@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <gtest/gtest.h>
 
 
@@ -63,7 +65,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     TestArena testArena;
-    NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/binary_admission"));
+    NWB::Impl::Sampler sampler(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSamplersBinaryAdmission));
     NWB::Core::SamplerDesc description;
     description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
     description.addressW = NWB::Core::SamplerAddressMode::Border;
@@ -119,7 +121,7 @@ TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAnd
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
-    NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/reload_admission"));
+    NWB::Impl::Sampler sampler(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSamplersReloadAdmission));
     NWB::Core::SamplerDesc description;
     description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
     description.maxAnisotropy = 4.0f;
@@ -166,7 +168,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreserv
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
-    NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/wide_enum_admission"));
+    NWB::Impl::Sampler sampler(testArena.arena, Name(AssetsGraphicsFixture::s_AssetCaseProjectSamplersWideEnumAdmission));
     NWB::Core::SamplerDesc description;
     description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
     description.addressU = NWB::Core::SamplerAddressMode::MirrorOnce;

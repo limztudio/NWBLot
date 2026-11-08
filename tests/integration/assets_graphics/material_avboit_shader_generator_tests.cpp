@@ -18,7 +18,7 @@ namespace __hidden_material_avboit_shader_generator_tests{
 
 TEST(MaterialAvboitShaderGenerator, MissingInterfaceRejectsTransparentEntryWithoutChangingShaderNames){
     NWB::Tests::AssetsGraphicsFixture::TestArena testArena;
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/avboit_shader_generator/scratch"));
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAvboitShaderGeneratorScratch);
     NWB::Tests::CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
     auto root = NWB::Tests::AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "avboit_shader_missing_interface_v2");
@@ -53,3 +53,4 @@ TEST(MaterialAvboitShaderGenerator, MissingInterfaceRejectsTransparentEntryWitho
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

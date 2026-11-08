@@ -1,0 +1,85 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <global/arena_memory.h>
+namespace NWB::Tests::AllocCases{
+using ArenaStatsValue = ::ArenaMemoryStats;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_AllocCaseScratchReuseTailTagOffset = 17u;
+const u32 s_AllocCaseScratchReusePathReserveBytes = 96u;
+const u32 s_AllocCaseScratchReuseSentinelByte = 71u;
+const u32 s_AllocCaseScratchReuseBlockBytes = 96u;
+const u32 s_AllocCaseScratchReuseFirstSentinel = 17u;
+const u32 s_AllocCaseScratchReuseCollectionCount = 1024u;
+const usize s_AllocCasePersistentArenaHighAlignment = 4096u;
+const usize s_AllocCaseSmallArenaPayloadBytes = 1024u;
+const usize s_AllocCaseVerifyAlignedReallocationAlignment = 256u;
+
+const Name s_AllocCasePersistentArenaExactPayload = "tests/persistent_arena/exact_payload";
+const Name s_AllocCasePersistentArenaExactOveralignedPayload = "tests/persistent_arena/exact_overaligned_payload";
+const Name s_AllocCasePersistentArenaFixedArrayBackings = "tests/persistent_arena/fixed_array_backings";
+const Name s_AllocCasePersistentArenaCoalescing = "tests/persistent_arena/coalescing";
+const Name s_AllocCasePersistentArenaDeferredReallocationGrowth = "tests/persistent_arena/deferred_reallocation_growth";
+const Name s_AllocCasePersistentArenaFailedReallocation = "tests/persistent_arena/failed_reallocation";
+const Name s_AllocCasePersistentArenaReallocationAlignment = "tests/persistent_arena/reallocation_alignment";
+const Name s_AllocCasePersistentArenaReallocationLowerAlignment = "tests/persistent_arena/reallocation_lower_alignment";
+const Name s_AllocCasePersistentArenaNullZeroReallocation = "tests/persistent_arena/null_zero_reallocation";
+const Name s_AllocCasePersistentArenaCAllocator = "tests/persistent_arena/c_allocator";
+const Name s_AllocCaseScratchReuseCrossChunk = "tests/scratch_reuse/cross_chunk";
+const Name s_AllocCaseScratchReuseColdAlignmentBuckets = "tests/scratch_reuse/cold_alignment_buckets";
+const Name s_AllocCaseScratchReuseInvalidAlignment = "tests/scratch_reuse/invalid_alignment";
+const Name s_AllocCaseScratchReuseAlignments = "tests/scratch_reuse/alignments";
+const Name s_AllocCaseScratchReuseOutOfOrder = "tests/scratch_reuse/out_of_order";
+const Name s_AllocCaseScratchReuseRelocation = "tests/scratch_reuse/relocation";
+const Name s_AllocCaseScratchReuseZeroBytes = "tests/scratch_reuse/zero_bytes";
+const Name s_AllocCaseScratchReuseZeroInitialCapacity = "tests/scratch_reuse/zero_initial_capacity";
+const Name s_AllocCaseScratchReuseCachedRelocation = "tests/scratch_reuse/cached_relocation";
+const Name s_AllocCaseScratchReuseFailedRelocation = "tests/scratch_reuse/failed_relocation";
+const Name s_AllocCaseScratchReuseMixedSizes = "tests/scratch_reuse/mixed_sizes";
+const Name s_AllocCaseScratchReuseNestedContainers = "tests/scratch_reuse/nested_containers";
+
+const Name s_GlobalSharedOwnerAllocationChurn = "tests/global/shared_owner_allocation_churn";
+const Name s_PersistentArenaSharedCrossThreadChurn = "tests/persistent_arena/shared_cross_thread_churn";
+const Name s_PersistentArenaSharedReallocationChurn = "tests/persistent_arena/shared_reallocation_churn";
+const Name s_ScratchReuseOwnerLifecycle = "tests/scratch_reuse/owner_lifecycle";
+const Name s_AllocationOwnersOddReallocation = "tests/allocation_owners/odd_reallocation";
+const Name s_AllocationOwnersObjectAndZero = "tests/allocation_owners/object_and_zero";
+
+
+class PersistentArenaWorkerResult{
+    public b8 allocationFailed = false;
+    public b8 contentsPreserved = true;
+    public b8 alignmentPreserved = true;
+}
+
+
+class PersistentArenaSlotRecord{
+    public u64 serial = 0u;
+    public usize markerHash = 0u;
+    public u32 marker = 0u;
+}
+
+
+class AllocationRequest{
+    public usize alignment = 0u;
+    public usize bytes = 0u;
+}
+
+
+class AllocatorWorkerResult{
+    public ArenaStatsValue stats = ArenaStatsValue();
+    public b8 allocationFailed = false;
+    public b8 contentsPreserved = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

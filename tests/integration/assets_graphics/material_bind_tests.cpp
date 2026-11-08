@@ -33,6 +33,38 @@ namespace __hidden_assets_graphics_material_bind_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(AssetsGraphics, ResourceParameterCandidateRejectsExpressionsButPreservesBytes){
+    EXPECT_FALSE(NWB::Impl::IsMaterialResourceParameterCandidate(""));
+    EXPECT_FALSE(NWB::Impl::IsMaterialResourceParameterCandidate("project/value("));
+    EXPECT_FALSE(NWB::Impl::IsMaterialResourceParameterCandidate("project/value)"));
+    EXPECT_TRUE(NWB::Impl::IsMaterialResourceParameterCandidate("project/value"));
+    EXPECT_TRUE(NWB::Impl::IsMaterialResourceParameterCandidate(AStringView("project/\0value", 14u)));
+}
+
+TEST(AssetsGraphics, MaterialCookAdmissionRejectsMissingInputsAndCountOverflow){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    EXPECT_FALSE(Impl::ValidateMaterialBindIncludePath("", "source.bind"));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("virtual path is empty for 'source.bind'")));
+    EXPECT_FALSE(Impl::ValidateDeferredBxdfSource("project/material", ""));
+    EXPECT_TRUE(Impl::ValidateDeferredBxdfCount(static_cast<usize>(Limit<u32>::s_Max)));
+    EXPECT_TRUE(Impl::ValidateMaterialSurfaceCount(static_cast<usize>(Limit<u32>::s_Max)));
+    u32 expectedErrors = 4u;
+    if constexpr(sizeof(usize) > sizeof(u32)){
+        EXPECT_FALSE(Impl::ValidateDeferredBxdfCount(static_cast<usize>(Limit<u32>::s_Max) + 1u));
+        EXPECT_FALSE(Impl::ValidateMaterialSurfaceCount(static_cast<usize>(Limit<u32>::s_Max) + 1u));
+        expectedErrors += 2u;
+    }
+    EXPECT_TRUE(Impl::ValidateGeneratedMaterialMeshShader(0u, s_NameNone));
+    EXPECT_FALSE(Impl::ValidateGeneratedMaterialMeshShader(1u, s_NameNone));
+    EXPECT_FALSE(Impl::ValidateTransparentMaterialInterface("project/material", "", "occupancy"));
+    EXPECT_FALSE(Impl::IsMaterialOpticalStageCombinationValid(true, false, true, false));
+    EXPECT_FALSE(Impl::IsMaterialOpticalStageCombinationValid(true, false, false, true));
+    EXPECT_TRUE(Impl::IsMaterialOpticalStageCombinationValid(true, false, false, false));
+    EXPECT_TRUE(Impl::IsMaterialOpticalStageCombinationValid(false, false, true, true));
+    EXPECT_EQ(logger.errorCount(), expectedErrors);
+}
+
 TEST(AssetsGraphics, MaterialKeyHashPreservesHighBytesAndPathSeparators){
     EXPECT_EQ(ComputeFnv64AsciiLowerText(AStringView("Ab\\C/\xC3\xA9", 7u)), 0xff4be59fee952354ull);
     EXPECT_EQ(ComputeFnv64AsciiLowerText(AStringView("Ab/C/\xC3\xA9", 7u)), 0x6c9a1f221edbde7dull);

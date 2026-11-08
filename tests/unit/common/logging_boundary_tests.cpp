@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+
 #include <core/common/log.h>
 
 #include <global/atomic.h>
 #include <global/optional.h>
 #include <global/thread.h>
-
-#include <tests/common/capturing_logger.h>
 
 #include <gtest/gtest.h>
 
@@ -159,7 +159,7 @@ TEST(CommonLoggingBoundaries, GuardTeardownInsideEnqueueWaitsForOtherReaderWitho
                 m_guardSlot.reset();
                 if(m_peerStillInCallback.load(MemoryOrder::acquire))
                     m_unregistrationReturnedWhilePeerActive.store(true, MemoryOrder::relaxed);
-                NWB_LOGGER_INFO(NWB_TEXT("routed-to-base-after-self-unregister"));
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("routed-to-base-after-self-unregister"));
                 return;
             }
 

@@ -1,0 +1,73 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_TelemetryCaseTestsTelemetrySharedArenaPeak = "tests/telemetry/shared_arena_peak/";
+const Name s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks = "tests/telemetry/shared_arena_peak_json_checks";
+const Name s_TelemetryCaseTestsTelemetryReportWork = "tests/telemetry/report_work";
+const Name s_TelemetryCasePerfGenericScope = "perf/generic/scope";
+const Name s_TelemetryCaseLargeFirst = "large_first";
+const Name s_TelemetryCaseLargeSecond = "large_second";
+const Name s_TelemetryCaseAutomaticOwner = "tests/telemetry/automatic_owner/";
+const Name s_TelemetryCaseRetiredScratch = "tests/telemetry/retired_scratch/";
+const Name s_TelemetryCaseJsonChecks = "tests/telemetry/json_checks";
+const Name s_TelemetryCaseHeapJsonChecks = "tests/telemetry/heap_json_checks";
+const Name s_TelemetryCaseSource = "source";
+const Name s_TelemetryCaseMissing = "missing";
+const Name s_TelemetryCaseLocalLabel = "local_label";
+const Name s_TelemetryCaseMutation = "mutation";
+const Name s_TelemetryCaseOwnedLabel = "owned_label";
+const Name s_TelemetryCaseDestroyer = "destroyer";
+const Name s_TelemetryCaseCacheLifetime = "cache_lifetime";
+const Name s_RuntimeOwner = "runtime_owner";
+const Name s_ReportTask = "tests/telemetry/report/task";
+const Name s_ReportOwner = "tests/telemetry/report/owner";
+const Name s_RenderFirst = "render.first";
+const Name s_RenderSecond = "render.second";
+const Name s_RenderPresent = "render.present";
+const Name s_RenderFrameRecovery = "render.frame_recovery";
+const Name s_TelemetryCaseRenderNormalWork = "render.normal_work";
+const Name s_TelemetryCaseScalingOwner = "tests/telemetry/scaling_owner";
+const Name s_Gbuffer = "gbuffer";
+const Name s_Albedo = "albedo";
+const Name s_Lighting = "lighting";
+const Name s_TelemetryCasePacketSubmissionPass = "packet_submission_pass";
+const Name s_TelemetryCaseTestsProbeFirst = "tests/probe/first";
+const Name s_TelemetryCaseMemoryOtherArena = "memory/other_arena";
+const Name s_TelemetryCasePerfCpuUpdate = "perf/cpu/update";
+
+const Name s_TelemetryPayloadValidationOwner = "tests/telemetry/payload_validation_owner";
+const Name s_TelemetryRecorderSourceCollision = "tests/telemetry/recorder_source_collision";
+const Name s_GlobalArenaMemoryHeapBacking = "global/arena_memory/heap_backing";
+const Name s_TelemetrySharedSourceIdentity = "tests/telemetry/shared_source_identity";
+const Name s_CpuTaskTestsExplicit = "cpu.task.tests.explicit";
+const Name s_CpuTaskTestsScope = "cpu.task.tests.scope";
+const Name s_CpuTaskTestsWorker = "cpu.task.tests.worker";
+const Name s_TelemetryScratch = "tests/telemetry/scratch";
+const StringView s_TelemetryMemoryProjectArena = "memory/project_arena";
+const StringView s_TelemetryProjectArenaText = "Project Arena";
+
+
+class MemoryDifferenceCase{
+    public u64 current = 0u;
+    public u64 previous = 0u;
+    public i64 expected = 0;
+}
+
+
+class MemoryUnrepresentableCase{
+    public u64 current = 0u;
+    public u64 previous = 0u;
+}
+
+
+class MemoryDeltaCase{
+    public i64 first = 0;
+    public i64 second = 0;
+    public i64 expected = 0;
+    public b8 valid = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

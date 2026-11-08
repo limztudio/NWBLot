@@ -404,8 +404,7 @@ template<Operation::Enum Kind, b8 Candidate>
 NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations)noexcept{
     return SimdOptimizationBenchmark::ThroughputWorkload<4u>(
         data, iterations,
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); }
-    );
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); });
 }
 
 template<Operation::Enum Kind>
@@ -414,8 +413,7 @@ void RunVariant(const Dataset& data, const b8 candidate, const usize iterations,
     SimdOptimizationBenchmark::SelectVariant(
         s_OperationNames[Kind], candidate, latency, operations,
         [&]()noexcept{ return Workload<Kind, true>(data, iterations); },
-        [&]()noexcept{ return Workload<Kind, false>(data, iterations); }
-    );
+        [&]()noexcept{ return Workload<Kind, false>(data, iterations); });
 }
 
 

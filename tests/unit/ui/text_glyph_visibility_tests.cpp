@@ -4,10 +4,11 @@
 
 #include "widget_fixture.h"
 
+#include <tests/common/font_fixture.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/text/atlas.h>
 #include <impl/ecs_ui/toolkit/text/glyph_visibility.h>
-
-#include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
 
@@ -39,7 +40,7 @@ using namespace Impl::Ui;
 class TextGlyphVisibilityFontTests : public testing::Test{
 public:
     TextGlyphVisibilityFontTests()
-        : m_arena(Name("tests/ui/text/glyph_visibility/fonts"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextGlyphVisibilityFonts))
         , m_latin(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
         , m_korean(m_arena, Name(UiWidgetTests::s_TestKoreanFontPath))
     {}
@@ -47,7 +48,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
+        Core::Alloc::ScratchArena fontScratchArena{Name(NWB::Tests::UiCases::s_UiCaseNameFontScratch)};
         ASSERT_TRUE(loadFont("latin.font", m_latin));
         ASSERT_TRUE(loadFont("korean.font", m_korean));
         auto faceResult = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
@@ -88,8 +89,8 @@ protected:
 class TextGlyphVisibilityAtlasTests : public testing::Test{
 public:
     TextGlyphVisibilityAtlasTests()
-        : m_arena(Name("tests/ui/text/glyph_visibility/atlas"))
-        , m_asset(m_arena, Name("tests/ui/glyph_visibility/atlas"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextGlyphVisibilityAtlas))
+        , m_asset(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiGlyphVisibilityAtlas))
     {}
 
 
@@ -114,7 +115,7 @@ protected:
         group.pixels.resize(8u * 8u * 4u, 128u);
         group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
         m_asset.setPayload(Move(payload));
-        Core::Alloc::ScratchArena scratchArena(Name("tests/ui/text/glyph_visibility/validation_scratch"));
+        Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextGlyphVisibilityValidationScratch)};
         ASSERT_TRUE(m_asset.validatePayload(scratchArena));
         auto atlasResult = CreateBakedFontAtlas(m_arena, m_asset, 1u);
         ASSERT_TRUE(atlasResult);

@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -103,7 +105,7 @@ ImageOptions WidgetFixture::Fixed(const f32 width, const f32 height)noexcept{
 }
 
 WidgetFixture::WidgetFixture()
-    : m_arena(Name("tests/ui/widgets"))
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgets))
     , m_font(m_arena, Name(s_TestLatinFontPath))
     , m_text(m_arena)
     , m_skin(m_arena, Name(s_TestSkinPath))

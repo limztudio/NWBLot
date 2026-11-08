@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_skeleton/cook.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
+#include <impl/assets_skeleton/cook.h>
 
 #include <global/arena_memory.h>
 #include <global/text_utils.h>
@@ -35,10 +36,10 @@ using namespace NWB::Impl;
 
 
 struct SkeletonInputs{
-    Core::Assets::AssetArena arena{ Name("tests/skeleton_payload/inputs") };
-    Core::Alloc::ScratchArena scratchArena{ Name("tests/skeleton_payload/validation_scratch") };
+    Core::Assets::AssetArena arena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsSkeletonPayloadInputs) };
+    Core::Alloc::ScratchArena scratchArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsSkeletonPayloadValidationScratch) };
     SkeletonCookEntry entry{ arena };
-    Skeleton skeleton{ arena, Name("tests/skeleton_payload/skeleton") };
+    Skeleton skeleton{ arena, Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsSkeletonPayloadSkeleton) };
 
 
 public:
@@ -48,7 +49,7 @@ public:
         entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Root) });
         entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Left), .parent = Name(s_Root) });
         entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_Right), .parent = Name(s_Root) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name("hand"), .parent = Name(s_Left) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseHand), .parent = Name(s_Left) });
         entry.joints[1u].localBindPose._14 = 2.0f;
         entry.joints[3u].localBindPose._24 = 3.0f;
     }
@@ -63,7 +64,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParen
         switch(invalidCase){
         case 0u: inputs.entry.joints[0u].parent = Name(s_Left); break;
         case 1u: inputs.entry.joints[1u].parent = Name(s_Left); break;
-        case 2u: inputs.entry.joints[3u].parent = Name("missing"); break;
+        case 2u: inputs.entry.joints[3u].parent = Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseMissing); break;
         case 3u: inputs.entry.joints[1u].parent = Name(s_Right); break;
         }
         EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena)) << invalidCase;

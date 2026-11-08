@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -33,17 +35,17 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto sourceResult = AddBufferMetadata(graph, Name("tests/task_graph/built_in_buffer_copy_source"), "Built-In Buffer Copy Source");
+    const auto sourceResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphBuiltInBufferCopySource), "Built-In Buffer Copy Source");
     ASSERT_TRUE(sourceResult);
     const Core::GpuGraphResourceId source = *sourceResult;
-    const auto destinationResult = AddBufferMetadata(graph, Name("tests/task_graph/built_in_buffer_copy_destination"), "Built-In Buffer Copy Destination");
+    const auto destinationResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphBuiltInBufferCopyDestination), "Built-In Buffer Copy Destination");
     ASSERT_TRUE(destinationResult);
     const Core::GpuGraphResourceId destination = *destinationResult;
     ASSERT_TRUE(source.valid());
     ASSERT_TRUE(destination.valid());
 
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/built_in_buffer_copy")).setMarkerLabel("Built-In Buffer Copy");
+    desc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphBuiltInBufferCopy)).setMarkerLabel("Built-In Buffer Copy");
     const Core::GpuCopyBufferTaskRegion region{ .source = source, .destination = destination, .dataSizeBytes = sizeof(u32), };
     EXPECT_FALSE(graph.addCopyBufferTask(desc, Core::GpuCopyBufferTaskDesc{ .regions = &region, .regionCount = 1u, }).has_value());
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);

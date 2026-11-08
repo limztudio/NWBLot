@@ -4,6 +4,7 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
@@ -63,7 +64,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
     for(const b8 hasDependencies : dependencyCases){
         SCOPED_TRACE(hasDependencies);
         TestArena testArena;
-        Core::Alloc::ScratchArena scratchArena(Name("tests/task/gpu/queue_scoring"));
+        Core::Alloc::ScratchArena scratchArena{Name(TaskGraphTestUtils::s_GpuCaseTaskGpuQueueScoring)};
         Core::GpuTaskGraph graph(testArena.arena);
         Array<Core::GpuTaskId, s_TaskCount> tasks = {};
         for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
@@ -72,7 +73,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
             for(usize dependencyIndex = 0u; dependencyIndex < dependencyCount; ++dependencyIndex)
                 dependencies[dependencyIndex] = tasks[parents[taskIndex][dependencyIndex]];
             Core::GpuTaskDesc desc;
-            const auto derivedNameResult = IndexedName(Name("tests/queue_scoring/task_"), taskIndex);
+            const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseQueueScoringTask), taskIndex);
             ASSERT_TRUE(derivedNameResult);
             desc
                 .setIdentity(*derivedNameResult)

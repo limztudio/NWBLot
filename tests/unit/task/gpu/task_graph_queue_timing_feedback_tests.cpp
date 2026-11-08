@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,7 +44,7 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.allowSameClassQueueRouting = true;
     scheduling.allowTimingFeedbackRouting = true;
-    const Name taskIdentity("tests/task_graph/timing_feedback_hysteresis");
+    const Name taskIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphTimingFeedbackHysteresis;
     const Core::GpuTaskTimingMetadata timingMetadata{ .variant = 7u, .resolutionClass = 0x07800438u, };
     const auto taskResult = AddTaskWithCommands(taskIdentity, "Timing Feedback Hysteresis", graphicsCommands, scheduling, timingMetadata, {}, graph);
     ASSERT_TRUE(taskResult);
@@ -124,7 +126,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     scheduling.allowSameClassQueueRouting = true;
     scheduling.allowCrossFamilySameClassQueueRouting = true;
     scheduling.allowTimingFeedbackRouting = true;
-    const Name taskIdentity("tests/task_graph/timing_feedback_calibration");
+    const Name taskIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphTimingFeedbackCalibration;
     const Core::GpuTaskTimingMetadata timingMetadata{ .variant = 9u, .resolutionClass = 0x07800438u, };
     const auto taskResult = AddTaskWithCommands(taskIdentity, "Timing Feedback Calibration", graphicsCommands, scheduling, timingMetadata, {}, graph);
     ASSERT_TRUE(taskResult);
@@ -262,7 +264,7 @@ TEST(GpuTaskGraph, IgnoresTimingFeedbackWithoutAnyEnabledRoute){
     graphicsCommands.requiredCapabilities = Core::GpuQueueCapability::Graphics;
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.allowTimingFeedbackRouting = true;
-    const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/timing_feedback_without_enabled_route"), "Timing Feedback Without Enabled Route", graphicsCommands, scheduling, {}, {}, graph);
+    const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingFeedbackWithoutEnabledRoute), "Timing Feedback Without Enabled Route", graphicsCommands, scheduling, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
@@ -298,7 +300,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto handoffResult = AddHazardDomain(graph, Name("tests/task_graph/reduced_timing_score_handoff"), "Reduced Timing Score Handoff");
+    const auto handoffResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphReducedTimingScoreHandoff), "Reduced Timing Score Handoff");
     ASSERT_TRUE(handoffResult);
     const Core::GpuGraphResourceId handoff = *handoffResult;
     ASSERT_TRUE(handoff.valid());
@@ -309,7 +311,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     scheduling.allowSameClassQueueRouting = true;
     scheduling.allowTimingFeedbackRouting = true;
 
-    const Name firstIdentity("tests/task_graph/reduced_timing_score_first");
+    const Name firstIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphReducedTimingScoreFirst;
     const Core::GpuTaskResourceUse firstUse{ .resource = handoff, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskDesc firstDesc;
     firstDesc.setIdentity(firstIdentity).setMarkerLabel("Reduced Timing Score First").setScheduling(scheduling).setResourceUses(Span(&firstUse, 1u));
@@ -318,7 +320,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     const Core::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
 
-    const Name secondIdentity("tests/task_graph/reduced_timing_score_second");
+    const Name secondIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphReducedTimingScoreSecond;
     Core::GpuTaskDesc secondDesc;
     secondDesc.setIdentity(secondIdentity).setMarkerLabel("Reduced Timing Score Second").setScheduling(scheduling).setDependencies(Span(&first, 1u));
     const auto secondResult = graph.addTask(secondDesc, graphicsCommands);
@@ -326,7 +328,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     const Core::GpuTaskId second = *secondResult;
     ASSERT_TRUE(second.valid());
 
-    const Name thirdIdentity("tests/task_graph/reduced_timing_score_third");
+    const Name thirdIdentity = NWB::Tests::TaskGraphTestUtils::s_TaskGraphReducedTimingScoreThird;
     const Core::GpuTaskResourceUse thirdUse{ .resource = handoff, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     Core::GpuTaskDesc thirdDesc;
     thirdDesc.setIdentity(thirdIdentity).setMarkerLabel("Reduced Timing Score Third").setScheduling(scheduling).setDependencies(Span(&second, 1u)).setResourceUses(Span(&thirdUse, 1u));
@@ -400,7 +402,7 @@ TEST(GpuTaskGraph, RejectsInvalidGraphOwnedTimingPolicy){
     Core::GpuTaskGraph graph(testArena.arena);
     Core::GpuTaskTimingMetadata invalidTiming;
     invalidTiming.policy = static_cast<Core::GpuTaskTimingPolicy::Enum>(Core::GpuTaskTimingPolicy::Count);
-    const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/timing_policy_invalid"), "Timing Policy Invalid", {}, {}, invalidTiming, {}, graph);
+    const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingPolicyInvalid), "Timing Policy Invalid", {}, {}, invalidTiming, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());

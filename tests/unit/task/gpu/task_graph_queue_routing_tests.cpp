@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +41,7 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/same_class_buffer"), "Same Class Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphSameClassBuffer), "Same Class Buffer");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -52,7 +54,7 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     producerScheduling.allowSameClassQueueRouting = true;
     const Core::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/same_class_producer")).setMarkerLabel("Same Class Producer").setScheduling(producerScheduling).setResourceUses(Span(&producerUse, 1u));
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphSameClassProducer)).setMarkerLabel("Same Class Producer").setScheduling(producerScheduling).setResourceUses(Span(&producerUse, 1u));
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
@@ -64,7 +66,7 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     const Array<Core::GpuTaskId, 1u> consumerDependencies = { producer };
     const Core::GpuTaskResourceUse consumerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, };
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/same_class_consumer")).setMarkerLabel("Same Class Consumer").setScheduling(consumerScheduling).setDependencies(consumerDependencies).setResourceUses(Span(&consumerUse, 1u));
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphSameClassConsumer)).setMarkerLabel("Same Class Consumer").setScheduling(consumerScheduling).setDependencies(consumerDependencies).setResourceUses(Span(&consumerUse, 1u));
     const auto consumerResult = graph.addTask(consumerDesc, graphicsCommands);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
@@ -117,10 +119,10 @@ TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOr
     Core::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Core::GpuTaskCostHint::Large;
     producerScheduling.allowSameClassQueueRouting = true;
-    const auto firstResult = AddTaskWithCommands(Name("tests/task_graph/direct_affinity_order_first"), "Direct Affinity Order First", graphicsCommands, producerScheduling, {}, {}, graph);
+    const auto firstResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphDirectAffinityOrderFirst), "Direct Affinity Order First", graphicsCommands, producerScheduling, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTaskWithCommands(Name("tests/task_graph/direct_affinity_order_second"), "Direct Affinity Order Second", graphicsCommands, producerScheduling, {}, {}, graph);
+    const auto secondResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphDirectAffinityOrderSecond), "Direct Affinity Order Second", graphicsCommands, producerScheduling, {}, {}, graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
     ASSERT_TRUE(first.valid());
@@ -131,7 +133,7 @@ TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOr
     consumerScheduling.allowSameClassQueueRouting = true;
     consumerScheduling.preserveSameClassQueueWithDirectDependency = true;
     const Array<Core::GpuTaskId, 2u> consumerDependencies = { second, first };
-    const auto consumerResult = AddTaskWithCommands(Name("tests/task_graph/direct_affinity_order_consumer"), "Direct Affinity Order Consumer", graphicsCommands, consumerScheduling, {}, Span(consumerDependencies), graph);
+    const auto consumerResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphDirectAffinityOrderConsumer), "Direct Affinity Order Consumer", graphicsCommands, consumerScheduling, {}, Span(consumerDependencies), graph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(consumer.valid());
@@ -180,10 +182,10 @@ TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     Core::GpuTaskSchedulingHint secondScheduling;
     secondScheduling.cost = Core::GpuTaskCostHint::Medium;
     secondScheduling.allowSameClassQueueRouting = true;
-    const auto firstResult = AddTaskWithCommands(Name("tests/task_graph/cross_family_not_opted_first"), "Cross Family Not Opted First", graphicsCommands, firstScheduling, {}, {}, graph);
+    const auto firstResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilyNotOptedFirst), "Cross Family Not Opted First", graphicsCommands, firstScheduling, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTaskWithCommands(Name("tests/task_graph/cross_family_not_opted_second"), "Cross Family Not Opted Second", graphicsCommands, secondScheduling, {}, {}, graph);
+    const auto secondResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilyNotOptedSecond), "Cross Family Not Opted Second", graphicsCommands, secondScheduling, {}, {}, graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
     ASSERT_TRUE(first.valid());
@@ -211,7 +213,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/cross_family_same_class_concurrent_buffer"), "Cross Family Same Class Concurrent Buffer", Core::ResourceStates::Common, Core::ResourceQueueSharing::Graphics);
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassConcurrentBuffer), "Cross Family Same Class Concurrent Buffer", Core::ResourceStates::Common, Core::ResourceQueueSharing::Graphics);
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
@@ -225,7 +227,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     producerScheduling.allowCrossFamilySameClassQueueRouting = true;
     const Core::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/cross_family_same_class_concurrent_producer")).setMarkerLabel("Cross Family Same Class Concurrent Producer").setScheduling(producerScheduling).setResourceUses(Span(&producerUse, 1u));
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassConcurrentProducer)).setMarkerLabel("Cross Family Same Class Concurrent Producer").setScheduling(producerScheduling).setResourceUses(Span(&producerUse, 1u));
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
@@ -239,7 +241,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     const Core::GpuTaskResourceUse consumerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, };
     Core::GpuTaskDesc consumerDesc;
     consumerDesc
-        .setIdentity(Name("tests/task_graph/cross_family_same_class_concurrent_consumer"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassConcurrentConsumer))
         .setMarkerLabel("Cross Family Same Class Concurrent Consumer")
         .setScheduling(consumerScheduling)
         .setDependencies(consumerDependencies)
@@ -374,9 +376,9 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         Core::GpuQueueCapability::Graphics,
         GraphicsQueue(),
         auxiliaryGraphics,
-        Name("tests/task_graph/cross_family_same_class_buffer"),
-        Name("tests/task_graph/cross_family_same_class_producer"),
-        Name("tests/task_graph/cross_family_same_class_consumer")
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassBuffer),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassProducer),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassConsumer)
     );
 
     Core::GpuPhysicalQueueInfo auxiliaryCompute = DedicatedComputeQueue(3u);
@@ -385,9 +387,9 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         Core::GpuQueueCapability::Compute,
         DedicatedComputeQueue(),
         auxiliaryCompute,
-        Name("tests/task_graph/cross_family_same_class_compute_buffer"),
-        Name("tests/task_graph/cross_family_same_class_compute_producer"),
-        Name("tests/task_graph/cross_family_same_class_compute_consumer")
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassComputeBuffer),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassComputeProducer),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassComputeConsumer)
     );
 
     Core::GpuPhysicalQueueInfo auxiliaryTransfer = DedicatedTransferQueue(4u);
@@ -396,9 +398,9 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         Core::GpuQueueCapability::Transfer,
         DedicatedTransferQueue(),
         auxiliaryTransfer,
-        Name("tests/task_graph/cross_family_same_class_transfer_buffer"),
-        Name("tests/task_graph/cross_family_same_class_transfer_producer"),
-        Name("tests/task_graph/cross_family_same_class_transfer_consumer")
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassTransferBuffer),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassTransferProducer),
+        Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCrossFamilySameClassTransferConsumer)
     );
 }
 

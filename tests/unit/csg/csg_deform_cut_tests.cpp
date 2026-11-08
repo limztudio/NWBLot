@@ -4,6 +4,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
+#include <tests/unit/csg/name_cases.adhd.h>
 
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_csg/deform_edit.h>
@@ -23,8 +24,8 @@ namespace __hidden_csg_deform_cut_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_EngineCsgPlane = "engine/csg/plane";
-inline constexpr Name s_ScratchArena("tests/csg/scratch");
+static constexpr AStringView s_EngineCsgPlane = NWB::Tests::CsgCases::s_CsgEnginePlanePath;
+inline constexpr Name s_ScratchArena = NWB::Tests::CsgCases::s_OneOffNameTestsCsgScratch;
 
 
 TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
@@ -177,5 +178,4 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

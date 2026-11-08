@@ -88,6 +88,48 @@ class LogEvidenceFailureTests(unittest.TestCase):
             with self.assertRaisesRegex(window_capture_logs.SmokeFailure, "replaced"):
                 window_capture_logs.collect_log_delta(directory, baseline, "*.log")
 
+    def test_scoped_live_poll_keeps_reused_pid_and_collects_other_new_logs_at_shutdown(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            reused = directory / "logserver_20260101_010101_4321_0.log"
+            other = directory / "logserver_20260101_010101_12_0.log"
+            time_collision = directory / "logserver_20260101_004321_12_0.log"
+            reused.write_text("old owned\n", encoding="utf-8")
+            other.write_text("old other\n", encoding="utf-8")
+            time_collision.write_text("old collision\n", encoding="utf-8")
+            baseline = window_capture_logs.snapshot_log_files(directory, "logserver_*.log")
+            scoped = window_capture_logs.ScopedLogBaseline(baseline, "logserver_*.log", 4321)
+            with reused.open("a", encoding="utf-8") as stream:
+                stream.write("reused pid append\n")
+            with other.open("a", encoding="utf-8") as stream:
+                stream.write("other append\n")
+            with time_collision.open("a", encoding="utf-8") as stream:
+                stream.write("timestamp collision append\n")
+            (directory / "logserver_20260102_010101_4321_0.log").write_text("owned current\n", encoding="utf-8")
+            (directory / "logserver_20260102_010101_99_0.log").write_text("other current\n", encoding="utf-8")
+            live = window_capture_logs.collect_log_delta(directory, scoped, scoped.live_pattern)
+            self.assertIn("reused pid append", live)
+            self.assertIn("owned current", live)
+            self.assertNotIn("other append", live)
+            self.assertNotIn("other current", live)
+            self.assertNotIn("timestamp collision append", live)
+            with mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_LOG_DRAIN):
+                final = shutdown_logserver_and_collect(None, directory, scoped, scoped.live_pattern)
+            for message in ("reused pid append", "owned current", "other append", "other current", "timestamp collision append"):
+                self.assertIn(message, final)
+
+    def test_scoped_shutdown_detects_rewritten_unrelated_baseline(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            other = directory / "logserver_20260101_010101_12_0.log"
+            other.write_bytes(b"old record")
+            baseline = window_capture_logs.snapshot_log_files(directory, "logserver_*.log")
+            scoped = window_capture_logs.ScopedLogBaseline(baseline, "logserver_*.log", 4321)
+            other.write_bytes(b"new record")
+            self.assertEqual(window_capture_logs.collect_log_delta(directory, scoped, scoped.live_pattern), "")
+            with mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_LOG_DRAIN), self.assertRaisesRegex(window_capture_logs.SmokeFailure, "changed before its baseline"):
+                shutdown_logserver_and_collect(None, directory, scoped, scoped.live_pattern)
+
     def test_failed_poll_during_failed_termination_retains_capture(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "process.log"

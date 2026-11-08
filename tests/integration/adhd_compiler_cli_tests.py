@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 
 def main() -> None:
@@ -155,7 +156,8 @@ def main() -> None:
 
         ninja = shutil.which("ninja")
         if ninja:
-            special = root / ("source #$ space" if os.name == "nt" else "source #$ space\tback\\slash:colon")
+            special_name = "source #$ space" if os.name == "nt" else "source #$ " + "\\ " + "\\" * 2 + " " + "\\" * 3 + " back\\slash:colon"
+            special = root / special_name
             special.mkdir()
             dep_input = special / "input.adhd"
             dep_include = special / "shared #$.adhd"
@@ -163,6 +165,27 @@ def main() -> None:
             dep_include.write_text("", encoding="utf-8")
             def ninja_escape(path: pathlib.Path) -> str:
                 return path.as_posix().replace("$", "$$").replace(" ", "$ ").replace(":", "$:")
+
+            def make_escape(path: pathlib.Path) -> str:
+                text = path.as_posix()
+                out = []
+                index = 0
+                while index < len(text):
+                    if text[index] == "\\":
+                        start = index
+                        while index < len(text) and text[index] == "\\":
+                            index += 1
+                        count = index - start
+                        out.append("\\" * (count * 2 if index < len(text) and text[index] == " " else count))
+                        continue
+                    char = text[index]
+                    if char in " #:":
+                        out.append("\\")
+                    elif char == "$":
+                        out.append("$")
+                    out.append(char)
+                    index += 1
+                return "".join(out)
 
             dep_second = special / "second.adhd"
             dep_second.write_text("", encoding="utf-8")
@@ -176,6 +199,7 @@ def main() -> None:
                 result = subprocess.run(command, cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
                 if result.returncode != 0:
                     raise AssertionError(f"depfile compilation failed: {result.stdout}\n{result.stderr}")
+                dep_content = depfile.read_text(encoding="utf-8")
                 generated = tuple(dep_output / f"{item.stem}.adhd.{suffix}" for item in inputs for suffix in ("h", "cpp"))
                 for path in generated:
                     path.unlink()
@@ -191,6 +215,80 @@ def main() -> None:
                 dependency_output = result.stdout.replace("\\", "/") if os.name == "nt" else result.stdout
                 if result.returncode != 0 or any(path.as_posix() not in dependency_output for path in expected):
                     raise AssertionError(f"Ninja lost depfile dependencies: {result.stdout}\n{result.stderr}")
+                timestamp = generated[0].stat().st_mtime_ns + 2_000_000_000
+                os.utime(dep_input, ns=(timestamp, timestamp))
+                result = subprocess.run([ninja, "-f", str(manifest)], cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+                if result.returncode != 0 or "[1/1]" not in result.stdout:
+                    raise AssertionError(f"Ninja did not rebuild after a dependency changed: {result.stdout}\n{result.stderr}")
+                make = shutil.which("make") if os.name != "nt" else None
+                if make:
+                    make_depfile = root / f"make_input_{index}.d"
+                    make_depfile.write_text(dep_content, encoding="utf-8")
+                    makefile = root / f"build_{index}.mk"
+                    makefile.write_text(f"include {make_depfile.name}\n{make_escape(generated[0])}:\n\t@:\n", encoding="utf-8")
+                    timestamp = time.time_ns() - 1_000_000_000
+                    os.utime(dep_input, ns=(timestamp, timestamp))
+                    os.utime(generated[0], ns=(timestamp - 1_000_000_000, timestamp - 1_000_000_000))
+                    result = subprocess.run([make, "-q", "-f", str(makefile), str(generated[0])], cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+                    if result.returncode != 1:
+                        raise AssertionError(f"Make did not detect the changed dependency: {result.stdout}\n{result.stderr}")
+
+            if os.name != "nt":
+                bad_cases = (("source\tbad", False), ("source;bad", False), ("source\\#bad", False), ("source\\:bad", False), ("source\\$bad", False), ("source?bad", False), ("source%bad", False), ("source=bad", False), ("source[bad]", False), ("~", True))
+                for index, (directory, relative_input) in enumerate(bad_cases):
+                    bad_dir = root / directory
+                    bad_dir.mkdir()
+                    bad_input = bad_dir / "input.adhd"
+                    bad_input.write_text("", encoding="utf-8")
+                    bad_output = root / f"bad_dep_output_{index}"
+                    bad_output.mkdir()
+                    bad_header = bad_output / "input.adhd.h"
+                    bad_source = bad_output / "input.adhd.cpp"
+                    bad_depfile = root / f"bad_input_{index}.d"
+                    for path in (bad_header, bad_source, bad_depfile):
+                        path.write_text("sentinel", encoding="utf-8")
+                    input_arg = bad_input.relative_to(root) if relative_input else bad_input
+                    command = [str(compiler), "--input", str(input_arg), "--output", str(bad_output), "--depfile", str(bad_depfile)]
+                    result = subprocess.run(command, cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+                    if result.returncode == 0 or "cannot be represented safely" not in result.stdout + result.stderr:
+                        raise AssertionError(f"unsafe depfile path {directory!r} was accepted: {result.stdout}\n{result.stderr}")
+                    if any(path.read_text(encoding="utf-8") != "sentinel" for path in (bad_header, bad_source, bad_depfile)):
+                        raise AssertionError("unsafe depfile path changed existing outputs")
+
+                tail_include = root / "tail;bad.adhd"
+                tail_include.write_text("", encoding="utf-8")
+                tail_input = root / "tail_input.adhd"
+                tail_input.write_text('#include "tail;bad.adhd"\n', encoding="utf-8")
+                tail_output = root / "tail_output"
+                tail_output.mkdir()
+                tail_header = tail_output / "tail_input.adhd.h"
+                tail_source = tail_output / "tail_input.adhd.cpp"
+                tail_depfile = root / "tail_input.d"
+                for path in (tail_header, tail_source, tail_depfile):
+                    path.write_text("sentinel", encoding="utf-8")
+                command = [str(compiler), "--input", str(tail_input), "--output", str(tail_output), "--depfile", str(tail_depfile)]
+                result = subprocess.run(command, cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+                if result.returncode == 0 or "cannot be represented safely" not in result.stdout + result.stderr:
+                    raise AssertionError(f"unsafe included depfile path was accepted: {result.stdout}\n{result.stderr}")
+                if any(path.read_text(encoding="utf-8") != "sentinel" for path in (tail_header, tail_source, tail_depfile)):
+                    raise AssertionError("unsafe included depfile path changed existing outputs")
+
+                for index, name in enumerate(("terminal:", "terminal\\")):
+                    terminal_input = root / name
+                    terminal_input.write_text("", encoding="utf-8")
+                    terminal_output = root / f"terminal_output_{index}"
+                    terminal_output.mkdir()
+                    terminal_header = terminal_output / f"{name}.adhd.h"
+                    terminal_source = terminal_output / f"{name}.adhd.cpp"
+                    terminal_depfile = root / f"terminal_{index}.d"
+                    for path in (terminal_header, terminal_source, terminal_depfile):
+                        path.write_text("sentinel", encoding="utf-8")
+                    command = [str(compiler), "--input", str(terminal_input), "--output", str(terminal_output), "--depfile", str(terminal_depfile)]
+                    result = subprocess.run(command, cwd=root, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+                    if result.returncode == 0 or "cannot be represented safely" not in result.stdout + result.stderr:
+                        raise AssertionError(f"unsafe terminal depfile path {name!r} was accepted: {result.stdout}\n{result.stderr}")
+                    if any(path.read_text(encoding="utf-8") != "sentinel" for path in (terminal_header, terminal_source, terminal_depfile)):
+                        raise AssertionError("unsafe terminal depfile path changed existing outputs")
         else:
             print("SKIP: Ninja depfile consumption check (Ninja not available)")
 

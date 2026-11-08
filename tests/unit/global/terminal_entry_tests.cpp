@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/terminal_case_types.adhd.h>
+
 #include <global/terminal_entry.h>
 #include <global/scope_exit.h>
 #include <global/type.h>
@@ -18,10 +20,6 @@ namespace __hidden_terminal_entry_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TerminalTestError{
-    int result;
-};
-
 TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContextRemainsAlive){
     u32 cleanupCount = 0u;
     u32 handled = 0u;
@@ -33,14 +31,13 @@ TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContex
         result = InvokeTerminalEntry<TerminalTestError>([&]()->int{
             ScopeExit inner([&]()noexcept{ ++cleanupCount; });
 
-            throw TerminalTestError{ 17 };
+            throw TerminalTestError{ .result = 17 };
         }, [&](const TerminalTestError& error){
             EXPECT_EQ(cleanupCount, 1u);
             EXPECT_TRUE(reportingContextAlive);
             ++handled;
             return error.result;
-        }, []()noexcept{ return -1; }
-        );
+        }, []()noexcept{ return -1; });
         EXPECT_TRUE(reportingContextAlive);
     }
     EXPECT_EQ(result, 17);

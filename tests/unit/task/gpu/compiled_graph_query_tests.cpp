@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,14 +50,14 @@ static void CheckPacketQueries(const usize taskCount){
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = orderIndex != 0u;
         const Core::GpuTaskId dependency{ .generation = graphGeneration, .index = static_cast<u32>(declarationIndex + 1u), };
-        const auto derivedNameResult = IndexedName(Name("tests/compiled_query/task/"), declarationIndex);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseCompiledQueryTask), declarationIndex);
         ASSERT_TRUE(derivedNameResult);
         const auto taskAdmission = AddTaskWithCommands(*derivedNameResult, "Compiled Query Task", GraphicsCommands(), scheduling, {}, orderIndex != 0u ? Span(&dependency, 1u) : Span<const Core::GpuTaskId>{}, graph);
         ASSERT_TRUE(taskAdmission);
         tasks[orderIndex] = *taskAdmission;
         ASSERT_TRUE(tasks[orderIndex].valid());
     }
-    const auto nextPacketTaskResult = AddTaskWithCommands(Name("tests/compiled_query/next_packet"), "Next Packet", GraphicsCommands(), {}, {}, Span(&tasks.back(), 1u), graph);
+    const auto nextPacketTaskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseCompiledQueryNextPacket), "Next Packet", GraphicsCommands(), {}, {}, Span(&tasks.back(), 1u), graph);
     ASSERT_TRUE(nextPacketTaskResult);
     const Core::GpuTaskId nextPacketTask = *nextPacketTaskResult;
     ASSERT_TRUE(nextPacketTask.valid());

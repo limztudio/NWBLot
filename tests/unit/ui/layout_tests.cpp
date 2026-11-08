@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/layout/tree.h>
 
 #include <global/simdmath.h>
@@ -46,7 +48,7 @@ static LayoutNodeDesc FixedLeaf(const f32 width, const f32 height)noexcept{
 class UiLayoutTests : public testing::Test{
 public:
     UiLayoutTests()
-        : m_arena(Name("tests/ui/layout"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiLayout))
         , m_tree(m_arena)
     {}
 

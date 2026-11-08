@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -258,7 +260,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
 }
 
 [[nodiscard]] Expected<TransferOwnershipPair> AddTransferOwnershipPair(Core::GpuTaskGraph& graph, const Core::ResourceQueueSharing::Mask queueSharing){
-    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/transfer_ownership_texture"), "Transfer Ownership Texture", Core::ResourceStates::Common, queueSharing);
+    const auto textureResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTransferOwnershipTexture), "Transfer Ownership Texture", Core::ResourceStates::Common, queueSharing);
     if(!textureResult)
         return MakeUnexpected(Failure{});
 
@@ -271,9 +273,9 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     const Array<Core::GpuTaskResourceUse, 1> producerUses{ Core::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Write, } };
     const Array<Core::GpuTaskResourceUse, 1> consumerUses{ Core::GpuTaskResourceUse{ .resource = texture, .range = {}, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, } };
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/transfer_ownership_producer")).setMarkerLabel("Transfer Ownership Producer").setScheduling(scheduling).setResourceUses(producerUses);
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTransferOwnershipProducer)).setMarkerLabel("Transfer Ownership Producer").setScheduling(scheduling).setResourceUses(producerUses);
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/transfer_ownership_consumer")).setMarkerLabel("Transfer Ownership Consumer").setScheduling(scheduling).setResourceUses(consumerUses);
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTransferOwnershipConsumer)).setMarkerLabel("Transfer Ownership Consumer").setScheduling(scheduling).setResourceUses(consumerUses);
 
     const auto producer = graph.addTask(producerDesc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics });
     const auto consumer = graph.addTask(consumerDesc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Transfer });
@@ -304,7 +306,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
 ){
     Core::GpuGraphResourceDesc resourceDesc;
     resourceDesc
-        .setIdentity(Name("tests/task_graph/external_final_read_pair_resource"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalReadPairResource))
         .setMarkerLabel("External Final Read Pair Resource")
         .setType(resourceType)
         .setInitialState(readState)
@@ -328,7 +330,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
 
     const Core::GpuTaskResourceUse earlierUse{ .resource = resource, .range = earlierRange, .requiredState = readState, .access = Core::GpuTaskResourceAccess::Read, };
     Core::GpuTaskDesc earlierDesc;
-    earlierDesc.setIdentity(Name("tests/task_graph/external_final_earlier_reader")).setMarkerLabel("External Final Earlier Reader").setScheduling(earlierScheduling).setResourceUses(Span(&earlierUse, 1u));
+    earlierDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalEarlierReader)).setMarkerLabel("External Final Earlier Reader").setScheduling(earlierScheduling).setResourceUses(Span(&earlierUse, 1u));
     const auto earlierReaderResult = graph.addTask(earlierDesc, graphicsCommands);
     if(!earlierReaderResult)
         return MakeUnexpected(Failure{});
@@ -338,7 +340,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     const Core::GpuTaskResourceUse finalizingUse{ .resource = resource, .range = finalizingRange, .requiredState = readState, .access = Core::GpuTaskResourceAccess::Read, .hasIndependentStateSource = !samePacket, };
     Core::GpuTaskDesc finalizingDesc;
     finalizingDesc
-        .setIdentity(Name("tests/task_graph/external_final_terminal_reader"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalTerminalReader))
         .setMarkerLabel("External Final Terminal Reader")
         .setScheduling(finalizingScheduling)
         .setDependencies(Span(finalizerDependsOnEarlier ? &earlierReader : nullptr, finalizerDependsOnEarlier ? 1u : 0u))

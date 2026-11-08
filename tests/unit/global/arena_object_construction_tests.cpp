@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/name_case_types.adhd.h>
+
 #include <core/alloc/module.h>
 
 #include <global/arena_object.h>
@@ -515,7 +517,7 @@ void VerifyConstructionFailure(Arena& arena, const usize failAt, Factory factory
 
 
 TEST(ArenaObjectConstruction, RawObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    GlobalArena arena(Name("tests/arena_object/raw_constructor_failure"));
+    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectRawConstructorFailure)};
     using Probe = ConstructionProbe<GlobalArena>;
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return ArenaUniquePtr<Probe, GlobalArena>(NewArenaObject<Probe>(arena, arena, state), ArenaDeleter<Probe, GlobalArena>(arena));
@@ -523,49 +525,49 @@ TEST(ArenaObjectConstruction, RawObjectFailureReleasesAlignedStorageAndConstruct
 }
 
 TEST(ArenaObjectConstruction, GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    GlobalArena arena(Name("tests/arena_object/generic_constructor_failure"));
+    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGenericConstructorFailure)};
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakeArenaUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
     });
 }
 
 TEST(ArenaObjectConstruction, GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    GlobalArena arena(Name("tests/arena_object/global_constructor_failure"));
+    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGlobalConstructorFailure)};
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
     });
 }
 
 TEST(ArenaObjectConstruction, PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    PersistentArena arena(Name("tests/arena_object/persistent_constructor_failure"), PersistentArena::StructureAlignedSize(16384u));
+    PersistentArena arena(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPersistentConstructorFailure), PersistentArena::StructureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>>(arena, arena, state);
     });
 }
 
 TEST(ArenaObjectConstruction, GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
-    GlobalArena arena(Name("tests/arena_object/generic_array_failure"));
+    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGenericArrayFailure)};
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakeArenaUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
     });
 }
 
 TEST(ArenaObjectConstruction, GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
-    GlobalArena arena(Name("tests/arena_object/global_array_failure"));
+    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGlobalArrayFailure)};
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakeGlobalUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
     });
 }
 
 TEST(ArenaObjectConstruction, PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
-    PersistentArena arena(Name("tests/arena_object/persistent_array_failure"), PersistentArena::StructureAlignedSize(16384u));
+    PersistentArena arena(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPersistentArrayFailure), PersistentArena::StructureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>[]>(arena, 4u);
     });
 }
 
 TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows){
-    GlobalArena arena(Name("tests/arena_object/nested_constructor_failure"));
+    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectNestedConstructorFailure)};
     ConstructionState state;
     b8 outerDestroyed = false;
     const ArenaMemoryStats before = arena.memoryStats();
@@ -582,7 +584,7 @@ TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructi
 }
 
 TEST(ArenaObjectConstruction, FailedRawAllocationsNeverRunConstructorsOrDestructors){
-    GlobalArena memberArena(Name("tests/arena_object/rejected_construction"));
+    GlobalArena memberArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectRejectedConstruction)};
     RejectingArena arena;
     ConstructionState state;
     ActiveConstruction<GlobalArena> active(memberArena, state);
@@ -597,8 +599,8 @@ TEST(ArenaObjectConstruction, FailedRawAllocationsNeverRunConstructorsOrDestruct
 }
 
 TEST(ArenaObjectConstruction, ArenaFactoriesRetainStorageIdentityAndBypassClassAllocationHooks){
-    GlobalArena global(Name("tests/arena_object/canonical_global_placement"));
-    PersistentArena persistent(Name("tests/arena_object/canonical_persistent_placement"), PersistentArena::StructureAlignedSize(4096u));
+    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectCanonicalGlobalPlacement)};
+    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectCanonicalPersistentPlacement), PersistentArena::StructureAlignedSize(4096u));
     ArenaPlacementProbe::s_PlacementCalls = 0u;
     ArenaPlacementProbe::s_Constructors = 0u;
     ArenaPlacementProbe::s_Destructors = 0u;
@@ -634,8 +636,8 @@ TEST(ArenaObjectConstruction, ArenaFactoriesRetainStorageIdentityAndBypassClassA
 }
 
 TEST(ArenaObjectConstruction, ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage){
-    GlobalArena global(Name("tests/arena_object/global_argument_cleanup_failure"));
-    PersistentArena persistent(Name("tests/arena_object/persistent_argument_cleanup_failure"), PersistentArena::StructureAlignedSize(4096u));
+    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGlobalArgumentCleanupFailure)};
+    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPersistentArgumentCleanupFailure), PersistentArena::StructureAlignedSize(4096u));
     ConstructionState globalState;
     ConstructionState persistentState;
     const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
@@ -659,8 +661,8 @@ TEST(ArenaObjectConstruction, ArgumentTemporaryFailureDestroysCompletedMembersBe
 }
 
 TEST(ArenaObjectConstruction, CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess){
-    GlobalArena global(Name("tests/arena_object/private_global_destructor"));
-    PersistentArena persistent(Name("tests/arena_object/private_persistent_destructor"), PersistentArena::StructureAlignedSize(4096u));
+    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPrivateGlobalDestructor)};
+    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPrivatePersistentDestructor), PersistentArena::StructureAlignedSize(4096u));
     ConstructionState globalState;
     ConstructionState persistentState;
     const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
@@ -699,8 +701,8 @@ TEST(ArenaObjectConstruction, CanonicalPrivateDestructorsRetainOwningRollbackAnd
 }
 
 TEST(ArenaObjectConstruction, IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction){
-    GlobalArena global(Name("tests/arena_object/operator_friend_global_destructor"));
-    PersistentArena persistent(Name("tests/arena_object/operator_friend_persistent_destructor"), PersistentArena::StructureAlignedSize(4096u));
+    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectOperatorFriendGlobalDestructor)};
+    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectOperatorFriendPersistentDestructor), PersistentArena::StructureAlignedSize(4096u));
     ConstructionState globalState;
     ConstructionState persistentState;
     const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
@@ -746,19 +748,19 @@ TEST(ArenaObjectConstruction, IndividualDeleterFriendRetainsCompletedRollbackAnd
 }
 
 TEST(ArenaObjectConstruction, PolymorphicTransfersRetainCompleteAllocationAcrossVirtualBases){
-    GlobalArena global(Name("tests/arena_object/polymorphic_global"));
-    PersistentArena persistent(Name("tests/arena_object/polymorphic_persistent"), PersistentArena::StructureAlignedSize(4096u));
-    ScratchArena scratch(Name("tests/arena_object/polymorphic_scratch"));
+    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPolymorphicGlobal)};
+    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPolymorphicPersistent), PersistentArena::StructureAlignedSize(4096u));
+    ScratchArena scratch{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPolymorphicScratch)};
     VerifyPolymorphicAllocationIdentity(global);
     VerifyPolymorphicAllocationIdentity(persistent);
     VerifyPolymorphicAllocationIdentity(scratch);
 }
 
 TEST(ArenaObjectConstruction, StatefulCleanupSurvivesPreallocatedOwnerReentry){
-    GlobalArena oldGlobal(Name("tests/arena_object/reentry_old_global")), newGlobal(Name("tests/arena_object/reentry_new_global"));
-    PersistentArena oldPersistent(Name("tests/arena_object/reentry_old_persistent"), PersistentArena::StructureAlignedSize(4096u));
-    PersistentArena newPersistent(Name("tests/arena_object/reentry_new_persistent"), PersistentArena::StructureAlignedSize(4096u));
-    ScratchArena oldScratch(Name("tests/arena_object/reentry_old_scratch")), newScratch(Name("tests/arena_object/reentry_new_scratch"));
+    GlobalArena oldGlobal{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryOldGlobal)}, newGlobal{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryNewGlobal)};
+    PersistentArena oldPersistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryOldPersistent), PersistentArena::StructureAlignedSize(4096u));
+    PersistentArena newPersistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryNewPersistent), PersistentArena::StructureAlignedSize(4096u));
+    ScratchArena oldScratch{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryOldScratch)}, newScratch{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryNewScratch)};
     VerifyScalarOwnerReentry(oldGlobal, newGlobal);
     VerifyScalarOwnerReentry(oldPersistent, newPersistent);
     VerifyScalarOwnerReentry(oldScratch, newScratch);

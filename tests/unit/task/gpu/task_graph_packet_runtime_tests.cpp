@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -54,7 +56,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Core::GpuCompiledGraph compiledGraph(testArena.arena);
 
-    const auto firstTaskResult = AddTask(Name("tests/task_graph/recreate_recording_first"), "Recreate Recording First", {}, {}, {}, {}, {}, graph);
+    const auto firstTaskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecreateRecordingFirst), "Recreate Recording First", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstTaskResult);
     const Core::GpuTaskId firstTask = *firstTaskResult;
     ASSERT_TRUE(firstTask.valid());
@@ -92,7 +94,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     }
 
     graph.reset();
-    const auto secondTaskResult = AddTask(Name("tests/task_graph/recreate_recording_second"), "Recreate Recording Second", {}, {}, {}, {}, {}, graph);
+    const auto secondTaskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecreateRecordingSecond), "Recreate Recording Second", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(secondTaskResult);
     const Core::GpuTaskId secondTask = *secondTaskResult;
     ASSERT_TRUE(secondTask.valid());
@@ -129,7 +131,7 @@ TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     const Core::GpuTaskCommandRequirements computeCommands{ Core::GpuQueueCapability::Compute };
-    const auto taskResult = AddTaskWithCommands(Name("tests/task_graph/same_graph_recompile"), "Same Graph Recompile", computeCommands, {}, {}, {}, graph);
+    const auto taskResult = AddTaskWithCommands(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphSameGraphRecompile), "Same Graph Recompile", computeCommands, {}, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
@@ -199,7 +201,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto firstResult = AddTask(Name("tests/task_graph/compiled_lookup_first"), "Compiled Lookup First", {}, {}, {}, {}, {}, graph);
+    const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCompiledLookupFirst), "Compiled Lookup First", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
@@ -239,7 +241,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     }
 
     Core::GpuTaskGraph foreignGraph(testArena.arena);
-    const auto foreignResult = AddTask(Name("tests/task_graph/compiled_lookup_foreign"), "Compiled Lookup Foreign", {}, {}, {}, {}, {}, foreignGraph);
+    const auto foreignResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCompiledLookupForeign), "Compiled Lookup Foreign", {}, {}, {}, {}, {}, foreignGraph);
     ASSERT_TRUE(foreignResult);
     const Core::GpuTaskId foreign = *foreignResult;
     ASSERT_TRUE(foreign.valid());
@@ -250,7 +252,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
         expectMissingTask(compiledPlan, foreign);
     }
 
-    const auto appendedResult = AddTask(Name("tests/task_graph/compiled_lookup_appended"), "Compiled Lookup Appended", {}, {}, {}, {}, {}, graph);
+    const auto appendedResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCompiledLookupAppended), "Compiled Lookup Appended", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(appendedResult);
     const Core::GpuTaskId appended = *appendedResult;
     ASSERT_TRUE(appended.valid());
@@ -274,7 +276,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     }
 
     graph.reset();
-    const auto replacementResult = AddTask(Name("tests/task_graph/compiled_lookup_replacement"), "Compiled Lookup Replacement", {}, {}, {}, {}, {}, graph);
+    const auto replacementResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphCompiledLookupReplacement), "Compiled Lookup Replacement", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(replacementResult);
     const Core::GpuTaskId replacement = *replacementResult;
     ASSERT_TRUE(replacement.valid());
@@ -302,7 +304,7 @@ TEST(GpuTaskGraph, RejectsRecoverySubmissionWithoutAcceptedQueueFrontierRole){
     recoveryScheduling.allowPacketMerge = false;
     recoveryScheduling.isRecoverySubmission = true;
     Core::GpuTaskDesc recoveryDesc;
-    recoveryDesc.setIdentity(Name("tests/task_graph/recovery_without_frontier")).setMarkerLabel("Recovery Without Frontier").setScheduling(recoveryScheduling);
+    recoveryDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecoveryWithoutFrontier)).setMarkerLabel("Recovery Without Frontier").setScheduling(recoveryScheduling);
     const auto recoveryResult = graph.addTask(recoveryDesc);
     ASSERT_TRUE(recoveryResult);
     const Core::GpuTaskId recovery = *recoveryResult;
@@ -328,12 +330,12 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
 
     {
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto predecessorResult = AddTask(Name("tests/task_graph/frontier_explicit_predecessor"), "Frontier Explicit Predecessor", {}, {}, {}, {}, {}, graph);
+        const auto predecessorResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierExplicitPredecessor), "Frontier Explicit Predecessor", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(predecessorResult);
         const Core::GpuTaskId predecessor = *predecessorResult;
         ASSERT_TRUE(predecessor.valid());
         Core::GpuTaskDesc recoveryDesc;
-        recoveryDesc.setIdentity(Name("tests/task_graph/frontier_explicit_recovery")).setMarkerLabel("Frontier Explicit Recovery").setScheduling(frontierScheduling).setDependencies(Span(&predecessor, 1u));
+        recoveryDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierExplicitRecovery)).setMarkerLabel("Frontier Explicit Recovery").setScheduling(frontierScheduling).setDependencies(Span(&predecessor, 1u));
         const auto recoveryResult = graph.addTask(recoveryDesc);
         ASSERT_TRUE(recoveryResult);
         const Core::GpuTaskId recovery = *recoveryResult;
@@ -341,7 +343,7 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
 
         Core::GpuTaskGraph validGraph(testArena.arena);
         {
-            const auto gpuTaskAdmission = AddTask(Name("tests/task_graph/frontier_stale_assignment_source"), "Frontier Stale Assignment Source", {}, {}, {}, {}, {}, validGraph);
+            const auto gpuTaskAdmission = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierStaleAssignmentSource), "Frontier Stale Assignment Source", {}, {}, {}, {}, {}, validGraph);
             ASSERT_TRUE(gpuTaskAdmission);
             ASSERT_TRUE(gpuTaskAdmission->valid());
         }
@@ -374,12 +376,12 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
 
     {
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/frontier_external_completion")).setMarkerLabel("Frontier External Completion"));
+        const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierExternalCompletion)).setMarkerLabel("Frontier External Completion"));
         ASSERT_TRUE(completionResult);
         const Core::GpuExternalCompletionId completion = *completionResult;
         ASSERT_TRUE(completion.valid());
         Core::GpuTaskDesc recoveryDesc;
-        recoveryDesc.setIdentity(Name("tests/task_graph/frontier_external_recovery")).setMarkerLabel("Frontier External Recovery").setScheduling(frontierScheduling).setExternalDependencies(Span(&completion, 1u));
+        recoveryDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierExternalRecovery)).setMarkerLabel("Frontier External Recovery").setScheduling(frontierScheduling).setExternalDependencies(Span(&completion, 1u));
         const auto recoveryResult = graph.addTask(recoveryDesc);
         ASSERT_TRUE(recoveryResult);
         const Core::GpuTaskId recovery = *recoveryResult;
@@ -398,7 +400,7 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
         const Array<Core::GpuTaskExternalStateSource, 1u> externalStateSources = { Core::GpuTaskExternalStateSource{ .states = &externalStateSource }, };
         Core::GpuTaskDesc recoveryDesc;
         recoveryDesc
-            .setIdentity(Name("tests/task_graph/frontier_external_state_recovery"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierExternalStateRecovery))
             .setMarkerLabel("Frontier External State Recovery")
             .setScheduling(frontierScheduling)
             .setExternalStateSources(externalStateSources)
@@ -411,18 +413,18 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
 
     {
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto recoveryDomainResult = AddHazardDomain(graph, Name("tests/task_graph/frontier_inferred_domain"), "Frontier Inferred Domain");
+        const auto recoveryDomainResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierInferredDomain), "Frontier Inferred Domain");
         ASSERT_TRUE(recoveryDomainResult);
         const Core::GpuGraphResourceId recoveryDomain = *recoveryDomainResult;
         ASSERT_TRUE(recoveryDomain.valid());
         const Array<Core::GpuTaskResourceUse, 1u> predecessorUses = { Core::GpuTaskResourceUse{ .resource = recoveryDomain, .range = {}, .requiredState = Core::ResourceStates::Common, .access = Core::GpuTaskResourceAccess::Write, }, };
         const Array<Core::GpuTaskResourceUse, 1u> recoveryUses = { Core::GpuTaskResourceUse{ .resource = recoveryDomain, .range = {}, .requiredState = Core::ResourceStates::Common, .access = Core::GpuTaskResourceAccess::Read, }, };
-        const auto predecessorResult = AddTask(Name("tests/task_graph/frontier_inferred_predecessor"), "Frontier Inferred Predecessor", {}, Span(predecessorUses), {}, {}, {}, graph);
+        const auto predecessorResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierInferredPredecessor), "Frontier Inferred Predecessor", {}, Span(predecessorUses), {}, {}, {}, graph);
         ASSERT_TRUE(predecessorResult);
         const Core::GpuTaskId predecessor = *predecessorResult;
         ASSERT_TRUE(predecessor.valid());
         Core::GpuTaskDesc recoveryDesc;
-        recoveryDesc.setIdentity(Name("tests/task_graph/frontier_inferred_recovery")).setMarkerLabel("Frontier Inferred Recovery").setScheduling(frontierScheduling).setResourceUses(recoveryUses);
+        recoveryDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierInferredRecovery)).setMarkerLabel("Frontier Inferred Recovery").setScheduling(frontierScheduling).setResourceUses(recoveryUses);
         const auto recoveryResult = graph.addTask(recoveryDesc);
         ASSERT_TRUE(recoveryResult);
         const Core::GpuTaskId recovery = *recoveryResult;
@@ -440,32 +442,26 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
 TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithConcreteResources){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
-    struct ResourceCase{
-        Core::GpuGraphResourceType::Enum type;
-        Name identity;
-        AStringView markerLabel;
-    };
-
     TestArena testArena;
-    const Array<ResourceCase, 3u> resourceCases = {
-        ResourceCase{ .type = Core::GpuGraphResourceType::Texture, .identity = Name("tests/task_graph/frontier_texture"), .markerLabel = "Frontier Texture", },
-        ResourceCase{ .type = Core::GpuGraphResourceType::Buffer, .identity = Name("tests/task_graph/frontier_buffer"), .markerLabel = "Frontier Buffer", },
-        ResourceCase{ .type = Core::GpuGraphResourceType::AccelStruct, .identity = Name("tests/task_graph/frontier_accel_struct"), .markerLabel = "Frontier Accel Struct", },
+    const Array<GpuTaskResourceCase, 3u> resourceCases = {
+        GpuTaskResourceCase(Core::GpuGraphResourceType::Texture, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierTexture), "Frontier Texture"),
+        GpuTaskResourceCase(Core::GpuGraphResourceType::Buffer, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierBuffer), "Frontier Buffer"),
+        GpuTaskResourceCase(Core::GpuGraphResourceType::AccelStruct, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierAccelStruct), "Frontier Accel Struct"),
     };
     Core::GpuTaskSchedulingHint frontierScheduling;
     frontierScheduling.forceSubmissionBoundary = true;
     frontierScheduling.allowPacketMerge = false;
     frontierScheduling.joinsAcceptedQueueFrontier = true;
 
-    for(const ResourceCase& resourceCase : resourceCases){
+    for(const GpuTaskResourceCase& resourceCase : resourceCases){
         Core::GpuTaskGraph graph(testArena.arena);
-        const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(resourceCase.identity).setMarkerLabel(resourceCase.markerLabel).setType(resourceCase.type).setInitialState(Core::ResourceStates::Common));
+        const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(resourceCase.identity).setMarkerLabel(resourceCase.markerLabel).setType(resourceCase.resourceType).setInitialState(Core::ResourceStates::Common));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         const Array<Core::GpuTaskResourceUse, 1u> recoveryUses = { Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = Core::ResourceStates::Common, .access = Core::GpuTaskResourceAccess::Read, }, };
         Core::GpuTaskDesc recoveryDesc;
-        recoveryDesc.setIdentity(Name("tests/task_graph/frontier_concrete_recovery")).setMarkerLabel("Frontier Concrete Recovery").setScheduling(frontierScheduling).setResourceUses(recoveryUses);
+        recoveryDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphFrontierConcreteRecovery)).setMarkerLabel("Frontier Concrete Recovery").setScheduling(frontierScheduling).setResourceUses(recoveryUses);
         const auto recoveryResult = graph.addTask(recoveryDesc);
         ASSERT_TRUE(recoveryResult);
         const Core::GpuTaskId recovery = *recoveryResult;

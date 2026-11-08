@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/vertical_navigation.h>
 #include <impl/ecs_ui/toolkit/input/bindings.h>
 
@@ -100,7 +102,7 @@ TEST(UiEditNavigationStateTests, FiniteExtremeColumnsRemainFiniteAuthoritativeIn
 }
 
 TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsRejectNavigation){
-    Core::Alloc::GlobalArena arena(Name("tests/ui/edit/navigation"));
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiEditNavigation)};
     InputBindings bindings(arena);
     const Array<InputKeyBinding, 8> chords = {{
         { Core::Key::Up, Core::InputModifier::Control }, { Core::Key::Down, Core::InputModifier::Alt },

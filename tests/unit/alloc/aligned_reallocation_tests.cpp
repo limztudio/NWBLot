@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/test_context.h>
+#include <tests/unit/alloc/case_types.adhd.h>
+
 #include <core/alloc/general.h>
 #include <core/alloc/persistent.h>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -19,7 +20,7 @@ namespace __hidden_aligned_reallocation_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_VerifyAlignedReallocationAlignment = 256u;
+inline constexpr usize s_VerifyAlignedReallocationAlignment = NWB::Tests::AllocCases::s_AllocCaseVerifyAlignedReallocationAlignment;
 inline constexpr usize s_VerifyAlignedReallocationGrownBytes = s_VerifyAlignedReallocationAlignment * 4u;
 
 

@@ -37,7 +37,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     {
-        const auto gpuTaskAdmission = AddTask(Name("tests/task_graph/declaration_revision_base"), "Declaration Revision Base", {}, {}, {}, {}, {}, graph);
+        const auto gpuTaskAdmission = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseDeclarationRevisionBase), "Declaration Revision Base", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(gpuTaskAdmission);
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
@@ -75,7 +75,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
         previousRevision = declarations.declarationRevision();
     }
     {
-        const auto secondGpuTaskAdmission = AddTask(Name("tests/task_graph/declaration_revision_task"), "Declaration Revision Task", {}, {}, {}, {}, {}, graph);
+        const auto secondGpuTaskAdmission = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseDeclarationRevisionTask), "Declaration Revision Task", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(secondGpuTaskAdmission);
         ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
@@ -89,7 +89,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
-    const auto resourceResult = AddBufferMetadata(graph, Name("tests/task_graph/declaration_revision_resource"), "Declaration Revision Resource");
+    const auto resourceResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_DeclarationCaseDeclarationRevisionResource), "Declaration Revision Resource");
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
@@ -106,7 +106,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
     }
     const auto resourceSetResult = graph.importResourceSet(
         Core::GpuGraphResourceSetDesc{}
-            .setIdentity(Name("tests/task_graph/declaration_revision_resource_set"))
+            .setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseDeclarationRevisionResourceSet))
             .setMarkerLabel("Declaration Revision Resource Set")
         .setMembers(resourceSetMembers)
     );
@@ -123,7 +123,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
-    const auto pipelineResult = AddPipelineMetadata(graph, Name("tests/task_graph/declaration_revision_pipeline"), "Declaration Revision Pipeline", Core::GpuGraphPipelineType::Compute);
+    const auto pipelineResult = AddPipelineMetadata(graph, Name(TaskGraphTestUtils::s_DeclarationCaseDeclarationRevisionPipeline), "Declaration Revision Pipeline", Core::GpuGraphPipelineType::Compute);
     ASSERT_TRUE(pipelineResult);
     const Core::GpuGraphPipelineId pipeline = *pipelineResult;
     ASSERT_TRUE(pipeline.valid());
@@ -137,7 +137,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
-    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/declaration_revision_completion")).setMarkerLabel("Declaration Revision Completion"));
+    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseDeclarationRevisionCompletion)).setMarkerLabel("Declaration Revision Completion"));
     ASSERT_TRUE(completionResult);
     const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
@@ -170,7 +170,7 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     Core::GpuTaskGraph graph(testArena.arena);
 
     const Core::GpuGraphResourceDesc resourceDesc = Core::GpuGraphResourceDesc{}
-        .setIdentity(Name("tests/task_graph/stable_declaration_resource"))
+        .setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseStableDeclarationResource))
         .setMarkerLabel("Stable Declaration Resource")
         .setType(Core::GpuGraphResourceType::Buffer)
         .setInitialState(Core::ResourceStates::Common)
@@ -181,7 +181,7 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     ASSERT_TRUE(resource.valid());
     const Array<Core::GpuGraphResourceId, 1> resourceSetMembers = { resource };
     const Core::GpuGraphResourceSetDesc resourceSetDesc = Core::GpuGraphResourceSetDesc{}
-        .setIdentity(Name("tests/task_graph/stable_declaration_resource_set"))
+        .setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseStableDeclarationResourceSet))
         .setMarkerLabel("Stable Declaration Resource Set")
         .setMembers(resourceSetMembers)
     ;
@@ -189,12 +189,12 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     ASSERT_TRUE(resourceSetResult);
     const Core::GpuGraphResourceSetId resourceSet = *resourceSetResult;
     ASSERT_TRUE(resourceSet.valid());
-    const Core::GpuGraphPipelineDesc pipelineDesc = Core::GpuGraphPipelineDesc{}.setIdentity(Name("tests/task_graph/stable_declaration_pipeline")).setMarkerLabel("Stable Declaration Pipeline").setType(Core::GpuGraphPipelineType::Compute);
+    const Core::GpuGraphPipelineDesc pipelineDesc = Core::GpuGraphPipelineDesc{}.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseStableDeclarationPipeline)).setMarkerLabel("Stable Declaration Pipeline").setType(Core::GpuGraphPipelineType::Compute);
     const auto pipelineResult = graph.importPipeline(pipelineDesc);
     ASSERT_TRUE(pipelineResult);
     const Core::GpuGraphPipelineId pipeline = *pipelineResult;
     ASSERT_TRUE(pipeline.valid());
-    const Core::GpuExternalCompletionDesc completionDesc = Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/stable_declaration_completion")).setMarkerLabel("Stable Declaration Completion");
+    const Core::GpuExternalCompletionDesc completionDesc = Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseStableDeclarationCompletion)).setMarkerLabel("Stable Declaration Completion");
     const auto completionResult = graph.importExternalCompletion(completionDesc);
     ASSERT_TRUE(completionResult);
     const Core::GpuExternalCompletionId completion = *completionResult;
@@ -206,7 +206,7 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     {
-        const auto secondGpuTaskAdmission = AddTask(Name("tests/task_graph/stable_declaration_task"), "Stable Declaration Task", {}, {}, {}, {}, {}, graph);
+        const auto secondGpuTaskAdmission = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseStableDeclarationTask), "Stable Declaration Task", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(secondGpuTaskAdmission);
         ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
@@ -274,7 +274,7 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
     {
-        const auto gpuTaskAdmission = AddTask(Name("tests/task_graph/external_final_revision_base"), "External Final Revision Base", {}, {}, {}, {}, {}, graph);
+        const auto gpuTaskAdmission = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseExternalFinalRevisionBase), "External Final Revision Base", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(gpuTaskAdmission);
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
@@ -293,7 +293,7 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     }
     const auto externalFinalResourceResult = graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/external_final_revision_resource"))
+            .setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseExternalFinalRevisionResource))
             .setMarkerLabel("External Final Revision Resource")
             .setType(Core::GpuGraphResourceType::Buffer)
             .setInitialState(Core::ResourceStates::Common)

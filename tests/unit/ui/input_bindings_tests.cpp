@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/input/bindings.h>
 
 #include <gtest/gtest.h>
@@ -26,7 +28,7 @@ using namespace NWB::Impl::Ui;
 class UiInputBindingsTests : public testing::Test{
 public:
     UiInputBindingsTests()
-        : m_arena(Name("tests/ui/input_bindings"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiInputBindings))
         , m_bindings(m_arena)
     {}
 

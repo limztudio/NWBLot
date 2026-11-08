@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/task/gpu/task_graph.h>
 
 #include <global/arena_memory.h>
@@ -35,7 +37,7 @@ namespace __hidden_resource_set_memory_tests{
 using ResourceIds = Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena>;
 using TaskGraphTestUtils::IndexedName;
 
-static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
+static constexpr Name s_ScratchOwner = NWB::Tests::TaskGraphTestUtils::s_CoreTaskGpuDeclarationScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +47,7 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     members.clear();
     members.reserve(count);
     for(usize index = 0u; index < count; ++index){
-        const auto identityNameResult = IndexedName(Name("tests/resource_set_memory/resource/"), index);
+        const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemoryResource), index);
         if(!identityNameResult)
             return false;
         const Name identity = *identityNameResult;
@@ -78,13 +80,13 @@ static void ExpectDeclarationState(const Core::GpuTaskGraph& graph, const u64 re
 TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocated){
     const ArenaMemoryStats before = OwnerStats(s_ScratchOwner);
     {
-        Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/small"));
+        Core::Alloc::GlobalArena arena{Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemorySmall)};
         Core::GpuTaskGraph graph(arena);
         ResourceIds members(arena);
         ASSERT_TRUE(FillResources(graph, 64u, members));
         Core::GpuGraphResourceSetId lastSet;
         for(const usize count : { 0u, 1u, 8u, 32u }){
-            const auto identityNameResult = IndexedName(Name("tests/resource_set_memory/small_set/"), count);
+            const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemorySmallSet), count);
             ASSERT_TRUE(identityNameResult);
             const Name identity = *identityNameResult;
             const auto lastSetTaskAdmission = graph.importResourceSet(SetDescription(identity, members, count));
@@ -97,7 +99,7 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
             ASSERT_TRUE(declarations.valid());
             const u64 revision = declarations.declarationRevision();
             const Core::GpuTaskGraphResourceSetView last = declarations.resourceSetAt(lastSet.index);
-            EXPECT_FALSE(graph.importResourceSet(SetDescription(Name("tests/resource_set_memory/blocked_large"), members, members.size())).has_value());
+            EXPECT_FALSE(graph.importResourceSet(SetDescription(Name(NWB::Tests::TaskGraphTestUtils::s_TaskGraphCaseTestsResourceSetMemoryBlockedLarge), members, members.size())).has_value());
             EXPECT_FALSE(graph.importResourceSet(SetDescription(last.identity, members, last.memberCount)).has_value());
             EXPECT_EQ(declarations.declarationRevision(), revision);
         }
@@ -116,7 +118,7 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
     const ArenaMemoryStats before = OwnerStats(s_ScratchOwner);
     ArenaMemoryStats warm;
     {
-        Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/repeated"));
+        Core::Alloc::GlobalArena arena{Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemoryRepeated)};
         Core::GpuTaskGraph graph(arena);
         ResourceIds members(arena);
         for(usize cycle = 0u; cycle < 8u; ++cycle){
@@ -126,7 +128,7 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
             const ArenaMemoryStats heapBefore = HeapBackingMemoryStats();
             usize phase = 0u;
             for(const usize count : { 4096u, 33u, 4096u }){
-                const auto identityNameResult = IndexedName(Name("tests/resource_set_memory/phase/"), phase);
+                const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemoryPhase), phase);
                 ASSERT_TRUE(identityNameResult);
                 const Name identity = *identityNameResult;
                 const auto setResult = graph.importResourceSet(SetDescription(identity, members, count));
@@ -172,12 +174,12 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
 TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDeclaration){
     const ArenaMemoryStats before = OwnerStats(s_ScratchOwner);
     {
-        Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/rejection"));
+        Core::Alloc::GlobalArena arena{Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemoryRejection)};
         Core::GpuTaskGraph graph(arena);
         ResourceIds members(arena);
         ASSERT_TRUE(FillResources(graph, 1024u, members));
         const Core::GpuGraphResourceId saved = members.back();
-        const Core::GpuGraphResourceSetDesc rejected = SetDescription(Name("tests/resource_set_memory/rejected"), members, members.size());
+        const Core::GpuGraphResourceSetDesc rejected = SetDescription(Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemoryRejected), members, members.size());
         u64 warmReserved = 0u;
         for(usize cycle = 0u; cycle < 16u; ++cycle){
             u64 revision = 0u;
@@ -201,7 +203,7 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
             EXPECT_EQ(OwnerStats(s_ScratchOwner).usedBytes, before.usedBytes);
             members.back() = saved;
-            const auto acceptedIdentityNameResult = IndexedName(Name("tests/resource_set_memory/accepted/"), cycle);
+            const auto acceptedIdentityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseResourceSetMemoryAccepted), cycle);
             ASSERT_TRUE(acceptedIdentityNameResult);
             const Name acceptedIdentity = *acceptedIdentityNameResult;
             {

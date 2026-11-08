@@ -7,6 +7,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/logger_server/name_cases.adhd.h>
 
 #include <logger/common.h>
 #include <logger/processed_message_file.h>
@@ -89,7 +90,7 @@ TEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRe
     EXPECT_FALSE(result.accepted);
     EXPECT_TRUE(Contains(result.message, NWB_TEXT("failed to read crash archive")));
     const auto native = MakeDiagnosticEventText("native_category='{}'; native_code={}", missing.error().category().name(), missing.error().value());
-    constexpr Name s_FailureTextScratchName("tests/integration/logger_server/producer_contracts/scratch");
+    constexpr Name s_FailureTextScratchName = NWB::Tests::LoggerCrashCases::s_LoggerCrashTestNameTestsIntegrationLoggerServerProducerContractsScratch;
     NWB::Core::Alloc::ScratchArena scratchArena(s_FailureTextScratchName);
     const auto nativeText = ConvertString(scratchArena, native.view());
     EXPECT_TRUE(Contains(result.message, nativeText));

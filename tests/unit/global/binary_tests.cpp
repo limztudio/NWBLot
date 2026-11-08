@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/global/name_case_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -21,8 +22,8 @@ namespace __hidden_global_binary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_TableAlpha = "alpha";
-static constexpr AStringView s_TableBeta = "beta";
+static constexpr AStringView s_TableAlpha = NWB::Tests::GlobalCases::s_GlobalTestTableAlpha;
+static constexpr AStringView s_TableBeta = NWB::Tests::GlobalCases::s_GlobalTestTableBeta;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

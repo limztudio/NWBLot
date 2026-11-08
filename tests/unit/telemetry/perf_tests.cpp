@@ -4,8 +4,9 @@
 
 #include "telemetry_test_helpers.h"
 
-#include <global/named_registry.h>
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
 
+#include <global/named_registry.h>
 #include <global/binary.h>
 
 #include <gtest/gtest.h>
@@ -19,6 +20,8 @@ namespace __hidden_telemetry_perf_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace TestCases = NWB::Tests::TelemetryCases;
 
 static constexpr AStringView s_RendererFrame = "renderer/frame";
 static constexpr AStringView s_RendererFrameText = "Renderer Frame";
@@ -177,7 +180,7 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
 
 TEST(Telemetry, GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicitNameFailures){
     using NWB::Core::Perf::TimingScopeId;
-    GenericScopeRecord record{ Name("perf/generic/scope"), 3u };
+    GenericScopeRecord record{ Name(NWB::Tests::TelemetryCases::s_TelemetryCasePerfGenericScope), 3u };
     const Array<BorrowedScopePointer, 1u> ownerStorage{ BorrowedScopePointer{ &record } };
     const Span<const BorrowedScopePointer> owners(ownerStorage);
     const TimingScopeId scope{ 0u, 3u };
@@ -205,7 +208,7 @@ TEST(Telemetry, PerfTimingViewRejectsIndexAtScopeCount){
     TestArena testArena;
     NWB::Core::Perf::TimingRecorder cpuTiming(testArena.arena);
     cpuTiming.setEnabled(true);
-    const auto scopeResult = cpuTiming.registerScope(Name("perf/cpu/update"));
+    const auto scopeResult = cpuTiming.registerScope(Name(TestCases::s_TelemetryCasePerfCpuUpdate));
     ASSERT_TRUE(scopeResult);
     const NWB::Core::Perf::TimingScopeId scope = *scopeResult;
     cpuTiming.recordSample(scope, 0.010, 100u);

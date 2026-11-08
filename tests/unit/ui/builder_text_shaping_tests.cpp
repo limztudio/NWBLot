@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -43,7 +45,7 @@ protected:
         for(const UiSkinRegion& region : m_skin.regions())
             regions.push_back(region);
         UiSkinRegion edit;
-        edit.name = Name("edit.normal");
+        edit.name = Name(NWB::Tests::UiCases::s_UiCaseEditNormal);
         edit.rectangle = { 88u, 0u, 8u, 8u };
         regions.push_back(edit);
         m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));

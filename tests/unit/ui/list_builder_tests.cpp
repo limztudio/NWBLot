@@ -4,6 +4,8 @@
 
 #include "list_builder_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <global/simdmath.h>
 
 
@@ -31,9 +33,9 @@ TEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles){
     ListState secondState;
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
-    m_builder.listStyle().background = Name("button.normal");
+    m_builder.listStyle().background = Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal);
     ASSERT_TRUE(m_builder.virtualList("first", m_source, m_state, Options()).valid);
-    m_builder.listStyle().background = Name("button.hover");
+    m_builder.listStyle().background = Name(NWB::Tests::UiCases::s_UiCaseButtonHover);
     ASSERT_TRUE(m_builder.virtualList("second", m_source, secondState, Options()).valid);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();

@@ -13,17 +13,17 @@ namespace Tests{
 
 namespace __hidden_material_bind_fixture{
 
-constexpr AStringView s_EngineDirectory = "impl";
+constexpr AStringView s_EngineDirectory = AssetsGraphicsFixture::s_EngineDirectory;
 #if defined(NWB_FINAL)
-constexpr AStringView s_CacheDirectory = "__asset_cache";
-constexpr AStringView s_TestsConfiguration = "tests";
+constexpr AStringView s_CacheDirectory = AssetsGraphicsFixture::s_CacheDirectory;
+constexpr AStringView s_TestsConfiguration = AssetsGraphicsFixture::s_TestsConfiguration;
 #endif
-constexpr AStringView s_GraphicsDirectory = "graphics";
-constexpr AStringView s_AssetsDirectory = "assets";
-constexpr AStringView s_MeshesDirectory = "meshes";
-constexpr AStringView s_MaterialInterfacesDirectory = "material_interfaces";
-constexpr AStringView s_SurfaceBindFilename = "test_surface.bind";
-constexpr AStringView s_ShadersDirectory = "shaders";
+constexpr AStringView s_GraphicsDirectory = AssetsGraphicsFixture::s_GraphicsDirectory;
+constexpr AStringView s_AssetsDirectory = AssetsGraphicsFixture::s_AssetsDirectory;
+constexpr AStringView s_MeshesDirectory = AssetsGraphicsFixture::s_MeshesDirectory;
+constexpr AStringView s_MaterialInterfacesDirectory = AssetsGraphicsFixture::s_MaterialInterfacesDirectory;
+constexpr AStringView s_SurfaceBindFilename = AssetsGraphicsFixture::s_SurfaceBindFilename;
+constexpr AStringView s_ShadersDirectory = AssetsGraphicsFixture::s_ShadersDirectory;
 
 
 
@@ -162,3 +162,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

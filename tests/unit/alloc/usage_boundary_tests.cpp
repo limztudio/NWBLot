@@ -3,6 +3,7 @@
 
 
 #include <tests/common/arena_owner_fixture.h>
+#include <tests/unit/alloc/case_types.adhd.h>
 
 #include <core/alloc/general.h>
 
@@ -31,7 +32,7 @@ using NWB::Tests::OwnerStats;
 
 TEST(AllocatorUsageBoundaries, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
     constexpr u32 s_OddBytes = 13u;
-    constexpr Name s_Owner("tests/allocation_owners/odd_reallocation");
+    constexpr Name s_Owner = NWB::Tests::AllocCases::s_AllocationOwnersOddReallocation;
     GlobalArena arena(s_Owner);
     auto* pointer = static_cast<u8*>(arena.allocate(1u, s_OddBytes));
     ASSERT_NE(pointer, nullptr);
@@ -80,7 +81,7 @@ TEST(AllocatorUsageBoundaries, GlobalArenaChargesUsableBytesAcrossOddSizeRealloc
 }
 
 TEST(AllocatorUsageBoundaries, ZeroSizeReallocationReleasesChargedBytes){
-    constexpr Name s_Owner("tests/allocation_owners/object_and_zero");
+    constexpr Name s_Owner = NWB::Tests::AllocCases::s_AllocationOwnersObjectAndZero;
     GlobalArena arena(s_Owner);
     void* allocation = arena.allocate(64u, 13u);
     ASSERT_NE(allocation, nullptr);

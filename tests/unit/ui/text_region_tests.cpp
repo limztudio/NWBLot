@@ -6,6 +6,8 @@
 #include "widget_id_assertion.h"
 #include "combo_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/widgets/label.h>
 
 #include <core/alloc/scratch.h>
@@ -522,7 +524,7 @@ TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInstea
     ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
     ASSERT_TRUE(reference.popClip());
     const DrawSnapshot expected = reference.freeze();
-    Core::Alloc::ScratchArena scratch(Name("tests/ui/text_regions/centering"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiTextRegionsCentering)};
     Vector<Vertex, Core::Alloc::ScratchArena> actualGlyphs(scratch);
     Vector<Vertex, Core::Alloc::ScratchArena> expectedGlyphs(scratch);
     CopyGlyphVertices(actual, actualGlyphs);
@@ -564,7 +566,7 @@ TEST_F(UiTextRegionTests, WindowTitleInkKeepsPaddingAndCollapseReservationWhenVi
             const f32 inkTop = header.y + 6.0f;
             const f32 inkHeight = header.height - 14.0f;
             ExpectGlyphRegion(snapshot, { left, inkTop, right - left, inkHeight });
-            const auto skin = sampleSkinPaint(snapshot, Name("window.title"));
+            const auto skin = sampleSkinPaint(snapshot, Name(NWB::Tests::UiCases::s_UiCaseWindowTitle));
             ASSERT_TRUE(skin);
             UiPaintAssertions::ExpectRect(skin->bounds, title->clip);
             if(collapsible){
@@ -737,7 +739,7 @@ TEST_F(UiTextRegionTests, SelectableMetricsUseEveryStatePaddingAndMinimumWithout
     ASSERT_TRUE(layout);
     const auto textBounds = m_text.measure(*layout, { 800.0f, 600.0f, 1.0f, 1.0f });
     ASSERT_TRUE(textBounds);
-    Core::Alloc::ScratchArena scratch(Name("tests/ui/selectable_state_metrics"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::UiCases::s_UiCaseTestsUiSelectableStateMetrics)};
     Vector<Vertex, Core::Alloc::ScratchArena> baseline(scratch);
     u64 generation = 1u;
     for(const SelectablePaintFlags flags : { SelectablePaintFlags{}, SelectablePaintFlags{ true, false, true, false }, SelectablePaintFlags{ true, true, false, false }, SelectablePaintFlags{ false, false, false, false } }){

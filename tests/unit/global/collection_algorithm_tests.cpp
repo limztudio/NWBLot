@@ -79,7 +79,7 @@ TEST(Global, CollectionValidationAndOrderingPreserveBoundaries){
     const auto throwingValid = [](const u32) -> b8{ throw RuntimeException("validity predicate failure"); };
     static_assert(!noexcept(AllValidAndDistinct(Span<const u32>{}, throwingValid, recordDuplicate)));
     EXPECT_THROW(static_cast<void>(AllValidAndDistinct(Span<const u32>(valuesToValidate), throwingValid, recordDuplicate)), RuntimeException);
-    struct KeyedValue{ u32 key; u32 order; };
+    using KeyedValue = NWB::Tests::GlobalCases::StableDedupValue;
     Vector<KeyedValue, NWB::Core::Alloc::ScratchArena> duplicates(scratchArena);
     duplicates.push_back({ 2u, 0u });
     duplicates.push_back({ 1u, 1u });
@@ -165,7 +165,7 @@ TEST(Global, CollectionValidationAndOrderingPreserveBoundaries){
 }
 
 TEST(Global, IntervalCoverageHandlesOverlapAndThrows){
-    struct TestInterval{ u64 first; u64 last; u32 index; };
+    using TestInterval = NWB::Tests::GlobalCases::IntervalProbe;
     const Array<TestInterval, 3u> unsortedIntervals{ TestInterval{ 5u, 10u, 0u }, TestInterval{ 0u, 5u, 1u }, TestInterval{ 2u, 3u, 2u } };
     const auto eligible = [](const TestInterval&)noexcept{ return true; };
     const auto intervalBegin = [](const TestInterval& interval)noexcept{ return interval.first; };

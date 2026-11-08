@@ -5,6 +5,7 @@
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 #include <tests/smoke/gpu_pass_timing_probe.h>
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
 
 #include <global/text_utils.h>
 
@@ -19,6 +20,8 @@ namespace __hidden_gpu_pass_timing_probe_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace TestCases = NWB::Tests::TelemetryCases;
 
 static constexpr TStringView s_PublishedWindows2 = NWB_TEXT("published_windows=2");
 
@@ -65,7 +68,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     Tests::TestArena<> testArena;
     Core::Perf::TimingRecorder recorder(testArena.arena);
     recorder.setEnabled(true);
-    const auto firstScopeResult = recorder.registerScope(Name("tests/probe/first"));
+    const auto firstScopeResult = recorder.registerScope(Name(TestCases::s_TelemetryCaseTestsProbeFirst));
     ASSERT_TRUE(firstScopeResult);
     const Core::Perf::TimingScopeId firstScope = *firstScopeResult;
     ASSERT_TRUE(firstScope.valid());

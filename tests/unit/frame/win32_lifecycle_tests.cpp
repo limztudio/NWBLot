@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/frame/name_cases.adhd.h>
+
 #include <core/frame/module.h>
 #include <core/frame/frame_detail.h>
 #include <core/common/log.h>
@@ -24,14 +26,14 @@ namespace __hidden_win32_lifecycle_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_LoggerArena("tests/frame/clamp_observer");
+inline constexpr Name s_LoggerArena = NWB::Tests::FrameCases::s_OneOffNameTestsFrameClampObserver;
 inline constexpr TStringView s_ClampMessage = NWB_TEXT("Frame Win32 client size clamped");
 inline constexpr TStringView s_FrameClassName = NWB_TEXT("NWB_FRAME");
-inline constexpr int s_ClampObserverFailure = 53;
-inline constexpr int s_UnexpectedFailure = 71;
-inline constexpr u32 s_InitializationAttempts = 2u;
-inline constexpr u32 s_InactiveLoopWatchdogMS = 1000u;
-inline constexpr u32 s_WatchdogPollMS = 5u;
+inline constexpr int s_ClampObserverFailure = NWB::Tests::FrameCases::s_FrameTestClampObserverFailure;
+inline constexpr int s_UnexpectedFailure = NWB::Tests::FrameCases::s_FrameTestUnexpectedFailure;
+inline constexpr u32 s_InitializationAttempts = NWB::Tests::FrameCases::s_FrameTestInitializationAttempts;
+inline constexpr u32 s_InactiveLoopWatchdogMS = NWB::Tests::FrameCases::s_FrameTestInactiveLoopWatchdogMS;
+inline constexpr u32 s_WatchdogPollMS = NWB::Tests::FrameCases::s_FrameTestWatchdogPollMS;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,7 +92,7 @@ public:
 
 
 private:
-    NWB::Core::Common::LogArena m_arena{ Name("tests/frame/inactive_loop_logger") };
+    NWB::Core::Common::LogArena m_arena{ Name(NWB::Tests::FrameCases::s_OneOffNameTestsFrameInactiveLoopLogger) };
 };
 
 class UnfocusedLoopRenderPass final : public NWB::Core::IRenderPass{
@@ -123,7 +125,7 @@ public:
 };
 
 static void CheckRenderPassCollection(NWB::Core::GraphicsRuntime& graphics){
-    NWB::Core::Alloc::GlobalArena arena(Name("tests/frame/render_pass_collection"));
+    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::FrameCases::s_OneOffNameTestsFrameRenderPassCollection);
     NWB::Core::GraphicsModuleDetail::RenderPassCollection passes(arena);
     CollectionTestPass first(graphics);
     CollectionTestPass second(graphics);
@@ -288,8 +290,7 @@ TEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterIni
         const int result = InvokeTerminalEntry<ClampObserverFailure>([&]()->int{
             NWB::Core::Frame frame(instance, static_cast<u16>(s_MaxU16), static_cast<u16>(s_MaxU16), cpuTasks);
             return frame.init() ? 0 : 1;
-        }, [](const ClampObserverFailure&)noexcept{ return s_ClampObserverFailure; }, []()noexcept{ return s_UnexpectedFailure; }
-        );
+        }, [](const ClampObserverFailure&)noexcept{ return s_ClampObserverFailure; }, []()noexcept{ return s_UnexpectedFailure; });
         ASSERT_EQ(result, s_ClampObserverFailure);
         ASSERT_EQ(logger.clampCount(), attempt + 1u);
 

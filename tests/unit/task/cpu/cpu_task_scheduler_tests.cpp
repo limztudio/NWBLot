@@ -95,8 +95,8 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
         ASSERT_TRUE(secondCpuTaskAdmission);
         const auto child = *secondCpuTaskAdmission;
         if(!child.valid())
-            rejected.store(true, MemoryOrder::release); }
-    );
+            rejected.store(true, MemoryOrder::release);
+    });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
     const auto fourthCpuTaskAdmission = scheduler.submit([&]()noexcept{
@@ -181,10 +181,8 @@ TEST(CpuTaskSchedulerTests, OneWorkerCompletesNestedParallelRangesThroughCoopera
         EXPECT_TRUE((scheduler.parallelFor(0u, 5u, 1u, [&](const usize outer){
             EXPECT_TRUE((scheduler.parallelFor(0u, 7u, 1u, [&](const usize inner)noexcept{
                 visited[outer * 7u + inner].fetch_add(1u, MemoryOrder::relaxed);
-            }
-            )));
-        }
-        )));
+            })));
+        })));
     });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto root = *cpuTaskAdmission;

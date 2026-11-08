@@ -127,7 +127,7 @@ TEST(Global, CollectionSharedHelpersPreserveEdgeCases){
     EXPECT_EQ(denseMatrix[128u] & 1u, 1u);
     EXPECT_EQ(denseMatrix[0u] & 2u, 2u);
 
-    struct WordRange{ usize begin; usize end; };
+    using WordRange = NWB::Tests::GlobalCases::WordRangeProbe;
     Array<WordRange, 65u> ranges{};
     Array<usize, 65u> offsets{};
     usize wordCount = 0u;
@@ -162,5 +162,4 @@ TEST(Global, CollectionSharedHelpersPreserveEdgeCases){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

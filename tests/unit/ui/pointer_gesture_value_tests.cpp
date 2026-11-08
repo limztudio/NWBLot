@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -45,7 +46,7 @@ protected:
 
 
 UiPointerGestureValueTests::UiPointerGestureValueTests()
-    : RouterTestFixture(Name("tests/ui/pointer_gesture_value"))
+    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerGestureValue))
 {
     HitTarget& host = m_targets[0u];
     host.id = { 1u };

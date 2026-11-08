@@ -4,6 +4,8 @@
 
 #include "popup_tools_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <global/simdmath.h>
 
 
@@ -69,9 +71,9 @@ TEST_F(UiPopupToolsBuilderTests, VisibleTooltipPaintsItsDeclarationStyleAfterALa
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 280.0f }));
     EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
-    m_builder.tooltipStyle().background = Name("button.normal");
+    m_builder.tooltipStyle().background = Name(NWB::Tests::UiCases::s_UiCaseNameButtonNormal);
     ASSERT_TRUE(m_builder.tooltip("tip", "anchor", "Helpful text", m_tooltip, m_tooltipOptions));
-    m_builder.tooltipStyle().background = Name("button.pressed");
+    m_builder.tooltipStyle().background = Name(NWB::Tests::UiCases::s_UiCaseButtonPressed);
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_tooltip.visible());
     const DrawSnapshot snapshot = m_paint.freeze();

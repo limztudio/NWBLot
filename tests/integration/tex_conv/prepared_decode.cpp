@@ -2,12 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/integration/tex_conv/name_cases.adhd.h>
+
+#include <logger/client/module.h>
+
 #include <impl/assets_texture/cook.h>
 #include <impl/assets_texture/texture_mip_decoder.h>
 
 #include <core/common/application_entry.h>
-
-#include <logger/client/module.h>
 
 #include <global/bit.h>
 #include <global/filesystem.h>
@@ -26,7 +28,7 @@ namespace __hidden_tex_conv_prepared_decode{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_DecodeArena("tests/integration/tex_conv/prepared_decode");
+inline constexpr Name s_DecodeArena = NWB::Tests::TextureDecodeCases::s_OneOffNameTestsIntegrationTexConvPreparedDecode;
 inline constexpr usize s_MaxFixtureBytes = 64u * 1024u * 1024u;
 inline constexpr u32 s_ChannelCount = 4u;
 inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decode");

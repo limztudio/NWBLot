@@ -4,6 +4,8 @@
 
 #include "paint_image_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/gpu/image_resources.h>
 
 
@@ -216,7 +218,7 @@ TEST_F(GpuTextureImageValidationFixture, NonImageCommandsCannotReferenceTextureB
     const Rect rectangle{ 2.0f, 3.0f, 16.0f, 8.0f };
     const Rect uv{ 0.0f, 0.0f, 1.0f, 1.0f };
     m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), rectangle));
+    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), rectangle));
     ASSERT_TRUE(m_builder.drawGlyph(glyph, rectangle, uv));
     ASSERT_TRUE(m_builder.drawSdfGlyph(sdf, 3u, rectangle, uv));
     ASSERT_TRUE(m_builder.drawImage(image, rectangle));

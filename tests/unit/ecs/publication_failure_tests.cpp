@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/ecs/module.h>
-
 #include <tests/common/ecs_test_world.h>
+#include <tests/unit/ecs/publication_case_types.adhd.h>
+
+#include <core/ecs/module.h>
 
 #include <gtest/gtest.h>
 
@@ -23,14 +24,6 @@ using TestWorld = NWB::Tests::EcsTestWorld;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct PublicationPositionComponent{
-    i32 x = 0;
-};
-
-struct PublicationVelocityComponent{
-    i32 x = 0;
-};
 
 struct ThrowingConstructionComponent{
     u32 value;

@@ -1,0 +1,89 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_GlobalCaseTestsPathNativeComponentViews = "tests/path/native_component_views";
+const Name s_GlobalArenaCaseAllocatorPropagationDefault = "tests/allocator_propagation/default";
+const Name s_GlobalArenaCaseAllocatorPropagationSelfAssignment = "tests/allocator_propagation/self_assignment";
+const Name s_GlobalArenaCaseAllocatorPropagationVectorSource = "tests/allocator_propagation/vector_source";
+const Name s_GlobalArenaCaseAllocatorPropagationVectorTarget = "tests/allocator_propagation/vector_target";
+const Name s_GlobalArenaCaseAllocatorPropagationStringSource = "tests/allocator_propagation/string_source";
+const Name s_GlobalArenaCaseAllocatorPropagationStringTarget = "tests/allocator_propagation/string_target";
+const Name s_GlobalArenaCaseAllocatorPropagationVectorSwapFirst = "tests/allocator_propagation/vector_swap_first";
+const Name s_GlobalArenaCaseAllocatorPropagationVectorSwapSecond = "tests/allocator_propagation/vector_swap_second";
+const Name s_GlobalArenaCaseAllocatorPropagationStringSwapFirst = "tests/allocator_propagation/string_swap_first";
+const Name s_GlobalArenaCaseAllocatorPropagationStringSwapSecond = "tests/allocator_propagation/string_swap_second";
+const Name s_GlobalArenaCaseAllocatorPropagationParallelConstructSource = "tests/allocator_propagation/parallel_construct_source";
+const Name s_GlobalArenaCaseAllocatorPropagationParallelConstructTarget = "tests/allocator_propagation/parallel_construct_target";
+const Name s_GlobalArenaCaseAllocatorPropagationMapSource = "tests/allocator_propagation/map_source";
+const Name s_GlobalArenaCaseAllocatorPropagationMapTarget = "tests/allocator_propagation/map_target";
+const Name s_GlobalArenaCaseAllocatorPropagationOrderedSwapFirst = "tests/allocator_propagation/ordered_swap_first";
+const Name s_GlobalArenaCaseAllocatorPropagationOrderedSwapSecond = "tests/allocator_propagation/ordered_swap_second";
+const Name s_GlobalArenaCaseAllocatorPropagationHashMapFirst = "tests/allocator_propagation/hash_map_first";
+const Name s_GlobalArenaCaseAllocatorPropagationHashMapSecond = "tests/allocator_propagation/hash_map_second";
+const Name s_GlobalArenaCaseAllocatorPropagationHashSetFirst = "tests/allocator_propagation/hash_set_first";
+const Name s_GlobalArenaCaseAllocatorPropagationHashSetSecond = "tests/allocator_propagation/hash_set_second";
+const Name s_GlobalArenaCaseAllocatorPropagationDefaultSource = "tests/allocator_propagation/default_source";
+const Name s_GlobalArenaCaseArenaObjectRawConstructorFailure = "tests/arena_object/raw_constructor_failure";
+const Name s_GlobalArenaCaseArenaObjectGenericConstructorFailure = "tests/arena_object/generic_constructor_failure";
+const Name s_GlobalArenaCaseArenaObjectGlobalConstructorFailure = "tests/arena_object/global_constructor_failure";
+const Name s_GlobalArenaCaseArenaObjectPersistentConstructorFailure = "tests/arena_object/persistent_constructor_failure";
+const Name s_GlobalArenaCaseArenaObjectGenericArrayFailure = "tests/arena_object/generic_array_failure";
+const Name s_GlobalArenaCaseArenaObjectGlobalArrayFailure = "tests/arena_object/global_array_failure";
+const Name s_GlobalArenaCaseArenaObjectPersistentArrayFailure = "tests/arena_object/persistent_array_failure";
+const Name s_GlobalArenaCaseArenaObjectNestedConstructorFailure = "tests/arena_object/nested_constructor_failure";
+const Name s_GlobalArenaCaseArenaObjectRejectedConstruction = "tests/arena_object/rejected_construction";
+const Name s_GlobalArenaCaseArenaObjectCanonicalGlobalPlacement = "tests/arena_object/canonical_global_placement";
+const Name s_GlobalArenaCaseArenaObjectCanonicalPersistentPlacement = "tests/arena_object/canonical_persistent_placement";
+const Name s_GlobalArenaCaseArenaObjectGlobalArgumentCleanupFailure = "tests/arena_object/global_argument_cleanup_failure";
+const Name s_GlobalArenaCaseArenaObjectPersistentArgumentCleanupFailure = "tests/arena_object/persistent_argument_cleanup_failure";
+const Name s_GlobalArenaCaseArenaObjectPrivateGlobalDestructor = "tests/arena_object/private_global_destructor";
+const Name s_GlobalArenaCaseArenaObjectPrivatePersistentDestructor = "tests/arena_object/private_persistent_destructor";
+const Name s_GlobalArenaCaseArenaObjectOperatorFriendGlobalDestructor = "tests/arena_object/operator_friend_global_destructor";
+const Name s_GlobalArenaCaseArenaObjectOperatorFriendPersistentDestructor = "tests/arena_object/operator_friend_persistent_destructor";
+const Name s_GlobalArenaCaseArenaObjectPolymorphicGlobal = "tests/arena_object/polymorphic_global";
+const Name s_GlobalArenaCaseArenaObjectPolymorphicPersistent = "tests/arena_object/polymorphic_persistent";
+const Name s_GlobalArenaCaseArenaObjectPolymorphicScratch = "tests/arena_object/polymorphic_scratch";
+const Name s_GlobalArenaCaseArenaObjectReentryOldGlobal = "tests/arena_object/reentry_old_global";
+const Name s_GlobalArenaCaseArenaObjectReentryNewGlobal = "tests/arena_object/reentry_new_global";
+const Name s_GlobalArenaCaseArenaObjectReentryOldPersistent = "tests/arena_object/reentry_old_persistent";
+const Name s_GlobalArenaCaseArenaObjectReentryNewPersistent = "tests/arena_object/reentry_new_persistent";
+const Name s_GlobalArenaCaseArenaObjectReentryOldScratch = "tests/arena_object/reentry_old_scratch";
+const Name s_GlobalArenaCaseArenaObjectReentryNewScratch = "tests/arena_object/reentry_new_scratch";
+
+const Name s_AllocationOwnerIdentityRetirement = "tests/allocation_owners/identity_retirement";
+const Name s_AllocationOwnerIdentityLater = "tests/allocation_owners/identity_later_publication";
+const Name s_AllocationOwnerSharedName = "tests/allocation_owners/shared_name";
+const Name s_AllocationOwnerTransientScratch = "tests/allocation_owners/transient_scratch";
+const Name s_AllocationOwnerTransientPersistent = "tests/allocation_owners/transient_persistent";
+const Name s_AllocationOwnerMixedReservation = "tests/allocation_owners/mixed_reservation";
+const Name s_AllocationOwnerResetHistory = "tests/allocation_owners/reset_history";
+const Name s_AllocationOwnerRetiredOutstanding = "tests/allocation_owners/retired_outstanding";
+const Name s_AllocationOwnerHeapBacking = "global/arena_memory/heap_backing";
+const Name s_AllocationOwnerConcurrent = "tests/allocation_owners/concurrent";
+const Name s_AllocationOwnerConcurrentLifetimes = "tests/allocation_owners/concurrent_lifetimes";
+const Name s_DerivedNameTestBase = "tests/derived_name/identity";
+const StringView s_GlobalTestTableAlpha = "alpha";
+const StringView s_GlobalTestTableBeta = "beta";
+const StringView s_GlobalDiagnosticUnit = "unit";
+const StringView s_GlobalDiagnosticValue42 = "value 42";
+const StringView s_GlobalDiagnosticValueFormatTrailing = "value {}.trailing";
+const u32 s_GlobalPointerFailure = 0xE204u;
+const u32 s_GlobalComparisonFailure = 0xE209u;
+const StringView s_GlobalProcessCombinedOutputFilename = "combined output.txt";
+const StringView s_GlobalProcessBinSh = "/bin/sh";
+const StringView s_GlobalProcessCFlag = "-c";
+const StringView s_GlobalProcessTrailingSuffix = ".trailing";
+const u32 s_GlobalProcessCaptureTimeoutMS = 250u;
+const u32 s_GlobalProcessContinuousOutputTimeoutMS = 100u;
+const u32 s_GlobalProcessMaximumCaptureElapsedMS = 1000u;
+
+
+class NameRecursiveProbe{
+    public u32 recordCount = 0u;
+    public b8 nestedAccepted = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

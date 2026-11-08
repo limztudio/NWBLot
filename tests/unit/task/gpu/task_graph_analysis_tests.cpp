@@ -5,6 +5,7 @@
 #include "gpu_task_graph_read_views.h"
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
@@ -37,7 +38,7 @@ namespace __hidden_task_graph_analysis_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphAnalysisTestsTag>;
 using TaskGraphTestUtils::IndexedName;
 
-inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
+inline constexpr Name s_AnalysisScratchArena = NWB::Tests::TaskGraphTestUtils::s_TaskGpuAnalysisScratch;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,7 +51,7 @@ inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
     const Span<const Core::GpuTaskResourceUse> resourceUses = {}
 ){
     Core::GpuTaskDesc desc;
-    const auto resourceNameResult = IndexedName(Name("tests/task_graph_analysis/task_"), taskIndex);
+    const auto resourceNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAnalysisTask), taskIndex);
     if(!resourceNameResult)
         return MakeUnexpected(Failure{});
     desc.setIdentity(*resourceNameResult).setMarkerLabel("Analysis Test Task").setDependencies(dependencies).setResourceUses(resourceUses);
@@ -416,7 +417,7 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
     Core::GpuTaskGraph graph(testArena.arena);
     Array<Core::GpuGraphResourceId, 3u> resources = {};
     for(usize resourceIndex = 0u; resourceIndex < LengthOf(resources); ++resourceIndex){
-        const auto resourceNameResult = IndexedName(Name("tests/task_graph_analysis/resource_"), resourceIndex);
+        const auto resourceNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphAnalysisResource), resourceIndex);
         ASSERT_TRUE(resourceNameResult);
         const auto resourceTaskAdmission = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(*resourceNameResult).setMarkerLabel("Analysis Hazard Domain").setType(Core::GpuGraphResourceType::HazardDomain));
         ASSERT_TRUE(resourceTaskAdmission);
@@ -473,7 +474,7 @@ TEST(GpuTaskGraphAnalysis, EmptySchedulingReachabilityAvoidsStorageAndResetsAcro
     constexpr usize s_TaskCount = 65u;
     TestArena testArena;
     Core::Alloc::ScratchArena analysisScratchArena(s_AnalysisScratchArena);
-    Core::Alloc::ScratchArena reachabilityScratchArena(Name("tests/task/gpu/edgefree_reachability"));
+    Core::Alloc::ScratchArena reachabilityScratchArena{Name(TaskGraphTestUtils::s_GpuCaseTaskGpuEdgefreeReachability)};
     Core::GpuTaskGraph graph(testArena.arena);
     Array<Core::GpuTaskId, s_TaskCount> tasks = {};
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){

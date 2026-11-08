@@ -1,0 +1,14 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_FontAtlasValidationScratch = "tests/font_atlas/validation_scratch";
+const Name s_FontAtlasBuiltResult = "tests/font_atlas/built_result";
+const Name s_FontAtlasDifferentFont = "project/fonts/different";
+const Name s_FontAtlasOtherProject = "project/other";
+
+const Name s_OneOffNameTestsIntegrationAssetsFontAtlasMetadataScratch = "tests/integration/assets_font_atlas/metadata_scratch";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

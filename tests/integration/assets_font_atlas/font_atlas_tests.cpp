@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font_atlas/asset.h>
-#include <impl/assets_font_atlas/cook.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/assets_font_atlas/name_cases.adhd.h>
+
+#include <impl/assets_font_atlas/asset.h>
+#include <impl/assets_font_atlas/cook.h>
 
 #include <global/binary_big_endian.h>
 #include <global/filesystem.h>
@@ -44,7 +45,7 @@ using namespace Impl;
 
 struct FontAtlasTestArenaTag{};
 struct AtlasTestArena : TestArena<FontAtlasTestArenaTag>{
-    Core::Alloc::ScratchArena scratchArena{ Name("tests/font_atlas/validation_scratch") };
+    Core::Alloc::ScratchArena scratchArena{ Name(FontAtlasCases::s_FontAtlasValidationScratch) };
 };
 
 
@@ -142,7 +143,7 @@ TEST(AssetsFontAtlas, EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfte
 TEST(AssetsFontAtlas, BuildOwnsGlyphsGroupsAndPositioningInCallerArena){
     using namespace __hidden_font_atlas_tests;
     AtlasTestArena testArena;
-    Core::Assets::AssetArena resultArena(Name("tests/font_atlas/built_result"));
+    Core::Assets::AssetArena resultArena{Name(FontAtlasCases::s_FontAtlasBuiltResult)};
     FontAtlasCookEntry entry(testArena.arena);
     entry.payload = MakePayload(testArena);
     entry.virtualPath = Name(s_BodyFontAtlasPath);
@@ -168,6 +169,30 @@ TEST(AssetsFontAtlas, BuildOwnsGlyphsGroupsAndPositioningInCallerArena){
     const auto actual = SerializeFontAtlasPayload(payload, resultArena, testArena.scratchArena);
     ASSERT_TRUE(actual);
     EXPECT_EQ(*actual, *expected);
+}
+
+TEST(AssetsFontAtlas, FontIdentityPreservesUpperHashLanesAndRejectsOldVersion){
+    using namespace __hidden_font_atlas_tests;
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    AtlasTestArena testArena;
+    FontAtlasPayload payload = MakePayload(testArena);
+    NameHash identity = payload.font.name().hash();
+    for(u32 lane = s_NameHashLaneCount / 2u; lane < s_NameHashLaneCount; ++lane)
+        identity.qwords[lane] ^= 0x9e3779b97f4a7c15ull + lane;
+    payload.font.virtualPath = Name(identity);
+    const auto binary = SerializeFontAtlasPayload(payload, testArena.arena, testArena.scratchArena);
+    ASSERT_TRUE(binary);
+    const auto decoded = DeserializeFontAtlasPayload(*binary, testArena.arena, testArena.scratchArena);
+    ASSERT_TRUE(decoded);
+    EXPECT_EQ(decoded->font.name().hash(), identity);
+
+    FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
+    atlas.setPayload(Move(payload));
+    Core::Assets::AssetBytes obsolete(*binary);
+    WriteLittleU32(4u, 2u, obsolete);
+    EXPECT_FALSE(atlas.loadBinary(obsolete));
+    EXPECT_EQ(atlas.payload().font.name().hash(), identity);
 }
 
 TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
@@ -275,9 +300,10 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersAreRejected){
     auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena, testArena.scratchArena);
     ASSERT_TRUE(loaded);
     const usize groupOffset = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
-    const Array<Pair<usize, u32>, 11> invalidFields = {
+    const Array<Pair<usize, u32>, 12> invalidFields = {
         Pair<usize, u32>{ 4u, 1u },
         Pair<usize, u32>{ 4u, 0u },
+        Pair<usize, u32>{ 4u, 2u },
         Pair<usize, u32>{ 4u, s_FontAtlasBinaryVersion + 1u },
         Pair<usize, u32>{ groupOffset, Limit<u32>::s_Max },
         Pair<usize, u32>{ groupOffset + 4u, Limit<u32>::s_Max },
@@ -503,7 +529,7 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     payload.positioningTables[0u].bytes.back() ^= 1u;
     payload.positioningTables.pop_back();
     EXPECT_FALSE(ValidateFontAtlasSourceMatch(payload, font));
-    payload.font.virtualPath = Name("project/fonts/different");
+    payload.font.virtualPath = Name(FontAtlasCases::s_FontAtlasDifferentFont);
     EXPECT_FALSE(ValidateFontAtlasSourceMatch(payload, font));
 }
 

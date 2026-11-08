@@ -5,11 +5,12 @@
 #include "gpu_task_graph_read_views.h"
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
 #include <tests/common/test_context.h>
 
-#include <gtest/gtest.h>
-
 #include <core/task/gpu/compiler_internal.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,37 +67,37 @@ TEST(GpuTaskGraphTiming, CompilesInclusivePacketEnvelopeWithoutChangingTaskPolic
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto prefixResult = AddTask(graph, Name("tests/task_graph_timing/envelope_prefix"));
+    const auto prefixResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingEnvelopePrefix));
     ASSERT_TRUE(prefixResult);
     const Core::GpuTaskId prefix = *prefixResult;
     ASSERT_TRUE(prefix.valid());
-    const auto firstPacketPrefixResult = AddTask(graph, Name("tests/task_graph_timing/envelope_first_packet_prefix"), prefix);
+    const auto firstPacketPrefixResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingEnvelopeFirstPacketPrefix), prefix);
     ASSERT_TRUE(firstPacketPrefixResult);
     const Core::GpuTaskId firstPacketPrefix = *firstPacketPrefixResult;
     ASSERT_TRUE(firstPacketPrefix.valid());
 
     Core::GpuTaskSchedulingHint mergedScheduling;
     mergedScheduling.mergeWithPrevious = true;
-    const auto firstEndpointResult = AddTask(graph, Name("tests/task_graph_timing/envelope_first_endpoint"), firstPacketPrefix, mergedScheduling);
+    const auto firstEndpointResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingEnvelopeFirstEndpoint), firstPacketPrefix, mergedScheduling);
     ASSERT_TRUE(firstEndpointResult);
     const Core::GpuTaskId firstEndpoint = *firstEndpointResult;
     ASSERT_TRUE(firstEndpoint.valid());
-    const auto middleResult = AddTask(graph, Name("tests/task_graph_timing/envelope_middle"), firstEndpoint);
+    const auto middleResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingEnvelopeMiddle), firstEndpoint);
     ASSERT_TRUE(middleResult);
     const Core::GpuTaskId middle = *middleResult;
     ASSERT_TRUE(middle.valid());
-    const auto lastEndpointResult = AddTask(graph, Name("tests/task_graph_timing/envelope_last_endpoint"), middle);
+    const auto lastEndpointResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingEnvelopeLastEndpoint), middle);
     ASSERT_TRUE(lastEndpointResult);
     const Core::GpuTaskId lastEndpoint = *lastEndpointResult;
     ASSERT_TRUE(lastEndpoint.valid());
-    const auto lastPacketSuffixResult = AddTask(graph, Name("tests/task_graph_timing/envelope_last_packet_suffix"), lastEndpoint, mergedScheduling);
+    const auto lastPacketSuffixResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingEnvelopeLastPacketSuffix), lastEndpoint, mergedScheduling);
     ASSERT_TRUE(lastPacketSuffixResult);
     const Core::GpuTaskId lastPacketSuffix = *lastPacketSuffixResult;
     ASSERT_TRUE(lastPacketSuffix.valid());
 
     Core::GpuTaskTimingMetadata packetOnlyTiming;
     packetOnlyTiming.policy = Core::GpuTaskTimingPolicy::PacketOnly;
-    const auto timedTailResult = AddTask(graph, Name("tests/task_graph_timing/envelope_timed_tail"), lastPacketSuffix, {}, packetOnlyTiming);
+    const auto timedTailResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingEnvelopeTimedTail), lastPacketSuffix, {}, packetOnlyTiming);
     ASSERT_TRUE(timedTailResult);
     const Core::GpuTaskId timedTail = *timedTailResult;
     ASSERT_TRUE(timedTail.valid());
@@ -202,13 +203,13 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto firstResult = AddTask(graph, Name("tests/task_graph_timing/invalid_first"));
+    const auto firstResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingInvalidFirst));
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTask(graph, Name("tests/task_graph_timing/invalid_second"), first);
+    const auto secondResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingInvalidSecond), first);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
-    const auto thirdResult = AddTask(graph, Name("tests/task_graph_timing/invalid_third"), second);
+    const auto thirdResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingInvalidThird), second);
     ASSERT_TRUE(thirdResult);
     const Core::GpuTaskId third = *thirdResult;
     ASSERT_TRUE(first.valid());
@@ -238,7 +239,7 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     }
 
     Core::GpuTaskGraph foreignGraph(testArena.arena);
-    const auto foreignResult = AddTask(foreignGraph, Name("tests/task_graph_timing/invalid_foreign"));
+    const auto foreignResult = AddTask(foreignGraph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingInvalidForeign));
     ASSERT_TRUE(foreignResult);
     const Core::GpuTaskId foreign = *foreignResult;
     ASSERT_TRUE(foreign.valid());
@@ -268,12 +269,12 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     }
 
     Core::GpuTaskGraph mergedGraph(testArena.arena);
-    const auto mergedFirstResult = AddTask(mergedGraph, Name("tests/task_graph_timing/invalid_merged_first"));
+    const auto mergedFirstResult = AddTask(mergedGraph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingInvalidMergedFirst));
     ASSERT_TRUE(mergedFirstResult);
     const Core::GpuTaskId mergedFirst = *mergedFirstResult;
     Core::GpuTaskSchedulingHint mergedScheduling;
     mergedScheduling.mergeWithPrevious = true;
-    const auto mergedLastResult = AddTask(mergedGraph, Name("tests/task_graph_timing/invalid_merged_last"), mergedFirst, mergedScheduling);
+    const auto mergedLastResult = AddTask(mergedGraph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingInvalidMergedLast), mergedFirst, mergedScheduling);
     ASSERT_TRUE(mergedLastResult);
     const Core::GpuTaskId mergedLast = *mergedLastResult;
     ASSERT_TRUE(mergedFirst.valid());
@@ -286,7 +287,7 @@ TEST(GpuTaskGraphTiming, RejectsIncompleteForeignAndReversedEnvelopeEndpoints){
     }
 
     Core::GpuTaskGraph staleGraph(testArena.arena);
-    const auto staleEndpointResult = AddTask(staleGraph, Name("tests/task_graph_timing/invalid_stale"));
+    const auto staleEndpointResult = AddTask(staleGraph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingInvalidStale));
     ASSERT_TRUE(staleEndpointResult);
     const Core::GpuTaskId staleEndpoint = *staleEndpointResult;
     ASSERT_TRUE(staleEndpoint.valid());
@@ -315,13 +316,13 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
         graphGeneration = declarations.generation();
     }
     const Core::GpuTaskId futureEarly{ .generation = graphGeneration, .index = 2u };
-    const auto lateResult = AddTask(graph, Name("tests/task_graph_timing/topological_late"), futureEarly, scheduling);
+    const auto lateResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingTopologicalLate), futureEarly, scheduling);
     ASSERT_TRUE(lateResult);
     const Core::GpuTaskId late = *lateResult;
-    const auto prefixResult = AddTask(graph, Name("tests/task_graph_timing/topological_prefix"), {}, scheduling);
+    const auto prefixResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingTopologicalPrefix), {}, scheduling);
     ASSERT_TRUE(prefixResult);
     const Core::GpuTaskId prefix = *prefixResult;
-    const auto earlyResult = AddTask(graph, Name("tests/task_graph_timing/topological_early"), prefix, scheduling);
+    const auto earlyResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingTopologicalEarly), prefix, scheduling);
     ASSERT_TRUE(earlyResult);
     const Core::GpuTaskId early = *earlyResult;
     ASSERT_TRUE(late.valid());
@@ -360,7 +361,7 @@ TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPack
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto firstResult = AddTask(graph, Name("tests/task_graph_timing/frontier_first"));
+    const auto firstResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingFrontierFirst));
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
@@ -369,11 +370,11 @@ TEST(GpuTaskGraphTiming, RejectsEnvelopeRangesAtOrAfterAcceptedQueueFrontierPack
     frontierScheduling.forceSubmissionBoundary = true;
     frontierScheduling.allowPacketMerge = false;
     frontierScheduling.joinsAcceptedQueueFrontier = true;
-    const auto recoveryResult = AddTask(graph, Name("tests/task_graph_timing/frontier_recovery"), {}, frontierScheduling);
+    const auto recoveryResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingFrontierRecovery), {}, frontierScheduling);
     ASSERT_TRUE(recoveryResult);
     const Core::GpuTaskId recovery = *recoveryResult;
     ASSERT_TRUE(recovery.valid());
-    const auto lastResult = AddTask(graph, Name("tests/task_graph_timing/frontier_last"), recovery);
+    const auto lastResult = AddTask(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphTimingFrontierLast), recovery);
     ASSERT_TRUE(lastResult);
     const Core::GpuTaskId last = *lastResult;
     ASSERT_TRUE(last.valid());

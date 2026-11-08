@@ -1,0 +1,37 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer = "project/entities/hero/invalid_renderer";
+const Name s_SceneFixtureNameProjectScenesEmpty = "project/scenes/empty";
+const Name s_SceneFixtureNameNonexistentNickname = "nonexistent_nickname";
+const Name s_SceneFixtureNameCesiumManModel = "cesium_man_model";
+const Name s_SceneCaseTestsSceneEntityComponentAssets = "tests/scene/entity_component_assets";
+const Name s_SceneCaseTestsSceneEntityComponentAssetsGlobal = "tests/scene/entity_component_assets_global";
+const Name s_SceneCaseProjectMaterialsMatSkinnedUv = "project/materials/mat_skinned_uv";
+const Name s_SceneCaseProjectEntitiesHeroTransform = "project/entities/hero/transform";
+const Name s_SceneCaseProjectEntitiesHeroTransformDuplicate = "project/entities/hero/transform_duplicate";
+const Name s_SceneCaseProjectEntitiesDuplicateCompEntity = "project/entities/duplicate_comp_entity";
+const Name s_SceneCaseProjectScenesDuplicateCompScene = "project/scenes/duplicate_comp_scene";
+const Name s_SceneCaseTestsSceneSubsystemRoundTrip = "tests/scene/subsystem_round_trip";
+const Name s_SceneCaseTestsSceneProjectSceneRoundTrip = "tests/scene/project_scene_round_trip";
+const Name s_SceneCaseTestsSceneActiveSceneSubsystems = "tests/scene/active_scene_subsystems";
+const Name s_SceneCaseTestsSceneActiveSceneSubsystemsGlobal = "tests/scene/active_scene_subsystems_global";
+const Name s_SceneCaseCesiumManModel = "cesium_man_model";
+const Name s_SceneCaseProjectScenesMain = "project/scenes/main";
+const Name s_SceneCaseProjectSubsystemsRendererOverride = "project/subsystems/renderer_override";
+const Name s_SceneCaseProjectScenesDuplicateType = "project/scenes/duplicate_type";
+const Name s_SceneCaseProjectScenesBroken = "project/scenes/broken";
+
+const Name s_SceneAssetNameEngineSubsystemsRenderer = "engine/subsystems/renderer";
+const Name s_SceneAssetNameEngineSubsystemsSkinning = "engine/subsystems/skinning";
+const Name s_SceneAssetNameEngineSubsystemsTransparent = "engine/subsystems/transparent";
+const Name s_SceneAssetNameEngineSubsystemsUi = "engine/subsystems/ui";
+const Name s_SceneAssetNameEngineTestDefaultAsset = "engine/test/default_asset";
+const Name s_SceneCaseTestsSceneComponentBinaryEdges = "tests/scene/component_binary_edges";
+const Name s_SceneCaseProjectEntitiesInvalidLight = "project/entities/invalid_light";
+const Name s_SceneCaseProjectEntitiesTrailingLight = "project/entities/trailing_light";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

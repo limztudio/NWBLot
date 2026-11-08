@@ -4,6 +4,8 @@
 
 #include "popup_input_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,7 +17,7 @@ namespace EcsUiPopupInputTestDetail{
 
 
 UiPopupInputTests::UiPopupInputTests()
-    : m_arena(Name("tests/ecs_ui/popup_input"))
+    : m_arena(Name(NWB::Tests::UiCases::s_EcsUiPopupInput))
     , m_context(m_arena)
     , m_textInput(m_arena)
     , m_clipboard(m_arena, true)

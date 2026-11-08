@@ -1,10 +1,13 @@
+nwb_declare_static_library(nwb_test_common_names)
+nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests::CommonCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/common/name_cases.adhd")
+
 # Use the engine entry point so all GoogleTest suites share runtime initialization.
 function(nwb_declare_gtest_executable target)
     nwb_declare_executable(${target})
     target_sources(${target} PRIVATE
         "${CMAKE_SOURCE_DIR}/tests/common/gtest_nwb_main.cpp"
     )
-    target_link_libraries(${target} PRIVATE nwb::gtest nwb_common nwb_alloc)
+    target_link_libraries(${target} PRIVATE nwb::gtest nwb_common nwb_alloc nwb_test_common_names)
     add_test(NAME ${target} COMMAND ${target})
 endfunction()
 

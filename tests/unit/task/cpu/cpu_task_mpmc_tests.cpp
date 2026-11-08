@@ -164,8 +164,7 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
                 state.workerMask.fetch_or(1u << (worker - 1u), MemoryOrder::release);
             state.ready.fetch_add(1u, MemoryOrder::release);
             Produce(scheduler, scope, state, 1u + s_ExternalProducerCount + producer);
-        }, { .cost = CpuTaskCost::Any }
-        );
+        }, { .cost = CpuTaskCost::Any });
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());

@@ -5,6 +5,8 @@
 #include "task_graph_test_utils.h"
 #include "task_graph_lifecycle_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,12 +38,12 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto resourceResult = AddHazardDomain(graph, Name("tests/task_graph/resource"), "Resource");
+    const auto resourceResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_DeclarationCaseResource), "Resource");
     ASSERT_TRUE(resourceResult);
     const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
 
-    const auto predecessorResult = AddTask(Name("tests/task_graph/predecessor"), "Predecessor", {}, {}, {}, {}, {}, graph);
+    const auto predecessorResult = AddTask(Name(TaskGraphTestUtils::s_DeclarationCasePredecessor), "Predecessor", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(predecessorResult);
     const Core::GpuTaskId predecessor = *predecessorResult;
     ASSERT_TRUE(predecessor.valid());
@@ -50,7 +52,7 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     Array<Core::GpuTaskResourceUse, 1> uses = { Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, }, };
     Array<char, 13u> markerLabel = { 'S', 't', 'a', 'c', 'k', ' ', 'M', 'a', 'r', 'k', 'e', 'r', '\0' };
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/payload")).setMarkerLabel(AStringView(markerLabel.data())).setDependencies(dependencies).setResourceUses(uses);
+    desc.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCasePayload)).setMarkerLabel(AStringView(markerLabel.data())).setDependencies(dependencies).setResourceUses(uses);
 
     u32 destructionCount = 0u;
     PayloadDestroyTask::Payload payload(&destructionCount);
@@ -88,7 +90,7 @@ TEST(GpuTaskGraph, RejectsInvalidExternalStateSourceWithoutDeclarationMutation){
     ASSERT_FALSE(externalStateSource.valid());
     const Array<Core::GpuTaskExternalStateSource, 1> externalStateSources = { Core::GpuTaskExternalStateSource{ .states = &externalStateSource, .applicableConsumerQueueClass = Core::CommandQueue::Compute, }, };
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/invalid_external_state_source")).setMarkerLabel("Invalid External State Source").setExternalStateSources(externalStateSources);
+    desc.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseInvalidExternalStateSource)).setMarkerLabel("Invalid External State Source").setExternalStateSources(externalStateSources);
 
     EXPECT_FALSE(graph.addTask(desc).has_value());
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -111,7 +113,7 @@ TEST(GpuTaskGraph, RejectsReentrantCompilerReadDuringDeclarationMutation){
     payload.compileSucceeded = &compileSucceeded;
 
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/reentrant_compile_during_declaration")).setMarkerLabel("Reentrant Compile During Declaration");
+    desc.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseReentrantCompileDuringDeclaration)).setMarkerLabel("Reentrant Compile During Declaration");
     const auto taskResult = graph.addTask<ReentrantCompileDuringDeclarationTask>(desc, Move(payload));
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
@@ -134,7 +136,7 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto existingTaskResult = AddTask(Name("tests/task_graph/reentrant_telemetry_existing"), "Reentrant Telemetry Existing", {}, {}, {}, {}, {}, graph);
+    const auto existingTaskResult = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseReentrantTelemetryExisting), "Reentrant Telemetry Existing", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(existingTaskResult);
     const Core::GpuTaskId existingTask = *existingTaskResult;
     ASSERT_TRUE(existingTask.valid());
@@ -173,7 +175,7 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     ReentrantTelemetryDuringDeclarationState state{ .graph = &graph, .analysis = &analysis, .assignments = &assignments, .compiledGraph = &compiledGraph, .transaction = &transaction, .tracker = &tracker, .builder = &builder, .scratchArena = &scratchArena, };
     const auto probeTaskResult = graph.addTask<ReentrantTelemetryDuringDeclarationTask>(
         Core::GpuTaskDesc{}
-            .setIdentity(Name("tests/task_graph/reentrant_telemetry_during_declaration"))
+            .setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseReentrantTelemetryDuringDeclaration))
             .setMarkerLabel("Reentrant Telemetry During Declaration"),
         ReentrantTelemetryDuringDeclarationTask::Payload(state)
     );
@@ -285,12 +287,12 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
     Core::GpuTaskGraph graph(testArena.arena);
 
     Core::GpuGraphPipelineDesc invalidDesc;
-    invalidDesc.setIdentity(Name("tests/task_graph/invalid_pipeline")).setMarkerLabel("Invalid Pipeline");
+    invalidDesc.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseInvalidPipeline)).setMarkerLabel("Invalid Pipeline");
     EXPECT_FALSE(graph.importPipeline(invalidDesc).has_value());
     EXPECT_FALSE(graph.importComputePipeline(
         Core::ComputePipelineHandle{},
         Core::GpuGraphPipelineDesc{}
-            .setIdentity(Name("tests/task_graph/null_compute_pipeline"))
+            .setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseNullComputePipeline))
             .setMarkerLabel("Null Compute Pipeline")
             .setType(Core::GpuGraphPipelineType::Compute)
     ).has_value()
@@ -350,13 +352,13 @@ TEST(GpuTaskGraph, RejectsStaleDependencyHandlesDuringAnalysis){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto staleTaskResult = AddTask(Name("tests/task_graph/old"), "Old", {}, {}, {}, {}, {}, graph);
+    const auto staleTaskResult = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseOld), "Old", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(staleTaskResult);
     const Core::GpuTaskId staleTask = *staleTaskResult;
     ASSERT_TRUE(staleTask.valid());
 
     graph.reset();
-    const auto taskResult = AddTask(Name("tests/task_graph/new"), "New", Span(&staleTask, 1u), {}, {}, {}, {}, graph);
+    const auto taskResult = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseNew), "New", Span(&staleTask, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
@@ -375,15 +377,15 @@ TEST(GpuTaskGraph, RejectsEmptyLabelsAndStaleResourceAndExternalHandles){
     Core::GpuTaskGraph graph(testArena.arena);
 
     Core::GpuGraphResourceDesc unlabeledResource;
-    unlabeledResource.setIdentity(Name("tests/task_graph/unlabeled_resource")).setType(Core::GpuGraphResourceType::HazardDomain);
+    unlabeledResource.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseUnlabeledResource)).setType(Core::GpuGraphResourceType::HazardDomain);
     EXPECT_FALSE(graph.importHazardDomain(unlabeledResource).has_value());
-    EXPECT_FALSE(AddTask(Name("tests/task_graph/unlabeled_task"), "", {}, {}, {}, {}, {}, graph).has_value());
-    EXPECT_FALSE(graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/unlabeled_external"))).has_value());
+    EXPECT_FALSE(AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseUnlabeledTask), "", {}, {}, {}, {}, {}, graph).has_value());
+    EXPECT_FALSE(graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseUnlabeledExternal))).has_value());
 
-    const auto staleResourceResult = AddHazardDomain(graph, Name("tests/task_graph/stale_resource"), "Stale Resource");
+    const auto staleResourceResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_DeclarationCaseStaleResource), "Stale Resource");
     ASSERT_TRUE(staleResourceResult);
     const Core::GpuGraphResourceId staleResource = *staleResourceResult;
-    const auto staleExternalResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/stale_external")).setMarkerLabel("Stale External"));
+    const auto staleExternalResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseStaleExternal)).setMarkerLabel("Stale External"));
     ASSERT_TRUE(staleExternalResult);
     const Core::GpuExternalCompletionId staleExternal = *staleExternalResult;
     ASSERT_TRUE(staleResource.valid());
@@ -391,7 +393,7 @@ TEST(GpuTaskGraph, RejectsEmptyLabelsAndStaleResourceAndExternalHandles){
 
     graph.reset();
     const Core::GpuTaskResourceUse staleResourceUse{ .resource = staleResource, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    const auto resourceTaskResult = AddTask(Name("tests/task_graph/stale_resource_consumer"), "Stale Resource Consumer", {}, Span(&staleResourceUse, 1u), {}, {}, {}, graph);
+    const auto resourceTaskResult = AddTask(Name(TaskGraphTestUtils::s_DeclarationCaseStaleResourceConsumer), "Stale Resource Consumer", {}, Span(&staleResourceUse, 1u), {}, {}, {}, graph);
     ASSERT_TRUE(resourceTaskResult);
     const Core::GpuTaskId resourceTask = *resourceTaskResult;
     ASSERT_TRUE(resourceTask.valid());
@@ -403,7 +405,7 @@ TEST(GpuTaskGraph, RejectsEmptyLabelsAndStaleResourceAndExternalHandles){
 
     graph.reset();
     Core::GpuTaskDesc externalDesc;
-    externalDesc.setIdentity(Name("tests/task_graph/stale_external_consumer")).setMarkerLabel("Stale External Consumer").setExternalDependencies(Span(&staleExternal, 1u));
+    externalDesc.setIdentity(Name(TaskGraphTestUtils::s_DeclarationCaseStaleExternalConsumer)).setMarkerLabel("Stale External Consumer").setExternalDependencies(Span(&staleExternal, 1u));
     const auto externalTaskResult = graph.addTask(externalDesc);
     ASSERT_TRUE(externalTaskResult);
     const Core::GpuTaskId externalTask = *externalTaskResult;

@@ -9,8 +9,7 @@
 
 #include <tests/common/filesystem_helpers.h>
 #include <tests/common/test_context.h>
-
-#include <gtest/gtest.h>
+#include <tests/integration/crash/name_cases.adhd.h>
 
 #include <core/crash/package_internal.h>
 
@@ -23,6 +22,8 @@
 #include <global/exception.h>
 #include <global/scope_exit.h>
 #include <global/termination.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,9 +53,9 @@ inline constexpr AStringView s_Test = "test";
 using TestArena = NWB::Tests::TestArena<struct CrashTestsTag>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
 
-inline constexpr Name s_OperationScratch("tests/integration/crash/operation_scratch");
-inline constexpr Name s_InstallArena("tests/integration/crash/install");
-inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_child_install");
+inline constexpr Name s_OperationScratch = NWB::Tests::CrashCases::s_CrashTestNameTestsIntegrationCrashOperationScratch;
+inline constexpr Name s_InstallArena = NWB::Tests::CrashCases::s_CrashTestNameTestsIntegrationCrashInstall;
+inline constexpr Name s_SignalChildInstallArena = NWB::Tests::CrashCases::s_CrashTestNameTestsIntegrationCrashSignalChildInstall;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

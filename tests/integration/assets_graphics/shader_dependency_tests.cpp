@@ -63,8 +63,7 @@ TEST(AssetsGraphics, ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedI
     ASSERT_EQ(dependencies.size(), 2u);
     ASSERT_NE(FindIf(dependencies.begin(), dependencies.end(), [&trackedInclude](const Path& path)noexcept{
         return path == trackedInclude;
-    }
-    ), dependencies.end()
+    }), dependencies.end()
     );
     u64 beforeChecksum = 0u;
     u64 afterChecksum = 0u;

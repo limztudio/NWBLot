@@ -8,6 +8,7 @@
 #include <core/filesystem/volume_file_system.h>
 
 #include <tests/common/capturing_logger.h>
+#include <tests/unit/filesystem/name_cases.adhd.h>
 
 #include <global/filesystem/cleanup.h>
 
@@ -32,8 +33,8 @@ namespace Tests::FilesystemTest{
 using namespace Core::Filesystem;
 using Path = NWB::Path;
 
-inline constexpr Name s_TestArena("tests/filesystem");
-inline constexpr i32 s_PublishLogFailure = 47;
+inline constexpr Name s_TestArena = NWB::Tests::FilesystemCases::s_FilesystemNameTestsFilesystem;
+inline constexpr i32 s_PublishLogFailure = NWB::Tests::FilesystemCases::s_FilesystemPublishLogFailure;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/scene/name_cases.adhd.h>
+
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_subsystem/asset.h>
 
@@ -31,10 +33,10 @@ namespace Tests::SceneAssetTestHelpers{
 using namespace NWB::Core::Assets;
 using namespace NWB::Impl;
 
-inline constexpr Name s_RendererSubsystemPath("engine/subsystems/renderer");
-inline constexpr Name s_SkinningSubsystemPath("engine/subsystems/skinning");
-inline constexpr Name s_TransparentSubsystemPath("engine/subsystems/transparent");
-inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
+inline constexpr Name s_RendererSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsRenderer;
+inline constexpr Name s_SkinningSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsSkinning;
+inline constexpr Name s_TransparentSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsTransparent;
+inline constexpr Name s_UiSubsystemPath = NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineSubsystemsUi;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,10 +66,10 @@ inline void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
         if(descriptor.isArray){
             if(subsystem.fieldValueCount(i) == 0u)
-                subsystem.appendFieldValue(i, Name("engine/test/default_asset"));
+                subsystem.appendFieldValue(i, Name(NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset));
         }
         else if(!subsystem.fieldValue(i))
-            subsystem.appendFieldValue(i, Name("engine/test/default_asset"));
+            subsystem.appendFieldValue(i, Name(NWB::Tests::SceneAssetCases::s_SceneAssetNameEngineTestDefaultAsset));
     }
 }
 

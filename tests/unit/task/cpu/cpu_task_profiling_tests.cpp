@@ -2,8 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/task/cpu/scheduler.h>
+#include <tests/unit/task/cpu/scheduler_test_config.adhd.h>
 
+#include <core/task/cpu/scheduler.h>
 
 #include <gtest/gtest.h>
 
@@ -17,7 +18,7 @@ namespace __hidden_cpu_task_profiling_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_PollIntervalMS = 1u;
+constexpr u32 s_PollIntervalMS = CpuTaskSchedulerTestSupport::s_ProfilingPollIntervalMS;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,8 +33,8 @@ constexpr u32 s_PollIntervalMS = 1u;
 TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels){
     using namespace NWB::Core;
     CpuTaskScheduler scheduler(0u);
-    const Name scopeName("tests.cpu.scope");
-    const Name taskName("tests.cpu.task");
+    const Name scopeName = CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuScope;
+    const Name taskName = CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuTask;
     const auto scopeLabel = scheduler.registerProfileLabel(scopeName);
     const auto taskLabel = scheduler.registerProfileLabel(taskName);
     CpuTaskScope scope(scheduler, scopeLabel);
@@ -190,7 +191,7 @@ TEST(CpuTaskProfilingTests, ForeignLabelsDoNotAliasLocalNames){
     using namespace NWB::Core;
     CpuTaskScheduler first(0u);
     CpuTaskScheduler second(0u);
-    const Name name("tests.cpu.local_name");
+    const Name name = CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuLocalName;
     const auto foreign = first.registerProfileLabel(name);
     const auto local = second.registerProfileLabel(name);
     EXPECT_NE(foreign.value, local.value);
@@ -284,7 +285,7 @@ TEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainTheirProfil
     constexpr usize s_ScopeCount = 3u;
     constexpr u64 s_Frame = 19u;
     CpuTaskScheduler scheduler(0u);
-    const Array<Name, s_ScopeCount> names = { Name("tests.cpu.empty_scope"), Name("tests.cpu.completed_scope"), Name("tests.cpu.canceled_scope") };
+    const Array<Name, s_ScopeCount> names = { Name(CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuEmptyScope), Name(CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCompletedScope), Name(CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCanceledScope) };
     CpuTaskScope empty(scheduler, scheduler.registerProfileLabel(names[0u]));
     CpuTaskScope completed(scheduler, scheduler.registerProfileLabel(names[1u]));
     CpuTaskScope canceled(scheduler, scheduler.registerProfileLabel(names[2u]));

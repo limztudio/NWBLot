@@ -18,5 +18,5 @@ target_sources(nwb_ecs_ui_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/tests/unit/ui/native_input.cpp"
     "${CMAKE_SOURCE_DIR}/tests/unit/ui/native_input.h"
 )
-target_link_libraries(nwb_ecs_ui_tests PRIVATE nwb_ecs_ui nwb_ui_edit)
+target_link_libraries(nwb_ecs_ui_tests PRIVATE nwb_ecs_ui nwb_ui_edit nwb_ui_name_cases)
 

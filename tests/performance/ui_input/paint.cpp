@@ -4,6 +4,8 @@
 
 #include "benchmark.h"
 
+#include <tests/performance/ui_input/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/paint.h>
 
 
@@ -24,7 +26,7 @@ using namespace NWB::Impl::Ui;
 class PaintCase final{
 public:
     PaintCase(const u32 commands, const b8 descending)
-        : m_arena(Name("tests/performance/ui_input/paint"))
+        : m_arena(Name(NWB::Tests::UiInputBenchmarkCases::s_UiBenchmarkNameTestsPerformanceUiInputPaint))
         , m_skin(m_arena, Name(s_SkinPath))
         , m_builder(m_arena)
         , m_snapshot(m_arena)

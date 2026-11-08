@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <pipeline/asset_gatherer/gather.h>
 
 #include <core/assets/input_list.h>
@@ -9,9 +13,6 @@
 #include <core/assets/volume/asset_volume_writer.h>
 #include <core/filesystem/factory.h>
 #include <core/graphics/shader_archive.h>
-
-#include <tests/common/capturing_logger.h>
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -46,7 +47,7 @@ static usize s_MergeCalls = 0u;
 
 [[nodiscard]] static Expected<Name> AssetName(const usize index){
     Array<char, 32u> text = {};
-    return DeriveName(Name("project/gather/"), FormatDecimal(index, text));
+    return DeriveName(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseProjectGather), FormatDecimal(index, text));
 }
 
 class GatherInputs : public testing::Test{
@@ -61,7 +62,7 @@ protected:
     }
 
     void writeInputs(AStringView directory, const usize count, const usize payloadSize, const u8 seed){
-        NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/built_inputs"));
+        NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetsGraphicsBuiltInputs)};
         Pack::AssetVolumePackManifest manifest(m_testArena.arena);
         ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(count, manifest));
         Assets::AssetBytes bytes(payloadSize, seed, m_testArena.arena);
@@ -101,7 +102,7 @@ protected:
 
 
 protected:
-    NWB::Core::Alloc::ScratchArena m_scratchArena{ Name("tests/assets_graphics/gather_inputs") };
+    NWB::Core::Alloc::ScratchArena m_scratchArena{ Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetsGraphicsGatherInputs) };
     NWB::Tests::TestArena<> m_testArena;
     NWB::Tests::CapturingLogger m_logger;
     NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
@@ -113,13 +114,13 @@ TEST(AssetsGraphics, DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwr
     NWB::Tests::TestArena<> testArena;
     NWB::Tests::CapturingLogger logger;
     const NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/borrowed_index"));
+    NWB::Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsAssetsGraphicsBorrowedIndex)};
     namespace ShaderArchive = NWB::Core::ShaderArchive;
     NWB::Core::GraphicsVector<ShaderArchive::Record> records(testArena.arena);
     ShaderArchive::Record& record = records.emplace_back(testArena.arena);
-    record.shaderName = Name("project/shaders/borrowed_index");
+    record.shaderName = Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseProjectShadersBorrowedIndex);
     record.variantName = "BORROWED_VARIANT=nontrivial_owned_text";
-    record.stage = Name("ps");
+    record.stage = Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCasePs);
     const Expected<Name> virtualPath = ShaderArchive::BuildVirtualPathName(record.shaderName, AStringView(record.variantName), record.stage);
     ASSERT_TRUE(virtualPath);
     record.virtualPathHash = virtualPath->hash();
@@ -133,6 +134,15 @@ TEST(AssetsGraphics, DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwr
     EXPECT_EQ(AStringView(decoded->front().variantName), AStringView(record.variantName));
     EXPECT_EQ(decoded->front().virtualPathHash, record.virtualPathHash);
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST_F(GatherInputs, MissingOutputIsRejectedBeforeInputDiscovery){
+    m_options.outputDirectory.clear();
+    m_options.inputs.emplace_back("missing-gather-input", m_testArena.arena);
+    EXPECT_FALSE(Gatherer::GatherAssets(m_options, m_scratchArena));
+    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("output directory is empty")));
+    EXPECT_FALSE(m_logger.sawErrorContaining(NWB_TEXT("failed to inspect input")));
+    EXPECT_EQ(m_logger.errorCount(), 1u);
 }
 
 TEST_F(GatherInputs, InputListEncodingRejectsUnrepresentablePathsWithoutLosingDuplicates){

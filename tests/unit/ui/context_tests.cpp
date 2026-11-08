@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/context.h>
 
@@ -40,7 +41,7 @@ static HitTarget ButtonTarget(const Rect& rectangle = { 10.0f, 20.0f, 30.0f, 20.
 class UiContextTests : public testing::Test{
 public:
     UiContextTests()
-        : m_arena(Name("tests/ui/context"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContext))
         , m_context(m_arena)
     {}
 

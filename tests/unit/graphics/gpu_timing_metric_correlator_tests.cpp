@@ -3,11 +3,12 @@
 
 
 #include <tests/common/test_context.h>
-
-#include <gtest/gtest.h>
+#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
 
 #include <core/graphics/gpu_timing_metric_correlator.h>
 #include <core/perf/timing.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +33,7 @@ namespace __hidden_gpu_timing_metric_correlator_tests{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct GpuTimingMetricCorrelatorTestsTag>;
-inline constexpr Name s_MetricScratchArena("tests/timing/metric_correlator_scratch");
+inline constexpr Name s_MetricScratchArena = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingMetricCorrelatorScratch;
 
 
 struct RegistrationSentinel{};
@@ -83,14 +84,14 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
     scopes.reserve(s_ScopeCount);
     for(usize scopeIndex = 0u; scopeIndex < s_ScopeCount; ++scopeIndex){
         Array<char, 32u> scopeIndexBuffer = {};
-        const auto scopeNameResult = DeriveName(Name("tests/timing/large_envelope/"), FormatDecimal(scopeIndex, scopeIndexBuffer));
+        const auto scopeNameResult = DeriveName(Name(GraphicsTimingCases::s_GpuTimingCaseLargeEnvelope), FormatDecimal(scopeIndex, scopeIndexBuffer));
         ASSERT_TRUE(scopeNameResult);
         scopes.push_back(Core::GpuPacketEnvelopeMetricScope{ .scopeName = *scopeNameResult, .physicalQueue = { .index = static_cast<u16>(scopeIndex % 2u), .deviceGeneration = 7u }, });
     }
-    const Name overlapScope("tests/timing/large_envelope_overlap");
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingLargeEnvelopeOverlap;
     const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, .internalIdleScopeName = Name("tests/timing/large_idle_0") },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, .internalIdleScopeName = Name("tests/timing/large_idle_1") },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseLargeIdle0) },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseLargeIdle1) },
     };
     const b8 prepared = correlator.preparePacketEnvelopeMetrics(s_FrameIndex, scopes, overlapScope, outputs);
 
@@ -136,14 +137,14 @@ TEST(GpuTimingPacketEnvelopeMetrics, ReplacesDuplicateRangesWithoutCompletingMis
     Core::Alloc::ScratchArena scratchArena(s_MetricScratchArena);
     const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 9u };
     const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 9u };
-    const Name overlapScope("tests/timing/duplicate_envelope_overlap");
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingDuplicateEnvelopeOverlap;
     const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name("tests/timing/duplicate_envelope_first"), .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name("tests/timing/duplicate_envelope_second"), .physicalQueue = secondQueue },
+        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateEnvelopeFirst), .physicalQueue = firstQueue },
+        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateEnvelopeSecond), .physicalQueue = secondQueue },
     };
     const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name("tests/timing/duplicate_idle_1") },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name("tests/timing/duplicate_idle_0") },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateIdle1) },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateIdle0) },
     };
     const auto prepare = [&](){
         return correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs);
@@ -161,7 +162,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, ReplacesDuplicateRangesWithoutCompletingMis
     ASSERT_TRUE(samples.empty());
 
     correlator.recordTimestampRange(scopes[1u].scopeName, 73u, range, scratchArena, samples);
-    correlator.recordTimestampRange(Name("tests/timing/unrelated_envelope"), 73u, range, scratchArena, samples);
+    correlator.recordTimestampRange(Name(GraphicsTimingCases::s_GpuTimingCaseUnrelatedEnvelope), 73u, range, scratchArena, samples);
     ASSERT_TRUE(samples.empty());
     range.beginTicks = 15u;
     range.endTicks = 25u;
@@ -189,16 +190,16 @@ TEST(GpuTimingPacketEnvelopeMetrics, PreservesPartialFramesAcrossGrowthRejectedP
     Core::Alloc::ScratchArena scratchArena(s_MetricScratchArena);
     const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 9u };
     const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 9u };
-    const Name overlapScope("tests/timing/growing_envelope_overlap");
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingGrowingEnvelopeOverlap;
     const Array<Core::GpuPacketEnvelopeMetricScope, 2> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name("tests/timing/growing_envelope_first"), .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name("tests/timing/growing_envelope_second"), .physicalQueue = secondQueue },
+        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingEnvelopeFirst), .physicalQueue = firstQueue },
+        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingEnvelopeSecond), .physicalQueue = secondQueue },
     };
     const Array<Core::GpuPacketEnvelopeMetricScope, 2> reversedScopes = { scopes[1u], scopes[0u] };
     const Array<Core::GpuPacketEnvelopeMetricScope, 2> duplicateScopes = { scopes[0u], Core::GpuPacketEnvelopeMetricScope{ .scopeName = scopes[0u].scopeName, .physicalQueue = secondQueue }, };
     const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name("tests/timing/growing_idle_0") },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name("tests/timing/growing_idle_1") },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingIdle0) },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingIdle1) },
     };
     const auto prepare = [&](const u64 frameIndex, const Span<const Core::GpuPacketEnvelopeMetricScope> scopeInputs){
         return correlator.preparePacketEnvelopeMetrics(frameIndex, scopeInputs, overlapScope, outputs);
@@ -243,14 +244,14 @@ TEST(GpuTimingPacketEnvelopeMetrics, PublishesNoPartialFrameWhenOutputRegistrati
     Core::Alloc::ScratchArena scratchArena(s_MetricScratchArena);
     const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 13u };
     const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 13u };
-    const Name overlapScope("tests/timing/throwing_envelope_overlap");
+    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingThrowingEnvelopeOverlap;
     const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name("tests/timing/throwing_envelope_first"), .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name("tests/timing/throwing_envelope_second"), .physicalQueue = secondQueue },
+        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingEnvelopeFirst), .physicalQueue = firstQueue },
+        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingEnvelopeSecond), .physicalQueue = secondQueue },
     };
     const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name("tests/timing/throwing_idle_0") },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name("tests/timing/throwing_idle_1") },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingIdle0) },
+        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingIdle1) },
     };
     const auto prepare = [&](){
         return correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs);

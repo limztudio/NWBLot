@@ -4,9 +4,10 @@
 
 #include "task_graph_test_utils.h"
 
-#include <core/task/gpu/task_graph.h>
-
+#include <tests/unit/task/gpu/case_types.adhd.h>
 #include <tests/common/test_context.h>
+
+#include <core/task/gpu/task_graph.h>
 
 #include <gtest/gtest.h>
 
@@ -33,9 +34,9 @@ namespace __hidden_resource_set_validation_tests{
 
 
 struct ResourceSetContext{
-    Core::Alloc::GlobalArena graphArena{ Name("tests/resource_set_validation/graph") };
+    Core::Alloc::GlobalArena graphArena{ Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationGraph) };
     Core::GpuTaskGraph graph{ graphArena };
-    Core::Alloc::GlobalArena inputArena{ Name("tests/resource_set_validation/input") };
+    Core::Alloc::GlobalArena inputArena{ Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationInput) };
     Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena> members{ inputArena };
     b8 ready = false;
 
@@ -51,7 +52,7 @@ public:
         members.clear();
         members.reserve(count);
         for(usize index = 0u; index < count; ++index){
-            const auto identityNameResult = TaskGraphTestUtils::IndexedName(Name("tests/resource_set_validation/resource/"), index);
+            const auto identityNameResult = TaskGraphTestUtils::IndexedName(Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationResource), index);
             if(!identityNameResult)
                 return false;
             const Name identity = *identityNameResult;
@@ -87,7 +88,7 @@ static void ExpectUnchangedDeclaration(const ResourceSetContext& context, const 
 TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdentity){
     ResourceSetContext context(64u);
     ASSERT_TRUE(context.ready);
-    constexpr Name s_Identity("tests/resource_set_validation/ordered");
+    constexpr Name s_Identity = NWB::Tests::TaskGraphTestUtils::s_ResourceSetValidationOrdered;
     Core::GpuGraphResourceSetDesc desc = context.description(s_Identity);
     const auto setResult = context.graph.importResourceSet(desc);
     ASSERT_TRUE(setResult);
@@ -125,7 +126,7 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
     --desc.memberCount;
     EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     ExpectUnchangedDeclaration(context, revision, 1u);
-    desc = context.description(Name("tests/resource_set_validation/second_ordered"));
+    desc = context.description(Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationSecondOrdered));
     {
         const auto secondGpuTaskAdmission = context.graph.importResourceSet(desc);
         EXPECT_TRUE(secondGpuTaskAdmission);
@@ -140,7 +141,7 @@ TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartia
     for(const usize count : { 2u, 8u, 32u, 33u, 1024u }){
         ResourceSetContext context(count);
         ASSERT_TRUE(context.ready);
-        const Core::GpuGraphResourceSetDesc desc = context.description(Name("tests/resource_set_validation/rejected"));
+        const Core::GpuGraphResourceSetDesc desc = context.description(Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationRejected));
         u64 revision = 0u;
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
@@ -182,7 +183,7 @@ TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartia
 TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnpublished){
     ResourceSetContext context(1u);
     ASSERT_TRUE(context.ready);
-    Core::GpuGraphResourceSetDesc desc = context.description(Name("tests/resource_set_validation/empty"));
+    Core::GpuGraphResourceSetDesc desc = context.description(Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationEmpty));
     desc.setMembers({});
     const auto emptyResult = context.graph.importResourceSet(desc);
     ASSERT_TRUE(emptyResult);
@@ -200,15 +201,15 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
         revision = declarations.declarationRevision();
         EXPECT_EQ(declarations.resourceSetAt(empty.index).memberCount, 0u);
     }
-    desc.identity = Name("tests/resource_set_validation/bad_shape");
+    desc.identity = Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationBadShape);
     desc.memberCount = 1u;
     EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     desc = context.description(s_NameNone);
     EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
-    desc = context.description(Name("tests/resource_set_validation/bad_label"));
+    desc = context.description(Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationBadLabel));
     desc.markerLabel = {};
     EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
-    desc = context.description(Name("tests/resource_set_validation/too_many"));
+    desc = context.description(Name(TaskGraphTestUtils::s_GpuCaseResourceSetValidationTooMany));
     desc.memberCount = static_cast<usize>(Limit<u32>::s_Max) + 1u;
     EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     ExpectUnchangedDeclaration(context, revision, 1u);
@@ -217,7 +218,7 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
 TEST(ResourceSetValidation, ResetRejectsOldGenerationsAndAcceptsFreshIdsAtTheSameIndices){
     ResourceSetContext context(64u);
     ASSERT_TRUE(context.ready);
-    constexpr Name s_Identity("tests/resource_set_validation/reset");
+    constexpr Name s_Identity = NWB::Tests::TaskGraphTestUtils::s_ResourceSetValidationReset;
     const auto previousSetResult = context.graph.importResourceSet(context.description(s_Identity));
     ASSERT_TRUE(previousSetResult);
     const Core::GpuGraphResourceSetId previousSet = *previousSetResult;

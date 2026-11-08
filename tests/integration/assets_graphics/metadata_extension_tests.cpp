@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_model/cook.h>
 #include <impl/assets_sampler/cook.h>
 #include <impl/assets_shader/asset.h>
@@ -12,9 +16,6 @@
 #include <core/assets/paths.h>
 #include <core/common/name_symbols.h>
 #include <core/task/cpu/scheduler.h>
-
-#include <tests/common/capturing_logger.h>
-#include <tests/common/test_context.h>
 
 #include <global/filesystem.h>
 #include <global/scope_exit.h>
@@ -50,11 +51,7 @@ using namespace NWB::Core;
 using namespace NWB::Core::Assets;
 
 
-struct ExtensionState{
-    usize constructions = 0u;
-    usize destructions = 0u;
-    usize memberDestructions = 0u;
-};
+using ExtensionState = NWB::Tests::AssetsGraphicsFixture::MetadataExtensionState;
 
 struct ConstructionFailure{};
 struct InsertionFailure{};
@@ -168,13 +165,13 @@ static_assert(IsNothrowDestructible_V<ParsedMetadataExtension>);
 
 
 TEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject){
-    AssetArena arena(Name("tests/metadata_extension/require"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionRequire)};
     ExtensionState alignedState;
     ExtensionState textState;
     const u64 baseline = arena.memoryStats().usedBytes;
     {
         ParsedAssetMetadata metadata(arena);
-        const Name name("tests/metadata_extension/aligned");
+        const Name name = NWB::Tests::AssetsGraphicsFixture::s_MetadataExtensionAligned;
         AlignedExtension& first = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, alignedState);
         const u64 afterFirst = arena.memoryStats().allocationCount;
         AlignedExtension& second = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, alignedState, true);
@@ -183,8 +180,8 @@ TEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheS
         EXPECT_EQ(reinterpret_cast<usize>(&first) % alignof(AlignedExtension), 0u);
         const ParsedAssetMetadata& borrowed = metadata;
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(name, borrowed), &first);
-        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(Name("tests/metadata_extension/absent"), metadata), nullptr);
-        const Name textName("tests/metadata_extension/text");
+        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetFixtureNameTestsMetadataExtensionAbsent), metadata), nullptr);
+        const Name textName = NWB::Tests::AssetsGraphicsFixture::s_MetadataExtensionText;
         const TextExtension& text = RequireParsedMetadataExtension<TextExtension>(textName, metadata, arena, textState);
         EXPECT_EQ(FindParsedMetadataExtension<TextExtension>(textName, metadata), &text);
     }
@@ -196,7 +193,7 @@ TEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheS
 }
 
 TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadOnce){
-    AssetArena arena(Name("tests/metadata_extension/erase_clear"));
+    AssetArena arena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionEraseClear)};
     ExtensionState state;
     const u64 baseline = arena.memoryStats().usedBytes;
     {
@@ -224,14 +221,14 @@ TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadO
 }
 
 TEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena){
-    AssetArena firstMapArena(Name("tests/metadata_extension/map_first"));
-    AssetArena secondMapArena(Name("tests/metadata_extension/map_second"));
-    AssetArena firstOwnerArena(Name("tests/metadata_extension/owner_first"));
-    AssetArena secondOwnerArena(Name("tests/metadata_extension/owner_second"));
+    AssetArena firstMapArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionMapFirst)};
+    AssetArena secondMapArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionMapSecond)};
+    AssetArena firstOwnerArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionOwnerFirst)};
+    AssetArena secondOwnerArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionOwnerSecond)};
     ExtensionState firstState;
     ExtensionState secondState;
     const Name firstName(s_FirstMetadataName);
-    const Name otherName("tests/metadata_extension/other");
+    const Name otherName = NWB::Tests::AssetsGraphicsFixture::s_MetadataExtensionOther;
     {
         ParsedMetadataExtensionMap firstMap(0u, Hasher<Name>{}, EqualTo<Name>{}, firstMapArena);
         ParsedMetadataExtension first = MakeParsedMetadataExtension<AlignedExtension>(firstOwnerArena, firstOwnerArena, firstState);
@@ -337,8 +334,8 @@ TEST(MetadataExtensionOwnership, ReentrantInsertionReturnsTheActualStoredValue){
 }
 
 TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
-    AssetArena mapArena(Name("tests/metadata_extension/insertion_map"));
-    AssetArena ownerArena(Name("tests/metadata_extension/insertion_owner"));
+    AssetArena mapArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionInsertionMap)};
+    AssetArena ownerArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionInsertionOwner)};
     ExtensionState state;
     b8 fail = false;
     {
@@ -348,7 +345,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
         fail = true;
         EXPECT_THROW({
             ParsedMetadataExtension pending = MakeParsedMetadataExtension<AlignedExtension>(ownerArena, ownerArena, state);
-            EXPECT_TRUE(values.try_emplace(Name("tests/metadata_extension/insertion_unwind"), Move(pending)).second);
+            EXPECT_TRUE(values.try_emplace(Name(NWB::Tests::AssetsGraphicsFixture::s_AssetFixtureNameTestsMetadataExtensionInsertionUnwind), Move(pending)).second);
         }, InsertionFailure
         );
         fail = false;
@@ -363,7 +360,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
 
 TEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorrow){
     AssetArena arena{ Name(s_RegistryLifetimeMetadataName) };
-    Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/registry_lifetime_scratch"));
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionRegistryLifetimeScratch)};
     usize observedBucketCount = 0u;
     usize expectedBucketCount = 0u;
     {
@@ -379,9 +376,9 @@ TEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorro
 }
 
 TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtensionPayload){
-    AssetArena fixtureArena(Name("tests/metadata_extension/graphics_fixture"));
-    AssetArena ownerArena(Name("tests/metadata_extension/graphics_owner"));
-    Alloc::ScratchArena scratchArena(Name("tests/metadata_extension/graphics_scratch"));
+    AssetArena fixtureArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionGraphicsFixture)};
+    AssetArena ownerArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionGraphicsOwner)};
+    Alloc::ScratchArena scratchArena{Name(NWB::Tests::AssetsGraphicsFixture::s_AssetCaseTestsMetadataExtensionGraphicsScratch)};
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     Metascript::Document document(fixtureArena);

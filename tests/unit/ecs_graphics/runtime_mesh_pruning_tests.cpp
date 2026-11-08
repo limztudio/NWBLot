@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/ecs_test_world.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_render/mesh/runtime_mesh_pruning.h>
 
 #include <core/ecs/entity.h>
-
-#include <tests/common/ecs_test_world.h>
 
 #include <global/name.h>
 
@@ -63,7 +64,7 @@ TEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAn
         names[index] = Name(hash);
     }
     for(const usize capacityHint : { 0u, 64u }){
-        Core::Alloc::ScratchArena scratch(Name("tests/runtime_mesh_pruning/request_scratch"));
+        Core::Alloc::ScratchArena scratch{Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch)};
         RuntimeMeshRequestSet requests(scratch, capacityHint);
         requests.add(s_NameNone, 7u);
         requests.markLive(s_NameNone, 7u);
@@ -81,7 +82,7 @@ TEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAn
             EXPECT_EQ(requests.containsLive(names[index], 7u), index < 16u);
             EXPECT_FALSE(requests.containsLive(names[index], 8u));
         }
-        requests.markLive(Name("tests/runtime_mesh_pruning/not_requested"), 7u);
+        requests.markLive(Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsRuntimeMeshPruningNotRequested), 7u);
         EXPECT_FALSE(requests.complete());
         for(usize index = 0u; index < 40u; ++index){
             requests.markLive(names[index], 7u);

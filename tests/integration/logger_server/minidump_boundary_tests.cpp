@@ -4,9 +4,10 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/integration/logger_server/name_cases.adhd.h>
 
 #include <core/alloc/scratch.h>
-#include <core/crash/package_names.h>
+#include <core/crash/package_names.adhd.h>
 
 #include <global/filesystem/operations.h>
 #include <global/filesystem/utility.h>
@@ -102,7 +103,7 @@ protected:
 
 protected:
     Tests::TestArena<> m_testArena;
-    Core::Alloc::ScratchArena m_scratchArena{ Name("tests/minidump_boundary/scratch") };
+    Core::Alloc::ScratchArena m_scratchArena{ Name(NWB::Tests::LoggerCrashCases::s_LoggerCrashFixtureNameTestsMinidumpBoundaryScratch) };
     ::Path<Core::Alloc::GlobalArena> m_directory;
     Tests::CapturingLogger m_logger;
     Core::Common::LoggerRegistrationGuard m_loggerGuard;

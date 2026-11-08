@@ -4,6 +4,8 @@
 
 #include "paint_text_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <gtest/gtest.h>
 
 
@@ -56,7 +58,7 @@ TEST_F(UiPaintGlyphTests, BatchesOnlyAdjacentGlyphsWithMatchingPageMaterialAndCl
     ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
     m_builder.fillRect(rectangle);
     ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), rectangle));
+    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), rectangle));
     ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));
     m_builder.pushClip({ 0.0f, 0.0f, 20.0f, 20.0f });
     ASSERT_TRUE(m_builder.drawGlyph(first, rectangle, uv));

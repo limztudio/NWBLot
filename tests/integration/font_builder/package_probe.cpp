@@ -2,13 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/integration/font_builder/package_name_cases.adhd.h>
+
+#include <logger/client/module.h>
+
 #include <impl/assets_font/cook.h>
 #include <impl/assets_font_atlas/cook.h>
 
 #include <core/assets/bunch/cook.h>
 #include <core/common/application_entry.h>
-
-#include <logger/client/module.h>
 
 #include <global/filesystem.h>
 
@@ -22,7 +24,7 @@ namespace __hidden_font_builder_package_probe{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_PackageArena("tests/integration/font_builder/package");
+inline constexpr Name s_PackageArena = NWB::Tests::FontPackageCases::s_OneOffNameTestsIntegrationFontBuilderPackage;
 inline constexpr TStringView s_LoggerAppName = NWB_TEXT("font_builder_package_probe");
 inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[font_builder_package_probe] logger.init() failed");
 inline constexpr int s_EntryFailure = -1;
@@ -68,8 +70,8 @@ inline constexpr int s_EntryFailure = -1;
     NWB::Core::Assets::AssetArena arena(s_PackageArena);
     const NWB::Path sourcePath(arena, source);
     const NWB::Path destinationPath(arena, destination);
-    NWB::Core::Metascript::MetaArena metadataArena(Name("tests/integration/font_builder/metadata"));
-    NWB::Core::Alloc::ScratchArena scratch(Name("tests/integration/font_builder/scratch"));
+    NWB::Core::Metascript::MetaArena metadataArena{Name(NWB::Tests::FontPackageCases::s_FontPackageNameTestsIntegrationFontBuilderMetadata)};
+    NWB::Core::Alloc::ScratchArena scratch{Name(NWB::Tests::FontPackageCases::s_FontPackageNameTestsIntegrationFontBuilderScratch)};
     NWB::Core::Metascript::MString metadata(metadataArena);
     NWB::Core::Metascript::Document document(metadataArena);
     if(!ReadTextFile(sourcePath, metadata))
@@ -86,7 +88,7 @@ inline constexpr int s_EntryFailure = -1;
     b8 foundFont = false;
     b8 foundAtlas = false;
     for(const auto& asset : *expanded){
-        if(asset.assetType == Name("font")){
+        if(asset.assetType == Name(NWB::Tests::FontPackageCases::s_FontPackageLookupNameFont)){
             if(foundFont)
                 return false;
             auto entryResult = NWB::Impl::ParseFontCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena);
@@ -98,7 +100,7 @@ inline constexpr int s_EntryFailure = -1;
             font = Move(*assetResult);
             foundFont = true;
         }
-        else if(asset.assetType == Name("font_atlas")){
+        else if(asset.assetType == Name(NWB::Tests::FontPackageCases::s_FontPackageLookupNameFontAtlas)){
             if(foundAtlas)
                 return false;
             auto entryResult = NWB::Impl::ParseFontAtlasCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena, scratch);

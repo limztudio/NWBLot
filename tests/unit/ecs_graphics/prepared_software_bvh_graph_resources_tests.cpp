@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.h>
-
 #include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
+#include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.h>
 
 #include <gtest/gtest.h>
 
@@ -33,7 +34,7 @@ struct BuildContext{
 
 TEST(PreparedSoftwareBvhGraphResources, MissingImportedBuildBuffersCannotPublishResources){
     BuildContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/prepared_sw_bvh/missing"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsPreparedSwBvhMissing)};
     const auto emptyResources = ResolvePreparedSoftwareBvhGraphResources(context.graph, {}, scratch);
     ASSERT_TRUE(emptyResources);
     EXPECT_TRUE(emptyResources->empty());

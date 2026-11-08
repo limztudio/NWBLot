@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/graphics/rhi/queue_sharing.h>
 
 
@@ -172,7 +174,7 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto textureResult = AddTextureMetadata(graph, Name("tests/task_graph/multi_range_ownership_texture"), "Multi-Range Ownership Texture", Core::ResourceStates::Common, Core::ResourceQueueSharing::Exclusive);
+    const auto textureResult = AddTextureMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMultiRangeOwnershipTexture), "Multi-Range Ownership Texture", Core::ResourceStates::Common, Core::ResourceQueueSharing::Exclusive);
     ASSERT_TRUE(textureResult);
     const Core::GpuGraphResourceId texture = *textureResult;
     ASSERT_TRUE(texture.valid());
@@ -191,9 +193,9 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/multi_range_ownership_producer")).setMarkerLabel("Multi-Range Ownership Producer").setScheduling(scheduling).setResourceUses(producerUses);
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMultiRangeOwnershipProducer)).setMarkerLabel("Multi-Range Ownership Producer").setScheduling(scheduling).setResourceUses(producerUses);
     Core::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph/multi_range_ownership_consumer")).setMarkerLabel("Multi-Range Ownership Consumer").setScheduling(scheduling).setResourceUses(consumerUses);
+    consumerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMultiRangeOwnershipConsumer)).setMarkerLabel("Multi-Range Ownership Consumer").setScheduling(scheduling).setResourceUses(consumerUses);
     const auto producerResult = graph.addTask(producerDesc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics });
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;

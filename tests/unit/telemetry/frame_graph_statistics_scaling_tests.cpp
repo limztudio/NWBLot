@@ -4,6 +4,8 @@
 
 #include "frame_graph_test_helpers.h"
 
+#include <tests/unit/telemetry/perf_case_types.adhd.h>
+
 #include <core/telemetry/frame_graph_contributor.h>
 
 #include <global/text_utils.h>
@@ -19,6 +21,8 @@ namespace __hidden_frame_graph_statistics_scaling_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace TestCases = NWB::Tests::TelemetryCases;
 
 static constexpr AStringView s_QueueAliasOwner = "queue_alias_owner";
 static constexpr AStringView s_QueueAliasOwner2 = "Queue alias owner";
@@ -74,7 +78,7 @@ void PrepareFixture(const u32 packetCount, const u32 ownerCount, StatisticsFixtu
     fixture.packets.reserve(packetCount);
     for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
         fixture.nodes.push_back(Telemetry::FrameGraphNodeDesc{
-            .name = Name("tests/telemetry/scaling_owner"),
+            .name = Name(TestCases::s_TelemetryCaseScalingOwner),
             .label = "Scaling owner",
             .kind = Telemetry::FrameGraphNodeKind::Pass,
             .queueAssignment = {},

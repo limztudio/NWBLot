@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <impl/assets_csg/shape_module_writer.h>
 #include <impl/assets_graphics/csg_shader_variants.h>
 #include <impl/assets_graphics/shader_cook_plan.h>
@@ -73,6 +75,38 @@ Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix&, const S
     desc.shaderModuleInclude = moduleInclude;
     desc.boundsCallback = &CsgCookTestBounds;
     return desc;
+}
+
+TEST(AssetsGraphics, ShaderPlanningCapacityBoundaries){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    constexpr usize s_Max = Limit<usize>::s_Max;
+    constexpr usize s_ClipExtra = Impl::s_CsgClipAddedDefineCount;
+    constexpr usize s_PreparedFactor = Impl::s_MaxPreparedEntriesPerShaderEntry;
+
+    const auto clipCapacity = Impl::TryComputeCsgClipDefineCapacity("edge", s_Max - s_ClipExtra);
+    ASSERT_TRUE(clipCapacity);
+    EXPECT_EQ(*clipCapacity, s_Max);
+    EXPECT_FALSE(Impl::TryComputeCsgClipDefineCapacity("edge", s_Max - s_ClipExtra + 1u));
+
+    const auto includeCapacity = Impl::TryComputeShaderIncludeRootCapacity("edge", s_Max - 1u, 1u);
+    ASSERT_TRUE(includeCapacity);
+    EXPECT_EQ(*includeCapacity, s_Max);
+    EXPECT_FALSE(Impl::TryComputeShaderIncludeRootCapacity("edge", s_Max, 1u));
+
+    const auto preparedCapacity = Impl::TryComputePreparedShaderEntryCapacity(s_Max / s_PreparedFactor);
+    ASSERT_TRUE(preparedCapacity);
+    EXPECT_EQ(*preparedCapacity, (s_Max / s_PreparedFactor) * s_PreparedFactor);
+    EXPECT_FALSE(Impl::TryComputePreparedShaderEntryCapacity(s_Max / s_PreparedFactor + 1u));
+
+    const auto implicitCapacity = Impl::TryComputeImplicitShaderIncludeRootCapacity(s_Max - 1u, 1u);
+    ASSERT_TRUE(implicitCapacity);
+    EXPECT_EQ(*implicitCapacity, s_Max);
+    EXPECT_FALSE(Impl::TryComputeImplicitShaderIncludeRootCapacity(s_Max, 1u));
+
+    EXPECT_TRUE(Impl::ValidateShaderMergedDefineCount("edge", static_cast<usize>(Limit<u32>::s_Max)));
+    if constexpr(sizeof(usize) > sizeof(u32))
+        EXPECT_FALSE(Impl::ValidateShaderMergedDefineCount("edge", static_cast<usize>(Limit<u32>::s_Max) + 1u));
 }
 
 TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedDefines){
@@ -177,10 +211,10 @@ TEST(AssetsGraphics, CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrati
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     using namespace NWB::Impl::AssetsCsgCook;
 
-    const Name alphaShape("project/csg/alpha_shape");
-    const Name zebraShape("project/csg/zebra_shape");
-    const Name alphaModule("project/csg/alpha_module");
-    const Name zebraModule("project/csg/zebra_module");
+    const Name alphaShape = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgAlphaShape;
+    const Name zebraShape = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgZebraShape;
+    const Name alphaModule = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgAlphaModule;
+    const Name zebraModule = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgZebraModule;
     const AStringView alphaInclude("project/csg/generated/alpha.slangi");
     const AStringView zebraInclude("project/csg/generated/zebra.slangi");
 
@@ -267,8 +301,8 @@ asset.eval = "project/csg/MixedCaseEval.slangi";
 TEST(AssetsGraphics, CsgRegistryOwnsExactModuleTextAfterSourceRetirementAndReplacement){
     TestArena registryArena;
     Impl::CsgShapeRegistry registry(registryArena.arena);
-    const Name shapeName("project/csg/exact_text_shape");
-    const Name moduleName("project/csg/exact_text_module");
+    const Name shapeName = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgExactTextShape;
+    const Name moduleName = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgExactTextModule;
     const AStringView originalInclude = "project/csg/Generated/LongMixedCaseEvaluatorOwnedByTheRegistry.slangi";
     {
         TestArena sourceArena;
@@ -280,7 +314,7 @@ TEST(AssetsGraphics, CsgRegistryOwnsExactModuleTextAfterSourceRetirementAndRepla
     EXPECT_EQ(*selected, originalInclude);
     for(u32 index = 0u; index < 32u; ++index){
         Array<char, 32u> indexText = {};
-        const auto extraNameResult = DeriveName(Name("project/csg/exact_text_extra/"), FormatDecimal(index, indexText));
+        const auto extraNameResult = DeriveName(Name(AssetsGraphicsFixture::s_AssetCaseProjectCsgExactTextExtra), FormatDecimal(index, indexText));
         ASSERT_TRUE(extraNameResult);
         const Name extraName = *extraNameResult;
         auto extra = CsgCookTestShapeDesc(extraName, s_NameNone, AStringView{}, registryArena.arena);
@@ -305,8 +339,8 @@ TEST(AssetsGraphics, CsgRegistryRejectsQuotedIncludeControlBytesWithoutReplacing
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
     Impl::CsgShapeRegistry registry(testArena.arena);
-    const Name shapeName("project/csg/control_byte_shape");
-    const Name moduleName("project/csg/control_byte_module");
+    const Name shapeName = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgControlByteShape;
+    const Name moduleName = NWB::Tests::AssetsGraphicsFixture::s_ProjectCsgControlByteModule;
     const AStringView originalInclude = "project/csg/Generated/OriginalEvaluator.slangi";
     const auto original = registry.registerShapeType(CsgCookTestShapeDesc(shapeName, moduleName, originalInclude, testArena.arena));
     ASSERT_TRUE(original);
@@ -339,8 +373,8 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
     using namespace NWB::Impl::AssetsCsgCook;
 
     CsgShapeCookEntryVector entries(testArena.arena);
-    AppendCsgShapeCookEntry(Name("project/csg/first_shape"), Name("project/csg/first_module"), "project/csg/generated/shared.slangi", testArena.arena, entries);
-    AppendCsgShapeCookEntry(Name("project/csg/second_shape"), Name("project/csg/second_module"), "project/csg/generated/SHARED.slangi", testArena.arena, entries);
+    AppendCsgShapeCookEntry(Name(AssetsGraphicsFixture::s_AssetCaseProjectCsgFirstShape), Name(AssetsGraphicsFixture::s_AssetCaseProjectCsgFirstModule), "project/csg/generated/shared.slangi", testArena.arena, entries);
+    AppendCsgShapeCookEntry(Name(AssetsGraphicsFixture::s_AssetCaseProjectCsgSecondShape), Name(AssetsGraphicsFixture::s_AssetCaseProjectCsgSecondModule), "project/csg/generated/SHARED.slangi", testArena.arena, entries);
 
     auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision");
     ASSERT_TRUE(rootResult);

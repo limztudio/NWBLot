@@ -248,8 +248,7 @@ NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iteratio
         if(!latency){
             return SimdOptimizationBenchmark::ThroughputWorkload<8u>(
                 data, iterations,
-                [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); }
-            );
+                [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); });
         }
     }
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
@@ -283,8 +282,7 @@ void RunVariant(const Dataset& data, const b8 candidate, const usize iterations,
     SimdOptimizationBenchmark::SelectVariant(
         s_OperationNames[Kind], candidate, latency, operations,
         [&]()noexcept{ return Workload<Kind, true>(data, iterations, latency); },
-        [&]()noexcept{ return Workload<Kind, false>(data, iterations, latency); }
-    );
+        [&]()noexcept{ return Workload<Kind, false>(data, iterations, latency); });
 }
 
 

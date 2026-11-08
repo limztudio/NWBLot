@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/global/contract_name_cases.adhd.h>
 
 #include <core/alloc/scratch.h>
 
@@ -168,7 +169,7 @@ TEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWithoutReadingT
 }
 
 TEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries){
-    NWB::Core::Alloc::ScratchArena arena(Name("tests/global/fixed_index_collision"));
+    NWB::Core::Alloc::ScratchArena arena{Name(NWB::Tests::GlobalContractCases::s_GlobalContractNameTestsGlobalFixedIndexCollision)};
     const auto collide = [](const u32)noexcept{ return usize{ 1u }; };
     FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena, decltype(collide)> map(arena, 2u, collide);
     ASSERT_TRUE(map.valid());

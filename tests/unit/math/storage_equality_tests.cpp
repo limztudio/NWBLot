@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/math/case_types.adhd.h>
+
 #include <global/containers.h>
 #include <global/floating_point_environment.h>
 #include <global/simd/result.h>
@@ -132,11 +134,7 @@ public:
     }
 };
 
-struct EqualityObservation{
-    b8 equal;
-    i32 flags;
-    u32 rawFlags;
-};
+using EqualityObservation = NWB::Tests::MathCases::EqualityObservation;
 
 template<typename Value, typename Compare>
 Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(compare(lhs, rhs))) && IsNothrowDestructible_V<Compare>){
@@ -144,7 +142,7 @@ Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs
         return MakeUnexpected(Failure{});
     _mm_setcsr(_mm_getcsr() & ~0x3Fu);
     const b8 equal = compare(lhs, rhs);
-    return EqualityObservation{ equal, TestFloatingPointExceptions(FE_ALL_EXCEPT), _mm_getcsr() & 0x3Fu };
+    return EqualityObservation{ .flags = TestFloatingPointExceptions(FE_ALL_EXCEPT), .rawFlags = _mm_getcsr() & 0x3Fu, .equal = equal };
 }
 
 template<typename Value, usize Count>

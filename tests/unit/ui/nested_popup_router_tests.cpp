@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -84,7 +85,7 @@ HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, cons
 class UiNestedPopupRouterTests : public UiTestSupport::RouterTestFixture{
 public:
     UiNestedPopupRouterTests()
-        : RouterTestFixture(Name("tests/ui/nested_popup_router"))
+        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiNestedPopupRouter))
     {}
 
 

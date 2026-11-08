@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +42,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
 
     const auto bufferResult = graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/external_final_release_buffer"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalReleaseBuffer))
             .setMarkerLabel("External Final Release Buffer")
             .setType(Core::GpuGraphResourceType::Buffer)
             .setInitialState(Core::ResourceStates::Common)
@@ -52,7 +54,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     ASSERT_TRUE(buffer.valid());
 
     const Core::GpuTaskResourceUse use{ .resource = buffer, .range = Core::GpuTaskResourceRange{ .bufferRange = Core::BufferRange(32u, 64u) }, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, };
-    const auto taskResult = AddTask(Name("tests/task_graph/external_final_release_writer"), "External Final Release Writer", {}, Span(&use, 1u), {}, {}, {}, graph);
+    const auto taskResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalReleaseWriter), "External Final Release Writer", {}, Span(&use, 1u), {}, {}, {}, graph);
     ASSERT_TRUE(taskResult);
     const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
@@ -163,7 +165,7 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues), };
     const auto textureResult = graph.importResource(
         Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/external_final_multiple_packets"))
+            .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalMultiplePackets))
             .setMarkerLabel("External Final Multiple Packets")
             .setType(Core::GpuGraphResourceType::Texture)
             .setInitialState(Core::ResourceStates::Common)
@@ -189,9 +191,9 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     const Core::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
     const Core::GpuTaskCommandRequirements computeCommands = ComputeCommands();
     Core::GpuTaskDesc graphicsDesc;
-    graphicsDesc.setIdentity(Name("tests/task_graph/external_final_multiple_graphics")).setMarkerLabel("External Final Multiple Graphics").setResourceUses(Span(&graphicsUse, 1u));
+    graphicsDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalMultipleGraphics)).setMarkerLabel("External Final Multiple Graphics").setResourceUses(Span(&graphicsUse, 1u));
     Core::GpuTaskDesc computeDesc;
-    computeDesc.setIdentity(Name("tests/task_graph/external_final_multiple_compute")).setMarkerLabel("External Final Multiple Compute").setResourceUses(Span(&computeUse, 1u));
+    computeDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalMultipleCompute)).setMarkerLabel("External Final Multiple Compute").setResourceUses(Span(&computeUse, 1u));
     const auto graphicsTaskResult = graph.addTask(graphicsDesc, graphicsCommands);
     ASSERT_TRUE(graphicsTaskResult);
     const Core::GpuTaskId graphicsTask = *graphicsTaskResult;
@@ -284,8 +286,7 @@ TEST(GpuTaskGraph, OrdersExternalFinalTransitionAfterOverlappingConcurrentReader
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
         false,
         false,
-        {}
-    );
+        {});
     ASSERT_TRUE(pairResult);
     const ExternalFinalReadPair pair = *pairResult;
     ASSERT_TRUE(pair.resource.valid());
@@ -330,12 +331,12 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
     Core::GpuTaskGraph graph(testArena.arena);
 
     Core::GpuGraphResourceDesc unsupportedDesc;
-    unsupportedDesc.setIdentity(Name("tests/task_graph/external_final_hazard_domain")).setMarkerLabel("External Final Hazard Domain").setType(Core::GpuGraphResourceType::HazardDomain).setExternalFinalState(Core::ResourceStates::ShaderResource);
+    unsupportedDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalHazardDomain)).setMarkerLabel("External Final Hazard Domain").setType(Core::GpuGraphResourceType::HazardDomain).setExternalFinalState(Core::ResourceStates::ShaderResource);
     EXPECT_FALSE(graph.importResource(unsupportedDesc).has_value());
 
     Core::GpuGraphResourceDesc destinationWithoutFinalState;
     destinationWithoutFinalState
-        .setIdentity(Name("tests/task_graph/external_final_release_without_state"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalReleaseWithoutState))
         .setMarkerLabel("External Final Release Without State")
         .setType(Core::GpuGraphResourceType::Buffer)
         .setInitialState(Core::ResourceStates::Common)
@@ -345,7 +346,7 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
 
     Core::GpuGraphResourceDesc untouchedDesc;
     untouchedDesc
-        .setIdentity(Name("tests/task_graph/external_final_untouched"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalUntouched))
         .setMarkerLabel("External Final Untouched")
         .setType(Core::GpuGraphResourceType::Buffer)
         .setInitialState(Core::ResourceStates::Common)
@@ -358,7 +359,7 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
             EXPECT_TRUE(gpuTaskAdmission->valid());
     }
     {
-        const auto secondGpuTaskAdmission = AddTask(Name("tests/task_graph/external_final_unrelated"), "External Final Unrelated", {}, {}, {}, {}, {}, graph);
+        const auto secondGpuTaskAdmission = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphExternalFinalUnrelated), "External Final Unrelated", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(secondGpuTaskAdmission);
         ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/global/contract_name_cases.adhd.h>
+
 #include <global/not_null.h>
 #include <global/refcount_ptr.h>
 
@@ -17,8 +19,8 @@ namespace __hidden_global_pointer_contract_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ConversionFailure = 0xE301u;
-constexpr u32 s_DeleterTag = 47u;
+constexpr u32 s_ConversionFailure = NWB::Tests::GlobalContractCases::s_GlobalContractConversionFailure;
+constexpr u32 s_DeleterTag = NWB::Tests::GlobalContractCases::s_GlobalContractDeleterTag;
 
 
 struct ThrowingPointerConversion{
@@ -157,3 +159,4 @@ TEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerRetainsItsV
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

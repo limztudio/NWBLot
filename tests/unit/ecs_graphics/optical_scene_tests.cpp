@@ -2,17 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.h>
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/optics/optical_scene_resources.h>
 
 #include <core/alloc/general.h>
 
-#include <tests/common/floating_point_environment_guard.h>
-
-#include <gtest/gtest.h>
-
 #include <global/floating_point_environment.h>
 #include <global/simd/vector.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,8 +29,8 @@ using namespace NWB;
 using namespace NWB::Impl;
 
 struct OpticalSceneContext{
-    Core::Alloc::GlobalArena arena{ Name("tests/optical_scene/upload") };
-    Core::Alloc::ScratchArena scratch{ Name("tests/optical_scene/gather") };
+    Core::Alloc::GlobalArena arena{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneUpload) };
+    Core::Alloc::ScratchArena scratch{ Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpticalSceneGather) };
     RayTracingOpticalSceneGather gather{ scratch, 4u };
 };
 

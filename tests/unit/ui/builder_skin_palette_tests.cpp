@@ -4,6 +4,8 @@
 
 #include "widget_fixture.h"
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <global/simdmath.h>
 
 
@@ -53,7 +55,7 @@ TEST_F(UiBuilderSkinPaletteTests, SkinChangeInsidePanelFailsWithoutReplacingActi
     m_builder.setSkin(m_skin);
     ASSERT_FLOAT_EQ(m_builder.style().fontSize, 20.0f);
 
-    UiSkin replacement(m_arena, Name("tests/ui/replacement_skin"));
+    UiSkin replacement(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiReplacementSkin));
     UiSkin::RegionVector regions(m_skin.regions().begin(), m_skin.regions().end(), m_arena);
     replacement.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
     replacement.setPalette(MakePalette(0.3f));

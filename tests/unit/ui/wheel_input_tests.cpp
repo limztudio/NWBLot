@@ -3,6 +3,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/ecs_ui/toolkit/input/router.h>
 
@@ -60,7 +61,7 @@ HitTarget WheelPart(const HitTarget& host)noexcept{
 class UiWheelInputTests : public testing::Test{
 public:
     UiWheelInputTests()
-        : m_arena(Name("tests/ui/wheel_input"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWheelInput))
         , m_router(m_arena)
     {
         m_targets[0u] = WheelHost();

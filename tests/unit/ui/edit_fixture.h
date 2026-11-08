@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/model.h>
 #include <impl/ecs_ui/toolkit/edit/grapheme.h>
 
@@ -16,12 +18,20 @@
 
 NWB_BEGIN
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace UiEditTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class EditFixture : public testing::Test{
 public:
     EditFixture()
-        : m_arena(Name("tests/ui/edit"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiEditFixture))
         , m_model(m_arena)
     {}
 
@@ -30,6 +40,10 @@ protected:
     Core::Alloc::GlobalArena m_arena;
     Impl::Ui::EditModel m_model;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

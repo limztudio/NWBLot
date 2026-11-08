@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_FilesystemInputNameProjectTestsNewGrowth = "project/tests/new_growth";
+const Name s_FilesystemInputNameProjectTestsLimitedGrowth = "project/tests/limited_growth";
+const Name s_FilesystemNameProjectTestsPayload = "project/tests/payload";
+const Name s_FilesystemNameTestsFilesystem = "tests/filesystem";
+const Name s_FilesystemNameProjectTestsLargeGrowth = "project/tests/large_growth";
+const Name s_FilesystemNameProjectTestsRecoveryGap = "project/tests/recovery_gap";
+const Name s_FilesystemNameProjectTestsCompactFirst = "project/tests/compact_first";
+const Name s_FilesystemNameProjectTestsCompactGap = "project/tests/compact_gap";
+const Name s_FilesystemNameProjectTestsCompactTarget = "project/tests/compact_target";
+const Name s_FilesystemNameProjectTestsMutationFirst = "project/tests/mutation_first";
+const Name s_FilesystemNameProjectTestsMutationNew = "project/tests/mutation_new";
+const StringView s_FilesystemStageDirectory = "stage";
+const StringView s_FilesystemBackupDirectory = "backup";
+const i32 s_FilesystemPublishLogFailure = 47;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

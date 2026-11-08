@@ -4,6 +4,8 @@
 
 #include "reflection_statistics_test_helpers.h"
 
+#include <tests/unit/ecs_graphics/name_cases.adhd.h>
+
 #include <impl/ecs_render/reflection/feedback.h>
 #include <impl/ecs_render/reflection/feedback_resources.h>
 
@@ -271,7 +273,7 @@ TEST(ReflectionFeedback, ResourceGenerationBlocksOldCallbacksWithoutDiscardingTh
 }
 
 TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
-    Core::Alloc::GlobalArena arena{Name("tests/reflection/feedback_graph")};
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionFeedbackGraph)};
     auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
     ASSERT_TRUE(controlResult);
     auto control = Move(*controlResult);
@@ -279,7 +281,7 @@ TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
     const auto rejected = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
     EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionFeedbackReservation(control, rejected)}).has_value());
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests.feedback.lease")).setMarkerLabel("Feedback Lease");
+    desc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsFeedbackLease)).setMarkerLabel("Feedback Lease");
     const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
     {
         const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionFeedbackReservation(control, pending)});
@@ -294,7 +296,7 @@ TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
 }
 
 TEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction){
-    Core::Alloc::GlobalArena arena{Name("tests/reflection/feedback_move")};
+    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionFeedbackMove)};
     auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
     ASSERT_TRUE(controlResult);
     auto control = Move(*controlResult);

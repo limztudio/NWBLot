@@ -12,6 +12,7 @@
 
 #include <tests/common/test_context.h>
 #include <tests/common/capturing_logger.h>
+#include <tests/unit/filesystem/name_cases.adhd.h>
 
 #include <global/filesystem.h>
 #include <global/binary.h>
@@ -36,9 +37,9 @@ using NWB::Tests::FilesystemTest::BlockingRestoreLogger;
 using NWB::Tests::FilesystemTest::FilesystemVolumeTest;
 using NWB::Tests::FilesystemTest::ThrowingPublishLogger;
 
-inline constexpr Name s_TestArena("tests/filesystem");
-constexpr AStringView s_StageDirectory = "stage";
-constexpr AStringView s_BackupDirectory = "backup";
+inline constexpr Name s_TestArena = NWB::Tests::FilesystemCases::s_FilesystemNameTestsFilesystem;
+constexpr AStringView s_StageDirectory = NWB::Tests::FilesystemCases::s_FilesystemStageDirectory;
+constexpr AStringView s_BackupDirectory = NWB::Tests::FilesystemCases::s_FilesystemBackupDirectory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

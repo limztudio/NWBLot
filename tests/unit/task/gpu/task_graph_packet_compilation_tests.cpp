@@ -5,6 +5,8 @@
 #include "task_graph_test_utils.h"
 #include "task_graph_lifecycle_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,9 +38,9 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto completionsAdmission0 = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/merged_external_a")).setMarkerLabel("Merged External A"));
-    const auto completionsAdmission1 = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/merged_external_b")).setMarkerLabel("Merged External B"));
-    const auto completionsAdmission2 = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/merged_external_c")).setMarkerLabel("Merged External C"));
+    const auto completionsAdmission0 = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMergedExternalA)).setMarkerLabel("Merged External A"));
+    const auto completionsAdmission1 = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMergedExternalB)).setMarkerLabel("Merged External B"));
+    const auto completionsAdmission2 = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMergedExternalC)).setMarkerLabel("Merged External C"));
     ASSERT_TRUE(completionsAdmission0);
     ASSERT_TRUE(completionsAdmission1);
     ASSERT_TRUE(completionsAdmission2);
@@ -54,7 +56,7 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     Core::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/merged_external_first")).setMarkerLabel("Merged External First").setScheduling(firstScheduling).setExternalDependencies(firstExternalDependencies);
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMergedExternalFirst)).setMarkerLabel("Merged External First").setScheduling(firstScheduling).setExternalDependencies(firstExternalDependencies);
     const auto firstResult = graph.addTask(firstDesc);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
@@ -66,7 +68,7 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     secondScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc secondDesc;
     secondDesc
-        .setIdentity(Name("tests/task_graph/merged_external_second"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphMergedExternalSecond))
         .setMarkerLabel("Merged External Second")
         .setScheduling(secondScheduling)
         .setDependencies(Span(&first, 1u))
@@ -120,32 +122,32 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Core::GpuTaskGraph graph(testArena.arena);
     const Core::GpuPhysicalQueueInfo producerQueue = DedicatedComputeQueue();
     const Core::QueueSubmissionToken completionToken{ .value = 41u, .physicalQueueIndex = producerQueue.id.index, .deviceGeneration = producerQueue.id.deviceGeneration, .queue = producerQueue.queueClass, };
-    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/packet_external")).setMarkerLabel("External Completion").setToken(completionToken));
+    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPacketExternal)).setMarkerLabel("External Completion").setToken(completionToken));
     ASSERT_TRUE(completionResult);
     const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
     Core::GpuTaskDesc firstDesc;
-    firstDesc.setIdentity(Name("tests/task_graph/packet_first")).setMarkerLabel("Packet First");
+    firstDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPacketFirst)).setMarkerLabel("Packet First");
     const auto firstResult = graph.addTask<PacketLifecycleTask>(firstDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Core::GpuQueueCapability::Compute });
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
     ASSERT_TRUE(first.valid());
 
     Core::GpuTaskDesc secondDesc;
-    secondDesc.setIdentity(Name("tests/task_graph/packet_second")).setMarkerLabel("Packet Second").setDependencies(Span(&first, 1u)).setExternalDependencies(Span(&completion, 1u));
+    secondDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPacketSecond)).setMarkerLabel("Packet Second").setDependencies(Span(&first, 1u)).setExternalDependencies(Span(&completion, 1u));
     const auto secondResult = graph.addTask<PacketLifecycleTask>(secondDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Core::GpuQueueCapability::Graphics });
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
     ASSERT_TRUE(second.valid());
 
     Core::GpuTaskDesc transferDesc;
-    transferDesc.setIdentity(Name("tests/task_graph/packet_transfer")).setMarkerLabel("Packet Transfer");
+    transferDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPacketTransfer)).setMarkerLabel("Packet Transfer");
     const auto transferResult = graph.addTask<PacketLifecycleTask>(transferDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Core::GpuQueueCapability::Transfer });
     ASSERT_TRUE(transferResult);
     const Core::GpuTaskId transfer = *transferResult;
     ASSERT_TRUE(transfer.valid());
 
-    const auto recoveryDomainResult = AddHazardDomain(graph, Name("tests/task_graph/packet_recovery_domain"), "Frame Recovery Timing");
+    const auto recoveryDomainResult = AddHazardDomain(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPacketRecoveryDomain), "Frame Recovery Timing");
     ASSERT_TRUE(recoveryDomainResult);
     const Core::GpuGraphResourceId recoveryDomain = *recoveryDomainResult;
     ASSERT_TRUE(recoveryDomain.valid());
@@ -156,7 +158,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
     recoveryScheduling.isRecoverySubmission = true;
     Core::GpuTaskDesc recoveryDesc;
-    recoveryDesc.setIdentity(Name("tests/task_graph/packet_recovery")).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryUses);
+    recoveryDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphPacketRecovery)).setMarkerLabel("Frame Recovery").setScheduling(recoveryScheduling).setResourceUses(recoveryUses);
     const auto recoveryResult = graph.addTask<PacketLifecycleTask>(recoveryDesc, PacketLifecycleTask::Payload{ .requiredCapabilities = Core::GpuQueueCapability::Graphics });
     ASSERT_TRUE(recoveryResult);
     const Core::GpuTaskId recovery = *recoveryResult;
@@ -229,18 +231,18 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
 TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto firstResult = AddTask(Name("tests/task_graph/recording_frontier_first"), "Recording Frontier First", {}, {}, {}, {}, {}, graph);
+    const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierFirst), "Recording Frontier First", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTask(Name("tests/task_graph/recording_frontier_second"), "Recording Frontier Second", {}, {}, {}, {}, {}, graph);
+    const auto secondResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierSecond), "Recording Frontier Second", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
     const Array<Core::GpuTaskId, 1> thirdDependencies = { first };
-    const auto thirdResult = AddTask(Name("tests/task_graph/recording_frontier_third"), "Recording Frontier Third", Span(thirdDependencies), {}, {}, {}, {}, graph);
+    const auto thirdResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierThird), "Recording Frontier Third", Span(thirdDependencies), {}, {}, {}, {}, graph);
     ASSERT_TRUE(thirdResult);
     const Core::GpuTaskId third = *thirdResult;
     const Array<Core::GpuTaskId, 2> fourthDependencies = { second, third };
-    const auto fourthResult = AddTask(Name("tests/task_graph/recording_frontier_fourth"), "Recording Frontier Fourth", Span(fourthDependencies), {}, {}, {}, {}, graph);
+    const auto fourthResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierFourth), "Recording Frontier Fourth", Span(fourthDependencies), {}, {}, {}, {}, graph);
     ASSERT_TRUE(fourthResult);
     const Core::GpuTaskId fourth = *fourthResult;
     ASSERT_TRUE(first.valid());
@@ -284,17 +286,17 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
 
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto firstResult = AddTask(Name("tests/task_graph/stable_packet_dependency_first"), "Stable Packet Dependency First", {}, {}, {}, {}, {}, graph);
+    const auto firstResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphStablePacketDependencyFirst), "Stable Packet Dependency First", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
     const Core::GpuTaskId first = *firstResult;
-    const auto secondResult = AddTask(Name("tests/task_graph/stable_packet_dependency_second"), "Stable Packet Dependency Second", {}, {}, {}, {}, {}, graph);
+    const auto secondResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphStablePacketDependencySecond), "Stable Packet Dependency Second", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(secondResult);
     const Core::GpuTaskId second = *secondResult;
-    const auto thirdResult = AddTask(Name("tests/task_graph/stable_packet_dependency_third"), "Stable Packet Dependency Third", {}, {}, {}, {}, {}, graph);
+    const auto thirdResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphStablePacketDependencyThird), "Stable Packet Dependency Third", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(thirdResult);
     const Core::GpuTaskId third = *thirdResult;
     const Array<Core::GpuTaskId, 3> consumerDependencies = { third, first, second };
-    const auto consumerResult = AddTask(Name("tests/task_graph/stable_packet_dependency_consumer"), "Stable Packet Dependency Consumer", Span(consumerDependencies), {}, {}, {}, {}, graph);
+    const auto consumerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphStablePacketDependencyConsumer), "Stable Packet Dependency Consumer", Span(consumerDependencies), {}, {}, {}, {}, graph);
     ASSERT_TRUE(consumerResult);
     const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(first.valid());
@@ -336,11 +338,11 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
 TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    const auto bufferResult = AddBufferMetadata(graph, Name("tests/task_graph/recording_frontier_state_seed_buffer"), "Recording Frontier State Seed Buffer");
+    const auto bufferResult = AddBufferMetadata(graph, Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierStateSeedBuffer), "Recording Frontier State Seed Buffer");
     ASSERT_TRUE(bufferResult);
     const Core::GpuGraphResourceId buffer = *bufferResult;
     ASSERT_TRUE(buffer.valid());
-    const auto orderingProducerResult = AddTask(Name("tests/task_graph/recording_frontier_ordering_producer"), "Recording Frontier Ordering Producer", {}, {}, {}, {}, {}, graph);
+    const auto orderingProducerResult = AddTask(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierOrderingProducer), "Recording Frontier Ordering Producer", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(orderingProducerResult);
     const Core::GpuTaskId orderingProducer = *orderingProducerResult;
     ASSERT_TRUE(orderingProducer.valid());
@@ -353,7 +355,7 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
 
     const Core::GpuTaskResourceUse producerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph/recording_frontier_state_seed_producer")).setMarkerLabel("Recording Frontier State Seed Producer").setScheduling(scheduling).setResourceUses(Span(&producerUse, 1u));
+    producerDesc.setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierStateSeedProducer)).setMarkerLabel("Recording Frontier State Seed Producer").setScheduling(scheduling).setResourceUses(Span(&producerUse, 1u));
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
     const Core::GpuTaskId producer = *producerResult;
@@ -363,7 +365,7 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     const Core::GpuTaskResourceUse consumerUse{ .resource = buffer, .range = {}, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, };
     Core::GpuTaskDesc consumerDesc;
     consumerDesc
-        .setIdentity(Name("tests/task_graph/recording_frontier_state_seed_consumer"))
+        .setIdentity(Name(TaskGraphTestUtils::s_GpuCaseTaskGraphRecordingFrontierStateSeedConsumer))
         .setMarkerLabel("Recording Frontier State Seed Consumer")
         .setScheduling(scheduling)
         .setDependencies(consumerDependencies)

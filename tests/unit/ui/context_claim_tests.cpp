@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/context.h>
 
 #include <gtest/gtest.h>
@@ -26,7 +28,7 @@ constexpr AStringView s_ListKey = "list";
 class UiContextClaimTests : public testing::Test{
 public:
     UiContextClaimTests()
-        : m_arena(Name("tests/ui/context_claim"))
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiContextClaim))
         , m_context(m_arena)
     {}
 

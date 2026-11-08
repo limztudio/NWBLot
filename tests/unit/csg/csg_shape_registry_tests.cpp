@@ -4,6 +4,7 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
+#include <tests/unit/csg/name_cases.adhd.h>
 
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_csg/deform_edit.h>
@@ -23,10 +24,10 @@ namespace __hidden_csg_shape_registry_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_EngineCsgBox = "engine/csg/box";
-static constexpr AStringView s_EngineCsgPlane = "engine/csg/plane";
+static constexpr AStringView s_EngineCsgBox = NWB::Tests::CsgCases::s_CsgEngineBoxPath;
+static constexpr AStringView s_EngineCsgPlane = NWB::Tests::CsgCases::s_CsgEnginePlanePath;
 using TestWorld = NWB::Tests::EcsTestWorld;
-inline constexpr Name s_ScratchArena("tests/csg/scratch");
+inline constexpr Name s_ScratchArena = NWB::Tests::CsgCases::s_OneOffNameTestsCsgScratch;
 
 
 TEST(Csg, ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName){
@@ -84,7 +85,7 @@ TEST(Csg, ShapeBoundsRejectShortPayloadAndKeepPlaneUnbounded){
 class TestProjectSlabShape final : public NWB::Impl::ICsgShape{
 public:
     virtual Name shapeTypeName()const noexcept override{
-        return Name("project/csg/slab");
+        return Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgSlab);
     }
 
     virtual u32 parameterByteSize()const noexcept override{
@@ -106,7 +107,7 @@ public:
 
 class OversizedProjectShape final : public NWB::Impl::ICsgShape{
 public:
-    virtual Name shapeTypeName()const noexcept override{ return Name("project/csg/oversized"); }
+    virtual Name shapeTypeName()const noexcept override{ return Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgOversized); }
     virtual u32 parameterByteSize()const noexcept override{ return static_cast<u32>(NWB::Impl::s_CsgShapeInlineParameterMaxBytes) + 1u; }
     virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{ return {}; }
     virtual Expected<NWB::Impl::CsgShapeLocalBounds> computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters&)const noexcept override{ return MakeUnexpected(Failure{}); }
@@ -124,7 +125,7 @@ TEST(Csg, OversizedProjectShapeDoesNotChangeRegistry){
     EXPECT_FALSE(registry.registerShape<OversizedProjectShape>());
     EXPECT_EQ(registry.shapeTypeCount(), count);
     EXPECT_EQ(registry.revision(), revision);
-    EXPECT_FALSE(registry.findShapeType(Name("project/csg/oversized")));
+    EXPECT_FALSE(registry.findShapeType(Name(NWB::Tests::CsgCases::s_CsgLookupNameProjectCsgOversized)));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("parameter size larger than the inline shader ABI")));
 }
 
@@ -135,7 +136,7 @@ TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
 
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
     ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-    const auto slabId = registry.registerShape<TestProjectSlabShape>(false, Name("project/csg/custom"), "project/csg/generated/custom.slangi");
+    const auto slabId = registry.registerShape<TestProjectSlabShape>(false, Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgCustom), "project/csg/generated/custom.slangi");
     ASSERT_TRUE(slabId);
     EXPECT_EQ(registry.shapeTypeCount(), 5u);
 
@@ -180,7 +181,7 @@ TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
 
     NWB::Impl::CsgDeformCutDesc cut;
     cut.active = true;
-    cut.shape.shapeType = Name("project/csg/slab");
+    cut.shape.shapeType = Name(NWB::Tests::CsgCases::s_CsgInputNameProjectCsgSlab);
     cut.shape.worldToShape = ::MatrixIdentity<Float34>();
     cut.shape.parameter0 = Float4(0.5f, 1.0f, 1.0f, 0.0f);
 
@@ -211,5 +212,4 @@ TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

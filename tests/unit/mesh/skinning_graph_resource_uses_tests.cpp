@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/graph_resource_uses.h>
-#include <impl/ecs_mesh/skinning/skinning_state_handoff.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
+#include <tests/unit/mesh/skinning_name_cases.adhd.h>
+
+#include <impl/ecs_mesh/skinning/graph_resource_uses.h>
+#include <impl/ecs_mesh/skinning/skinning_state_handoff.h>
 
 #include <gtest/gtest.h>
 
@@ -52,7 +53,7 @@ using namespace NWB::Impl;
 }
 
 TEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence){
-    Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/repeated"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningGraphUsesRepeated)};
     Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     Array<MeshSkinningGraphDispatchPlan, 3u> plans = { Plan(), Plan(), Plan(100u) };
     Swap(plans[1u].restPositionResource, plans[1u].restNormalResource);
@@ -71,7 +72,7 @@ TEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChan
 }
 
 TEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChangedFlags){
-    Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/generation"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningGraphUsesGeneration)};
     Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     Array<MeshSkinningGraphDispatchPlan, 2u> plans = { Plan(), Plan(0u, 1ull << 40u) };
     uses = BuildMeshSkinningGraphResourceUses(plans, scratch);
@@ -110,7 +111,7 @@ TEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChange
 TEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRecovers){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/rejections"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningGraphUsesRejections)};
     Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     for(u32 failure = 0u; failure < 10u; ++failure){
         MeshSkinningGraphDispatchPlan plan = Plan();
@@ -168,7 +169,7 @@ TEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRec
 TEST(SkinningGraphResourceUses, PromotedCollectionsRejectLaterPhaseConflictsAndRebuildAfterFailure){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/promoted_failures"));
+    Core::Alloc::ScratchArena scratch{Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningGraphUsesPromotedFailures)};
     Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     for(u32 failure = 0u; failure < 3u; ++failure){
         Array<MeshSkinningGraphDispatchPlan, 3u> plans = { Plan(), Plan(100u), Plan(200u) };
@@ -197,8 +198,8 @@ TEST(SkinningGraphResourceUses, PromotedCollectionsRejectLaterPhaseConflictsAndR
 }
 
 TEST(SkinningGraphResourceUses, RepeatedPlansUseTheSameScratchCapacityAsOnePlan){
-    Core::Alloc::ScratchArena singleScratch(Name("tests/skinning_graph_uses/single_storage"));
-    Core::Alloc::ScratchArena repeatedScratch(Name("tests/skinning_graph_uses/repeated_storage"));
+    Core::Alloc::ScratchArena singleScratch{Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningGraphUsesSingleStorage)};
+    Core::Alloc::ScratchArena repeatedScratch{Name(NWB::Tests::SkinningCases::s_SkinningCaseSkinningGraphUsesRepeatedStorage)};
     Expected<MeshSkinningGraphResourceUses> singleUses = MakeUnexpected(Failure{});
     Expected<MeshSkinningGraphResourceUses> repeatedUses = MakeUnexpected(Failure{});
     Array<MeshSkinningGraphDispatchPlan, 64u> plans{};
@@ -218,7 +219,7 @@ TEST(SkinningGraphResourceUses, RepeatedPlansUseTheSameScratchCapacityAsOnePlan)
 
 TEST(SkinningStateHandoff, RejectsUnpreparedAcceptanceAndMissingRecordedState){
     NWB::Tests::TestArena<> arena;
-    Core::Alloc::ScratchArena scratch(Name("tests/skinning_handoff/rejected"));
+    Core::Alloc::ScratchArena scratch(NWB::Tests::SkinningCases::s_SkinningCaseSkinningHandoffRejected);
     Core::GpuPersistentResourceStateCache cache(arena.arena);
     SkinningStateHandoff handoff(cache, scratch, {});
     EXPECT_FALSE(SkinningStateHandoff::Prepare(nullptr, nullptr));

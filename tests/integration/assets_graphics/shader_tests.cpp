@@ -4,6 +4,8 @@
 
 #include "assets_graphics_fixture.h"
 
+#include <tests/integration/assets_graphics/case_types.adhd.h>
+
 #include <gtest/gtest.h>
 
 
@@ -211,6 +213,24 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
             EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
         }
     }
+    EXPECT_TRUE(RemoveAllIfExists(root));
+}
+
+TEST(AssetsGraphics, InvalidShaderDefineNamePrecedesInvalidValueShape){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    TestArena testArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
+    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_invalid_define_name_and_value");
+    ASSERT_TRUE(rootResult);
+    Path root = Move(*rootResult);
+    const Path metadataPath = root / "shader.nwb";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, "compute_shader asset;\nasset.entry_point = \"main\";\nasset.defines = { \"9BAD\": 1 };\n"));
+    Impl::ShaderCook shaderCook(testArena.arena);
+    EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile<Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be an ASCII shader identifier")));
+    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("values must be a list of strings")));
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 

@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 #include <core/task/gpu/scheduler_submission_bindings.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/perf/timing.h>
@@ -73,7 +75,7 @@ SubmissionBindingFixture::SubmissionBindingFixture()
     for(usize index = 0u; index < taskCount; ++index){
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % mergeGroupSize != 0u;
-        const auto derivedNameResult = IndexedName(Name("tests/submission_bindings/task/"), index);
+        const auto derivedNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseSubmissionBindingsTask), index);
         if(!derivedNameResult)
             return false;
         const auto taskResult = AddTaskWithCommands(*derivedNameResult, "Submission Binding", commands, scheduling, {}, scheduling.mergeWithPrevious ? Span(&tasks.back(), 1u) : Span<const Core::GpuTaskId>{}, graph);

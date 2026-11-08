@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <tests/unit/task/gpu/case_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,7 +51,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     }
     TestArena testArena;
     Core::GpuTaskGraph graph(testArena.arena);
-    Core::Alloc::ScratchArena declarationScratch(Name("tests/terminal_dependency/declarations"));
+    Core::Alloc::ScratchArena declarationScratch{Name(TaskGraphTestUtils::s_GpuCaseTerminalDependencyDeclarations)};
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> resources(declarationScratch);
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> readers(declarationScratch);
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> finalizers(declarationScratch);
@@ -59,7 +61,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     readers.reserve(readerCount);
     finalizers.reserve(pairCount);
     for(usize resourceIndex = 0u; resourceIndex < pairCount * 2u; ++resourceIndex){
-        const auto identityNameResult = IndexedName(Name("tests/terminal_dependency/resource/"), resourceIndex);
+        const auto identityNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseTerminalDependencyResource), resourceIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const auto resourceResult = graph.importResource(
@@ -99,7 +101,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
             useCount = uses.size();
         }
         Core::GpuTaskDesc desc;
-        const auto readerNameResult = IndexedName(Name("tests/terminal_dependency/reader/"), readerIndex);
+        const auto readerNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseTerminalDependencyReader), readerIndex);
         ASSERT_TRUE(readerNameResult);
         desc.setIdentity(*readerNameResult).setMarkerLabel("Independent Terminal Reader").setScheduling(scheduling).setResourceUses(Span(uses.data(), useCount));
         if(scenario == TerminalDependencyScenario::Chain && !readers.empty())
@@ -114,7 +116,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     for(usize pairIndex = 0u; pairIndex < pairCount; ++pairIndex){
         const Array<Core::GpuTaskResourceUse, 2u> uses = { resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u) };
         Core::GpuTaskDesc desc;
-        const auto secondReaderNameResult = IndexedName(Name("tests/terminal_dependency/finalizer/"), pairIndex);
+        const auto secondReaderNameResult = IndexedName(Name(TaskGraphTestUtils::s_GpuCaseTerminalDependencyFinalizer), pairIndex);
         ASSERT_TRUE(secondReaderNameResult);
         desc.setIdentity(*secondReaderNameResult).setMarkerLabel("Terminal Finalizing Reader").setScheduling(scheduling).setResourceUses(uses);
         if(scenario == TerminalDependencyScenario::Chain)
@@ -133,7 +135,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     Core::GpuTaskGraphAnalysis analysis(testArena.arena);
     Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Core::GpuCompiledGraph compiledGraph(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/terminal_dependency/compilation"));
+    Core::Alloc::ScratchArena scratchArena{Name(TaskGraphTestUtils::s_GpuCaseTerminalDependencyCompilation)};
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology));
 
     const Core::GpuCompiledGraph::ReadView plan(compiledGraph);

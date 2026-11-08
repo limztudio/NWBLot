@@ -33,7 +33,7 @@ are cooked: `nwb_transparent_multi_smoke`, `nwb_transparent_csg_smoke`,
 `nwb_caustic_sphere_smoke`, `nwb_skinned_caustic_smoke`,
 `nwb_stress_test_smoke`, and `nwb_gi_test_smoke`.
 
-From the repository root, select a matching platform/architecture configure preset and build without launching a scene:
+From the repo root, pick a match board/chip set preform. Make with no scene start:
 
 ```text
 python -m launcher build nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_caustic_sphere_smoke nwb_skinned_caustic_smoke nwb_stress_test_smoke nwb_gi_test_smoke --configure-preset <configure-preset> --build-dir <build-directory> --config opt -D NWB_BUILD_TESTS=ON
@@ -113,9 +113,7 @@ or over-budget geometry reports a diagnostic and uses conservative occlusion.
 ## Temporal CSG direct/GI sequence
 
 `tests/smoke/csg_gi_temporal_smoke.py` records 32 framebuffer captures from one
-`nwb_csg_visible_smoke` process. Live rendering first reaches graphics frame 360,
-then continues for at least 30 steady-clock seconds before selecting and logging
-the actual first capture frame. Compilation, asset loading, and startup
+`nwb_csg_visible_smoke` process. Live draw first hits card frame 360. Then it runs 30 or more true-clock secs. Then it picks and logs the true first grab frame. Compilation, asset loading, and startup
 preparation are outside that timed interval. Samples use graphics frame
 `firstCaptureFrame + sampleIndex * frameInterval` and retain the actual
 1280 x 900 framebuffer. `--frame-interval` accepts 1 through 64 and defaults to

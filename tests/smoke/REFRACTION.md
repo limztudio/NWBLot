@@ -15,7 +15,7 @@ A one-group end pass runs after the sort UAV need in the same graph job. Its 32-
 
 Both notes go out in the old fix-up job and time span. The picked note runs its own cooked thin or thick code. The other starts zero work groups. The thick code maps group IDs straight to frame tiles. It has no list look-up and no live-count fork. Pick uses exact now-frame live tiles. It uses no CPU read-back and no full mark. Both screen and card trace ready both code sets. This holds the screen fall-back pair for no-card make.
 
-Make the scene and its cooked run files through the repo launcher:
+Make the scene and its cooked run files with the repo launcher:
 
 ```powershell
 python -m launcher build nwb_refraction_smoke --configure-preset windows-clang-arm64 --config dbg
@@ -56,9 +56,7 @@ exactly `0`, `1`, `10`, `50`, or `100`. It requires an set
 with a gallery case or lifecycle capture. Empty or unknown density/extent values
 are errors. Refraction stays enabled; `NWB_REFRACTION_SMOKE_ENABLED` must be absent
 or exactly `1`. Hardware preference must be absent, `0`, or `1`, with the existing
-`NWB_REFRACTION_SMOKE_HARDWARE=0` selecting screen-space tracing. The ordinary
-sphere and lifecycle fixtures retain their existing defaults when density is not
-selected; `native` and `npot` remain extent options for those fixtures.
+`NWB_REFRACTION_SMOKE_HARDWARE=0` selecting screen-space tracing. The plain ball and life-cycle sets keep their old base forms when tight-fill stays off. `native` and `npot` stay size picks for those sets.
 
 Each density uses one closed, hard-edge clear glass slab with IOR 1.5, zero AVBOIT
 cover, and thick 0.2. The eye sits at `(0, 1.4, -6)`. The straight FOV is

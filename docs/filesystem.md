@@ -1,7 +1,7 @@
 # Project filesystems
 
 `core/filesystem/filesystem.h` defines `NWB::Core::Filesystem::IFilesystem`. Its implementation file contains
-only backend-independent cursor helpers. The separate `core/filesystem/factory.h/.cpp` composition module owns
+only backend-independent cursor helpers. The separate `core/filesystem/factory.h` and `core/filesystem/factory.cpp` composition module owns
 `FilesystemFactory` and `CreateFilesystem`, including selection of the default backend. The interface never
 includes or constructs a concrete filesystem. The default implementation is `VolumeFileSystem`, which reads and writes the engine's existing segmented volume format. Asset loading, shader
 archive loading, pipeline cache persistence, and asset gathering use the interface. The retired `VolumeSession`

@@ -361,17 +361,17 @@ instrumentation remains enabled, while shader query counters, image readbacks,
 frame-graph capture, and validation are acquired separately. Inherited smoke
 diagnostic settings are cleared by timing environment preparation.
 
-On Windows, a persistent PDH query records GPU Engine utilization at 1 Hz for
+On Windows, a persistent PDH query records GPU Engine load at 1 Hz for
 both the fixture PID and other processes. Raw counter instances, statuses,
 monotonic/UTC observation times, and publication-header observations are saved.
 Initial invalid data, missing fixture instances, and gaps remain visible; at
 least two valid fixture samples must overlap the approximate retained
 publication window. Per-engine process sums remain separate because concurrent
-engines cannot be added into one utilization percentage. Header publication may
+engines cannot be added into one load percentage. Header publication may
 lag GPU execution, so load associations are observational. Before acquisition,
 the host inventory records the adapter/driver, exposed GPU counter paths,
 clock/frequency counter candidates, and whether `nvidia-smi` is present. The
-sampler collects engine utilization only; clock measurements require separate
+sampler collects engine load only; clock measurements require separate
 supported instrumentation. Anonymous ACPI thermal zones do not identify GPU
 temperature. The output records these limitations explicitly and does not infer
 clock state from load.

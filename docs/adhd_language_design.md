@@ -291,7 +291,8 @@
 - **Built-In Math & SIMD Intrinsics (No `native` Block Required)**:
   - Scalar & SIMD vector/matrix intrinsics are available out of the box and lower directly to `global/simplemath.h` and `global/simdmath.h`:
     - **Scalar & Vector**: `abs`, `min`, `max`, `clamp`, `lerp`, `sqrt`, `rsqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `round`
-    - **SIMD Vector & Matrix**: `dot(a, b)`, `cross(a, b)`, `length(v)`, `lengthSq(v)`, `normalize(v)`, `mul(a, b)`, `transpose(m)`, `inverse(m)`
+    - **SIMD Vector & Matrix**: `dot(a, b)`, `cross(a, b)`, `length(v)`, `lengthSq(v)`, `normalize(v)`, `mul(a, b)`, `transpose(m)`, `inverse(m)`, `isFinite(v)`, `any(v)`, `all(v)`
+    - **SIMD Floating-Point Safety**: `isFinite(v)` lowers to integer exponent-mask comparisons (`VectorIsFinite` / `VectorDoubleIsFinite`), and the `adhd` compiler automatically emits `#pragma STDC FENV_ACCESS ON` for blocks, lambdas, and parallel tasks that evaluate SIMD floating-point expressions so inactive or short-circuited lanes never raise spurious `FE_INVALID` traps.
 
 ### 5.3 Default Containers & Strings
 All owning containers are automatically bound to the enclosing class's static arena (for members) or the active function's `ScratchArena` (for local variables):

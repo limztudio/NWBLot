@@ -315,6 +315,9 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "    const VectorSingle nonUniformAdd = VectorSingle(a.x + scale, a.y + 1.0f, a.z + 2.0f, a.w + 3.0f);\r\n"
         "    const VectorSingle mixedAddSub = VectorSingle(a.x + b.x, a.y - b.y, a.z + b.z, a.w - b.w);\r\n"
         "    const VectorSingle uniformLaneMul = VectorSingle(a.x * b.y, a.y * b.y, a.z * b.y, a.w * b.y);\r\n"
+        "    const VectorSingle planeEq = VectorSingle(norm3, -dot(norm3.xyz, b.xyz));\r\n"
+        "    const VectorSingle negNorm3ZeroW = VectorSingle(-norm3, 0.0f);\r\n"
+        "    const VectorSingle negScaleFma = a * (-scale) + b;\r\n"
         "    const VectorDouble minD(cast<f64>(a.x), cast<f64>(a.y), 0.0, 0.0);\r\n"
         "    const VectorDouble divD = VectorDouble(d.x, d.y, 0.0, 0.0) / xyUnitZW;\r\n"
         "    const VectorDouble maxD = max(minD, divD);\r\n"
@@ -324,11 +327,13 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "        return constZero;\r\n"
         "    if(abs(box.minPt.x) > 1.0f || abs(box.minPt.y) > 1.0f || abs(box.minPt.z) > 1.0f)\r\n"
         "        return constAxisY;\r\n"
-        "    if(!isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z) || !isFinite(a.w) || a.x < 0.0f || a.y < 0.0f || a.z < 0.0f || a.w < 0.0f)\r\n"
+        "    if(!isFinite(a.x) || !isFinite(a.y) || !isFinite(a.z) || !isFinite(a.w) || !isFinite(a.x + a.z) || !isFinite(a.y + a.w) || a.x < 0.0f || a.y < 0.0f || a.z < 0.0f || a.w < 0.0f)\r\n"
         "        return unitVec;\r\n"
+        "    if(scale >= a.x && 2.0f >= a.y && scale < a.z && 2.0f < a.w)\r\n"
+        "        return planeEq;\r\n"
         "    if(a.x <= a.z && a.y <= a.w && isFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n"
         "        return halfVec + axisW + VectorSingle(xyUnitZW) + VectorSingle(mixedBounds);\r\n"
-        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + narrowXY + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
+        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + planeEq + negNorm3ZeroW + negScaleFma + narrowXY + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
         "}\r\n";
 
     CompileResult optRes(arena.arena);
@@ -339,6 +344,11 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
     EXPECT_NE(optView.find("const ::SIMDVectorSingle nonUniformAdd = ::VectorAdd(a, ::VectorSet(scale, 1.0f, 2.0f, 3.0f));"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle mixedAddSub = ::VectorAdd(a, ::VectorXorInt(b, ::s_SIMDFlipYW));"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle uniformLaneMul = ::VectorMultiply(a, ::VectorSplatY(b));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle planeEq = ::VectorPermute<0u, 1u, 2u, 7u>(norm3, ::VectorNegate(::Vector3Dot(norm3, b)));"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negNorm3ZeroW = ::VectorXorInt(norm3, ::s_SIMDNegate3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negScaleFma = ::VectorNegativeMultiplySubtract(a, ::VectorReplicate(scale), b);"), MStringView::npos);
+    EXPECT_NE(optView.find("!::VectorIsFinite(::VectorAdd(a, ::VectorSwizzle<2u, 3u, 2u, 3u>(a)), ::VectorComponentMask::s_XY)"), MStringView::npos);
+    EXPECT_NE(optView.find("((::VectorMoveMask(::VectorPermute<0u, 1u, 6u, 7u>(::VectorLessOrEqual(a, ::VectorSet(scale, 2.0f, scale, 2.0f)), ::VectorGreater(a, ::VectorSet(scale, 2.0f, scale, 2.0f)))) & ::VectorComponentMask::s_XYZW) == ::VectorComponentMask::s_XYZW)"), MStringView::npos);
 
     EXPECT_NE(optView.find("::MatrixIdentity()"), MStringView::npos);
     EXPECT_EQ(optView.find("for(usize __i = 0u; __i < 4u; ++__i)"), MStringView::npos);

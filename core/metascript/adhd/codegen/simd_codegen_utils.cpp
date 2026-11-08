@@ -1168,6 +1168,141 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     return true;
 }
 
+[[nodiscard]] const Expr* TryMatchSimdLengthSqVecArg(const Expr* const expr, const b8 isDouble, const SymbolTable& symbols)noexcept{
+    if(!expr)
+        return nullptr;
+    const Expr* candidate = expr->resolvedSimdType.empty() ? expr : TryUnwrapSimdSplatScalarArg(*expr, symbols);
+    if(!candidate)
+        return nullptr;
+    if(
+        candidate->kind == ExprKind::Call
+        && candidate->isBuiltinCall
+        && candidate->lhs
+        && candidate->lhs->kind == ExprKind::Identifier
+        && candidate->lhs->text == "lengthSq"
+        && candidate->arguments.size() == 1u
+        && candidate->arguments[0]
+        && IsRegisterPromotableSimdType(candidate->arguments[0]->resolvedSimdType)
+        && IsDoubleSimdType(candidate->arguments[0]->resolvedSimdType) == isDouble
+    ){
+        return candidate->arguments[0];
+    }
+    return nullptr;
+}
+
+[[nodiscard]] const Expr* TryMatchSimdLengthVecArg(const Expr* const expr, const b8 isDouble, const SymbolTable& symbols)noexcept{
+    if(!expr)
+        return nullptr;
+    const Expr* candidate = expr->resolvedSimdType.empty() ? expr : TryUnwrapSimdSplatScalarArg(*expr, symbols);
+    if(!candidate)
+        return nullptr;
+    if(
+        candidate->kind == ExprKind::Call
+        && candidate->isBuiltinCall
+        && candidate->lhs
+        && candidate->lhs->kind == ExprKind::Identifier
+        && candidate->arguments.size() == 1u
+        && candidate->arguments[0]
+    ){
+        if(
+            candidate->lhs->text == "length"
+            && IsRegisterPromotableSimdType(candidate->arguments[0]->resolvedSimdType)
+            && IsDoubleSimdType(candidate->arguments[0]->resolvedSimdType) == isDouble
+        ){
+            return candidate->arguments[0];
+        }
+        if(candidate->lhs->text == "sqrt")
+            return TryMatchSimdLengthSqVecArg(candidate->arguments[0], isDouble, symbols);
+    }
+    return nullptr;
+}
+
+[[nodiscard]] b8 CanEmitScalarAsSimdVectorWithoutReplicate(const Expr& scalarExpr, const MStringView simdType, const SymbolTable& symbols)noexcept{
+    if(!scalarExpr.resolvedSimdType.empty() || IsIntSimdType(simdType) || SymbolTable::IsSimdMatrixType(simdType))
+        return false;
+    if(scalarExpr.kind == ExprKind::Unary && !scalarExpr.isPostfix && scalarExpr.op == TokenType::Minus && scalarExpr.lhs)
+        return CanEmitScalarAsSimdVectorWithoutReplicate(*scalarExpr.lhs, simdType, symbols);
+    const b8 isDouble = IsDoubleSimdType(simdType);
+    const Expr* laneBase = nullptr;
+    u32 laneIdx = 0u;
+    if(TryMatchSingleLaneAccess(&scalarExpr, laneBase, laneIdx) && laneBase && laneBase->resolvedSimdType == simdType)
+        return true;
+    if(scalarExpr.kind == ExprKind::Call && scalarExpr.isBuiltinCall && scalarExpr.lhs && scalarExpr.lhs->kind == ExprKind::Identifier){
+        const MStringView callee = scalarExpr.lhs->text;
+        if(!MapSimdScalarReductionSuffix(callee).empty() && !scalarExpr.arguments.empty() && scalarExpr.arguments[0]){
+            const MStringView argSimd = scalarExpr.arguments[0]->resolvedSimdType;
+            if(IsRegisterPromotableSimdType(argSimd) && IsDoubleSimdType(argSimd) == isDouble)
+                return true;
+        }
+        if(callee == "rsqrt" && scalarExpr.arguments.size() == 1u && TryMatchSimdLengthSqVecArg(scalarExpr.arguments[0], isDouble, symbols))
+            return true;
+        const Expr* maxBaseVec = nullptr;
+        b8 maxIsDouble = false;
+        u32 maxLanes = 0u;
+        b8 maxIsAbs = false;
+        if(callee == "max" && TryMatchSimdMaxComponentReduction(scalarExpr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble)
+            return true;
+    }
+    if(scalarExpr.kind == ExprKind::Binary && scalarExpr.op == TokenType::Slash && scalarExpr.lhs && scalarExpr.rhs){
+        if(IsUnitFloatLiteral(*scalarExpr.lhs, &symbols) && TryMatchSimdLengthVecArg(scalarExpr.rhs, isDouble, symbols))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] const Expr* TryUnwrapSimdNegatedVecExpr(const Expr& expr, const MStringView simdType, const SymbolTable& symbols)noexcept{
+    if(IsIntSimdType(simdType) || SymbolTable::IsSimdMatrixType(simdType))
+        return nullptr;
+    if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty()){
+        if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs && !IsZeroScalarLiteral(*expr.lhs, &symbols))
+            return expr.lhs;
+        return nullptr;
+    }
+    if(expr.resolvedSimdType != simdType)
+        return nullptr;
+    if(const Expr* splatArg = TryUnwrapSimdSplatScalarArg(expr, symbols)){
+        if(splatArg->kind == ExprKind::Unary && !splatArg->isPostfix && splatArg->op == TokenType::Minus && splatArg->lhs && !IsZeroScalarLiteral(*splatArg->lhs, &symbols))
+            return splatArg->lhs;
+    }
+    const b8 isDouble = IsDoubleSimdType(simdType);
+    if(expr.kind == ExprKind::Unary && !expr.isPostfix && expr.op == TokenType::Minus && expr.lhs && expr.lhs->resolvedSimdType == simdType)
+        return expr.lhs;
+    if(expr.kind == ExprKind::Binary && expr.lhs && expr.rhs){
+        if(expr.op == TokenType::Minus && expr.rhs->resolvedSimdType == simdType && IsSimdZeroFloatVectorExpr(*expr.lhs, isDouble, &symbols))
+            return expr.rhs;
+        if(expr.op == TokenType::Star){
+            if(expr.lhs->resolvedSimdType == simdType && IsSimdNegativeUnitFloatVectorExpr(*expr.rhs, isDouble, &symbols))
+                return expr.lhs;
+            if(expr.rhs->resolvedSimdType == simdType && IsSimdNegativeUnitFloatVectorExpr(*expr.lhs, isDouble, &symbols))
+                return expr.rhs;
+        }
+        else if(expr.op == TokenType::Slash && expr.lhs->resolvedSimdType == simdType && IsSimdNegativeUnitFloatVectorExpr(*expr.rhs, isDouble, &symbols)){
+            return expr.lhs;
+        }
+    }
+    if(
+        expr.kind == ExprKind::Call
+        && expr.lhs
+        && expr.lhs->kind == ExprKind::Identifier
+        && expr.arguments.size() == 4u
+        && symbols.resolveBaseTypeName(expr.lhs->text) == simdType
+    ){
+        const Expr* negBase = nullptr;
+        for(u32 i = 0u; i < 4u; ++i){
+            const Expr* curBase = nullptr;
+            u32 curLane = 0u;
+            if(!TryMatchNegatedSingleLaneAccess(expr.arguments[i], curBase, curLane) || !curBase || curBase->resolvedSimdType != simdType || curLane != i)
+                return nullptr;
+            if(!negBase)
+                negBase = curBase;
+            else if(!AreSamePureSimdExpr(*negBase, *curBase))
+                return nullptr;
+        }
+        return negBase;
+    }
+    return nullptr;
+}
+
 [[nodiscard]] MStringView ResolveLocalVarDeclSimdType(const Stmt& stmt, const SymbolTable& symbols)noexcept{
     if(stmt.usesScratchArena || (stmt.varType && stmt.varType->refMode != ParamPassingMode::None))
         return {};

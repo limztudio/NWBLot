@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 #include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
 
@@ -68,11 +69,6 @@ struct FrameGraphTransparentCsgTaskInputs{
     Core::GpuTaskId transparentCsgUploadTask;
     Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
     Core::GpuGraphResourceSetId transparentCsgMaterialSampledTextureSet;
-};
-
-struct FrameGraphTransparentCsgTaskResult{
-    Core::GpuTaskId intervalCompletionTask;
-    b8 intervalOutputsGraphOwned = false;
 };
 
 

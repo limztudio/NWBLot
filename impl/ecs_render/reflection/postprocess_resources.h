@@ -7,6 +7,7 @@
 
 #include "history.h"
 
+#include <impl/assets_graphics/reflection_subsystem.adhd.h>
 #include <impl/assets/graphics/reflection/spatial_constants.h>
 #include <impl/assets_graphics/components.adhd.h>
 

@@ -16,6 +16,33 @@ using QueueSubmissionToken = Core::QueueSubmissionToken;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_RenderNameRenderAvboitRefractionResolveClear = "render.avboit.refraction_resolve_clear";
+const Name s_RenderNameRenderRefractionTileList = "render.refraction.tile_list";
+const Name s_RenderNameRenderRefractionTileArguments = "render.refraction.tile_arguments";
+const Name s_RenderNameRenderAvboitRefractionTileArgumentsClear = "render.avboit.refraction_tile_arguments_clear";
+const Name s_RenderNameRenderAvboitRefractionClassifyTiles = "render.avboit.refraction_classify_tiles";
+const Name s_RefractionCounters = "render.refraction.diagnostic_counters";
+const Name s_RenderNameRenderRefractionDiagnosticsClear = "render.refraction.diagnostics_clear";
+const Name s_RenderNameRenderAvboitRefractionResolve = "render.avboit.refraction_resolve";
+const Name s_RenderNameRenderRefractionStatistics = "render.refraction.statistics";
+
+const Name s_RenderIdentityEngineRefractionTileList = "engine/refraction/tile_list";
+const Name s_RenderIdentityEngineRefractionTileArguments = "engine/refraction/tile_arguments";
+const Name s_RenderIdentityRenderRefractionClearDepth = "render.refraction.clear.depth";
+const Name s_RenderIdentityRenderRefractionClearNormalIor = "render.refraction.clear.normal_ior";
+const Name s_RenderIdentityRenderRefractionClearTintCoverage = "render.refraction.clear.tint_coverage";
+const Name s_RenderIdentityRenderRefractionClearInstance = "render.refraction.clear.instance";
+const Name s_RenderIdentityRenderRefractionClearSpecularRoughness = "render.refraction.clear.specular_roughness";
+const Name s_RenderIdentityRenderRefractionCaptureFinalize = "render.refraction.capture_finalize";
+const Name s_RenderIdentityRenderRefractionCaptureGeometry = "render.refraction.capture.geometry";
+const Name s_RenderIdentityRenderRefractionCaptureMaterialTextures = "render.refraction.capture.material_textures";
+const Name s_RenderIdentityRenderRefractionCaptureInstancesUpload = "render.refraction.capture.instances_upload";
+const Name s_RenderIdentityRenderRefractionCaptureMaterialUpload = "render.refraction.capture.material_upload";
+const Name s_RenderIdentityRenderRefractionCaptureCsgRangesUpload = "render.refraction.capture.csg_ranges_upload";
+const Name s_RenderIdentityRenderRefractionCaptureCsgCuttersUpload = "render.refraction.capture.csg_cutters_upload";
+const Name s_RenderIdentityRenderRefractionCaptureCsgContextUpload = "render.refraction.capture.csg_context_upload";
+const Name s_RenderIdentityRenderRefractionCaptureCaps = "render.refraction.capture.caps";
+
 const usize s_RefractionDiagnosticCsgVariantCount = 2u;
 const Name s_RefractionStatisticsReadback0Name = "engine/refraction/statistics_readback_0";
 const Name s_RefractionStatisticsReadback1Name = "engine/refraction/statistics_readback_1";

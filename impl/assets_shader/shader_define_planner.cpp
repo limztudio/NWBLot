@@ -51,10 +51,8 @@ void ShaderDefinePlanner::mergeInheritedDefines(const Span<const Path> dependenc
         const IncludeEntry& includeEntry = found.value();
         inheritedEntries.push_back(MakeNotNull(&includeEntry));
 
-        if(includeEntry.defineValues.size() > Limit<usize>::s_Max - defineReserveCount)
+        if(!ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(includeEntry.defineValues.size(), defineReserveCount))
             canReserveDefineValues = false;
-        else
-            defineReserveCount += includeEntry.defineValues.size();
     }
 
     if(canReserveDefineValues && defineReserveCount > inOutEntry.defineValues.size())
@@ -112,13 +110,14 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
             continue;
         }
 
-        if(outCombinations.size() > Limit<usize>::s_Max / values.size()){
+        const auto expandedCount = ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(outCombinations.size(), values.size());
+        if(!expandedCount){
             outCombinations.clear();
             return false;
         }
 
         CookVector<DefineCombo> expanded{m_memoryArena};
-        expanded.reserve(outCombinations.size() * values.size());
+        expanded.reserve(*expandedCount);
 
         const usize copiedValueCount = values.size() - 1u;
         for(DefineCombo& combo : outCombinations){
@@ -160,3 +159,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

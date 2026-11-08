@@ -3,10 +3,9 @@
 
 
 #include "task_graph_reflection.h"
-
-#include <impl/ecs_render/kernel/timing_names.h>
 #include "task_graph_postprocess.h"
 
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
@@ -291,8 +290,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     desc.setResourceUses({ &parameterWrite, 1u });
     const auto dependencyResult = graph.addTask<UploadParametersTask>(
         desc,
-        UploadParametersTask::Payload{ resources.frameParameters, resources.parameters, resources.postprocess.history, resources.feedback.plan, feedbackReserved, inputs.hardwarePreparationReady, }
-    );
+        UploadParametersTask::Payload{ resources.frameParameters, resources.parameters, resources.postprocess.history, resources.feedback.plan, feedbackReserved, inputs.hardwarePreparationReady, });
     if(!dependencyResult)
         return MakeUnexpected(Failure{});
     dependency = *dependencyResult;
@@ -328,8 +326,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
             dispatchFeedback = Move(feedbackReservation);
         const auto dispatchTask = graph.addTask<DispatchTask>(
             dispatchDesc,
-            DispatchTask::Payload{ graphics, inputs.raytracingSystem, resources, stage, Move(dispatchFeedback), inputs.hardwarePreparationReady, inputs.hardwareDispatchLogged, inputs.fallbackDispatchLogged, }
-        );
+            DispatchTask::Payload{ graphics, inputs.raytracingSystem, resources, stage, Move(dispatchFeedback), inputs.hardwarePreparationReady, inputs.hardwareDispatchLogged, inputs.fallbackDispatchLogged, });
         if(!dispatchTask){
             dependency = {};
             return false;

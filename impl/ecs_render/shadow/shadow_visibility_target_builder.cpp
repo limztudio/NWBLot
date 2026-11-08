@@ -150,7 +150,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("sw_shadow_edge_list"))
+        .setDebugName(Name(s_SoftwareShadowEdgeList))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto edgeListBufferResult = m_graphics.createBuffer(edgeListDesc);
@@ -179,3 +179,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -3,8 +3,8 @@
 
 
 #include "task_graph_postprocess.h"
-#include <impl/ecs_render/kernel/timing_names.h>
 
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/assets/graphics/reflection/depth_constants.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/assets/graphics/reflection/temporal_constants.h>
@@ -325,8 +325,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
         desc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
     const auto temporalTask = graph.addTask<TemporalTask>(
         desc,
-        TemporalTask::Payload{ graphics, snapshot, Move(reservation), resources.parameters.width, resources.parameters.height, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u, }
-    );
+        TemporalTask::Payload{ graphics, snapshot, Move(reservation), resources.parameters.width, resources.parameters.height, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u, });
     if(!temporalTask)
         return MakeUnexpected(temporalTask.error());
     dependency = *temporalTask;
@@ -356,8 +355,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     );
     const auto spatialTask = graph.addTask<SpatialTask>(
         desc,
-        SpatialTask::Payload{ graphics, snapshot.spatialPipeline, spatialParameters }
-    );
+        SpatialTask::Payload{ graphics, snapshot.spatialPipeline, spatialParameters });
     if(!spatialTask)
         return MakeUnexpected(spatialTask.error());
     dependency = *spatialTask;
@@ -407,8 +405,7 @@ Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
                 StatisticsReadbackTask::Payload{
                     resources.counters, readback, result.counters, readbackResource, Move(reservation), resources.postprocess.history,
                     resources.feedback.plan, inputs.hardwarePreparationReady, feedbackReserved, resources.parameters.hardwareEnabled != 0u,
-                }
-            );
+                });
             if(!copyTask)
                 return MakeUnexpected(Failure{});
             dependency = *copyTask;

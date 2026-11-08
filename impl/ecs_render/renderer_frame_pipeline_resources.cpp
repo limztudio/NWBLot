@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/renderer_subsystem.adhd.h>
 #include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>

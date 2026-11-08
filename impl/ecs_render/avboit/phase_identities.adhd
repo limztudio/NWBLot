@@ -2,6 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_RenderIdentityRenderAvboitAccumulation = "render.avboit.accumulation";
+const Name s_RenderIdentityRenderAvboitAccumulationFinalize = "render.avboit.accumulation_finalize";
+const Name s_RenderIdentityRenderAvboitIntegration = "render.avboit.integration";
+const Name s_RenderIdentityRenderAvboitPre = "render.avboit.pre";
+
+const Name s_AvboitClearLowRasterIdentity = "render.avboit.clear.low_raster";
+const Name s_AvboitClearAccumColorIdentity = "render.avboit.clear.accum_color";
+const Name s_AvboitClearAccumExtinctionIdentity = "render.avboit.clear.accum_extinction";
+const Name s_AvboitClearForegroundColorIdentity = "render.avboit.clear.foreground_color";
+const Name s_AvboitClearForegroundExtinctionIdentity = "render.avboit.clear.foreground_extinction";
+const Name s_AvboitClearCoverageIdentity = "render.avboit.clear.coverage";
+const Name s_AvboitClearDepthWarpIdentity = "render.avboit.clear.depth_warp";
+const Name s_AvboitClearControlIdentity = "render.avboit.clear.control";
+const Name s_AvboitClearExtinctionIdentity = "render.avboit.clear.extinction";
+const Name s_AvboitClearExtinctionOverflowIdentity = "render.avboit.clear.extinction_overflow";
+const Name s_AvboitClearTransmittanceIdentity = "render.avboit.clear.transmittance";
+
 const Name s_AvboitExtinctionGeometryIdentity = "render.avboit.extinction.material_geometry";
 const StringView s_AvboitExtinctionGeometryLabel = "AVBOIT Extinction Material Geometry";
 const Name s_AvboitExtinctionSampledIdentity = "render.avboit.extinction.material_sampled_textures";
@@ -149,3 +166,4 @@ AvboitMaterialUploadIdentities ResolveAvboitMaterialUploadIdentities(in AvboitGe
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

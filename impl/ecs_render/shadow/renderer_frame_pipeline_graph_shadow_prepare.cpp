@@ -15,6 +15,7 @@
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
@@ -169,7 +170,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     const Core::GpuTaskExternalStateSource shadowPrepareStateSource{ .states = context.persistentState.source(), };
     Core::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("render.shadow_prepare"))
+        .setIdentity(Name(s_ShadowPreparePass))
         .setMarkerLabel("Shadow Preparation")
         .setScheduling(scheduling)
         .setDependencies({ &shadowPrepareDependency, s_ShadowPrepareSingleDependencyCount })
@@ -193,8 +194,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
             .meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned,
             .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
             .preparedMeshSwBvhBuildsRecordedByGraph = pureSoftwareMeshSwBvhBuildsGraphOwned,
-        }
-    );
+        });
     if(!deferredShadowPrepareTaskResult){
         m_deferredShadowPrepareTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));

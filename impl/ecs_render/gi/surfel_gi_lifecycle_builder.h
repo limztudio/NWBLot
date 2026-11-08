@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/gi/lifecycle_types.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
@@ -41,13 +42,6 @@ struct SurfelGiLifecycleInputs{
     Core::GpuTaskExternalStateSource computeStateSource;
     Core::GpuTaskExternalStateSource counterStateSource;
     b8 hasWork = false;
-};
-
-struct SurfelGiLifecycleResult{
-    Core::GpuTaskId preparationTask;
-    Core::GpuTaskId initializationLifecycleTask;
-    Core::GpuTaskId snapshotCopyTask;
-    Core::GpuTaskId dependency;
 };
 
 

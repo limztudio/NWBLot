@@ -154,7 +154,7 @@ Expected<RayTracingOpticalSceneGraphBuffer> OpticalBoundsFinalizeGraph::declare(
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("render.raytrace.optical_bounds_finalize"))
+        .setIdentity(Name(s_RenderNameRenderRaytraceOpticalBoundsFinalize))
         .setMarkerLabel("Ray Optical Bounds Finalize")
         .setScheduling(scheduling)
         .setDependencies({ priorReadersDrained.valid() ? &priorReadersDrained : nullptr, priorReadersDrained.valid() ? 1u : 0u })
@@ -174,3 +174,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

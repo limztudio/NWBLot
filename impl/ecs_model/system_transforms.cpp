@@ -58,8 +58,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObject
                 return;
 
             (void)Scene::TryDecomposeAndAssignTransformComponent(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, object.owner), LoadFloat(object.localTransform)), transform);
-        }
-    );
+        });
 }
 
 void ModelSystem::updateStaticMeshAttachments(){
@@ -139,3 +138,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

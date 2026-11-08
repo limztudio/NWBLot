@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/raytrace/software_bvh_builder.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
 #include <impl/ecs_render/raytrace/raytracing_build_policy.adhd.h>
 
@@ -70,7 +71,7 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHa
         .setStructStride(sizeof(NwbBvhNodeGpu))
         .setCanHaveUAVs(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("bvh_mesh_nodes"))
+        .setDebugName(Name(s_RenderNameBvhMeshNodes))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto newNodeBufferResult = m_graphics.createBuffer(nodeBufferDesc);
@@ -86,7 +87,7 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHa
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("bvh_mesh_parent"))
+        .setDebugName(Name(s_RenderNameBvhMeshParent))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto newParentBufferResult = m_graphics.createBuffer(parentBufferDesc);

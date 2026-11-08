@@ -10,6 +10,7 @@
 
 #include "shader_cook_plan.h"
 
+#include <impl/assets_graphics/mesh_subsystem.adhd.h>
 #include <impl/assets_csg/asset.h>
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_csg/shape_module_writer.h>
@@ -17,6 +18,7 @@
 #include <impl/assets_material/material_avboit_shader_generator.h>
 #include <impl/assets_shader/shader_types.h>
 #include <impl/assets_subsystem/cook.h>
+#include <impl/assets_graphics/cook_types.adhd.h>
 
 #include <core/assets/asset_file_discovery.h>
 #include <core/assets/volume/volume_prepare_registry.h>
@@ -381,7 +383,7 @@ static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_P
 static Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
 static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MeshSubsystemNonStandaloneAssetTypeRegistrar(MeshSubsystem::AssetTypeName(), "mesh_subsystem");
 static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_IncludeNonStandaloneAssetTypeRegistrar(s_IncludeAssetTypeName, "include");
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_ShaderNonStandaloneAssetTypeRegistrar(Name("shader"), "shader");
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_ShaderNonStandaloneAssetTypeRegistrar(Name(NWB::Impl::s_ShaderNonStandaloneAssetTypeName), "shader");
 static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar s_ShaderSuffixNonStandaloneRegistrar("_shader");
 
 

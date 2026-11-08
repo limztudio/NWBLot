@@ -239,10 +239,10 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
     NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*mutableRange));
     const NWB::Impl::Scene::TransformComponent defaultTransform;
     const NWB::Impl::Scene::TransformComponent& resolvedTransform = transform ? *transform : defaultTransform;
-    return ShadowOccluderMaterialContext{
-        ::NWB::Impl::BuildInstanceGpuData(entity, transform != nullptr, LoadFloat(resolvedTransform.position), LoadFloat(resolvedTransform.rotation), LoadFloat(resolvedTransform.scale), mutableRange->byteOffset),
-        constantRange->byteOffset
-    };
+    ShadowOccluderMaterialContext context;
+    context.instance = ::NWB::Impl::BuildInstanceGpuData(entity, transform != nullptr, LoadFloat(resolvedTransform.position), LoadFloat(resolvedTransform.rotation), LoadFloat(resolvedTransform.scale), mutableRange->byteOffset);
+    context.constantByteOffset = constantRange->byteOffset;
+    return context;
 }
 
 void RendererMaterialSystem::releaseMaterialResourceReferences(){

@@ -2,6 +2,43 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_FrameGraphNameRenderSurfelGiCounterReadbackComplete = "render.surfel_gi.counter_readback_complete";
+
+const Name s_SurfelGraphIrradianceHalf = "render.surfel_gi.irradiance_half";
+const Name s_SurfelGraphSceneGeometry = "render.surfel_gi.scene_geometry";
+const Name s_SurfelGraphPool = "render.surfel_gi.pool";
+const Name s_SurfelGraphGuidePool = "render.surfel_gi.guide_pool";
+const Name s_SurfelGraphCellHeads = "render.surfel_gi.cell_heads";
+const Name s_SurfelGraphFreeList = "render.surfel_gi.free_list";
+const Name s_SurfelGraphPoolSnapshot = "render.surfel_gi.pool_snapshot";
+const Name s_SurfelGraphCellHeadSnapshot = "render.surfel_gi.cell_head_snapshot";
+const Name s_SurfelGraphTraceArgs = "render.surfel_gi.trace_args";
+const Name s_SurfelGraphIrradianceClear = "render.surfel_gi.irradiance_clear";
+const Name s_SurfelGraphAgeFree = "render.surfel_gi.age_free";
+const Name s_SurfelGraphCellHeadClear = "render.surfel_gi.cell_head_clear";
+const Name s_SurfelGraphHashBuild = "render.surfel_gi.hash_build";
+const Name s_SurfelGraphSpawn = "render.surfel_gi.spawn";
+const Name s_SurfelGraphTraceBuildArgs = "render.surfel_gi.trace_build_args";
+const Name s_SurfelGraphTrace = "render.surfel_gi.trace";
+const Name s_SurfelGraphResolve = "render.surfel_gi.resolve";
+const Name s_SurfelGraphPass = "render.surfel_gi";
+const Name s_SurfelResourceCounterReadback = "surfel_counter_readback";
+const Name s_SurfelResourceConstants = "surfel_constants";
+const Name s_SurfelResourcePool = "surfel_pool";
+const Name s_SurfelResourceGuidePool = "surfel_guide_pool";
+const Name s_SurfelResourceCellHead = "surfel_cell_head";
+const Name s_SurfelResourceCounter = "surfel_counter";
+const Name s_SurfelResourceTraceIndirectArgs = "surfel_trace_indirect_args";
+const Name s_SurfelResourceFreeList = "surfel_free_list";
+const Name s_SurfelResourcePoolSnapshot = "surfel_pool_snapshot";
+const Name s_SurfelResourceCellHeadSnapshot = "surfel_cell_head_snapshot";
+const Name s_SurfelGraphInitializePoolClear = "render.surfel_gi.initialize_pool_clear";
+const Name s_SurfelGraphInitializeCellHeadClear = "render.surfel_gi.initialize_cell_head_clear";
+const Name s_SurfelGraphInitializeCounterClear = "render.surfel_gi.initialize_counter_clear";
+const Name s_SurfelGraphInitializeFreeListClear = "render.surfel_gi.initialize_free_list_clear";
+const Name s_SurfelGraphInitializeLifecycle = "render.surfel_gi.initialize_lifecycle";
+const Name s_SurfelGraphSnapshotCopy = "render.surfel_gi.snapshot_copy";
+
 // Offset trace and gather points to avoid self-intersection.
 const f32 s_SurfelNormalBias = 0.05f;
 // Delayed counter readback avoids stalling on the asynchronous copy.
@@ -81,8 +118,28 @@ class SurfelHeapPushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 IsValidSurfelGiResolveFactor(in u32 factor){
+    return factor == cast<u32>(SurfelGiResolveResolution::Half) || factor == cast<u32>(SurfelGiResolveResolution::Quarter);
+}
+
 b8 ValidateSurfelGiQualitySettings(in SurfelGiQualitySettings settings){
-    return settings.resolveResolution == SurfelGiResolveResolution::Half || settings.resolveResolution == SurfelGiResolveResolution::Quarter;
+    return IsValidSurfelGiResolveFactor(cast<u32>(settings.resolveResolution));
+}
+
+b8 IsValidSurfelGiResolveSize(in SurfelGiResolveSize size){
+    return size.width != 0u && size.height != 0u;
+}
+
+b8 IsValidSurfelGiStorageCounts(in u32 poolCapacity, in u32 cellCount){
+    return poolCapacity != 0u && cellCount != 0u;
+}
+
+u32 ResolveSurfelSpawnDispatchGroup(in u32 dimension, in u32 groupSize){
+    return divideUp(divideUp(dimension, s_SurfelSpawnTile), groupSize);
+}
+
+u64 ComputeSurfelBufferByteSize(in u64 elementSize, in u32 count){
+    return elementSize * cast<u64>(count);
 }
 
 SurfelGiResolveSize MakeSurfelGiResolveSize(in u32 width, in u32 height, in u32 factor){

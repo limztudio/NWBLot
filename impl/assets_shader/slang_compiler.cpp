@@ -115,15 +115,19 @@ static constexpr Array<AStringView, s_CommonCompilerArgumentCount> s_CommonCompi
             return MakeUnexpected(Failure{});
         }
         const auto capacity = SlangCompilerWorkspace::CompilerPathTextCapacity(*overlayIncludePath);
-        if(!capacity || *capacity > Limit<usize>::s_Max - s_SlangQuotePairByteCount)
+        if(!capacity)
             return MakeUnexpected(Failure{});
-        valueCapacity = *capacity + s_SlangQuotePairByteCount;
+        const auto quotedCapacity = ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(*capacity);
+        if(!quotedCapacity)
+            return MakeUnexpected(Failure{});
+        valueCapacity = *quotedCapacity;
     }
     const usize fixedBytes = s_SlangDefineArgument.size() + (!define.value.empty() ? 1u : 0u);
-    if(define.name.size() > Limit<usize>::s_Max - fixedBytes || valueCapacity > Limit<usize>::s_Max - fixedBytes - define.name.size())
+    const auto argumentCapacity = ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(fixedBytes, define.name.size(), valueCapacity);
+    if(!argumentCapacity)
         return MakeUnexpected(Failure{});
     ScratchString argument{scratchArena};
-    argument.reserve(fixedBytes + define.name.size() + valueCapacity);
+    argument.reserve(*argumentCapacity);
     argument += s_SlangDefineArgument;
     argument += define.name;
     if(!define.value.empty()){

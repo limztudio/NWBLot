@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
@@ -56,12 +57,6 @@ struct TransparentCsgIntervalProducerInputs{
     Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
     Core::GpuTaskId prefixTask;
     b8 hasTransparentRenderers = false;
-};
-
-struct TransparentCsgIntervalProducerResult{
-    Core::GpuTaskId uploadTask;
-    Core::GpuGraphResourceSetId materialGeometrySet;
-    Core::GpuGraphResourceSetId materialSampledTextureSet;
 };
 
 

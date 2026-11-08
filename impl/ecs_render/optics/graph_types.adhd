@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_render/optics/optical_scene_upload.h>
+#include <impl/ecs_render/optics/optical_bounds_finalize.h>
+
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using OpticalGpuGraphResourceId = Core::GpuGraphResourceId;
+using OpticalGpuTaskId = Core::GpuTaskId;
+using OpticalBufferHandle = Core::BufferHandle;
+using OpticalFinalizeHandle = RayTracingOpticalBoundsFinalizeHandle;
+using OpticalUploadHandle = RayTracingOpticalSceneUploadHandle;
+using OpticalUploadControlHandle = RayTracingOpticalUploadControlHandle;
+using OpticalDescriptorHandle = Core::GpuDescriptorHandle;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_RenderNameRaytraceOpticalRuntimeInputs = "raytrace_optical_runtime_inputs";
+const Name s_RenderNameRaytraceOpticalResolvedScene = "raytrace_optical_resolved_scene";
+const Name s_RenderNameRayOpticalBoundsFinalize = "RayOpticalBoundsFinalize";
+const Name s_RenderNameRenderRaytraceOpticalSceneReady = "render.raytrace.optical_scene_ready";
+const Name s_RenderNameRenderRaytraceOpticalSceneUpload = "render.raytrace.optical_scene_upload";
+const Name s_RenderNameRenderRaytraceOpticalBoundsFinalize = "render.raytrace.optical_bounds_finalize";
+
+class RayTracingOpticalSceneSnapshot{
+    public OpticalBufferHandle buffer = OpticalBufferHandle();
+    // Present only for runtime bounds: this remains the immutable CPU metadata upload destination.
+    public OpticalBufferHandle uploadBuffer = OpticalBufferHandle();
+    public OpticalFinalizeHandle finalize = OpticalFinalizeHandle();
+    public OpticalUploadHandle upload = OpticalUploadHandle();
+    public OpticalUploadControlHandle uploadState = OpticalUploadControlHandle();
+    public OpticalDescriptorHandle descriptor = OpticalDescriptorHandle();
+    public u32 transparentCount = 0u;
+    public b8 boundsComplete = false;
+    public b8 unspecifiedBoundariesOnly = false;
+
+    public b8 valid()const{
+        return this.buffer && this.descriptor.valid() && this.upload && this.uploadState;
+    }
+}
+
+class RayTracingOpticalSceneGraphBuffer{
+    public OpticalGpuGraphResourceId resource = OpticalGpuGraphResourceId();
+    public OpticalGpuTaskId uploadTask = OpticalGpuTaskId();
+    public b8 reused = false;
+
+    public b8 valid()const{
+        return this.resource.valid() && (this.reused || this.uploadTask.valid());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

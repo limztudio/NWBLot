@@ -67,9 +67,10 @@ Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPrep
     usize drawItemCount = 0u;
     for(const MaterialPassDrawItemsView& drawItems : drawItemSets){
         for(const usize count : { drawItems.meshDrawItems.size(), drawItems.computeDrawItems.size() }){
-            if(count > s_MaxDrawItemCount - drawItemCount)
+            const auto nextCount = TryAccumulateMaterialDrawCount(drawItemCount, count, s_MaxDrawItemCount);
+            if(!nextCount)
                 return MakeUnexpected(Failure{});
-            drawItemCount += count;
+            drawItemCount = *nextCount;
         }
     }
     if(drawItemCount == 0u)

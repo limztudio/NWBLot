@@ -25,7 +25,7 @@ Expected<OpaqueGbufferMaterialResources> OpaqueGbufferMaterialResourceCollector:
     const Array<MaterialPassDrawItemsView, 2> drawSets = { drawItems.regular, drawItems.csgReceiverSurface, };
     const b8 usesMaterialGeometry = !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
     if(usesMaterialGeometry){
-        const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, Name("render.graphics_prefix.gbuffer.material_geometry"), "Opaque Material Geometry", m_graph, m_scratchArena);
+        const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_GbufferMaterialGeometrySet), "Opaque Material Geometry", m_graph, m_scratchArena);
         resources.geometryStatesGraphOwned = geometrySet.has_value();
         if(geometrySet)
             resources.geometrySet = *geometrySet;
@@ -39,7 +39,7 @@ Expected<OpaqueGbufferMaterialResources> OpaqueGbufferMaterialResourceCollector:
         const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
             drawSets,
-            Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
+            Name(s_FrameGraphNameRenderGraphicsPrefixGbufferMaterialSampledTextures),
             "Opaque Material Sampled Textures",
             m_graph,
             m_scratchArena

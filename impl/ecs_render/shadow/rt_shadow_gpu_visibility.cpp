@@ -160,10 +160,8 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
     // Soft opaque resolve replaces the full-resolution mask.
     if(softWillRun){
-        const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
-        const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
-        const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
-        const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
+        const u32 softGroupsX = ResolveWrappingRayTracingDispatchGroup(targets.width, targets.shadowReceiverFactor, groupSize);
+        const u32 softGroupsY = ResolveWrappingRayTracingDispatchGroup(targets.height, targets.shadowReceiverFactor, groupSize);
 
         // Advance the primary producer's jitter sequence once.
         const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;

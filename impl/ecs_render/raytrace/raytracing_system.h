@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/refraction/refraction_renderer.h>
 #include <impl/ecs_render/shadow/soft_shadow_wavelet.h>
@@ -110,8 +111,8 @@ public:
         , m_rayTracingState(rayTracingState)
         , m_opticalVolumes(opticalVolumes)
         , m_csgShapeRegistry(csgShapeRegistry)
-        , m_hardwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_hw"))
-        , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
+        , m_hardwareOpticalScene(arena, graphics, Name(s_RayOpticalSceneHardware))
+        , m_softwareOpticalScene(arena, graphics, Name(s_RayOpticalSceneSoftware))
         , m_sceneSwBvhRefit(arena, graphics)
         , m_lightSpaceShadow(arena)
         , m_refraction(*this, arena, graphics)

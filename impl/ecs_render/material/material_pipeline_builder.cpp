@@ -4,6 +4,7 @@
 
 #include "material_pipeline_builder.h"
 
+#include <impl/assets_graphics/csg_subsystem.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/material/material_shader_variants_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
@@ -130,9 +131,7 @@ b8 MaterialPipelineBuilder::buildCompute(){
     m_inputs.resources.renderPath = RenderPath::ComputeEmulation;
     // The shared mesh_compute program is independent of authored materials.
     m_inputs.resources.sharedGeometryComputeProgram = m_inputs.pipelineKey.csgMode == MaterialPipelineCsgMode::None
-        && m_inputs.sharedMeshShaderAssetName
-        && m_inputs.materialInfo.meshShader.name() == m_inputs.sharedMeshShaderAssetName
-        && m_inputs.meshShaderVariant == Core::ShaderArchive::s_DefaultVariant
+        && UsesSharedMaterialMeshShader(m_inputs.sharedMeshShaderAssetName, m_inputs.materialInfo.meshShader, m_inputs.meshShaderVariant, Core::ShaderArchive::s_DefaultVariant)
     ;
     m_inputs.resources.indexedGeometryOutput = m_inputs.resources.sharedGeometryComputeProgram;
     return true;

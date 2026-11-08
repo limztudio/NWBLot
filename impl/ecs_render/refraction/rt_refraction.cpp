@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/refractive_subsystem.adhd.h>
 #include <impl/ecs_render/refraction/refraction_renderer.h>
 #include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
 #include <impl/ecs_render/raytrace/rt_private.h>

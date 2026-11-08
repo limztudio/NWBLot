@@ -52,7 +52,7 @@ nwb_target_adhd_sources(nwb_ui
         "${CMAKE_CURRENT_LIST_DIR}/input/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/text/*.adhd"
 )
-target_link_libraries(nwb_ui PUBLIC nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas)
+target_link_libraries(nwb_ui PUBLIC nwb_input nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas)
 
 add_subdirectory(edit)
 add_subdirectory(text)

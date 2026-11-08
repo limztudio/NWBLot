@@ -8,6 +8,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_RayOpticalSceneHardware = "raytrace_optical_scene_hw";
+const Name s_RayOpticalSceneSoftware = "raytrace_optical_scene_sw";
+
+const Name s_RenderNameRenderShadowTraceSwBvhSortKeys = "render.shadow_trace.sw_bvh_sort_keys";
+const Name s_RenderNameRenderShadowTraceSwBvhSortPayload = "render.shadow_trace.sw_bvh_sort_payload";
+const Name s_RenderNameRenderShadowTraceSwBvhVisitCounter = "render.shadow_trace.sw_bvh_visit_counter";
+const Name s_RenderNameRenderPostGbufferTraceGeometry = "render.post_gbuffer_trace_geometry";
+const Name s_RenderNameRenderSoftwareTraceGeometry = "render.software_trace_geometry";
+const Name s_RenderNameRenderTraceMaterialSampledTextures = "render.trace_material_sampled_textures";
+const Name s_RenderNameRenderHardwareTraceGeometry = "render.hardware_trace_geometry";
+const Name s_RenderNameRaytraceMaterialContextSlots = "raytrace_material_context_slots";
+const Name s_RenderNameBvhSortKeys = "bvh_sort_keys";
+const Name s_RenderNameBvhSortPayload = "bvh_sort_payload";
+const Name s_RenderNameBvhVisitCounter = "bvh_visit_counter";
+const Name s_RenderNameSceneBvhNodes = "scene_bvh_nodes";
+const Name s_RenderNameSceneBvhInstances = "scene_bvh_instances";
+const Name s_RenderNameBvhMeshNodes = "bvh_mesh_nodes";
+const Name s_RenderNameBvhMeshParent = "bvh_mesh_parent";
+const Name s_RenderNameSoftwareSceneRefit = "SoftwareSceneRefit";
+const Name s_RenderNameRenderShadowPrepareSceneRefitInputsUpload = "render.shadow_prepare.scene_refit_inputs_upload";
+const Name s_RenderNameRenderShadowPrepareSceneRefit = "render.shadow_prepare.scene_refit";
+
 // Hash semantic scene inputs, not padded object representations.
 const u32 s_SceneStaticCacheHashVersion = 2u;
 const StringView s_SceneShadowInstanceMaterialName = "render.deferred_effects.instance_material";
@@ -102,6 +124,10 @@ RayTracingDispatchGroups ResolveRayTracingDispatchGroups(in u32 width, in u32 he
     groups.x = divideUp(receiverWidth, groupSize);
     groups.y = divideUp(receiverHeight, groupSize);
     return groups;
+}
+
+u32 ResolveWrappingRayTracingDispatchGroup(in u32 dimension, in u32 receiverFactor, in u32 groupSize){
+    return divideUp(divideUpWrappingU32(dimension, receiverFactor), groupSize);
 }
 
 NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterialData(in u32 surfaceDispatchId, in u32 shadingModelId, in b8 transparent, in b8 refractive, in u32 materialConstantByteOffset, in u32 meshInstanceIndex){

@@ -12,8 +12,6 @@
 #include <core/alloc/scratch.h>
 #include <core/graphics/runtime/runtime.h>
 
-#include <global/overflow.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +38,7 @@ struct BufferFlags{
 
 template<typename PayloadT>
 [[nodiscard]] inline Expected<Core::BufferHandle, BufferSetupFailure::Enum> SetupBuffer(Core::GraphicsRuntime& graphics, const Name& debugName, const Span<const PayloadT> payload, const BufferFlags flags = {}){
-    const auto payloadBytes = TryMultiply<usize>(payload.size(), sizeof(PayloadT));
+    const auto payloadBytes = TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(PayloadT));
     if(!payloadBytes)
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 

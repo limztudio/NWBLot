@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_ui/toolkit/paint_primitives.adhd.h>
 
 #include <global/inplace_function.h>
 
@@ -24,7 +25,7 @@ class UiPaintContext;
 
 class UiPaintSlot{
 private:
-    static constexpr usize s_CallbackInlineBytes = 64u;
+    static constexpr usize s_CallbackInlineBytes = Ui::s_PaintCallbackInlineBytes;
     using Callback = InplaceFunction<s_CallbackInlineBytes, void(UiPaintContext&)>;
 
     struct Lease{

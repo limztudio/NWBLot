@@ -7,6 +7,8 @@
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/optics/types.adhd.h>
+#include <impl/ecs_render/optics/graph_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -84,7 +86,7 @@ Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(const RayTr
     const Core::BufferDesc& bufferDesc = uploadBuffer->getCreationDescription();
     const usize byteSize = resources.upload->bytes.size();
     if(
-        !bufferDesc.debugName || byteSize == 0u || byteSize > bufferDesc.byteSize || (byteSize % sizeof(u32)) != 0u
+        !bufferDesc.debugName || !OpticalUploadByteSizeFits(byteSize, bufferDesc.byteSize, sizeof(u32))
         || bufferDesc.isVolatile || !bufferDesc.keepInitialState || bufferDesc.initialState != Core::ResourceStates::Common
         || uploadBuffer->resolveTaskGraphImportInitialState() != Core::ResourceStates::Common
     )
@@ -100,7 +102,7 @@ Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(const RayTr
     Core::GpuGraphResourceDesc resourceDesc = RendererTaskGraphDetail::BufferResourceDesc(bufferDesc.debugName, "Ray Optical Scene Buffer");
     resourceDesc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
     if(plan.acceptedToken.valid()){
-        const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("render.raytrace.optical_scene_ready")).setMarkerLabel("Ray Optical Scene Ready").setToken(plan.acceptedToken));
+        const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name(s_RenderNameRenderRaytraceOpticalSceneReady)).setMarkerLabel("Ray Optical Scene Ready").setToken(plan.acceptedToken));
         if(!readyResult)
             return MakeUnexpected(Failure{});
         const Core::GpuExternalCompletionId ready = *readyResult;
@@ -131,7 +133,7 @@ Expected<RayTracingOpticalSceneGraphBuffer> ImportOpticalSceneUpload(const RayTr
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("render.raytrace.optical_scene_upload"))
+        .setIdentity(Name(s_RenderNameRenderRaytraceOpticalSceneUpload))
         .setMarkerLabel("Ray Optical Scene Upload")
         .setScheduling(scheduling)
         .setDependencies({ priorReadersDrained.valid() ? &priorReadersDrained : nullptr, priorReadersDrained.valid() ? 1u : 0u })

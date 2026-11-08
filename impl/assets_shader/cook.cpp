@@ -70,11 +70,12 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
     defines.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
         CookString defineName(key.data(), key.size(), arena);
-        if(IsReservedShaderEngineDefineName(AStringView(defineName))){
+        const ShaderDefineNameStatus::Enum nameStatus = ClassifyShaderDefineName(AStringView(defineName));
+        if(nameStatus == ShaderDefineNameStatus::Reserved){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
-        if(!IsAsciiIdentifier(AStringView(defineName))){
+        if(nameStatus == ShaderDefineNameStatus::Invalid){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
@@ -134,8 +135,7 @@ b8 ShaderCook::ValidateVariantSignature(const AStringView contextLabel, const AS
         },
         [&](const VariantSignatureSegmentError::Enum error, const AStringView segment){
             ReportVariantSignatureSegmentError(contextLabel, variantSignature, error, segment);
-        }
-    );
+        });
     if(!parsedAssignments)
         return false;
 

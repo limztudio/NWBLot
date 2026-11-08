@@ -11,6 +11,7 @@
 #include <impl/ecs_render/caustic/caustics_resolve_chain.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
+#include <impl/ecs_render/caustic/graph_types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -164,7 +165,7 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(cons
 
     Core::GpuTaskDesc hardwarePhotonDesc;
     hardwarePhotonDesc
-        .setIdentity(Name("render.hardware_caustics.photons"))
+        .setIdentity(Name(s_RenderNameRenderHardwareCausticsPhotons))
         .setMarkerLabel("Hardware Caustic Photons")
         .setScheduling(hardwareCausticsScheduling)
         .setDependencies({ &prefixTasksResult->photonDependencyTask, 1u })

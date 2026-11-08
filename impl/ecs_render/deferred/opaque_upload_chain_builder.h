@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/graph_types.adhd.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/material_typed_private.h>
@@ -48,13 +49,6 @@ struct OpaqueUploadChainInputs{
     Core::GpuGraphResourceId csgClipContextSlots;
     Core::GpuGraphResourceId csgIntervalSampleState;
     Core::GpuTaskId dependencyTask;
-};
-
-struct OpaqueUploadChainResult{
-    Core::GpuTaskId csgUploadTask;
-    b8 materialDrawBuffersUploaded = false;
-    b8 csgFrameBuffersUploaded = false;
-    b8 hasCsgFrameGpuWork = false;
 };
 
 

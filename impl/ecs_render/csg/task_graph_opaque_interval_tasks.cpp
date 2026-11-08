@@ -90,8 +90,7 @@ b8 CsgReceiverSpanBuildGraphTask::Record(const Payload& payload, Core::CommandLi
         commandList,
         [](RendererCsgSystem& csgSystem, Core::CommandList& cmd, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const CsgGraphResourceSnapshot& csgResources){
             csgSystem.dispatchCsgReceiverSpanBuild(cmd, targets, csgFrameData, csgResources);
-        }
-    );
+        });
 }
 
 
@@ -104,8 +103,7 @@ b8 CsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList
         commandList,
         [](RendererCsgSystem& csgSystem, Core::CommandList& cmd, DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const CsgGraphResourceSnapshot& csgResources){
             csgSystem.dispatchCsgIntervalCombine(cmd, targets, csgFrameData, csgResources);
-        }
-    );
+        });
 }
 
 

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/avboit/graph_types.adhd.h>
 #include <impl/ecs_render/avboit/avboit_frame_targets.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -39,10 +40,6 @@ struct AvboitDepthWarpStageInputs{
     Core::GpuTimingSubmissionTicket& depthWarpTimingTicket;
     RendererTaskTimingFeedback& timingFeedback;
     b8 hasTransparentRenderers = false;
-};
-
-struct AvboitDepthWarpStageResult{
-    Core::GpuTaskId completionTask;
 };
 
 struct AvboitIntegrationStageInputs{

@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/shadow/light_space_shadow_diagnostics.adhd.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <global/algorithm.h>
 
@@ -55,10 +56,8 @@ Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
 
     // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_shadowSoftPipeline && m_rayTracingState.m_softShadowSlotMask != 0u){
-        const u32 softHalfWidth = DivideUpWrapping(targets.width, targets.shadowReceiverFactor);
-        const u32 softHalfHeight = DivideUpWrapping(targets.height, targets.shadowReceiverFactor);
-        const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
-        const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
+        const u32 softGroupsX = ResolveWrappingRayTracingDispatchGroup(targets.width, targets.shadowReceiverFactor, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
+        const u32 softGroupsY = ResolveWrappingRayTracingDispatchGroup(targets.height, targets.shadowReceiverFactor, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
 
 
         // Resolve reuses the trace outputs as UAV/SRV scratch.

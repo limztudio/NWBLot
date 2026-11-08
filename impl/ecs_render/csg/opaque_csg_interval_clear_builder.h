@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
@@ -37,10 +38,6 @@ struct OpaqueCsgIntervalClearInputs{
     b8 hasOpaqueCsgFrameWork = false;
 };
 
-struct OpaqueCsgIntervalClearResult{
-    Core::GpuTaskId clearTask;
-    Core::GpuTaskId clearFirstTask;
-};
 
 struct CsgIntervalRectClearDesc{
     Name intervalClearIdentity = s_NameNone;

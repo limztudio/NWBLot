@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/graph_types.adhd.h>
 #include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
@@ -55,14 +56,6 @@ struct DeferredGraphSuffixInputs{
     Core::GpuTaskId hardwareCausticsTask;
     const Core::AcquiredPresentationFrame& presentationFrame;
     const Core::FramebufferDesc& presentationFramebufferDesc;
-};
-
-struct DeferredGraphSuffixResult{
-    Core::GpuTaskId compositeTask;
-    Core::GpuTaskId presentTask;
-    Core::GpuTaskId overlayTask;
-    Core::GpuTaskId frameTimingEndTask;
-    b8 overlayRequired = false;
 };
 
 

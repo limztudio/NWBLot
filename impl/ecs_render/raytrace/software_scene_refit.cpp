@@ -4,11 +4,13 @@
 
 #include "software_scene_refit.h"
 
+#include <impl/assets_graphics/bvh_subsystem.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
@@ -123,7 +125,7 @@ b8 SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSyste
         shaderSystem,
         &BvhSubsystem::sceneRefitCs,
         Core::ShaderArchive::s_DefaultVariant,
-        Name("SoftwareSceneRefit"),
+        Name(s_RenderNameSoftwareSceneRefit),
         NWB_SCENE_BVH_REFIT_PUSH_BYTES,
         false,
         m_bindingLayout,
@@ -234,7 +236,7 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(const SoftwareS
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc uploadDesc;
-    uploadDesc.setIdentity(Name("render.shadow_prepare.scene_refit_inputs_upload")).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(scheduling).setDependencies({ &dependency, 1u });
+    uploadDesc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefitInputsUpload)).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(scheduling).setDependencies({ &dependency, 1u });
     SoftwareSceneRefitGraphTasks result;
     const auto inputUploadResult = graph.addUploadBufferTask(
         uploadDesc,
@@ -242,13 +244,13 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(const SoftwareS
             .source = upload,
             .destination = input,
             // Retained storage restores Common; the refit read owns the following SRV transition.
-            .finalState = Core::ResourceStates::Common, }
-    );
+            .finalState = Core::ResourceStates::Common,
+        });
     if(!inputUploadResult)
         return MakeUnexpected(Failure{});
     result.inputUpload = *inputUploadResult;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("render.shadow_prepare.scene_refit")).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependencies({ &result.inputUpload, 1u }).setResourceUses(uses);
+    desc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefit)).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependencies({ &result.inputUpload, 1u }).setResourceUses(uses);
     const auto refitResult = graph.addTask<__hidden_task_graph_software_scene_refit::RefitTask>(desc, __hidden_task_graph_software_scene_refit::RefitTask::Payload{ snapshot });
     if(!refitResult)
         return MakeUnexpected(refitResult.error());

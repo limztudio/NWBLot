@@ -248,8 +248,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         // Descriptor state is the post-upload contract, not the native layout before first write.
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
-    }
-    )){
+    })){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }

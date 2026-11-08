@@ -61,7 +61,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
 
     if(
         !targets.bindless.valid()
-        || (targets.surfelResolveFactor != static_cast<u32>(SurfelGiResolveResolution::Half) && targets.surfelResolveFactor != static_cast<u32>(SurfelGiResolveResolution::Quarter))
+        || !IsValidSurfelGiResolveFactor(targets.surfelResolveFactor)
         || !deferredLightingResources.valid()
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
@@ -155,9 +155,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.setComputeState(state);
         heap.bindCompute(commandList, *m_rayTracingState.m_surfelSpawnPipeline.get());
         commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
-        const u32 tilesX = DivideUp(targets.width, NWB_SURFEL_SPAWN_TILE);
-        const u32 tilesY = DivideUp(targets.height, NWB_SURFEL_SPAWN_TILE);
-        commandList.dispatch(DivideUp(tilesX, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), DivideUp(tilesY, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
+        commandList.dispatch(ResolveSurfelSpawnDispatchGroup(targets.width, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), ResolveSurfelSpawnDispatchGroup(targets.height, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
     }
 
     if(!dispatchTraceBuildArgs && !dispatchTrace && !dispatchResolve && !dispatchRemaining)

@@ -11,6 +11,7 @@
 #include "cook.h"
 
 #include <impl/assets_csg/shape_module_source.adhd.h>
+#include <impl/assets_csg/shape_id.adhd.h>
 
 #include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>
@@ -172,7 +173,7 @@ b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchA
         return IsBeforeCsgShapeCookName(lhs.shapeName, rhs.shapeName);
     });
 
-    CookArena shapeIdArena(Name("AssetsCsgCook::AssignCsgShapeCookIds"));
+    CookArena shapeIdArena{Name(NWB::Impl::s_CsgShapeCookIdArenaName)};
     HashMap<CsgShapeTypeId, Name> shapeIdNames(shapeIdArena);
     shapeIdNames.reserve(csgShapeEntries.size());
 

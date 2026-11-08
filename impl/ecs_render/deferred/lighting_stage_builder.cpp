@@ -9,6 +9,8 @@
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -74,7 +76,7 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
         uploadScheduling.allowPacketMerge = true;
         Core::GpuTaskDesc uploadDesc;
         uploadDesc
-            .setIdentity(Name("render.lagged_lighting.bindless_slots_upload"))
+            .setIdentity(Name(s_RenderNameRenderLaggedLightingBindlessSlotsUpload))
             .setMarkerLabel("Lagged Lighting Bindless Slots Upload")
             .setScheduling(uploadScheduling)
             .setDependencies(laggedLightingSelectorUploadDependencies)
@@ -85,8 +87,8 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
                 .source = laggedBindlessSlotsBlob,
                 .destination = inputs.bindlessSlots,
                 // Selector buffers publish Common; Deferred Lighting owns the ConstantBuffer transition in this same packet.
-                .finalState = Core::ResourceStates::Common, }
-        );
+                .finalState = Core::ResourceStates::Common,
+            });
         if(!historySlotsUploadTaskResult){
             historySlotsUploadTask = {};
             return MakeUnexpected(Failure{});
@@ -130,7 +132,7 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
     scheduling.mergeWithPrevious = laggedBindlessSlotsGraphOwned;
     Core::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("render.deferred_lighting"))
+        .setIdentity(Name(s_RenderNameRenderDeferredLighting))
         .setMarkerLabel(RendererGpuPassText::s_DeferredLightingLabel)
         .setScheduling(scheduling)
         .setDependencies({ resolvedLightingDependencies, lightingDependencyCount })

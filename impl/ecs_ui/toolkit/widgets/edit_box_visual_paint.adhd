@@ -129,9 +129,9 @@ TextLayoutStatus PrepareEditBoxShapeRequest(
 
 b8 MeasureEditBoxViewVisual(
     in b8 ready,
-    mut TextService text,
     in TextLayout layout,
     in DisplayMetrics display,
+    mut TextService text,
     mut Rect outVisualBounds
 ){
     if(!ready)
@@ -145,3 +145,4 @@ b8 MeasureEditBoxViewVisual(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

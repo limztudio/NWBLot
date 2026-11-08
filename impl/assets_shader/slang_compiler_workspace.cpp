@@ -116,12 +116,7 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateComp
 }
 
 Expected<usize> SlangCompilerWorkspace::CompilerPathTextCapacity(const ScratchPath& path){
-    constexpr usize s_MaxEncodedBytesPerUnit = IsSame_V<ScratchPath::value_type, char> ? ShaderBinaryPayload::s_MaxEncodedPathBytesPerCharUnit : ShaderBinaryPayload::s_MaxEncodedPathBytesPerWideUnit;
-    if(path.native().size() > Limit<usize>::s_Max / s_MaxEncodedBytesPerUnit){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler path text exceeds representable size"));
-        return MakeUnexpected(Failure{});
-    }
-    return path.native().size() * s_MaxEncodedBytesPerUnit;
+    return ShaderBinaryPayload::TryComputeCompilerPathTextCapacity(path.native().size(), IsSame_V<ScratchPath::value_type, char>);
 }
 
 Expected<SlangCompilerWorkspace::ScratchString> SlangCompilerWorkspace::BuildCompilerPathText(const ScratchPath& path, Alloc::ScratchArena& scratchArena){
@@ -149,10 +144,13 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompi
         return MakeUnexpected(Failure{});
 
     const auto rootText = BuildCompilerPathText(rootPath, scratchArena);
-    if(!rootText || rootText->size() > (Limit<usize>::s_Max - ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix.size()) / 2u)
+    if(!rootText)
+        return MakeUnexpected(Failure{});
+    const auto rootKeyCapacity = ShaderBinaryPayload::TryComputeCompilerOverlayRootKeyCapacity(rootText->size());
+    if(!rootKeyCapacity)
         return MakeUnexpected(Failure{});
     ScratchString rootKey(ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix, scratchArena);
-    rootKey.reserve(ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix.size() + rootText->size() * 2u);
+    rootKey.reserve(*rootKeyCapacity);
     for(const char ch : *rootText){
         const u8 byte = static_cast<u8>(ch);
         rootKey += ShaderBinaryPayload::s_SlangWorkspaceHexDigits[byte >> s_HexNibbleBits];
@@ -227,12 +225,11 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
         return MakeUnexpected(Failure{});
     }
 
-    if(request.includeDirectories.size() > Limit<usize>::s_Max / 2u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many include directories"), ConvertString(request.shaderName));
+    const auto includeDirectoryCapacity = ShaderBinaryPayload::TryComputeCompilerIncludeDirectoryCapacity(request.shaderName, request.includeDirectories.size());
+    if(!includeDirectoryCapacity)
         return MakeUnexpected(Failure{});
-    }
 
-    includeDirectories.reserve(request.includeDirectories.size() * 2u);
+    includeDirectories.reserve(*includeDirectoryCapacity);
     for(const Path& includeDirectory : request.includeDirectories){
         const auto absoluteIncludeDirectory = AbsolutePath(ScratchPath(scratchArena, includeDirectory));
         if(!absoluteIncludeDirectory){
@@ -304,11 +301,12 @@ b8 __hidden_slang_compiler_workspace::WriteBomStrippedCompilerInput(
                 auto pathText = BuildCompilerPathText(*overlayIncludePath, scratchArena);
                 if(!pathText)
                     return false;
-                if(pathText->size() > Limit<usize>::s_Max - (outputBytes - include->name.size())){
+                const auto replacementOutputBytes = ShaderBinaryPayload::TryComputeCompilerReplacementOutputBytes(outputBytes, include->name.size(), pathText->size());
+                if(!replacementOutputBytes){
                     NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: BOM-stripped compiler input '{}' exceeds representable size"), PathToString<tchar>(outputPath));
                     return false;
                 }
-                outputBytes = outputBytes - include->name.size() + pathText->size();
+                outputBytes = *replacementOutputBytes;
                 const usize sourceOffset = begin + static_cast<usize>(include->name.data() - scanLine.data());
                 replacements.push_back({ Move(*pathText), sourceOffset, include->name.size() });
             }

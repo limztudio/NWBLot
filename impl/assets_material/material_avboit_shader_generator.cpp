@@ -94,10 +94,8 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
             continue;
         if(entry.surfaceSource.empty())
             continue;
-        if(entry.materialInterface.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader"), ConvertString(AStringView(entry.virtualPath)), ConvertString(spec.passLabel));
+        if(!ValidateTransparentMaterialInterface(AStringView(entry.virtualPath), AStringView(entry.materialInterface), spec.passLabel))
             return MakeUnexpected(Failure{});
-        }
 
         // Same .bind + .surface pair as the G-buffer PS.
         CookString generatedSource(arena);
@@ -201,3 +199,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

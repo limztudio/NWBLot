@@ -43,8 +43,7 @@ void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, co
         counters,
         [](ReflectionStatistics& latest, const ReflectionStatistics& metadata, const Span<const u32> completedCounters)noexcept{
             CopyReflectionDiagnosticCounters(completedCounters, metadata, latest);
-        }
-    );
+        });
 }
 
 

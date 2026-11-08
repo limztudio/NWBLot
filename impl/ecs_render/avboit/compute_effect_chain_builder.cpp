@@ -5,6 +5,7 @@
 #include "compute_effect_chain_builder.h"
 
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/avboit/phase_identities.adhd.h>
 #include <impl/ecs_render/avboit/compute_effect_record_inputs.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
@@ -92,8 +93,7 @@ Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDep
         ;
         const auto depthWarpTaskResult = m_graph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
-            AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.depthWarpTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, }
-        );
+            AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.depthWarpTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, });
         if(!depthWarpTaskResult){
             m_avboitSystem.taskGraphStage().m_depthWarpTask = {};
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
@@ -134,7 +134,7 @@ b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationSt
     const Array<Core::GpuTaskId, 1> integrationDependency = { inputs.extinctionTask };
     Core::GpuTaskDesc integrationDesc;
     integrationDesc
-        .setIdentity(Name("render.avboit.integration"))
+        .setIdentity(Name(s_RenderIdentityRenderAvboitIntegration))
         .setMarkerLabel(RendererGpuPassText::s_AvboitIntegrationLabel)
         .setScheduling(avboitComputeScheduling)
         .setTiming(avboitComputeStageTiming)
@@ -143,8 +143,7 @@ b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationSt
     ;
     const auto integrationTaskResult = m_graph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,
-        AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.integrationTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, }
-    );
+        AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.integrationTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, });
     if(!integrationTaskResult){
         m_avboitSystem.taskGraphStage().m_integrationTask = {};
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));

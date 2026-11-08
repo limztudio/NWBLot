@@ -170,8 +170,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareUploadTask(
             .source = *uploadSourceResult,
             .destination = destination,
             .finalState = finalState,
-        }
-    );
+        });
     if(!uploadTaskResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare {} for runtime mesh '{}'"), declareErrorLabel, instance.handle.value);
         return false;
@@ -237,8 +236,8 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkin
 }
 
 b8 MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan){
-    usize jointPaletteBytes = 0u;
-    if(jointPaletteUpload.size() > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || (jointPaletteBytes = jointPaletteUpload.size() * sizeof(SkeletonJointMatrix)) == 0u){
+    const auto jointPaletteBytes = TryComputeRuntimeMeshBufferByteCount(jointPaletteUpload.size(), sizeof(SkeletonJointMatrix));
+    if(!jointPaletteBytes || *jointPaletteBytes == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
         return false;
     }
@@ -246,7 +245,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSki
         instance,
         s_JointPaletteUploadSuffix,
         s_JointPaletteUploadLabel,
-        BinaryByteView{ reinterpret_cast<const u8*>(jointPaletteUpload.data()), jointPaletteBytes },
+        BinaryByteView{ reinterpret_cast<const u8*>(jointPaletteUpload.data()), *jointPaletteBytes },
         alignof(SkeletonJointMatrix),
         plan.jointPaletteResource,
         Core::ResourceStates::ShaderResource,

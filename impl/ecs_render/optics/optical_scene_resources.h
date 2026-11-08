@@ -8,6 +8,8 @@
 #include "optical_scene_upload.h"
 #include "optical_bounds_finalize.h"
 
+#include <impl/ecs_render/optics/graph_types.adhd.h>
+
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/resource.h>
@@ -42,23 +44,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct RayTracingOpticalSceneSnapshot{
-    Core::BufferHandle buffer;
-    // Present only for runtime bounds: this remains the immutable CPU metadata upload destination.
-    Core::BufferHandle uploadBuffer;
-    RayTracingOpticalBoundsFinalizeHandle finalize;
-    RayTracingOpticalSceneUploadHandle upload;
-    RayTracingOpticalUploadControlHandle uploadState;
-    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
-    u32 transparentCount = 0u;
-    b8 boundsComplete = false;
-    b8 unspecifiedBoundariesOnly = false;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return buffer && descriptor.valid() && upload && uploadState; }
-};
 
 class RayTracingOpticalSceneResources final : NoCopy{
 public:

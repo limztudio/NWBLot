@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/avboit/graph_types.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/compiler.h>
@@ -21,17 +22,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Domains publish this boundary after declaring topology; downstream avoids local coupling.
-struct RendererTaskGraphTransparencyStage{
-    Core::GpuTaskId firstTask;
-    Core::GpuTaskId completionTask;
-    b8 hasTransparentTasks = false;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return firstTask.valid() && completionTask.valid(); }
-};
 
 // AVBOIT owns its stage identifiers; the host observes the typed boundary and owns execution.
 struct RendererAvboitTaskGraphStageState{

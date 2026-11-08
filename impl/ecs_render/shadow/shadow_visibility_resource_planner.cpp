@@ -50,7 +50,7 @@ b8 ShadowVisibilityResourcePlanner::prepare(const ShadowVisibilityResourceInputs
     auto& adaptiveEdgeCounter = result.adaptiveEdgeCounter;
     auto& resourceUses = result.resourceUses;
 
-    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), s_SceneGeometryDomainLabel));
+    const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name(s_ShadowPassSceneGeometry), s_SceneGeometryDomainLabel));
     if(!sceneGeometryDomainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
         return false;
@@ -142,7 +142,7 @@ b8 ShadowVisibilityResourcePlanner::prepare(const ShadowVisibilityResourceInputs
         (
             // The monolith picks adaptive fallback after runtime slot checks. Declare coarse across that route; split callbacks omit it.
             splitSoftTransparentFold
-            || appendOptionalWriteTexture(deferredTargets.shadowCoarseTransmittance, Name("render.shadow_visibility.coarse_transmittance"), "Shadow Coarse Transmittance")
+            || appendOptionalWriteTexture(deferredTargets.shadowCoarseTransmittance, Name(s_ShadowPassCoarseTransmittance), "Shadow Coarse Transmittance")
         )
         // The retained callback first overwrites these scratch targets, then resolves them locally within the same command list.
         // Its graph entry must therefore preserve Unknown -> UAV first writes rather than fabricate a ReadWrite native source for a fresh target generation.
@@ -165,8 +165,8 @@ b8 ShadowVisibilityResourcePlanner::prepare(const ShadowVisibilityResourceInputs
             resourceUses
         ))
         && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowEdgeCounterBuffer, Name(s_ShadowEdgeCounterName), s_ShadowEdgeCounterLabel, Core::ResourceStates::UnorderedAccess)
-        && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowEdgeListBuffer, Name("render.shadow_visibility.edge_list"), "Shadow Edge List", Core::ResourceStates::UnorderedAccess)
-        && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowIndirectArgsBuffer, Name("render.shadow_visibility.indirect_args"), "Shadow Indirect Arguments", Core::ResourceStates::UnorderedAccess)
+        && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowEdgeListBuffer, Name(s_ShadowPassEdgeList), "Shadow Edge List", Core::ResourceStates::UnorderedAccess)
+        && appendOptionalReadWriteBuffer(rayTracingShadowResources.swShadowIndirectArgsBuffer, Name(s_ShadowPassIndirectArgs), "Shadow Indirect Arguments", Core::ResourceStates::UnorderedAccess)
     ;
     if(rayTracingShadowResources.sceneTlas){
         const auto sceneTlasResult = m_graph.importAccelStruct(

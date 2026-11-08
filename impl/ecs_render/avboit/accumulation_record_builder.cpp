@@ -5,6 +5,7 @@
 #include "accumulation_record_builder.h"
 
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/avboit/phase_identities.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -62,7 +63,7 @@ b8 AvboitAccumulationRecordBuilder::declare(
         NWB_MAKE_AVBOIT_RASTER_RECORD_PHASE_DESC(
             "render.avboit.accumulation",
             "AVBOIT Accumulation",
-            Name("render.avboit.accumulation"),
+            Name(s_RenderIdentityRenderAvboitAccumulation),
             "AVBOIT Accumulation",
             s_AvboitResourceBaseCount
         ),
@@ -75,8 +76,7 @@ b8 AvboitAccumulationRecordBuilder::declare(
             .sharedComputeEmulationTasks = stage.m_accumulationSharedComputeEmulationTasks,
             .sharedComputeEmulationTaskCount = stage.m_accumulationSharedComputeEmulationTaskCount,
             .rasterTask = stage.m_accumulationTask,
-        }
-    ))
+        }))
         return false;
 
     const Array<Core::GpuTaskResourceUse, 5u> accumulationFinalizeResourceUses = {
@@ -95,7 +95,7 @@ b8 AvboitAccumulationRecordBuilder::declare(
     accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc accumulationFinalizeDesc;
     accumulationFinalizeDesc
-        .setIdentity(Name("render.avboit.accumulation_finalize"))
+        .setIdentity(Name(s_RenderIdentityRenderAvboitAccumulationFinalize))
         .setMarkerLabel("AVBOIT Accumulation Finalize")
         .setScheduling(accumulationFinalizeScheduling)
         .setDependencies({ &stage.m_accumulationTask, 1u })

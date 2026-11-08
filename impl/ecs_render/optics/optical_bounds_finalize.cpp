@@ -4,11 +4,13 @@
 
 #include "optical_bounds_finalize.h"
 
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/shader/shader_system.h>
+#include <impl/ecs_render/optics/graph_types.adhd.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -46,8 +48,8 @@ void RayTracingOpticalBoundsFinalizeResources::invalidate(){
 Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeResources::prepare(const RayTracingOpticalSceneGather& gather, const Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem){
     if(
         gather.runtimeBounds.empty() || !sourceDescriptor.valid()
-        || gather.runtimeBounds.size() > Limit<u32>::s_Max / sizeof(RayTracingOpticalRuntimeInputGpu)
-        || gather.instances.size() > (Limit<u32>::s_Max - NWB_RT_OPTICAL_SCENE_HEADER_BYTES) / NWB_RT_OPTICAL_INSTANCE_BYTES
+        || !OpticalRuntimeInputCountFits(gather.runtimeBounds.size(), sizeof(RayTracingOpticalRuntimeInputGpu))
+        || !OpticalSceneInstanceCountFits(gather.instances.size())
         || !ensurePipeline(shaderSystem)
     )
         return MakeUnexpected(Failure{});
@@ -75,8 +77,8 @@ Expected<RayTracingOpticalBoundsFinalizeHandle> RayTracingOpticalBoundsFinalizeR
         descriptor = slot;
         return true;
     };
-    const b8 inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu), Name("raytrace_optical_runtime_inputs"), false);
-    const b8 outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES, Name("raytrace_optical_resolved_scene"), true);
+    const b8 inputReady = ensureBuffer(m_inputBuffer, m_inputDescriptor, gather.runtimeBounds.size() * sizeof(RayTracingOpticalRuntimeInputGpu), Name(s_RenderNameRaytraceOpticalRuntimeInputs), false);
+    const b8 outputReady = inputReady && ensureBuffer(m_outputBuffer, m_outputDescriptor, NWB_RT_OPTICAL_SCENE_HEADER_BYTES + gather.instances.size() * NWB_RT_OPTICAL_INSTANCE_BYTES, Name(s_RenderNameRaytraceOpticalResolvedScene), true);
     if(!outputReady){
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical bounds: failed to create finalize buffers"));
         return MakeUnexpected(Failure{});
@@ -145,7 +147,7 @@ b8 RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSystem
         shaderSystem,
         &TransparentSubsystem::opticalBoundsFinalizeCs,
         Core::ShaderArchive::s_DefaultVariant,
-        Name("RayOpticalBoundsFinalize"),
+        Name(s_RenderNameRayOpticalBoundsFinalize),
         NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES,
         false,
         m_bindingLayout,

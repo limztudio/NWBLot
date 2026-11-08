@@ -147,7 +147,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
         const auto groupField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentOpticalVolumeGroupField, true);
         if(!groupField)
             return MakeUnexpected(Failure{});
-        if(TrimView(groupField->text).empty() || groupField->text != TrimView(groupField->text)){
+        if(!IsUnpaddedRendererOpticalVolumeGroup(groupField->text)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty or padded"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
             return MakeUnexpected(Failure{});
         }

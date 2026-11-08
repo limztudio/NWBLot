@@ -19,6 +19,8 @@
 #include <impl/ecs_render/avboit/frame_graph_avboit_stage.h>
 #include <impl/ecs_render/reflection/frame_graph_reflection_resolve.h>
 #include <impl/ecs_render/refraction/task_graph_refraction_resolve.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 
@@ -157,8 +159,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .clearAvboitTargets = clearAvboitTargets,
             .capturesLaggedLightingHistory = capturesLaggedLightingHistory,
             .hasCsgFrameWork = !csgFrameState.empty(),
-        }
-    );
+        });
     if(!deferredGraphResources){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-lighting graph resources"));
         return;
@@ -325,7 +326,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     if(useLaggedLightingHistory){
         Core::GpuExternalCompletionDesc lightingHistoryReadReadyDesc;
-        lightingHistoryReadReadyDesc.setIdentity(Name("render.deferred_lighting.lagged_history_read_ready")).setMarkerLabel("Lagged Lighting History Read Ready").setToken(laggedLightingHistoryReadReadyToken);
+        lightingHistoryReadReadyDesc.setIdentity(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryReadReady)).setMarkerLabel("Lagged Lighting History Read Ready").setToken(laggedLightingHistoryReadReadyToken);
         const auto deferredLightingHistoryReadReadyCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryReadReadyDesc);
         if(!deferredLightingHistoryReadReadyCompletionResult){
             m_deferredLightingHistoryReadReadyCompletion = {};
@@ -337,7 +338,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     if(features.laggedLightingHistoryWriterWaitPending){
         Core::GpuExternalCompletionDesc lightingHistoryWriterDrainDesc;
-        lightingHistoryWriterDrainDesc.setIdentity(Name("render.deferred_lighting.lagged_history_writer_drain")).setMarkerLabel("Lagged Lighting History Writer Drain").setToken(laggedLightingHistoryWriterDrainToken);
+        lightingHistoryWriterDrainDesc.setIdentity(Name(s_FrameGraphNameRenderDeferredLightingLaggedHistoryWriterDrain)).setMarkerLabel("Lagged Lighting History Writer Drain").setToken(laggedLightingHistoryWriterDrainToken);
         const auto deferredLightingHistoryWriterDrainCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(lightingHistoryWriterDrainDesc);
         if(!deferredLightingHistoryWriterDrainCompletionResult){
             m_deferredLightingHistoryWriterDrainCompletion = {};
@@ -349,7 +350,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     if(m_raytracingSystem.hasSurfelWork() && rayTracingSurfelResources.countReadbackSubmissionToken.valid()){
         Core::GpuExternalCompletionDesc surfelCounterReadbackCompletionDesc;
-        surfelCounterReadbackCompletionDesc.setIdentity(Name("render.surfel_gi.counter_readback_complete")).setMarkerLabel("Surfel Counter Readback Complete").setToken(surfelCounterReadbackCompletionToken);
+        surfelCounterReadbackCompletionDesc.setIdentity(Name(s_FrameGraphNameRenderSurfelGiCounterReadbackComplete)).setMarkerLabel("Surfel Counter Readback Complete").setToken(surfelCounterReadbackCompletionToken);
         const auto deferredSurfelGiCounterReadbackCompletionResult = m_deferredLightingTaskGraph.importExternalCompletion(surfelCounterReadbackCompletionDesc);
         if(!deferredSurfelGiCounterReadbackCompletionResult){
             m_deferredSurfelGiCounterReadbackCompletion = {};
@@ -734,8 +735,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .historyCopyDestinationCausticIrradiance = historyCopyDestinationCausticIrradiance,
             .historyCopyDestinationSurfelIrradiance = historyCopyDestinationSurfelIrradiance,
             .capturesLaggedLightingHistory = capturesLaggedLightingHistory,
-        }
-    );
+        });
     if(!deferredFrameTailResult)
         return;
     m_deferredLaggedLightingHistoryTask = deferredFrameTailResult->historyCopyTask;

@@ -41,8 +41,7 @@ void RefractionStatisticsState::complete(const StatisticsReservationKey& key, co
         counters,
         [](RefractionStatistics& latest, [[maybe_unused]] const RefractionStatistics& metadata, const Span<const u32> completedCounters)noexcept{
             CopyRefractionDiagnosticCounters(completedCounters, latest);
-        }
-    );
+        });
 }
 
 

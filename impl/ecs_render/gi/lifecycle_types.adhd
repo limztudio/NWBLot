@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using SurfelGiGpuTaskId = Core::GpuTaskId;
+using SurfelGiQueueSubmissionToken = Core::QueueSubmissionToken;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SurfelGiLifecycleResult{
+    public SurfelGiGpuTaskId preparationTask = SurfelGiGpuTaskId();
+    public SurfelGiGpuTaskId initializationLifecycleTask = SurfelGiGpuTaskId();
+    public SurfelGiGpuTaskId snapshotCopyTask = SurfelGiGpuTaskId();
+    public SurfelGiGpuTaskId dependency = SurfelGiGpuTaskId();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SurfelReadbackSubmissionMatches(in SurfelGiQueueSubmissionToken accepted, in SurfelGiQueueSubmissionToken candidate){
+    return accepted.valid() && candidate.valid() && accepted.queue == candidate.queue && accepted.value == candidate.value && accepted.matchesPhysicalQueue(candidate.physicalQueueIndex, candidate.deviceGeneration);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

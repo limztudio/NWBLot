@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/gi_subsystem.adhd.h>
 #include <impl/ecs_render/gi/surfel_gi_pipeline_set.h>
 #include <impl/ecs_render/gi/rt_surfel_gi_state.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.h>
@@ -68,7 +69,7 @@ namespace __hidden_surfel_pipelines{
         inOutFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel {} compute pipeline"), passLabel);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created surfel {} compute pipeline"), passLabel);
     return true;
 }
 

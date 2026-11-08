@@ -8,13 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_RayTracingOpticalSceneHeaderBytes = 32u;
-const usize s_RayTracingOpticalInstanceBytes = 16u;
-
-
 class OpticalSceneBinaryCodec{
     public b8 computeByteSize(in usize instanceCount, mut usize outInstanceBytes, mut usize outByteCount)const{
-        if(instanceCount > (cast<usize>(u32.max) - s_RayTracingOpticalSceneHeaderBytes) / s_RayTracingOpticalInstanceBytes){
+        if(!OpticalSceneInstanceCountFits(instanceCount)){
             error("Ray optical scene: instance table exceeds the shader address range");
             return false;
         }
@@ -41,3 +37,4 @@ class OpticalSceneBinaryCodec{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

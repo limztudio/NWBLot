@@ -11,6 +11,7 @@
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/csg/types.adhd.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 
 #include <core/common/log.h>
 
@@ -102,7 +103,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     csgReceiverSpanScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc csgReceiverSpanDesc;
     csgReceiverSpanDesc
-        .setIdentity(Name("render.graphics_prefix.csg_receiver_span"))
+        .setIdentity(Name(s_RenderNameRenderGraphicsPrefixCsgReceiverSpan))
         .setMarkerLabel("Opaque CSG Receiver Span")
         .setScheduling(csgReceiverSpanScheduling)
         .setDependencies({ &inputs.dependencyTask, 1u })
@@ -123,7 +124,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     csgIntervalCombineScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc csgIntervalCombineDesc;
     csgIntervalCombineDesc
-        .setIdentity(Name("render.graphics_prefix.csg_interval_combine"))
+        .setIdentity(Name(s_RenderNameRenderGraphicsPrefixCsgIntervalCombine))
         .setMarkerLabel("Opaque CSG Interval Combine")
         .setScheduling(csgIntervalCombineScheduling)
         .setDependencies({ &tasks.receiverSpanTask, 1u })
@@ -146,7 +147,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     if(csgIntervalSampleUsesMaterialGeometry){
         const auto csgIntervalSampleMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
             csgIntervalSampleMaterialGeometryDrawSets,
-            Name("render.graphics_prefix.csg_interval_sample.material_geometry"),
+            Name(s_RenderNameRenderGraphicsPrefixCsgIntervalSampleMaterialGeometry),
             "Opaque CSG Material Geometry",
             m_graph,
             scratchArena
@@ -164,7 +165,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         const auto csgIntervalSampleMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
             csgIntervalSampleMaterialGeometryDrawSets,
-            Name("render.graphics_prefix.csg_interval_sample.material_sampled_textures"),
+            Name(s_RenderNameRenderGraphicsPrefixCsgIntervalSampleMaterialSampledTextures),
             "Opaque CSG Material Sampled Textures",
             m_graph,
             scratchArena
@@ -192,7 +193,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
             m_graph,
             m_intervalSampleComputeEmulationPayload.plan,
             scratchArena,
-            Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation.outputs"),
+            Name(s_RenderNameRenderGraphicsPrefixOpaqueCsgIntervalSampleComputeEmulationOutputs),
             "Opaque CSG Interval-Sample Compute Emulation Outputs"
         );
         opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned = opaqueCsgIntervalSampleComputeEmulationOutputSetResult.has_value();
@@ -305,7 +306,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         opaqueCsgIntervalSampleComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc opaqueCsgIntervalSampleComputeEmulationDesc;
         opaqueCsgIntervalSampleComputeEmulationDesc
-            .setIdentity(Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation"))
+            .setIdentity(Name(s_RenderNameRenderGraphicsPrefixOpaqueCsgIntervalSampleComputeEmulation))
             .setMarkerLabel("Opaque CSG Interval-Sample Compute Emulation")
             .setScheduling(opaqueCsgIntervalSampleComputeEmulationScheduling)
             .setDependencies({ &csgIntervalSampleDependency, 1u })
@@ -330,7 +331,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     csgIntervalSampleScheduling.allowMergeAcrossConsumerFrontier = opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned;
     Core::GpuTaskDesc csgIntervalSampleDesc;
     csgIntervalSampleDesc
-        .setIdentity(Name("render.graphics_prefix.csg_interval_sample"))
+        .setIdentity(Name(s_RenderNameRenderGraphicsPrefixCsgIntervalSample))
         .setMarkerLabel("Opaque CSG Interval Sample")
         .setScheduling(csgIntervalSampleScheduling)
         .setDependencies({ &csgIntervalSampleDependency, 1u })

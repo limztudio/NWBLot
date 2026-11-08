@@ -39,7 +39,7 @@ inline constexpr TStringView s_MaterialAssetKindLabel = NWB_TEXT("material");
 
 [[nodiscard]] static b8 IsMaterialResourceParameterValue(const AStringView valueText, Core::Alloc::ScratchArena& scratchArena){
     const AStringView trimmed = TrimView(valueText);
-    if(trimmed.empty() || trimmed.find('(') != AStringView::npos || trimmed.find(')') != AStringView::npos)
+    if(!IsMaterialResourceParameterCandidate(trimmed))
         return false;
     return Core::Assets::HasReservedAssetVirtualRoot(trimmed, scratchArena);
 }

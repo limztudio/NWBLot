@@ -14,6 +14,7 @@
 #include <impl/ecs_render/gi/surfel_gi_resource_builder.h>
 #include <impl/ecs_render/gi/surfel_gi_counter_readback_builder.h>
 #include <impl/ecs_render/gi/surfel_gi_task_builder.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
@@ -178,7 +179,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     const Core::GpuTaskResourceUse surfelIrradianceClearResourceUse = WriteTextureUse(surfelIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     Core::GpuTaskDesc surfelIrradianceClearDesc;
     surfelIrradianceClearDesc
-        .setIdentity(Name("render.surfel_gi.irradiance_clear"))
+        .setIdentity(Name(s_SurfelGraphIrradianceClear))
         .setMarkerLabel("Surfel Irradiance Clear")
         .setScheduling(surfelIrradianceClearScheduling)
         .setDependencies({ &surfelGiDependency, 1u })
@@ -186,8 +187,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     ;
     const auto surfelIrradianceClearTaskResult = context.graph.addTask<ECSRenderDetail::FloatTextureClearGraphTask>(
         surfelIrradianceClearDesc,
-        ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = surfelIrradiance, .subresources = ECSRenderDetail::s_FramebufferSubresources, .floatValue = ECSRenderDetail::s_SurfelIrradianceClearColor, }
-    );
+        ECSRenderDetail::FloatTextureClearGraphTask::Payload{ .destination = surfelIrradiance, .subresources = ECSRenderDetail::s_FramebufferSubresources, .floatValue = ECSRenderDetail::s_SurfelIrradianceClearColor, });
     if(!surfelIrradianceClearTaskResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
         return false;
@@ -214,7 +214,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
 
         Core::GpuTaskDesc ageFreeDesc;
         ageFreeDesc
-            .setIdentity(Name("render.surfel_gi.age_free"))
+            .setIdentity(Name(s_SurfelGraphAgeFree))
             .setMarkerLabel("Surfel GI Age Free")
             .setScheduling(surfelGiScheduling)
             .setDependencies({ &surfelGiDependency, 1u })
@@ -232,7 +232,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
 
         Core::GpuTaskDesc cellHeadClearDesc;
         cellHeadClearDesc
-            .setIdentity(Name("render.surfel_gi.cell_head_clear"))
+            .setIdentity(Name(s_SurfelGraphCellHeadClear))
             .setMarkerLabel("Surfel GI Cell Head Clear")
             .setScheduling(surfelGiScheduling)
             .setDependencies({ &m_deferredSurfelGiAgeFreeTask, 1u })
@@ -253,7 +253,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         };
         Core::GpuTaskDesc hashBuildDesc;
         hashBuildDesc
-            .setIdentity(Name("render.surfel_gi.hash_build"))
+            .setIdentity(Name(s_SurfelGraphHashBuild))
             .setMarkerLabel("Surfel GI Hash Build")
             .setScheduling(surfelGiScheduling)
             .setDependencies({ &m_deferredSurfelGiCellHeadClearTask, 1u })
@@ -280,7 +280,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
             ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource),
         };
         Core::GpuTaskDesc spawnDesc;
-        spawnDesc.setIdentity(Name("render.surfel_gi.spawn")).setMarkerLabel("Surfel GI Spawn").setScheduling(surfelGiScheduling).setDependencies({ &m_deferredSurfelGiHashBuildTask, 1u }).setResourceUses(spawnResourceUses);
+        spawnDesc.setIdentity(Name(s_SurfelGraphSpawn)).setMarkerLabel("Surfel GI Spawn").setScheduling(surfelGiScheduling).setDependencies({ &m_deferredSurfelGiHashBuildTask, 1u }).setResourceUses(spawnResourceUses);
         const auto deferredSurfelGiSpawnTaskResult = surfelGiTasks.declareSpawnTask(spawnDesc, deferredLightingResources, deferredTargets, timingTicket, asyncTiming);
         if(!deferredSurfelGiSpawnTaskResult){
             m_deferredSurfelGiSpawnTask = {};
@@ -296,7 +296,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         };
         Core::GpuTaskDesc traceBuildArgsDesc;
         traceBuildArgsDesc
-            .setIdentity(Name("render.surfel_gi.trace_build_args"))
+            .setIdentity(Name(s_SurfelGraphTraceBuildArgs))
             .setMarkerLabel("Surfel GI Trace Build Args")
             .setScheduling(surfelGiScheduling)
             .setDependencies({ &m_deferredSurfelGiSpawnTask, 1u })
@@ -314,7 +314,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         Core::GpuTaskDesc traceDesc;
         const SurfelGiTaskStateSourceSet traceStateSources = makeSurfelGiTaskStateSources(true, csgTraceContext.valid(), false);
         traceDesc
-            .setIdentity(Name("render.surfel_gi.trace"))
+            .setIdentity(Name(s_SurfelGraphTrace))
             .setMarkerLabel("Surfel GI Trace")
             .setScheduling(surfelGiScheduling)
             .setDependencies({ &m_deferredSurfelGiTraceBuildArgsTask, 1u })
@@ -340,7 +340,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
         };
         Core::GpuTaskDesc resolveDesc;
         resolveDesc
-            .setIdentity(Name("render.surfel_gi.resolve"))
+            .setIdentity(Name(s_SurfelGraphResolve))
             .setMarkerLabel("Surfel GI Resolve")
             .setScheduling(surfelGiScheduling)
             .setDependencies({ &m_deferredSurfelGiTraceTask, 1u })
@@ -360,7 +360,7 @@ b8 SurfelGiGraphCoordinator::declareDeferredSurfelGiTask(
     const SurfelGiTaskStateSourceSet& terminalStateSources = graphOwnsSurfelGiResolve ? surfelGiComputeReturnStateSources : surfelGiAllStateSources;
     Core::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("render.surfel_gi"))
+        .setIdentity(Name(s_SurfelGraphPass))
         .setMarkerLabel("Surfel GI")
         .setScheduling(surfelGiScheduling)
         .setDependencies({ &surfelGiDependency, 1u })

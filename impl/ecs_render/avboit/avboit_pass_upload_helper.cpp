@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/avboit/compute_emulation_capture.h>
 #include <impl/ecs_render/avboit/generated_geometry_reuse.h>
+#include <impl/ecs_render/avboit/graph_types.adhd.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
@@ -140,10 +141,7 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
 
     const Array<MaterialPassDrawItemsView, 2u> materialGeometryDrawSets = { drawItems.regular, drawItems.csg, };
     AvboitGeometryPreparationBuilder geometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
-    const auto geometryPreparationResult = geometryPreparationBuilder.declare(AvboitGeometryPreparationInputs{
-        .drawItemSets = materialGeometryDrawSets,
-        .phase = phaseDesc.phase,
-    });
+    const auto geometryPreparationResult = geometryPreparationBuilder.declare(AvboitGeometryPreparationInputs(materialGeometryDrawSets, phaseDesc.phase));
     if(!geometryPreparationResult)
         return MakeUnexpected(Failure{});
     rasterPayload.materialGeometryStatesGraphOwned = geometryPreparationResult->geometryOwned;
@@ -153,11 +151,14 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
 
     m_materialSystem.prepareMaterialPassInstanceUploadData(inputs.csgResources, instanceData);
 #if defined(NWB_DEBUG)
-    if(
-        instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
-        || csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
-        || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
-    ){
+    if(!AvboitUploadCountsFit(
+        instanceData.size(),
+        csgFrameData.receiverRanges.size(),
+        csgFrameData.cutters.size(),
+        Limit<usize>::s_Max / sizeof(InstanceGpuData),
+        Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData),
+        Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
+    )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
         return MakeUnexpected(Failure{});
     }
@@ -241,3 +242,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

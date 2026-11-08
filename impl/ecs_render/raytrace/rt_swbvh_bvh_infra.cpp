@@ -2,9 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/bvh_subsystem.adhd.h>
 #include <impl/ecs_render/raytrace/software_bvh_builder.h>
 #include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
 #include <impl/ecs_render/raytrace/rt_swbvh_helpers.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,7 +119,7 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(usize paddedCount){
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("bvh_sort_keys"))
+        .setDebugName(Name(s_RenderNameBvhSortKeys))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto keysBufferResult = m_graphics.createBuffer(keysBufferDesc);
@@ -133,7 +135,7 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(usize paddedCount){
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("bvh_sort_payload"))
+        .setDebugName(Name(s_RenderNameBvhSortPayload))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto payloadBufferResult = m_graphics.createBuffer(payloadBufferDesc);
@@ -313,7 +315,7 @@ b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(usize primitiveCount){
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("bvh_visit_counter"))
+        .setDebugName(Name(s_RenderNameBvhVisitCounter))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto counterBufferResult = m_graphics.createBuffer(counterBufferDesc);
@@ -348,7 +350,7 @@ b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterial
             .setStructStride(sizeof(NwbBvhNodeGpu))
             .setCanHaveUAVs(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("scene_bvh_nodes"))
+            .setDebugName(Name(s_RenderNameSceneBvhNodes))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         auto nodeBufferResult = m_graphics.createBuffer(nodeBufferDesc);
@@ -372,7 +374,7 @@ b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterial
             .setByteSize(static_cast<u64>(sizeof(SceneSwBvhInstanceGpu) * capacity))
             .setStructStride(sizeof(SceneSwBvhInstanceGpu))
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("scene_bvh_instances"))
+            .setDebugName(Name(s_RenderNameSceneBvhInstances))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);

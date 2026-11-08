@@ -9,6 +9,7 @@
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 
 #include <core/common/log.h>
 
@@ -60,9 +61,9 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
             !rayTracingShadowResources.bvhSortKeysBuffer
             || !rayTracingShadowResources.bvhSortPayloadBuffer
             || !rayTracingShadowResources.bvhVisitCounterBuffer
-            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortKeysBuffer, Name("render.shadow_trace.sw_bvh_sort_keys"), "Software BVH Sort Keys")
-            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortPayloadBuffer, Name("render.shadow_trace.sw_bvh_sort_payload"), "Software BVH Sort Payload")
-            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhVisitCounterBuffer, Name("render.shadow_trace.sw_bvh_visit_counter"), "Software BVH Visit Counter")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortKeysBuffer, Name(s_RenderNameRenderShadowTraceSwBvhSortKeys), "Software BVH Sort Keys")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortPayloadBuffer, Name(s_RenderNameRenderShadowTraceSwBvhSortPayload), "Software BVH Sort Payload")
+            || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhVisitCounterBuffer, Name(s_RenderNameRenderShadowTraceSwBvhVisitCounter), "Software BVH Visit Counter")
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
             return MakeUnexpected(Failure{});
@@ -121,12 +122,12 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
             return MakeUnexpected(Failure{});
         }
     }
-    result.shadowTraceGeometrySet = importSet(result.traceGeometry, Name("render.post_gbuffer_trace_geometry"), "Post-G-Buffer Trace Geometry");
-    result.softwareTraceGeometrySet = importSet(result.softwareTraceGeometry, Name("render.software_trace_geometry"), "Software Trace Geometry");
+    result.shadowTraceGeometrySet = importSet(result.traceGeometry, Name(s_RenderNameRenderPostGbufferTraceGeometry), "Post-G-Buffer Trace Geometry");
+    result.softwareTraceGeometrySet = importSet(result.softwareTraceGeometry, Name(s_RenderNameRenderSoftwareTraceGeometry), "Software Trace Geometry");
     if(!traceMaterialSampledTextureResources->empty()){
         const auto traceMaterialSampledTextureSetResult = m_graph.importResourceSet(
             Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.trace_material_sampled_textures"))
+                .setIdentity(Name(s_RenderNameRenderTraceMaterialSampledTextures))
                 .setMarkerLabel("Trace Material Sampled Textures")
                 .setMembers(*traceMaterialSampledTextureResources)
         );
@@ -136,7 +137,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         }
         result.traceMaterialSampledTextureSet = *traceMaterialSampledTextureSetResult;
     }
-    result.hardwareTraceGeometrySet = importSet(result.hardwareTraceGeometry, Name("render.hardware_trace_geometry"), "Hardware Trace Geometry");
+    result.hardwareTraceGeometrySet = importSet(result.hardwareTraceGeometry, Name(s_RenderNameRenderHardwareTraceGeometry), "Hardware Trace Geometry");
 
     result.softwareTraceResourcesPrepared = !result.softwareTraceGeometry.empty();
     FrameGraphSoftwareBvhBuildStateImporter softwareBvhBuildStateImporter(m_graph, m_meshSystem);

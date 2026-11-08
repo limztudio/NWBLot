@@ -11,6 +11,7 @@
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/refraction/types.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -104,7 +105,7 @@ Expected<Core::GpuTaskId> AvboitRefractionCapBuilder::Declare(const AvboitRefrac
     uses.push_back(ReadWriteUse(tintCoverage, Core::ResourceStates::RenderTarget));
     uses.push_back(ReadWriteUse(instance, Core::ResourceStates::RenderTarget));
     uses.push_back(ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
-    Core::GpuTaskDesc desc = TaskDesc(Name("render.refraction.capture.caps"), "Refraction Capture Caps", dependency);
+    Core::GpuTaskDesc desc = TaskDesc(Name(s_RenderIdentityRenderRefractionCaptureCaps), "Refraction Capture Caps", dependency);
     desc.setResourceUses(uses);
     if(inputs.sampledTextureSetUse)
         desc.setResourceSetUses({ inputs.sampledTextureSetUse, 1u });

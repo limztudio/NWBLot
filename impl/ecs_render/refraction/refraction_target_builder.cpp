@@ -8,6 +8,7 @@
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
+#include <impl/ecs_render/refraction/types.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -84,8 +85,8 @@ b8 RefractionTargetBuilder::createTileBuffers(const u64 tileCount, AvboitFrameTa
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
         return m_graphics.createBuffer(desc);
     };
-    auto tileList = createTileBuffer(tileCount * sizeof(u32), Name("engine/refraction/tile_list"), false);
-    auto tileArguments = createTileBuffer(NWB_REFRACTION_TILE_ARGUMENT_BYTES, Name("engine/refraction/tile_arguments"), true);
+    auto tileList = createTileBuffer(tileCount * sizeof(u32), Name(s_RenderIdentityEngineRefractionTileList), false);
+    auto tileArguments = createTileBuffer(NWB_REFRACTION_TILE_ARGUMENT_BYTES, Name(s_RenderIdentityEngineRefractionTileArguments), true);
     if(!tileList || !tileArguments){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create refraction tile scheduling buffers"));
         return false;

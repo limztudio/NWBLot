@@ -48,8 +48,11 @@ class SkinningSubsystem{
 
 b8 ValidSkinInfluenceWeights(in VectorSingle weights){
     if(
-        !isFinite(weights.x) || !isFinite(weights.y) || !isFinite(weights.z) || !isFinite(weights.w)
-        || weights.x < 0.0f || weights.y < 0.0f || weights.z < 0.0f || weights.w < 0.0f
+        !isFinite(weights)
+        || weights.x < 0.0f
+        || weights.y < 0.0f
+        || weights.z < 0.0f
+        || weights.w < 0.0f
     )
         return false;
     const f32 sum = dot(weights, VectorSingle(1.0f));

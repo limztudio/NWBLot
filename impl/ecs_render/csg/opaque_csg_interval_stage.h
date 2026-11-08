@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
@@ -28,7 +29,7 @@ NWB_IMPL_BEGIN
 class ObjectGeometryCacheGraph;
 class RendererCsgSystem;
 class RendererMaterialSystem;
-struct DeferredGraphResourceImportResult;
+class DeferredGraphResourceImportResult;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,13 +54,6 @@ struct OpaqueCsgIntervalStageInputs{
     usize materialTypedByteCount = 0u;
     b8 hasOpaqueDrawItems = false;
     b8 hasCsgFrameGpuWork = false;
-};
-
-struct OpaqueCsgIntervalStageTasks{
-    Core::GpuTaskId receiverSpanTask;
-    Core::GpuTaskId intervalCombineTask;
-    Core::GpuTaskId intervalSampleComputeEmulationTask;
-    Core::GpuTaskId intervalSampleTask;
 };
 
 

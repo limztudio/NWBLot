@@ -31,13 +31,13 @@ const StringView s_ColorsStreamLabelText = "colors";
 
 
 b8 IsValidMeshDirectionVector(in VectorSingle direction){
-    if(!isFinite(direction.x) || !isFinite(direction.y) || !isFinite(direction.z))
+    if(!isFinite(direction.xyz))
         return false;
     return abs(lengthSq(direction.xyz) - 1.0f) <= s_DirectionLengthTolerance;
 }
 
 b8 IsValidMeshTangentVector(in VectorSingle tangent){
-    if(!isFinite(tangent.x) || !isFinite(tangent.y) || !isFinite(tangent.z) || !isFinite(tangent.w))
+    if(!isFinite(tangent))
         return false;
     return
         abs(lengthSq(tangent.xyz) - 1.0f) <= s_DirectionLengthTolerance
@@ -248,7 +248,7 @@ b8 ValidateMeshStreams(
     }
     for(usize i = 0u; i < colors.size(); ++i){
         const VectorSingle color(colors[i]);
-        if(isFinite(color.x) && isFinite(color.y) && isFinite(color.z) && isFinite(color.w))
+        if(isFinite(color))
             continue;
 
         LogMeshPayloadIndexedValidation(contextText, meshPathText, s_ColorsStreamLabelText, i, s_NonFiniteDataReasonText);
@@ -260,3 +260,4 @@ b8 ValidateMeshStreams(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

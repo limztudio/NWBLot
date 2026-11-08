@@ -7,6 +7,7 @@
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -41,7 +42,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
             initializationScheduling.allowPacketMerge = true;
             Core::GpuTaskDesc poolClearDesc;
             poolClearDesc
-                .setIdentity(Name("render.surfel_gi.initialize_pool_clear"))
+                .setIdentity(Name(s_SurfelGraphInitializePoolClear))
                 .setMarkerLabel("Surfel GI Initialize Pool Clear")
                 .setScheduling(initializationScheduling)
                 .setDependencies({ &dependency, 1u })
@@ -78,7 +79,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
             };
             if(
                 !addInitializationClear(
-                    Name("render.surfel_gi.initialize_cell_head_clear"),
+                    Name(s_SurfelGraphInitializeCellHeadClear),
                     "Surfel GI Initialize Cell-Head Clear",
                     inputs.surfelCellHead,
                     NWB_SURFEL_CELL_INVALID,
@@ -86,7 +87,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
                     inputs.computeStateSource.states ? 1u : 0u
                 ).has_value()
                 || !addInitializationClear(
-                    Name("render.surfel_gi.initialize_counter_clear"),
+                    Name(s_SurfelGraphInitializeCounterClear),
                     "Surfel GI Initialize Counter Clear",
                     inputs.surfelCounter,
                     0u,
@@ -94,7 +95,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
                     inputs.counterStateSource.states ? 1u : 0u
                 ).has_value()
                 || !addInitializationClear(
-                    Name("render.surfel_gi.initialize_free_list_clear"),
+                    Name(s_SurfelGraphInitializeFreeListClear),
                     "Surfel GI Initialize Free-List Clear",
                     inputs.surfelFreeList,
                     0u,
@@ -107,7 +108,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
             }
 
             Core::GpuTaskDesc initializationLifecycleDesc;
-            initializationLifecycleDesc.setIdentity(Name("render.surfel_gi.initialize_lifecycle")).setMarkerLabel("Surfel GI Initialize Lifecycle").setScheduling(chainedInitializationScheduling).setDependencies({ &initializationDependency, 1u });
+            initializationLifecycleDesc.setIdentity(Name(s_SurfelGraphInitializeLifecycle)).setMarkerLabel("Surfel GI Initialize Lifecycle").setScheduling(chainedInitializationScheduling).setDependencies({ &initializationDependency, 1u });
             const auto initializationLifecycleTaskResult = m_raytracingSystem.declareSurfelResourceInitializationLifecycleTask(m_graph, initializationLifecycleDesc);
             if(!initializationLifecycleTaskResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization lifecycle"));
@@ -123,7 +124,7 @@ Expected<SurfelGiLifecycleResult> SurfelGiLifecycleBuilder::declare(const Surfel
         };
         Core::GpuTaskDesc snapshotDesc;
         snapshotDesc
-            .setIdentity(Name("render.surfel_gi.snapshot_copy"))
+            .setIdentity(Name(s_SurfelGraphSnapshotCopy))
             .setMarkerLabel("Surfel GI Snapshot Copy")
             .setScheduling(inputs.scheduling)
             .setDependencies({ &dependency, 1u })

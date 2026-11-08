@@ -2,13 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/refractive_subsystem.adhd.h>
 #include <impl/ecs_render/caustic/caustic_pipeline_set.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-
-#include <global/algorithm.h>
+#include <impl/ecs_render/caustic/graph_types.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
+
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 #include <core/graphics/rhi/foundation.h>
 
 
@@ -23,17 +24,6 @@ struct DeferredFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SoftwareTransparentShadowTraceInputs{
-    u32 frameIndex = 0u;
-    u32 sampleCount = 0u;
-    u32 groupsX = 0u;
-    u32 groupsY = 0u;
-    b8 graphOwnsOpaqueToTransparentBoundary = false;
-    b8 temporalHistoryReadable = false;
-    b8 historyFrontIsA = false;
-};
 
 
 class SoftwareTransparentShadowTraceRecorder final{

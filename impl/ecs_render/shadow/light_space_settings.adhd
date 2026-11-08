@@ -9,6 +9,31 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_LightSpaceShaderScope = "ECSRender_LightSpaceShadow";
+const Name s_LightSpaceResourceCsgDiagnosticReadback = "light_space_csg_diagnostic_readback";
+const Name s_LightSpaceResourceCsgContext = "light_space_csg_context";
+const Name s_LightSpaceResourceCsgOpaqueDepth = "light_space_csg_opaque_depth";
+const Name s_LightSpaceResourceCounts = "light_space_counts";
+const Name s_LightSpaceResourceEvents = "light_space_events";
+const Name s_LightSpaceResourceViews = "light_space_views";
+const Name s_LightSpaceResourceDrawArguments = "light_space_draw_arguments";
+const Name s_LightSpaceResourceDepth = "light_space_depth";
+const Name s_LightSpaceGraphCounts = "render.light_space_shadow.counts";
+const Name s_LightSpaceGraphEvents = "render.light_space_shadow.events";
+const Name s_LightSpaceGraphViews = "render.light_space_shadow.views";
+const Name s_LightSpaceGraphDepth = "render.light_space_shadow.depth";
+const Name s_LightSpaceGraphCsgContext = "render.light_space_shadow.csg_context";
+const Name s_LightSpaceGraphCsgDepth = "render.light_space_shadow.csg_depth";
+const Name s_LightSpaceGraphDrawArguments = "render.light_space_shadow.draw_arguments";
+const Name s_LightSpaceGraphCsgUpload = "render.light_space_shadow.csg_upload";
+const Name s_LightSpaceGraphCsgPayloadUpload = "render.light_space_shadow.csg_payload_upload";
+const Name s_LightSpaceGraphCountsClear = "render.light_space_shadow.counts_clear";
+const Name s_LightSpaceGraphViewFit = "render.light_space_shadow.view_fit";
+const Name s_LightSpaceGraphDrawCull = "render.light_space_shadow.draw_cull";
+const Name s_LightSpaceGraphOpaqueCapture = "render.light_space_shadow.opaque_capture";
+const Name s_LightSpaceGraphTransparentCapture = "render.light_space_shadow.transparent_capture";
+const Name s_LightSpaceGraphShade = "render.light_space_shadow.shade";
+
 const u32 s_ShadowCaptureReuseLimitOneFrame = 1u;
 const u32 s_ShadowCaptureReuseLimitTwoFrames = 2u;
 const u32 s_ShadowDefaultDirectionalResolution = 512u;
@@ -286,6 +311,13 @@ void LogAcceptedLightSpaceCaptureReuseIfNeeded(
             , cast<u32>(captureCadence) + 1u
         );
     }
+}
+
+b8 ShouldSkipLightSpacePipeline(in u32 index, in b8 csg, in b8 hardwareCsg){
+    return
+        (!csg && index >= s_LightSpaceFirstCsgOnlyPipelineIndex && index <= s_LightSpaceLastCsgOnlyPipelineIndex)
+        || (hardwareCsg && index >= s_LightSpaceFirstCsgFallbackPipelineIndex && index <= s_LightSpaceLastCsgFallbackPipelineIndex)
+    ;
 }
 
 b8 IsLightSpaceDiagnosticIntervalDue(in u32 frameIndex, in u32 acceptedFrame){

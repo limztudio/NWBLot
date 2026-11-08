@@ -73,8 +73,7 @@ b8 AvboitExtinctionRecordBuilder::declare(
             .sharedComputeEmulationTasks = stage.m_extinctionSharedComputeEmulationTasks,
             .sharedComputeEmulationTaskCount = stage.m_extinctionSharedComputeEmulationTaskCount,
             .rasterTask = stage.m_extinctionTask,
-        }
-    );
+        });
 }
 
 

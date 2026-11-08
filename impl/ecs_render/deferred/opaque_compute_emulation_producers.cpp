@@ -7,6 +7,8 @@
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 
 #include <core/common/log.h>
 
@@ -55,7 +57,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     opaqueComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc opaqueComputeEmulationDesc;
     opaqueComputeEmulationDesc
-        .setIdentity(Name("render.graphics_prefix.opaque_compute_emulation"))
+        .setIdentity(Name(s_RenderNameRenderGraphicsPrefixOpaqueComputeEmulation))
         .setMarkerLabel("Opaque Compute Emulation")
         .setScheduling(opaqueComputeEmulationScheduling)
         .setDependencies({ &dependency, 1u })
@@ -114,7 +116,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     opaqueCsgReceiverComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc opaqueCsgReceiverComputeEmulationDesc;
     opaqueCsgReceiverComputeEmulationDesc
-        .setIdentity(Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation"))
+        .setIdentity(Name(s_RenderNameRenderGraphicsPrefixOpaqueCsgReceiverComputeEmulation))
         .setMarkerLabel("Opaque CSG Receiver Compute Emulation")
         .setScheduling(opaqueCsgReceiverComputeEmulationScheduling)
         .setDependencies({ &dependency, 1u })

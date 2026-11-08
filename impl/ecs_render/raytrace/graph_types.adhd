@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using RefitGraphTaskId = Core::GpuTaskId;
+using PreparedGraphUploadId = Core::GpuUploadBlobId;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_PreparedGraphInvalidIndex = 0xffffffffu;
+
+
+class SoftwareSceneRefitGraphTasks{
+    public RefitGraphTaskId inputUpload = RefitGraphTaskId();
+    public RefitGraphTaskId refit = RefitGraphTaskId();
+}
+
+
+
+// Freeze adaptive software-shadow compaction before graph compilation so its append-counter clear is a graph primitive.
+class PreparedShadowMaterialContextUploads{
+    public PreparedGraphUploadId instanceMaterial = PreparedGraphUploadId(0u, s_PreparedGraphInvalidIndex);
+    public PreparedGraphUploadId instance = PreparedGraphUploadId(0u, s_PreparedGraphInvalidIndex);
+    public PreparedGraphUploadId materialTyped = PreparedGraphUploadId(0u, s_PreparedGraphInvalidIndex);
+}
+
+
+class PreparedSceneBvhUploads{
+    public PreparedGraphUploadId node = PreparedGraphUploadId(0u, s_PreparedGraphInvalidIndex);
+    public PreparedGraphUploadId instance = PreparedGraphUploadId(0u, s_PreparedGraphInvalidIndex);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

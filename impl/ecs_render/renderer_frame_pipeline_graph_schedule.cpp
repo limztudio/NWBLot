@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/deferred/import_types.adhd.h>
 
 #include <core/task/gpu/frame_timing_begin_task.h>
 #include <core/task/gpu/scheduler.h>
@@ -72,11 +73,10 @@ b8 RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTransa
     scheduling.allowPacketMerge = false;
     const auto deferredFrameTimingBeginTaskResult = m_deferredLightingTaskGraph.addTask<Core::FrameTimingBeginGraphTask>(
         Core::GpuTaskDesc{}
-            .setIdentity(Name("render.frame_timing_begin"))
+            .setIdentity(Name(s_FrameGraphNameRenderFrameTimingBegin))
             .setMarkerLabel("Frame Timing Begin")
             .setScheduling(scheduling),
-        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = RendererGpuTimingScope::s_Frame, }
-    );
+        Core::FrameTimingBeginGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, .device = m_graphics.getDevice(), .scopeDefinition = RendererGpuTimingScope::s_Frame, });
     if(!deferredFrameTimingBeginTaskResult || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(*deferredFrameTimingBeginTaskResult)){
         if(deferredFrameTimingBeginTaskResult)
             m_deferredFrameTimingBeginTask = *deferredFrameTimingBeginTaskResult;

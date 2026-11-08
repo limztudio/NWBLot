@@ -272,8 +272,7 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareAgeFreeTask(
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
-        }
-    );
+        });
 }
 
 Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareHashBuildTask(
@@ -285,8 +284,7 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareHashBuildTask(
 ){
     return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiHashBuildGraphTask>(
         desc,
-        __hidden_rt_surfel_tasks::SurfelGiHashBuildGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
-    );
+        __hidden_rt_surfel_tasks::SurfelGiHashBuildGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, });
 }
 
 Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareSpawnTask(
@@ -298,8 +296,7 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareSpawnTask(
 ){
     return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiSpawnGraphTask>(
         desc,
-        __hidden_rt_surfel_tasks::SurfelGiSpawnGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
-    );
+        __hidden_rt_surfel_tasks::SurfelGiSpawnGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, });
 }
 
 Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceBuildArgsTask(
@@ -311,8 +308,7 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceBuildArgsTask(
 ){
     return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiTraceBuildArgsGraphTask>(
         desc,
-        __hidden_rt_surfel_tasks::SurfelGiTraceBuildArgsGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
-    );
+        __hidden_rt_surfel_tasks::SurfelGiTraceBuildArgsGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, });
 }
 
 Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceTask(
@@ -324,8 +320,7 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTraceTask(
 ){
     return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiTraceGraphTask>(
         desc,
-        __hidden_rt_surfel_tasks::SurfelGiTraceGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
-    );
+        __hidden_rt_surfel_tasks::SurfelGiTraceGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, });
 }
 
 Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareResolveTask(
@@ -337,8 +332,7 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareResolveTask(
 ){
     return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiResolveGraphTask>(
         desc,
-        __hidden_rt_surfel_tasks::SurfelGiResolveGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
-    );
+        __hidden_rt_surfel_tasks::SurfelGiResolveGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, });
 }
 
 Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTerminalTask(
@@ -350,8 +344,7 @@ Expected<Core::GpuTaskId> SurfelGiTaskBuilder::declareTerminalTask(
 ){
     return m_graph.addTask<__hidden_rt_surfel_tasks::SurfelGiGraphTask>(
         desc,
-        __hidden_rt_surfel_tasks::SurfelGiGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, }
-    );
+        __hidden_rt_surfel_tasks::SurfelGiGraphTask::Payload{ .raytracingSystem = m_system, .targets = targets, .deferredLightingResources = deferredLightingResources, .timingTicket = timingTicket, .asyncTiming = asyncTiming, });
 }
 
 

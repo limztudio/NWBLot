@@ -191,10 +191,11 @@ void ResolveNineSliceCoordinates(
     mut VectorSingle outU,
     mut VectorSingle outV
 ){
-    const f32 borderLeft = cast<f32>(borders.left) / referenceDensity;
-    const f32 borderRight = cast<f32>(borders.right) / referenceDensity;
-    const f32 borderTop = cast<f32>(borders.top) / referenceDensity;
-    const f32 borderBottom = cast<f32>(borders.bottom) / referenceDensity;
+    const VectorSingle normalizedBorders = VectorSingle(cast<f32>(borders.left), cast<f32>(borders.right), cast<f32>(borders.top), cast<f32>(borders.bottom)) / VectorSingle(referenceDensity);
+    const f32 borderLeft = normalizedBorders.x;
+    const f32 borderRight = normalizedBorders.y;
+    const f32 borderTop = normalizedBorders.z;
+    const f32 borderBottom = normalizedBorders.w;
     const f32 borderExtentX = borderLeft + borderRight;
     const f32 borderExtentY = borderTop + borderBottom;
     const f32 endX = rectangle.x + rectangle.width;
@@ -202,13 +203,20 @@ void ResolveNineSliceCoordinates(
     f32 firstX = rectangle.x + borderLeft;
     f32 secondX = endX - borderRight;
     if(rectangle.width < borderExtentX){
-        firstX = rectangle.x + rectangle.width * (borderLeft / borderExtentX);
+        // Do not evaluate the division outside this branch.
+        native(in rectangle, in borderLeft, in borderExtentX, mut firstX){
+            #pragma STDC FENV_ACCESS ON
+            firstX = rectangle.x + rectangle.width * (borderLeft / borderExtentX);
+        }
         secondX = firstX;
     }
     f32 firstY = rectangle.y + borderTop;
     f32 secondY = endY - borderBottom;
     if(rectangle.height < borderExtentY){
-        firstY = rectangle.y + rectangle.height * (borderTop / borderExtentY);
+        native(in rectangle, in borderTop, in borderExtentY, mut firstY){
+            #pragma STDC FENV_ACCESS ON
+            firstY = rectangle.y + rectangle.height * (borderTop / borderExtentY);
+        }
         secondY = firstY;
     }
     outX = VectorSingle(rectangle.x, firstX, secondX, endX);
@@ -229,3 +237,4 @@ void ResolveNineSliceCoordinates(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -8,7 +8,7 @@ nwb_target_adhd_sources(nwb_ecs_render_components
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/*/*.adhd"
 )
-target_link_libraries(nwb_ecs_render_components PUBLIC nwb_assets nwb_assets_material_types nwb_assets_mesh_types nwb_ecs nwb_ecs_csg nwb_ecs_scene)
+target_link_libraries(nwb_ecs_render_components PUBLIC nwb_assets nwb_assets_material_types nwb_assets_mesh_types nwb_ecs nwb_ecs_csg nwb_ecs_scene nwb_graphics_backend_ray_policy nwb_gpu_task)
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE

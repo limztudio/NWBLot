@@ -35,8 +35,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowVisibilityTask(
             .prepared = prepared,
             .graphOwnedAdaptivePlan = graphOwnedAdaptivePlan,
             .hardwareShadowSupported = hardwareShadowSupported,
-        }
-    );
+        });
 }
 
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTemporalMergeTask(
@@ -68,8 +67,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoft
             .graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates,
             .combinedTemporal = combinedTemporal,
             .hardwareShadowSupported = hardwareShadowSupported,
-        }
-    );
+        });
 }
 
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFirstWaveletTask(
@@ -101,8 +99,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoft
             .graphOwnsTransparentWaveletInputBoundary = graphOwnsTransparentWaveletInputBoundary,
             .startsTransparentResolveTiming = startsTransparentResolveTiming,
             .combinedWavelet = combinedWavelet,
-        }
-    );
+        });
 }
 
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
@@ -133,8 +130,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoft
             .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
             .combinedUpsample = combinedUpsample,
-        }
-    );
+        });
 }
 
 Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
@@ -159,8 +155,7 @@ Expected<Core::GpuTaskId> RendererRayTracingSystem::declareShadowTransparentSoft
             .opaqueProduced = opaqueProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
             .transparentTraceProduced = transparentTraceProduced,
-        }
-    );
+        });
 }
 
 b8 RendererRayTracingSystem::renderSoftTransparentShadowTrace(

@@ -2,10 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/shadow_subsystem.adhd.h>
 #include <impl/ecs_render/shadow/shadow_pipeline_set.h>
 #include <impl/ecs_render/raytrace/ray_trace_material_resources.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
+#include <impl/ecs_render/material/instance_typed_ranges.adhd.h>
 
 #include <global/algorithm.h>
 
@@ -122,7 +125,7 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("sw_shadow_edge_counter"))
+            .setDebugName(Name(s_SoftwareShadowEdgeCounter))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         auto swShadowEdgeCounterBufferResult = m_graphics.createBuffer(edgeCounterDesc);
@@ -143,7 +146,7 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
             .setCanHaveUAVs(true)
             .setIsDrawIndirectArgs(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("sw_shadow_indirect_args"))
+            .setDebugName(Name(s_SoftwareShadowIndirectArgs))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         auto swShadowIndirectArgsBufferResult = m_graphics.createBuffer(indirectArgsDesc);
@@ -210,7 +213,7 @@ b8 RayTraceMaterialResources::ensureShadowInstanceMaterialBuffer(usize instanceC
         .setByteSize(static_cast<u64>(sizeof(NwbRtInstanceMaterialGpu) * capacity))
         .setStructStride(sizeof(NwbRtInstanceMaterialGpu))
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("shadow_instance_material"))
+        .setDebugName(Name(s_ShadowResourceInstanceMaterial))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto materialBufferResult = m_graphics.createBuffer(materialBufferDesc);
@@ -239,7 +242,7 @@ b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(usize instanceCo
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("shadow_instance_context"))
+        .setDebugName(Name(s_ShadowResourceInstanceContext))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
@@ -257,8 +260,7 @@ b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(usize instanceCo
 
 b8 RayTraceMaterialResources::ensureShadowMaterialTypedBuffer(usize byteCount){
     // Keep one word so the heap binding remains valid with no transparent occluders.
-    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
-    requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
+    const usize requiredByteCount = ResolveMaterialTypedBufferByteCount(byteCount, sizeof(u32));
     if(m_shadow.m_shadowMaterialTypedBuffer && m_shadow.m_shadowMaterialTypedCapacity >= requiredByteCount)
         return ensureRayTraceMaterialContextHeapHandle(*m_shadow.m_shadowMaterialTypedBuffer.get(), m_shadow.m_shadowMaterialTypedHeapHandle);
 
@@ -268,7 +270,7 @@ b8 RayTraceMaterialResources::ensureShadowMaterialTypedBuffer(usize byteCount){
         .setByteSize(static_cast<u64>(capacity))
         .setStructStride(sizeof(u32))
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(Name("shadow_material_typed"))
+        .setDebugName(Name(s_ShadowResourceMaterialTyped))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto materialTypedBufferResult = m_graphics.createBuffer(materialTypedBufferDesc);

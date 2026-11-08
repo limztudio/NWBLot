@@ -1,0 +1,62 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/task/gpu/types.h>
+namespace NWB::Impl{
+using DeferredTailGpuTaskId = Core::GpuTaskId;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DeferredFrameTailResult{
+    public DeferredTailGpuTaskId historyCopyTask = DeferredTailGpuTaskId();
+    public DeferredTailGpuTaskId recoveryTask = DeferredTailGpuTaskId();
+}
+
+
+class DeferredLightingStageResult{
+    public DeferredTailGpuTaskId lightingTask = DeferredTailGpuTaskId();
+    public DeferredTailGpuTaskId historySlotsUploadTask = DeferredTailGpuTaskId();
+}
+
+
+class DeferredGraphSuffixResult{
+    public DeferredTailGpuTaskId compositeTask = DeferredTailGpuTaskId();
+    public DeferredTailGpuTaskId presentTask = DeferredTailGpuTaskId();
+    public DeferredTailGpuTaskId overlayTask = DeferredTailGpuTaskId();
+    public DeferredTailGpuTaskId frameTimingEndTask = DeferredTailGpuTaskId();
+    public b8 overlayRequired = false;
+}
+
+
+class OpaqueUploadChainResult{
+    public DeferredTailGpuTaskId csgUploadTask = DeferredTailGpuTaskId();
+    public b8 materialDrawBuffersUploaded = false;
+    public b8 csgFrameBuffersUploaded = false;
+    public b8 hasCsgFrameGpuWork = false;
+}
+
+
+class OpaqueSharedComputeEmulationChainResult{
+    public DeferredTailGpuTaskId completionTask;
+    public usize taskCount;
+
+    public OpaqueSharedComputeEmulationChainResult(){
+        this.completionTask = DeferredTailGpuTaskId();
+        this.taskCount = 0u;
+    }
+
+    public OpaqueSharedComputeEmulationChainResult(in DeferredTailGpuTaskId completionTask, in usize taskCount){
+        this.completionTask = completionTask;
+        this.taskCount = taskCount;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

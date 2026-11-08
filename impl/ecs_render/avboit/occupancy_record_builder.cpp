@@ -5,6 +5,7 @@
 #include "occupancy_record_builder.h"
 
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/avboit/phase_identities.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -56,7 +57,7 @@ b8 AvboitOccupancyRecordBuilder::declare(
         NWB_MAKE_AVBOIT_RASTER_RECORD_PHASE_DESC(
             "render.avboit.occupancy",
             "AVBOIT Occupancy",
-            Name("render.avboit.pre"),
+            Name(s_RenderIdentityRenderAvboitPre),
             "AVBOIT Pre",
             s_AvboitOccupancyResourceBaseCount
         ),
@@ -69,8 +70,7 @@ b8 AvboitOccupancyRecordBuilder::declare(
             .sharedComputeEmulationTasks = stage.m_occupancySharedComputeEmulationTasks,
             .sharedComputeEmulationTaskCount = stage.m_occupancySharedComputeEmulationTaskCount,
             .rasterTask = stage.m_occupancyTask,
-        }
-    );
+        });
 }
 
 

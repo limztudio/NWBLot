@@ -3,6 +3,7 @@
 
 
 const u32 s_MeshInstanceGeometrySlotCount = 12u;
+const usize s_InstanceGpuDataByteSize = 3u * 16u + cast<usize>(s_MeshInstanceGeometrySlotCount) * 4u;
 const u64 s_MeshletLocalVertexRefByteSize = 4ull;
 const u64 s_MeshEmulationVertexByteSize = 64ull;
 const u64 s_MeshEmulationFirstVertexIndex = 1ull;
@@ -25,6 +26,7 @@ const StringView s_MeshletAttributeRefDeltasBufferName = ":meshlet_attribute_ref
 const StringView s_MeshletLocalVertexRefsBufferName = ":meshlet_local_vertex_refs";
 const StringView s_MeshletPrimitiveIndicesBufferName = ":meshlet_primitive_indices";
 const usize s_RetainedAccelerationBuffersPerMesh = 5u;
+const usize s_MeshViewGpuDataBytes = 240u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +98,6 @@ InstanceGpuData BuildInstanceGpuData(
     return data;
 }
 
-const usize s_MeshViewGpuDataBytes = 240u;
 
 b8 ValidateRuntimeMeshPrimitiveIndexCount(
     in Name meshName,

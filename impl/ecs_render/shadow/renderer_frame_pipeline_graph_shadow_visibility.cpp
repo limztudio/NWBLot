@@ -14,6 +14,7 @@
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
@@ -269,7 +270,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
             counterClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
             EnableSameFamilyComputeEffectRouting(counterClearScheduling, adaptivePrimitivePrecedesVisibility);
             Core::GpuTaskDesc counterClearDesc;
-            counterClearDesc.setIdentity(Name("render.shadow_visibility.adaptive_counter_clear")).setMarkerLabel("Shadow Adaptive Counter Clear").setScheduling(counterClearScheduling).setDependencies({ &shadowVisibilityDependency, 1u });
+            counterClearDesc.setIdentity(Name(s_ShadowPassAdaptiveCounterClear)).setMarkerLabel("Shadow Adaptive Counter Clear").setScheduling(counterClearScheduling).setDependencies({ &shadowVisibilityDependency, 1u });
             const auto deferredShadowVisibilityAdaptiveCounterClearTaskResult = context.graph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u, });
             if(!deferredShadowVisibilityAdaptiveCounterClearTaskResult){
                 m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
@@ -295,7 +296,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     const Core::GpuTaskResourceUse allLitClearResourceUse = WriteTextureUse(shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     Core::GpuTaskDesc allLitClearDesc;
     allLitClearDesc
-        .setIdentity(Name("render.shadow_visibility.all_lit_clear"))
+        .setIdentity(Name(s_ShadowPassAllLitClear))
         .setMarkerLabel("Shadow Visibility All-Lit Clear")
         .setScheduling(allLitClearScheduling)
         .setDependencies({ &shadowVisibilityDependency, 1u })
@@ -322,7 +323,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     EnableCrossFamilyComputeEffectRouting(scheduling);
     Core::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("render.shadow_visibility"))
+        .setIdentity(Name(s_ShadowVisibilityPass))
         .setMarkerLabel(RendererGpuPassText::s_ShadowVisibilityLabel)
         .setScheduling(scheduling)
         .setDependencies({ &shadowVisibilityDependency, 1u })

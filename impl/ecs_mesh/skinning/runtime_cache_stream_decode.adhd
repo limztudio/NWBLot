@@ -231,9 +231,11 @@ Expected<RuntimeMeshLocalBounds> TryBuildRuntimeMeshLocalBounds(in Name sourceNa
         maxBounds = max(maxBounds, p);
     }
     if(
-        !isFinite(minBounds.x) || !isFinite(minBounds.y) || !isFinite(minBounds.z)
-        || !isFinite(maxBounds.x) || !isFinite(maxBounds.y) || !isFinite(maxBounds.z)
-        || minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z
+        !isFinite(minBounds.xyz)
+        || !isFinite(maxBounds.xyz)
+        || minBounds.x > maxBounds.x
+        || minBounds.y > maxBounds.y
+        || minBounds.z > maxBounds.z
     ){
         error("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds", sourceName.resolvedText());
         return makeUnexpected(Failure());

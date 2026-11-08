@@ -9,7 +9,7 @@
 
 
 b8 IsValidMeshletDirection3(in VectorSingle value){
-    return isFinite(value.x) && isFinite(value.y) && isFinite(value.z) && lengthSq(value.xyz) > s_MeshletDirectionEpsilon;
+    return isFinite(value.xyz) && lengthSq(value.xyz) > s_MeshletDirectionEpsilon;
 }
 
 VectorSingle NormalizeMeshletDirection3OrZero(in VectorSingle value){
@@ -144,3 +144,4 @@ b8 FlushBuiltMeshlet(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

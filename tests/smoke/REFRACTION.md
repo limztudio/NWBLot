@@ -11,23 +11,11 @@ clear glass with zero AVBOIT opacity. Active tiles append to a GPU queue, with
 compact indirect rows capped at 65,535 workgroups. The sparse kernel clips the
 final row to the active count and partial tiles to the framebuffer extent.
 
-A one-group finalizer runs after the classifier's UAV dependency within the same
-graph task and classification timing scope. Its 32-byte argument buffer contains
-sparse XYZ at byte 0, the active count at byte 12, dense XYZ at byte 16, and a
-reserved zero word at byte 28. When every tile is active and the framebuffer tile
-width fits the dispatch X limit, the finalizer enables the dense record and
-zeros sparse X. Otherwise it enables the compact record and zeros dense X.
-An empty capture has both X counts zero.
+A one-group end pass runs after the sort UAV need in the same graph job. Its 32-byte flag box holds thin XYZ at byte 0. It holds the live count at byte 12. It holds thick XYZ at byte 16. It holds a kept zero word at byte 28. When each tile is live and the tile width fits the send X cap, the end pass turns on the thick note. It zeros thin X. If not, it turns on the thin note. It zeros thick X. A blank grab has both X counts at zero.
 
-Both records are submitted inside the existing resolve task and timing scope.
-The selected record runs its separately cooked sparse or dense kernel; the other
-launches zero workgroups. The dense kernel maps workgroup IDs directly to
-framebuffer tiles and has no queue lookup or runtime occupancy branch. Selection
-uses exact current-frame occupancy, with no CPU readback or density threshold.
-Both screen-space and hardware tracing prepare both kernels, including the
-screen fallback pair for unavailable hardware preparation.
+Both notes go out in the old fix-up job and time span. The picked note runs its own cooked thin or thick code. The other starts zero work groups. The thick code maps group IDs straight to frame tiles. It has no list look-up and no live-count fork. Pick uses exact now-frame live tiles. It uses no CPU read-back and no full mark. Both screen and card trace ready both code sets. This holds the screen fall-back pair for no-card make.
 
-Build the scene and its cooked runtime assets through the repository launcher:
+Make the scene and its cooked run files through the repo launcher:
 
 ```powershell
 python -m launcher build nwb_refraction_smoke --configure-preset windows-clang-arm64 --config dbg
@@ -35,64 +23,21 @@ python -m launcher build nwb_refraction_smoke --configure-preset windows-clang-a
 
 For interactive inspection, use `python -m launcher smoke refraction --config dbg`.
 
-Run `nwb_refraction_capture_smoke` through CTest after building
-`nwb_refraction_smoke`. `nwb_refraction_gpudbg_capture_smoke` runs the same sequence
-with selected-backend GPU validation enabled in `dbg`. Each test captures three swapchain images
-after the same graphics frame count: refraction disabled, automatic tracing, and
-explicit screen-space tracing. The latter uses the renderer's normal hardware
-tracing preference, leaving device capability reporting intact.
+Run `nwb_refraction_capture_smoke` through CTest after you build `nwb_refraction_smoke`. `nwb_refraction_gpudbg_capture_smoke` runs the same steps. It turns on picked-back GPU checks in `dbg`. Each test grabs three swap shots after the same art frame count. The three are bend off, auto trace, and set screen trace. The last keeps the normal card trace want. Card skill notes stay whole.
 
-The smoke requires successful resolve dispatch diagnostics, normal application
-shutdown, and clean runtime/validation logs. Its visual checks require both dark
-stripes becoming light and light stripes becoming dark inside the glass, stable
-pixels outside its silhouette, and preservation of the foreground red panel.
-Both edge directions are necessary so flat tinting or attenuation cannot pass as
-refraction. Captures, amplified differences, and numeric measurements are written
-under `Testing/smoke/<config>/refraction` in the selected CMake build directory.
+The smoke needs good fix-up send notes. It needs a plain app end. It needs clean run/check logs. Its look checks need dark bars turned light in the glass. They need light bars turned dark in the glass. They need firm pixels past its shape. They need the front red pane kept. Both edge ways are a must. Flat tint or fade thus cannot pass as bend. Shots, grown gaps, and count checks land under `Testing/smoke/<config>/refraction` in the picked CMake build folder.
 
-To require a hardware ray-query dispatch on a known capable GPU, run
-`refraction_capture_smoke.py` with `--require-hardware`, together with its required
-`--executable`, `--working-directory`, and `--output-directory` paths. The normal
-CTest accepts the engine's natural route on GPUs without ray queries and always
-checks the explicitly selected screen-space route. Lack of swapchain readback
-support is reported as a skip; validation failures remain failures.
+To force a card ray-ask send on a known good card, run `refraction_capture_smoke.py` with `--require-hardware`. Give its set `--executable`, `--working-directory`, and `--output-directory` paths. Plain CTest takes the card free route on cards with no ray asks. It still always checks the set screen path. No swap-shot back-up gives a skip. Check faults stay faults.
 
 Interactive fixture controls are `NWB_REFRACTION_SMOKE_ENABLED=0` for the baseline
 and `NWB_REFRACTION_SMOKE_HARDWARE=0` for screen-space tracing. They call public
 renderer settings and exist only in the smoke project.
 
-The lifecycle smoke runs seven completed application framebuffer captures in one
-process: refraction disabled, active centered glass, glass moved to other tiles,
-glass intersecting the right framebuffer edge, glass moved offscreen, refraction
-disabled again, and refraction reenabled. It uses a 967x727 framebuffer and a wider
-stripe backdrop so the last seven columns of the partial 8x8 tile contain a
-measurable refracted image. The checks require both stripe-displacement directions
-in the broad edge region and displacement of each sufficiently represented
-baseline stripe polarity inside the partial tile, restoration of the old glass region after movement,
-neutral empty and disabled frames, repeatable reactivation, and preservation of
-the foreground red AVBOIT panel throughout.
+The life smoke runs seven done app frame-mark shots in one run. The steps are bend off, live mid glass, glass moved to more tiles, glass cut by the right mark edge, glass moved off-shot, bend off once more, and bend back on. It uses a 967x727 mark and a wider bar back-wall. The last seven rows of the half 8x8 tile thus hold a weighed bent shot. The checks need both bar-move ways in the wide edge zone. They need a move of each well-shown base bar end in the half tile. They need the old glass zone fixed after move. They need plain blank and off frames. They need repeat on. They need the front red AVBOIT pane kept all through.
 
-The moved and edge comparisons cover the projected sphere bounds. A separate
-moved-region check beyond the original sphere silhouette proves that new tiles
-became active. Hardware tracing must displace the partial tile's available stripe
-polarity. When the runtime explicitly reports screen-space tracing, the partial
-tile may instead match the clear sheet's bounded straight fallback: the screen
-march rejects offscreen or inconsistent depth crossings, then preserves the
-background with two Fresnel factors. The fallback check reconstructs the fixed
-fixture's IOR 1.5 Schlick transmission and default Reinhard/sRGB presentation from
-the disabled reference. It requires neutral, nonblack attenuation within 1.5
-encoded levels at at least 95% of eligible tail pixels, with a change of at least
-one level; unchanged, black, colored, or excessively darkened tails fail. The full
-edge region still requires stripe displacement in both directions on every route.
+The moved and edge weighs span the shown ball box. One more moved-zone check past the first ball shape proves new tiles turned live. Card trace must move the half tile seen bar end. When the run plainly tells screen trace, the half tile can instead match the clear sheet capped straight fall-back. The screen walk turns down off-shot or mixed depth cuts. Then it keeps the back-wall with two Fresnel rates. The fall-back weigh remakes the set IOR 1.5 Schlick pass and base Reinhard/sRGB show from the off base. It needs plain non-black fade in 1.5 coded steps at 95% or more of fit tail pixels. It needs a move of at least one step. Same, black, tinted, or too-dark tails fail. The full edge zone still needs bar move both ways on each path.
 
-Run `nwb_refraction_lifecycle_capture_smoke` after building the same target;
-`nwb_refraction_lifecycle_gpudbg_capture_smoke` enables GPU validation in `dbg`.
-Both run automatic and explicitly selected screen-space tracing. Captures include
-the source graphics-frame identity for each phase and are retained under
-`Testing/smoke/<config>/refraction_lifecycle`. The test-only fixture controls are
-`NWB_REFRACTION_SMOKE_LIFECYCLE=1` and `NWB_REFRACTION_SMOKE_EXTENT=npot`.
-`refraction_lifecycle_smoke.py --require-hardware` additionally requires a hardware
-resolve in its automatic run.
+Run `nwb_refraction_lifecycle_capture_smoke` after you build the same exe. `nwb_refraction_lifecycle_gpudbg_capture_smoke` turns on GPU checks in `dbg`. Both run auto and set screen trace. Shots hold the true art-frame ID for each step. They stay under `Testing/smoke/<config>/refraction_lifecycle`. The test-only knobs are `NWB_REFRACTION_SMOKE_LIFECYCLE=1` and `NWB_REFRACTION_SMOKE_EXTENT=npot`. `refraction_lifecycle_smoke.py --require-hardware` also forces a card fix-up in its auto run.
 
 For direct GPU scheduling coverage, build `nwb_avboit_depth_warp_probe_smoke`
 and `nwb_logserver` in the same configuration, then run:
@@ -101,36 +46,12 @@ and `nwb_logserver` in the same configuration, then run:
 ctest --test-dir __cmake/build/windows-clang-arm64 -C opt -R "^nwb_avboit_depth_warp_probe_smoke$" --output-on-failure
 ```
 
-The refraction portion uses the cooked production classifier, its one-group
-argument finalizer, and both specialized shared resolver mappings at 2049x2049,
-including the partial edge tiles. Its six phases reuse the
-same resources with 66,049, zero, six sparse, 65,535, 65,536, and 66,048 active
-tiles; the last case omits an interior tile while keeping the final tile active.
-It checks every byte of the 32-byte indirect argument layout, queue membership
-and uniqueness, every tile and pixel visit, row tails, edge lanes, and sentinel
-guards with GPU validation. Each phase records both indirect dispatches and
-separate route counters: the inactive route has zero groups, and the empty phase
-has no verifier groups. Exactly full occupancy selects the native 257x257 dense
-grid; every nonempty sparse phase uses the compact grid capped at 65,535 groups
-per row. The dense verifier receives a separate list of valid reversed tile IDs,
-while the CPU still validates the classifier's original list. Requiring the
-mapped tile to equal the dispatch index proves that the dense path bypasses
-queue order. The all-but-one case must retain sparse queue mapping, including
-its bounded indirect tail. The smoke
-requires all six phases and 25,190,406 pixel checks before reporting success.
+The bend part uses the cooked real sort, its one-group flag end pass, and both set shared fix-up maps at 2049x2049. This holds half edge tiles. Its six steps reuse the same stores. Live tile counts are 66,049, zero, six thin, 65,535, 65,536, and 66,048. The last step drops a mid tile but keeps the end tile live. It checks each byte of the 32-byte send flag plan. It checks list hold and once-only. It checks each tile and pixel hit, row tails, edge lanes, and mark guards with GPU checks. Each step logs both send counts and split path counts. The idle path has zero groups. The blank step has no checker groups. Full live tiles pick the home 257x257 thick grid. Each live thin step uses the small grid capped at 65,535 groups per row. The thick checker gets its own list of true flipped tile IDs. The CPU still checks the sort first list. The mapped tile must match the send index. This proves the thick path skips list order. The all-but-one step must keep thin list map. This holds its capped send tail. The smoke needs all six steps and 25,190,406 pixel checks first. Then it reports good.
 
-For uncaptured timing acquisition, set `NWB_REFRACTION_SMOKE_TIMING=1` and
-`NWB_GPU_TIMING_FILE` to an output path. The fixture uses the shared AVBOIT timing
-observer, including refraction classification and resolve, AVBOIT stages, frame
-time, and unaffected control passes. It keeps rendering unfocused through the
-existing render-pass policy. Keep timing runs separate from serialized framebuffer
-lifecycle captures and compare classification plus resolve and whole-frame cost
-with matched binaries, packed assets, extent, trace route, and acquisition
-conditions. The normal fixture uses 960x720; `NWB_REFRACTION_SMOKE_EXTENT=npot`
-selects 967x727 for either capture or timing.
+For shot-free time take, set `NWB_REFRACTION_SMOKE_TIMING=1` and `NWB_GPU_TIMING_FILE` to an out path. The set uses the shared AVBOIT time look-out. This holds bend sort and fix-up, AVBOIT steps, frame time, and plain kept passes. It keeps draw off-focus through the old draw-pass rule. Keep time runs apart from set frame-shot life grabs. Match exes, packed files, size, trace path, and take rules when you weigh sort plus fix-up and full-frame cost. The plain set uses 960x720. `NWB_REFRACTION_SMOKE_EXTENT=npot` picks 967x727 for shot or time runs.
 
 The density fixture is opt-in through `NWB_REFRACTION_SMOKE_DENSITY`, which accepts
-exactly `0`, `1`, `10`, `50`, or `100`. It requires an explicit
+exactly `0`, `1`, `10`, `50`, or `100`. It requires an set
 `NWB_REFRACTION_SMOKE_EXTENT=960x720`, `1600x900`, or `1920x1080`, and rejects density combined
 with a gallery case or lifecycle capture. Empty or unknown density/extent values
 are errors. Refraction stays enabled; `NWB_REFRACTION_SMOKE_ENABLED` must be absent
@@ -176,60 +97,18 @@ verify the framebuffer extent before accepting a density result.
 | 100% | 691,200 / 10,800 | 1,440,000 / 22,600 | 2,073,600 / 32,400 |
 
 `refraction_density_capture_smoke.py` independently qualifies the rendered density
-before timing. Supply the normal executable, working-directory, output-directory,
-and optional logserver paths. Its defaults capture all 20 density/extent/route
-combinations at 960x720 and 1600x900; `--densities`, `--extents`, and `--routes` accept comma-separated
-subsets. Each extent/route always captures its 0% occluded reference even when
-zero is absent from the requested subset. `--application-arg=--gpudbg` enables
-validation for every captured process.
+before time runs. Give the plain exe, work-folder, out-folder, and set log-server paths. Its base form grabs all 20 thick/size/path sets at 960x720 and 1600x900. `--densities`, `--extents`, and `--routes` take cut lists. Each size/path still grabs its 0% hid base shot, even when zero is out of the asked set. `--application-arg=--gpudbg` turns on checks for each shot run.
 
-1920x1080 remains available through explicit `--extents=1920x1080` on hosts with
-adequate resource-allocation limits. The renderer allocates its full 32-layer CSG
-target independently of glass coverage; that target can exceed a device's single
-allocation limit at this extent. Exact window sizing does not establish resource
-admission. A runtime allocation warning rejects the capture, and an extent with
-such a warning remains unqualified rather than falling back to a smaller image.
+1920x1080 stays open through set `--extents=1920x1080` on boxes with good store-ask caps. The draw grabs its full 32-coat CSG mark apart from glass cover. That mark can pass one card ask cap at this size. Exact pane size does not prove store take-in. A run store warn turns down the shot. Such a size stays unfit. It does not fall back to a small shot.
 
-Capture protocol 2 sets the observer's required width/height to the requested
-extent and keeps the process alive after readback. The harness inspects the
-actual native client size and uses the test backend's `resize_client` operation
-when startup clamps the window to the desktop work area. The density harness
-opts into sizing this test window beyond the work area; it does not change the
-display mode. It requires both the exact client size and the matching runtime
-framebuffer-resize diagnostic before accepting readback, then closes the
-application through its normal window shutdown. The final log and image must
-confirm the target extent. An initial clamped size is retained as evidence and
-accepted only after that confirmed transition; it never substitutes for the
-requested image size. Metrics record the protocol, initial and confirmed client
-extents, runtime framebuffer extents, and whether a resize was requested.
+Grab rule 2 sets the look-out asked width/height to the asked size. It keeps the run live after read-back. The cover checks the true home pane size. It uses the test back `resize_client` call when start clips the pane to the desk work zone. The thick cover opts to size this test pane past the work zone. It does not swap show mode. It needs both the exact pane size and the match run frame-mark resize note first. Then it takes read-back. Then it ends the app through its plain pane end. The end log and shot must prove the mark size. A first clipped size stays as proof. It counts only after that proved move. It never stands in for the asked shot size. Scores log the rule, first and proved pane sizes, run frame-mark sizes, and if a resize was asked.
 
-The zero reference must match the default unlit neutral stripe levels and remain
-constant vertically. Positive captures report actual changed pixel bounds/counts
-against independent projected-rectangle math, rather than using the fixture's
-logged count as image evidence. Pixels outside a one-pixel rectangle boundary
-guard must remain exactly unchanged. At least 99% of the inset rectangle must
-change, and every sufficiently populated 8x8 block must have at least 90% changed
-pixels, rejecting a missing local tile even when global coverage remains high.
-The interior must retain both nonblack neutral stripe polarities and match the
-IOR 1.5 Schlick factors through default Reinhard/sRGB presentation within two
-encoded levels. Hardware uses the closed slab's entry/exit cosines; screen-space
-uses its existing single-interface sheet factors. Per-block physical checks also
-reject small black or tinted holes.
+The zero base shot must match the base dim plain bar steps. It must stay flat top to base. Good shots tell true moved pixel edges/counts. They weigh free shown-box math. They do not use the set logged count as shot proof. Pixels past a one-pixel box edge guard must stay same. At least 99% of the inset box must move. Each well-filled 8x8 cell must hold at least 90% moved pixels. A lost home tile thus fails, even when world cover stays high. The in-box must keep both non-black plain bar ends. It must match the IOR 1.5 Schlick rates through base Reinhard/sRGB show in two coded steps. Card runs use the shut slab in/out tilts. Screen runs use their old one-face sheet rates. Per-cell true checks also turn down small black or tinted pits.
 
-Only the flat front/back Fresnel comparison excludes a separate, analytically
-derived inner edge band: near a finite slab's silhouette, a ray may exit its side
-and undergo total internal reflection. This band derives from thickness, FOV,
-view angle, and pixel extent and is recorded in the metrics. All pixels in that
-band still participate in the changed-mask and local coverage checks. This is
-distinct from the one-pixel outside-mask allowance. Captures, runtime logs, and
-`density_capture_metrics.json` retain the measured bounds, coverage, and physical
-acceptance counts. CPU oracle tests reject absent or partial glass, one missing
-tile, output outside the mask, a wrong-pitch footprint, black/tinted/excessively
-attenuated output, and a corrupted zero reference.
+Only the flat front/back Fresnel weigh drops one more set in-box edge strip. Near a thick slab shape edge, a ray can leave its side and fully bounce in. This strip comes from thick, FOV, look tilt, and pixel size. Scores log it. All strip pixels still join the moved-mask and home cover checks. This is apart from the one-pixel past-mask pass. Shots, run logs, and `density_capture_metrics.json` keep the weighed edges, cover, and true take counts. CPU true-model tests turn down lost or half glass, one lost tile, out past the mask, a bad-step foot shape, black/tinted/too-dim out, and a bad zero base.
 
-For a separate frame-graph diagnostic, set
-`NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH` to a nonempty output JSON path whose
-parent directory already exists. This mode rejects simultaneous timing,
+For a split frame-plan note, set `NWB_REFRACTION_FRAME_GRAPH_SNAPSHOT_PATH` to a non-blank out JSON path whose
+parent folder already exists. This mode rejects simultaneous timing,
 lifecycle, framebuffer readback, or frame freeze. It waits until the runtime has
 held the requested extent for at least 360 completed graphics frames, resetting
 that interval if the extent changes. On the next update it snapshots the public
@@ -304,34 +183,11 @@ python tests/smoke/refraction_density_benchmark.py `
   --blocks 2
 ```
 
-Add `--baseline-namesym` and `--candidate-namesym` with the actual generated
-symbol paths when the build's timing output requires symbol resolution. Add `--plan-only` to
-validate frozen inputs and inspect the cell/order plan without launching the
-applications. Repeated `--extent`, `--coverage`, and `--trace-route` arguments
-select subsets. Two blocks alternate reference/candidate order and are
-descriptive; the default is four blocks, and an even count of at least six
-enables paired bootstrap intervals. An interval for one selected metric does
-not establish simultaneous confidence across the whole density matrix.
+Give `--baseline-namesym` and `--candidate-namesym` with the true made mark paths when the build time out needs mark fix. Give `--plan-only` to check held ins and see the cell/order plan with no app start. Repeat `--extent`, `--coverage`, and `--trace-route` flags to pick cuts. Two blocks swap base/try order and only tell. The base form is four blocks. A same count of at least six turns on paired boot spans. A span for one picked score does not prove same-time trust for the full thick grid.
 
-Each trial confirms the native client and final deferred-target extent, discards
-startup and unsealed GPU reports, then requires at least two target-only warmup
-intervals and 100 completed GPU frames. It retains at least twelve positive,
-sealed report intervals. It uses fixed simulation delta and continuous
-render-unfocused behavior, with framebuffer readback, frame-graph snapshots,
-and GPU validation absent during measurement. Runtime warnings, an incorrect
-actual trace route, or missing scope coverage reject acquisition.
+Each try proves the home pane and end held-mark size. It drops start and unsealed GPU notes. Then it needs at least two mark-only warm spans and 100 done GPU frames. It keeps at least twelve good sealed note spans. It uses a set act step and non-stop draw-off-focus way. Frame-shot read-back, frame-plan shots, and GPU checks stay off in measure. Run warns, a wrong true trace path, or lost span cover turn down the take.
 
-Compare argument clear + classifier + resolve + compositor GPU duration per
-completed GPU frame. A full-frame reference omits tile-only clear/classifier
-scopes; a tiled reference and every candidate must publish both, including at 0% coverage. Keep
-individual scopes and whole-frame timing alongside the aggregate; resolve alone
-does not account for scheduling cost. Report opaque, shadow, lighting, and
-presentation controls to expose drift. A callback stall over the declared
-threshold rejects wall-time eligibility while retaining the raw evidence;
-callback timing includes pacing and does not establish CPU cost or presentation
-cadence. GPU acquisition success, clean wall acquisition, and a performance
-conclusion are separate decisions. Retain `plan.json`, all per-trial logs and GPU
-reports, summaries, and failures when reporting the result.
+Weigh flag clear + sort + fix-up + mix card time per done GPU frame. A full-frame base drops tile-only clear/sort spans. A tiled base and each try must show both, plus at 0% cover. Keep split spans and full-frame times next to the sum. Fix-up alone does not hold plan cost. Tell solid, dark, light, and show kept scores to show drift. A call-back stall past the set cap turns down wall-time use but keeps raw proof. Call-back time holds pace and does not prove CPU cost or show beat. Card take good, clean wall take, and a speed call stay split calls. Keep `plan.json`, each try logs and card notes, sums, and faults when you tell the result.
 
 `refraction_query_profile_benchmark.py` profiles one frozen renderer at hardware
 refraction coverage 50% and 100%, each at 960x720 and 1600x900. Its default eight
@@ -350,9 +206,7 @@ python tests/smoke/refraction_query_profile_benchmark.py `
   --output-directory refraction-query-profile
 ```
 
-Use `--plan-only` to validate identities and save the complete trial order before
-launch. Source manifests must include both compiled density fixture files. Each
-trial confirms the actual extent, discards the startup/unsealed boundary, then
+Use `--plan-only` to check IDs and save the full try order before start. Source lists must hold both built thick set files. Each try proves the true size. It drops the startup/unsealed boundary, then
 discards at least 30 seconds of target-only sealed publication intervals and
 100 completed GPU frames. It retains twelve or more positive sealed reports
 with at least 100 GPU frames. Warmup is fixed before acquisition; the runner does
@@ -380,7 +234,7 @@ The report keeps whole-frame, resolve, scheduling/compositor aggregate, AVBOIT,
 opaque, shadow, lighting, presentation, per-position, and per-block values.
 Coverage scaling uses paired independent blocks with individual bootstrap
 intervals. A coverage change changes the optical workload; these values guide
-diagnostic attribution and do not establish an optimization speedup. Keep shader
+diagnostic attribution and do not prove an optimization speedup. Keep shader
 query/fallback counts in a separate diagnostic acquisition against the same
 scene and route, and measure timing with the uninstrumented frozen arm.
 
@@ -407,38 +261,11 @@ Start-Process -FilePath (Get-Command pwsh.exe).Source `
   -ArgumentList $profileSupervisorArguments -WindowStyle Hidden
 ```
 
-The supervisor checks acquisition-script hashes and original protocol/arm paths
-before launching Python, retains the native child handle, and records a running
-heartbeat plus final exit code in `<output>-supervisor/process-status.json`.
-The same control directory retains `stdout.log` and `stderr.log`. `-ProbeOnly`
-with a separate output name verifies that the hidden supervisor survives its
-originating command, without starting Python or GPU rendering. An interrupted
-campaign remains incomplete; a new complete schedule uses a new output directory
-and does not combine selectively replayed trials with partial data.
+The boss checks take-script hashes and first rule/arm paths first. Then it starts Python. It keeps the home child grip. It writes a live beat plus end exit code in `<output>-supervisor/process-status.json`. The same kept folder holds `stdout.log` and `stderr.log`. `-ProbeOnly` with a split out name proves the hid boss lives past its start call. It starts no Python and no card draw. A cut drive stays half done. A new full plan uses a new out folder. It does not mix hand-picked repeat tries with half facts.
 
-The public renderer diagnostic opt-in is
-`RendererSystem::setRefractionDiagnosticsEnabled(true)`. It selects separately
-cooked hardware kernels with counters and asynchronous completed readback.
-`tryGetLatestRefractionStatistics()` returns a completed accepted copy, or failure
-until one is available; it does not wait for the GPU or promise the current
-frame. The latest publication may remain available while newer work is pending.
-Use its sequence/generation, graphics source frame, extent, hardware readiness
-and accepted physical submission token to establish freshness and route. An
-accepted diagnostic copy does not establish that a later presentation succeeded.
+The open draw note opt-in is `RendererSystem::setRefractionDiagnosticsEnabled(true)`. It picks split cooked card code with counts and free done read-back. `tryGetLatestRefractionStatistics()` gives a done took copy, or fault till one lives. It does not wait for the card and does not vow the now frame. The last post may stay up while new work waits. Use its line/set, art true frame, size, card ready, and took true send token to prove new and path. A took note copy does not prove a next show won.
 
-The three-slot readback ring skips a new sample when full while rendering
-continues. Statistics expose entry association, volume exit, internal reflection,
-background continuation, cache and fallback work. Counters are 32-bit, and any
-nonzero `overflowFlags` invalidates that sample. Ordinary logical stage queries
-each issue one physical inline query; certified single-refractor front boundaries
-associate directly from the capture without an entry query (`entryQueries = 0`,
-`entryHits = activePixels`), while CSG may perform additional physical work, so
-`physicalQueries` and `queryBudgetUnits` remain separate. Counter shares do not
-establish GPU-time shares. Background hits on opaque instances consult the
-screen-space lighting cache directly from hit distance and instance flags before
-reading primitive, barycentric, or `worldToObject` intersection attributes;
-surface reconstruction and `nwbRefractionShadeSurfaceHit` (`materialShadeCalls`)
-run only when a hit is non-opaque or misses the screen cache.
+The three-slot read-back ring drops a new try when full. Draw goes on. Facts show in link, bulk out, in bounce, back follow, kept and fall-back work. Counts are 32-bit. Any non-zero `overflowFlags` voids that try. Plain true step asks each send one true in-line ask. Marked one-bender front edges link straight from the grab with no in ask (`entryQueries = 0`, `entryHits = activePixels`). CSG can do more true work. So `physicalQueries` and `queryBudgetUnits` stay split. Count shares do not prove card-time shares. Back hits on solid copies ask the screen light kept store first. They use hit range and copy flags first. They read this before point, mid-weight, or `worldToObject` hit facts. Face remake and `nwbRefractionShadeSurfaceHit` (`materialShadeCalls`) run only when a hit is non-solid or misses the screen kept store.
 
 `refraction_query_diagnostics_smoke.py` acquires diagnostic counts and optical
 checks separately from timing:
@@ -528,7 +355,7 @@ stripe displacement and foreground transparency preservation.
 The default `RendererComponent::opticalVolumeCoincidence` policy is `Independent`,
 which preserves authored surfaces. `IdenticalMaterial` opts into grouping exact
 static duplicates with the same mesh, material, effective surface inputs, and
-transform. `SharedGroup` additionally requires a nonempty `opticalVolumeGroup` and
+transform. `SharedGroup` also requires a nonempty `opticalVolumeGroup` and
 permits differing mutable surface inputs. Both merge modes assert that geometry and surface hooks are independent of dense
 instance identity; `SharedGroup` also asserts that the
 differing inputs preserve the same boundary. The material asset, mesh, and exact
@@ -554,39 +381,14 @@ python tests/smoke/refraction_duplicate_smoke.py `
   --require-hardware --application-arg=--gpudbg
 ```
 
-The default run captures thirty-three framesets: fourteen cases on each of the
-automatic and screen-space routes, plus five refraction-disabled controls.
-`--variants automatic` or `--variants screen` limits the optical route. Every
-capture uses sixteen graphics presentation frames, completed GPU readback, clean
-logs, and normal shutdown. Duplicate
-matches permit at most two levels of channel rounding and a mean absolute RGB
-error of 0.02/255 across the full frame. Distinct controls must change at least
-sixty-four pixels by more than two channel levels; separate cool/warm reference
-checks prevent a priority test from passing with indistinguishable materials.
-`duplicate_comparisons.json` records successful comparisons, while `gallery.html`
-and raw BMP/PNG captures are written before image comparison so a failed oracle
-can be inspected. The corresponding CTest is
-`nwb_refraction_duplicate_capture_smoke`; CPU-only oracle tests are registered as
-`nwb_refraction_duplicate_analysis_unit`.
+The base run grabs 33 frame sets. It grabs 14 cases on auto and 14 on screen, plus five bend-off kept shots. `--variants automatic` or `--variants screen` cuts the light path. Each grab uses 16 art show frames, done card read-back, clean logs, and a plain end. Same-copy match lets at most two steps of lane round and a mean full-RGB gap of 0.02/255 for the full frame. Split kept shots must move at least 64 pixels by more than two lane steps. Split cool/warm base checks stop a first test from passing with same-look mats. `duplicate_comparisons.json` logs good weighs. `gallery.html` and raw BMP/PNG shots land first, so a bad true-model can be seen. The match CTest is `nwb_refraction_duplicate_capture_smoke`. CPU-only true-model tests live as `nwb_refraction_duplicate_analysis_unit`.
 
-The caustic-sphere fixture also explicitly enables camera refraction while keeping
-its original glass material, light, receiver, and photon caustics. Launch it with:
+The burn-ball set also turns on camera bend outright. It keeps its first glass mat, light, catch plate, and photon burns. Start it with:
 
 ```powershell
 python -m launcher smoke caustic-sphere --config dbg
 ```
 
-`NWB_REFRACTION_SMOKE_ENABLED=0` disables only camera refraction for a comparison;
-the glass continues casting its refractive shadow and photon caustic. Set
-`NWB_REFRACTION_SMOKE_HARDWARE=0` to compare screen-space camera refraction while
-leaving the caustic producer on the device's natural route. Both preferences
-default to enabled when the environment variables are absent.
+`NWB_REFRACTION_SMOKE_ENABLED=0` turns off only camera bend for a weigh. The glass still casts its bend dark and photon burn. Set `NWB_REFRACTION_SMOKE_HARDWARE=0` to weigh screen camera bend. The burn maker stays on the card free path. Both wants base to on when the box flags miss.
 
-`nwb_software_raytracing_optical_smoke` reads back the application framebuffer after
-360 graphics presentation frames, once GPU readback has completed, with a fixed
-1/60-second simulation delta. It requires both
-a refraction resolve and a caustic producer dispatch, clean runtime logs, a
-nonempty image, and orderly shutdown. Its output is
-`Testing/smoke/<config>/caustic_sphere_capture.bmp`. The existing renderer-baseline
-freeze remains available for interactive/reference captures; an active framebuffer
-observer takes precedence so a stale freeze setting cannot stop its readback.
+`nwb_software_raytracing_optical_smoke` reads back the app frame mark after 360 art show frames. Card read-back must be done first. Act step stays at 1/60 sec. It needs both a bend fix-up and a burn maker send. It needs clean run logs, a non-blank shot, and a neat end. Its out file is `Testing/smoke/<config>/caustic_sphere_capture.bmp`. The old draw-base hold stays open for hand/base shots. A live frame-mark look-out wins, so an old hold set cannot stop its read-back.

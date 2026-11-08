@@ -98,17 +98,13 @@ Adapters without a dedicated compute queue skip this async qualification through
 the existing capability diagnostic. Lagged artifacts use the _lagged suffix.
 
 GI uses current CSG geometry independently of retained light-space shadow maps.
-Both traversal implementations subtract the cutter union from closed-component
-spans and shade the selected surviving triangle or generated wall with the receiver
+Both walk makes cut the cutter join from shut-part spans. They tint the picked live tri or made wall with the catcher
 material. Cooked membership bits identify closed components in the final ray-triangle
 order. Zero-volume components remain surfaces, with volume measured relative to a
 stable component origin. Open components in the same mesh remain clipped surface
 hits and do not generate walls. Light-space shadows consume the same membership
 without interpreting open events as unmatched volume exits. Nonzero oriented
-winding preserves reversed closed shells and nested cavity cancellation. Shared
-built-in shape and bounded cutter support follow the current CSG snapshot contract;
-unsupported
-or over-budget geometry reports a diagnostic and uses conservative occlusion.
+winding preserves reversed closed shells and nested cavity cancellation. Shared in-house shape and capped cutter help keep the now CSG snap deal. Lost or past-cap shape tells a note and uses softservative occlusion.
 
 ## Temporal CSG direct/GI sequence
 
@@ -254,10 +250,7 @@ CTest registers fourteen sequences as `nwb_csg_gi_<suffix>_smoke`:
 
 The lighting sequences enable the quality gate; normal/position sequences enable
 the geometry gate; cap-state sequences enable the cap-state gate; overlapping
-span-state sequences enable the span gate. All request
-GPU validation, use the matching runtime directory
-and logserver when available, overwrite only their own known capture artifacts,
-and serialize display use through the test resource lock. Unsupported capture
+span-state sequences enable the span gate. All ask for card proof. They use the match run root and log-server when near. They wipe only their own known grab files. They line up display use through the test resource lock. Unsupported capture
 environments may skip with exit 77. A passing gate verifies those finite
 regression conditions on the actual run; broader optical correctness and
 performance still require their own matched comparisons. Interval-1 GPU

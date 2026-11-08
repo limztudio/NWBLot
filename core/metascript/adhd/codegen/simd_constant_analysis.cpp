@@ -85,9 +85,9 @@ namespace __hidden_simd_constant_analysis{
 
 
 [[nodiscard]] b8 SimdConstantAnalysis::TryMatchIdentityRowIndex(
+    u32& outRowIndex,
     const Expr& expr,
     const SymbolTable& symbols,
-    u32& outRowIndex,
     const Span<const Stmt* const> localVarDecls
 )noexcept{
     for(u32 r = 0u; r < 4u; ++r){
@@ -376,3 +376,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

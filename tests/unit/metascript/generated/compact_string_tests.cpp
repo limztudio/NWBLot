@@ -5,6 +5,9 @@
 #include "compact_string.adhd.h"
 #include "builtin_shadow_global.adhd.h"
 
+#include <global/floating_point_environment.h>
+#include <tests/common/floating_point_environment_guard.h>
+
 #include <gtest/gtest.h>
 
 
@@ -137,6 +140,62 @@ TEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation
         + (0x40u + 0x81u + 0x80u);
     EXPECT_EQ(NWB::Tests::exerciseHighByteStringOps(viewValue, compactValue), expected);
     EXPECT_EQ(NWB::Tests::borrowLocalStringAcrossValueCall(), 76u + 72u);
+}
+
+
+TEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    const NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+
+    volatile u32 snan32 = 0x7f800123u;
+    volatile u64 snan64 = 0x7ff0000000000123ull;
+    const SIMDVectorSingle inactive32 = VectorSetInt(0u, 0u, 0u, snan32);
+    const SIMDVectorSingle shortCircuit32 = VectorSetInt(0x3f800000u, snan32, 0u, snan32);
+    const SIMDVectorSingle active32 = VectorSetInt(0u, snan32, 0u, 0u);
+    const SIMDVectorDouble inactive64 = VectorDoubleSetInt(0ull, 0ull, 0ull, snan64);
+    const SIMDVectorDouble shortCircuit64 = VectorDoubleSetInt(0x3ff0000000000000ull, snan64, 0ull, snan64);
+    const SIMDVectorDouble active64 = VectorDoubleSetInt(0ull, snan64, 0ull, 0ull);
+
+    for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::anyLaneGreater3Single(inactive32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::anyLaneGreater3Single(shortCircuit32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::anyLaneGreater3Single(active32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT) & FE_INVALID, FE_INVALID);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::anyLaneGreater3Double(inactive64, VectorDoubleZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::anyLaneGreater3Double(shortCircuit64, VectorDoubleZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_FALSE(NWB::Tests::anyLaneGreater3Double(active64, VectorDoubleZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT) & FE_INVALID, FE_INVALID);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::anyLaneGreater2Single(shortCircuit32, VectorZero()));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        EXPECT_TRUE(NWB::Tests::finiteLane3Single(inactive32));
+        EXPECT_FALSE(NWB::Tests::finiteLane3Single(active32));
+        EXPECT_TRUE(NWB::Tests::finiteLane3Double(inactive64));
+        EXPECT_FALSE(NWB::Tests::finiteLane3Double(active64));
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

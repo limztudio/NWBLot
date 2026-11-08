@@ -3,6 +3,7 @@
 
 
 #include "parallel_statement_emitter.h"
+#include "simd_expression_analysis.h"
 #include "source_emitter.h"
 
 #include "reflection_emitter.h"
@@ -22,6 +23,93 @@ namespace __hidden_adhd_source_emitter{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] constexpr b8 IsComparisonOp(const TokenType::Enum op)noexcept{
+    return op == TokenType::EqualEqual
+        || op == TokenType::BangEqual
+        || op == TokenType::Less
+        || op == TokenType::LessEqual
+        || op == TokenType::Greater
+        || op == TokenType::GreaterEqual;
+}
+
+[[nodiscard]] constexpr b8 IsNonFloatLiteralExpr(const Expr* const expr)noexcept{
+    return expr && (expr->kind == ExprKind::IntegerLiteral || expr->kind == ExprKind::BoolLiteral || expr->kind == ExprKind::StringLiteral);
+}
+
+[[nodiscard]] b8 StatementsNeedSimdFloatingPointEnv(const Span<const Stmt* const> stmts, const SymbolTable& symbols, b8 hasSimdScalarLocal = false)noexcept;
+
+[[nodiscard]] b8 ExprNeedsSimdFloatingPointEnv(const Expr* const expr, const SymbolTable& symbols, const b8 hasSimdScalarLocal)noexcept{
+    if(!expr)
+        return false;
+    if(expr->kind == ExprKind::Binary && IsComparisonOp(expr->op)){
+        if((hasSimdScalarLocal && !IsNonFloatLiteralExpr(expr->lhs) && !IsNonFloatLiteralExpr(expr->rhs))
+            || SimdExpressionAnalysis::ExprContainsSimdMath(expr->lhs, symbols)
+            || SimdExpressionAnalysis::ExprContainsSimdMath(expr->rhs, symbols))
+            return true;
+    }
+    if(expr->kind == ExprKind::Call && expr->isBuiltinCall && expr->lhs && expr->lhs->kind == ExprKind::Identifier && expr->lhs->text == "isFinite"){
+        if(hasSimdScalarLocal)
+            return true;
+        for(const Expr* arg : expr->arguments){
+            if(SimdExpressionAnalysis::ExprContainsSimdMath(arg, symbols))
+                return true;
+        }
+    }
+    if(expr->kind == ExprKind::Lambda && StatementsNeedSimdFloatingPointEnv(expr->lambdaBody, symbols, hasSimdScalarLocal))
+        return true;
+    if(ExprNeedsSimdFloatingPointEnv(expr->lhs, symbols, hasSimdScalarLocal)
+        || ExprNeedsSimdFloatingPointEnv(expr->rhs, symbols, hasSimdScalarLocal))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(ExprNeedsSimdFloatingPointEnv(arg, symbols, hasSimdScalarLocal))
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 StatementsNeedSimdFloatingPointEnv(const Span<const Stmt* const> stmts, const SymbolTable& symbols, b8 hasSimdScalarLocal)noexcept{
+    for(const Stmt* stmt : stmts){
+        if(!stmt)
+            continue;
+        if(stmt->kind == StmtKind::VarDecl && SimdExpressionAnalysis::ResolveLocalVarDeclSimdType(*stmt, symbols).empty()){
+            if(stmt->expr && SimdExpressionAnalysis::ExprContainsSimdMath(stmt->expr, symbols))
+                hasSimdScalarLocal = true;
+            for(const Expr* arg : stmt->arguments){
+                if(SimdExpressionAnalysis::ExprContainsSimdMath(arg, symbols))
+                    hasSimdScalarLocal = true;
+            }
+        }
+        if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->rhs && SimdExpressionAnalysis::ExprContainsSimdMath(stmt->expr->rhs, symbols))
+            hasSimdScalarLocal = true;
+        if(ExprNeedsSimdFloatingPointEnv(stmt->expr, symbols, hasSimdScalarLocal)
+            || ExprNeedsSimdFloatingPointEnv(stmt->condition, symbols, hasSimdScalarLocal)
+            || ExprNeedsSimdFloatingPointEnv(stmt->stepExpr, symbols, hasSimdScalarLocal))
+            return true;
+        if(stmt->initStmt){
+            const Stmt* const initPtr = stmt->initStmt;
+            if(StatementsNeedSimdFloatingPointEnv(Span<const Stmt* const>(&initPtr, 1u), symbols, hasSimdScalarLocal))
+                return true;
+        }
+        for(const Expr* arg : stmt->arguments){
+            if(ExprNeedsSimdFloatingPointEnv(arg, symbols, hasSimdScalarLocal))
+                return true;
+        }
+        if(StatementsNeedSimdFloatingPointEnv(stmt->statements, symbols, hasSimdScalarLocal)
+            || StatementsNeedSimdFloatingPointEnv(stmt->elseStatements, symbols, hasSimdScalarLocal))
+            return true;
+        for(const SwitchCase& sc : stmt->switchCases){
+            if(ExprNeedsSimdFloatingPointEnv(sc.matchExpr, symbols, hasSimdScalarLocal)
+                || StatementsNeedSimdFloatingPointEnv(sc.statements, symbols, hasSimdScalarLocal))
+                return true;
+        }
+        for(const NativeBinding& nb : stmt->nativeBindings){
+            if(ExprNeedsSimdFloatingPointEnv(nb.sourceExpr, symbols, hasSimdScalarLocal))
+                return true;
+        }
+    }
+    return false;
+}
 
 [[nodiscard]] const Expr* FindConstructorFieldAssignment(const Span<const Stmt* const> stmts, const MStringView fieldName, const Expr*& outUniqueTopLevelAssignExpr)noexcept{
     const Expr* firstFound = nullptr;
@@ -65,6 +153,83 @@ namespace __hidden_adhd_source_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static b8 HasOnlyGlobalConstants(const TranslationUnit& unit)noexcept{
+    return !unit.globalConstants.empty()
+        && unit.topLevelNativeBlocks.empty()
+        && unit.includedAdhdFiles.empty()
+        && unit.resolvedIncludedFiles.empty()
+        && unit.typeAliases.empty()
+        && unit.enums.empty()
+        && unit.interfaces.empty()
+        && unit.classes.empty()
+        && unit.templateInstantiations.empty()
+        && unit.freeFunctions.empty()
+        && unit.outOfLineMethods.empty();
+}
+
+b8 IsNameLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
+    if(!HasOnlyGlobalConstants(unit))
+        return false;
+    for(const Stmt* constant : unit.globalConstants){
+        if(!constant || constant->isImported || !constant->varType || constant->varType->name != "Name" || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr || constant->expr->kind != ExprKind::StringLiteral)
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 IsSimpleScalarExpression(const Expr& value, const TranslationUnit& unit, const usize precedingCount, const b8 allowNegative, const b8 allowFloating)noexcept{
+    if(value.kind == ExprKind::IntegerLiteral)
+        return true;
+    if(value.kind == ExprKind::FloatLiteral || value.kind == ExprKind::DoubleLiteral)
+        return allowFloating;
+    if(value.kind == ExprKind::Identifier && !value.isBuiltinConstant){
+        for(usize index = 0u; index < precedingCount; ++index){
+            const Stmt* previous = unit.globalConstants[index];
+            if(previous && previous->name == value.text && previous->varType)
+                return previous->varType->name != "StringView" && previous->varType->name != "b8";
+        }
+        return false;
+    }
+    if(value.kind == ExprKind::Unary)
+        return allowNegative && !value.isPostfix && value.text == "-" && value.lhs && IsSimpleScalarExpression(*value.lhs, unit, precedingCount, allowNegative, allowFloating);
+    if(value.kind != ExprKind::Binary || value.isNotNullRebind || !value.lhs || !value.rhs || (value.text != "+" && value.text != "-" && value.text != "*"))
+        return false;
+    return IsSimpleScalarExpression(*value.lhs, unit, precedingCount, allowNegative, allowFloating)
+        && IsSimpleScalarExpression(*value.rhs, unit, precedingCount, allowNegative, allowFloating);
+}
+
+b8 IsScalarLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
+    if(!HasOnlyGlobalConstants(unit))
+        return false;
+    for(usize index = 0u; index < unit.globalConstants.size(); ++index){
+        const Stmt* constant = unit.globalConstants[index];
+        if(!constant || constant->isImported || !constant->varType || constant->varType->isFuncType || constant->varType->isAuto
+            || constant->varType->refMode != ParamPassingMode::None || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr)
+            return false;
+        const MStringView typeName = constant->varType->name;
+        const Expr* value = constant->expr;
+        if(typeName == "StringView"){
+            if(value->kind != ExprKind::StringLiteral || value->adaptToTChar)
+                return false;
+            continue;
+        }
+        if(typeName == "b8"){
+            if(value->kind != ExprKind::BoolLiteral)
+                return false;
+            continue;
+        }
+        const b8 isSignedInteger = typeName == "i8" || typeName == "i16" || typeName == "i32" || typeName == "i64" || typeName == "isize";
+        const b8 isUnsignedInteger = typeName == "u8" || typeName == "u16" || typeName == "u32" || typeName == "u64" || typeName == "usize";
+        const b8 isFloating = typeName == "f32" || typeName == "f64";
+        if(!isSignedInteger && !isUnsignedInteger && !isFloating)
+            return false;
+        if(!IsSimpleScalarExpression(*value, unit, index, isSignedInteger || isFloating, isFloating))
+            return false;
+    }
+    return true;
+}
+
+
 MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView headerIncludePath, const MStringView namespacePath)const{
     MString out(m_arena);
     out.reserve(s_AdhdEmitReserveBytes);
@@ -75,10 +240,13 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#include \"");
     out.append(headerIncludePath.data(), headerIncludePath.size());
-    out.append("\"\r\n\r\n");
-    out.append("#include <global/assert.h>\r\n");
-    out.append("#include <core/common/log.h>\r\n");
-    out.append("#include <core/task/cpu/scheduler.h>\r\n\r\n\r\n");
+    out.append("\"\r\n");
+    if(!IsNameLiteralOnlyUnit(unit) && !IsScalarLiteralOnlyUnit(unit)){
+        out.append("\r\n#include <global/assert.h>\r\n");
+        out.append("#include <core/common/log.h>\r\n");
+        out.append("#include <core/task/cpu/scheduler.h>\r\n");
+    }
+    out.append("\r\n\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
 
     if(!namespacePath.empty()){
@@ -143,6 +311,8 @@ void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerC
 }
 
 void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, const u32 indent)const{
+    if(statementsNeedSimdFloatingPointEnv(method.body))
+        out.append("#pragma STDC FENV_ACCESS ON\r\n");
     if(method.usesScratchArena)
         emitScratchArenaPrologue(out, indent, method.name);
     if(method.usesTaskScope)
@@ -157,6 +327,10 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     m_remainingBlockStatements = {};
     m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
     m_skippedCtorAssignExprs = nullptr;
+}
+
+b8 SourceEmitter::statementsNeedSimdFloatingPointEnv(const Span<const Stmt* const> statements)const noexcept{
+    return __hidden_adhd_source_emitter::StatementsNeedSimdFloatingPointEnv(statements, m_symbols);
 }
 
 void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<const FieldDecl* const> orderedFields, const MethodDecl& ctor)const{
@@ -209,3 +383,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

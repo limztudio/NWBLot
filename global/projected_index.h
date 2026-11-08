@@ -22,8 +22,7 @@ void BuildProjectedRecordIndex(Indices& indices, const Records& records, const S
     Sort(indices.begin(), indices.end(), [&](const usize lhs, const usize rhs)noexcept(
         noexcept(recordLess(records[lhs], records[rhs]))
         && (!IsReference_V<decltype(recordLess(records[lhs], records[rhs]))> || IsNothrowConvertible_V<decltype(recordLess(records[lhs], records[rhs])), Decay_T<decltype(recordLess(records[lhs], records[rhs]))>>)
-    ){ return recordLess(records[lhs], records[rhs]); }
-    );
+    ){ return recordLess(records[lhs], records[rhs]); });
 }
 
 

@@ -174,7 +174,7 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             const Expr& vecExpr = lhsIsMat ? *expr.arguments[1] : *expr.arguments[0];
             const Expr& matExpr = lhsIsMat ? *expr.arguments[0] : *expr.arguments[1];
             u32 unitRowIdx = 0u;
-            if(!isInt && SimdConstantAnalysis::TryMatchIdentityRowIndex(vecExpr, m_emitter.m_symbols, unitRowIdx, m_emitter.activeLocalVarDecls())){
+            if(!isInt && SimdConstantAnalysis::TryMatchIdentityRowIndex(unitRowIdx, vecExpr, m_emitter.m_symbols, m_emitter.activeLocalVarDecls())){
                 if(const Expr* transposeSrcMat = SimdOptimizationAnalysis::TryGetTransposeSourceMatrix(matExpr, m_emitter.activeLocalVarDecls())){
                     m_emitter.emitSimdRegExpr(out, *transposeSrcMat, transposeSrcMat->resolvedSimdType);
                     out.append(".v[");
@@ -264,3 +264,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -18,6 +18,10 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] b8 IsNameLiteralOnlyUnit(const TranslationUnit& unit)noexcept;
+[[nodiscard]] b8 IsScalarLiteralOnlyUnit(const TranslationUnit& unit)noexcept;
+
+
 class SourceEmitter final{
 public:
     SourceEmitter(MetaArena& arena, const SymbolTable& symbols)noexcept
@@ -57,6 +61,7 @@ private:
     void emitCallTargetExpr(MString& out, const Expr* lhs, b8 isBuiltinCall)const;
     void emitIndent(MString& out, u32 indent)const;
     void emitScratchArenaPrologue(MString& out, u32 indent, MStringView arenaName)const;
+    [[nodiscard]] b8 statementsNeedSimdFloatingPointEnv(Span<const Stmt* const> statements)const noexcept;
     void emitStatementList(MString& out, Span<const Stmt* const> statements, u32 indent)const;
     void emitLoopBodyStatements(MString& out, Span<const Stmt* const> statements, u32 indent)const;
     void emitStmt(MString& out, const Stmt& stmt, u32 indent)const;
@@ -94,3 +99,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

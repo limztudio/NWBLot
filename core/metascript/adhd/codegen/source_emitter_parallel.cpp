@@ -93,6 +93,8 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
         if(stmt.expr)
             m_emitter.emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
+        if(m_emitter.statementsNeedSimdFloatingPointEnv(stmt.statements))
+            out.append("#pragma STDC FENV_ACCESS ON\r\n");
         if(stmt.usesScratchArena)
             m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
         m_emitter.emitIndent(out, indent + 1u);
@@ -167,6 +169,8 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
             out.append("1u");
         }
         out.append(", [&](const usize __adhd_idx)noexcept{\r\n");
+        if(m_emitter.statementsNeedSimdFloatingPointEnv(stmt.statements))
+            out.append("#pragma STDC FENV_ACCESS ON\r\n");
         if(stmt.usesScratchArena)
             m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
         if(stmt.initStmt && stmt.initStmt->varType){
@@ -226,6 +230,8 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
             out.append(" = ");
         }
         out.append("__adhd_task_scope.submit([&]()noexcept{\r\n");
+        if(m_emitter.statementsNeedSimdFloatingPointEnv(stmt.statements))
+            out.append("#pragma STDC FENV_ACCESS ON\r\n");
         if(stmt.usesScratchArena)
             m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");
         const usize prevParIdxDecls = m_emitter.m_activeLocalVarDecls.size();
@@ -341,3 +347,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

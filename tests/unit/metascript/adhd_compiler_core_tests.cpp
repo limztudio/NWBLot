@@ -625,10 +625,66 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
 }
 
 
+TEST(AdhdCompiler, LiteralOnlyUnitsAvoidEngineDependenciesAndComplexUnitsKeepThem){
+    AdhdTestArena arena;
+    constexpr MStringView s_NameOnly = "const Name s_First = \"first\";\r\nconst Name s_Second = \"second\";\r\n";
+    CompileResult names(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_NameOnly, "core/input/names.adhd", arena.arena, names));
+    const MStringView namesHeader(names.generatedHeader.data(), names.generatedHeader.size());
+    const MStringView namesSource(names.generatedSource.data(), names.generatedSource.size());
+    EXPECT_NE(namesHeader.find("#include <global/name.h>"), MStringView::npos);
+    EXPECT_EQ(namesHeader.find("#include <core/"), MStringView::npos);
+    EXPECT_EQ(namesSource.find("#include <core/"), MStringView::npos);
+
+    constexpr MStringView s_Scalars = "const u8 s_Byte = 255u;\r\nconst i32 s_Negative = -17;\r\nconst f32 s_Float = -1.25f;\r\nconst b8 s_Flag = true;\r\nconst u64 s_Size = 64u * 1024u * 1024u;\r\nconst u32 s_Base = 8u;\r\nconst u32 s_Mask = s_Base - 1u;\r\nconst StringView s_Text = \"a\\tb\";\r\n";
+    CompileResult scalars(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Scalars, "core/input/scalars.adhd", arena.arena, scalars));
+    const MStringView scalarHeader(scalars.generatedHeader.data(), scalars.generatedHeader.size());
+    const MStringView scalarSource(scalars.generatedSource.data(), scalars.generatedSource.size());
+    EXPECT_NE(scalarHeader.find("#include <global/type.h>"), MStringView::npos);
+    EXPECT_EQ(scalarHeader.find("#include <core/"), MStringView::npos);
+    EXPECT_EQ(scalarSource.find("#include <core/"), MStringView::npos);
+
+    constexpr MStringView s_Limit = "const u32 s_Limit = u32.max;\r\n";
+    CompileResult limit(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Limit, "core/input/limit.adhd", arena.arena, limit));
+    const MStringView limitHeader(limit.generatedHeader.data(), limit.generatedHeader.size());
+    const MStringView limitSource(limit.generatedSource.data(), limit.generatedSource.size());
+    EXPECT_NE(limitHeader.find("#include <core/assets/ref.h>"), MStringView::npos);
+    EXPECT_NE(limitSource.find("#include <core/task/cpu/scheduler.h>"), MStringView::npos);
+
+    constexpr MStringView s_Cast = "const u32 s_Cast = cast<u32>(1u);\r\n";
+    CompileResult cast(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Cast, "core/input/cast.adhd", arena.arena, cast));
+    const MStringView castHeader(cast.generatedHeader.data(), cast.generatedHeader.size());
+    EXPECT_NE(castHeader.find("#include <core/assets/ref.h>"), MStringView::npos);
+
+    constexpr MStringView s_NameAndScalar = "const Name s_First = \"first\";\r\nconst u32 s_Value = 1u;\r\n";
+    CompileResult nameAndScalar(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_NameAndScalar, "core/input/name_and_scalar.adhd", arena.arena, nameAndScalar));
+    const MStringView nameAndScalarHeader(nameAndScalar.generatedHeader.data(), nameAndScalar.generatedHeader.size());
+    EXPECT_NE(nameAndScalarHeader.find("#include <core/assets/ref.h>"), MStringView::npos);
+
+    constexpr MStringView s_Mixed = "const Name s_First = \"first\";\r\nu32 value(){ return 1u; }\r\n";
+    CompileResult mixed(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Mixed, "core/input/mixed.adhd", arena.arena, mixed));
+    const MStringView mixedHeader(mixed.generatedHeader.data(), mixed.generatedHeader.size());
+    const MStringView mixedSource(mixed.generatedSource.data(), mixed.generatedSource.size());
+    EXPECT_NE(mixedHeader.find("#include <core/assets/ref.h>"), MStringView::npos);
+    EXPECT_NE(mixedSource.find("#include <core/task/cpu/scheduler.h>"), MStringView::npos);
+
+    constexpr MStringView s_Constructed = "const Name s_First = Name(\"first\");\r\n";
+    CompileResult constructed(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Constructed, "core/input/constructed.adhd", arena.arena, constructed));
+    const MStringView constructedHeader(constructed.generatedHeader.data(), constructed.generatedHeader.size());
+    EXPECT_NE(constructedHeader.find("#include <core/assets/ref.h>"), MStringView::npos);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

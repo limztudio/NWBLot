@@ -5,6 +5,7 @@
 #include <core/metascript/parser.h>
 
 #include <tests/common/test_context.h>
+#include <tests/unit/metascript/generated/compact_string.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -18,7 +19,7 @@ namespace __hidden_metascript_value_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_ItemsField = "items";
+constexpr AStringView s_ItemsField = NWB::Tests::s_MetascriptValueItemsField;
 using Value = NWB::Core::Metascript::Value;
 using MStringView = NWB::Core::Metascript::MStringView;
 using AString = NWB::Tests::TestAString;
@@ -176,7 +177,7 @@ TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
 }
 
 TEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation){
-    constexpr usize s_InitialCount = 8u;
+    constexpr usize s_InitialCount = NWB::Tests::s_MetascriptValueInitialCount;
     const Array<usize, 3u> sourceIndices = { 0u, 3u, 7u };
     for(const usize sourceIndex : sourceIndices){
         for(const b8 moveSource : { false, true }){
@@ -206,7 +207,7 @@ TEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation){
 }
 
 TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
-    constexpr usize s_InitialCount = 8u;
+    constexpr usize s_InitialCount = NWB::Tests::s_MetascriptValueInitialCount;
     const Array<usize, 3u> sourceIndices = { 0u, 3u, 7u };
     const AString text(128u, 'n');
     for(const usize sourceIndex : sourceIndices){
@@ -241,3 +242,4 @@ TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

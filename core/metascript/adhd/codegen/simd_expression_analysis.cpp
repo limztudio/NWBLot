@@ -11,7 +11,7 @@
 NWB_ADHD_BEGIN
 
 
-[[nodiscard]] b8 SimdExpressionAnalysis::IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB, const SymbolTable* const symbols)noexcept{
+[[nodiscard]] b8 SimdExpressionAnalysis::IsSimdMulExpr(const Expr*& outMulA, const Expr*& outMulB, const Expr* expr, const SymbolTable* const symbols)noexcept{
     if(!expr || expr->kind != ExprKind::Binary || expr->op != TokenType::Star || !expr->lhs || !expr->rhs)
         return false;
     const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(expr->resolvedSimdType);
@@ -309,19 +309,19 @@ NWB_ADHD_BEGIN
     if(!expr)
         return false;
 
-    if(expr->kind == ExprKind::MemberAccess && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)){
+    if(expr->kind == ExprKind::MemberAccess && expr->lhs && (!expr->lhs->resolvedSimdType.empty() || !expr->lhs->resolvedUnalignedType.empty())){
         u32 lane = 0u;
         if(expr->isSwizzle || IsSingleSwizzleLane(expr->text, lane))
             return true;
     }
 
-    if(expr->kind == ExprKind::Index && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType))
+    if(expr->kind == ExprKind::Index && expr->lhs && (!expr->lhs->resolvedSimdType.empty() || !expr->lhs->resolvedUnalignedType.empty()))
         return true;
 
-    if(expr->kind == ExprKind::Unary && IsRegisterPromotableSimdType(expr->resolvedSimdType))
+    if(expr->kind == ExprKind::Unary && (!expr->resolvedSimdType.empty() || !expr->resolvedUnalignedType.empty()))
         return true;
 
-    if(expr->kind == ExprKind::Binary && IsRegisterPromotableSimdType(expr->resolvedSimdType)){
+    if(expr->kind == ExprKind::Binary && (!expr->resolvedSimdType.empty() || !expr->resolvedUnalignedType.empty())){
         if(expr->op != TokenType::Equal)
             return true;
         if(ExprContainsSimdMath(expr->rhs, symbols))
@@ -330,23 +330,23 @@ NWB_ADHD_BEGIN
 
     if(expr->kind == ExprKind::Binary && OperatorSemantics::IsCompoundOrSimpleAssignment(expr->op) && expr->lhs){
         u32 lane = 0u;
-        if(expr->lhs->kind == ExprKind::MemberAccess && expr->lhs->lhs && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType) && IsSingleSwizzleLane(expr->lhs->text, lane))
+        if(expr->lhs->kind == ExprKind::MemberAccess && expr->lhs->lhs && (!expr->lhs->lhs->resolvedSimdType.empty() || !expr->lhs->lhs->resolvedUnalignedType.empty()) && IsSingleSwizzleLane(expr->lhs->text, lane))
             return true;
-        if(expr->lhs->kind == ExprKind::Index && expr->lhs->lhs && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType))
+        if(expr->lhs->kind == ExprKind::Index && expr->lhs->lhs && (!expr->lhs->lhs->resolvedSimdType.empty() || !expr->lhs->lhs->resolvedUnalignedType.empty()))
             return true;
     }
 
     if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
         const MStringView callee = expr->lhs->text;
         const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
-        if(SymbolTable::IsSimdType(baseCallee) && IsRegisterPromotableSimdType(expr->resolvedSimdType))
+        if((SymbolTable::IsSimdType(baseCallee) || SymbolTable::IsUnalignedVectorType(baseCallee)) && (!expr->resolvedSimdType.empty() || !expr->resolvedUnalignedType.empty()))
             return true;
         if(expr->isBuiltinCall){
-            if(IsRegisterPromotableSimdType(expr->resolvedSimdType))
+            if(!expr->resolvedSimdType.empty() || !expr->resolvedUnalignedType.empty())
                 return true;
             if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || callee == "isFinite"){
                 for(const Expr* arg : expr->arguments){
-                    if(arg && IsRegisterPromotableSimdType(arg->resolvedSimdType))
+                    if(arg && (!arg->resolvedSimdType.empty() || !arg->resolvedUnalignedType.empty()))
                         return true;
                 }
             }

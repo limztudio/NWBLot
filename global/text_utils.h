@@ -410,8 +410,23 @@ inline void AppendPascalCaseIdentifierSegment(const AStringView segment, StringT
 
 template<typename StringT>
 inline void AppendDepfileEscapedPath(const AStringView pathText, StringT& out)noexcept(noexcept(out.push_back(char{}))){
-    for(const char c : pathText){
-        if(c == ' ' || c == '\t' || c == '#' || c == ':' || c == '\\')
+    for(usize index = 0u; index < pathText.size(); ++index){
+        const char c = pathText[index];
+        if(c == '\\'){
+            const usize begin = index;
+            while(index < pathText.size() && pathText[index] == '\\')
+                ++index;
+            const usize count = index - begin;
+            for(usize slash = 0u; slash < count; ++slash)
+                out.push_back('\\');
+            if(index < pathText.size() && pathText[index] == ' '){
+                for(usize slash = 0u; slash < count; ++slash)
+                    out.push_back('\\');
+            }
+            --index;
+            continue;
+        }
+        if(c == ' ' || c == '#' || c == ':')
             out.push_back('\\');
         else if(c == '$')
             out.push_back('$');

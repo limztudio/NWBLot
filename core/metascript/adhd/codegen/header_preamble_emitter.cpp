@@ -18,23 +18,31 @@ void HeaderPreambleEmitter::emit(MString& out, const TranslationUnit& unit, cons
     out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#pragma once\r\n\r\n\r\n");
-    out.append("#include <global/global.h>\r\n");
-    out.append("#include <global/atomic_identity.h>\r\n");
-    out.append("#include <global/binary_big_endian.h>\r\n");
-    out.append("#include <global/binary_little_endian.h>\r\n");
-    out.append("#include <global/numeric_range.h>\r\n");
-    out.append("#include <global/simdmath.h>\r\n");
-    out.append("#include <global/inplace_function.h>\r\n");
-    out.append("#include <global/not_null.h>\r\n");
-    out.append("#include <core/alloc/global.h>\r\n");
-    out.append("#include <core/alloc/general.h>\r\n");
-    out.append("#include <core/alloc/scratch.h>\r\n");
-    out.append("#include <core/assets/ref.h>\r\n");
-    out.append("#include <core/ecs/entity_id.h>\r\n");
-    if(namespacePath == "NWB::Impl::Scene")
-        out.append("#include <impl/ecs_scene/global.h>\r\n");
-    else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")
-        out.append("#include <impl/global.h>\r\n");
+    if(IsNameLiteralOnlyUnit(unit)){
+        out.append("#include <global/name.h>\r\n");
+    }
+    else if(IsScalarLiteralOnlyUnit(unit)){
+        out.append("#include <global/type.h>\r\n");
+    }
+    else{
+        out.append("#include <global/global.h>\r\n");
+        out.append("#include <global/atomic_identity.h>\r\n");
+        out.append("#include <global/binary_big_endian.h>\r\n");
+        out.append("#include <global/binary_little_endian.h>\r\n");
+        out.append("#include <global/numeric_range.h>\r\n");
+        out.append("#include <global/simdmath.h>\r\n");
+        out.append("#include <global/inplace_function.h>\r\n");
+        out.append("#include <global/not_null.h>\r\n");
+        out.append("#include <core/alloc/global.h>\r\n");
+        out.append("#include <core/alloc/general.h>\r\n");
+        out.append("#include <core/alloc/scratch.h>\r\n");
+        out.append("#include <core/assets/ref.h>\r\n");
+        out.append("#include <core/ecs/entity_id.h>\r\n");
+        if(namespacePath == "NWB::Impl::Scene")
+            out.append("#include <impl/ecs_scene/global.h>\r\n");
+        else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")
+            out.append("#include <impl/global.h>\r\n");
+    }
 
     b8 hasSubsystemDecl = false;
     b8 hasComponentAssetDecl = false;
@@ -105,3 +113,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

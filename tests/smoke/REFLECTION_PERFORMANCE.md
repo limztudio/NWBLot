@@ -4,9 +4,9 @@ The September 12 [deferred optical appearance experiment](REFLECTION_OPTICAL_EXP
 
 The eight-stage reflection implementation is complete. The optimized benchmark completed all **164 process trials in 40 balanced blocks**, retaining **120,748 completed GPU frame samples**. These measurements show that fewer hardware rays or screen-depth loads do not necessarily reduce total frame time.
 
-On the tested Qualcomm Adreno X2-90, Hardware mode was faster than Hybrid in the qualified long-miss and productive-floor comparisons. The optional screen-miss feedback reduced classification work, but none of its three paired frame comparisons established a reduction beyond the predeclared practical threshold. Feedback therefore remains disabled by default. Route and filter controls remain explicit. This single-adapter experiment does not change the general defaults.
+On the tested Qualcomm Adreno X2-90, Hardware mode was faster than Hybrid in the qualified long-miss and productive-floor comparisons. The spare screen-miss feed cut sort work. But no paired frame weigh past the toldctical threshold. Feedback therefore remains disabled by default. Route and filter controls remain explicit. This single-adapter experiment does not change the general defaults.
 
-Spatial filtering is a substantial quality cost in the roughness fixture: approximately 0.78–0.80 ms in its dispatch and 0.83 ms added to the frame relative to raw Hardware. Temporal-only accumulation has a measured dispatch cost near 0.060 ms. Its total-frame difference is unresolved. Which does not mean it is free. Temporal reuse requires trusted, unchanged view/content/settings and is not general motion-reprojected denoising.
+Room clean is a big grade cost in the rough set: near 0.78–0.80 ms in its send and 0.83 ms more per frame past raw Hardware. Temporal-only accumulation has a measured dispatch cost near 0.060 ms. Its total-frame difference is unresolved. Which does not mean it is free. Temporal reuse requires trusted, unchanged view/content/settings and is not general motion-reprojected denoising.
 
 **Bounded secondary optical transport remains a significant performance limitation.** In the clear-volume stress scene, Hardware averages 52.42 ms for `render.frame`, with 37.22 ms inside the hardware-reflection resolve alone. That resolve costs 36.92–37.63 ms across all six Hardware trials. All optical frame comparisons are control-uncertain. So the Report does not certify the entire active-minus-disabled difference as a feature-only effect. Even so, the directly measured resolve cost identifies an expensive path. This scene is not performance-qualified for a typical real-time frame budget on this adapter.
 
@@ -14,7 +14,7 @@ The optical fixture reflects a 31-stripe chart through one authored closed IOR-1
 
 ## Build, hardware, and validation evidence
 
-- Date: 2026-09-09. The measurement window was bracketed by operator records at 08:50:04–09:07:26 UTC, about 17 minutes 22 seconds including acquisition startup, report analysis, and launch/shutdown overhead.
+- Date: 2026-09-09. Hand notes ringed the read span at 08:50:04–09:07:26 UTC, near 17 min 22 secs with take start, note read, and launch/shutdown overhead.
 - Host: Windows 11 ARM64; `windows-clang-arm64-opt` build, Qualcomm(R) Adreno(TM) X2-90 GPU, Vulkan hardware ray queries. Materials selected CS + PS compute emulation because native mesh shaders were unavailable in this configuration.
 - AC power was connected, battery state was 79%, and the Balanced scheme was active at both operator observations. GPU clocks were not locked. No other build, cook, GPU benchmark, or framebuffer-capture job was launched during the matrix.
 - Rendering source base: `7b27bdeee41dd73021d1bd40d4f89b9411e91455`, plus this step's timing-only smoke-fixture changes. The benchmark changed no production renderer or shader code.

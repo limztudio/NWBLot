@@ -470,8 +470,7 @@ The final four combined framebuffer captures pass the end-to-end harness:
 reflection changes 203,862 sphere pixels, camera refraction changes 10,156,
 and disabling caustics changes 36,229 ground pixels outside the sphere
 silhouette. Neither reflection nor camera-refraction toggling changes a ground
-pixel beyond the comparison threshold. The primary-glass reflection still
-requires AVBOIT optical composition when camera refraction is disabled: that
+pixel beyond the comparison threshold. The main-glass bounce still needs AVBOIT look mix when cam bend stays off: that
 variant reports the fixture's disabled camera-refraction state and uses the
 screen-space composition route, while hardware camera refraction is rejected.
 

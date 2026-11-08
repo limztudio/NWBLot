@@ -322,7 +322,15 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "    const VectorDouble divD = VectorDouble(d.x, d.y, 0.0, 0.0) / xyUnitZW;\r\n"
         "    const VectorDouble maxD = max(minD, divD);\r\n"
         "    const VectorSingle narrowXY = VectorSingle(cast<f32>(maxD.x), cast<f32>(maxD.y), 0.0f, 0.0f);\r\n"
+        "    const VectorSingle negAxisZ = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);\r\n"
+        "    const VectorSingle unitXW = VectorSingle(1.0f, 0.0f, 0.0f, 1.0f);\r\n"
+        "    const VectorSingle negZPosW = VectorSingle(0.0f, 0.0f, -1.0f, 1.0f);\r\n"
+        "    const VectorSingle withUnitW = VectorSingle(a, 1.0f);\r\n"
+        "    const f32 idxGetZ = a[2u];\r\n"
+        "    outBox.extent4 = f32x4(box.minPt.x, box.minPt.y, box.minPt.z, 0.0f);\r\n"
         "    outBox.extent4 = f32x4(a, b.w);\r\n"
+        "    if(!isFinite(box.extent4[0u]) || !isFinite(box.extent4[1u]) || !isFinite(box.extent4[2u]) || !isFinite(box.extent4[3u]))\r\n"
+        "        return negAxisZ;\r\n"
         "    if(!isFinite(d.x) || d.x > 10.0 || !isFinite(d.y) || d.y > 10.0)\r\n"
         "        return constZero;\r\n"
         "    if(abs(box.minPt.x) > 1.0f || abs(box.minPt.y) > 1.0f || abs(box.minPt.z) > 1.0f)\r\n"
@@ -333,12 +341,19 @@ TEST(AdhdCompiler, OptimizesSimdConstantsMasksSwizzlesReductionsTransformsAndLog
         "        return planeEq;\r\n"
         "    if(a.x <= a.z && a.y <= a.w && isFinite(b.xyz) && a.x == b.x && a.y == b.y && a.z == b.z)\r\n"
         "        return halfVec + axisW + VectorSingle(xyUnitZW) + VectorSingle(mixedBounds);\r\n"
-        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + planeEq + negNorm3ZeroW + negScaleFma + narrowXY + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
+        "    return masked3 + clearX + flipYW + storageMaskXY + negRep + neg3KeepW + laneBinOp + axisYWithW + splatZ + foldedSwiz + identitySwiz + fromDouble + swizFromDouble + max4Splat + proj + scaled + invLen + pt + pt2 + nrm + transRow0 + transRow2 + matCol0 + norm3ZeroW + scaledNorm3Swiz + nonUniformAdd + mixedAddSub + uniformLaneMul + planeEq + negNorm3ZeroW + negScaleFma + narrowXY + negAxisZ + unitXW + negZPosW + withUnitW + negFma + splatMul + pad3 + signFlipSplat + satClamp + satMinMax + storageSwiz + storageBinOp + storageNeg3 + laneMathMin + altMaskSplat + zeroSubAdd + lerpZero + mul(a, mulTrans) + VectorSingle(dot3ZeroW + sumAll + swizGetX + idxGetZ + max3 + cast<f32>(bitsY) + zeroStorageVec.x + zeroStorageMat[0][0]);\r\n"
         "}\r\n";
 
     CompileResult optRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_SimdOptSource, "impl/sim/simd_opt.adhd", arena.arena, optRes));
     const MStringView optView(optRes.generatedSource.data(), optRes.generatedSource.size());
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negAxisZ = ::VectorAndInt(::s_SIMDNegativeOne, ::s_SIMDMaskZ);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle unitXW = ::VectorOrInt(::s_SIMDIdentityR0, ::s_SIMDIdentityR3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle negZPosW = ::VectorPermute<0u, 1u, 6u, 3u>(::s_SIMDIdentityR3, ::s_SIMDNegativeOne);"), MStringView::npos);
+    EXPECT_NE(optView.find("const ::SIMDVectorSingle withUnitW = ::VectorPermute<0u, 1u, 2u, 7u>(a, ::s_SIMDIdentityR3);"), MStringView::npos);
+    EXPECT_NE(optView.find("const f32 idxGetZ = ::VectorGetZ(a);"), MStringView::npos);
+    EXPECT_NE(optView.find("::StoreFloat(::LoadFloat(box.minPt), outBox.extent4);"), MStringView::npos);
+    EXPECT_NE(optView.find("!::VectorIsFinite(::LoadFloat(box.extent4), ::VectorComponentMask::s_XYZW)"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle scaledNorm3Swiz = ::VectorSwizzle<1u, 2u, 0u, 3u>(scaledNorm3);"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorDouble mixedBounds = ::VectorDoublePermute<0u, 1u, 6u, 7u>(::VectorDoubleMin(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)), ::VectorDoubleMax(d, ::VectorDoubleSet(1.0, 2.0, 3.0, 4.0)));"), MStringView::npos);
     EXPECT_NE(optView.find("const ::SIMDVectorSingle nonUniformAdd = ::VectorAdd(a, ::VectorSet(scale, 1.0f, 2.0f, 3.0f));"), MStringView::npos);

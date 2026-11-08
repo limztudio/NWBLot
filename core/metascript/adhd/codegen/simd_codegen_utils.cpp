@@ -1041,12 +1041,41 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
     return a.arguments.empty() && b.arguments.empty();
 }
 
+[[nodiscard]] b8 TryMatchConstLaneIndex(const Expr& indexExpr, u32& outLane)noexcept{
+    if(indexExpr.kind != ExprKind::IntegerLiteral || indexExpr.text.empty())
+        return false;
+    const char first = indexExpr.text[0];
+    if(first < '0' || first > '3')
+        return false;
+    for(usize i = 1u; i < indexExpr.text.size(); ++i){
+        const char c = indexExpr.text[i];
+        if(c != 'u' && c != 'U' && c != 'l' && c != 'L')
+            return false;
+    }
+    outLane = static_cast<u32>(first - '0');
+    return true;
+}
+
 [[nodiscard]] b8 TryMatchSingleLaneAccess(const Expr* expr, const Expr*& outBase, u32& outLane)noexcept{
-    if(!expr || expr->kind != ExprKind::MemberAccess || expr->isSwizzle || expr->isMutArg || !expr->lhs)
+    if(!expr || expr->isMutArg || !expr->lhs)
         return false;
     u32 lane = 0u;
-    if(!IsSingleSwizzleLane(expr->text, lane))
+    if(expr->kind == ExprKind::MemberAccess && !expr->isSwizzle){
+        if(!IsSingleSwizzleLane(expr->text, lane))
+            return false;
+    }
+    else if(
+        expr->kind == ExprKind::Index
+        && !expr->isMatrixRowIndex
+        && (expr->isVectorRawIndex || SymbolTable::IsSimdRegisterVectorType(expr->lhs->resolvedSimdType))
+        && expr->rhs
+    ){
+        if(!TryMatchConstLaneIndex(*expr->rhs, lane))
+            return false;
+    }
+    else{
         return false;
+    }
     const Expr* base = expr->lhs;
     while(base && base->kind == ExprKind::MemberAccess && base->isSwizzle && !base->isMutArg && base->lhs){
         if(lane >= base->text.size() || !TryMapSwizzleCharToLane(base->text[lane], lane))

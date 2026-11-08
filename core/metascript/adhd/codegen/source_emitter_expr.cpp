@@ -1025,7 +1025,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
     case ExprKind::Index:{
         if(!expr.isMutArg && expr.lhs && expr.rhs && SymbolTable::IsSimdRegisterVectorType(expr.lhs->resolvedSimdType)){
-            emitSimdLaneGetExpr(out, *expr.lhs, 0u, expr.rhs);
+            u32 staticLane = 0u;
+            if(TryMatchConstLaneIndex(*expr.rhs, staticLane))
+                emitSimdLaneGetExpr(out, *expr.lhs, staticLane, nullptr);
+            else
+                emitSimdLaneGetExpr(out, *expr.lhs, 0u, expr.rhs);
             break;
         }
         if(expr.isStringByteMutRef)
@@ -1298,6 +1302,18 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 && IsSingleSwizzleLane(expr.lhs->text, staticLane)
             ){
                 vecBase = expr.lhs->lhs;
+            }
+            else if(
+                expr.lhs->kind == ExprKind::Index
+                && expr.lhs->lhs
+                && expr.lhs->rhs
+                && SymbolTable::IsSimdRegisterVectorType(expr.lhs->lhs->resolvedSimdType)
+            ){
+                vecBase = expr.lhs->lhs;
+                if(!TryMatchConstLaneIndex(*expr.lhs->rhs, staticLane))
+                    dynamicIdx = expr.lhs->rhs;
+            }
+            if(vecBase && !dynamicIdx){
                 while(
                     vecBase->kind == ExprKind::MemberAccess
                     && vecBase->isSwizzle
@@ -1308,15 +1324,6 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                     staticLane = MapSwizzleCharToLane(vecBase->text[staticLane]);
                     vecBase = vecBase->lhs;
                 }
-            }
-            else if(
-                expr.lhs->kind == ExprKind::Index
-                && expr.lhs->lhs
-                && expr.lhs->rhs
-                && SymbolTable::IsSimdRegisterVectorType(expr.lhs->lhs->resolvedSimdType)
-            ){
-                vecBase = expr.lhs->lhs;
-                dynamicIdx = expr.lhs->rhs;
             }
             if(vecBase){
                 const MStringView vecSimd = vecBase->resolvedSimdType;

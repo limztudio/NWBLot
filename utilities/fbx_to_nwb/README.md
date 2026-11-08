@@ -1,17 +1,17 @@
 # fbx_to_nwb
 
-`fbx_to_nwb` imports an FBX scene into NWB mesh metadata. It can write a
-standalone mesh, a self-contained asset bunch, a separately packaged model, or
-the skeleton and skin assets for a skinned mesh. It also refreshes existing NWB
-mesh assets into the canonical stream layout.
+`fbx_to_nwb` brings an FBX scene into NWB mesh data. It can write a plain
+mesh, a full asset bunch, a split model pack, or the bone and skin files for
+a skinned mesh. It can also refresh old NWB mesh files into the plain stream
+form.
 
-The executable target is `nwb_fbx_to_nwb`. The tool accepts the binary and
-ASCII FBX variants supported by the vendored ufbx loader.
+The exe target is `nwb_fbx_to_nwb`. The tool takes the binary and text FBX
+forms that the kept ufbx loader reads.
 
 ## Build and run
 
-The directory launcher is discovered by the repository root, builds the target
-as needed, and forwards arguments after `--`:
+The folder launcher is found by the repo root. It builds the target as needed
+and sends flags after `--`:
 
 ```sh
 python -m launcher fbx-to-nwb --build-only --config dbg
@@ -19,11 +19,10 @@ python -m launcher fbx-to-nwb --working-directory . -- --help
 python -m launcher fbx-to-nwb --working-directory . -- assets/models/crate.fbx
 ```
 
-The build-only command prepares the utility without importing an asset. See
-[the launcher guide](../../launcher/README.md) for configuration and build options.
-The final command starts the interactive workflow. For CI and asset pipelines,
-pass `--yes` so that every unspecified option uses its default instead of
-prompting:
+The build-only form readies the tool with no asset work. See [the launcher
+guide](../../launcher/README.md) for setup and build flags. The last form
+starts the ask-me flow. For CI and asset pipes, pass `--yes` so each unset
+flag uses its default with no ask:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
@@ -34,25 +33,24 @@ python -m launcher fbx-to-nwb --working-directory . -- \
     --yes
 ```
 
-Without `--output`, the output path is the input path with its extension
-replaced by `.nwb`. Existing primary output files are never replaced unless
-`--force` is supplied or an interactive overwrite prompt is accepted.
+With no `--output`, the out path is the in path with its tail set to `.nwb`.
+Old main out files never swap unless `--force` is set or an ask-to-swap
+prompt is said yes to.
 
-## Finding and selecting meshes
+## Find and pick meshes
 
-List the visible mesh instances in a scene before exporting one:
+List the seen mesh copies in a scene before you send one out:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- assets/characters/hero.fbx --list-meshes
 ```
 
-`--mesh` (or `-m`) selects `all` instances by default. It also accepts `first`,
-a zero-based instance index, a node name, or a mesh name. Name matching is
-case-insensitive; an exact match wins, otherwise a partial match selects every
-matching instance. Hidden mesh nodes are excluded unless `--include-hidden` is
-present.
+`--mesh` (or `-m`) picks `all` copies by default. It also takes `first`, a
+zero-based copy index, a node name, or a mesh name. Name match ignores case.
+An exact match wins. If not, a part match picks each match copy. Hid mesh
+nodes stay out unless `--include-hidden` is set.
 
-For example, this writes a single static mesh asset from the first instance:
+For example, this writes one still mesh file from the first copy:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
@@ -63,61 +61,60 @@ python -m launcher fbx-to-nwb --working-directory . -- \
     --yes
 ```
 
-Selected instances are merged into one exported mesh. Polygon faces are
-triangulated and degenerate triangles are discarded. The default
-`--triangle-area-length-squared-epsilon` is `1e-20`; set it to a larger
-non-negative finite value to discard smaller triangles.
+Picked copies join into one out mesh. Flat faces turn into tris, and bad tris
+drop. The default `--triangle-area-length-squared-epsilon` is `1e-20`. Set it
+to a larger real value at zero or more to drop smaller tris.
 
-## Coordinate, vertex, and tangent handling
+## Axes, points, and tangents
 
-By default, the importer converts the scene to NWB space: `+X` right, `+Y` up,
-`+Z` forward, with one unit equal to one metre. `--preserve-space` retains the
-source axes and units. Node transforms are baked into the output mesh by
-default; pass `--local` to keep the selected mesh in its local space. `--scale`
-applies an additional positive uniform scale after import.
+By default, the tool moves the scene into NWB space: `+X` right, `+Y` up,
+`+Z` front, with one unit as one metre. `--preserve-space` keeps the source
+axes and units. Node moves bake into the out mesh by default. Pass `--local`
+to keep the picked mesh in its own space. `--scale` adds one more good same
+scale after import.
 
-`--normal-mode` selects one of these modes:
+`--normal-mode` picks one of these modes:
 
 | Value | Result |
 | --- | --- |
-| `imported` (default) | Uses the imported per-corner normal stream. |
-| `smooth` | Rebuilds smooth normals shared by identical output positions. |
-| `regenerate` | Rebuilds a face normal for every triangle. |
+| `imported` (default) | Uses the brought-in per-corner normal list. |
+| `smooth` | Remakes smooth normals shared by same out spots. |
+| `regenerate` | Remakes one face normal per tri. |
 
-NWB mesh assets always contain a tangent stream. Source tangents are retained
-when they are complete and `imported` normals are selected; otherwise tangents
-are regenerated from `uv0`. Missing or degenerate UVs use a safe fallback
-tangent frame. The tool reports which tangent path it used.
+NWB mesh files always hold a tangent list. Source tangents stay when they are
+full and `imported` normals are set. If not, tangents remake from `uv0`.
+Missing or bad UVs use a safe backup tangent set. The tool prints which
+tangent path it took.
 
-`uv0` is imported when available and otherwise defaults to zero. Vertex colors
-are imported by default; use `--ignore-colors` to force the
-`--default-color R,G,B,A` value instead (the default is `1,1,1,1`).
-`--flip-winding` swaps the second and third vertex of every output triangle.
+`uv0` comes in when present, or zero when not. Point colors come in by
+default. Use `--ignore-colors` to force the `--default-color R,G,B,A` value
+instead (default is `1,1,1,1`). `--flip-winding` swaps the second and third
+point of each out tri.
 
-## Output layouts
+## Out forms
 
-`--asset-type` accepts `bunch`, `mesh`, `model`, `skeleton`, and `skin`.
+`--asset-type` takes `bunch`, `mesh`, `model`, `skeleton`, and `skin`.
 
-| Type | Files written | Intended use |
+| Type | Files made | Use |
 | --- | --- | --- |
-| `bunch` (default) | One `.nwb` file containing a mesh and model, plus skeleton and skin data when needed. | A self-contained asset-bunch import. |
-| `mesh` | One mesh `.nwb` file. | A standalone mesh payload. Skin and skeleton data are not emitted. |
-| `model` | One model `.nwb` file with references to package assets. | Use when the referenced mesh, skin, and skeleton assets already exist. |
-| `skeleton` | One skeleton `.nwb` file. | A skinned source only. |
-| `skin` | One skin `.nwb` file with mesh and skeleton references. | A skinned source only; referenced assets are not written. |
+| `bunch` (default) | One `.nwb` file with a mesh and model, plus bone and skin data when needed. | A full asset-bunch bring-in. |
+| `mesh` | One mesh `.nwb` file. | A plain mesh pack. Skin and bone data do not go out. |
+| `model` | One model `.nwb` file with links to pack files. | Use when the linked mesh, skin, and bone files are there. |
+| `skeleton` | One bone `.nwb` file. | A skinned source only. |
+| `skin` | One skin `.nwb` file with mesh and bone links. | A skinned source only. Linked files do not go out. |
 
-`--asset-type` accepts the five values in this table. The `asset_bunch` metadata declaration is a source-language construct; use `bunch` for the CLI output type.
+`--asset-type` takes the five values in this table. The `asset_bunch` data
+note is a source-word form. Use `bunch` for the CLI out type.
 
-For model, skin, and separate-package output, generated asset paths
-are derived from the output path. For example, an output of
-`assets/characters/hero.nwb` uses `project/characters/hero` as the default
-virtual base. Use `--virtual-root engine` to use `engine/...` instead. If the
-output path is outside an `assets` directory, its stem is used beneath that
-virtual root.
+For model, skin, and split-pack outs, made file paths come from the out path.
+For example, an out of `assets/characters/hero.nwb` uses
+`project/characters/hero` as the default base. Use `--virtual-root engine`
+to use `engine/...` instead. If the out path sits outside an `assets` folder,
+its stem goes under that base.
 
-`--separate-assets` is valid only with `--asset-type bunch`. Instead of writing
-one asset bunch, it writes the model to the requested output and its child
-assets in a directory named after the output stem:
+`--separate-assets` works only with `--asset-type bunch`. It does not write
+one asset bunch. It writes the model to the asked out file and its child
+files in a folder named for the out stem:
 
 ```text
 assets/characters/hero.nwb
@@ -126,22 +123,21 @@ assets/characters/hero/skeleton.nwb  # skinned sources only
 assets/characters/hero/skin.nwb      # skinned sources only
 ```
 
-For `bunch`, `model`, `skeleton`, and `skin` output, a source selection cannot
-mix static and skinned meshes. `skeleton` and `skin` specifically require a
-skinned selection.
+For `bunch`, `model`, `skeleton`, and `skin` outs, one source pick cannot mix
+still and skinned meshes. `skeleton` and `skin` need a skinned pick.
 
-## Refreshing an NWB mesh asset
+## Refresh an NWB mesh file
 
-Passing a `.nwb` input automatically enters refresh mode; `--refresh-nwb` can
-also force it. Refresh reads every mesh declaration, validates its supported
-mesh fields, canonicalizes and deduplicates supported vector streams, then
-rewrites only changed lists while preserving the rest of the document. Vector stream identity follows the existing numeric output policy:
-signed zero and magnitudes smaller than `1e-8` share the emitted zero value.
-Refresh remaps their vertex references together, so repeating the refresh keeps
-the same canonical bytes. Skinned refresh preserves the original position and
-skin influence pairing and leaves the influence list text unchanged.
+A `.nwb` input auto starts refresh mode. `--refresh-nwb` can also force it.
+Refresh reads each mesh note, checks its known mesh fields, makes plain and
+same known point lists, then rewrites only changed lists and keeps the rest
+of the file. Point list sameness uses the set number out rule: minus zero
+and sizes below `1e-8` share the shown zero value. Refresh re-links their
+point links as one, so a repeat refresh keeps the same plain bytes. Skinned
+refresh keeps the first spot and skin pull pair and leaves the pull list text
+as is.
 
-To make a canonical copy:
+To make a plain copy:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
@@ -150,7 +146,7 @@ python -m launcher fbx-to-nwb --working-directory . -- \
     --yes
 ```
 
-To replace the input in place, explicitly acknowledge the overwrite:
+To swap the input in place, say yes to the swap in a clear way:
 
 ```sh
 python -m launcher fbx-to-nwb --working-directory . -- \
@@ -158,34 +154,6 @@ python -m launcher fbx-to-nwb --working-directory . -- \
     --yes --force
 ```
 
-`--list-meshes` is only available for FBX input. Refresh rejects unsupported
-mesh fields rather than silently dropping them.
-
-## Command-line reference
-
-| Option | Description |
-| --- | --- |
-| `input` | FBX input path, or an NWB mesh path for refresh mode. |
-| `-o, --output PATH` | Primary output `.nwb` path. |
-| `--asset-type TYPE` | `bunch`, `mesh`, `model`, `skeleton`, or `skin`. |
-| `--virtual-root ROOT` | Virtual root for generated package references; defaults to `project`. |
-| `-m, --mesh SELECTOR` | `all`, `first`, an index, a node name, or a mesh name. |
-| `--normal-mode MODE` | `imported`, `smooth`, or `regenerate`. |
-| `--scale VALUE` | Positive finite uniform scale, applied after import. |
-| `--triangle-area-length-squared-epsilon VALUE` | Non-negative threshold for discarding degenerate triangles. |
-| `--default-color R,G,B,A` | Fallback color, four finite values. |
-| `--preserve-space` | Do not convert axes or source units to NWB space. |
-| `--include-hidden` | Include hidden FBX mesh nodes. |
-| `--local` | Do not bake node transforms into the output mesh. |
-| `--ignore-colors` | Use the default color even if the source has vertex colors. |
-| `--flip-winding` | Reverse every output triangle's winding. |
-| `--separate-assets` | Write a bunch as a model plus child `.nwb` files. |
-| `--refresh-nwb` | Treat the input as an NWB mesh asset to canonicalize. |
-| `--list-meshes` | Print importable FBX mesh instances and exit. |
-| `--force` | Allow replacement of an existing primary output file. |
-| `-y, --yes` | Use defaults for omitted import options and disable prompts. |
-| `-h, --help` | Show the executable's generated help text. |
-
-## Library result contracts
-
-Scene, mesh, skin and canonical-stream producers return values through global `Expected<T, E>`. Checked enum parsers return the selected enum. Callers check success before moving candidates or writing assets; instance append, stream/index remapping, SDK triangulation scratch and interactive session state retain actual in/out contracts. Diagnostics remain at the owning logger/CLI boundary, and invalid CLI explanations reach stderr in `fin`. See [produced values and expected failures](../../docs/expected_results.md).
+Refresh refuses a file with unknown mesh fields or bad lists. It never bakes
+a new mesh from FBX data in refresh mode. Bone and skin notes stay byte-same
+unless their mesh links change.

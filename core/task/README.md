@@ -1,22 +1,40 @@
-# CPU and GPU execution domains
+# CPU and GPU run fields
 
-`CpuTaskScheduler` and `GpuTaskScheduler` are frame-owned execution services with parallel module layouts:
+`CpuTaskScheduler` and `GpuTaskScheduler` are Frame-owned run helpers with
+matching folder plans:
 
-| Domain | Public entry | Target | Work description |
+| Field | Public door | Target | Work note |
 | --- | --- | --- | --- |
-| CPU | `cpu/scheduler.h` | `nwb_cpu_task` | Callables, `CpuTaskScope`, CPU completion handles |
-| GPU | `gpu/scheduler.h` | `nwb_gpu_task` | Task graphs, compiled plans, GPU submission tokens |
+| CPU | `cpu/scheduler.h` | `nwb_cpu_task` | Callables, `CpuTaskScope`, CPU done handles |
+| GPU | `gpu/scheduler.h` | `nwb_gpu_task` | Task graphs, built plans, GPU send tokens |
 
-`Frame::cpuTasks()` and `Frame::gpuTasks()` expose the same instances borrowed by the graphics runtime and project context. GPU scheduler admission compiles declared graphs from a current queue-pressure snapshot, then owns native recording and submission; `wait()` joins its device work and `wait(token)` joins a submitted operation. CPU and GPU completion remain distinct.
+`Frame::cpuTasks()` and `Frame::gpuTasks()` show the same live copies lent
+to the graphics run core and project context. GPU plan take-in builds stated
+graphs from a current queue-load still shot. Then it owns home record and
+send. `wait()` joins its card work, and `wait(token)` joins one sent job.
+CPU and GPU done states stay split.
 
-The GPU scheduler owns its execution admission and binding lifetime, not the selected graphics device. `GraphicsRuntime` owns device creation, resources, render passes, and presentation in `core/graphics/runtime`. It binds the GPU scheduler before resource callbacks, joins work before teardown, and detaches before device destruction. A failed detach leaves the device binding intact. Swap-chain resizing keeps the same binding.
+The GPU plan helper owns its run take-in and link life, not the picked
+graphics card. `GraphicsRuntime` owns card make, stores, render passes, and
+show in `core/graphics/runtime`. It links the GPU helper before store call
+backs, joins work before tear down, and unlinks before card kill. A failed
+unlink leaves the card link whole. Swap-chain resize keeps the same link.
 
-Dependencies run in one direction:
+Needs run one way:
 
 ```text
 nwb_graphics (runtime) -> nwb_gpu_task -> nwb_graphics_backend -> nwb_cpu_task -> nwb_alloc
 ```
 
-Backend code cannot include GPU graph/runtime headers, GPU tasks cannot include the graphics runtime, and CPU tasks cannot include graphics. GPU task code uses neutral RHI contracts and selected headers under `core/graphics/backend_selection/` for concrete device and command-list operations; native Vulkan headers and SDK types stay inside the provider. Compile-time selection adds no runtime dispatch, per-resource storage, or allocation overhead. Vulkan is the default and only implemented provider; selecting Metal is rejected until its provider exists.
+Back code cannot take GPU graph/run heads. GPU tasks cannot take the graphics
+run core. CPU tasks cannot take graphics. GPU task code uses plain RHI rules
+and picked heads under `core/graphics/backend_selection/` for real card and
+list calls. Home Vulkan heads and SDK kinds stay inside the back. Build-time
+pick adds no run fork, per-store keep, or make cost. Vulkan is the default
+and only built back. Metal pick fails until its back is there.
 
-Task-domain unit tests mirror the layout under `tests/unit/task/cpu` and `tests/unit/task/gpu`; selected-backend resource and presentation contract tests live under `tests/unit/graphics`. Test code and fixtures stay under `tests/`; new unit coverage targets edge cases through the selected public contracts rather than a provider-specific test backend.
+Task-field unit tests match the plan under `tests/unit/task/cpu` and
+`tests/unit/task/gpu`. Picked-back store and show rule tests live under
+`tests/unit/graphics`. Test code and fixtures stay under `tests/`. New unit
+cover aims at edge cases through the picked public rules, not a back-only
+test back.

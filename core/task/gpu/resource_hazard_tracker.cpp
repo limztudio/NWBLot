@@ -72,7 +72,7 @@ struct TrackedResourceAccessLists{
 };
 
 
-b8 GpuResourceHazardTracker::append(const GpuTaskGraph::DeclarationReadView& graph, const Span<const GpuTaskId> orderedTasks, Alloc::ScratchArena& scratchArena, GpuInferredDependencyCollector& edgeCollector, GpuTaskId& invalidTask, GpuGraphResourceId& invalidResource){
+b8 GpuResourceHazardTracker::Append(const GpuTaskGraph::DeclarationReadView& graph, const Span<const GpuTaskId> orderedTasks, Alloc::ScratchArena& scratchArena, GpuInferredDependencyCollector& edgeCollector, GpuTaskId& invalidTask, GpuGraphResourceId& invalidResource){
     using namespace __hidden_gpu_resource_hazard_tracker;
     using namespace GpuTaskGraphCompilerDetail;
     // Process physical resource use in the semantic stable order.

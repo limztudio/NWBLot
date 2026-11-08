@@ -21,9 +21,9 @@ using FloatMipChain = basisu::vector<FloatPlanes>;
 
 class TextureMipPreparer final{
 public:
-    [[nodiscard]] static Expected<::Vector<TextureFormat::MipLevelLayout, Core::Alloc::ScratchArena>> buildLevels(const TextureEncodeInput& entry, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<FloatPlanes> generateNext(const FloatPlanes& source, TextureDimension::Enum dimension);
-    [[nodiscard]] static Expected<TexConvAlphaTransport> deriveAlpha(const FloatMipChain& mips, TexturePayloadFormat::Enum format);
+    [[nodiscard]] static Expected<::Vector<TextureFormat::MipLevelLayout, Core::Alloc::ScratchArena>> BuildLevels(const TextureEncodeInput& entry, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<FloatPlanes> GenerateNext(const FloatPlanes& source, TextureDimension::Enum dimension);
+    [[nodiscard]] static Expected<TexConvAlphaTransport> DeriveAlpha(const FloatMipChain& mips, TexturePayloadFormat::Enum format);
 };
 
 

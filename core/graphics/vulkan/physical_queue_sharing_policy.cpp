@@ -11,7 +11,7 @@
 NWB_VULKAN_BEGIN
 
 
-PhysicalQueueSharingPolicy::Result PhysicalQueueSharingPolicy::resolve(const Span<const GpuPhysicalQueueInfo> queues, const u32 graphics, const u32 compute, const u32 transfer)noexcept{
+PhysicalQueueSharingPolicy::Result PhysicalQueueSharingPolicy::Resolve(const Span<const GpuPhysicalQueueInfo> queues, const u32 graphics, const u32 compute, const u32 transfer)noexcept{
     const u32 invalid = Limit<u32>::s_Max;
     const auto primaryFamily = [](const u32 family)noexcept{
         return family == invalid ? s_InvalidQueueFamilyIndex : static_cast<i32>(family);

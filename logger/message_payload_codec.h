@@ -27,7 +27,7 @@ private:
     inline static constexpr TStringView s_TruncatedMessageError = NWB_TEXT("Received a truncated message");
     inline static constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received a malformed message payload");
 
-    [[nodiscard]] static constexpr b8 isValidType(Core::Common::LogType::Enum type)noexcept{
+    [[nodiscard]] static constexpr b8 IsValidType(Core::Common::LogType::Enum type)noexcept{
         switch(type){
         case Core::Common::LogType::Info:
         case Core::Common::LogType::EssentialInfo:
@@ -44,11 +44,11 @@ private:
 
 public:
     template<typename PayloadContainer>
-    [[nodiscard]] static Expected<void, MessagePayloadError::Enum> build(const MessageType& msg, PayloadContainer& outPayload){
+    [[nodiscard]] static Expected<void, MessagePayloadError::Enum> Build(const MessageType& msg, PayloadContainer& outPayload){
         const auto& [time, type, str] = msg;
         outPayload.clear();
 
-        if(!isValidType(type))
+        if(!IsValidType(type))
             return MakeUnexpected(MessagePayloadError::InvalidType);
 
         usize payloadBytes = 0u;
@@ -69,7 +69,7 @@ public:
         return {};
     }
 
-    [[nodiscard]] static Expected<MessageType, TStringView> parse(LogArena& arena, const void* contents, const usize totalSize){
+    [[nodiscard]] static Expected<MessageType, TStringView> Parse(LogArena& arena, const void* contents, const usize totalSize){
         if(totalSize < sizeof(Timer) + sizeof(Core::Common::LogType::Enum) + sizeof(tchar)){
             return MakeUnexpected(s_TruncatedMessageError);
         }
@@ -86,7 +86,7 @@ public:
             return MakeUnexpected(s_TruncatedMessageError);
         }
 
-        if(!isValidType(*type)){
+        if(!IsValidType(*type)){
             return MakeUnexpected(TStringView(NWB_TEXT("Received a message with an invalid type")));
         }
 

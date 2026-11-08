@@ -35,12 +35,12 @@ public:
 
 
 public:
-    [[nodiscard]] static SetupUploadSameClassRouting resolveSameClassRouting(GraphicsBackend::Device& device, CommandQueue::Enum consumerQueue, usize uploadBytes)noexcept;
-    [[nodiscard]] static ResourceQueueSharing::Mask resolveConsumerSharing(ResourceQueueSharing::Mask requestedSharing, CommandQueue::Enum consumerQueue, b8 crossFamilySameClassRouting = false)noexcept;
-    [[nodiscard]] static CommandQueue::Enum resolveConsumerQueue(GraphicsBackend::Device& device, CommandQueue::Enum requestedConsumerQueue, usize uploadBytes, b8 hasKnownFinalState)noexcept;
-    [[nodiscard]] static GpuTaskSchedulingHint scheduling(usize byteCount, b8 sameClassRouting = false, b8 crossFamilySameClassRouting = false)noexcept;
-    [[nodiscard]] static ResourceStates::Mask finalState(ResourceStates::Mask declaredInitialState)noexcept;
-    [[nodiscard]] static b8 submit(
+    [[nodiscard]] static SetupUploadSameClassRouting ResolveSameClassRouting(GraphicsBackend::Device& device, CommandQueue::Enum consumerQueue, usize uploadBytes)noexcept;
+    [[nodiscard]] static ResourceQueueSharing::Mask ResolveConsumerSharing(ResourceQueueSharing::Mask requestedSharing, CommandQueue::Enum consumerQueue, b8 crossFamilySameClassRouting = false)noexcept;
+    [[nodiscard]] static CommandQueue::Enum ResolveConsumerQueue(GraphicsBackend::Device& device, CommandQueue::Enum requestedConsumerQueue, usize uploadBytes, b8 hasKnownFinalState)noexcept;
+    [[nodiscard]] static GpuTaskSchedulingHint Scheduling(usize byteCount, b8 sameClassRouting = false, b8 crossFamilySameClassRouting = false)noexcept;
+    [[nodiscard]] static ResourceStates::Mask FinalState(ResourceStates::Mask declaredInitialState)noexcept;
+    [[nodiscard]] static b8 Submit(
         const GraphicsRuntime& graphics,
         ResourceQueueSharing::Mask queueSharing,
         CommandQueue::Enum consumerQueue,

@@ -60,7 +60,7 @@ inline Expected<u64> AddAlignedStagingMipSize(const u64 size, const u64 mipSize,
 };
 
 
-Expected<VulkanDetail::TextureTransferLayout::StagingLayout> VulkanDetail::TextureTransferLayout::buildStagingLayout(Alloc::GlobalArena& arena, const TextureDesc& desc, const VulkanDetail::TextureFormatBlockLayout& formatLayout, const u32 bufferOffsetAlignment){
+Expected<VulkanDetail::TextureTransferLayout::StagingLayout> VulkanDetail::TextureTransferLayout::BuildStagingLayout(Alloc::GlobalArena& arena, const TextureDesc& desc, const VulkanDetail::TextureFormatBlockLayout& formatLayout, const u32 bufferOffsetAlignment){
     NWB_ASSERT(desc.mipLevels != 0u);
     StagingLayout result{ 0u, VulkanDetail::StagingTextureMipLayoutVector(arena) };
     result.mipLayouts.reserve(desc.mipLevels);
@@ -81,7 +81,7 @@ Expected<VulkanDetail::TextureTransferLayout::StagingLayout> VulkanDetail::Textu
 namespace VulkanDetail{
 
 
-Expected<BufferImageCopyLayout> TextureTransferLayout::buildBufferImageCopyLayout(
+Expected<BufferImageCopyLayout> TextureTransferLayout::BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
     const TextureFormatBlockLayout& formatLayout,
     const u64 rowPitch,
@@ -164,7 +164,7 @@ Expected<BufferImageCopyLayout> TextureTransferLayout::buildBufferImageCopyLayou
     return outLayout;
 }
 
-Expected<TextureSlice> TextureTransferLayout::resolveSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept{
+Expected<TextureSlice> TextureTransferLayout::ResolveSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept{
     if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
         return MakeUnexpected(Failure{});
     if(desc.arraySize == 0 || slice.arraySlice >= desc.arraySize)
@@ -193,7 +193,7 @@ Expected<TextureSlice> TextureTransferLayout::resolveSlice(const TextureDesc& de
     return resolved;
 }
 
-Expected<StagingTextureRange> TextureTransferLayout::buildStagingRange(
+Expected<StagingTextureRange> TextureTransferLayout::BuildStagingRange(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
     const TextureFormatBlockLayout& formatLayout,

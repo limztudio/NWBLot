@@ -24,7 +24,7 @@ public:
         StagingTextureMipLayoutVector mipLayouts;
     };
 
-    static Expected<BufferImageCopyLayout> buildBufferImageCopyLayout(
+    static Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
         const VkExtent3D& extent,
         const TextureFormatBlockLayout& formatLayout,
         u64 rowPitch,
@@ -33,9 +33,9 @@ public:
         BufferImageCopyPitchFields::Enum pitchFields,
         TStringView operationName = {}
     );
-    static Expected<StagingLayout> buildStagingLayout(Alloc::GlobalArena& arena, const TextureDesc& desc, const TextureFormatBlockLayout& formatLayout, u32 bufferOffsetAlignment);
-    static Expected<TextureSlice> resolveSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept;
-    static Expected<StagingTextureRange> buildStagingRange(const TextureSlice& resolvedSlice, const StagingTextureMipLayout& mipLayout, const TextureFormatBlockLayout& formatLayout, u64 arrayByteSize, u64 totalByteSize, u32 requiredOffsetAlignment, b8 requireHostPointerRange)noexcept;
+    static Expected<StagingLayout> BuildStagingLayout(Alloc::GlobalArena& arena, const TextureDesc& desc, const TextureFormatBlockLayout& formatLayout, u32 bufferOffsetAlignment);
+    static Expected<TextureSlice> ResolveSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept;
+    static Expected<StagingTextureRange> BuildStagingRange(const TextureSlice& resolvedSlice, const StagingTextureMipLayout& mipLayout, const TextureFormatBlockLayout& formatLayout, u64 arrayByteSize, u64 totalByteSize, u32 requiredOffsetAlignment, b8 requireHostPointerRange)noexcept;
 };
 
 

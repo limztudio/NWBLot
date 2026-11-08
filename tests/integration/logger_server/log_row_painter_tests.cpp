@@ -40,10 +40,10 @@ TEST(LogRowPainter, EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext){
     DRAWITEMSTRUCT item{};
     item.hDC = dc;
     item.rcItem = RECT{ 0, 0, 4, 4 };
-    Log::FrameDetail::LogRowPainter::draw(item, message);
+    Log::FrameDetail::LogRowPainter::Draw(item, message);
     EXPECT_EQ(GetPixel(dc, 1, 1), RGB(170, 0, 0));
     item.itemID = 1u;
-    Log::FrameDetail::LogRowPainter::draw(item, message);
+    Log::FrameDetail::LogRowPainter::Draw(item, message);
     EXPECT_EQ(GetPixel(dc, 1, 1), RGB(200, 0, 0));
     EXPECT_EQ(GetTextColor(dc), RGB(3, 4, 5));
     EXPECT_EQ(GetBkMode(dc), OPAQUE);
@@ -60,7 +60,7 @@ TEST(LogRowPainter, LongTextWrapsWithinHiddenParentClientWidth){
     SendMessage(child, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), FALSE);
     Log::FrameDetail::MessageItem message(Log::LogString(NWB_TEXT("A long message that must wrap across several narrow rows of the hidden logger window."), arena.arena), Core::Common::LogType::Info);
     MEASUREITEMSTRUCT item{};
-    Log::FrameDetail::LogRowPainter::measure(parent, child, item, message);
+    Log::FrameDetail::LogRowPainter::Measure(parent, child, item, message);
     EXPECT_GT(item.itemHeight, static_cast<UINT>(Log::FrameDetail::LogRowPainter::s_FontHeight));
 }
 

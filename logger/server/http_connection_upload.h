@@ -16,7 +16,7 @@
 NWB_LOG_BEGIN
 
 
-namespace __hidden_logger_server{
+namespace LoggerServerImpl{
 
 
 inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;

@@ -21,7 +21,7 @@ NWB_VULKAN_BEGIN
 
 
 b8 Device::PhysicalQueueRegistrar::registerQueue(const VulkanPhysicalQueueDesc& desc, NativeQueueState& nativeQueue){
-    const auto validation = PhysicalQueueRegistrationPolicy::validate(desc, nativeQueue, m_device.m_physicalQueueInfos, m_device.m_explicitPrimaryQueues);
+    const auto validation = PhysicalQueueRegistrationPolicy::Validate(desc, nativeQueue, m_device.m_physicalQueueInfos, m_device.m_explicitPrimaryQueues);
     switch(validation){
     case PhysicalQueueRegistrationPolicy::Result::Invalid:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));
@@ -70,7 +70,7 @@ void Device::PhysicalQueueRegistrar::configureSharing()noexcept{
         const Queue* const queue = m_device.m_primaryQueues[static_cast<u32>(queueClass)];
         return queue ? queue->m_queueFamilyIndex : Limit<u32>::s_Max;
     };
-    const auto sharing = PhysicalQueueSharingPolicy::resolve(
+    const auto sharing = PhysicalQueueSharingPolicy::Resolve(
         m_device.m_physicalQueueInfos,
         primaryFamily(CommandQueue::Graphics),
         primaryFamily(CommandQueue::Compute),

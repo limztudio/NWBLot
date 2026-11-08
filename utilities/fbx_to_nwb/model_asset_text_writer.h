@@ -20,7 +20,7 @@ NWB_FBX_TO_NWB_BEGIN
 class ModelAssetTextWriter final{
 public:
     template<typename Stream>
-    static void writeBody(
+    static void WriteBody(
         const AStringView variableName,
         const AStringView meshName,
         const Optional<AStringView> skinName,
@@ -35,7 +35,7 @@ public:
             file << variableName << ".skeletons = {\n";
             file << "    \"skeleton\": {\n";
             file << s_SkeletonPropertyText;
-            AssetReferenceTextWriter::write(*skeletonName, quoteAssetReferences, scratchArena, file);
+            AssetReferenceTextWriter::Write(*skeletonName, quoteAssetReferences, scratchArena, file);
             file << s_EntrySuffixText;
             file << s_TableEntryCloseText;
             file << s_TableCloseSectionText;
@@ -43,10 +43,10 @@ public:
             file << variableName << ".skinned_meshes = {\n";
             file << "    \"mesh\": {\n";
             file << "        \"skin\": ";
-            AssetReferenceTextWriter::write(*skinName, quoteAssetReferences, scratchArena, file);
+            AssetReferenceTextWriter::Write(*skinName, quoteAssetReferences, scratchArena, file);
             file << s_EntrySuffixText;
             file << s_SkeletonPropertyText;
-            AssetReferenceTextWriter::write(skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference, scratchArena, file);
+            AssetReferenceTextWriter::Write(skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference, scratchArena, file);
             file << s_EntrySuffixText;
             file << s_TableEntryCloseText;
             file << s_TableCloseText;
@@ -55,7 +55,7 @@ public:
             file << variableName << ".static_meshes = {\n";
             file << "    \"base\": {\n";
             file << "        \"mesh\": ";
-            AssetReferenceTextWriter::write(meshName, quoteAssetReferences, scratchArena, file);
+            AssetReferenceTextWriter::Write(meshName, quoteAssetReferences, scratchArena, file);
             file << s_EntrySuffixText;
             file << s_TableEntryCloseText;
             file << s_TableCloseText;

@@ -22,8 +22,8 @@ NWB_IMPL_BEGIN
 
 class RendererMaterialResourceResolver final{
 public:
-    [[nodiscard]] static b8 resolve(MaterialSurfaceInfo& materialInfo, RendererMaterialResourceState& resources, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager);
-    static void release(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources);
+    [[nodiscard]] static b8 Resolve(MaterialSurfaceInfo& materialInfo, RendererMaterialResourceState& resources, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager);
+    static void Release(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources);
 };
 
 

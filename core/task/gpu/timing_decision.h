@@ -19,10 +19,10 @@ NWB_CORE_BEGIN
 
 class GpuTaskTimingDecision final{
 public:
-    [[nodiscard]] static b8 historyMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-    [[nodiscard]] static b8 benefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-    [[nodiscard]] static b8 switchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
-    [[nodiscard]] static b8 canSwitch(
+    [[nodiscard]] static b8 HistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+    [[nodiscard]] static b8 BenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+    [[nodiscard]] static b8 SwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept;
+    [[nodiscard]] static b8 CanSwitch(
         const GpuTaskTimingHistory& incumbent,
         const GpuTaskTimingHistory& candidate,
         const GpuTaskTimingAssignmentState& assignment,

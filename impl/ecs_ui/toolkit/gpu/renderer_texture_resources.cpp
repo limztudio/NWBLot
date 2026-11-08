@@ -143,7 +143,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareTextureImages(Core:
         const auto& source = frame->m_snapshot.textureImages()[index];
         if(!image || !source || !image->m_source || !SameTextureImageKey(*image->m_source, *source) || !__hidden_ui_gpu_texture_resources::ValidVersion(*image))
             return MakeUnexpected(Failure{});
-        const auto texture = GpuSampledTextures::importTexture(
+        const auto texture = GpuSampledTextures::ImportTexture(
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuTextureImageReadyPrefix,
                 .readyMarkerLabel = s_GpuTextureImageReadyMarkerLabel,

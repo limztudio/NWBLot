@@ -12,7 +12,7 @@
 NWB_ADHD_BEGIN
 
 
-TypeRef* TypeSubstitution::substituteAliasType(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena){
+TypeRef* TypeSubstitution::SubstituteAliasType(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena){
     const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
     for(usize p = 0u; p < count; ++p){
         if(!templateParams[p].constValueType && origType.name == templateParams[p].name && origType.templateArgs.empty() && templateArgs[p].type){
@@ -32,7 +32,7 @@ TypeRef* TypeSubstitution::substituteAliasType(const TypeRef& origType, const Sp
     TypeRef* cloned = AllocateAstNode<TypeRef>(arena);
     cloned->name = origType.name;
     cloned->refMode = origType.refMode;
-    cloned->funcReturnType = origType.funcReturnType ? substituteAliasType(*origType.funcReturnType, templateParams, templateArgs, arena) : nullptr;
+    cloned->funcReturnType = origType.funcReturnType ? SubstituteAliasType(*origType.funcReturnType, templateParams, templateArgs, arena) : nullptr;
     cloned->inferredCaptureBytes = origType.inferredCaptureBytes;
     cloned->span = origType.span;
     cloned->isFuncType = origType.isFuncType;
@@ -40,7 +40,7 @@ TypeRef* TypeSubstitution::substituteAliasType(const TypeRef& origType, const Sp
     for(const FuncParamType& fp : origType.funcParams){
         FuncParamType subFp = fp;
         if(fp.type)
-            subFp.type = substituteAliasType(*fp.type, templateParams, templateArgs, arena);
+            subFp.type = SubstituteAliasType(*fp.type, templateParams, templateArgs, arena);
         cloned->funcParams.push_back(subFp);
     }
     for(const TypeArg& arg : origType.templateArgs){
@@ -56,7 +56,7 @@ TypeRef* TypeSubstitution::substituteAliasType(const TypeRef& origType, const Sp
                 }
             }
             if(!matchedConstParam)
-                subArg.type = substituteAliasType(*arg.type, templateParams, templateArgs, arena);
+                subArg.type = SubstituteAliasType(*arg.type, templateParams, templateArgs, arena);
         }
         else if(!arg.constantText.empty()){
             b8 exactMatch = false;
@@ -106,7 +106,7 @@ TypeRef* TypeSubstitution::substituteAliasType(const TypeRef& origType, const Sp
     return cloned;
 }
 
-[[nodiscard]] MethodDecl* TypeSubstitution::substituteInterfaceMethod(const SymbolTable& symbols, MethodDecl* method, const b8 hasSubst, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena){
+[[nodiscard]] MethodDecl* TypeSubstitution::SubstituteInterfaceMethod(const SymbolTable& symbols, MethodDecl* method, const b8 hasSubst, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena){
     if(!method || !hasSubst)
         return method;
     MethodDecl* cloned = AllocateAstNode<MethodDecl>(arena);

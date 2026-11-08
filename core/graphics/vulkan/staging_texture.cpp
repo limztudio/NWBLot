@@ -101,7 +101,7 @@ Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d
         return MakeUnexpected(Failure{});
     }
 
-    if(!VulkanTextureDetail::TextureShapePolicy::validate(d, NWB_TEXT("create staging texture"))){
+    if(!VulkanTextureDetail::TextureShapePolicy::Validate(d, NWB_TEXT("create staging texture"))){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
         return MakeUnexpected(Failure{});
     }
@@ -129,7 +129,7 @@ Expected<StagingTextureHandle> Device::createStagingTexture(const TextureDesc& d
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
         return MakeUnexpected(Failure{});
     }
-    auto layout = VulkanDetail::TextureTransferLayout::buildStagingLayout(m_context.objectArena, d, *formatLayout, *bufferOffsetAlignment);
+    auto layout = VulkanDetail::TextureTransferLayout::BuildStagingLayout(m_context.objectArena, d, *formatLayout, *bufferOffsetAlignment);
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
@@ -215,13 +215,13 @@ Expected<StagingTextureMapping> Device::mapStagingTexture(StagingTexture& stagin
         return MakeUnexpected(Failure{});
     }
 
-    const auto resolvedSlice = VulkanDetail::TextureTransferLayout::resolveSlice(staging.m_creationDesc, slice, staging.m_formatLayout);
+    const auto resolvedSlice = VulkanDetail::TextureTransferLayout::ResolveSlice(staging.m_creationDesc, slice, staging.m_formatLayout);
     if(!resolvedSlice){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
         return MakeUnexpected(Failure{});
     }
 
-    const auto range = VulkanDetail::TextureTransferLayout::buildStagingRange(*resolvedSlice, staging.m_mipLayouts[resolvedSlice->mipLevel], staging.m_formatLayout, staging.m_arrayByteSize, staging.m_totalByteSize, 0u, true);
+    const auto range = VulkanDetail::TextureTransferLayout::BuildStagingRange(*resolvedSlice, staging.m_mipLayouts[resolvedSlice->mipLevel], staging.m_formatLayout, staging.m_arrayByteSize, staging.m_totalByteSize, 0u, true);
     if(!range){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: mapped range is invalid"));
         return MakeUnexpected(Failure{});

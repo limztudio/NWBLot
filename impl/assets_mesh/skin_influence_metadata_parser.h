@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 class SkinInfluenceMetadataParser final{
 public:
     template<typename SkinInfluenceVectorT, typename PathArenaT>
-    [[nodiscard]] static b8 parse(
+    [[nodiscard]] static b8 Parse(
         const ::Path<PathArenaT>& nwbFilePath,
         const Core::Metascript::Value& skinAsset,
         const TStringView metaKind,

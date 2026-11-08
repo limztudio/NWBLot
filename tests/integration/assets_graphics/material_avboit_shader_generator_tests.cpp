@@ -34,9 +34,9 @@ TEST(MaterialAvboitShaderGenerator, MissingInterfaceRejectsTransparentEntryWitho
     entries.back().transparent = true;
 
     using Generator = NWB::Impl::MaterialAvboitShaderGenerator;
-    EXPECT_FALSE(Generator::emitAccumulate(*root, "test", testArena.arena, scratchArena, entries));
-    EXPECT_FALSE(Generator::emitOccupancy(*root, "test", testArena.arena, scratchArena, entries));
-    EXPECT_FALSE(Generator::emitExtinction(*root, "test", testArena.arena, scratchArena, entries));
+    EXPECT_FALSE(Generator::EmitAccumulate(*root, "test", testArena.arena, scratchArena, entries));
+    EXPECT_FALSE(Generator::EmitOccupancy(*root, "test", testArena.arena, scratchArena, entries));
+    EXPECT_FALSE(Generator::EmitExtinction(*root, "test", testArena.arena, scratchArena, entries));
     EXPECT_TRUE(entries[0u].avboitAccumulatePixelShaderName.empty());
     EXPECT_TRUE(entries[0u].avboitOccupancyPixelShaderName.empty());
     EXPECT_TRUE(entries[0u].avboitExtinctionPixelShaderName.empty());

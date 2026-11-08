@@ -23,7 +23,7 @@ public:
         b8 transferCompleted = false;
     };
 
-    static b8 globalInit()noexcept;
+    static b8 GlobalInit()noexcept;
     ~LogHttpTransport()noexcept;
     [[nodiscard]] b8 init();
     [[nodiscard]] Result send(const char* url, const u8* bytes, usize byteCount);

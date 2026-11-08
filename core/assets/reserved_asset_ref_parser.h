@@ -22,7 +22,7 @@ NWB_ASSETS_BEGIN
 class ReservedAssetRefParser{
 public:
     template<typename AssetT>
-    [[nodiscard]] static Expected<AssetRef<AssetT>> parseText(
+    [[nodiscard]] static Expected<AssetRef<AssetT>> ParseText(
         const Path& nwbFilePath,
         const AStringView diagnosticPrefix,
         const AStringView fieldLabel,
@@ -46,7 +46,7 @@ public:
     }
 
     template<typename AssetT, typename MetadataValue>
-    [[nodiscard]] static Expected<AssetRef<AssetT>> parseValue(
+    [[nodiscard]] static Expected<AssetRef<AssetT>> ParseValue(
         const Path& nwbFilePath,
         const AStringView diagnosticPrefix,
         const AStringView fieldLabel,
@@ -59,11 +59,11 @@ public:
             return MakeUnexpected(Failure{});
         }
         const AStringView text(value.asString().data(), value.asString().size());
-        return parseText<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, text, scratchArena);
+        return ParseText<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, text, scratchArena);
     }
 
     template<typename AssetT, typename MetadataValue>
-    [[nodiscard]] static Expected<AssetVector<AssetRef<AssetT>>> parseList(
+    [[nodiscard]] static Expected<AssetVector<AssetRef<AssetT>>> ParseList(
         const Path& nwbFilePath,
         const AStringView diagnosticPrefix,
         const MetadataValue& listValue,
@@ -79,7 +79,7 @@ public:
         AssetVector<AssetRef<AssetT>> refs(arena);
         refs.reserve(items.size());
         for(const MetadataValue& item : items){
-            const auto parsedRef = parseValue<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, item, "entries must be strings", scratchArena);
+            const auto parsedRef = ParseValue<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, item, "entries must be strings", scratchArena);
             if(!parsedRef)
                 return MakeUnexpected(Failure{});
             refs.push_back(*parsedRef);

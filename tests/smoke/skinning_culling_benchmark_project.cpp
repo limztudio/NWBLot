@@ -36,7 +36,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_skinning_culling_benchmark{
+namespace SkinningCullingBenchmarkImpl{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -389,7 +389,7 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<__hidden_skinning_culling_benchmark::SkinningCullingBenchmarkProject>(context);
+    return MakeUnique<SkinningCullingBenchmarkImpl::SkinningCullingBenchmarkProject>(context);
 }
 
 

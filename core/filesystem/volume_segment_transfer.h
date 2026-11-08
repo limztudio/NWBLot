@@ -27,8 +27,8 @@ namespace FilesystemVolumeDetail{
 
 class VolumeSegmentTransfer final{
 public:
-    [[nodiscard]] static b8 read(AStringView volumeName, Span<const Path> segmentPaths, u64 segmentSize, u64 offset, u64 byteCount, u8* outputBytes);
-    [[nodiscard]] static b8 write(AStringView volumeName, Span<const Path> segmentPaths, u64 segmentSize, u64 offset, u64 byteCount, const u8* inputBytes);
+    [[nodiscard]] static b8 Read(AStringView volumeName, Span<const Path> segmentPaths, u64 segmentSize, u64 offset, u64 byteCount, u8* outputBytes);
+    [[nodiscard]] static b8 Write(AStringView volumeName, Span<const Path> segmentPaths, u64 segmentSize, u64 offset, u64 byteCount, const u8* inputBytes);
 };
 
 

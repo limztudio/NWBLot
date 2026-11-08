@@ -17,7 +17,7 @@
 NWB_CORE_BEGIN
 
 
-b8 GpuBufferStateFanIn::merge(
+b8 GpuBufferStateFanIn::Merge(
     CommandListResourceStateHandoff& result,
     const CommandListResourceStateHandoff& base,
     const CommandListResourceStateHandoff* const* branches,
@@ -142,7 +142,7 @@ b8 GpuBufferStateFanIn::merge(
     return true;
 }
 
-b8 GpuBufferStateFanIn::mergePermanent(
+b8 GpuBufferStateFanIn::MergePermanent(
     CommandListResourceStateHandoff& result,
     const CommandListResourceStateHandoff& base,
     const CommandListResourceStateHandoff* const* branches,

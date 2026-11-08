@@ -87,7 +87,7 @@ public:
 
 
 private:
-    [[nodiscard]] static Expected<Placement> tryPlace(u32 cursorX, u32 cursorY, u32 rowHeight, u32 width, u32 height)noexcept;
+    [[nodiscard]] static Expected<Placement> TryPlace(u32 cursorX, u32 cursorY, u32 rowHeight, u32 width, u32 height)noexcept;
     void appendGlyph(AtlasGlyph&& record);
 
 

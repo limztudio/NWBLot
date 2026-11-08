@@ -22,7 +22,7 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WindowsCrashTransport::drainPendingAcks(const HANDLE ackReadHandle)noexcept{
+void WindowsCrashTransport::DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
     if(ackReadHandle == INVALID_HANDLE_VALUE)
         return;
 
@@ -40,7 +40,7 @@ void WindowsCrashTransport::drainPendingAcks(const HANDLE ackReadHandle)noexcept
 }
 
 
-CrashDumpTransportStatus::Enum WindowsCrashTransport::request(CrashState& state, const CrashRequest& request, const u32 waitMilliseconds)noexcept{
+CrashDumpTransportStatus::Enum WindowsCrashTransport::Request(CrashState& state, const CrashRequest& request, const u32 waitMilliseconds)noexcept{
     if(state.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
@@ -60,7 +60,7 @@ CrashDumpTransportStatus::Enum WindowsCrashTransport::request(CrashState& state,
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
     do{
-        drainPendingAcks(state.ackReadHandle);
+        DrainPendingAcks(state.ackReadHandle);
 
         if(state.crashHandledEvent)
             ResetEvent(state.crashHandledEvent);

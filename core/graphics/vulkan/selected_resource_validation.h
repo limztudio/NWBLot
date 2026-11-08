@@ -45,7 +45,7 @@ using VulkanDetail::IsBufferRangeInBounds;
     return device.isBufferReadyForGpuUse(buffer, buffer ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->getCreationDescription(), state) : 0u);
 }
 
-[[nodiscard]] inline b8 IsTextureReadyForState(const Device& device, Texture* texture, const ResourceStates::Mask state)noexcept{ return device.isTextureReadyForGpuUse(texture, VulkanTextureDetail::TextureImagePolicy::requiredImageUsageForResourceStates(state)); }
+[[nodiscard]] inline b8 IsTextureReadyForState(const Device& device, Texture* texture, const ResourceStates::Mask state)noexcept{ return device.isTextureReadyForGpuUse(texture, VulkanTextureDetail::TextureImagePolicy::RequiredImageUsageForResourceStates(state)); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

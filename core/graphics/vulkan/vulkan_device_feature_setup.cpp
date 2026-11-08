@@ -16,7 +16,7 @@
 NWB_VULKAN_BEGIN
 
 
-void VulkanDeviceFeatureSetup::initialize(VulkanContext& context, const DeviceDesc& desc, const b8 gpuCrashDiagnosticsEnabled){
+void VulkanDeviceFeatureSetup::Initialize(VulkanContext& context, const DeviceDesc& desc, const b8 gpuCrashDiagnosticsEnabled){
     context.extensions.bufferDeviceAddress = desc.bufferDeviceAddressSupported;
     context.hostQueryResetFeatureEnabled = desc.hostQueryResetFeatureEnabled;
     context.textureCompressionBcFeatureEnabled = desc.textureCompressionBcFeatureEnabled;
@@ -91,7 +91,7 @@ void VulkanDeviceFeatureSetup::initialize(VulkanContext& context, const DeviceDe
     Alloc::ScratchArena calibratedTimestampProbeArena(VulkanArenaScope::s_DeviceExtensionSetupArena);
     b8 comparableGpuTimestamps = false;
     if(context.extensions.khrCalibratedTimestamps){
-        comparableGpuTimestamps = VulkanDetail::CalibratedTimestampProbe::query(
+        comparableGpuTimestamps = VulkanDetail::CalibratedTimestampProbe::Query(
             context.physicalDevice,
             context.device,
             context.instanceDispatch.vkGetPhysicalDeviceCalibrateableTimeDomainsKHR,
@@ -100,7 +100,7 @@ void VulkanDeviceFeatureSetup::initialize(VulkanContext& context, const DeviceDe
         );
     }
     if(!comparableGpuTimestamps && context.extensions.extCalibratedTimestamps){
-        comparableGpuTimestamps = VulkanDetail::CalibratedTimestampProbe::query(
+        comparableGpuTimestamps = VulkanDetail::CalibratedTimestampProbe::Query(
             context.physicalDevice,
             context.device,
             context.instanceDispatch.vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,

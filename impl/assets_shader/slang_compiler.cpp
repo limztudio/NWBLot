@@ -173,7 +173,7 @@ static const Array<SlangStageMapping, 14u> s_StageMappings = {{
 
 Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& temporaryRoot, Alloc::ScratchArena& scratchArena){
     using namespace __hidden_slang_compiler;
-    return SlangCompilerFingerprint::compute(temporaryRoot, scratchArena, s_CommonCompilerArguments, s_SpirvBaselineCapabilities, s_StageMappings);
+    return SlangCompilerFingerprint::Compute(temporaryRoot, scratchArena, s_CommonCompilerArguments, s_SpirvBaselineCapabilities, s_StageMappings);
 }
 
 

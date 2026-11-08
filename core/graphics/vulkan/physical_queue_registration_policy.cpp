@@ -12,7 +12,7 @@
 NWB_VULKAN_BEGIN
 
 
-PhysicalQueueRegistrationPolicy::Result PhysicalQueueRegistrationPolicy::validate(
+PhysicalQueueRegistrationPolicy::Result::Enum PhysicalQueueRegistrationPolicy::Validate(
     const VulkanPhysicalQueueDesc& desc,
     const NativeQueueState& nativeQueue,
     const Span<const GpuPhysicalQueueInfo> existingQueues,
@@ -53,7 +53,7 @@ PhysicalQueueRegistrationPolicy::Result PhysicalQueueRegistrationPolicy::validat
     return Result::Valid;
 }
 
-PhysicalQueueRegistrationPolicy::Result PhysicalQueueRegistrationPolicy::validateCanonical(const Span<const VulkanNativeQueueDesc> nativeQueues, const Span<const VkQueueFamilyProperties> families)noexcept{
+PhysicalQueueRegistrationPolicy::Result::Enum PhysicalQueueRegistrationPolicy::ValidateCanonical(const Span<const VulkanNativeQueueDesc> nativeQueues, const Span<const VkQueueFamilyProperties> families)noexcept{
     for(usize nativeQueueIndex = 0u; nativeQueueIndex < nativeQueues.size(); ++nativeQueueIndex){
         const VulkanNativeQueueDesc& nativeQueue = nativeQueues[nativeQueueIndex];
         if(

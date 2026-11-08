@@ -68,7 +68,7 @@ template<
     const auto assetField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, DiagnosticPrefix, s_GraphicsComponentAssetField, true);
     if(!assetField)
         return MakeUnexpected(Failure{});
-    const auto assetRef = Core::Assets::ReservedAssetRefParser::parseText<ReferencedAssetT>(nwbFilePath, DiagnosticPrefix, s_GraphicsComponentAssetField, assetField->text, scratchArena);
+    const auto assetRef = Core::Assets::ReservedAssetRefParser::ParseText<ReferencedAssetT>(nwbFilePath, DiagnosticPrefix, s_GraphicsComponentAssetField, assetField->text, scratchArena);
     if(!assetRef)
         return MakeUnexpected(Failure{});
     entry.component.*FieldPtr = *assetRef;
@@ -112,7 +112,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
     const auto materialField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_RendererComponentMaterialField, true);
     if(!materialField)
         return MakeUnexpected(Failure{});
-    const auto materialRef = Core::Assets::ReservedAssetRefParser::parseText<Material>(nwbFilePath, s_RendererComponentDiagnosticPrefix, s_RendererComponentMaterialField, materialField->text, scratchArena);
+    const auto materialRef = Core::Assets::ReservedAssetRefParser::ParseText<Material>(nwbFilePath, s_RendererComponentDiagnosticPrefix, s_RendererComponentMaterialField, materialField->text, scratchArena);
     if(!materialRef)
         return MakeUnexpected(Failure{});
     entry.component.material = *materialRef;

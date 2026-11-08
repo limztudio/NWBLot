@@ -13,7 +13,7 @@
 NWB_IMPL_BEGIN
 
 
-Expected<PreparedMeshBlasBuild> PreparedMeshBlasBuilder::resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept{
+Expected<PreparedMeshBlasBuild> PreparedMeshBlasBuilder::Resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept{
     PreparedMeshBlasBuild build;
     if(!meshResources.meshName || !meshResources.positionBuffer || !meshResources.triangleIndexBuffer || !meshResources.blas || !meshResources.blas->getBackingBufferHandle())
         return MakeUnexpected(Failure{});
@@ -46,7 +46,7 @@ Expected<PreparedMeshBlasBuild> PreparedMeshBlasBuilder::resolve(const ECSRender
     return build;
 }
 
-b8 PreparedMeshBlasBuilder::matches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
+b8 PreparedMeshBlasBuilder::Matches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
     if(
         meshResources.meshName != build.meshName
         || meshResources.runtimeMesh != build.runtimeMesh
@@ -70,7 +70,7 @@ b8 PreparedMeshBlasBuilder::matches(const ECSRenderDetail::MeshRayTracingResourc
     return positionDesc.structStride == build.vertexStride && positionDesc.byteSize == build.positionByteSize && build.vertexStride != 0u && build.vertexCount == positionDesc.byteSize / build.vertexStride;
 }
 
-b8 PreparedMeshBlasBuilder::record(const PreparedMeshBlasBuild& build, const b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList){
+b8 PreparedMeshBlasBuilder::Record(const PreparedMeshBlasBuild& build, const b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList){
     if(
         !build.positionBuffer
         || !build.triangleIndexBuffer

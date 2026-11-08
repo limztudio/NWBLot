@@ -21,7 +21,7 @@ namespace NWB::Tests::Smoke{
 
 class TextureSrgbClearProbe final{
 public:
-    [[nodiscard]] static b8 verify(Core::GraphicsRuntime& graphics);
+    [[nodiscard]] static b8 Verify(Core::GraphicsRuntime& graphics);
 };
 
 

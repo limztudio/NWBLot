@@ -184,7 +184,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 }
 
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
-    return WindowsCrashTransport::request(g_State, request, waitMilliseconds);
+    return WindowsCrashTransport::Request(g_State, request, waitMilliseconds);
 }
 
 template<typename ArenaT>

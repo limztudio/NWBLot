@@ -79,7 +79,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     AccelStructGeometryBuildSignatureVector geometrySignatures(numGeometries, scratchArena);
 
     b8 hasOpacityMicromap = false;
-    if(!VulkanDetail::BlasOpacityMicromapPolicy::prepareBlasOpacityMicromapUsageOffsets(m_context, geometries, numGeometries, s_BuildBlasOperation, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, hasOpacityMicromap))
+    if(!VulkanDetail::BlasOpacityMicromapPolicy::PrepareBlasOpacityMicromapUsageOffsets(m_context, geometries, numGeometries, s_BuildBlasOperation, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, hasOpacityMicromap))
         return;
 
     const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> b8{
@@ -138,7 +138,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 return;
             }
 
-            const auto ommIndexFormat = VulkanDetail::BlasOpacityMicromapPolicy::resolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_BuildBlasOperation);
+            const auto ommIndexFormat = VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_BuildBlasOperation);
             if(!ommIndexFormat)
                 return;
             const VkIndexType ommIndexType = ommIndexFormat->indexType;
@@ -181,7 +181,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 }
             }
 
-            if(!VulkanDetail::BlasOpacityMicromapPolicy::validateOpacityMicromapStorageAndFillUsages(
+            if(!VulkanDetail::BlasOpacityMicromapPolicy::ValidateOpacityMicromapStorageAndFillUsages(
                 triangles,
                 ommIndexType,
                 ommIndexStride,
@@ -224,7 +224,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     const b8 hasPriorBuild = *hasPriorBuildResult;
 
-    VulkanDetail::BlasOpacityMicromapPolicy::attachBlasOpacityMicromapGeometries(geometries, numGeometries, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, opacityMicromapGeometries, blasScratch);
+    VulkanDetail::BlasOpacityMicromapPolicy::AttachBlasOpacityMicromapGeometries(geometries, numGeometries, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, opacityMicromapGeometries, blasScratch);
 
     VkDeviceAddress transformBaseAddress = 0;
     if(transformCount > 0){

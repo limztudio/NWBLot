@@ -31,7 +31,7 @@ namespace AssetsGraphicsCookDetail{
 
 class ShaderIncludeDirectories final{
 public:
-    [[nodiscard]] static Expected<Core::Assets::CookVector<Path>> build(
+    [[nodiscard]] static Expected<Core::Assets::CookVector<Path>> Build(
         const Path& repoRoot,
         Span<const Core::Assets::ResolvedAssetRoot> assetRoots,
         Span<const NotNull<const Path*>> implicitIncludeRoots,
@@ -44,7 +44,7 @@ public:
 private:
     using IncludeDirectoryScratchSet = HashSet<Core::Assets::ScratchString, Core::Assets::ScratchArena, Hasher<Core::Assets::ScratchString>, EqualTo<Core::Assets::ScratchString>>;
 
-    [[nodiscard]] static b8 append(
+    [[nodiscard]] static b8 Append(
         const Path& includeDirectory,
         const ShaderCook::ShaderEntry& entry,
         Core::Assets::ScratchArena& scratchArena,

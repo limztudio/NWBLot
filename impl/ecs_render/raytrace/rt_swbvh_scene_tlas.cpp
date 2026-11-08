@@ -256,7 +256,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     }
 
     // TLAS and material context use separate static keys.
-    const u64 tlasStaticSceneHash = staticScene ? TlasStaticSceneIdentity::compute(instances) : 0u;
+    const u64 tlasStaticSceneHash = staticScene ? TlasStaticSceneIdentity::Compute(instances) : 0u;
     const b8 canReuseTlas =
         staticScene
         && m_rayTracingState.m_tlasStaticSceneHashValid

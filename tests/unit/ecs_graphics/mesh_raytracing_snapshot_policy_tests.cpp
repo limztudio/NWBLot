@@ -20,23 +20,23 @@ TEST(MeshRayTracingSnapshotPolicyTests, MissingMeshletBoundsDoNotPublishPartialS
     mesh.runtimeMesh = true;
     mesh.runtimeGeometryContentRevision = 7u;
     mesh.meshletCount = 1u;
-    auto snapshot = MeshRayTracingSnapshotPolicy::capture(mesh);
+    auto snapshot = MeshRayTracingSnapshotPolicy::Capture(mesh);
     EXPECT_EQ(snapshot.meshletCount, 0u);
-    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::matches(mesh, snapshot));
+    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::Matches(mesh, snapshot));
     snapshot.meshletCount = 1u;
-    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::matches(mesh, snapshot));
+    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::Matches(mesh, snapshot));
 }
 
 TEST(MeshRayTracingSnapshotPolicyTests, IdentityIgnoresBuildStateButTracksGeometryRevision){
     MeshResources mesh;
     mesh.runtimeMesh = true;
     mesh.runtimeGeometryContentRevision = 7u;
-    const auto current = MeshRayTracingSnapshotPolicy::capture(mesh);
+    const auto current = MeshRayTracingSnapshotPolicy::Capture(mesh);
     auto other = current;
     other.blasBuildPending = !current.blasBuildPending;
-    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::sameIdentity(current, other));
+    EXPECT_TRUE(MeshRayTracingSnapshotPolicy::SameIdentity(current, other));
     ++other.runtimeGeometryContentRevision;
-    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::sameIdentity(current, other));
+    EXPECT_FALSE(MeshRayTracingSnapshotPolicy::SameIdentity(current, other));
 }
 
 }

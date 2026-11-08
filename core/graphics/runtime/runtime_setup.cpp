@@ -62,7 +62,7 @@ struct BufferSetupSubmissionData{
     uploadTaskDesc
         .setIdentity(s_SetupBufferUploadIdentity)
         .setMarkerLabel("Setup Buffer Upload")
-        .setScheduling(GraphicsModuleDetail::SetupUploadGraph::scheduling(submissionData.setupDesc.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
+        .setScheduling(GraphicsModuleDetail::SetupUploadGraph::Scheduling(submissionData.setupDesc.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily))
     ;
     const auto taskResult = graph.addUploadBufferTask(
         uploadTaskDesc,
@@ -70,7 +70,7 @@ struct BufferSetupSubmissionData{
             .source = source,
             .destination = destination,
             .destinationOffsetBytes = submissionData.setupDesc.destOffsetBytes,
-            .finalState = GraphicsModuleDetail::SetupUploadGraph::finalState(submissionData.uploadDesc.initialState),
+            .finalState = GraphicsModuleDetail::SetupUploadGraph::FinalState(submissionData.uploadDesc.initialState),
             .acceptedToken = &submissionData.uploadToken,
         }
     );
@@ -151,10 +151,10 @@ Expected<BufferHandle> GraphicsStandaloneService::setupBuffer(const BufferSetupD
         return buffer;
     }
 
-    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::SetupUploadGraph::resolveConsumerQueue(device, desc.queue, desc.dataSize, desc.bufferDesc.initialState != ResourceStates::Unknown);
-    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::SetupUploadGraph::resolveSameClassRouting(device, consumerQueue, desc.dataSize);
+    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::SetupUploadGraph::ResolveConsumerQueue(device, desc.queue, desc.dataSize, desc.bufferDesc.initialState != ResourceStates::Unknown);
+    const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::SetupUploadGraph::ResolveSameClassRouting(device, consumerQueue, desc.dataSize);
     BufferDesc uploadDesc = desc.bufferDesc;
-    uploadDesc.queueSharing = GraphicsModuleDetail::SetupUploadGraph::resolveConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
+    uploadDesc.queueSharing = GraphicsModuleDetail::SetupUploadGraph::ResolveConsumerSharing(uploadDesc.queueSharing, consumerQueue, sameClassRouting.crossesQueueFamily);
     auto bufferResult = device.createBuffer(uploadDesc);
     if(!bufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), ConvertString(desc.bufferDesc.debugName.resolvedText()));
@@ -171,7 +171,7 @@ Expected<BufferHandle> GraphicsStandaloneService::setupBuffer(const BufferSetupD
         .uploadToken = uploadToken,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
-    const b8 submitted = GraphicsModuleDetail::SetupUploadGraph::submit(
+    const b8 submitted = GraphicsModuleDetail::SetupUploadGraph::Submit(
         m_graphics,
         uploadDesc.queueSharing,
         consumerQueue,

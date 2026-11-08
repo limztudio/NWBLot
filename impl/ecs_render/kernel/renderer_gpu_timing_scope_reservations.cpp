@@ -17,7 +17,7 @@
 NWB_IMPL_BEGIN
 
 
-b8 RendererGpuTimingScopeReservations::prepare(Core::GraphicsRuntime& graphics){
+b8 RendererGpuTimingScopeReservations::Prepare(Core::GraphicsRuntime& graphics){
     auto& device = graphics.getDevice();
 
     struct ScopeReservation{

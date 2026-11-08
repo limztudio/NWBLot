@@ -133,13 +133,13 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
         presence.ignoreColors = ignoreColorsOption.count() > s_CliOptionPresentCount;
         presence.flipWinding = flipWindingOption.count() > s_CliOptionPresentCount;
 
-        if(!ImportPrompts::configurePromptsBeforeLoad(presence, scratchArena, options, prompted))
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);
+        if(!ImportPrompts::ConfigurePromptsBeforeLoad(presence, scratchArena, options, prompted))
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbInputOption, "Input FBX or NWB path is required.", scratchArena);
 
         if(!IsFinite(options.scale) || options.scale <= 0.0)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbScaleOption, "Must be a positive finite number.", scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbScaleOption, "Must be a positive finite number.", scratchArena);
         if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.", scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbTriangleAreaEpsilonOption, "Must be a finite non-negative number.", scratchArena);
 
         const auto inputIsRegularFile = IsRegularFile(ScratchPath(scratchArena, options.inputPath));
         if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
@@ -147,17 +147,17 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
             return s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile || !*inputIsRegularFile)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbInputOption, "Input path must name an existing regular file.", scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbInputOption, "Input path must name an existing regular file.", scratchArena);
 
-        if(NwbRefreshCommand::isNwbRefreshMode(options, scratchArena))
-            return NwbRefreshCommand::run(app, presence, cpuScheduler, scratchArena, options, prompted);
+        if(NwbRefreshCommand::IsNwbRefreshMode(options, scratchArena))
+            return NwbRefreshCommand::Run(app, presence, cpuScheduler, scratchArena, options, prompted);
 
         auto scene = LoadScene(options, scratchArena);
         if(!scene)
             return s_FbxToNwbExitFailure;
 
         if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
-            options.includeHidden = ImportPrompts::promptBool("Include hidden mesh nodes?", options.includeHidden, scratchArena, prompted);
+            options.includeHidden = ImportPrompts::PromptBool("Include hidden mesh nodes?", options.includeHidden, scratchArena, prompted);
 
         UtilityVector<MeshInstance> instances = CollectMeshInstances(*scene->scene, options.includeHidden);
         if(options.listMeshes){
@@ -172,29 +172,29 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
             return s_FbxToNwbExitFailure;
         }
 
-        if(!ImportPrompts::configurePromptsAfterLoad(presence, instances, scratchArena, options, prompted))
+        if(!ImportPrompts::ConfigurePromptsAfterLoad(presence, instances, scratchArena, options, prompted))
             return s_FbxToNwbExitFailure;
 
         if(!ValidateAssetTypeText(options.assetType))
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
         if(!ValidateNormalModeText(options.normalMode))
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbNormalModeOption, NormalModeErrorText(scratchArena), scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbNormalModeOption, NormalModeErrorText(scratchArena), scratchArena);
 
         const auto defaultColor = ParseColorText(options.defaultColorText, scratchArena);
         if(!defaultColor)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.", scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbDefaultColorOption, "Must contain four finite numbers, for example 1,1,1,1.", scratchArena);
 
         auto selectionResult = SelectMeshInstances(instances, options.meshSelector);
         if(!selectionResult)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.", scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbMeshOption, "Must select an available zero-based index, node name, or mesh name.", scratchArena);
 
         const UtilityVector<usize>& selection = *selectionResult;
         const auto assetTypeResult = ParseAssetTypeText(options.assetType);
         if(!assetTypeResult)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbAssetTypeOption, OutputAssetTypeErrorText(scratchArena), scratchArena);
         const OutputAssetType::Enum assetTypeValue = *assetTypeResult;
         if(options.separateAssets && assetTypeValue != OutputAssetType::Bunch)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.", scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbSeparateAssetsFlag, "Only valid with asset type 'bunch'.", scratchArena);
         b8 usesSkinning = false;
         b8 wantsSkinning = false;
         if(AssetTypeCanUseSkinning(assetTypeValue)){
@@ -204,19 +204,19 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
             usesSkinning = wantsSkinning = *selectedUsesSkinning;
         }
         if(AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning)
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbAssetTypeOption, "Selected source mesh is not skinned; requested asset type requires skinning.", scratchArena);
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbAssetTypeOption, "Selected source mesh is not skinned; requested asset type requires skinning.", scratchArena);
 
         const ScratchPath outputPath(scratchArena, options.outputPath);
         if(outputPath.empty())
-            return FbxCliDiagnostics::exitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
-        if(!ImportPrompts::validateOutputOverwrite(outputPath, options, scratchArena, prompted))
+            return FbxCliDiagnostics::ExitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
+        if(!ImportPrompts::ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
             return s_FbxToNwbExitFailure;
         if(options.separateAssets){
             const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
-            if(!ImportPrompts::validateOutputOverwrite(packageDirectory / s_MeshSplitFileName, options, scratchArena, prompted))
+            if(!ImportPrompts::ValidateOutputOverwrite(packageDirectory / s_MeshSplitFileName, options, scratchArena, prompted))
                 return s_FbxToNwbExitFailure;
-            if(wantsSkinning && (!ImportPrompts::validateOutputOverwrite(packageDirectory / s_SkeletonSplitFileName, options, scratchArena, prompted)
-                || !ImportPrompts::validateOutputOverwrite(packageDirectory / s_SkinSplitFileName, options, scratchArena, prompted)))
+            if(wantsSkinning && (!ImportPrompts::ValidateOutputOverwrite(packageDirectory / s_SkeletonSplitFileName, options, scratchArena, prompted)
+                || !ImportPrompts::ValidateOutputOverwrite(packageDirectory / s_SkinSplitFileName, options, scratchArena, prompted)))
                 return s_FbxToNwbExitFailure;
         }
 
@@ -256,7 +256,7 @@ i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc
         NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
 
         return s_FbxToNwbExitSuccess;
-    }, [&](const CLI::ParseError& error){ return FbxCliDiagnostics::exitParseError(app, error, scratchArena); }, [](){
+    }, [&](const CLI::ParseError& error){ return FbxCliDiagnostics::ExitParseError(app, error, scratchArena); }, [](){
         NWB_LOGGER_ERROR(NWB_TEXT("FBX conversion terminated with an unexpected exception"));
         return -1;
     });

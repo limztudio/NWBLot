@@ -56,7 +56,7 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     const auto foundInfo = m_materialState.m_surfaceInfos.find(materialPath);
     if(foundInfo != m_materialState.m_surfaceInfos.end()){
         MaterialSurfaceInfo& info = foundInfo.value();
-        if(!RendererMaterialResourceResolver::resolve(info, m_materialState.m_resourceState, m_graphics, m_assetManager))
+        if(!RendererMaterialResourceResolver::Resolve(info, m_materialState.m_resourceState, m_graphics, m_assetManager))
             return MakeUnexpected(Failure{});
         return MakeNotNull(&info);
     }
@@ -123,7 +123,7 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
         createdInfo.refractive
     ))
         return MakeUnexpected(Failure{});
-    if(!RendererMaterialResourceResolver::resolve(createdInfo, m_materialState.m_resourceState, m_graphics, m_assetManager))
+    if(!RendererMaterialResourceResolver::Resolve(createdInfo, m_materialState.m_resourceState, m_graphics, m_assetManager))
         return MakeUnexpected(Failure{});
 
     auto result = m_materialState.m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
@@ -246,7 +246,7 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
 }
 
 void RendererMaterialSystem::releaseMaterialResourceReferences(){
-    RendererMaterialResourceResolver::release(m_graphics, m_materialState.m_resourceState);
+    RendererMaterialResourceResolver::Release(m_graphics, m_materialState.m_resourceState);
     for(auto it = m_materialState.m_surfaceInfos.begin(); it != m_materialState.m_surfaceInfos.end(); ++it){
         MaterialSurfaceInfo& materialInfo = it.value();
         materialInfo.constantTypedBytes = materialInfo.unpatchedConstantTypedBytes;

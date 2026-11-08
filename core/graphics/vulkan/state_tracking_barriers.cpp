@@ -276,8 +276,8 @@ void CommandList::executePipelineBarrier(const Span<VkMemoryBarrier2> memoryBarr
     if(!universalGraphicsCompute){
         const auto normalizeBarrierScopes = [&](const auto barriers)noexcept{
             for(auto& barrier : barriers){
-                QueueBarrierScopePolicy::normalize(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
-                QueueBarrierScopePolicy::normalize(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
+                QueueBarrierScopePolicy::Normalize(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
+                QueueBarrierScopePolicy::Normalize(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
             }
         };
         normalizeBarrierScopes(memoryBarriers);

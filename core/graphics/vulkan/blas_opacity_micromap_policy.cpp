@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 namespace VulkanDetail{
 
 
-b8 BlasOpacityMicromapPolicy::prepareBlasOpacityMicromapUsageOffsets(
+b8 BlasOpacityMicromapPolicy::PrepareBlasOpacityMicromapUsageOffsets(
     const VulkanContext& context,
     const RayTracingGeometryDesc* const geometries,
     const usize geometryCount,
@@ -61,7 +61,7 @@ b8 BlasOpacityMicromapPolicy::prepareBlasOpacityMicromapUsageOffsets(
     return true;
 }
 
-Expected<OpacityMicromapIndexFormatInfo> BlasOpacityMicromapPolicy::resolveOpacityMicromapIndexFormat(const Format::Enum format, const TStringView operation){
+Expected<OpacityMicromapIndexFormatInfo> BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(const Format::Enum format, const TStringView operation){
     if(format == Format::UNKNOWN)
         return OpacityMicromapIndexFormatInfo{};
     if(format == Format::R16_UINT)
@@ -73,7 +73,7 @@ Expected<OpacityMicromapIndexFormatInfo> BlasOpacityMicromapPolicy::resolveOpaci
     return MakeUnexpected(Failure{});
 }
 
-b8 BlasOpacityMicromapPolicy::validateOpacityMicromapStorageAndFillUsages(
+b8 BlasOpacityMicromapPolicy::ValidateOpacityMicromapStorageAndFillUsages(
     const RayTracingGeometryTriangles& triangles,
     const VkIndexType ommIndexType,
     const u64 ommIndexStride,
@@ -124,7 +124,7 @@ b8 BlasOpacityMicromapPolicy::validateOpacityMicromapStorageAndFillUsages(
     return true;
 }
 
-void BlasOpacityMicromapPolicy::attachBlasOpacityMicromapGeometries(
+void BlasOpacityMicromapPolicy::AttachBlasOpacityMicromapGeometries(
     const RayTracingGeometryDesc* const geometries,
     const usize geometryCount,
     const OpacityMicromapUsageOffsetVector& opacityMicromapUsageOffsets,

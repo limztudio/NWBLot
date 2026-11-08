@@ -18,8 +18,8 @@ NWB_FBX_TO_NWB_BEGIN
 
 class FbxCliDiagnostics final{
 public:
-    static i32 exitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Alloc::ScratchArena& scratchArena);
-    static i32 exitValidation(const CLI::App& app, AStringView option, AStringView message, Core::Alloc::ScratchArena& scratchArena);
+    static i32 ExitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Alloc::ScratchArena& scratchArena);
+    static i32 ExitValidation(const CLI::App& app, AStringView option, AStringView message, Core::Alloc::ScratchArena& scratchArena);
 };
 
 

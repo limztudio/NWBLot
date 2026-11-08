@@ -267,7 +267,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 
     ASSERT_TRUE(assertPackageDirectory);
     NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
-    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(arena, archiveScratch, *assertPackageDirectory);
+    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::Build(arena, archiveScratch, *assertPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);
@@ -330,7 +330,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
 
     ASSERT_TRUE(errorPackageDirectory);
     NWB::Core::Alloc::ScratchArena archiveScratch(s_ArchiveScratch);
-    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(arena, archiveScratch, *errorPackageDirectory);
+    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::Build(arena, archiveScratch, *errorPackageDirectory);
     ASSERT_TRUE(archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, *archive);
     EXPECT_TRUE(result.accepted);

@@ -31,16 +31,16 @@ public:
         u64 byteSize = 0u;
     };
 
-    [[nodiscard]] static b8 isComponentTypeSupported(VkComponentTypeKHR componentType, const VkCooperativeVectorPropertiesNV* properties, u32 propertyCount)noexcept;
-    [[nodiscard]] static b8 isFloat8(VkComponentTypeKHR componentType)noexcept;
-    [[nodiscard]] static b8 isTypeConversionSupported(VkComponentTypeKHR srcType, VkComponentTypeKHR dstType)noexcept;
-    [[nodiscard]] static Expected<StandardMatrixLayout> standardLayoutSize(usize elementByteSize, u32 numRows, u32 numColumns, CooperativeVectorMatrixLayout::Enum layout, usize requestedStride)noexcept;
-    [[nodiscard]] static Expected<MatrixLayout> resolveMatrixLayout(const VulkanContext& context, const CooperativeVectorMatrixLayoutDesc& layoutDesc, u32 numRows, u32 numColumns)noexcept;
-    [[nodiscard]] static Expected<DeviceAddressRange> checkedDeviceRange(Buffer& buffer, u64 offset, usize declaredByteSize, usize requiredByteSize)noexcept;
+    [[nodiscard]] static b8 IsComponentTypeSupported(VkComponentTypeKHR componentType, const VkCooperativeVectorPropertiesNV* properties, u32 propertyCount)noexcept;
+    [[nodiscard]] static b8 IsFloat8(VkComponentTypeKHR componentType)noexcept;
+    [[nodiscard]] static b8 IsTypeConversionSupported(VkComponentTypeKHR srcType, VkComponentTypeKHR dstType)noexcept;
+    [[nodiscard]] static Expected<StandardMatrixLayout> StandardLayoutSize(usize elementByteSize, u32 numRows, u32 numColumns, CooperativeVectorMatrixLayout::Enum layout, usize requestedStride)noexcept;
+    [[nodiscard]] static Expected<MatrixLayout> ResolveMatrixLayout(const VulkanContext& context, const CooperativeVectorMatrixLayoutDesc& layoutDesc, u32 numRows, u32 numColumns)noexcept;
+    [[nodiscard]] static Expected<DeviceAddressRange> CheckedDeviceRange(Buffer& buffer, u64 offset, usize declaredByteSize, usize requiredByteSize)noexcept;
 
 private:
-    [[nodiscard]] static b8 isLowerPrecisionFloat(VkComponentTypeKHR componentType)noexcept;
-    [[nodiscard]] static Expected<usize> queryOptimalLayoutSize(const VulkanContext& context, VkComponentTypeKHR componentType, VkCooperativeVectorMatrixLayoutNV layout, u32 numRows, u32 numColumns)noexcept;
+    [[nodiscard]] static b8 IsLowerPrecisionFloat(VkComponentTypeKHR componentType)noexcept;
+    [[nodiscard]] static Expected<usize> QueryOptimalLayoutSize(const VulkanContext& context, VkComponentTypeKHR componentType, VkCooperativeVectorMatrixLayoutNV layout, u32 numRows, u32 numColumns)noexcept;
 };
 
 

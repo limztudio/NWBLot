@@ -99,7 +99,7 @@ Expected<MeshBuildResult> BuildMesh(
         result.inverseBindMatrices = Move(skinContext.inverseBindMatrices);
     }
 
-    if(!SourceMeshCanonicalizer::canonicalize(cpuScheduler, scratchArena, result.mesh))
+    if(!SourceMeshCanonicalizer::Canonicalize(cpuScheduler, scratchArena, result.mesh))
         return MakeUnexpected(Failure{});
     return result;
 }

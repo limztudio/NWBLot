@@ -42,7 +42,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core:
         GpuVersion<GpuSdfAtlasVersion> reused = existing;
         m_imageCache.sdfs().erase(m_imageCache.sdfs().begin() + static_cast<isize>(index));
         m_imageCache.sdfs().push_back(reused);
-        if(!GpuSampledTextures::prepareDescriptor(reused->m_graphics, reused->m_texture, reused->m_texture->getDescription().format, reused->m_sampledImage))
+        if(!GpuSampledTextures::PrepareDescriptor(reused->m_graphics, reused->m_texture, reused->m_texture->getDescription().format, reused->m_sampledImage))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -69,7 +69,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core:
         uploadData = expanded.data();
         uploadBytes = expanded.size();
     }
-    if(!GpuSampledTextures::createAndUploadPage(
+    if(!GpuSampledTextures::CreateAndUploadPage(
         m_graphics,
         GpuPageTextureUploadDesc{
             .name = s_GpuSdfPageTextureName,
@@ -90,7 +90,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core:
         m_imageCache.evict();
     m_imageCache.sdfs().push_back(version);
     // Preserve every accepted upload before descriptor publication; retrying a failed descriptor never uploads again.
-    if(!GpuSampledTextures::prepareDescriptor(version->m_graphics, version->m_texture, version->m_texture->getDescription().format, version->m_sampledImage))
+    if(!GpuSampledTextures::PrepareDescriptor(version->m_graphics, version->m_texture, version->m_texture->getDescription().format, version->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(version);
 }
@@ -116,7 +116,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareSdfPages(Core::GpuT
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
         const auto& page = frame->m_sdfPages[index];
-        const auto texture = GpuSampledTextures::importTexture(
+        const auto texture = GpuSampledTextures::ImportTexture(
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuSdfPageReadyPrefix,
                 .readyMarkerLabel = s_GpuSdfPageReadyMarkerLabel,

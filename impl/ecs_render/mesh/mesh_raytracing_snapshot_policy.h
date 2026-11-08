@@ -20,13 +20,13 @@ namespace ECSRenderDetail{ struct MeshRayTracingResourceSnapshot; };
 
 class MeshRayTracingSnapshotPolicy{
 public:
-    [[nodiscard]] static ECSRenderDetail::MeshRayTracingResourceSnapshot capture(const MeshResources& mesh)noexcept;
-    [[nodiscard]] static b8 matches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept;
-    [[nodiscard]] static b8 sameIdentity(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs)noexcept;
+    [[nodiscard]] static ECSRenderDetail::MeshRayTracingResourceSnapshot Capture(const MeshResources& mesh)noexcept;
+    [[nodiscard]] static b8 Matches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept;
+    [[nodiscard]] static b8 SameIdentity(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs)noexcept;
 
 private:
-    [[nodiscard]] static b8 boundsReady(const MeshResources& mesh)noexcept;
-    [[nodiscard]] static b8 meshletMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept;
+    [[nodiscard]] static b8 BoundsReady(const MeshResources& mesh)noexcept;
+    [[nodiscard]] static b8 MeshletMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept;
 };
 
 

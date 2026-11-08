@@ -22,9 +22,9 @@ NWB_IMPL_BEGIN
 
 class SceneComponentMetadataParser final{
 public:
-    [[nodiscard]] static Expected<TransformComponentCookEntry> parseTransform(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<CameraComponentCookEntry> parseCamera(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<LightComponentCookEntry> parseLight(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<TransformComponentCookEntry> ParseTransform(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<CameraComponentCookEntry> ParseCamera(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<LightComponentCookEntry> ParseLight(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 };
 
 

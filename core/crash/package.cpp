@@ -164,7 +164,7 @@ b8 WriteCrashPackage(const CrashRequest& request){
     auto& arena = DumpArena();
     if(!CrashProtocol::IsCurrentCrashRequest(request))
         return false;
-    if(!CrashPackageReport::write(arena, request))
+    if(!CrashPackageReport::Write(arena, request))
         return false;
 
 #if defined(NWB_PLATFORM_WINDOWS)

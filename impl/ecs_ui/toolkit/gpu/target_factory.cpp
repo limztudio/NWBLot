@@ -115,7 +115,7 @@ Expected<GpuVersion<GpuTargetVersion>> GpuTargetFactory::create(Core::Alloc::Glo
     target->m_readinessToken = *submission;
     if(!target->m_readinessToken.valid() || !target->m_readinessToken.hasPhysicalQueueIdentity())
         return MakeUnexpected(Failure{});
-    if(!GpuSampledTextures::prepareDescriptor(graphics, target->m_color, Core::Format::RGBA16_FLOAT, target->m_sampledImage))
+    if(!GpuSampledTextures::PrepareDescriptor(graphics, target->m_color, Core::Format::RGBA16_FLOAT, target->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(target);
 }

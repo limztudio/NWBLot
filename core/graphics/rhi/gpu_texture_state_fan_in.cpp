@@ -18,7 +18,7 @@
 NWB_CORE_BEGIN
 
 
-b8 GpuTextureStateFanIn::mergeTransient(CommandListResourceStateHandoff& result, const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, const usize branchCount, const usize textureStateCapacity, Alloc::ScratchArena& scratchArena){
+b8 GpuTextureStateFanIn::MergeTransient(CommandListResourceStateHandoff& result, const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, const usize branchCount, const usize textureStateCapacity, Alloc::ScratchArena& scratchArena){
     using TextureState = CommandListResourceStateHandoff::TextureState;
     using TextureStateKey = TextureSubresourceStateKey;
     using TextureStateIndexMap = FixedIndexMap<TextureStateKey, Alloc::ScratchArena, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo>;
@@ -83,7 +83,7 @@ b8 GpuTextureStateFanIn::mergeTransient(CommandListResourceStateHandoff& result,
     return true;
 }
 
-b8 GpuTextureStateFanIn::mergePermanent(CommandListResourceStateHandoff& result, const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, const usize branchCount, const usize permanentTextureStateCapacity, Alloc::ScratchArena& scratchArena){
+b8 GpuTextureStateFanIn::MergePermanent(CommandListResourceStateHandoff& result, const CommandListResourceStateHandoff& base, const CommandListResourceStateHandoff* const* branches, const usize branchCount, const usize permanentTextureStateCapacity, Alloc::ScratchArena& scratchArena){
     using PermanentTextureState = CommandListResourceStateHandoff::PermanentTextureState;
     using PermanentTextureStateIndexMap = FixedIndexMap<Texture*, Alloc::ScratchArena, Hasher<Texture*>, EqualTo<Texture*>>;
     const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs)noexcept{

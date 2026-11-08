@@ -61,7 +61,7 @@ struct SetupUploadReadinessBridgeGraphTask{
     GpuTaskId terminalTask = uploadTask;
     constexpr Array<CommandQueue::Enum, 3> s_ConsumerQueues = {{ CommandQueue::Graphics, CommandQueue::Compute, CommandQueue::Transfer }};
     const auto appendBridge = [&graph, &device, uploadTask, &terminalTask](const CommandQueue::Enum consumerQueue){
-        GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraph::scheduling(0u);
+        GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraph::Scheduling(0u);
         scheduling.overlapPreferred = false;
         GpuTaskDesc bridgeDesc;
         bridgeDesc.setIdentity(s_SetupUploadReadinessBridgeIdentity).setMarkerLabel("Setup Upload Readiness Bridge").setScheduling(scheduling).setDependencies(Span<const GpuTaskId>(&uploadTask, 1u));
@@ -117,7 +117,7 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SetupUploadSameClassRouting SetupUploadGraph::resolveSameClassRouting(GraphicsBackend::Device& device, const CommandQueue::Enum consumerQueue, const usize uploadBytes)noexcept{
+SetupUploadSameClassRouting SetupUploadGraph::ResolveSameClassRouting(GraphicsBackend::Device& device, const CommandQueue::Enum consumerQueue, const usize uploadBytes)noexcept{
     SetupUploadSameClassRouting result;
     if(uploadBytes < s_LargeMinimumBytes)
         return result;
@@ -144,7 +144,7 @@ SetupUploadSameClassRouting SetupUploadGraph::resolveSameClassRouting(GraphicsBa
     return result;
 }
 
-ResourceQueueSharing::Mask SetupUploadGraph::resolveConsumerSharing(const ResourceQueueSharing::Mask requestedSharing, const CommandQueue::Enum consumerQueue, const b8 crossFamilySameClassRouting)noexcept{
+ResourceQueueSharing::Mask SetupUploadGraph::ResolveConsumerSharing(const ResourceQueueSharing::Mask requestedSharing, const CommandQueue::Enum consumerQueue, const b8 crossFamilySameClassRouting)noexcept{
     if(crossFamilySameClassRouting){
         const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive ? ResourceQueueSharing::ForQueueClass(consumerQueue) : requestedSharing;
         return static_cast<ResourceQueueSharing::Mask>(static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(consumerQueue)));
@@ -157,7 +157,7 @@ ResourceQueueSharing::Mask SetupUploadGraph::resolveConsumerSharing(const Resour
     return static_cast<ResourceQueueSharing::Mask>(static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(consumerQueue)));
 }
 
-CommandQueue::Enum SetupUploadGraph::resolveConsumerQueue(GraphicsBackend::Device& device, const CommandQueue::Enum requestedConsumerQueue, const usize uploadBytes, const b8 hasKnownFinalState)noexcept{
+CommandQueue::Enum SetupUploadGraph::ResolveConsumerQueue(GraphicsBackend::Device& device, const CommandQueue::Enum requestedConsumerQueue, const usize uploadBytes, const b8 hasKnownFinalState)noexcept{
     switch(requestedConsumerQueue){
     case CommandQueue::kCount:
         if(uploadBytes < s_LargeMinimumBytes || !hasKnownFinalState)
@@ -175,7 +175,7 @@ CommandQueue::Enum SetupUploadGraph::resolveConsumerQueue(GraphicsBackend::Devic
     }
 }
 
-GpuTaskSchedulingHint SetupUploadGraph::scheduling(const usize byteCount, const b8 sameClassRouting, const b8 crossFamilySameClassRouting)noexcept{
+GpuTaskSchedulingHint SetupUploadGraph::Scheduling(const usize byteCount, const b8 sameClassRouting, const b8 crossFamilySameClassRouting)noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = byteCount >= s_LargeMinimumBytes ? GpuTaskCostHint::Large : GpuTaskCostHint::Tiny;
     // A public setup call returns one accepted producer token, so retain a distinct explicit packet.
@@ -187,13 +187,13 @@ GpuTaskSchedulingHint SetupUploadGraph::scheduling(const usize byteCount, const 
     return scheduling;
 }
 
-ResourceStates::Mask SetupUploadGraph::finalState(const ResourceStates::Mask declaredInitialState)noexcept{
+ResourceStates::Mask SetupUploadGraph::FinalState(const ResourceStates::Mask declaredInitialState)noexcept{
     // Uploads with an Unknown descriptor state publish the concrete CopyDest post-write state.
     return declaredInitialState == ResourceStates::Unknown ? ResourceStates::CopyDest : declaredInitialState;
 }
 
 
-b8 SetupUploadGraph::submit(
+b8 SetupUploadGraph::Submit(
     const GraphicsRuntime& graphics,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum consumerQueue,

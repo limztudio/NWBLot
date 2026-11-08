@@ -49,18 +49,18 @@ TEST_F(LoggerProtocolTests, MessagePayloadReadsUnalignedBytesAndPreservesEmbedde
     const TStringView message(s_Message.data(), s_Message.size());
     const NWB::Log::MessageType source = MakeTuple(Timer{}, NWB::Core::Common::LogType::Warning, NWB::Log::LogString(message, testArena.arena));
     NWB::Log::LogBytes payload(testArena.arena);
-    ASSERT_TRUE(NWB::Log::MessagePayloadCodec::build(source, payload));
+    ASSERT_TRUE(NWB::Log::MessagePayloadCodec::Build(source, payload));
 
     constexpr usize s_PrefixBytes = sizeof(tchar);
     NWB::Log::LogBytes shifted(testArena.arena);
     shifted.resize(s_PrefixBytes + payload.size());
     NWB_MEMCPY(shifted.data() + s_PrefixBytes, payload.size(), payload.data(), payload.size());
-    const auto parsed = NWB::Log::MessagePayloadCodec::parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
+    const auto parsed = NWB::Log::MessagePayloadCodec::Parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
     ASSERT_TRUE(parsed);
     EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);
 
     shifted.back() = 1u;
-    const auto malformed = NWB::Log::MessagePayloadCodec::parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
+    const auto malformed = NWB::Log::MessagePayloadCodec::Parse(testArena.arena, shifted.data() + s_PrefixBytes, payload.size());
     ASSERT_FALSE(malformed);
     EXPECT_FALSE(malformed.error().empty());
     EXPECT_EQ(TStringView(Get<2u>(*parsed)), message);

@@ -23,7 +23,7 @@ NWB_FBX_TO_NWB_BEGIN
 class AssetReferenceTextWriter final{
 public:
     template<typename Stream>
-    static void write(const AStringView value, const b8 quote, Core::Alloc::ScratchArena& scratchArena, Stream& file){
+    static void Write(const AStringView value, const b8 quote, Core::Alloc::ScratchArena& scratchArena, Stream& file){
         if(quote){
             ScratchString escaped(scratchArena);
             escaped.reserve(SizeOf<s_EscapedTextReserveFactor>(value.size()));

@@ -196,7 +196,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             else{
                 operationError = GpuCommandIrDetail::ValidateRasterBuiltinBoundary(contextRecord.task, rasterState);
                 if(operationError == GpuCommandIrReplayError::None){
-                    operationError = GpuCommandIrBuiltinPreflight::validate(decoded.builtin, reader.blobBytes(), graph, task, *queue);
+                    operationError = GpuCommandIrBuiltinPreflight::Validate(decoded.builtin, reader.blobBytes(), graph, task, *queue);
                 }
             }
         }

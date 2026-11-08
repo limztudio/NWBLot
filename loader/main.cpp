@@ -173,7 +173,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
         if(telemetryClient)
             frame.setTelemetryUploadCallback(&__hidden_loader::UploadTelemetry, telemetryClient);
         frame.graphics().setWindowTitle(projectWindowTitle);
-        auto resourceDirectoryResult = NWB::LoaderDetail::ResourceMountResolver::resolve(frame.projectObjectArena(), scratchArena);
+        auto resourceDirectoryResult = NWB::LoaderDetail::ResourceMountResolver::Resolve(frame.projectObjectArena(), scratchArena);
         if(resourceDirectoryResult)
             frame.graphics().setPipelineCacheDirectory(*resourceDirectoryResult);
         NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
@@ -305,7 +305,7 @@ static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidde
             return __hidden_loader::s_LoaderExitFailure;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
-        NWB::LoaderDetail::CrashReporting::configure(crashReportingInstalled, options.useStandaloneLogger, AStringView(options.logAddress.data(), options.logAddress.size()), AStringView(options.crashUploadToken.data(), options.crashUploadToken.size()), options.enableGpuDebug);
+        NWB::LoaderDetail::CrashReporting::Configure(crashReportingInstalled, options.useStandaloneLogger, AStringView(options.logAddress.data(), options.logAddress.size()), AStringView(options.crashUploadToken.data(), options.crashUploadToken.size()), options.enableGpuDebug);
 
         return RunProjectRuntime(scratchArena, options, inst, nullptr);
     }
@@ -315,7 +315,7 @@ static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidde
         return __hidden_loader::s_LoaderExitFailure;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), ConvertString(options.logAddress));
-    NWB::LoaderDetail::CrashReporting::configure(crashReportingInstalled, options.useStandaloneLogger, AStringView(options.logAddress.data(), options.logAddress.size()), AStringView(options.crashUploadToken.data(), options.crashUploadToken.size()), options.enableGpuDebug);
+    NWB::LoaderDetail::CrashReporting::Configure(crashReportingInstalled, options.useStandaloneLogger, AStringView(options.logAddress.data(), options.logAddress.size()), AStringView(options.crashUploadToken.data(), options.crashUploadToken.size()), options.enableGpuDebug);
 
     return RunProjectRuntime(scratchArena, options, inst, &logger);
 }
@@ -329,7 +329,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     // Capture early startup failures; configure uploads after CLI and logger setup.
     const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
-    const b8 crashReportingInstalled = NWB::LoaderDetail::CrashReporting::install(crashArena);
+    const b8 crashReportingInstalled = NWB::LoaderDetail::CrashReporting::Install(crashArena);
     ScopeExit crashCaptureGuard([crashReportingInstalled]()noexcept{
         if(crashReportingInstalled){
             NWB::Core::RegisterGpuCrashSink(nullptr, nullptr);

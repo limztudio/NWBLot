@@ -27,7 +27,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     b8 allPlansCurrent = true;
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(!meshResourcesResult || !PreparedMeshBlasBuilder::matches((*meshResourcesResult), build)){
+        if(!meshResourcesResult || !PreparedMeshBlasBuilder::Matches((*meshResourcesResult), build)){
             allPlansCurrent = false;
             continue;
         }
@@ -114,7 +114,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchA
             continue;
         }
 
-        auto build = PreparedMeshBlasBuilder::resolve(meshResources);
+        auto build = PreparedMeshBlasBuilder::Resolve(meshResources);
         if(!build){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             clearPreparedMeshBlasBuilds();
@@ -132,13 +132,13 @@ b8 RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& com
 
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
-        if(!meshResourcesResult || !PreparedMeshBlasBuilder::matches((*meshResourcesResult), build)){
+        if(!meshResourcesResult || !PreparedMeshBlasBuilder::Matches((*meshResourcesResult), build)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), ConvertString(build.meshName.resolvedText()));
             return false;
         }
     }
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        if(!PreparedMeshBlasBuilder::record(build, meshBlasGeometryBuildInputStatesGraphOwned, commandList)){
+        if(!PreparedMeshBlasBuilder::Record(build, meshBlasGeometryBuildInputStatesGraphOwned, commandList)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
             return false;
         }

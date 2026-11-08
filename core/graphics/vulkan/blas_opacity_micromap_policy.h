@@ -24,7 +24,7 @@ struct OpacityMicromapIndexFormatInfo{
 
 class BlasOpacityMicromapPolicy{
 public:
-    [[nodiscard]] static b8 prepareBlasOpacityMicromapUsageOffsets(
+    [[nodiscard]] static b8 PrepareBlasOpacityMicromapUsageOffsets(
         const VulkanContext& context,
         const RayTracingGeometryDesc* geometries,
         usize geometryCount,
@@ -33,8 +33,8 @@ public:
         OpacityMicromapUsageVector& outUsageCounts,
         b8& outHasOpacityMicromap
     );
-    [[nodiscard]] static Expected<OpacityMicromapIndexFormatInfo> resolveOpacityMicromapIndexFormat(Format::Enum format, TStringView operation);
-    [[nodiscard]] static b8 validateOpacityMicromapStorageAndFillUsages(
+    [[nodiscard]] static Expected<OpacityMicromapIndexFormatInfo> ResolveOpacityMicromapIndexFormat(Format::Enum format, TStringView operation);
+    [[nodiscard]] static b8 ValidateOpacityMicromapStorageAndFillUsages(
         const RayTracingGeometryTriangles& triangles,
         VkIndexType ommIndexType,
         u64 ommIndexStride,
@@ -44,7 +44,7 @@ public:
         OpacityMicromapUsageVector& inOutUsageCounts,
         VkAccelerationStructureTrianglesOpacityMicromapEXT& outOmmGeometry
     );
-    static void attachBlasOpacityMicromapGeometries(
+    static void AttachBlasOpacityMicromapGeometries(
         const RayTracingGeometryDesc* geometries,
         usize geometryCount,
         const OpacityMicromapUsageOffsetVector& opacityMicromapUsageOffsets,

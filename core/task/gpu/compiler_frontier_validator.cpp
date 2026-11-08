@@ -11,7 +11,7 @@
 NWB_CORE_BEGIN
 
 
-b8 GpuTaskGraphFrontierValidator::validate(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, GpuTaskGraphAnalysisDiagnostic& outDiagnostic){
+b8 GpuTaskGraphFrontierValidator::Validate(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, GpuTaskGraphAnalysisDiagnostic& outDiagnostic){
     const auto failAcceptedQueueFrontierPlan = [&](const GpuTaskId task, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {})noexcept{
         outDiagnostic = GpuTaskGraphAnalysisDiagnostic{ .task = task, .relatedTask = relatedTask, .resource = resource, .resourceVersion = {}, .status = GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask, };
         return false;

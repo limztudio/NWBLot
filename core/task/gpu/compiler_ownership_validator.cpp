@@ -23,7 +23,7 @@ struct InitialOwnershipCompletionRequirement{
 };
 
 
-b8 GpuTaskGraphOwnershipValidator::validateCompletionQueues(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology){
+b8 GpuTaskGraphOwnershipValidator::ValidateCompletionQueues(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology){
     for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex){
         const GpuTaskGraphExternalCompletionView completion = graph.externalCompletionAt(completionIndex);
         if(!completion.hasToken)
@@ -45,7 +45,7 @@ b8 GpuTaskGraphOwnershipValidator::validateCompletionQueues(const GpuTaskGraph::
 }
 
 
-b8 GpuTaskGraphOwnershipValidator::validateInitialOwnership(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, Alloc::ScratchArena& scratchArena){
+b8 GpuTaskGraphOwnershipValidator::ValidateInitialOwnership(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, Alloc::ScratchArena& scratchArena){
     using namespace GpuTaskGraphCompilerDetail;
     using namespace __hidden_gpu_task_graph_ownership_validator;
 

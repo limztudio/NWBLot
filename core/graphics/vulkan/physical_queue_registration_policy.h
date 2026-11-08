@@ -16,9 +16,9 @@ NWB_VULKAN_BEGIN
 
 class PhysicalQueueRegistrationPolicy final{
 public:
-    enum class Result : u8{ Valid, Invalid, DuplicateQueue, DuplicatePrimary };
-    [[nodiscard]] static Result validateCanonical(Span<const VulkanNativeQueueDesc> nativeQueues, Span<const VkQueueFamilyProperties> families)noexcept;
-    [[nodiscard]] static Result validate(
+    struct Result{ enum Enum : u8{ Valid, Invalid, DuplicateQueue, DuplicatePrimary }; };
+    [[nodiscard]] static Result::Enum ValidateCanonical(Span<const VulkanNativeQueueDesc> nativeQueues, Span<const VkQueueFamilyProperties> families)noexcept;
+    [[nodiscard]] static Result::Enum Validate(
         const VulkanPhysicalQueueDesc& desc,
         const NativeQueueState& nativeQueue,
         Span<const GpuPhysicalQueueInfo> existingQueues,

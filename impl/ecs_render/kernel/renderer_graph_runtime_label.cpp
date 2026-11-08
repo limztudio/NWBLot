@@ -65,7 +65,7 @@ static void AppendCommandArenaWorkerStatistics(const Core::GpuCommandArenaWorker
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererGraphRuntimeLabel::append(
+b8 RendererGraphRuntimeLabel::Append(
     const Core::GpuTaskGraphRuntimeStatistics& deferredRuntimeStatistics,
     const Core::GpuPhysicalQueueTopology& runtimeQueueTopology,
     const Span<const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics> physicalQueueRuntimeStatistics,

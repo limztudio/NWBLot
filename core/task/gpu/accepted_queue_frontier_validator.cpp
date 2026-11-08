@@ -11,7 +11,7 @@
 NWB_CORE_BEGIN
 
 
-b8 GpuAcceptedQueueFrontierValidator::validate(const GpuTaskGraph::DeclarationReadView& graph, const Span<const usize> incomingOffsets, const Span<const GpuTaskDependencyEdge> edges, GpuTaskGraphAnalysisDiagnostic& diagnostic)noexcept{
+b8 GpuAcceptedQueueFrontierValidator::Validate(const GpuTaskGraph::DeclarationReadView& graph, const Span<const usize> incomingOffsets, const Span<const GpuTaskDependencyEdge> edges, GpuTaskGraphAnalysisDiagnostic& diagnostic)noexcept{
     const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task = {}, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {})noexcept{
         diagnostic.status = status;
         diagnostic.task = task;

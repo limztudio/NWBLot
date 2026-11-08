@@ -32,7 +32,7 @@ inline constexpr StringView s_FramePointerFieldPrefix = "\nframe_pointer=";
 
 
 template<typename ArenaT>
-void CrashPackageReport::appendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const StringView key, const b8 isFirst){
+void CrashPackageReport::AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const StringView key, const b8 isFirst){
     if(!isFirst)
         out += ",\n";
     out += "  \"";
@@ -40,7 +40,7 @@ void CrashPackageReport::appendManifestPropertyPrefix(CrashStringT<ArenaT>& out,
     out += "\": ";
 }
 
-StringView CrashPackageReport::artifactStrategyName(const CrashRequest& request)noexcept{
+StringView CrashPackageReport::ArtifactStrategyName(const CrashRequest& request)noexcept{
     switch(request.platform){
     case PlatformKind::Windows:
         return "windows_minidump_external_handler";
@@ -54,73 +54,73 @@ StringView CrashPackageReport::artifactStrategyName(const CrashRequest& request)
 }
 
 template<typename ArenaT>
-CrashStringT<ArenaT> CrashPackageReport::buildManifest(ArenaT& arena, const CrashRequest& request){
+CrashStringT<ArenaT> CrashPackageReport::BuildManifest(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> manifest{arena};
     manifest.reserve(s_ManifestReserveBytes);
     manifest += "{\n";
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFormatKey, true);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFormatKey, true);
     manifest += '"';
     manifest += PackageNames::s_ManifestFormatValue;
     manifest += '"';
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestCrashIdKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestCrashIdKey, false);
     AppendJsonQuotedText(manifest, request.crashId.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestApplicationKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestApplicationKey, false);
     AppendJsonQuotedText(manifest, request.applicationName.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestVersionKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestVersionKey, false);
     AppendJsonQuotedText(manifest, request.versionText.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestBuildIdKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestBuildIdKey, false);
     AppendJsonQuotedText(manifest, request.buildId.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestAbiKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestAbiKey, false);
     AppendJsonQuotedText(manifest, request.abi.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestPlatformKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestPlatformKey, false);
     AppendJsonQuotedText(manifest, PlatformKindName(request.platform));
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonKindKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonKindKey, false);
     AppendJsonQuotedText(manifest, ReasonKindName(request.reasonKind));
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonCodeKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonCodeKey, false);
     AppendUnsignedU64Text(manifest, request.reasonCode);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestProcessIdKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestProcessIdKey, false);
     AppendUnsignedU64Text(manifest, request.processId);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestThreadIdKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestThreadIdKey, false);
     AppendUnsignedU64Text(manifest, request.threadId);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
 #if defined(NWB_PLATFORM_WINDOWS)
     const b8 hasExceptionContext = request.manualContextSize != 0u || request.exceptionPointers != 0u;
 #else
     const b8 hasExceptionContext = request.exceptionPointers != 0u;
 #endif
     manifest += hasExceptionContext ? s_TrueText : s_FalseText;
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
     AppendUnsignedU64Text(manifest, request.faultAddress);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestInstructionPointerKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestInstructionPointerKey, false);
     AppendUnsignedU64Text(manifest, request.instructionPointer);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestStackPointerKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestStackPointerKey, false);
     AppendUnsignedU64Text(manifest, request.stackPointer);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFramePointerKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFramePointerKey, false);
     AppendUnsignedU64Text(manifest, request.framePointer);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestEventKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestEventKey, false);
     AppendJsonQuotedText(manifest, request.event.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerCategoryKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerCategoryKey, false);
     AppendJsonQuotedText(manifest, request.triggerCategory.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerExpressionKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerExpressionKey, false);
     AppendJsonQuotedText(manifest, request.triggerExpression.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerMessageKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerMessageKey, false);
     AppendJsonQuotedText(manifest, request.triggerMessage.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerFileKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerFileKey, false);
     AppendJsonQuotedText(manifest, request.triggerFile.data());
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerLineKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerLineKey, false);
     AppendUnsignedU64Text(manifest, request.triggerLine);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestDumpDetailModeKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestDumpDetailModeKey, false);
     AppendJsonQuotedText(manifest, request.dumpDetailMode == DumpDetailMode::Full ? PackageNames::s_ManifestDumpDetailModeFullValue : PackageNames::s_ManifestDumpDetailModeSmallValue);
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestArtifactStrategyKey, false);
-    AppendJsonQuotedText(manifest, artifactStrategyName(request));
-    appendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHandlerLifetimeKey, false);
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestArtifactStrategyKey, false);
+    AppendJsonQuotedText(manifest, ArtifactStrategyName(request));
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHandlerLifetimeKey, false);
     AppendJsonQuotedText(manifest, PackageNames::s_ManifestHandlerLifetimeClientIpcValue);
     manifest += "\n}\n";
     return manifest;
 }
 
 template<typename ArenaT>
-CrashStringT<ArenaT> CrashPackageReport::buildMetadataText(ArenaT& arena, const CrashRequest& request){
+CrashStringT<ArenaT> CrashPackageReport::BuildMetadataText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     for(u32 i = 0u; i < request.metadataCount; ++i){
         text += request.metadata[i].key.data();
@@ -132,7 +132,7 @@ CrashStringT<ArenaT> CrashPackageReport::buildMetadataText(ArenaT& arena, const 
 }
 
 template<typename ArenaT>
-CrashStringT<ArenaT> CrashPackageReport::buildBreadcrumbText(ArenaT& arena, const CrashRequest& request){
+CrashStringT<ArenaT> CrashPackageReport::BuildBreadcrumbText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     for(u32 i = 0u; i < request.breadcrumbCount; ++i){
         AppendUnsignedU64Text(text, request.breadcrumbs[i].order);
@@ -146,7 +146,7 @@ CrashStringT<ArenaT> CrashPackageReport::buildBreadcrumbText(ArenaT& arena, cons
 }
 
 template<typename ArenaT>
-CrashStringT<ArenaT> CrashPackageReport::buildEmergencyText(ArenaT& arena, const CrashRequest& request){
+CrashStringT<ArenaT> CrashPackageReport::BuildEmergencyText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     text += "reason=";
     text += ReasonKindName(request.reasonKind);
@@ -182,16 +182,16 @@ CrashStringT<ArenaT> CrashPackageReport::buildEmergencyText(ArenaT& arena, const
     return text;
 }
 
-b8 CrashPackageReport::hasCpuContext(const CrashRequest& request)noexcept{
+b8 CrashPackageReport::HasCpuContext(const CrashRequest& request)noexcept{
     return request.faultAddress != 0u || request.instructionPointer != 0u || request.stackPointer != 0u || request.framePointer != 0u;
 }
 
-b8 CrashPackageReport::hasCallstack(const CrashRequest& request)noexcept{
+b8 CrashPackageReport::HasCallstack(const CrashRequest& request)noexcept{
     return request.callstackFrameCount != 0u;
 }
 
 template<typename ArenaT>
-CrashStringT<ArenaT> CrashPackageReport::buildCpuContextText(ArenaT& arena, const CrashRequest& request){
+CrashStringT<ArenaT> CrashPackageReport::BuildCpuContextText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     text += "fault_address=";
     AppendUnsignedU64Text(text, request.faultAddress);
@@ -206,7 +206,7 @@ CrashStringT<ArenaT> CrashPackageReport::buildCpuContextText(ArenaT& arena, cons
 }
 
 template<typename ArenaT>
-CrashStringT<ArenaT> CrashPackageReport::buildCallstackText(ArenaT& arena, const CrashRequest& request){
+CrashStringT<ArenaT> CrashPackageReport::BuildCallstackText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     const u32 frameCount = request.callstackFrameCount > s_MaxCallstackFrames ? static_cast<u32>(s_MaxCallstackFrames) : request.callstackFrameCount;
     for(u32 i = 0u; i < frameCount; ++i){
@@ -220,10 +220,10 @@ CrashStringT<ArenaT> CrashPackageReport::buildCallstackText(ArenaT& arena, const
 }
 
 template<typename ArenaT>
-CrashStringT<ArenaT> CrashPackageReport::buildArtifactStrategyText(ArenaT& arena, const CrashRequest& request){
+CrashStringT<ArenaT> CrashPackageReport::BuildArtifactStrategyText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     text += "strategy=";
-    text += artifactStrategyName(request);
+    text += ArtifactStrategyName(request);
     text += '\n';
     text += PackageNames::s_ManifestHandlerLifetimeKey;
     text += '=';
@@ -246,7 +246,7 @@ CrashStringT<ArenaT> CrashPackageReport::buildArtifactStrategyText(ArenaT& arena
     return text;
 }
 
-b8 CrashPackageReport::write(Alloc::PersistentArena& arena, const CrashRequest& request){
+b8 CrashPackageReport::Write(Alloc::PersistentArena& arena, const CrashRequest& request){
     const ::Path<Alloc::PersistentArena> packageDirectory = RequestPendingDirectory(arena, request);
     const auto directory = EnsureDirectories(packageDirectory);
     if(!directory){
@@ -254,19 +254,19 @@ b8 CrashPackageReport::write(Alloc::PersistentArena& arena, const CrashRequest& 
         return false;
     }
 
-    if(!WriteTextFile(packageDirectory / PackageNames::s_ManifestFileName, buildManifest(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_ManifestFileName, BuildManifest(arena, request)))
         return false;
-    if(!WriteTextFile(packageDirectory / PackageNames::s_MetadataFileName, buildMetadataText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_MetadataFileName, BuildMetadataText(arena, request)))
         return false;
-    if(!WriteTextFile(packageDirectory / PackageNames::s_BreadcrumbsFileName, buildBreadcrumbText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_BreadcrumbsFileName, BuildBreadcrumbText(arena, request)))
         return false;
-    if(!WriteTextFile(packageDirectory / PackageNames::s_EmergencyFileName, buildEmergencyText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_EmergencyFileName, BuildEmergencyText(arena, request)))
         return false;
-    if(!WriteTextFile(packageDirectory / PackageNames::s_ArtifactStrategyFileName, buildArtifactStrategyText(arena, request)))
+    if(!WriteTextFile(packageDirectory / PackageNames::s_ArtifactStrategyFileName, BuildArtifactStrategyText(arena, request)))
         return false;
-    if(hasCpuContext(request) && !WriteTextFile(packageDirectory / PackageNames::s_CpuContextFileName, buildCpuContextText(arena, request)))
+    if(HasCpuContext(request) && !WriteTextFile(packageDirectory / PackageNames::s_CpuContextFileName, BuildCpuContextText(arena, request)))
         return false;
-    if(hasCallstack(request) && !WriteTextFile(packageDirectory / PackageNames::s_CallstackFileName, buildCallstackText(arena, request)))
+    if(HasCallstack(request) && !WriteTextFile(packageDirectory / PackageNames::s_CallstackFileName, BuildCallstackText(arena, request)))
         return false;
     return true;
 }

@@ -100,7 +100,7 @@ inline Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
         return MakeUnexpected(Failure{});
     if(!ParseSourceVertexRefsInto(nwbFilePath, asset, metaKind, scratchArena, streams.vertexRefs))
         return MakeUnexpected(Failure{});
-    if(!MeshIndexMetadataParser::parse(nwbFilePath, asset, metaKind, scratchArena, streams.indices))
+    if(!MeshIndexMetadataParser::Parse(nwbFilePath, asset, metaKind, scratchArena, streams.indices))
         return MakeUnexpected(Failure{});
     if(!ValidateSourceIndexStream(nwbFilePath, metaKind, streams.indices, streams.vertexRefs.size()))
         return MakeUnexpected(Failure{});

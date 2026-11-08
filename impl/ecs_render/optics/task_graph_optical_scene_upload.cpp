@@ -165,7 +165,7 @@ Expected<RayTracingOpticalSceneGraphBuffer> ImportRayTracingOpticalSceneBuffer(
     const auto uploaded = __hidden_task_graph_optical_scene_upload::ImportOpticalSceneUpload(resources, priorReadersDrained, graph);
     if(!uploaded || !resources.finalize)
         return uploaded;
-    return OpticalBoundsFinalizeGraph::declare(resources, uploaded->resource, priorReadersDrained, graph, scratchArena);
+    return OpticalBoundsFinalizeGraph::Declare(resources, uploaded->resource, priorReadersDrained, graph, scratchArena);
 }
 
 

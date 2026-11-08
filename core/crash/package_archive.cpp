@@ -28,7 +28,7 @@ static void AppendArchiveText(CrashBytesT<ArenaT>& out, const AStringView text){
 }
 
 template<typename ArenaT, typename PathArenaT>
-Expected<CrashBytesT<ArenaT>, ErrorCode> CrashPackageArchive::build(ArenaT& arena, Alloc::ScratchArena& scratchArena, const ::Path<PathArenaT>& packageDirectory){
+Expected<CrashBytesT<ArenaT>, ErrorCode> CrashPackageArchive::Build(ArenaT& arena, Alloc::ScratchArena& scratchArena, const ::Path<PathArenaT>& packageDirectory){
     CrashBytesT<ArenaT> archive(arena);
     AppendArchiveText(archive, PackageNames::s_ArchiveHeaderText);
 
@@ -67,11 +67,11 @@ Expected<CrashBytesT<ArenaT>, ErrorCode> CrashPackageArchive::build(ArenaT& aren
     return archive;
 }
 
-template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> CrashPackageArchive::build(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::GlobalArena>& packageDirectory);
-template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> CrashPackageArchive::build(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> CrashPackageArchive::Build(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::GlobalArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::GlobalArena>, ErrorCode> CrashPackageArchive::Build(Alloc::GlobalArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
 
-template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::PersistentArena>& packageDirectory);
-template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::Build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::PersistentArena>& packageDirectory);
+template Expected<CrashBytesT<Alloc::PersistentArena>, ErrorCode> CrashPackageArchive::Build(Alloc::PersistentArena& arena, Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& packageDirectory);
 
 
 

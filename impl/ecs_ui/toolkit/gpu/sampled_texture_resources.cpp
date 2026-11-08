@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GpuSampledTextures::prepareDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
+b8 GpuSampledTextures::PrepareDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
     if(inOutDescriptor.valid())
         return true;
     Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
@@ -35,7 +35,7 @@ b8 GpuSampledTextures::prepareDescriptor(Core::GraphicsRuntime& graphics, const 
     return true;
 }
 
-b8 GpuSampledTextures::createAndUploadPage(
+b8 GpuSampledTextures::CreateAndUploadPage(
     Core::GraphicsRuntime& graphics,
     const GpuPageTextureUploadDesc& desc,
     Core::TextureHandle& outTexture,
@@ -68,7 +68,7 @@ b8 GpuSampledTextures::createAndUploadPage(
     return outReadinessToken.valid() && outReadinessToken.hasPhysicalQueueIdentity();
 }
 
-Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> GpuSampledTextures::importTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses){
+Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> GpuSampledTextures::ImportTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses){
     Array<char, s_DecimalTextBufferBytes> identityText{};
     const AStringView suffix = FormatDecimal(desc.index, identityText);
     // Graph imports unify equal identities; every immutable snapshot page needs a distinct texture and completion name.

@@ -169,7 +169,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 }
 
 static b8 ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& inOutGraphicsMetadata){
-    const auto bindFiles = Core::Assets::AssetFileDiscovery::discover(context.resolvedPaths.assetRoots, s_MaterialBindSourceExtensionText, context.arena, context.scratchArena);
+    const auto bindFiles = Core::Assets::AssetFileDiscovery::Discover(context.resolvedPaths.assetRoots, s_MaterialBindSourceExtensionText, context.arena, context.scratchArena);
     if(!bindFiles)
         return false;
 
@@ -282,16 +282,16 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
         return false;
 
     // Generate AVBOIT accumulation from the same surface hook before shader preparation and material validation.
-    auto generatedAvboitAccumulatePixelShadersResult = MaterialAvboitShaderGenerator::emitAccumulate(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedAvboitAccumulatePixelShadersResult = MaterialAvboitShaderGenerator::EmitAccumulate(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitAccumulatePixelShadersResult)
         return false;
 
     // Occupancy, extinction, and accumulation must share the surface hook so renderCoverage agrees across passes.
-    auto generatedAvboitOccupancyPixelShadersResult = MaterialAvboitShaderGenerator::emitOccupancy(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedAvboitOccupancyPixelShadersResult = MaterialAvboitShaderGenerator::EmitOccupancy(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitOccupancyPixelShadersResult)
         return false;
 
-    auto generatedAvboitExtinctionPixelShadersResult = MaterialAvboitShaderGenerator::emitExtinction(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
+    auto generatedAvboitExtinctionPixelShadersResult = MaterialAvboitShaderGenerator::EmitExtinction(context.resolvedPaths.cacheDirectory, context.configurationSafeName, materialCookArena, context.scratchArena, materialEntries);
     if(!generatedAvboitExtinctionPixelShadersResult)
         return false;
 
@@ -377,12 +377,12 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
-static Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MeshSubsystemNonStandaloneAssetTypeRegistrar(MeshSubsystem::AssetTypeName(), "mesh_subsystem");
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_IncludeNonStandaloneAssetTypeRegistrar(s_IncludeAssetTypeName, "include");
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_ShaderNonStandaloneAssetTypeRegistrar(Name("shader"), "shader");
-static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar s_ShaderSuffixNonStandaloneRegistrar("_shader");
+static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar S_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
+static Core::Assets::AssetMetadataParserAutoRegistrar S_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_MeshSubsystemNonStandaloneAssetTypeRegistrar(MeshSubsystem::AssetTypeName(), "mesh_subsystem");
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_IncludeNonStandaloneAssetTypeRegistrar(s_IncludeAssetTypeName, "include");
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_ShaderNonStandaloneAssetTypeRegistrar(Name("shader"), "shader");
+static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar S_ShaderSuffixNonStandaloneRegistrar("_shader");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

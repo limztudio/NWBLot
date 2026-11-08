@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraphFrontierValidator{
 public:
-    [[nodiscard]] static b8 validate(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, GpuTaskGraphAnalysisDiagnostic& outDiagnostic);
+    [[nodiscard]] static b8 Validate(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan, GpuTaskGraphAnalysisDiagnostic& outDiagnostic);
 };
 
 

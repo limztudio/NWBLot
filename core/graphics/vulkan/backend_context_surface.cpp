@@ -169,7 +169,7 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    const auto surfaceFormatSelection = SwapChainSurfacePolicy::selectFormat(surfaceFormats, requestedSdrFormat, hdr10Allowed);
+    const auto surfaceFormatSelection = SwapChainSurfacePolicy::SelectFormat(surfaceFormats, requestedSdrFormat, hdr10Allowed);
     if(!surfaceFormatSelection){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes neither HDR10 nor a compatible SDR swapchain format."));
         return false;
@@ -201,7 +201,7 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: Swapchain readback {}."), status);
     }
 
-    const VkExtent2D extent = SwapChainSurfacePolicy::resolveExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+    const VkExtent2D extent = SwapChainSurfacePolicy::ResolveExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
     if(extent.width == 0 || extent.height == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
         return false;
@@ -224,15 +224,15 @@ b8 BackendContext::createVulkanSwapChain(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    const auto selectedPresentMode = SwapChainSurfacePolicy::selectPresentMode(presentModes, m_swapChainState.vsyncEnabled);
+    const auto selectedPresentMode = SwapChainSurfacePolicy::SelectPresentMode(presentModes, m_swapChainState.vsyncEnabled);
     if(!selectedPresentMode){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes no present modes."));
         return false;
     }
 
-    const u32 selectedImageCount = SwapChainSurfacePolicy::imageCount(surfaceCaps, m_deviceParams.swapChainBufferCount);
-    const VkSurfaceTransformFlagBitsKHR selectedPreTransform = SwapChainSurfacePolicy::preTransform(surfaceCaps);
-    const auto selectedCompositeAlpha = SwapChainSurfacePolicy::selectCompositeAlpha(surfaceCaps);
+    const u32 selectedImageCount = SwapChainSurfacePolicy::ImageCount(surfaceCaps, m_deviceParams.swapChainBufferCount);
+    const VkSurfaceTransformFlagBitsKHR selectedPreTransform = SwapChainSurfacePolicy::PreTransform(surfaceCaps);
+    const auto selectedCompositeAlpha = SwapChainSurfacePolicy::SelectCompositeAlpha(surfaceCaps);
     if(!selectedCompositeAlpha){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface supports no compatible composite alpha mode."));
         return false;

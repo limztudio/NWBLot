@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 
 class QueueBarrierScopePolicy final{
 public:
-    static void normalize(GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept;
+    static void Normalize(GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept;
 };
 
 

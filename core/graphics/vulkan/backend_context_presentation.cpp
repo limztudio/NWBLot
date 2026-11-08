@@ -70,7 +70,7 @@ BeginFrameResult BackendContext::beginFrame(){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities for a requested resize. {}"), ResultToString(capabilitiesResult));
             return result;
         }
-        const VkExtent2D extent = SwapChainSurfacePolicy::resolveExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+        const VkExtent2D extent = SwapChainSurfacePolicy::ResolveExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
         result.suggestedWidth = extent.width;
         result.suggestedHeight = extent.height;
         result.status = BeginFrameStatus::ResizeRequired;

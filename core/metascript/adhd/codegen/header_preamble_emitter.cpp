@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void HeaderPreambleEmitter::emit(MString& out, const TranslationUnit& unit, const MStringView namespacePath){
+void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, const MStringView namespacePath){
     out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#pragma once\r\n\r\n\r\n");

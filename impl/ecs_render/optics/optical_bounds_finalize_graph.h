@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 
 class OpticalBoundsFinalizeGraph final{
 public:
-    [[nodiscard]] static Expected<RayTracingOpticalSceneGraphBuffer> declare(
+    [[nodiscard]] static Expected<RayTracingOpticalSceneGraphBuffer> Declare(
         const RayTracingOpticalSceneSnapshot& resources,
         Core::GpuGraphResourceId source,
         Core::GpuTaskId priorReadersDrained,

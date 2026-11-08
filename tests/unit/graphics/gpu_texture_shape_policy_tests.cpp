@@ -20,12 +20,12 @@ TEST(GpuTextureShapePolicyTests, CubeArraysRequireWholeCubesAndSquareFaces){
     desc.dimension = TextureDimension::TextureCubeArray;
     desc.width = desc.height = 16u;
     desc.arraySize = 12u;
-    EXPECT_TRUE(TextureShapePolicy::isValid(desc));
+    EXPECT_TRUE(TextureShapePolicy::IsValid(desc));
     desc.arraySize = 13u;
-    EXPECT_FALSE(TextureShapePolicy::isValid(desc));
+    EXPECT_FALSE(TextureShapePolicy::IsValid(desc));
     desc.arraySize = 12u;
     desc.height = 8u;
-    EXPECT_FALSE(TextureShapePolicy::isValid(desc));
+    EXPECT_FALSE(TextureShapePolicy::IsValid(desc));
 }
 
 TEST(GpuTextureShapePolicyTests, ThreeDimensionalDepthDeterminesMipLimit){
@@ -33,10 +33,10 @@ TEST(GpuTextureShapePolicyTests, ThreeDimensionalDepthDeterminesMipLimit){
     desc.dimension = TextureDimension::Texture3D;
     desc.depth = 16u;
     desc.mipLevels = 5u;
-    EXPECT_EQ(TextureShapePolicy::maxMipLevels(desc), 5u);
-    EXPECT_TRUE(TextureShapePolicy::isValid(desc));
+    EXPECT_EQ(TextureShapePolicy::MaxMipLevels(desc), 5u);
+    EXPECT_TRUE(TextureShapePolicy::IsValid(desc));
     desc.mipLevels = 6u;
-    EXPECT_FALSE(TextureShapePolicy::isValid(desc));
+    EXPECT_FALSE(TextureShapePolicy::IsValid(desc));
 }
 
 }

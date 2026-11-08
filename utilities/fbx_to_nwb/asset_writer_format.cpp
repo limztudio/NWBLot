@@ -91,7 +91,7 @@ b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
 
     return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "mesh asset;\n\n";
-        MeshAssetTextWriter::writeBody(mesh, s_AssetVariableName, "", file);
+        MeshAssetTextWriter::WriteBody(mesh, s_AssetVariableName, "", file);
         return true;
     });
 }
@@ -101,7 +101,7 @@ b8 WriteSkeletonAsset(const ScratchPath& outputPath, const Span<ufbx_node* const
 
     return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "skeleton asset;\n\n";
-        return SkinnedAssetTextWriter::writeSkeletonBody(s_AssetVariableName, joints, bindPoseMatrices, scratchArena, file);
+        return SkinnedAssetTextWriter::WriteSkeletonBody(s_AssetVariableName, joints, bindPoseMatrices, scratchArena, file);
     });
 }
 
@@ -115,7 +115,7 @@ b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, con
 
     return WriteNwbTextFile(outputPath, s_SkinAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "skin asset;\n\n";
-        SkinnedAssetTextWriter::writeSkinBody(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, scratchArena, file);
+        SkinnedAssetTextWriter::WriteSkinBody(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, scratchArena, file);
         return true;
     });
 }
@@ -125,7 +125,7 @@ b8 WriteModelAsset(const ScratchPath& outputPath, const AStringView meshName, co
 
     return WriteNwbTextFile(outputPath, s_ModelAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
         file << "model asset;\n\n";
-        ModelAssetTextWriter::writeBody(s_AssetVariableName, meshName, skinName, skeletonName, s_SkeletonAssetTypeText, true, true, scratchArena, file);
+        ModelAssetTextWriter::WriteBody(s_AssetVariableName, meshName, skinName, skeletonName, s_SkeletonAssetTypeText, true, true, scratchArena, file);
         return true;
     });
 }
@@ -145,26 +145,26 @@ b8 WriteAssetBunch(
 
     return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, [&](CrlfOutputFileStream& file) -> b8{
         file << "mesh mesh;\n\n";
-        MeshAssetTextWriter::writeBody(mesh, s_MeshAssetTypeText, "", file);
+        MeshAssetTextWriter::WriteBody(mesh, s_MeshAssetTypeText, "", file);
 
         const b8 skinnedBunch = skinName && skeletonName && !skinInfluences.empty();
         if(skinnedBunch){
             file << s_AssetSectionSeparatorText;
             file << "skeleton skeleton;\n\n";
-            if(!SkinnedAssetTextWriter::writeSkeletonBody(s_SkeletonAssetTypeText, skeletonJoints, skeletonBindPoseMatrices, scratchArena, file))
+            if(!SkinnedAssetTextWriter::WriteSkeletonBody(s_SkeletonAssetTypeText, skeletonJoints, skeletonBindPoseMatrices, scratchArena, file))
                 return false;
 
             file << s_AssetSectionSeparatorText;
             file << "skin skin;\n\n";
-            SkinnedAssetTextWriter::writeSkinBody(s_SkinAssetTypeText, s_MeshAssetTypeText, s_SkeletonAssetTypeText, skinInfluences, inverseBindMatrices, false, scratchArena, file);
+            SkinnedAssetTextWriter::WriteSkinBody(s_SkinAssetTypeText, s_MeshAssetTypeText, s_SkeletonAssetTypeText, skinInfluences, inverseBindMatrices, false, scratchArena, file);
         }
 
         file << s_AssetSectionSeparatorText;
         file << "model model;\n\n";
         if(skinnedBunch)
-            ModelAssetTextWriter::writeBody(s_ModelAssetTypeText, s_MeshAssetTypeText, s_SkinAssetTypeText, s_SkeletonAssetTypeText, s_SkeletonAssetTypeText, false, true, scratchArena, file);
+            ModelAssetTextWriter::WriteBody(s_ModelAssetTypeText, s_MeshAssetTypeText, s_SkinAssetTypeText, s_SkeletonAssetTypeText, s_SkeletonAssetTypeText, false, true, scratchArena, file);
         else
-            ModelAssetTextWriter::writeBody(s_ModelAssetTypeText, s_MeshAssetTypeText, {}, {}, s_SkeletonAssetTypeText, false, false, scratchArena, file);
+            ModelAssetTextWriter::WriteBody(s_ModelAssetTypeText, s_MeshAssetTypeText, {}, {}, s_SkeletonAssetTypeText, false, false, scratchArena, file);
 
         file << s_AssetSectionSeparatorText;
         file << "asset_bunch bunch = [\n";

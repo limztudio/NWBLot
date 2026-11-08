@@ -141,7 +141,7 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     entry.skeleton = *skeletonResult;
-    if(!SkinInfluenceMetadataParser::parse(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
+    if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
         return MakeUnexpected(Failure{});
     auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, asset, arena);
     if(!inverseBindMatricesResult)

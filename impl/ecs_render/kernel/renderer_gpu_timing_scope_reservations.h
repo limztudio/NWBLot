@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 
 class RendererGpuTimingScopeReservations final{
 public:
-    [[nodiscard]] static b8 prepare(Core::GraphicsRuntime& graphics);
+    [[nodiscard]] static b8 Prepare(Core::GraphicsRuntime& graphics);
 };
 
 

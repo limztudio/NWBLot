@@ -153,7 +153,7 @@ b8 ParseAssetMetadata(
     b8 useAssetCache = !assetCacheDirectory.empty();
     Sha256Digest producerDigest = {};
     if(useAssetCache && !nwbFiles.empty())
-        AssetProducerFingerprint::resolve(scratchArena, useAssetCache, producerDigest);
+        AssetProducerFingerprint::Resolve(scratchArena, useAssetCache, producerDigest);
     outMetadata.fileCacheRecords.clear();
     if(useAssetCache){
         outMetadata.fileCacheRecords.reserve(nwbFiles.size());

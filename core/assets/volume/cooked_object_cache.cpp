@@ -30,7 +30,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cooked_object_cache{
+namespace CookedObjectCacheDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,11 +186,11 @@ b8 BuildRegistryObjectManifestEntries(
 ){
     const usize bucketCount = parsedMetadata.entryRegistry.bucketCount();
     if(bucketCount == 0u){
-        const Span<const __hidden_cooked_object_cache::RegistryObjectBucketManifest> emptyBuckets;
-        return __hidden_cooked_object_cache::NwbFileAssetCacheWriter::Write(parsedMetadata.fileCacheRecords, emptyBuckets, manifest, scratchArena);
+        const Span<const CookedObjectCacheDetail::RegistryObjectBucketManifest> emptyBuckets;
+        return CookedObjectCacheDetail::NwbFileAssetCacheWriter::Write(parsedMetadata.fileCacheRecords, emptyBuckets, manifest, scratchArena);
     }
 
-    __hidden_cooked_object_cache::RegistryObjectBucketManifestVector bucketManifests(scratchArena);
+    CookedObjectCacheDetail::RegistryObjectBucketManifestVector bucketManifests(scratchArena);
     bucketManifests.reserve(bucketCount);
     for(usize bucketIndex = 0u; bucketIndex < bucketCount; ++bucketIndex)
         bucketManifests.emplace_back(arena);
@@ -201,8 +201,8 @@ b8 BuildRegistryObjectManifestEntries(
             return;
 
         Core::Alloc::ScratchArena bucketScratchArena(AssetsVolumeArenaScope::s_CookArena);
-        __hidden_cooked_object_cache::RegistryObjectBucketManifest& bucketManifest = bucketManifests[bucketIndex];
-        if(__hidden_cooked_object_cache::BuildRegistryObjectBucketManifestEntries(configurationSafeName, bucketIndex, arena, bucketScratchArena, parsedMetadata.entryRegistry, bucketManifest))
+        CookedObjectCacheDetail::RegistryObjectBucketManifest& bucketManifest = bucketManifests[bucketIndex];
+        if(CookedObjectCacheDetail::BuildRegistryObjectBucketManifestEntries(configurationSafeName, bucketIndex, arena, bucketScratchArena, parsedMetadata.entryRegistry, bucketManifest))
             return;
 
         failed.store(true, MemoryOrder::release);
@@ -214,10 +214,10 @@ b8 BuildRegistryObjectManifestEntries(
     if(failed.load(MemoryOrder::acquire))
         return false;
 
-    if(!__hidden_cooked_object_cache::MergeRegistryObjectBucketManifests(bucketManifests, manifest, seenVirtualPathHashes))
+    if(!CookedObjectCacheDetail::MergeRegistryObjectBucketManifests(bucketManifests, manifest, seenVirtualPathHashes))
         return false;
 
-    return __hidden_cooked_object_cache::NwbFileAssetCacheWriter::Write(parsedMetadata.fileCacheRecords, bucketManifests, manifest, scratchArena);
+    return CookedObjectCacheDetail::NwbFileAssetCacheWriter::Write(parsedMetadata.fileCacheRecords, bucketManifests, manifest, scratchArena);
 }
 
 

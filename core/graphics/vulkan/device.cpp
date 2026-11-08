@@ -114,7 +114,7 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Physical-device queue-family enumeration returned an invalid count."));
         return;
     }
-    const auto canonicalQueueValidation = PhysicalQueueRegistrationPolicy::validateCanonical(
+    const auto canonicalQueueValidation = PhysicalQueueRegistrationPolicy::ValidateCanonical(
         { desc.nativeQueues, desc.nativeQueueCount },
         { physicalQueueFamilies.data(), physicalQueueFamilyCount }
     );
@@ -161,7 +161,7 @@ Device::Device(const DeviceDesc& desc)
     m_context.instanceDispatch.vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
     m_pipelineCacheVolumeName = VulkanDetail::s_PipelineCacheVolumeName;
 
-    VulkanDeviceFeatureSetup::initialize(m_context, desc, m_gpuCrashDiagnostics.enabled());
+    VulkanDeviceFeatureSetup::Initialize(m_context, desc, m_gpuCrashDiagnostics.enabled());
 
     // Resolve every ASTC and BC sampled-image path up front.
     // Texture loading consults this cache, so it can select ASTC, BC, or an uncompressed fallback before allocating data.

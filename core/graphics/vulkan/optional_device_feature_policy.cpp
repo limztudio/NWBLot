@@ -14,7 +14,7 @@ NWB_VULKAN_BEGIN
 namespace VulkanDetail{
 
 
-OptionalDeviceFeatureSet OptionalDeviceFeaturePolicy::makeRequested()noexcept{
+OptionalDeviceFeatureSet OptionalDeviceFeaturePolicy::MakeRequested()noexcept{
     OptionalDeviceFeatureSet features;
 
     features.accelerationStructure.accelerationStructure = VK_TRUE;
@@ -50,7 +50,7 @@ OptionalDeviceFeatureSet OptionalDeviceFeaturePolicy::makeRequested()noexcept{
 
     return features;
 }
-void* OptionalDeviceFeaturePolicy::featureStruct(OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature)noexcept{
+void* OptionalDeviceFeaturePolicy::FeatureStruct(OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature)noexcept{
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure: return &features.accelerationStructure;
     case DeviceExtensionFeature::RayTracingPipeline: return &features.rayTracingPipeline;
@@ -71,7 +71,7 @@ void* OptionalDeviceFeaturePolicy::featureStruct(OptionalDeviceFeatureSet& featu
         return nullptr;
     }
 }
-b8 OptionalDeviceFeaturePolicy::supportsRequested(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature)noexcept{
+b8 OptionalDeviceFeaturePolicy::SupportsRequested(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature)noexcept{
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure:
         return SupportsRequestedValue(requested.accelerationStructure.accelerationStructure, supported.accelerationStructure.accelerationStructure);
@@ -115,13 +115,13 @@ b8 OptionalDeviceFeaturePolicy::supportsRequested(const OptionalDeviceFeatureSet
         return true;
     }
 }
-void OptionalDeviceFeaturePolicy::finalizeEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported)noexcept{
+void OptionalDeviceFeaturePolicy::FinalizeEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported)noexcept{
     enabled.meshShader.taskShader = supported.meshShader.taskShader;
     enabled.rayTracingLinearSweptSpheres.spheres = supported.rayTracingLinearSweptSpheres.spheres;
     enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
     enabled.deviceFault.deviceFaultVendorBinary = supported.deviceFault.deviceFaultVendorBinary;
 }
-void OptionalDeviceFeaturePolicy::appendFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, Array<b8, static_cast<usize>(DeviceExtensionFeature::Count)>& appended)noexcept{
+void OptionalDeviceFeaturePolicy::AppendFeature(DeviceExtensionFeature::Enum feature, void*& pNext, OptionalDeviceFeatureSet& features, Array<b8, static_cast<usize>(DeviceExtensionFeature::Count)>& appended)noexcept{
     if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::Count)
         return;
 
@@ -129,7 +129,7 @@ void OptionalDeviceFeaturePolicy::appendFeature(DeviceExtensionFeature::Enum fea
     if(appended[featureIndex])
         return;
 
-    if(void* featureStruct = OptionalDeviceFeaturePolicy::featureStruct(features, feature)){
+    if(void* featureStruct = OptionalDeviceFeaturePolicy::FeatureStruct(features, feature)){
         AppendFeatureStruct(pNext, *MakeNotNull(static_cast<VkBaseOutStructure*>(featureStruct)));
         appended[featureIndex] = true;
     }

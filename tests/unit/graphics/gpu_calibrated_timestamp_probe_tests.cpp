@@ -58,7 +58,7 @@ TEST(CalibratedTimestampProbe, RetriesIncompleteEnumerationBeforeDeviceQuery){
     s_RetryFirstCount = true;
     s_HasDeviceDomain = true;
     Alloc::ScratchArena scratch(NWB::Tests::s_TestArena);
-    EXPECT_TRUE(VulkanDetail::CalibratedTimestampProbe::query(VK_NULL_HANDLE, VK_NULL_HANDLE, &EnumerateDomains, &GetTimestamps, scratch));
+    EXPECT_TRUE(VulkanDetail::CalibratedTimestampProbe::Query(VK_NULL_HANDLE, VK_NULL_HANDLE, &EnumerateDomains, &GetTimestamps, scratch));
     EXPECT_EQ(s_CountCalls, 2u);
     EXPECT_EQ(s_ListCalls, 1u);
     EXPECT_EQ(s_TimestampCalls, 1u);
@@ -71,7 +71,7 @@ TEST(CalibratedTimestampProbe, MissingDeviceDomainDoesNotQueryTimestamps){
     s_RetryFirstCount = false;
     s_HasDeviceDomain = false;
     Alloc::ScratchArena scratch(NWB::Tests::s_TestArena);
-    EXPECT_FALSE(VulkanDetail::CalibratedTimestampProbe::query(VK_NULL_HANDLE, VK_NULL_HANDLE, &EnumerateDomains, &GetTimestamps, scratch));
+    EXPECT_FALSE(VulkanDetail::CalibratedTimestampProbe::Query(VK_NULL_HANDLE, VK_NULL_HANDLE, &EnumerateDomains, &GetTimestamps, scratch));
     EXPECT_EQ(s_CountCalls, 1u);
     EXPECT_EQ(s_ListCalls, 1u);
     EXPECT_EQ(s_TimestampCalls, 0u);

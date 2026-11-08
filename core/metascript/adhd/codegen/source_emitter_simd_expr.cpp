@@ -260,13 +260,13 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                     out.append(matRegType.data(), matRegType.size());
                     out.append(" __m = ");
                     emitSimdRegExpr(out, *expr.lhs, simdType);
-                    SimdEmissionFragments::emitSimdMatrixUnaryRowInitSuffix(out, matRegType, isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(", ")");
+                    SimdEmissionFragments::EmitSimdMatrixUnaryRowInitSuffix(out, matRegType, isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(", ")");
                     return;
                 }
                 if(isInt){
-                    SimdEmissionFragments::emitSimdIntTwosComplementNegatePrefix(out, isDouble);
+                    SimdEmissionFragments::EmitSimdIntTwosComplementNegatePrefix(out, isDouble);
                     emitSimdRegExpr(out, *expr.lhs, simdType);
-                    SimdEmissionFragments::emitSimdIntTwosComplementNegateSuffix(out, isDouble);
+                    SimdEmissionFragments::EmitSimdIntTwosComplementNegateSuffix(out, isDouble);
                     return;
                 }
                 if(const Expr* innerVec = SimdOptimizationAnalysis::TryUnwrapSimdNegatedVecExpr(*expr.lhs, simdType, m_symbols)){

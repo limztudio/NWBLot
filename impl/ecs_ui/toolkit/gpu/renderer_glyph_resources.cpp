@@ -48,7 +48,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuImageResources::prepareGlyphPage(const 
         GpuVersion<GpuGlyphVersion> reused = existing;
         m_imageCache.glyphs().erase(m_imageCache.glyphs().begin() + static_cast<isize>(index));
         m_imageCache.glyphs().push_back(reused);
-        if(!GpuSampledTextures::prepareDescriptor(reused->m_graphics, reused->m_texture, Core::Format::R8_UNORM, reused->m_sampledImage))
+        if(!GpuSampledTextures::PrepareDescriptor(reused->m_graphics, reused->m_texture, Core::Format::R8_UNORM, reused->m_sampledImage))
             return MakeUnexpected(Failure{});
         return Move(reused);
     }
@@ -61,7 +61,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuImageResources::prepareGlyphPage(const 
     GpuVersion<GpuGlyphVersion> version = Move(*versionResult);
     const GlyphPageBinding& binding = page->binding();
     // Upload only a fresh immutable image. Accepted readiness stays with this version across presentation retries.
-    if(!GpuSampledTextures::createAndUploadPage(
+    if(!GpuSampledTextures::CreateAndUploadPage(
         m_graphics,
         GpuPageTextureUploadDesc{
             .name = s_GpuGlyphPageTextureName,
@@ -83,7 +83,7 @@ Expected<GpuVersion<GpuGlyphVersion>> GpuImageResources::prepareGlyphPage(const 
         m_imageCache.evict();
     m_imageCache.glyphs().push_back(version);
     // Cache accepted uploads before descriptor publication so descriptor exhaustion retries cannot discard their readiness.
-    if(!GpuSampledTextures::prepareDescriptor(version->m_graphics, version->m_texture, Core::Format::R8_UNORM, version->m_sampledImage))
+    if(!GpuSampledTextures::PrepareDescriptor(version->m_graphics, version->m_texture, Core::Format::R8_UNORM, version->m_sampledImage))
         return MakeUnexpected(Failure{});
     return Move(version);
 }
@@ -109,7 +109,7 @@ Expected<GpuSampledGraphResources> GpuImageResources::declareGlyphPages(Core::Gp
     }
     for(usize index = 0u; index < frame->m_glyphPages.size(); ++index){
         const auto& page = frame->m_glyphPages[index];
-        const auto texture = GpuSampledTextures::importTexture(
+        const auto texture = GpuSampledTextures::ImportTexture(
             GpuSampledTextureImportDesc{
                 .readyPrefix = s_GpuGlyphPageReadyPrefix,
                 .readyMarkerLabel = s_GpuGlyphPageReadyMarkerLabel,

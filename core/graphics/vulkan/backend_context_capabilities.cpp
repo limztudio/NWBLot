@@ -14,7 +14,7 @@ NWB_VULKAN_BEGIN
 namespace VulkanDetail{
 
 
-RequiredQueueFamilySelection PhysicalDeviceCapabilities::selectQueueFamilies(const Span<const VkQueueFamilyProperties> queueFamilies, const b8 enableAsyncComputeLane, const b8 enableDedicatedTransferQueue)noexcept{
+RequiredQueueFamilySelection PhysicalDeviceCapabilities::SelectQueueFamilies(const Span<const VkQueueFamilyProperties> queueFamilies, const b8 enableAsyncComputeLane, const b8 enableDedicatedTransferQueue)noexcept{
     RequiredQueueFamilySelection result;
     i32 firstGraphicsFamily = s_InvalidQueueFamilyIndex;
     i32 firstComputeFamily = s_InvalidQueueFamilyIndex;
@@ -54,7 +54,7 @@ RequiredQueueFamilySelection PhysicalDeviceCapabilities::selectQueueFamilies(con
     return result;
 }
 
-b8 PhysicalDeviceCapabilities::hasExtension(const Span<const VkExtensionProperties> extensions, const AStringView extensionName)noexcept{
+b8 PhysicalDeviceCapabilities::HasExtension(const Span<const VkExtensionProperties> extensions, const AStringView extensionName)noexcept{
     if(extensionName.size() >= VK_MAX_EXTENSION_NAME_SIZE || extensionName.find('\0') != AStringView::npos)
         return false;
 
@@ -66,7 +66,7 @@ b8 PhysicalDeviceCapabilities::hasExtension(const Span<const VkExtensionProperti
     return false;
 }
 
-void PhysicalDeviceCapabilities::queryFeatureSupport(const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const PhysicalDeviceFeatureQueryOptions& options, PhysicalDeviceFeatureSupport& outSupport)noexcept{
+void PhysicalDeviceCapabilities::QueryFeatureSupport(const VolkInstanceTable& instanceDispatch, const VkPhysicalDevice physicalDevice, const PhysicalDeviceFeatureQueryOptions& options, PhysicalDeviceFeatureSupport& outSupport)noexcept{
     outSupport = {};
     outSupport.features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     outSupport.vulkan11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
@@ -118,7 +118,7 @@ void PhysicalDeviceCapabilities::queryFeatureSupport(const VolkInstanceTable& in
     outSupport.maintenance4.pNext = nullptr;
 }
 
-AStringView PhysicalDeviceCapabilities::findMissingFeature(const PhysicalDeviceFeatureSupport& support)noexcept{
+AStringView PhysicalDeviceCapabilities::FindMissingFeature(const PhysicalDeviceFeatureSupport& support)noexcept{
     const VkPhysicalDeviceFeatures& core = support.features.features;
     if(core.shaderImageGatherExtended != VK_TRUE)
         return "shaderImageGatherExtended";

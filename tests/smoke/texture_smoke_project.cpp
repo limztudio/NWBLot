@@ -87,7 +87,7 @@ public:
     virtual b8 onStartup()override{
         if(!m_captureConfigurationValid)
             return false;
-        if(!NWB::Tests::Smoke::TextureSrgbClearProbe::verify(m_context.graphics))
+        if(!NWB::Tests::Smoke::TextureSrgbClearProbe::Verify(m_context.graphics))
             return false;
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_CameraHeight, s_CameraDistance, s_CameraPitch, *m_world);

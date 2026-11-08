@@ -55,10 +55,10 @@ struct PhysicalDeviceFeatureSupport{
 
 class PhysicalDeviceCapabilities{
 public:
-    [[nodiscard]] static RequiredQueueFamilySelection selectQueueFamilies(Span<const VkQueueFamilyProperties> queueFamilies, b8 enableAsyncComputeLane, b8 enableDedicatedTransferQueue)noexcept;
-    [[nodiscard]] static b8 hasExtension(Span<const VkExtensionProperties> extensions, AStringView extensionName)noexcept;
-    static void queryFeatureSupport(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice, const PhysicalDeviceFeatureQueryOptions& options, PhysicalDeviceFeatureSupport& outSupport)noexcept;
-    [[nodiscard]] static AStringView findMissingFeature(const PhysicalDeviceFeatureSupport& support)noexcept;
+    [[nodiscard]] static RequiredQueueFamilySelection SelectQueueFamilies(Span<const VkQueueFamilyProperties> queueFamilies, b8 enableAsyncComputeLane, b8 enableDedicatedTransferQueue)noexcept;
+    [[nodiscard]] static b8 HasExtension(Span<const VkExtensionProperties> extensions, AStringView extensionName)noexcept;
+    static void QueryFeatureSupport(const VolkInstanceTable& instanceDispatch, VkPhysicalDevice physicalDevice, const PhysicalDeviceFeatureQueryOptions& options, PhysicalDeviceFeatureSupport& outSupport)noexcept;
+    [[nodiscard]] static AStringView FindMissingFeature(const PhysicalDeviceFeatureSupport& support)noexcept;
 };
 
 

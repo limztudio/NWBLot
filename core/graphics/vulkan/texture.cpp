@@ -106,7 +106,7 @@ Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture
         return MakeUnexpected(Failure{});
     }
 
-    if(!VulkanTextureDetail::TextureImagePolicy::validateTextureViewShape(dimension, resolvedSubresources)){
+    if(!VulkanTextureDetail::TextureImagePolicy::ValidateTextureViewShape(dimension, resolvedSubresources)){
         if(assertFailure)
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: invalid view shape"), operationName);
         return MakeUnexpected(Failure{});
@@ -116,7 +116,7 @@ Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(Texture& texture
 
     outViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     outViewInfo.image = texture.m_image;
-    outViewInfo.viewType = VulkanTextureDetail::TextureImagePolicy::textureDimensionToViewType(dimension);
+    outViewInfo.viewType = VulkanTextureDetail::TextureImagePolicy::TextureDimensionToViewType(dimension);
     outViewInfo.format = vkFormat;
     outViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     outViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;

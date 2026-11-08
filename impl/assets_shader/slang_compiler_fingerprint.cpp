@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 namespace Alloc = Core::Alloc;
 
 
-Expected<u64> SlangCompilerFingerprint::compute(const Path& temporaryRoot, Alloc::ScratchArena& scratchArena, const Span<const AStringView> commonArguments, const Span<const AStringView> baselineCapabilities, const Span<const ShaderBinaryPayload::SlangStageMapping> stageMappings){
+Expected<u64> SlangCompilerFingerprint::Compute(const Path& temporaryRoot, Alloc::ScratchArena& scratchArena, const Span<const AStringView> commonArguments, const Span<const AStringView> baselineCapabilities, const Span<const ShaderBinaryPayload::SlangStageMapping> stageMappings){
     using namespace ShaderBinaryPayload;
     using ScratchPath = SlangCompilerWorkspace::ScratchPath;
     using ScratchString = SlangCompilerWorkspace::ScratchString;

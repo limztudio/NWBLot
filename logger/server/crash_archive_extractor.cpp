@@ -72,7 +72,7 @@ struct ArchiveFileHeader{
 };
 
 
-Expected<void, CrashIngestFailure> CrashArchiveExtractor::extract(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory){
+Expected<void, CrashIngestFailure> CrashArchiveExtractor::Extract(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory){
     using namespace __hidden_crash_archive_extractor;
     CrashBytes archiveBytes{scratchArena};
     const auto read = ReadBinaryFile(archivePath, archiveBytes);

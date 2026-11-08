@@ -19,10 +19,10 @@ NWB_IMPL_BEGIN
 
 class MeshIndexMetadataParser final{
 private:
-    [[nodiscard]] static b8 accumulateLeaves(const Core::Metascript::Value& value, usize& inOutCount)noexcept{
+    [[nodiscard]] static b8 AccumulateLeaves(const Core::Metascript::Value& value, usize& inOutCount)noexcept{
         if(value.isList()){
             for(const Core::Metascript::Value& child : value.asList()){
-                if(!accumulateLeaves(child, inOutCount))
+                if(!AccumulateLeaves(child, inOutCount))
                     return false;
             }
             return true;
@@ -35,15 +35,15 @@ private:
         return true;
     }
 
-    [[nodiscard]] static Expected<usize> countLeaves(const Core::Metascript::Value& value)noexcept{
+    [[nodiscard]] static Expected<usize> CountLeaves(const Core::Metascript::Value& value)noexcept{
         usize count = 0u;
-        if(!accumulateLeaves(value, count))
+        if(!AccumulateLeaves(value, count))
             return MakeUnexpected(Failure{});
         return count;
     }
 
     template<typename IndexVectorT, typename PathArenaT>
-    [[nodiscard]] static b8 fillRecursive(
+    [[nodiscard]] static b8 FillRecursive(
         const ::Path<PathArenaT>& nwbFilePath,
         const Core::Metascript::Value& value,
         const TStringView metaKind,
@@ -107,7 +107,7 @@ private:
 
 public:
     template<typename IndexVectorT, typename PathArenaT>
-    [[nodiscard]] static b8 parse(
+    [[nodiscard]] static b8 Parse(
         const ::Path<PathArenaT>& nwbFilePath,
         const Core::Metascript::Value& asset,
         const TStringView metaKind,
@@ -119,14 +119,14 @@ public:
         if(!field)
             return false;
 
-        const auto indexCount = countLeaves(**field);
+        const auto indexCount = CountLeaves(**field);
         if(!indexCount){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' scalar count overflows"), metaKind, PathToString<tchar>(nwbFilePath));
             return false;
         }
 
         outIndices.reserve(*indexCount);
-        if(!fillRecursive(nwbFilePath, **field, metaKind, s_MeshIndicesFieldNameView, scratchArena, outIndices))
+        if(!FillRecursive(nwbFilePath, **field, metaKind, s_MeshIndicesFieldNameView, scratchArena, outIndices))
             return false;
         NWB_ASSERT(outIndices.size() == *indexCount);
         if(outIndices.empty()){

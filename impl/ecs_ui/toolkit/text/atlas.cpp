@@ -100,7 +100,7 @@ b8 GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){
     while(pageIndex < m_pages.size()){
         const AtlasPage& page = m_pages[pageIndex];
         if(page.face.get() == face.get()){
-            const auto placed = tryPlace(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight);
+            const auto placed = TryPlace(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight);
             if(placed){
                 placement = *placed;
                 break;
@@ -151,7 +151,7 @@ Expected<SharedGlyphPage> GlyphAtlas::page(u32 index){
     return page.published;
 }
 
-Expected<GlyphAtlas::Placement> GlyphAtlas::tryPlace(const u32 cursorX, const u32 cursorY, const u32 rowHeight, const u32 width, const u32 height)noexcept{
+Expected<GlyphAtlas::Placement> GlyphAtlas::TryPlace(const u32 cursorX, const u32 cursorY, const u32 rowHeight, const u32 width, const u32 height)noexcept{
     Placement placement{ cursorX, cursorY, rowHeight };
     if(placement.x + width > s_GlyphAtlasPageExtent){
         placement.x = 0u;

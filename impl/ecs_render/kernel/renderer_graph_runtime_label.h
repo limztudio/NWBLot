@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 
 class RendererGraphRuntimeLabel final{
 public:
-    [[nodiscard]] static b8 append(
+    [[nodiscard]] static b8 Append(
         const Core::GpuTaskGraphRuntimeStatistics& deferredRuntimeStatistics,
         const Core::GpuPhysicalQueueTopology& runtimeQueueTopology,
         Span<const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics> physicalQueueRuntimeStatistics,

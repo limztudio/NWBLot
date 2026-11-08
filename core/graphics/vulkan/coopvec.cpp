@@ -22,7 +22,7 @@ NWB_VULKAN_BEGIN
 
 
 Expected<CooperativeVectorDeviceFeatures> Device::queryCoopVecFeatures(){
-    return CooperativeVectorFeatureQuery::query(m_context, taskScheduler());
+    return CooperativeVectorFeatureQuery::Query(m_context, taskScheduler());
 }
 
 Expected<usize> Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
@@ -221,36 +221,36 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         VkComponentTypeKHR dstComponentType = VulkanDetail::ConvertCoopVecDataType(convertDesc.dst.type);
         VkCooperativeVectorMatrixLayoutNV srcLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.src.layout);
         VkCooperativeVectorMatrixLayoutNV dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.dst.layout);
-        if(!CooperativeVectorMatrixPolicy::isComponentTypeSupported(srcComponentType, cooperativeVectorProperties.data(), cooperativeVectorPropertyCount) || !CooperativeVectorMatrixPolicy::isComponentTypeSupported(dstComponentType, cooperativeVectorProperties.data(), cooperativeVectorPropertyCount)){
+        if(!CooperativeVectorMatrixPolicy::IsComponentTypeSupported(srcComponentType, cooperativeVectorProperties.data(), cooperativeVectorPropertyCount) || !CooperativeVectorMatrixPolicy::IsComponentTypeSupported(dstComponentType, cooperativeVectorProperties.data(), cooperativeVectorPropertyCount)){
             rejectCommandRecording(s_OperationName, NWB_TEXT("a matrix component type is unsupported"));
             return;
         }
-        if(!CooperativeVectorMatrixPolicy::isTypeConversionSupported(srcComponentType, dstComponentType)){
+        if(!CooperativeVectorMatrixPolicy::IsTypeConversionSupported(srcComponentType, dstComponentType)){
             rejectCommandRecording(s_OperationName, NWB_TEXT("the matrix component type conversion is unsupported"));
             return;
         }
-        if(CooperativeVectorMatrixPolicy::isFloat8(dstComponentType) && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_INFERENCING_OPTIMAL_NV && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_TRAINING_OPTIMAL_NV){
+        if(CooperativeVectorMatrixPolicy::IsFloat8(dstComponentType) && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_INFERENCING_OPTIMAL_NV && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_TRAINING_OPTIMAL_NV){
             rejectCommandRecording(s_OperationName, NWB_TEXT("float8 destinations require an optimal matrix layout"));
             return;
         }
 
-        const auto sourceLayout = CooperativeVectorMatrixPolicy::resolveMatrixLayout(m_context, convertDesc.src, convertDesc.numRows, convertDesc.numColumns);
+        const auto sourceLayout = CooperativeVectorMatrixPolicy::ResolveMatrixLayout(m_context, convertDesc.src, convertDesc.numRows, convertDesc.numColumns);
         if(!sourceLayout){
             rejectCommandRecording(s_OperationName, s_MatrixQueryInvalidReason);
             return;
         }
-        const auto destinationLayout = CooperativeVectorMatrixPolicy::resolveMatrixLayout(m_context, convertDesc.dst, convertDesc.numRows, convertDesc.numColumns);
+        const auto destinationLayout = CooperativeVectorMatrixPolicy::ResolveMatrixLayout(m_context, convertDesc.dst, convertDesc.numRows, convertDesc.numColumns);
         if(!destinationLayout){
             rejectCommandRecording(s_OperationName, s_MatrixQueryInvalidReason);
             return;
         }
 
-        const auto srcRange = CooperativeVectorMatrixPolicy::checkedDeviceRange(*convertDesc.src.buffer, convertDesc.src.offset, convertDesc.src.size, sourceLayout->byteSize);
+        const auto srcRange = CooperativeVectorMatrixPolicy::CheckedDeviceRange(*convertDesc.src.buffer, convertDesc.src.offset, convertDesc.src.size, sourceLayout->byteSize);
         if(!srcRange){
             rejectCommandRecording(s_OperationName, s_MatrixRangeInvalidReason);
             return;
         }
-        const auto dstRange = CooperativeVectorMatrixPolicy::checkedDeviceRange(*convertDesc.dst.buffer, convertDesc.dst.offset, convertDesc.dst.size, destinationLayout->byteSize);
+        const auto dstRange = CooperativeVectorMatrixPolicy::CheckedDeviceRange(*convertDesc.dst.buffer, convertDesc.dst.offset, convertDesc.dst.size, destinationLayout->byteSize);
         if(!dstRange){
             rejectCommandRecording(s_OperationName, s_MatrixRangeInvalidReason);
             return;

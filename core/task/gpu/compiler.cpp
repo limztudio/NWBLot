@@ -122,7 +122,7 @@ b8 GpuTaskGraphCompiler::compile(
     if(options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::Count || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration))
         return false;
 
-    if(!GpuTaskGraphOwnershipValidator::validateCompletionQueues(graph, topology))
+    if(!GpuTaskGraphOwnershipValidator::ValidateCompletionQueues(graph, topology))
         return false;
 
     outCompiledGraph.m_generation = graph.generation();
@@ -165,7 +165,7 @@ b8 GpuTaskGraphCompiler::compile(
         .deviceGeneration = outCompiledGraph.m_deviceGeneration,
     };
 
-    if(!GpuTaskGraphOwnershipValidator::validateInitialOwnership(graph, topology, compiledPlan, scratchArena))
+    if(!GpuTaskGraphOwnershipValidator::ValidateInitialOwnership(graph, topology, compiledPlan, scratchArena))
         return false;
 
     const Timer packetizationBegin = TimerNow();
@@ -228,7 +228,7 @@ b8 GpuTaskGraphCompiler::compile(
     const f64 packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);
 
     GpuTaskGraphAnalysisDiagnostic frontierDiagnostic;
-    if(!GpuTaskGraphFrontierValidator::validate(graph, compiledPlan, frontierDiagnostic)){
+    if(!GpuTaskGraphFrontierValidator::Validate(graph, compiledPlan, frontierDiagnostic)){
         outAnalysis.m_diagnostic = frontierDiagnostic;
         outAnalysis.m_valid = false;
         return false;

@@ -29,13 +29,13 @@ using Core::Assets::ScratchArena;
 using Core::Assets::ScratchString;
 
 
-ShaderVariantBytecodeCache::ScratchPath ShaderVariantBytecodeCache::buildPath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
+ShaderVariantBytecodeCache::ScratchPath ShaderVariantBytecodeCache::BuildPath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
     ScratchString bytecodeFileName(sourceChecksumHex, scratchArena);
     bytecodeFileName += s_ShaderVariantBytecodeExtension;
     return ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / bytecodeFileName;
 }
 
-ShaderVariantCacheReadStatus::Enum ShaderVariantBytecodeCache::readCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
+ShaderVariantCacheReadStatus::Enum ShaderVariantBytecodeCache::ReadCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
     const auto read = ReadBinaryFile(bytecodePath, outBytecode);
     if(read){
         const auto stageName = ToName(entry.stage);
@@ -60,7 +60,7 @@ ShaderVariantCacheReadStatus::Enum ShaderVariantBytecodeCache::readCached(const 
     return ShaderVariantCacheReadStatus::Miss;
 }
 
-b8 ShaderVariantBytecodeCache::getBytecode(
+b8 ShaderVariantBytecodeCache::GetBytecode(
     const ShaderCook::ShaderEntry& entry,
     const AStringView variantName,
     const ShaderCook::DefineCombo& defineCombo,
@@ -75,7 +75,7 @@ b8 ShaderVariantBytecodeCache::getBytecode(
 
     outBytecode.clear();
 
-    const ShaderVariantCacheReadStatus::Enum bytecodeCacheStatus = readCached(entry, bytecodeCachePath, outBytecode);
+    const ShaderVariantCacheReadStatus::Enum bytecodeCacheStatus = ReadCached(entry, bytecodeCachePath, outBytecode);
     if(bytecodeCacheStatus == ShaderVariantCacheReadStatus::Error)
         return false;
     if(bytecodeCacheStatus == ShaderVariantCacheReadStatus::Hit)

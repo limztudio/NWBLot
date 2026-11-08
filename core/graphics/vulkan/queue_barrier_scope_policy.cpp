@@ -11,7 +11,7 @@
 NWB_VULKAN_BEGIN
 
 
-void QueueBarrierScopePolicy::normalize(const GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept{
+void QueueBarrierScopePolicy::Normalize(const GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept{
     const u8 capabilityBits = static_cast<u8>(capabilities);
     const b8 graphicsCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
     const b8 computeCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;

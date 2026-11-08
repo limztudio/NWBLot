@@ -27,7 +27,7 @@ public:
         b8 transferQueueEnabled;
     };
 
-    [[nodiscard]] static Result resolve(Span<const GpuPhysicalQueueInfo> queues, u32 graphics, u32 compute, u32 transfer)noexcept;
+    [[nodiscard]] static Result Resolve(Span<const GpuPhysicalQueueInfo> queues, u32 graphics, u32 compute, u32 transfer)noexcept;
 };
 
 

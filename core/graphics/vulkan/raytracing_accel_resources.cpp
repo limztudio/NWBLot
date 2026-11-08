@@ -163,7 +163,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
         VulkanDetail::OpacityMicromapUsageOffsetVector opacityMicromapUsageOffsets(geometryCount, scratchArena);
         VulkanDetail::OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
         b8 hasOpacityMicromap = false;
-        if(!VulkanDetail::BlasOpacityMicromapPolicy::prepareBlasOpacityMicromapUsageOffsets(m_context, desc.bottomLevelGeometries.data(), geometryCount, s_CreateBlasOperation, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, hasOpacityMicromap))
+        if(!VulkanDetail::BlasOpacityMicromapPolicy::PrepareBlasOpacityMicromapUsageOffsets(m_context, desc.bottomLevelGeometries.data(), geometryCount, s_CreateBlasOperation, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, hasOpacityMicromap))
             return MakeUnexpected(Failure{});
 
         for(usize i = 0u; i < geometryCount; ++i){
@@ -183,10 +183,10 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
                     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle opacity micromap storage is not ready"));
                     return MakeUnexpected(Failure{});
                 }
-                const auto ommIndexFormat = VulkanDetail::BlasOpacityMicromapPolicy::resolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_CreateBlasOperation);
+                const auto ommIndexFormat = VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(triangles.ommIndexFormat, s_CreateBlasOperation);
                 if(!ommIndexFormat)
                     return MakeUnexpected(Failure{});
-                if(!VulkanDetail::BlasOpacityMicromapPolicy::validateOpacityMicromapStorageAndFillUsages(
+                if(!VulkanDetail::BlasOpacityMicromapPolicy::ValidateOpacityMicromapStorageAndFillUsages(
                     triangles,
                     ommIndexFormat->indexType,
                     ommIndexFormat->indexStride,
@@ -201,7 +201,7 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
             }
         }
 
-        VulkanDetail::BlasOpacityMicromapPolicy::attachBlasOpacityMicromapGeometries(desc.bottomLevelGeometries.data(), geometryCount, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, opacityMicromapGeometries, blasScratch);
+        VulkanDetail::BlasOpacityMicromapPolicy::AttachBlasOpacityMicromapGeometries(desc.bottomLevelGeometries.data(), geometryCount, opacityMicromapUsageOffsets, opacityMicromapUsageCounts, opacityMicromapGeometries, blasScratch);
 
         auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
         buildInfo.type = asType;
@@ -300,7 +300,7 @@ Expected<MemoryRequirements> Device::getAccelStructMemoryRequirements(RayTracing
 }
 
 Expected<RayTracingClusterOperationSizeInfo> Device::getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params){
-    return VulkanDetail::ClusterOperationQuery::query(m_context, params);
+    return VulkanDetail::ClusterOperationQuery::Query(m_context, params);
 }
 
 b8 Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset){

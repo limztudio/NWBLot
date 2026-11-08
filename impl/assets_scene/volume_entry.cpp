@@ -37,7 +37,7 @@ static b8 RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry& r
     return RegisterComponentCookEntry<
         TransformComponentCookEntry,
         TransformComponentAsset,
-        &SceneComponentMetadataParser::parseTransform,
+        &SceneComponentMetadataParser::ParseTransform,
         s_TransformDiagnosticPrefix
     >(registry);
 }
@@ -46,7 +46,7 @@ static b8 RegisterCameraComponentCookEntry(Core::Assets::CookEntryRegistry& regi
     return RegisterComponentCookEntry<
         CameraComponentCookEntry,
         CameraComponentAsset,
-        &SceneComponentMetadataParser::parseCamera,
+        &SceneComponentMetadataParser::ParseCamera,
         s_CameraDiagnosticPrefix
     >(registry);
 }
@@ -55,7 +55,7 @@ static b8 RegisterLightComponentCookEntry(Core::Assets::CookEntryRegistry& regis
     return RegisterComponentCookEntry<
         LightComponentCookEntry,
         LightComponentAsset,
-        &SceneComponentMetadataParser::parseLight,
+        &SceneComponentMetadataParser::ParseLight,
         s_LightDiagnosticPrefix
     >(registry);
 }
@@ -170,9 +170,9 @@ static b8 RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
 static b8 RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
     return
         registry.registerDefaultEntryAsset(s_DefaultProjectVirtualPath, ProjectAsset::AssetTypeName(), s_DefaultProjectVirtualPathText)
-        && registry.registerType(TransformComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<TransformComponentCookEntry, &SceneComponentMetadataParser::parseTransform, s_TransformDiagnosticPrefix>, IComponent::AssetTypeName())
-        && registry.registerType(CameraComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<CameraComponentCookEntry, &SceneComponentMetadataParser::parseCamera, s_CameraDiagnosticPrefix>, IComponent::AssetTypeName())
-        && registry.registerType(LightComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<LightComponentCookEntry, &SceneComponentMetadataParser::parseLight, s_LightDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(TransformComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<TransformComponentCookEntry, &SceneComponentMetadataParser::ParseTransform, s_TransformDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(CameraComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<CameraComponentCookEntry, &SceneComponentMetadataParser::ParseCamera, s_CameraDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(LightComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<LightComponentCookEntry, &SceneComponentMetadataParser::ParseLight, s_LightDiagnosticPrefix>, IComponent::AssetTypeName())
         && registry.registerType(EntityAsset::AssetTypeName(), &ExtractEntityDependencies)
         && registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies)
         && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies)
@@ -183,8 +183,8 @@ static b8 RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& re
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Core::Assets::CompositeRootAssetTypeAutoRegistrar s_EntityCompositeRootRegistrar(EntityAsset::AssetTypeName());
-static Core::Assets::CompositeRootAssetTypeAutoRegistrar s_SceneCompositeRootRegistrar(SceneAsset::AssetTypeName());
+static Core::Assets::CompositeRootAssetTypeAutoRegistrar S_EntityCompositeRootRegistrar(EntityAsset::AssetTypeName());
+static Core::Assets::CompositeRootAssetTypeAutoRegistrar S_SceneCompositeRootRegistrar(SceneAsset::AssetTypeName());
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_TransformComponentCookEntryRegistrar, RegisterTransformComponentCookEntry);
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_CameraComponentCookEntryRegistrar, RegisterCameraComponentCookEntry);
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_LightComponentCookEntryRegistrar, RegisterLightComponentCookEntry);

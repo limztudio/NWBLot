@@ -16,9 +16,9 @@ NWB_VULKAN_BEGIN
 
 class VulkanViewportPolicy final{
 public:
-    [[nodiscard]] static b8 isViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept;
-    [[nodiscard]] static b8 isImplicitScissorValid(const Viewport& viewport)noexcept;
-    [[nodiscard]] static Expected<VkRect2D> buildImplicitScissor(const Viewport& viewport)noexcept;
+    [[nodiscard]] static b8 IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept;
+    [[nodiscard]] static b8 IsImplicitScissorValid(const Viewport& viewport)noexcept;
+    [[nodiscard]] static Expected<VkRect2D> BuildImplicitScissor(const Viewport& viewport)noexcept;
 };
 
 

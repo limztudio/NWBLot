@@ -39,7 +39,7 @@ using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
 
 class AssetFileDiscovery{
 public:
-    [[nodiscard]] static Expected<DiscoveredNwbFileVector> discover(Span<const ResolvedAssetRoot> assetRoots, AStringView expectedExtension, CookArena& cookArena, ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<DiscoveredNwbFileVector> Discover(Span<const ResolvedAssetRoot> assetRoots, AStringView expectedExtension, CookArena& cookArena, ScratchArena& scratchArena);
 };
 
 

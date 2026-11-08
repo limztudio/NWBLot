@@ -55,7 +55,7 @@ b8 CommandList::validateViewportState(const ViewportState& viewportState, const 
         rejectCommandRecording(operationName, NWB_TEXT("only one viewport and scissor are supported"));
         return false;
     }
-    if(!viewportState.viewports.empty() && !VulkanViewportPolicy::isViewportValid(viewportState.viewports[0u], m_context.physicalDeviceProperties.limits)){
+    if(!viewportState.viewports.empty() && !VulkanViewportPolicy::IsViewportValid(viewportState.viewports[0u], m_context.physicalDeviceProperties.limits)){
         rejectCommandRecording(operationName, NWB_TEXT("viewport is outside Vulkan device limits"));
         return false;
     }
@@ -63,7 +63,7 @@ b8 CommandList::validateViewportState(const ViewportState& viewportState, const 
         rejectCommandRecording(operationName, NWB_TEXT("scissor rectangle is invalid"));
         return false;
     }
-    if(viewportState.scissorRects.empty() && !viewportState.viewports.empty() && !VulkanViewportPolicy::isImplicitScissorValid(viewportState.viewports[0u])){
+    if(viewportState.scissorRects.empty() && !viewportState.viewports.empty() && !VulkanViewportPolicy::IsImplicitScissorValid(viewportState.viewports[0u])){
         rejectCommandRecording(operationName, NWB_TEXT("viewport cannot be converted to an implicit scissor"));
         return false;
     }
@@ -77,7 +77,7 @@ b8 CommandList::validateTextureForGpuState(Texture* const texture, const Resourc
         rejectCommandRecording(operationName, NWB_TEXT("state is invalid for a texture"));
         return false;
     }
-    const VkImageUsageFlags requiredUsage = explicitRequiredUsage | VulkanTextureDetail::TextureImagePolicy::requiredImageUsageForResourceStates(requiredState);
+    const VkImageUsageFlags requiredUsage = explicitRequiredUsage | VulkanTextureDetail::TextureImagePolicy::RequiredImageUsageForResourceStates(requiredState);
     if(!isTextureReadyForCommandQueue(texture, requiredUsage)){
         rejectCommandRecording(operationName, s_TextureNotReadyForQueueReason);
         return false;

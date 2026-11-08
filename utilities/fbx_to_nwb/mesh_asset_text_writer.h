@@ -21,13 +21,13 @@ NWB_FBX_TO_NWB_BEGIN
 class MeshAssetTextWriter final{
 private:
     template<typename Stream>
-    static void writeVertexRef(const SourceVertexRef& ref, Stream& out)noexcept(noexcept(out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]")){
+    static void WriteVertexRef(const SourceVertexRef& ref, Stream& out)noexcept(noexcept(out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]")){
         out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]";
     }
 
 public:
     template<typename Stream>
-    static void writeBody(const SourceMeshStreams& mesh, const AStringView variableName, const AStringView indent, Stream& file)noexcept(
+    static void WriteBody(const SourceMeshStreams& mesh, const AStringView variableName, const AStringView indent, Stream& file)noexcept(
         noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshPositionsFieldNameView << s_ListAssignOpenText)
         && noexcept(file << indent << "    ")
         && noexcept(TextWrite::WriteVec3(DeclVal<const Vec3&>(), file))
@@ -40,7 +40,7 @@ public:
         && noexcept(TextWrite::WriteVec2(DeclVal<const Vec2&>(), file))
         && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshColorsFieldNameView << s_ListAssignOpenText)
         && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshVertexRefsFieldNameView << s_ListAssignOpenText)
-        && noexcept(writeVertexRef(DeclVal<const SourceVertexRef&>(), file))
+        && noexcept(WriteVertexRef(DeclVal<const SourceVertexRef&>(), file))
         && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshIndicesFieldNameView << s_ListAssignOpenText)
         && noexcept(file << indent << "    [" << mesh.indices[DeclVal<usize>() + 0u] << ", " << mesh.indices[DeclVal<usize>() + 1u] << ", " << mesh.indices[DeclVal<usize>() + 2u] << s_RowSuffixText)
         && noexcept(file << indent << s_FormatListCloseText)
@@ -88,7 +88,7 @@ public:
         file << variableName << s_FieldAccessText << Impl::s_MeshVertexRefsFieldNameView << s_ListAssignOpenText;
         for(const SourceVertexRef& ref : mesh.vertexRefs){
             file << indent << "    ";
-            writeVertexRef(ref, file);
+            WriteVertexRef(ref, file);
             file << s_EntrySuffixText;
         }
         file << indent << s_ListCloseSectionText;

@@ -31,7 +31,7 @@ void RendererMeshSystem::collectRayTracingResourceSnapshots(ECSRenderDetail::Mes
     outSnapshots.clear();
     outSnapshots.reserve(m_meshState.m_meshes.size());
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-        auto snapshot = MeshRayTracingSnapshotPolicy::capture(meshIt.value());
+        auto snapshot = MeshRayTracingSnapshotPolicy::Capture(meshIt.value());
         outSnapshots.push_back(Move(snapshot));
     }
 }
@@ -41,7 +41,7 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::fi
     if(found == m_meshState.m_meshes.end())
         return MakeUnexpected(Failure{});
 
-    return MeshRayTracingSnapshotPolicy::capture(found.value());
+    return MeshRayTracingSnapshotPolicy::Capture(found.value());
 }
 
 Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTracingResourceSnapshot(const RenderableMeshDesc& desc)const noexcept{
@@ -69,13 +69,13 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::fi
     )
         return MakeUnexpected(Failure{});
 
-    return MeshRayTracingSnapshotPolicy::capture(mesh);
+    return MeshRayTracingSnapshotPolicy::Capture(mesh);
 }
 
 b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected, ECSRenderDetail::MeshRayTracingResourceSnapshot& desired){
     const auto found = m_meshState.m_meshes.find(expected.meshName);
-    const b8 currentMatches = found != m_meshState.m_meshes.end() && MeshRayTracingSnapshotPolicy::matches(found.value(), expected);
-    if(!currentMatches || !MeshRayTracingSnapshotPolicy::sameIdentity(expected, desired)){
+    const b8 currentMatches = found != m_meshState.m_meshes.end() && MeshRayTracingSnapshotPolicy::Matches(found.value(), expected);
+    if(!currentMatches || !MeshRayTracingSnapshotPolicy::SameIdentity(expected, desired)){
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         const Core::GpuDescriptorHandle currentNodeHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhNodeHeapHandle : Core::GpuDescriptorHandle::Invalid();
         const Core::GpuDescriptorHandle currentParentHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhParentHeapHandle : Core::GpuDescriptorHandle::Invalid();
@@ -157,10 +157,10 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::M
 
 Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::ensureRayTracingInputHeapHandles(const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected){
     const auto found = m_meshState.m_meshes.find(expected.meshName);
-    if(found == m_meshState.m_meshes.end() || !MeshRayTracingSnapshotPolicy::matches(found.value(), expected) || !ensureMeshSwBvhInputHeapHandles(found.value()))
+    if(found == m_meshState.m_meshes.end() || !MeshRayTracingSnapshotPolicy::Matches(found.value(), expected) || !ensureMeshSwBvhInputHeapHandles(found.value()))
         return MakeUnexpected(Failure{});
 
-    return MeshRayTracingSnapshotPolicy::capture(found.value());
+    return MeshRayTracingSnapshotPolicy::Capture(found.value());
 }
 
 void RendererMeshSystem::discardRayTracingBuildState()noexcept{

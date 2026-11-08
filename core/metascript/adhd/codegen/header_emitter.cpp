@@ -23,7 +23,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     out.reserve(s_AdhdEmitReserveBytes);
 
 
-    HeaderPreambleEmitter::emit(out, unit, namespacePath);
+    HeaderPreambleEmitter::Emit(out, unit, namespacePath);
 
     for(const EnumDecl* enumDecl : unit.enums){
         if(enumDecl && !enumDecl->isImported)

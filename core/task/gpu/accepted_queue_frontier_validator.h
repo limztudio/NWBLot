@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 
 class GpuAcceptedQueueFrontierValidator final{
 public:
-    [[nodiscard]] static b8 validate(const GpuTaskGraph::DeclarationReadView& graph, Span<const usize> incomingOffsets, Span<const GpuTaskDependencyEdge> edges, GpuTaskGraphAnalysisDiagnostic& diagnostic)noexcept;
+    [[nodiscard]] static b8 Validate(const GpuTaskGraph::DeclarationReadView& graph, Span<const usize> incomingOffsets, Span<const GpuTaskDependencyEdge> edges, GpuTaskGraphAnalysisDiagnostic& diagnostic)noexcept;
 };
 
 

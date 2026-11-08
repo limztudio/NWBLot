@@ -30,7 +30,7 @@ public:
         ::Path<Core::Alloc::ScratchArena> path;
     };
 
-    static Expected<Path, Error> resolve(Core::Alloc::GlobalArena& arena, Core::Alloc::ScratchArena& scratchArena);
+    static Expected<Path, Error> Resolve(Core::Alloc::GlobalArena& arena, Core::Alloc::ScratchArena& scratchArena);
 };
 
 

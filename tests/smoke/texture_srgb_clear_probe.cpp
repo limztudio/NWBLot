@@ -141,7 +141,7 @@ struct SRGBClearEdgeInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 NWB::Tests::Smoke::TextureSrgbClearProbe::verify(NWB::Core::GraphicsRuntime& graphics){
+b8 NWB::Tests::Smoke::TextureSrgbClearProbe::Verify(NWB::Core::GraphicsRuntime& graphics){
     using namespace __hidden_texture_srgb_clear_probe;
     using namespace NWB::Core;
     auto& device = graphics.getDevice();

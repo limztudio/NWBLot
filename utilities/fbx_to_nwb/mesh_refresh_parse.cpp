@@ -72,7 +72,7 @@ namespace MeshRefreshParseDetail{
 
 [[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName){
     UtilityVector<MeshSkinInfluence> outInfluences;
-    if(!Impl::SkinInfluenceMetadataParser::parse(nwbFilePath, skinAsset, Impl::s_MeshMetaKind, skinVariableName, false, outInfluences))
+    if(!Impl::SkinInfluenceMetadataParser::Parse(nwbFilePath, skinAsset, Impl::s_MeshMetaKind, skinVariableName, false, outInfluences))
         return MakeUnexpected(Failure{});
     return outInfluences;
 }
@@ -93,7 +93,7 @@ namespace MeshRefreshParseDetail{
         return MakeUnexpected(Failure{});
     if(!Impl::MeshCookSourceStreams::ParseSourceVertexRefsInto(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.vertexRefs))
         return MakeUnexpected(Failure{});
-    if(!Impl::MeshIndexMetadataParser::parse(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.indices))
+    if(!Impl::MeshIndexMetadataParser::Parse(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.indices))
         return MakeUnexpected(Failure{});
     if(!ValidateMesh(nwbFilePath, mesh))
         return MakeUnexpected(Failure{});

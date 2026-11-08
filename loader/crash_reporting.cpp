@@ -33,7 +33,7 @@ inline constexpr AStringView s_EnabledText = "true";
 inline constexpr AStringView s_DisabledText = "false";
 
 
-b8 CrashReporting::install(CrashArena& crashArena){
+b8 CrashReporting::Install(CrashArena& crashArena){
     auto executableDirectory = ExecutablePaths(crashArena).directory();
     if(!executableDirectory)
         executableDirectory = ::Path<CrashArena>(crashArena, s_FallbackExecutableDirectory);
@@ -66,7 +66,7 @@ b8 CrashReporting::install(CrashArena& crashArena){
     return true;
 }
 
-void CrashReporting::configure(const b8 crashReportingInstalled, const b8 useStandaloneLogger, const AStringView logAddress, const AStringView crashUploadToken, const b8 enableGpuDebug)noexcept(!NWB_OCCUR_WARNING){
+void CrashReporting::Configure(const b8 crashReportingInstalled, const b8 useStandaloneLogger, const AStringView logAddress, const AStringView crashUploadToken, const b8 enableGpuDebug)noexcept(!NWB_OCCUR_WARNING){
     if(!crashReportingInstalled){
         NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
         return;

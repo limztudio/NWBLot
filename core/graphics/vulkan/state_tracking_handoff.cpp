@@ -55,11 +55,11 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
     NWB_ASSERT(states.m_valid);
 
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
-        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::requiredImageUsageForResourceStates(state.state))))
+        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::RequiredImageUsageForResourceStates(state.state))))
             return false;
     }
     for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
-        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::requiredImageUsageForResourceStates(state.state))))
+        if(state.texture && (!VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state) || !isTextureReadyForCommandQueue(state.texture, VulkanTextureDetail::TextureImagePolicy::RequiredImageUsageForResourceStates(state.state))))
             return false;
     }
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){

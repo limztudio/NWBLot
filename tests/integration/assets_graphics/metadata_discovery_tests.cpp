@@ -46,11 +46,11 @@ TEST(MetadataDiscoveryAdmission, DuplicateRootsKeepFirstOwnerAndPaths){
     const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / "tests" / "smoke" / "assets" / "textures";
     CookVector<ResolvedAssetRoot> roots(arena);
     roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-    const auto single = AssetFileDiscovery::discover(roots, s_NwbExtension, arena, scratchArena);
+    const auto single = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
     ASSERT_TRUE(single);
     ASSERT_FALSE(single->empty());
     roots.emplace_back(NWB::Path(arena, root), s_EngineVirtualRoot);
-    const auto duplicate = AssetFileDiscovery::discover(roots, s_NwbExtension, arena, scratchArena);
+    const auto duplicate = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
     ASSERT_TRUE(duplicate);
     ASSERT_EQ(duplicate->size(), single->size());
     for(usize i = 0u; i < single->size(); ++i){
@@ -81,7 +81,7 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
     CookVector<ResolvedAssetRoot> roots(arena);
     roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
     roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-    const auto files = AssetFileDiscovery::discover(roots, s_NwbExtension, arena, scratchArena);
+    const auto files = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
     ASSERT_TRUE(files);
     ASSERT_EQ(files->size(), 2u);
     EXPECT_NE((*files)[0].filePath, (*files)[1].filePath);

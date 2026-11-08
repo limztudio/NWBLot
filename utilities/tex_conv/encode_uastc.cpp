@@ -150,7 +150,7 @@ using EncodedMip = TextureFormat::MipLevelLayout;
 Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_encode_uastc;
 
-    auto mipLevels = TextureMipPreparer::buildLevels(input, scratchArena);
+    auto mipLevels = TextureMipPreparer::BuildLevels(input, scratchArena);
     if(!mipLevels)
         return MakeUnexpected(Failure{});
     const EncodedMip& lastMip = mipLevels->back();
@@ -160,12 +160,12 @@ Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::
     mips.reserve(mipLevels->size());
     mips.push_back(Move(input.planes));
     for(usize level = 1u; level < mipLevels->size(); ++level){
-        auto next = TextureMipPreparer::generateNext(mips.back(), input.dimension);
+        auto next = TextureMipPreparer::GenerateNext(mips.back(), input.dimension);
         if(!next)
             return MakeUnexpected(Failure{});
         mips.push_back(Move(*next));
     }
-    const auto alpha = TextureMipPreparer::deriveAlpha(mips, input.format);
+    const auto alpha = TextureMipPreparer::DeriveAlpha(mips, input.format);
     if(!alpha || !InitializeEncoder())
         return MakeUnexpected(Failure{});
 

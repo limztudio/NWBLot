@@ -191,7 +191,7 @@ MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* p
     for(MethodDecl* fn : m_freeFunctions){
         if(!fn || fn->name != name)
             continue;
-        if(CallableOverloadSelector::considerScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *fn, bestMatch, bestScore))
+        if(CallableOverloadSelector::ConsiderScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *fn, bestMatch, bestScore))
             return bestMatch;
     }
     return bestMatch;
@@ -214,7 +214,7 @@ const MethodDecl* SymbolTable::findClassMethod(
     const Span<const MStringView> argTypeNames,
     const Span<const u8> argIsMut
 )const noexcept{
-    return CallableOverloadSelector::findScoredClassCallable(*this, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
+    return CallableOverloadSelector::FindScoredClassCallable(*this, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 
 const MethodDecl* SymbolTable::findClassOperator(
@@ -226,11 +226,11 @@ const MethodDecl* SymbolTable::findClassOperator(
     const Span<const MStringView> argTypeNames,
     const Span<const u8> argIsMut
 )const noexcept{
-    return CallableOverloadSelector::findScoredClassCallable(*this, classDecl, opName, true, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
+    return CallableOverloadSelector::FindScoredClassCallable(*this, classDecl, opName, true, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 
 const MethodDecl* SymbolTable::findClassConstructor(const ClassDecl& classDecl, const usize argCount, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
-    return CallableOverloadSelector::findClassConstructor(*this, classDecl, argCount, requirePublic, argTypeNames, argIsMut);
+    return CallableOverloadSelector::FindClassConstructor(*this, classDecl, argCount, requirePublic, argTypeNames, argIsMut);
 }
 
 MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MStringView methodName, const usize* preferredArgCount, const u32 depth, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
@@ -249,8 +249,8 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
     i32 bestScore = -1;
     for(MethodDecl* method : iface->methods){
         if(method && method->name == methodName){
-            MethodDecl* subMethod = TypeSubstitution::substituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
-            if(CallableOverloadSelector::considerScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *subMethod, bestMatch, bestScore))
+            MethodDecl* subMethod = TypeSubstitution::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
+            if(CallableOverloadSelector::ConsiderScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *subMethod, bestMatch, bestScore))
                 return bestMatch;
         }
     }
@@ -263,7 +263,7 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
             continue;
         MethodDecl* inherited = findInterfaceMethod(*subBase, methodName, preferredArgCount, depth + 1u, argTypeNames, argIsMut);
         if(inherited){
-            if(CallableOverloadSelector::considerScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *inherited, bestMatch, bestScore))
+            if(CallableOverloadSelector::ConsiderScoredCallableCandidate(*this, preferredArgCount, argTypeNames, argIsMut, *inherited, bestMatch, bestScore))
                 return bestMatch;
         }
     }
@@ -293,12 +293,12 @@ void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, const u32
     for(MethodDecl* method : iface->methods){
         if(!method)
             continue;
-        outMethods.push_back(TypeSubstitution::substituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena));
+        outMethods.push_back(TypeSubstitution::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena));
     }
 }
 
 TypeRef* SymbolTable::substituteTypeParams(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs)const{
-    return TypeSubstitution::substituteAliasType(origType, templateParams, templateArgs, m_arena);
+    return TypeSubstitution::SubstituteAliasType(origType, templateParams, templateArgs, m_arena);
 }
 
 TypeRef* SymbolTable::substituteTypeParams(const TypeRef* origType, const Span<const TemplateParamDecl> templateParams, const TypeRef* instanceTypeRef)const{

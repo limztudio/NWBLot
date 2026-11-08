@@ -28,7 +28,7 @@ NWB_FBX_TO_NWB_BEGIN
 class SkinnedAssetTextWriter final{
 private:
     template<typename Stream>
-    static void writeSkinJoints(const MeshSkinInfluence& skin, Stream& out)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(out << skin.joint[DeclVal<usize>()]) && noexcept(out << "]")){
+    static void WriteSkinJoints(const MeshSkinInfluence& skin, Stream& out)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(out << skin.joint[DeclVal<usize>()]) && noexcept(out << "]")){
         out << "[";
         for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
             if(i != 0u)
@@ -39,7 +39,7 @@ private:
     }
 
     template<typename Stream>
-    static void writeSkinWeights(const MeshSkinInfluence& skin, Stream& out)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(TextWrite::WriteFloat(skin.weight.raw[DeclVal<usize>()], out)) && noexcept(out << "]")){
+    static void WriteSkinWeights(const MeshSkinInfluence& skin, Stream& out)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(TextWrite::WriteFloat(skin.weight.raw[DeclVal<usize>()], out)) && noexcept(out << "]")){
         out << "[";
         for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
             if(i != 0u)
@@ -50,7 +50,7 @@ private:
     }
 
     template<typename Stream>
-    static void writeJointMatrix(const JointMatrix& matrix, const AStringView indent, Stream& out)noexcept(
+    static void WriteJointMatrix(const JointMatrix& matrix, const AStringView indent, Stream& out)noexcept(
         noexcept(out << s_ListOpenText)
         && noexcept(out << indent << "    ")
         && noexcept(TextWrite::WriteVec4(DeclVal<const Vec4&>(), out))
@@ -66,7 +66,7 @@ private:
         out << indent << "]";
     }
 
-    static ScratchString uniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const Span<const ScratchString> usedNames, Core::Alloc::ScratchArena& scratchArena){
+    static ScratchString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, const Span<const ScratchString> usedNames, Core::Alloc::ScratchArena& scratchArena){
         const ScratchString baseName = AssetWriterSkeletonDetail::NodeName(node, fallbackIndex, scratchArena);
         ScratchString name(baseName, scratchArena);
         name.reserve(AddSize(baseName.size(), s_UniqueNameSuffixReserve));
@@ -81,11 +81,11 @@ private:
         return name;
     }
 
-    static UtilityScratchVector<ScratchString> buildUniqueJointNames(const Span<ufbx_node* const> joints, Core::Alloc::ScratchArena& scratchArena){
+    static UtilityScratchVector<ScratchString> BuildUniqueJointNames(const Span<ufbx_node* const> joints, Core::Alloc::ScratchArena& scratchArena){
         UtilityScratchVector<ScratchString> names(scratchArena);
         names.reserve(joints.size());
         for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
-            names.push_back(uniqueNodeName(joints[jointIndex], jointIndex, names, scratchArena));
+            names.push_back(UniqueNodeName(joints[jointIndex], jointIndex, names, scratchArena));
 
         return names;
     }
@@ -93,9 +93,9 @@ private:
 
 public:
     template<typename Stream>
-    static b8 writeSkeletonBody(const AStringView variableName, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena, Stream& file){
+    static b8 WriteSkeletonBody(const AStringView variableName, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena, Stream& file){
         file << variableName << ".joints = [\n";
-        const auto jointNames = buildUniqueJointNames(joints, scratchArena);
+        const auto jointNames = BuildUniqueJointNames(joints, scratchArena);
 
         UtilityScratchMap<const ufbx_node*, usize> jointLookup(scratchArena);
         jointLookup.reserve(joints.size());
@@ -110,19 +110,19 @@ public:
         for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
             file << "    {\n";
             file << "        \"name\": ";
-            AssetReferenceTextWriter::write(jointNames[jointIndex], true, scratchArena, file);
+            AssetReferenceTextWriter::Write(jointNames[jointIndex], true, scratchArena, file);
             file << s_EntrySuffixText;
             if(joints[jointIndex] && joints[jointIndex]->parent){
                 const auto foundParent = jointLookup.find(joints[jointIndex]->parent);
                 if(foundParent != jointLookup.end()){
                     const ScratchString& parentName = jointNames[foundParent.value()];
                     file << "        \"parent\": ";
-                    AssetReferenceTextWriter::write(parentName, true, scratchArena, file);
+                    AssetReferenceTextWriter::Write(parentName, true, scratchArena, file);
                     file << s_EntrySuffixText;
                 }
             }
             file << "        \"local_bind_pose\": ";
-            writeJointMatrix(bindPoseMatrices[jointIndex], "        ", file);
+            WriteJointMatrix(bindPoseMatrices[jointIndex], "        ", file);
             file << s_EntrySuffixText;
             file << s_TableEntryCloseText;
         }
@@ -131,7 +131,7 @@ public:
     }
 
     template<typename Stream>
-    static void writeSkinBody(
+    static void WriteSkinBody(
         const AStringView variableName,
         const AStringView meshName,
         const AStringView skeletonName,
@@ -142,18 +142,18 @@ public:
         Stream& file
     ){
         file << variableName << ".mesh = ";
-        AssetReferenceTextWriter::write(meshName, quoteReferences, scratchArena, file);
+        AssetReferenceTextWriter::Write(meshName, quoteReferences, scratchArena, file);
         file << s_StatementEndText;
         file << variableName << ".skeleton = ";
-        AssetReferenceTextWriter::write(skeletonName, quoteReferences, scratchArena, file);
+        AssetReferenceTextWriter::Write(skeletonName, quoteReferences, scratchArena, file);
         file << s_StatementEndSectionText;
 
         file << variableName << ".influences = [\n";
         for(const MeshSkinInfluence& influence : influences){
             file << "    { \"joints\": ";
-            writeSkinJoints(influence, file);
+            WriteSkinJoints(influence, file);
             file << ", \"weights\": ";
-            writeSkinWeights(influence, file);
+            WriteSkinWeights(influence, file);
             file << " },\n";
         }
         file << s_ListCloseSectionText;
@@ -161,7 +161,7 @@ public:
         file << variableName << ".inverse_bind_matrices = [\n";
         for(const JointMatrix& matrix : inverseBindMatrices){
             file << "    ";
-            writeJointMatrix(matrix, "    ", file);
+            WriteJointMatrix(matrix, "    ", file);
             file << s_EntrySuffixText;
         }
         file << s_FormatListCloseText;

@@ -12,7 +12,7 @@
 NWB_CORE_BEGIN
 
 
-b8 GpuPresentationEndpointValidator::validate(const GpuTaskGraph::DeclarationReadView& graph, const Span<const GpuTaskId> topologicalOrder, const Span<const usize> incomingOffsets, const Span<const u32> incomingProducers, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysisDiagnostic& diagnostic){
+b8 GpuPresentationEndpointValidator::Validate(const GpuTaskGraph::DeclarationReadView& graph, const Span<const GpuTaskId> topologicalOrder, const Span<const usize> incomingOffsets, const Span<const u32> incomingProducers, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysisDiagnostic& diagnostic){
     using namespace GpuTaskGraphCompilerDetail;
     const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task = {}, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {})noexcept{
         diagnostic.status = status;

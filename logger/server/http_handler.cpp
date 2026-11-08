@@ -33,7 +33,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_logger_server{
+namespace LoggerServerImpl{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -219,33 +219,33 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
     auto& connectionContext = *connectionContextPtr;
 
     const AStringView urlView(url);
-    if(urlView == __hidden_logger_server::s_UnsupportedNameSymbolUploadPath)
-        return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_NOT_FOUND);
+    if(urlView == LoggerServerImpl::s_UnsupportedNameSymbolUploadPath)
+        return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_NOT_FOUND);
 
     const b8 isCrashUpload = urlView == Core::Crash::PackageNames::s_CrashUploadEndpoint;
     const b8 isTelemetryUpload = urlView == s_TelemetryUploadEndpoint;
-    const auto uploadKind = isCrashUpload ? __hidden_logger_server::ConnectionUploadKind::Crash : isTelemetryUpload ? __hidden_logger_server::ConnectionUploadKind::Telemetry : __hidden_logger_server::ConnectionUploadKind::LogMessage;
+    const auto uploadKind = isCrashUpload ? LoggerServerImpl::ConnectionUploadKind::Crash : isTelemetryUpload ? LoggerServerImpl::ConnectionUploadKind::Telemetry : LoggerServerImpl::ConnectionUploadKind::LogMessage;
 
     if(!connectionContext){
         if(isCrashUpload && !handler->crashUploadAuthorized(*connection)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Core::Common::LogType::Warning);
-            return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Core::Common::LogType::Warning);
+            return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
-        const auto info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
+        const auto info = LoggerServerImpl::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
             thisPtr->enqueue(
-                StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), __hidden_logger_server::s_ServerName),
+                StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), LoggerServerImpl::s_ServerName),
                 Core::Common::LogType::Error
             );
-            return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_SERVICE_UNAVAILABLE);
+            return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_SERVICE_UNAVAILABLE);
         }
 
         connectionContext = info->get();
         return MHD_YES;
     }
 
-    auto* info = static_cast<__hidden_logger_server::ConnectionInfo*>(connectionContext);
+    auto* info = static_cast<LoggerServerImpl::ConnectionInfo*>(connectionContext);
 
     if(uploadDataSize){
         if(info->rejectionStatus){
@@ -253,16 +253,16 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
             return MHD_YES;
         }
         if(!uploadData){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_BAD_REQUEST;
             uploadDataSize = 0u;
             return MHD_YES;
         }
 
-        const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->uploadKind);
+        const usize uploadSizeLimit = LoggerServerImpl::UploadSizeLimit(info->uploadKind);
         if(uploadDataSize > static_cast<size_t>(uploadSizeLimit) || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_CONTENT_TOO_LARGE;
             uploadDataSize = 0u;
@@ -271,7 +271,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(BinaryByteView(reinterpret_cast<const u8*>(uploadData), appendSize))){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
             uploadDataSize = 0u;
@@ -283,10 +283,10 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
     }
 
     if(info->rejectionStatus)
-        return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, info->rejectionStatus);
+        return LoggerServerImpl::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, info->rejectionStatus);
 
     u32 responseStatus = MHD_HTTP_OK;
-    if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Crash){
+    if(info->uploadKind == LoggerServerImpl::ConnectionUploadKind::Crash){
         if(info->closeCrashUploadStream() && info->crashUploadOwned){
             Core::Alloc::ScratchArena scratchArena(Name("logger/server/crash_enqueue/scratch"));
             const Path& storedPath = info->crashUploadPath;
@@ -306,7 +306,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
             thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be closed and was retained at '{}'"), PathToString<tchar>(info->crashUploadPath)), Core::Common::LogType::Error);
         }
     }
-    else if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Telemetry){
+    else if(info->uploadKind == LoggerServerImpl::ConnectionUploadKind::Telemetry){
         TelemetryIngestResult result = ProcessTelemetryUpload(thisPtr->arena(), info->buffer, info->size, handler->m_telemetryIngestConfig);
         if(!result.storedRaw)
             responseStatus = info->size == 0u ? MHD_HTTP_BAD_REQUEST : MHD_HTTP_SERVICE_UNAVAILABLE;
@@ -316,16 +316,16 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
         thisPtr->enqueue(Move(result.message), result.type);
     }
     else{
-        auto message = MessagePayloadCodec::parse(thisPtr->arena(), info->buffer, info->size);
+        auto message = MessagePayloadCodec::Parse(thisPtr->arena(), info->buffer, info->size);
         if(message)
             thisPtr->enqueue(Move(*message));
         else{
             responseStatus = MHD_HTTP_BAD_REQUEST;
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, message.error(), Core::Common::LogType::Error);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, message.error(), Core::Common::LogType::Error);
         }
     }
 
-    return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, responseStatus);
+    return LoggerServerImpl::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, responseStatus);
 }
 
 
@@ -363,7 +363,7 @@ b8 ServerHttpHandler::start(const u16 port){
         , static_cast<socklen_t>(sizeof(listenAddress))
         , &listenAddress
         , MHD_OPTION_NOTIFY_COMPLETED
-        , &__hidden_logger_server::RequestCompleted
+        , &LoggerServerImpl::RequestCompleted
         , nullptr
         , MHD_OPTION_END
     );

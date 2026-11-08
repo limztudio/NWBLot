@@ -98,7 +98,7 @@ static void* CrashCurlCalloc(const usize count, const usize size)noexcept{
     return ZeroAllocateArenaCMemory(DumpArena(), count, size);
 }
 
-b8 CrashUploadTransport::initialize(){
+b8 CrashUploadTransport::Initialize(){
     CURLcode result = CURLE_OK;
     {
         NothrowScopedLock lock(s_CurlGlobalInitMutex);
@@ -205,7 +205,7 @@ static Expected<void, UploadFailure> UploadPackage(Alloc::ScratchArena& scratchA
     return {};
 }
 
-b8 CrashUploadTransport::upload(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, const Span<const u8> archiveBytes, const AStringView crashUploadToken){
+b8 CrashUploadTransport::Upload(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, const Span<const u8> archiveBytes, const AStringView crashUploadToken){
     const auto result = UploadPackage(scratchArena, url, archiveBytes, crashUploadToken);
     if(result)
         return true;

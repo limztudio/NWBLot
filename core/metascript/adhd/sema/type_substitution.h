@@ -16,8 +16,8 @@ NWB_ADHD_BEGIN
 
 class TypeSubstitution final{
 public:
-    [[nodiscard]] static TypeRef* substituteAliasType(const TypeRef& origType, Span<const TemplateParamDecl> templateParams, Span<const TypeArg> templateArgs, MetaArena& arena);
-    [[nodiscard]] static MethodDecl* substituteInterfaceMethod(const SymbolTable& symbols, MethodDecl* method, b8 hasSubst, Span<const TemplateParamDecl> templateParams, Span<const TypeArg> templateArgs, MetaArena& arena);
+    [[nodiscard]] static TypeRef* SubstituteAliasType(const TypeRef& origType, Span<const TemplateParamDecl> templateParams, Span<const TypeArg> templateArgs, MetaArena& arena);
+    [[nodiscard]] static MethodDecl* SubstituteInterfaceMethod(const SymbolTable& symbols, MethodDecl* method, b8 hasSubst, Span<const TemplateParamDecl> templateParams, Span<const TypeArg> templateArgs, MetaArena& arena);
 };
 
 

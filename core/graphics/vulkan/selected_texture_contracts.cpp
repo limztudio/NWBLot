@@ -36,7 +36,7 @@ namespace VulkanTextureDetail{
 
 Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDesc, const TextureSlice& sourceSlice, const TextureDesc& destinationDesc, const TextureSlice& destinationSlice)noexcept{
     TextureCopyContract contract{};
-    if(!TextureShapePolicy::isValid(sourceDesc) || !TextureShapePolicy::isValid(destinationDesc))
+    if(!TextureShapePolicy::IsValid(sourceDesc) || !TextureShapePolicy::IsValid(destinationDesc))
         return MakeUnexpected(Failure{});
 
     if(
@@ -55,8 +55,8 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
     const auto formatLayout = VulkanDetail::GetTextureFormatBlockLayout(GetFormatInfo(sourceDesc.format));
     if(!formatLayout)
         return MakeUnexpected(Failure{});
-    const auto resolvedSource = VulkanDetail::TextureTransferLayout::resolveSlice(sourceDesc, sourceSlice, *formatLayout);
-    const auto resolvedDestination = VulkanDetail::TextureTransferLayout::resolveSlice(destinationDesc, destinationSlice, *formatLayout);
+    const auto resolvedSource = VulkanDetail::TextureTransferLayout::ResolveSlice(sourceDesc, sourceSlice, *formatLayout);
+    const auto resolvedDestination = VulkanDetail::TextureTransferLayout::ResolveSlice(destinationDesc, destinationSlice, *formatLayout);
     if(!resolvedSource || !resolvedDestination)
         return MakeUnexpected(Failure{});
     contract.sourceSlice = *resolvedSource;
@@ -65,8 +65,8 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
     if(sourceDesc.sampleCount != 1u){
         if(
             *sourceImageType != VK_IMAGE_TYPE_2D
-            || (TextureImagePolicy::pickImageFlags(sourceDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
-            || (TextureImagePolicy::pickImageFlags(destinationDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
+            || (TextureImagePolicy::PickImageFlags(sourceDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
+            || (TextureImagePolicy::PickImageFlags(destinationDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
             || sourceDesc.mipLevels != 1u
             || destinationDesc.mipLevels != 1u
             || formatLayout->blockWidth != 1u

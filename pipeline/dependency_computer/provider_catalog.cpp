@@ -80,7 +80,7 @@ b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::All
     );
     if(!roots)
         return false;
-    auto files = Assets::AssetFileDiscovery::discover(*roots, Assets::s_NwbExtension, m_arena, scratchArena);
+    auto files = Assets::AssetFileDiscovery::Discover(*roots, Assets::s_NwbExtension, m_arena, scratchArena);
     if(!files)
         return false;
     Assets::AssetVector<Name> virtualPaths(m_arena);

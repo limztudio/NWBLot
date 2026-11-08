@@ -15,7 +15,7 @@
 NWB_IMPL_BEGIN
 
 
-void RendererDeviceDiagnosticsLabel::append(Core::GraphicsRuntime& graphics, AString<Core::Alloc::GlobalArena>& label){
+void RendererDeviceDiagnosticsLabel::Append(Core::GraphicsRuntime& graphics, AString<Core::Alloc::GlobalArena>& label){
     Core::Device& device = graphics.getDevice();
     const Core::GpuTimingRecorderStatistics gpuTimingStatistics = graphics.gpuTiming().statistics(device);
     StringAppendFormat(

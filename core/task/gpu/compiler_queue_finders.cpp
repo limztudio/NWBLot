@@ -174,9 +174,9 @@ namespace GpuTaskGraphCompilerDetail{
             continue;
 
         // A fresh store may finish calibration with no probe as incumbent; the static route is then the baseline.
-        const b8 canSwitch = assignmentState ? GpuTaskTimingDecision::canSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingDecision::historyMeetsMinimumSamples(*incumbentHistory, policy)
-                && GpuTaskTimingDecision::historyMeetsMinimumSamples(*candidateHistory, policy)
-                && GpuTaskTimingDecision::benefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
+        const b8 canSwitch = assignmentState ? GpuTaskTimingDecision::CanSwitch(*incumbentHistory, *candidateHistory, *assignmentState, incumbent.id, candidate.id, frameIndex, policy) : GpuTaskTimingDecision::HistoryMeetsMinimumSamples(*incumbentHistory, policy)
+                && GpuTaskTimingDecision::HistoryMeetsMinimumSamples(*candidateHistory, policy)
+                && GpuTaskTimingDecision::BenefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
         ;
         if(!canSwitch)
             continue;

@@ -17,7 +17,7 @@
 NWB_ASSETS_BEGIN
 
 
-Expected<DiscoveredNwbFileVector> AssetFileDiscovery::discover(const Span<const ResolvedAssetRoot> assetRoots, const AStringView expectedExtension, CookArena& cookArena, ScratchArena& scratchArena){
+Expected<DiscoveredNwbFileVector> AssetFileDiscovery::Discover(const Span<const ResolvedAssetRoot> assetRoots, const AStringView expectedExtension, CookArena& cookArena, ScratchArena& scratchArena){
     DiscoveredNwbFileVector files(cookArena);
     CookMetadataDetail::DiscoveredPathSet seenPaths(0, Hasher<AStringView>(), EqualTo<>(), scratchArena);
 

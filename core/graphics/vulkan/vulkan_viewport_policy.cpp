@@ -13,7 +13,7 @@
 NWB_VULKAN_BEGIN
 
 
-b8 VulkanViewportPolicy::isViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept{
+b8 VulkanViewportPolicy::IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept{
     if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY) || !IsFinite(viewport.minZ) || !IsFinite(viewport.maxZ))
         return false;
     if(viewport.maxX <= viewport.minX || viewport.maxY < viewport.minY || viewport.minZ < 0.0f || viewport.minZ > 1.0f || viewport.maxZ < 0.0f || viewport.maxZ > 1.0f)
@@ -31,7 +31,7 @@ b8 VulkanViewportPolicy::isViewportValid(const Viewport& viewport, const VkPhysi
     ;
 }
 
-b8 VulkanViewportPolicy::isImplicitScissorValid(const Viewport& viewport)noexcept{
+b8 VulkanViewportPolicy::IsImplicitScissorValid(const Viewport& viewport)noexcept{
     if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY))
         return false;
 
@@ -45,8 +45,8 @@ b8 VulkanViewportPolicy::isImplicitScissorValid(const Viewport& viewport)noexcep
     return minX >= 0.0 && minY >= 0.0 && maxX >= minX && maxY >= minY && maxX <= static_cast<f64>(Limit<i32>::s_Max) && maxY <= static_cast<f64>(Limit<i32>::s_Max);
 }
 
-Expected<VkRect2D> VulkanViewportPolicy::buildImplicitScissor(const Viewport& viewport)noexcept{
-    if(!isImplicitScissorValid(viewport))
+Expected<VkRect2D> VulkanViewportPolicy::BuildImplicitScissor(const Viewport& viewport)noexcept{
+    if(!VulkanViewportPolicy::IsImplicitScissorValid(viewport))
         return MakeUnexpected(Failure{});
 
     const Rect rect = Rect::FromViewport(viewport);

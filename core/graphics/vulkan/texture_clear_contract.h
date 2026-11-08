@@ -52,7 +52,7 @@ namespace VulkanTextureDetail{
 
 [[nodiscard]] inline Expected<TextureClearContract> ResolveTextureClearContract(const TextureDesc& description, const TextureSubresourceSet& subresources, const TextureClearValueKind::Enum valueKind, const b8 clearDepth, const b8 clearStencil)noexcept{
     TextureClearContract contract{};
-    if(!TextureShapePolicy::isValid(description) || description.sampleQuality != 0u || !VulkanDetail::IsSupportedSampleCount(description.sampleCount) || !TextureClearValueMatchesFormat(description, valueKind, clearDepth, clearStencil))
+    if(!TextureShapePolicy::IsValid(description) || description.sampleQuality != 0u || !VulkanDetail::IsSupportedSampleCount(description.sampleCount) || !TextureClearValueMatchesFormat(description, valueKind, clearDepth, clearStencil))
         return MakeUnexpected(Failure{});
 
     const b8 blockCompressed = Format::IsBlockCompressedFormat(description.format);

@@ -93,7 +93,7 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 FrameTimingResetGraph::submit(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing){
+b8 FrameTimingResetGraph::Submit(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing){
     auto& device = graphics.getDevice();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(!graphicsQueue.valid())

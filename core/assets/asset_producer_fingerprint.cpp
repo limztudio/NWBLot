@@ -19,7 +19,7 @@
 NWB_ASSETS_BEGIN
 
 
-void AssetProducerFingerprint::resolve(ScratchArena& scratchArena, b8& useAssetCache, Sha256Digest& producerDigest){
+void AssetProducerFingerprint::Resolve(ScratchArena& scratchArena, b8& useAssetCache, Sha256Digest& producerDigest){
     ::Path<ScratchArena> executablePath(scratchArena);
 #if defined(NWB_PLATFORM_LINUX)
     executablePath = ::Path<ScratchArena>(scratchArena, "/proc/self/exe");

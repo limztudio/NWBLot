@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 
 class GpuBufferStateFanIn final{
 public:
-    [[nodiscard]] static b8 merge(
+    [[nodiscard]] static b8 Merge(
         CommandListResourceStateHandoff& result,
         const CommandListResourceStateHandoff& base,
         const CommandListResourceStateHandoff* const* branches,
@@ -24,7 +24,7 @@ public:
         usize bufferStateCapacity,
         Alloc::ScratchArena& scratchArena
     );
-    [[nodiscard]] static b8 mergePermanent(
+    [[nodiscard]] static b8 MergePermanent(
         CommandListResourceStateHandoff& result,
         const CommandListResourceStateHandoff& base,
         const CommandListResourceStateHandoff* const* branches,

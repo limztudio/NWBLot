@@ -73,16 +73,16 @@ b8 CommandListResourceStateHandoff::buildFanIn(const CommandListResourceStateHan
     m_permanentTextureStates.reserve(permanentTextureStateCapacity);
     m_permanentBufferStates.reserve(permanentBufferStateCapacity);
 
-    if(!GpuTextureStateFanIn::mergeTransient(*this, base, branches, branchCount, textureStateCapacity, scratchArena))
+    if(!GpuTextureStateFanIn::MergeTransient(*this, base, branches, branchCount, textureStateCapacity, scratchArena))
         return false;
 
-    if(!GpuBufferStateFanIn::merge(*this, base, branches, branchCount, bufferStateCapacity, scratchArena))
+    if(!GpuBufferStateFanIn::Merge(*this, base, branches, branchCount, bufferStateCapacity, scratchArena))
         return false;
 
-    if(!GpuTextureStateFanIn::mergePermanent(*this, base, branches, branchCount, permanentTextureStateCapacity, scratchArena))
+    if(!GpuTextureStateFanIn::MergePermanent(*this, base, branches, branchCount, permanentTextureStateCapacity, scratchArena))
         return false;
 
-    if(!GpuBufferStateFanIn::mergePermanent(*this, base, branches, branchCount, permanentBufferStateCapacity, scratchArena))
+    if(!GpuBufferStateFanIn::MergePermanent(*this, base, branches, branchCount, permanentBufferStateCapacity, scratchArena))
         return false;
 
     m_valid = true;

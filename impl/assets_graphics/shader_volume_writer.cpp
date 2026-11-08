@@ -153,8 +153,8 @@ b8 AppendPreparedShadersToManifest(
             const u64 sourceChecksum = ShaderCook::ComputeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
             const Core::Assets::ScratchString sourceChecksumHex = FormatHex64A(scratchArena, sourceChecksum);
 
-            const __hidden_shader_volume_writer::ScratchPath bytecodeCachePath = ShaderVariantBytecodeCache::buildPath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
-            if(!ShaderVariantBytecodeCache::getBytecode(
+            const __hidden_shader_volume_writer::ScratchPath bytecodeCachePath = ShaderVariantBytecodeCache::BuildPath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
+            if(!ShaderVariantBytecodeCache::GetBytecode(
                 entry,
                 generatedVariantName,
                 defineCombo,

@@ -48,7 +48,7 @@ TEST_F(LoggerProducerContracts, MessagePayloadRejectsInvalidTypeWithoutPublishin
     NWB::Log::LogBytes payload(testArena.arena);
     payload.push_back(42u);
     const NWB::Log::MessageType source = MakeTuple(Timer{}, static_cast<NWB::Core::Common::LogType::Enum>(255u), NWB::Log::LogString(NWB_TEXT("invalid"), testArena.arena));
-    const auto built = NWB::Log::MessagePayloadCodec::build(source, payload);
+    const auto built = NWB::Log::MessagePayloadCodec::Build(source, payload);
     ASSERT_FALSE(built);
     EXPECT_EQ(built.error(), NWB::Log::MessagePayloadError::InvalidType);
     EXPECT_TRUE(payload.empty());

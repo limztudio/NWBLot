@@ -14,12 +14,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GpuTaskTimingDecision::historyMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
+b8 GpuTaskTimingDecision::HistoryMeetsMinimumSamples(const GpuTaskTimingHistory& history, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
     return policy.valid() && history.valid() && history.sampleCount >= policy.minimumSampleCount;
 }
 
 
-b8 GpuTaskTimingDecision::benefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
+b8 GpuTaskTimingDecision::BenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, const GpuTaskTimingHistory& candidate, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
     if(!policy.valid() || !incumbent.valid() || !candidate.valid() || candidate.averageSeconds >= incumbent.averageSeconds)
         return false;
 
@@ -30,14 +30,14 @@ b8 GpuTaskTimingDecision::benefitExceedsHysteresis(const GpuTaskTimingHistory& i
 }
 
 
-b8 GpuTaskTimingDecision::switchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, const u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
+b8 GpuTaskTimingDecision::SwitchDwellElapsed(const GpuTaskTimingAssignmentState& assignment, const u64 frameIndex, const GpuTaskTimingFeedbackPolicy& policy)noexcept{
     if(!policy.valid() || !assignment.valid() || frameIndex < assignment.lastSwitchFrameIndex)
         return false;
     return frameIndex - assignment.lastSwitchFrameIndex >= policy.minimumFramesBetweenSwitches;
 }
 
 
-b8 GpuTaskTimingDecision::canSwitch(
+b8 GpuTaskTimingDecision::CanSwitch(
     const GpuTaskTimingHistory& incumbent,
     const GpuTaskTimingHistory& candidate,
     const GpuTaskTimingAssignmentState& assignment,
@@ -54,10 +54,10 @@ b8 GpuTaskTimingDecision::canSwitch(
         && incumbentQueue.deviceGeneration == candidateQueue.deviceGeneration
         && assignment.valid()
         && assignment.lastAcceptedQueue == incumbentQueue
-        && historyMeetsMinimumSamples(incumbent, policy)
-        && historyMeetsMinimumSamples(candidate, policy)
-        && benefitExceedsHysteresis(incumbent, candidate, policy)
-        && switchDwellElapsed(assignment, frameIndex, policy)
+        && GpuTaskTimingDecision::HistoryMeetsMinimumSamples(incumbent, policy)
+        && GpuTaskTimingDecision::HistoryMeetsMinimumSamples(candidate, policy)
+        && GpuTaskTimingDecision::BenefitExceedsHysteresis(incumbent, candidate, policy)
+        && GpuTaskTimingDecision::SwitchDwellElapsed(assignment, frameIndex, policy)
     ;
 }
 

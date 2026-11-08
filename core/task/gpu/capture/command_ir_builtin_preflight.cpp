@@ -252,7 +252,7 @@ struct TextureClearDestination{
 };
 
 
-GpuCommandIrReplayError::Enum GpuCommandIrBuiltinPreflight::validate(
+GpuCommandIrReplayError::Enum GpuCommandIrBuiltinPreflight::Validate(
     const GpuCommandIrBuiltinTaskRecord& record,
     const BinaryByteView blobBytes,
     const GpuTaskGraphDeclarationReadView& graph,

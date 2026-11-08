@@ -118,13 +118,13 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
             if(!influences)
                 return MakeUnexpected(Failure{});
             UtilityVector<MeshSkinInfluence>& skinInfluences = *influences;
-            const auto canonicalized = SourceMeshCanonicalizer::canonicalizeSkinned(skinInfluences, cpuScheduler, scratchArena, mesh);
+            const auto canonicalized = SourceMeshCanonicalizer::CanonicalizeSkinned(skinInfluences, cpuScheduler, scratchArena, mesh);
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;
         }
         else{
-            const auto canonicalized = SourceMeshCanonicalizer::canonicalize(cpuScheduler, scratchArena, mesh);
+            const auto canonicalized = SourceMeshCanonicalizer::Canonicalize(cpuScheduler, scratchArena, mesh);
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;

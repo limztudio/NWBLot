@@ -46,9 +46,9 @@ struct GpuPageTextureUploadDesc{
 
 class GpuSampledTextures final{
 public:
-    [[nodiscard]] static b8 prepareDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor);
-    [[nodiscard]] static b8 createAndUploadPage(Core::GraphicsRuntime& graphics, const GpuPageTextureUploadDesc& desc, Core::TextureHandle& outTexture, Core::QueueSubmissionToken& outReadinessToken);
-    [[nodiscard]] static Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> importTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses);
+    [[nodiscard]] static b8 PrepareDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor);
+    [[nodiscard]] static b8 CreateAndUploadPage(Core::GraphicsRuntime& graphics, const GpuPageTextureUploadDesc& desc, Core::TextureHandle& outTexture, Core::QueueSubmissionToken& outReadinessToken);
+    [[nodiscard]] static Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses);
 };
 
 

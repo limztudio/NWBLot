@@ -17,7 +17,7 @@ NWB_LOG_BEGIN
 
 class CrashArchiveExtractor final{
 public:
-    [[nodiscard]] static Expected<void, CrashIngestFailure> extract(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory);
+    [[nodiscard]] static Expected<void, CrashIngestFailure> Extract(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory);
 };
 
 

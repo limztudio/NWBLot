@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 namespace VulkanTextureDetail{
 
 
-VkImageUsageFlags TextureImagePolicy::requiredImageUsageForResourceStates(const ResourceStates::Mask states)noexcept{
+VkImageUsageFlags TextureImagePolicy::RequiredImageUsageForResourceStates(const ResourceStates::Mask states)noexcept{
     VkImageUsageFlags usage = 0u;
     if(states & ResourceStates::ShaderResource)
         usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -36,7 +36,7 @@ VkImageUsageFlags TextureImagePolicy::requiredImageUsageForResourceStates(const 
     return usage;
 }
 
-VkImageViewType TextureImagePolicy::textureDimensionToViewType(TextureDimension::Enum dimension)noexcept{
+VkImageViewType TextureImagePolicy::TextureDimensionToViewType(TextureDimension::Enum dimension)noexcept{
     switch(dimension){
     case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;
     case TextureDimension::Texture1DArray: return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
@@ -51,7 +51,7 @@ VkImageViewType TextureImagePolicy::textureDimensionToViewType(TextureDimension:
     }
 }
 
-VkImageUsageFlags TextureImagePolicy::pickImageUsage(const TextureDesc& desc, const VkImageAspectFlags aspectMask)noexcept{
+VkImageUsageFlags TextureImagePolicy::PickImageUsage(const TextureDesc& desc, const VkImageAspectFlags aspectMask)noexcept{
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     if(desc.isShaderResource)
@@ -73,7 +73,7 @@ VkImageUsageFlags TextureImagePolicy::pickImageUsage(const TextureDesc& desc, co
     return usage;
 }
 
-VkImageCreateFlags TextureImagePolicy::pickImageFlags(const TextureDesc& desc)noexcept{
+VkImageCreateFlags TextureImagePolicy::PickImageFlags(const TextureDesc& desc)noexcept{
     VkImageCreateFlags flags = 0;
 
     if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray)
@@ -85,7 +85,7 @@ VkImageCreateFlags TextureImagePolicy::pickImageFlags(const TextureDesc& desc)no
     return flags;
 }
 
-VkImageCreateInfo TextureImagePolicy::buildTextureImageCreateInfo(const TextureDesc& desc, const TextureCreateMetadata& metadata)noexcept{
+VkImageCreateInfo TextureImagePolicy::BuildTextureImageCreateInfo(const TextureDesc& desc, const TextureCreateMetadata& metadata)noexcept{
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = metadata.imageType;
@@ -104,7 +104,7 @@ VkImageCreateInfo TextureImagePolicy::buildTextureImageCreateInfo(const TextureD
     return imageInfo;
 }
 
-b8 TextureImagePolicy::isTextureImageInfoConsistent(const TextureDesc& desc, const VkImageCreateInfo& imageInfo, const VkImageUsageFlags requiredUsage)noexcept{
+b8 TextureImagePolicy::IsTextureImageInfoConsistent(const TextureDesc& desc, const VkImageCreateInfo& imageInfo, const VkImageUsageFlags requiredUsage)noexcept{
     const auto expectedImageType = TryTextureDimensionToImageType(desc.dimension);
     if(!expectedImageType || !VulkanDetail::IsSupportedSampleCount(desc.sampleCount) || desc.sampleQuality != 0u)
         return false;
@@ -113,8 +113,8 @@ b8 TextureImagePolicy::isTextureImageInfoConsistent(const TextureDesc& desc, con
     if(expectedFormat == VK_FORMAT_UNDEFINED)
         return false;
     const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(desc.format));
-    const VkImageUsageFlags descriptionUsage = (pickImageUsage(desc, expectedAspectMask) & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)) | requiredImageUsageForResourceStates(desc.initialState);
-    const VkImageCreateFlags requiredFlags = pickImageFlags(desc);
+    const VkImageUsageFlags descriptionUsage = (PickImageUsage(desc, expectedAspectMask) & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)) | RequiredImageUsageForResourceStates(desc.initialState);
+    const VkImageCreateFlags requiredFlags = PickImageFlags(desc);
     const b8 sharingInfoConsistent =
         (imageInfo.sharingMode == VK_SHARING_MODE_EXCLUSIVE && imageInfo.queueFamilyIndexCount == 0u && imageInfo.pQueueFamilyIndices == nullptr)
         || (imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT && imageInfo.queueFamilyIndexCount >= 2u && imageInfo.pQueueFamilyIndices != nullptr)
@@ -138,7 +138,7 @@ b8 TextureImagePolicy::isTextureImageInfoConsistent(const TextureDesc& desc, con
     ;
 }
 
-b8 TextureImagePolicy::textureFormatMetadataMatches(const Format::Enum format, const VkImageAspectFlags aspectMask, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
+b8 TextureImagePolicy::TextureFormatMetadataMatches(const Format::Enum format, const VkImageAspectFlags aspectMask, const VulkanDetail::TextureFormatBlockLayout& formatLayout)noexcept{
     const FormatInfo& formatInfo = GetFormatInfo(format);
     const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
     return
@@ -150,7 +150,7 @@ b8 TextureImagePolicy::textureFormatMetadataMatches(const Format::Enum format, c
     ;
 }
 
-b8 TextureImagePolicy::validateTextureViewShape(const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
+b8 TextureImagePolicy::ValidateTextureViewShape(const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
     if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != s_TextureCubeLayerCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));
         return false;
@@ -163,20 +163,20 @@ b8 TextureImagePolicy::validateTextureViewShape(const TextureDimension::Enum dim
     return true;
 }
 
-Unexpected<Failure> TextureImagePolicy::reportTextureCreateDescError(TStringView operationName, TStringView message, const b8 assertFailure){
+Unexpected<Failure> TextureImagePolicy::ReportTextureCreateDescError(TStringView operationName, TStringView message, const b8 assertFailure){
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     if(assertFailure)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     return MakeUnexpected(Failure{});
 }
 
-Expected<TextureCreateMetadata> TextureImagePolicy::validateTextureCreateDesc(const TextureDesc& desc, TStringView operationName, const b8 assertFailure){
+Expected<TextureCreateMetadata> TextureImagePolicy::ValidateTextureCreateDesc(const TextureDesc& desc, TStringView operationName, const b8 assertFailure){
     TextureCreateMetadata metadata{};
     if(!ResourceQueueSharing::IsValid(desc.queueSharing))
-        return reportTextureCreateDescError(operationName, NWB_TEXT("queue sharing contains unknown bits"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("queue sharing contains unknown bits"), assertFailure);
     if(!IsTextureCreationStateMaskValid(desc.initialState))
-        return reportTextureCreateDescError(operationName, NWB_TEXT("initial state is invalid for a texture"), assertFailure);
-    if(!TextureShapePolicy::validate(desc, operationName)){
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("initial state is invalid for a texture"), assertFailure);
+    if(!TextureShapePolicy::Validate(desc, operationName)){
         if(assertFailure)
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: invalid texture shape"), operationName);
         return MakeUnexpected(Failure{});
@@ -184,34 +184,34 @@ Expected<TextureCreateMetadata> TextureImagePolicy::validateTextureCreateDesc(co
 
     metadata.format = VulkanDetail::ConvertFormat(desc.format);
     if(metadata.format == VK_FORMAT_UNDEFINED)
-        return reportTextureCreateDescError(operationName, NWB_TEXT("format is unsupported"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("format is unsupported"), assertFailure);
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
     const auto formatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
     if(!formatLayout)
-        return reportTextureCreateDescError(operationName, NWB_TEXT("invalid texture format"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("invalid texture format"), assertFailure);
     metadata.formatLayout = *formatLayout;
 
     metadata.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(!VulkanDetail::IsSupportedSampleCount(desc.sampleCount))
-        return reportTextureCreateDescError(operationName, NWB_TEXT("sample count is unsupported"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("sample count is unsupported"), assertFailure);
     if(desc.sampleQuality != 0u)
-        return reportTextureCreateDescError(operationName, NWB_TEXT("sample quality must be zero"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("sample quality must be zero"), assertFailure);
     const auto imageType = TryTextureDimensionToImageType(desc.dimension);
     if(!imageType)
-        return reportTextureCreateDescError(operationName, NWB_TEXT("texture dimension is unsupported"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("texture dimension is unsupported"), assertFailure);
     metadata.imageType = *imageType;
-    if(desc.sampleCount != 1u && (metadata.imageType != VK_IMAGE_TYPE_2D || (pickImageFlags(desc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u))
-        return reportTextureCreateDescError(operationName, NWB_TEXT("multisampled textures must be 2D and not cube-compatible"), assertFailure);
+    if(desc.sampleCount != 1u && (metadata.imageType != VK_IMAGE_TYPE_2D || (PickImageFlags(desc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u))
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("multisampled textures must be 2D and not cube-compatible"), assertFailure);
     if(desc.sampleCount != 1 && desc.mipLevels != 1)
-        return reportTextureCreateDescError(operationName, NWB_TEXT("multisampled texture mip levels must be 1"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("multisampled texture mip levels must be 1"), assertFailure);
 
-    metadata.usage = pickImageUsage(desc, metadata.aspectMask);
-    const VkImageUsageFlags requiredInitialUsage = requiredImageUsageForResourceStates(desc.initialState);
+    metadata.usage = PickImageUsage(desc, metadata.aspectMask);
+    const VkImageUsageFlags requiredInitialUsage = RequiredImageUsageForResourceStates(desc.initialState);
     if((metadata.usage & requiredInitialUsage) != requiredInitialUsage){
-        return reportTextureCreateDescError(operationName, NWB_TEXT("initial state requires an undeclared image usage"), assertFailure);
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("initial state requires an undeclared image usage"), assertFailure);
     }
-    metadata.flags = pickImageFlags(desc);
+    metadata.flags = PickImageFlags(desc);
     metadata.sampleCount = VulkanDetail::GetSampleCountFlagBits(desc.sampleCount);
     return metadata;
 }

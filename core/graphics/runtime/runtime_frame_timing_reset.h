@@ -25,7 +25,7 @@ namespace GraphicsModuleDetail{
 
     class FrameTimingResetGraph final{
     public:
-        [[nodiscard]] static b8 submit(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing);
+        [[nodiscard]] static b8 Submit(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing);
     };
 };
 

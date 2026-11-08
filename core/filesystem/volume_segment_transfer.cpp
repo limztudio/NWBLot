@@ -249,11 +249,11 @@ struct WriteSegmentBytesOp{
     }
 };
 
-b8 VolumeSegmentTransfer::read(const AStringView volumeName, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, u8* outputBytes){
+b8 VolumeSegmentTransfer::Read(const AStringView volumeName, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, u8* outputBytes){
     return TransferVolumeBytes(volumeName, s_VolumeOpReadBytes, segmentPaths, segmentSize, offset, byteCount, ReadSegmentBytesOp{}, outputBytes);
 }
 
-b8 VolumeSegmentTransfer::write(const AStringView volumeName, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, const u8* inputBytes){
+b8 VolumeSegmentTransfer::Write(const AStringView volumeName, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, const u8* inputBytes){
     return TransferVolumeBytes(volumeName, s_VolumeOpWriteBytes, segmentPaths, segmentSize, offset, byteCount, WriteSegmentBytesOp{}, inputBytes);
 }
 

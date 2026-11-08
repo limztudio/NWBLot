@@ -17,13 +17,13 @@ NWB_VULKAN_BEGIN
 namespace VulkanTextureDetail{
 
 
-u32 TextureShapePolicy::maxMipLevels(const TextureDesc& desc)noexcept{
+u32 TextureShapePolicy::MaxMipLevels(const TextureDesc& desc)noexcept{
     const u32 depth = desc.dimension == TextureDimension::Texture3D ? desc.depth : 1u;
     const u32 maxExtent = Max(Max(desc.width, desc.height), depth);
     return maxExtent > 1u ? FloorLog2(maxExtent) + 1u : 1u;
 }
 
-b8 TextureShapePolicy::isValid(const TextureDesc& desc)noexcept{
+b8 TextureShapePolicy::IsValid(const TextureDesc& desc)noexcept{
     if(desc.width == 0u || desc.height == 0u || desc.depth == 0u || desc.mipLevels == 0u || desc.arraySize == 0u)
         return false;
 
@@ -56,10 +56,10 @@ b8 TextureShapePolicy::isValid(const TextureDesc& desc)noexcept{
         return false;
     }
 
-    return dimensionValid && desc.mipLevels <= maxMipLevels(desc);
+    return dimensionValid && desc.mipLevels <= TextureShapePolicy::MaxMipLevels(desc);
 }
 
-b8 TextureShapePolicy::validate(const TextureDesc& desc, TStringView operationName){
+b8 TextureShapePolicy::Validate(const TextureDesc& desc, TStringView operationName){
     if(desc.width == 0 || desc.height == 0 || desc.depth == 0 || desc.mipLevels == 0 || desc.arraySize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
         return false;
@@ -99,7 +99,7 @@ b8 TextureShapePolicy::validate(const TextureDesc& desc, TStringView operationNa
         return false;
     }
 
-    const u32 maxMipLevels = TextureShapePolicy::maxMipLevels(desc);
+    const u32 maxMipLevels = TextureShapePolicy::MaxMipLevels(desc);
     if(desc.mipLevels > maxMipLevels){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}"), operationName, desc.mipLevels, maxMipLevels, desc.width, desc.height, desc.depth);
         return false;

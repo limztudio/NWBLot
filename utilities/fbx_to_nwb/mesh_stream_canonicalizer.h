@@ -19,8 +19,8 @@ NWB_FBX_TO_NWB_BEGIN
 
 class SourceMeshCanonicalizer final{
 public:
-    [[nodiscard]] static Expected<SourceMeshCanonicalizeReport> canonicalize(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
-    [[nodiscard]] static Expected<SourceMeshCanonicalizeReport> canonicalizeSkinned(Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
+    [[nodiscard]] static Expected<SourceMeshCanonicalizeReport> Canonicalize(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
+    [[nodiscard]] static Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinned(Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
 };
 
 

@@ -152,7 +152,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
 };
 
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderGenerator::emitAccumulate(
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderGenerator::EmitAccumulate(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
@@ -167,7 +167,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderG
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderGenerator::emitOccupancy(
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderGenerator::EmitOccupancy(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     MaterialCookArena& arena,
@@ -182,7 +182,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderG
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderGenerator::emitExtinction(
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderGenerator::EmitExtinction(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     MaterialCookArena& arena,

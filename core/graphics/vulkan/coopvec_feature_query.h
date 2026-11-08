@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 class CooperativeVectorFeatureQuery final{
 public:
-    [[nodiscard]] static Expected<CooperativeVectorDeviceFeatures> query(VulkanContext& context, CpuTaskScheduler& scheduler);
+    [[nodiscard]] static Expected<CooperativeVectorDeviceFeatures> Query(VulkanContext& context, CpuTaskScheduler& scheduler);
 };
 
 

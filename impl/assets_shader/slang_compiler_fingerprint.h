@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 
 class SlangCompilerFingerprint{
 public:
-    [[nodiscard]] static Expected<u64> compute(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena, Span<const AStringView> commonArguments, Span<const AStringView> baselineCapabilities, Span<const ShaderBinaryPayload::SlangStageMapping> stageMappings);
+    [[nodiscard]] static Expected<u64> Compute(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena, Span<const AStringView> commonArguments, Span<const AStringView> baselineCapabilities, Span<const ShaderBinaryPayload::SlangStageMapping> stageMappings);
 };
 
 

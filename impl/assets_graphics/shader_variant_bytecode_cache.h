@@ -24,11 +24,11 @@ class ShaderVariantBytecodeCache final{
 public:
     using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 
-    [[nodiscard]] static ScratchPath buildPath(const Path& cacheDirectory, AStringView configurationSafeName, AStringView sourceChecksumHex, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static b8 getBytecode(const ShaderCook::ShaderEntry& entry, AStringView variantName, const ShaderCook::DefineCombo& defineCombo, Span<const Path> includeDirectories, Span<const Path> dependencies, const Path& sourcePath, const ScratchPath& bytecodeCachePath, b8 compilerInputsHaveBom, Core::Alloc::ScratchArena& scratchArena, Core::GraphicsBytes& outBytecode);
+    [[nodiscard]] static ScratchPath BuildPath(const Path& cacheDirectory, AStringView configurationSafeName, AStringView sourceChecksumHex, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static b8 GetBytecode(const ShaderCook::ShaderEntry& entry, AStringView variantName, const ShaderCook::DefineCombo& defineCombo, Span<const Path> includeDirectories, Span<const Path> dependencies, const Path& sourcePath, const ScratchPath& bytecodeCachePath, b8 compilerInputsHaveBom, Core::Alloc::ScratchArena& scratchArena, Core::GraphicsBytes& outBytecode);
 
 private:
-    [[nodiscard]] static ShaderVariantCacheReadStatus::Enum readCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode);
+    [[nodiscard]] static ShaderVariantCacheReadStatus::Enum ReadCached(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode);
 };
 
 

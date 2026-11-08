@@ -168,7 +168,7 @@ b8 GraphicsRuntime::prepareFramePreamble(){
         // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
-        if(!GraphicsModuleDetail::FrameTimingResetGraph::submit(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
+        if(!GraphicsModuleDetail::FrameTimingResetGraph::Submit(*this, *m_standaloneGraphWorkspaces, m_gpuTiming)){
             m_gpuTiming.discardFrameReset();
             NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to submit the graph-owned frame GPU-timing reset packet"));
         }

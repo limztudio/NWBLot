@@ -137,8 +137,8 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         .maintenance4ExtensionAvailable = maintenance4ExtensionEnabled,
     };
     VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
-    VulkanDetail::PhysicalDeviceCapabilities::queryFeatureSupport(m_instanceDispatch, m_vulkanPhysicalDevice, featureQueryOptions, featureSupport);
-    if(const AStringView missingFeature = VulkanDetail::PhysicalDeviceCapabilities::findMissingFeature(featureSupport); !missingFeature.empty()){
+    VulkanDetail::PhysicalDeviceCapabilities::QueryFeatureSupport(m_instanceDispatch, m_vulkanPhysicalDevice, featureQueryOptions, featureSupport);
+    if(const AStringView missingFeature = VulkanDetail::PhysicalDeviceCapabilities::FindMissingFeature(featureSupport); !missingFeature.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), ConvertString(missingFeature));
         return false;
     }
@@ -154,7 +154,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     void* pNext = nullptr;
     auto optionalPhysicalDeviceFeatures = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 
-    VulkanDetail::OptionalDeviceFeatureSet requestedOptionalFeatures = VulkanDetail::OptionalDeviceFeaturePolicy::makeRequested();
+    VulkanDetail::OptionalDeviceFeatureSet requestedOptionalFeatures = VulkanDetail::OptionalDeviceFeaturePolicy::MakeRequested();
     if(!m_deviceParams.enableNativeMeshShaders)
         requestedOptionalFeatures.meshShader.meshShader = VK_FALSE;
     VulkanDetail::OptionalDeviceFeatureSet supportedOptionalFeatures;
@@ -168,7 +168,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     for(const auto& [_, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::DescriptorBuffer || (apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr))
             continue;
-        VulkanDetail::OptionalDeviceFeaturePolicy::appendFeature(feature, pNext, supportedOptionalFeatures, queriedOptionalFeatures);
+        VulkanDetail::OptionalDeviceFeaturePolicy::AppendFeature(feature, pNext, supportedOptionalFeatures, queriedOptionalFeatures);
     }
 
     optionalPhysicalDeviceFeatures.pNext = pNext;
@@ -185,7 +185,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
             continue;
         if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr && supportedVulkan13Features.textureCompressionASTC_HDR == VK_TRUE)
             continue;
-        if(VulkanDetail::OptionalDeviceFeaturePolicy::supportsRequested(requestedOptionalFeatures, supportedOptionalFeatures, feature))
+        if(VulkanDetail::OptionalDeviceFeaturePolicy::SupportsRequested(requestedOptionalFeatures, supportedOptionalFeatures, feature))
             continue;
         unsupportedFeatureExtensions.emplace_back(AStringView(name), scratchArena);
     }
@@ -245,7 +245,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     m_fullDrawIndexUint32FeatureEnabled = true;
     m_multiDrawIndirectFeatureEnabled = true;
     m_drawIndirectFirstInstanceFeatureEnabled = true;
-    VulkanDetail::OptionalDeviceFeaturePolicy::finalizeEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
+    VulkanDetail::OptionalDeviceFeaturePolicy::FinalizeEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
     if(!m_deviceParams.enableNativeMeshShaders)
         requestedOptionalFeatures.meshShader.taskShader = VK_FALSE;
     m_meshShaderFeatureEnabled = m_deviceParams.enableNativeMeshShaders && isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME) && requestedOptionalFeatures.meshShader.meshShader == VK_TRUE;
@@ -332,7 +332,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
         // ASTC HDR is owned by VkPhysicalDeviceVulkan13Features after promotion into Vulkan 1.3.
         if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)
             continue;
-        VulkanDetail::OptionalDeviceFeaturePolicy::appendFeature(feature, pNext, requestedOptionalFeatures, enabledOptionalFeatures);
+        VulkanDetail::OptionalDeviceFeaturePolicy::AppendFeature(feature, pNext, requestedOptionalFeatures, enabledOptionalFeatures);
     }
 
     if(!apiSupportsVulkan13 && dynamicRenderingEnabled)

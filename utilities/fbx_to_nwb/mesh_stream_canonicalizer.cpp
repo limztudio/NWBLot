@@ -101,7 +101,7 @@ template<typename Value>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::canonicalizeSkinned(const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
+Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::CanonicalizeSkinned(const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     if(inOutMesh.positions.size() != skinInfluences.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
         return MakeUnexpected(Failure{});
@@ -140,7 +140,7 @@ Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::canonicalizeSkin
     return report;
 }
 
-Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::canonicalize(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
+Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::Canonicalize(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     SourceMeshCanonicalizeReport report;
     report.before = CountSourceMeshStreams(inOutMesh);
 

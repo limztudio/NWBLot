@@ -42,11 +42,11 @@ namespace VulkanTextureDetail{
 
 
 Expected<TextureHandle> Device::createTexture(const TextureDesc& d){
-    const auto metadata = VulkanTextureDetail::TextureImagePolicy::validateTextureCreateDesc(d, NWB_TEXT("create texture"), true);
+    const auto metadata = VulkanTextureDetail::TextureImagePolicy::ValidateTextureCreateDesc(d, NWB_TEXT("create texture"), true);
     if(!metadata)
         return MakeUnexpected(Failure{});
 
-    VkImageCreateInfo imageInfo = VulkanTextureDetail::TextureImagePolicy::buildTextureImageCreateInfo(d, *metadata);
+    VkImageCreateInfo imageInfo = VulkanTextureDetail::TextureImagePolicy::BuildTextureImageCreateInfo(d, *metadata);
     const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
     imageInfo.sharingMode = sharingInfo.mode;
     imageInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
@@ -186,7 +186,7 @@ b8 Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsageF
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
         return false;
     NWB_ASSERT(texture.descriptionMatchesCreation());
-    NWB_ASSERT(VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(texture.m_creationDesc, texture.m_imageInfo));
+    NWB_ASSERT(VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent(texture.m_creationDesc, texture.m_imageInfo));
     if((texture.m_imageInfo.usage & requiredUsage) != requiredUsage)
         return false;
     if(texture.m_image == VK_NULL_HANDLE)
@@ -217,7 +217,7 @@ Expected<TextureHandle> Device::createHandleForNativeTexture(const ObjectType ob
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: image handle is null"));
         return MakeUnexpected(Failure{});
     }
-    const auto metadata = VulkanTextureDetail::TextureImagePolicy::validateTextureCreateDesc(desc, NWB_TEXT("create texture handle for native texture"), false);
+    const auto metadata = VulkanTextureDetail::TextureImagePolicy::ValidateTextureCreateDesc(desc, NWB_TEXT("create texture handle for native texture"), false);
     if(!metadata)
         return MakeUnexpected(Failure{});
     if(nativeProvenance.usage == 0u){
@@ -227,13 +227,13 @@ Expected<TextureHandle> Device::createHandleForNativeTexture(const ObjectType ob
     if(!VulkanNativeSharingDetail::ValidateNativeResourceSharing(*this, m_context.instanceDispatch, m_context.physicalDevice, desc.queueSharing, nativeProvenance, "texture handle for native texture"))
         return MakeUnexpected(Failure{});
 
-    VkImageCreateInfo imageInfo = VulkanTextureDetail::TextureImagePolicy::buildTextureImageCreateInfo(desc, *metadata);
+    VkImageCreateInfo imageInfo = VulkanTextureDetail::TextureImagePolicy::BuildTextureImageCreateInfo(desc, *metadata);
     imageInfo.usage = nativeProvenance.usage;
     imageInfo.flags = nativeProvenance.flags;
     imageInfo.sharingMode = nativeProvenance.sharingMode;
     imageInfo.queueFamilyIndexCount = nativeProvenance.queueFamilyIndexCount;
     imageInfo.pQueueFamilyIndices = nativeProvenance.queueFamilyIndices;
-    if(!VulkanTextureDetail::TextureImagePolicy::isTextureImageInfoConsistent(desc, imageInfo)){
+    if(!VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native provenance contradicts the logical description or declared initial state"));
         return MakeUnexpected(Failure{});
     }

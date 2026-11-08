@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 
 class GpuPresentationEndpointValidator final{
 public:
-    [[nodiscard]] static b8 validate(const GpuTaskGraph::DeclarationReadView& graph, Span<const GpuTaskId> topologicalOrder, Span<const usize> incomingOffsets, Span<const u32> incomingProducers, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysisDiagnostic& diagnostic);
+    [[nodiscard]] static b8 Validate(const GpuTaskGraph::DeclarationReadView& graph, Span<const GpuTaskId> topologicalOrder, Span<const usize> incomingOffsets, Span<const u32> incomingProducers, Alloc::ScratchArena& scratchArena, GpuTaskGraphAnalysisDiagnostic& diagnostic);
 };
 
 

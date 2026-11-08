@@ -19,9 +19,9 @@ namespace VulkanTextureDetail{
 
 class TextureShapePolicy{
 public:
-    [[nodiscard]] static u32 maxMipLevels(const TextureDesc& desc)noexcept;
-    [[nodiscard]] static b8 isValid(const TextureDesc& desc)noexcept;
-    [[nodiscard]] static b8 validate(const TextureDesc& desc, TStringView operationName);
+    [[nodiscard]] static u32 MaxMipLevels(const TextureDesc& desc)noexcept;
+    [[nodiscard]] static b8 IsValid(const TextureDesc& desc)noexcept;
+    [[nodiscard]] static b8 Validate(const TextureDesc& desc, TStringView operationName);
 };
 
 

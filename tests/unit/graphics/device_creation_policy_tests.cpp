@@ -36,13 +36,13 @@ namespace __hidden_device_creation_policy_tests{
 TEST(DeviceCreationPolicy, SurfacePolicyKeepsFallbackOrderAndRejectsMissingAlpha){
     using Policy = Core::GraphicsBackend::SwapChainSurfacePolicy;
     const Array<VkPresentModeKHR, 2> modes = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR };
-    const auto mode = Policy::selectPresentMode(modes, false);
+    const auto mode = Policy::SelectPresentMode(modes, false);
     ASSERT_TRUE(mode);
     EXPECT_EQ(*mode, VK_PRESENT_MODE_FIFO_KHR);
-    EXPECT_FALSE(Policy::selectPresentMode({}, false));
+    EXPECT_FALSE(Policy::SelectPresentMode({}, false));
 
     const Array<VkSurfaceFormatKHR, 1> formats = {{ { VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR } }};
-    const auto format = Policy::selectFormat(formats, Core::Format::RGBA8_UNORM_SRGB, true);
+    const auto format = Policy::SelectFormat(formats, Core::Format::RGBA8_UNORM_SRGB, true);
     ASSERT_TRUE(format);
     EXPECT_EQ(format->surfaceFormat.format, VK_FORMAT_R8G8B8A8_SRGB);
     EXPECT_EQ(format->outputMode, Core::SwapChainOutputMode::SDR);
@@ -53,13 +53,13 @@ TEST(DeviceCreationPolicy, SurfacePolicyKeepsFallbackOrderAndRejectsMissingAlpha
     caps.maxImageExtent = { 500u, 600u };
     caps.minImageCount = 2u;
     caps.maxImageCount = 3u;
-    const VkExtent2D extent = Policy::resolveExtent(caps, 1u, 900u);
+    const VkExtent2D extent = Policy::ResolveExtent(caps, 1u, 900u);
     EXPECT_EQ(extent.width, 100u);
     EXPECT_EQ(extent.height, 600u);
-    EXPECT_EQ(Policy::imageCount(caps, 5u), 3u);
-    EXPECT_FALSE(Policy::selectCompositeAlpha(caps));
+    EXPECT_EQ(Policy::ImageCount(caps, 5u), 3u);
+    EXPECT_FALSE(Policy::SelectCompositeAlpha(caps));
     caps.supportedCompositeAlpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-    const auto alpha = Policy::selectCompositeAlpha(caps);
+    const auto alpha = Policy::SelectCompositeAlpha(caps);
     ASSERT_TRUE(alpha);
     EXPECT_EQ(*alpha, VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR);
 }
@@ -72,16 +72,16 @@ TEST(DeviceCreationPolicy, QueueRegistrationRejectsBoundaryAndDuplicateIdentity)
     desc.capabilities = Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Transfer;
     desc.timestampValidBits = 35u;
     Array<b8, static_cast<u32>(Core::CommandQueue::kCount)> primaries{};
-    EXPECT_EQ(Policy::validate(desc, native, {}, primaries), Policy::Result::Invalid);
+    EXPECT_EQ(Policy::Validate(desc, native, {}, primaries), Policy::Result::Invalid);
     desc.timestampValidBits = 36u;
-    EXPECT_EQ(Policy::validate(desc, native, {}, primaries), Policy::Result::Valid);
+    EXPECT_EQ(Policy::Validate(desc, native, {}, primaries), Policy::Result::Valid);
     Array<Core::GpuPhysicalQueueInfo, 1> existing{};
     existing[0].familyIndex = 4u;
     existing[0].queueIndex = 2u;
-    EXPECT_EQ(Policy::validate(desc, native, existing, primaries), Policy::Result::DuplicateQueue);
+    EXPECT_EQ(Policy::Validate(desc, native, existing, primaries), Policy::Result::DuplicateQueue);
     desc.primaryForClass = true;
     primaries[static_cast<u32>(Core::CommandQueue::Graphics)] = true;
-    EXPECT_EQ(Policy::validate(desc, native, {}, primaries), Policy::Result::DuplicatePrimary);
+    EXPECT_EQ(Policy::Validate(desc, native, {}, primaries), Policy::Result::DuplicatePrimary);
 }
 
 TEST(DeviceCreationPolicy, QueueSharingUsesFirstDistinctFamilyAndHandlesMissingPrimary){
@@ -98,13 +98,13 @@ TEST(DeviceCreationPolicy, QueueSharingUsesFirstDistinctFamilyAndHandlesMissingP
     queues[3].familyIndex = 4u;
     queues[4].queueClass = Core::CommandQueue::Transfer;
     queues[4].familyIndex = 9u;
-    const auto shared = Policy::resolve(queues, 4u, 4u, 9u);
+    const auto shared = Policy::Resolve(queues, 4u, 4u, 9u);
     EXPECT_EQ(shared.graphics, 4);
     EXPECT_EQ(shared.auxiliaryGraphics, 7);
     EXPECT_EQ(shared.auxiliaryCompute, -1);
     EXPECT_FALSE(shared.asyncComputeLaneEnabled);
     EXPECT_TRUE(shared.transferQueueEnabled);
-    const auto missingGraphics = Policy::resolve(queues, missing, 4u, 4u);
+    const auto missingGraphics = Policy::Resolve(queues, missing, 4u, 4u);
     EXPECT_EQ(missingGraphics.graphics, -1);
     EXPECT_EQ(missingGraphics.auxiliaryGraphics, -1);
     EXPECT_FALSE(missingGraphics.asyncComputeLaneEnabled);
@@ -122,12 +122,12 @@ TEST(DeviceCreationPolicy, CanonicalQueuesRejectAliasedHandlesAndOutOfRangeIndic
     queues[1].queue = reinterpret_cast<VkQueue>(2u);
     queues[1].familyIndex = 0u;
     queues[1].queueIndex = 1u;
-    EXPECT_EQ(Policy::validateCanonical(queues, families), Policy::Result::Valid);
+    EXPECT_EQ(Policy::ValidateCanonical(queues, families), Policy::Result::Valid);
     queues[1].queue = queues[0].queue;
-    EXPECT_EQ(Policy::validateCanonical(queues, families), Policy::Result::DuplicateQueue);
+    EXPECT_EQ(Policy::ValidateCanonical(queues, families), Policy::Result::DuplicateQueue);
     queues[1].queue = reinterpret_cast<VkQueue>(2u);
     queues[1].queueIndex = 2u;
-    EXPECT_EQ(Policy::validateCanonical(queues, families), Policy::Result::Invalid);
+    EXPECT_EQ(Policy::ValidateCanonical(queues, families), Policy::Result::Invalid);
 }
 
 TEST(DeviceCreationPolicy, QueuePlanKeepsCrossFamilyOrderAndStablePriorities){

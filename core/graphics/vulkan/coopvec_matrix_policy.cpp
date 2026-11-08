@@ -13,7 +13,7 @@
 NWB_VULKAN_BEGIN
 
 
-b8 CooperativeVectorMatrixPolicy::isComponentTypeSupported(const VkComponentTypeKHR componentType, const VkCooperativeVectorPropertiesNV* const cooperativeVectorProperties, const u32 cooperativeVectorPropertyCount)noexcept{
+b8 CooperativeVectorMatrixPolicy::IsComponentTypeSupported(const VkComponentTypeKHR componentType, const VkCooperativeVectorPropertiesNV* const cooperativeVectorProperties, const u32 cooperativeVectorPropertyCount)noexcept{
     if(componentType == VK_COMPONENT_TYPE_FLOAT32_KHR)
         return true;
     for(u32 i = 0u; i < cooperativeVectorPropertyCount; ++i){
@@ -23,7 +23,7 @@ b8 CooperativeVectorMatrixPolicy::isComponentTypeSupported(const VkComponentType
     return false;
 }
 
-b8 CooperativeVectorMatrixPolicy::isLowerPrecisionFloat(const VkComponentTypeKHR componentType)noexcept{
+b8 CooperativeVectorMatrixPolicy::IsLowerPrecisionFloat(const VkComponentTypeKHR componentType)noexcept{
     switch(componentType){
     case VK_COMPONENT_TYPE_FLOAT_E4M3_NV:
     case VK_COMPONENT_TYPE_FLOAT_E5M2_NV:
@@ -35,25 +35,25 @@ b8 CooperativeVectorMatrixPolicy::isLowerPrecisionFloat(const VkComponentTypeKHR
     }
 }
 
-b8 CooperativeVectorMatrixPolicy::isFloat8(const VkComponentTypeKHR componentType)noexcept{
+b8 CooperativeVectorMatrixPolicy::IsFloat8(const VkComponentTypeKHR componentType)noexcept{
     return componentType == VK_COMPONENT_TYPE_FLOAT_E4M3_NV || componentType == VK_COMPONENT_TYPE_FLOAT_E5M2_NV;
 }
 
-b8 CooperativeVectorMatrixPolicy::isTypeConversionSupported(const VkComponentTypeKHR srcType, const VkComponentTypeKHR dstType)noexcept{
+b8 CooperativeVectorMatrixPolicy::IsTypeConversionSupported(const VkComponentTypeKHR srcType, const VkComponentTypeKHR dstType)noexcept{
     if(srcType == dstType)
         return true;
     if(srcType == VK_COMPONENT_TYPE_FLOAT32_KHR)
-        return isLowerPrecisionFloat(dstType);
+        return CooperativeVectorMatrixPolicy::IsLowerPrecisionFloat(dstType);
     if(dstType == VK_COMPONENT_TYPE_FLOAT32_KHR)
-        return isLowerPrecisionFloat(srcType);
+        return CooperativeVectorMatrixPolicy::IsLowerPrecisionFloat(srcType);
     if(srcType == VK_COMPONENT_TYPE_FLOAT16_KHR)
-        return isFloat8(dstType);
+        return CooperativeVectorMatrixPolicy::IsFloat8(dstType);
     if(dstType == VK_COMPONENT_TYPE_FLOAT16_KHR)
-        return isFloat8(srcType);
+        return CooperativeVectorMatrixPolicy::IsFloat8(srcType);
     return false;
 }
 
-Expected<CooperativeVectorMatrixPolicy::StandardMatrixLayout> CooperativeVectorMatrixPolicy::standardLayoutSize(const usize elementByteSize, const u32 numRows, const u32 numColumns, const CooperativeVectorMatrixLayout::Enum layout, const usize requestedStride)noexcept{
+Expected<CooperativeVectorMatrixPolicy::StandardMatrixLayout> CooperativeVectorMatrixPolicy::StandardLayoutSize(const usize elementByteSize, const u32 numRows, const u32 numColumns, const CooperativeVectorMatrixLayout::Enum layout, const usize requestedStride)noexcept{
     const usize minorElementCount = layout == CooperativeVectorMatrixLayout::RowMajor ? static_cast<usize>(numColumns) : static_cast<usize>(numRows);
     const usize majorElementCount = layout == CooperativeVectorMatrixLayout::RowMajor ? static_cast<usize>(numRows) : static_cast<usize>(numColumns);
     const auto minorByteSize = TryMultiply<usize>(minorElementCount, elementByteSize);
@@ -76,7 +76,7 @@ Expected<CooperativeVectorMatrixPolicy::StandardMatrixLayout> CooperativeVectorM
     return StandardMatrixLayout{ stride, byteSize };
 }
 
-Expected<usize> CooperativeVectorMatrixPolicy::queryOptimalLayoutSize(const VulkanContext& context, const VkComponentTypeKHR componentType, const VkCooperativeVectorMatrixLayoutNV layout, const u32 numRows, const u32 numColumns)noexcept{
+Expected<usize> CooperativeVectorMatrixPolicy::QueryOptimalLayoutSize(const VulkanContext& context, const VkComponentTypeKHR componentType, const VkCooperativeVectorMatrixLayoutNV layout, const u32 numRows, const u32 numColumns)noexcept{
     const auto publicComponentType = VulkanDetail::ConvertCoopVecDataType(componentType);
     const usize elementByteSize = GetCooperativeVectorDataTypeSize(publicComponentType);
     const auto rowByteSize = TryMultiply<usize>(static_cast<usize>(numColumns), elementByteSize);
@@ -107,19 +107,19 @@ Expected<usize> CooperativeVectorMatrixPolicy::queryOptimalLayoutSize(const Vulk
     return queriedByteSize;
 }
 
-Expected<CooperativeVectorMatrixPolicy::MatrixLayout> CooperativeVectorMatrixPolicy::resolveMatrixLayout(const VulkanContext& context, const CooperativeVectorMatrixLayoutDesc& layoutDesc, const u32 numRows, const u32 numColumns)noexcept{
+Expected<CooperativeVectorMatrixPolicy::MatrixLayout> CooperativeVectorMatrixPolicy::ResolveMatrixLayout(const VulkanContext& context, const CooperativeVectorMatrixLayoutDesc& layoutDesc, const u32 numRows, const u32 numColumns)noexcept{
     MatrixLayout resolved;
     resolved.componentType = VulkanDetail::ConvertCoopVecDataType(layoutDesc.type);
     resolved.layout = VulkanDetail::ConvertCoopVecMatrixLayout(layoutDesc.layout);
     if(layoutDesc.layout == CooperativeVectorMatrixLayout::RowMajor || layoutDesc.layout == CooperativeVectorMatrixLayout::ColumnMajor){
-        const auto standard = standardLayoutSize(GetCooperativeVectorDataTypeSize(layoutDesc.type), numRows, numColumns, layoutDesc.layout, layoutDesc.stride);
+        const auto standard = CooperativeVectorMatrixPolicy::StandardLayoutSize(GetCooperativeVectorDataTypeSize(layoutDesc.type), numRows, numColumns, layoutDesc.layout, layoutDesc.stride);
         if(!standard)
             return MakeUnexpected(standard.error());
         resolved.stride = standard->stride;
         resolved.byteSize = standard->byteSize;
     }
     else{
-        const auto byteSize = queryOptimalLayoutSize(context, resolved.componentType, resolved.layout, numRows, numColumns);
+        const auto byteSize = CooperativeVectorMatrixPolicy::QueryOptimalLayoutSize(context, resolved.componentType, resolved.layout, numRows, numColumns);
         if(!byteSize)
             return MakeUnexpected(byteSize.error());
         resolved.byteSize = *byteSize;
@@ -127,7 +127,7 @@ Expected<CooperativeVectorMatrixPolicy::MatrixLayout> CooperativeVectorMatrixPol
     return resolved;
 }
 
-Expected<CooperativeVectorMatrixPolicy::DeviceAddressRange> CooperativeVectorMatrixPolicy::checkedDeviceRange(Buffer& buffer, const u64 offset, const usize declaredByteSize, const usize requiredByteSize)noexcept{
+Expected<CooperativeVectorMatrixPolicy::DeviceAddressRange> CooperativeVectorMatrixPolicy::CheckedDeviceRange(Buffer& buffer, const u64 offset, const usize declaredByteSize, const usize requiredByteSize)noexcept{
     NWB_ASSERT(requiredByteSize != 0u);
     if(declaredByteSize < requiredByteSize)
         return MakeUnexpected(Failure{});

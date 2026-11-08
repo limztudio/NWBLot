@@ -34,7 +34,7 @@ using Core::Assets::CookVector;
 using Core::Assets::ScratchArena;
 using Core::Assets::ScratchString;
 
-b8 ShaderIncludeDirectories::append(const Path& includeDirectory, const ShaderCook::ShaderEntry& entry, ScratchArena& scratchArena, CookVector<Path>& outIncludeDirectories, IncludeDirectoryScratchSet& inOutSeenIncludeDirectories){
+b8 ShaderIncludeDirectories::Append(const Path& includeDirectory, const ShaderCook::ShaderEntry& entry, ScratchArena& scratchArena, CookVector<Path>& outIncludeDirectories, IncludeDirectoryScratchSet& inOutSeenIncludeDirectories){
     const auto isDirectoryResult = IsDirectory(includeDirectory);
     if(!isDirectoryResult){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query include root '{}' for entry '{}': {}"), PathToString<tchar>(includeDirectory), ConvertString(entry.name), ConvertString(isDirectoryResult.error().message()));
@@ -62,7 +62,7 @@ b8 ShaderIncludeDirectories::append(const Path& includeDirectory, const ShaderCo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CookVector<Path>> ShaderIncludeDirectories::build(
+Expected<CookVector<Path>> ShaderIncludeDirectories::Build(
     const Path& repoRoot,
     const Span<const Core::Assets::ResolvedAssetRoot> assetRoots,
     const Span<const NotNull<const Path*>> implicitIncludeRoots,
@@ -82,7 +82,7 @@ Expected<CookVector<Path>> ShaderIncludeDirectories::build(
     seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
 
     for(const NotNull<const Path*> implicitIncludeRoot : implicitIncludeRoots){
-        if(!append(*implicitIncludeRoot, entry, scratchArena, includeDirectories, seenIncludeDirectories))
+        if(!ShaderIncludeDirectories::Append(*implicitIncludeRoot, entry, scratchArena, includeDirectories, seenIncludeDirectories))
             return MakeUnexpected(Failure{});
     }
 
@@ -101,7 +101,7 @@ Expected<CookVector<Path>> ShaderIncludeDirectories::build(
             includeDirectory = *resolved;
         }
 
-        if(!append(*includeDirectory, entry, scratchArena, includeDirectories, seenIncludeDirectories))
+        if(!ShaderIncludeDirectories::Append(*includeDirectory, entry, scratchArena, includeDirectories, seenIncludeDirectories))
             return MakeUnexpected(Failure{});
     }
 

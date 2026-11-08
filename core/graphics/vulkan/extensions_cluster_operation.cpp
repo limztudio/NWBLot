@@ -110,12 +110,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         return;
     }
 
-    auto input = VulkanDetail::ClusterOperationInput::build(opDesc.params, s_OperationName);
+    auto input = VulkanDetail::ClusterOperationInput::Build(opDesc.params, s_OperationName);
     if(!input){
         rejectCommandRecording(s_OperationName, NWB_TEXT("operation parameters are invalid"));
         return;
     }
-    const auto inputInfo = input->nativeInfo();
+    const auto inputInfo = input->NativeInfo();
 
     if(opDesc.params.type == RayTracingClusterOperationType::ClasBuild || opDesc.params.type == RayTracingClusterOperationType::ClasBuildTemplates || opDesc.params.type == RayTracingClusterOperationType::ClasInstantiateTemplates){
         const auto& properties = m_context.nvClusterAccelerationStructureProperties;

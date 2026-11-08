@@ -126,11 +126,11 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     const CrashScratchPath operationArchivePath(scratchArena, archivePath);
     const CrashScratchPath packageDirectory = CrashExtractedPackageDirectory(scratchArena, config.storageDirectory, operationArchivePath);
 
-    const auto extracted = CrashArchiveExtractor::extract(scratchArena, operationArchivePath, packageDirectory);
+    const auto extracted = CrashArchiveExtractor::Extract(scratchArena, operationArchivePath, packageDirectory);
     if(!extracted)
         return Ingest::RejectCrashUpload(arena, scratchArena, operationArchivePath, packageDirectory, config, extracted.error());
 
-    auto summaryResult = CrashManifestValidator::validate(arena, scratchArena, packageDirectory);
+    auto summaryResult = CrashManifestValidator::Validate(arena, scratchArena, packageDirectory);
     if(!summaryResult)
         return Ingest::RejectCrashUpload(arena, scratchArena, operationArchivePath, packageDirectory, config, summaryResult.error());
     const CrashPackageSummary& summary = *summaryResult;

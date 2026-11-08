@@ -17,7 +17,7 @@ NWB_LOG_BEGIN
 
 class CrashManifestValidator final{
 public:
-    [[nodiscard]] static Expected<CrashPackageSummary, CrashIngestFailure> validate(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory);
+    [[nodiscard]] static Expected<CrashPackageSummary, CrashIngestFailure> Validate(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory);
 };
 
 

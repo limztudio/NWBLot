@@ -13,14 +13,14 @@
 NWB_VULKAN_BEGIN
 
 
-Expected<VulkanDetail::SwapChainSurfaceFormatSelection> SwapChainSurfacePolicy::selectFormat(const Span<const VkSurfaceFormatKHR> supportedFormats, const Format::Enum requestedSdrFormat, const b8 hdr10Allowed)noexcept{
+Expected<VulkanDetail::SwapChainSurfaceFormatSelection> SwapChainSurfacePolicy::SelectFormat(const Span<const VkSurfaceFormatKHR> supportedFormats, const Format::Enum requestedSdrFormat, const b8 hdr10Allowed)noexcept{
     VulkanDetail::SwapChainSurfaceFormatSelection selection;
     if(!supportedFormats.data() || supportedFormats.empty())
         return MakeUnexpected(Failure{});
 
     if(hdr10Allowed){
         for(const VkSurfaceFormatKHR& supported : supportedFormats){
-            if(!supports(supported, VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT))
+            if(!Supports(supported, VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT))
                 continue;
 
             selection.surfaceFormat = supported;
@@ -51,7 +51,7 @@ Expected<VulkanDetail::SwapChainSurfaceFormatSelection> SwapChainSurfacePolicy::
             continue;
 
         for(const VkSurfaceFormatKHR& supported : supportedFormats){
-            if(!supports(supported, candidate.format, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR))
+            if(!Supports(supported, candidate.format, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR))
                 continue;
 
             selection.surfaceFormat = supported;
@@ -66,7 +66,7 @@ Expected<VulkanDetail::SwapChainSurfaceFormatSelection> SwapChainSurfacePolicy::
     return MakeUnexpected(Failure{});
 }
 
-VkExtent2D SwapChainSurfacePolicy::resolveExtent(const VkSurfaceCapabilitiesKHR& surfaceCaps, const u32 requestedWidth, const u32 requestedHeight)noexcept{
+VkExtent2D SwapChainSurfacePolicy::ResolveExtent(const VkSurfaceCapabilitiesKHR& surfaceCaps, const u32 requestedWidth, const u32 requestedHeight)noexcept{
     if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX)
         return surfaceCaps.currentExtent;
 
@@ -76,7 +76,7 @@ VkExtent2D SwapChainSurfacePolicy::resolveExtent(const VkSurfaceCapabilitiesKHR&
     };
 }
 
-Expected<VkPresentModeKHR> SwapChainSurfacePolicy::selectPresentMode(const Span<const VkPresentModeKHR> modes, const b8 vsyncEnabled)noexcept{
+Expected<VkPresentModeKHR> SwapChainSurfacePolicy::SelectPresentMode(const Span<const VkPresentModeKHR> modes, const b8 vsyncEnabled)noexcept{
     const VkPresentModeKHR requested = vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
     b8 fifoFound = false;
     for(const VkPresentModeKHR mode : modes){
@@ -92,7 +92,7 @@ Expected<VkPresentModeKHR> SwapChainSurfacePolicy::selectPresentMode(const Span<
     return modes[0];
 }
 
-Expected<VkCompositeAlphaFlagBitsKHR> SwapChainSurfacePolicy::selectCompositeAlpha(const VkSurfaceCapabilitiesKHR& surfaceCaps)noexcept{
+Expected<VkCompositeAlphaFlagBitsKHR> SwapChainSurfacePolicy::SelectCompositeAlpha(const VkSurfaceCapabilitiesKHR& surfaceCaps)noexcept{
     const Array<VkCompositeAlphaFlagBitsKHR, 4> candidates = {{
         VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
@@ -106,14 +106,14 @@ Expected<VkCompositeAlphaFlagBitsKHR> SwapChainSurfacePolicy::selectCompositeAlp
     return MakeUnexpected(Failure{});
 }
 
-u32 SwapChainSurfacePolicy::imageCount(const VkSurfaceCapabilitiesKHR& surfaceCaps, const u32 requestedCount)noexcept{
+u32 SwapChainSurfacePolicy::ImageCount(const VkSurfaceCapabilitiesKHR& surfaceCaps, const u32 requestedCount)noexcept{
     u32 count = Max(requestedCount, surfaceCaps.minImageCount);
     if(surfaceCaps.maxImageCount > 0)
         count = Min(count, surfaceCaps.maxImageCount);
     return count;
 }
 
-VkSurfaceTransformFlagBitsKHR SwapChainSurfacePolicy::preTransform(const VkSurfaceCapabilitiesKHR& surfaceCaps)noexcept{
+VkSurfaceTransformFlagBitsKHR SwapChainSurfacePolicy::PreTransform(const VkSurfaceCapabilitiesKHR& surfaceCaps)noexcept{
     return (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : surfaceCaps.currentTransform;
 }
 

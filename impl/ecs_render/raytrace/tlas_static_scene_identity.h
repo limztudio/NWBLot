@@ -14,10 +14,10 @@ NWB_IMPL_BEGIN
 
 class TlasStaticSceneIdentity final{
 public:
-    [[nodiscard]] static u64 compute(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
+    [[nodiscard]] static u64 Compute(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
 
 private:
-    static void append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
+    static void Append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
 };
 
 

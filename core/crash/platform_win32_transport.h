@@ -22,10 +22,10 @@ namespace CrashDetail{
 
 class WindowsCrashTransport final{
 public:
-    [[nodiscard]] static CrashDumpTransportStatus::Enum request(CrashState& state, const CrashRequest& request, u32 waitMilliseconds)noexcept;
+    [[nodiscard]] static CrashDumpTransportStatus::Enum Request(CrashState& state, const CrashRequest& request, u32 waitMilliseconds)noexcept;
 
 private:
-    static void drainPendingAcks(HANDLE ackReadHandle)noexcept;
+    static void DrainPendingAcks(HANDLE ackReadHandle)noexcept;
     static constexpr DWORD s_CrashWaitHandleCount = 2u;
 };
 

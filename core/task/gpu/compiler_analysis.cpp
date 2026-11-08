@@ -277,7 +277,7 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
     const Timer hazardAnalysisBegin = TimerNow();
     GpuTaskId invalidHazardTask;
     GpuGraphResourceId invalidHazardResource;
-    if(!GpuResourceHazardTracker::append(graph, outAnalysis.m_topologicalOrder, scratchArena, edgeCollector, invalidHazardTask, invalidHazardResource))
+    if(!GpuResourceHazardTracker::Append(graph, outAnalysis.m_topologicalOrder, scratchArena, edgeCollector, invalidHazardTask, invalidHazardResource))
         return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, invalidHazardTask, {}, invalidHazardResource);
     const f64 hazardAnalysisSeconds = DurationInSeconds<f64>(TimerNow(), hazardAnalysisBegin);
 
@@ -303,12 +303,12 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
     const f64 topologicalOrderSeconds = semanticTopologySeconds + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin);
 
     const Timer acceptedQueueFrontierValidationBegin = TimerNow();
-    if(!GpuAcceptedQueueFrontierValidator::validate(graph, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_edges, outAnalysis.m_diagnostic))
+    if(!GpuAcceptedQueueFrontierValidator::Validate(graph, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_edges, outAnalysis.m_diagnostic))
         return false;
     validationSeconds += DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin);
 
     const Timer presentationValidationBegin = TimerNow();
-    if(!GpuPresentationEndpointValidator::validate(graph, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_schedulingIncomingProducers, scratchArena, outAnalysis.m_diagnostic))
+    if(!GpuPresentationEndpointValidator::Validate(graph, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_schedulingIncomingProducers, scratchArena, outAnalysis.m_diagnostic))
         return false;
     validationSeconds += DurationInSeconds<f64>(TimerNow(), presentationValidationBegin);
 

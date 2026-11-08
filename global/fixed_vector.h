@@ -115,9 +115,9 @@ public:
     constexpr size_type max_size()const noexcept{ return s_MaxElements; }
 
     // Slots remain constructed; successful removals reset them from the back.
-    constexpr void clear()noexcept(resetSlotIsNoexcept()){
+    constexpr void clear()noexcept(ResetSlotIsNoexcept()){
         while(m_currentSize != 0u){
-            resetSlot(data()[m_currentSize - 1u]);
+            ResetSlot(data()[m_currentSize - 1u]);
             --m_currentSize;
         }
     }
@@ -146,7 +146,7 @@ public:
 
     constexpr void pop_back(){
         requireNonEmpty(MakeNotNull("FixedVector pop_back on empty vector"));
-        resetSlot(data()[m_currentSize - 1u]);
+        ResetSlot(data()[m_currentSize - 1u]);
         --m_currentSize;
     }
 
@@ -174,7 +174,7 @@ public:
 
 
 private:
-    [[nodiscard]] static consteval b8 resetSlotIsNoexcept(){
+    [[nodiscard]] static consteval b8 ResetSlotIsNoexcept(){
         if constexpr(MaxElements == 0u)
             return true;
         else if constexpr(requires(T& slot){ slot = T{}; })
@@ -185,7 +185,7 @@ private:
             return true;
     }
 
-    static constexpr void resetSlot([[maybe_unused]] T& slot)noexcept(resetSlotIsNoexcept()){
+    static constexpr void ResetSlot([[maybe_unused]] T& slot)noexcept(ResetSlotIsNoexcept()){
         if constexpr(MaxElements != 0u){
             if constexpr(requires(T& value){ value = T{}; })
                 slot = T{};

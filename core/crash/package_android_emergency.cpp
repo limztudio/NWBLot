@@ -29,7 +29,7 @@ static b8 WriteAndroidCollectionNote(Alloc::ScratchArena& scratchArena, const Cr
     return WriteTextFile(RequestPendingDirectory(scratchArena, request) / PackageNames::s_AndroidCollectionFileName, s_CollectionNote);
 }
 
-void CrashAndroidEmergencyCollector::collect(Alloc::ScratchArena& scratchArena, const CrashUploadSnapshot& snapshot){
+void CrashAndroidEmergencyCollector::Collect(Alloc::ScratchArena& scratchArena, const CrashUploadSnapshot& snapshot){
     const ::Path<Alloc::ScratchArena> recordPath = ::Path<Alloc::ScratchArena>(scratchArena, snapshot.spoolDirectory.data()) / PackageNames::s_AndroidEmergencyRequestFileName;
     CrashBytesT<Alloc::ScratchArena> bytes(scratchArena);
     const auto read = ReadBinaryFile(recordPath, bytes);
@@ -67,7 +67,7 @@ void CrashAndroidEmergencyCollector::collect(Alloc::ScratchArena& scratchArena, 
         });
 }
 #else
-void CrashAndroidEmergencyCollector::collect([[maybe_unused]] Alloc::ScratchArena& scratchArena, [[maybe_unused]] const CrashUploadSnapshot& snapshot){}
+void CrashAndroidEmergencyCollector::Collect([[maybe_unused]] Alloc::ScratchArena& scratchArena, [[maybe_unused]] const CrashUploadSnapshot& snapshot){}
 #endif
 
 };

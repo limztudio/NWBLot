@@ -269,7 +269,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             auto& mis = *MakeNotNull(reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam));
             ScopedLock lock(s_ListMutex);
             if(IsMessageIndexValid(mis.itemID))
-                LogRowPainter::measure(hwnd, s_ListHwnd, mis, s_Store->messages[static_cast<usize>(mis.itemID)]);
+                LogRowPainter::Measure(hwnd, s_ListHwnd, mis, s_Store->messages[static_cast<usize>(mis.itemID)]);
         }
         return TRUE;
 
@@ -283,7 +283,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             auto& dis = *MakeNotNull(reinterpret_cast<LPDRAWITEMSTRUCT>(lParam));
             ScopedLock lock(s_ListMutex);
             if(IsMessageIndexValid(dis.itemID))
-                LogRowPainter::draw(dis, s_Store->messages[static_cast<usize>(dis.itemID)]);
+                LogRowPainter::Draw(dis, s_Store->messages[static_cast<usize>(dis.itemID)]);
         }
         return TRUE;
         }

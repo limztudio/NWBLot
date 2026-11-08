@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 
 class GpuCommandIrBuiltinPreflight final{
 public:
-    [[nodiscard]] static GpuCommandIrReplayError::Enum validate(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept;
+    [[nodiscard]] static GpuCommandIrReplayError::Enum Validate(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& queue)noexcept;
 };
 
 

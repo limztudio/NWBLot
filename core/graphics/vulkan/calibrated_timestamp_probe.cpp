@@ -28,7 +28,7 @@ namespace __hidden_calibrated_timestamp_probe{
 };
 
 
-b8 CalibratedTimestampProbe::query(const VkPhysicalDevice physicalDevice, const VkDevice device, const PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR enumerateTimeDomains, const PFN_vkGetCalibratedTimestampsKHR getCalibratedTimestamps, Alloc::ScratchArena& scratchArena){
+b8 CalibratedTimestampProbe::Query(const VkPhysicalDevice physicalDevice, const VkDevice device, const PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR enumerateTimeDomains, const PFN_vkGetCalibratedTimestampsKHR getCalibratedTimestamps, Alloc::ScratchArena& scratchArena){
     if(!enumerateTimeDomains || !getCalibratedTimestamps){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp entry points are unavailable."));
         return false;

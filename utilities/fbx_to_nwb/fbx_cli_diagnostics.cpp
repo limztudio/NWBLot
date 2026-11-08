@@ -15,7 +15,7 @@
 NWB_FBX_TO_NWB_BEGIN
 
 
-i32 FbxCliDiagnostics::exitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Alloc::ScratchArena& scratchArena){
+i32 FbxCliDiagnostics::ExitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Alloc::ScratchArena& scratchArena){
     if(error.get_exit_code() == s_FbxToNwbExitSuccess)
         return app.exit(error, NWB_COUT, NWB_CERR);
 
@@ -29,8 +29,8 @@ i32 FbxCliDiagnostics::exitParseError(const CLI::App& app, const CLI::ParseError
     return result;
 }
 
-i32 FbxCliDiagnostics::exitValidation(const CLI::App& app, const AStringView option, const AStringView message, Core::Alloc::ScratchArena& scratchArena){
-    return exitParseError(app, CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())), scratchArena);
+i32 FbxCliDiagnostics::ExitValidation(const CLI::App& app, const AStringView option, const AStringView message, Core::Alloc::ScratchArena& scratchArena){
+    return ExitParseError(app, CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())), scratchArena);
 }
 
 

@@ -88,7 +88,7 @@ using namespace SceneAssetCook;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TransformComponentCookEntry> SceneComponentMetadataParser::parseTransform(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+Expected<TransformComponentCookEntry> SceneComponentMetadataParser::ParseTransform(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     using namespace __hidden_scene_cook_components;
 
     TransformComponentCookEntry entry(arena);
@@ -153,7 +153,7 @@ Expected<TransformComponentCookEntry> SceneComponentMetadataParser::parseTransfo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CameraComponentCookEntry> SceneComponentMetadataParser::parseCamera(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+Expected<CameraComponentCookEntry> SceneComponentMetadataParser::ParseCamera(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     using namespace __hidden_scene_cook_components;
 
     CameraComponentCookEntry entry(arena);
@@ -209,7 +209,7 @@ Expected<CameraComponentCookEntry> SceneComponentMetadataParser::parseCamera(con
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<LightComponentCookEntry> SceneComponentMetadataParser::parseLight(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+Expected<LightComponentCookEntry> SceneComponentMetadataParser::ParseLight(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     using namespace __hidden_scene_cook_components;
 
     LightComponentCookEntry entry(arena);

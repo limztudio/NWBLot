@@ -22,7 +22,7 @@ NWB_TEX_CONV_BEGIN
 
 using EncodedMip = TextureFormat::MipLevelLayout;
 
-Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> TextureMipPreparer::buildLevels(const TextureEncodeInput& entry, Core::Alloc::ScratchArena& scratchArena){
+Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> TextureMipPreparer::BuildLevels(const TextureEncodeInput& entry, Core::Alloc::ScratchArena& scratchArena){
     auto mipLevels = TextureFormat::BuildMipChainLayout(
         entry.format,
         entry.dimension,
@@ -58,7 +58,7 @@ Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> TextureMipPreparer::bu
     return Move(*mipLevels);
 }
 
-Expected<FloatPlanes> TextureMipPreparer::generateNext(const FloatPlanes& source, const TextureDimension::Enum dimension){
+Expected<FloatPlanes> TextureMipPreparer::GenerateNext(const FloatPlanes& source, const TextureDimension::Enum dimension){
     if(source.empty())
         return MakeUnexpected(Failure{});
     const u32 sourceWidth = source.front().get_width();
@@ -103,7 +103,7 @@ Expected<FloatPlanes> TextureMipPreparer::generateNext(const FloatPlanes& source
     return target;
 }
 
-Expected<TexConvAlphaTransport> TextureMipPreparer::deriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
+Expected<TexConvAlphaTransport> TextureMipPreparer::DeriveAlpha(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
     b8 found = false;
     b8 constant = true;
     b8 opaque = true;

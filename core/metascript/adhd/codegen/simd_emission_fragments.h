@@ -16,10 +16,10 @@ NWB_ADHD_BEGIN
 
 class SimdEmissionFragments final{
 public:
-    static void emitSimdMatrixBinaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix);
-    static void emitSimdMatrixUnaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix, MStringView fnSuffix);
-    static void emitSimdIntTwosComplementNegatePrefix(MString& out, b8 isDouble);
-    static void emitSimdIntTwosComplementNegateSuffix(MString& out, b8 isDouble);
+    static void EmitSimdMatrixBinaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix);
+    static void EmitSimdMatrixUnaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix, MStringView fnSuffix);
+    static void EmitSimdIntTwosComplementNegatePrefix(MString& out, b8 isDouble);
+    static void EmitSimdIntTwosComplementNegateSuffix(MString& out, b8 isDouble);
 };
 
 

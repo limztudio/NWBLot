@@ -233,7 +233,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
     }
     else if(!viewportState.viewports.empty()){
-        const auto scissor = VulkanViewportPolicy::buildImplicitScissor(viewportState.viewports[0u]);
+        const auto scissor = VulkanViewportPolicy::BuildImplicitScissor(viewportState.viewports[0u]);
         if(!scissor)
             return;
         m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &*scissor);

@@ -14,7 +14,7 @@
 NWB_CRASH_BEGIN
 
 
-b8 DiagnosticCapturePolicy::allows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category)noexcept{
+b8 DiagnosticCapturePolicy::Allows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category)noexcept{
     if(category == DiagnosticEventCategory::s_Assert)
         return policy.captureAssertions;
     if(category == DiagnosticEventCategory::s_FatalAssert)
@@ -27,7 +27,7 @@ b8 DiagnosticCapturePolicy::allows(const CrashCapturePolicy& policy, const AStri
     return true;
 }
 
-u64 DiagnosticCapturePolicy::siteHash(const DiagnosticEventRecord& record)noexcept{
+u64 DiagnosticCapturePolicy::SiteHash(const DiagnosticEventRecord& record)noexcept{
     u64 hash = s_Fnv64OffsetBasis;
     if(!record.event.empty())
         hash = UpdateFnv64TextExact(hash, record.event);
@@ -43,15 +43,15 @@ u64 DiagnosticCapturePolicy::siteHash(const DiagnosticEventRecord& record)noexce
     return hash;
 }
 
-b8 DiagnosticCapturePolicy::canSuppressDuplicate(const CrashDumpResult& result)noexcept{
+b8 DiagnosticCapturePolicy::CanSuppressDuplicate(const CrashDumpResult& result)noexcept{
     return result.requestAccepted() && result.status != CrashDumpStatus::PackageWriteFailed;
 }
 
-b8 DiagnosticCapturePolicy::reserve(const DiagnosticEventRecord& record, const AStringView event, const AStringView category)noexcept{
+b8 DiagnosticCapturePolicy::Reserve(const DiagnosticEventRecord& record, const AStringView event, const AStringView category)noexcept{
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
     if(!CrashDetail::g_State.installed)
         return false;
-    if(!allows(CrashDetail::g_State.capturePolicy, event, category))
+    if(!Allows(CrashDetail::g_State.capturePolicy, event, category))
         return false;
 
     const CrashCapturePolicy& policy = CrashDetail::g_State.capturePolicy;
@@ -60,7 +60,7 @@ b8 DiagnosticCapturePolicy::reserve(const DiagnosticEventRecord& record, const A
 
     CrashDetail::FixedDiagnosticSite* freeSite = nullptr;
     CrashDetail::FixedDiagnosticSite* matchingSite = nullptr;
-    const u64 siteHash = DiagnosticCapturePolicy::siteHash(record);
+    const u64 siteHash = DiagnosticCapturePolicy::SiteHash(record);
     for(usize i = 0u; i < CrashDetail::s_MaxDiagnosticSites; ++i){
         CrashDetail::FixedDiagnosticSite& site = CrashDetail::g_State.diagnosticSites[i];
         if(site.used && site.hash == siteHash){

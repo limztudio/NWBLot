@@ -13,7 +13,7 @@
 NWB_IMPL_BEGIN
 
 
-[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::boundsReady(const MeshResources& mesh)noexcept{
+[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::BoundsReady(const MeshResources& mesh)noexcept{
     const Core::GpuDescriptorHandle descriptor = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
     const Core::GpuDescriptorHandle bounds = mesh.runtimeMeshletLocalBoundsHeapHandle;
     if(
@@ -26,8 +26,8 @@ NWB_IMPL_BEGIN
     return true;
 }
 
-[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::meshletMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
-    if(!boundsReady(mesh))
+[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::MeshletMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
+    if(!BoundsReady(mesh))
         return snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer && !snapshot.meshletDescHeapHandle.valid() && !snapshot.meshletLocalBoundsHeapHandle.valid();
     return
         snapshot.meshletCount == mesh.meshletCount
@@ -38,7 +38,7 @@ NWB_IMPL_BEGIN
     ;
 }
 
-ECSRenderDetail::MeshRayTracingResourceSnapshot MeshRayTracingSnapshotPolicy::capture(const MeshResources& mesh)noexcept{
+ECSRenderDetail::MeshRayTracingResourceSnapshot MeshRayTracingSnapshotPolicy::Capture(const MeshResources& mesh)noexcept{
     ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot = {
         .meshName = mesh.meshName,
         .runtimeMeshVersion = mesh.runtimeMeshVersion,
@@ -75,7 +75,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot MeshRayTracingSnapshotPolicy::ca
         .blasBuildAccepted = mesh.blasBuildAccepted,
         .swBvhBuildAccepted = mesh.swBvhBuildAccepted,
     };
-    if(boundsReady(mesh)){
+    if(BoundsReady(mesh)){
         snapshot.meshletCount = mesh.meshletCount;
         snapshot.meshletDescBuffer = mesh.meshletDescBuffer;
         snapshot.meshletLocalBoundsBuffer = mesh.runtimeMeshletLocalBoundsBuffer;
@@ -85,7 +85,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot MeshRayTracingSnapshotPolicy::ca
     return snapshot;
 }
 
-[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::matches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
+[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::Matches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
     return
         mesh.meshName == snapshot.meshName
         && mesh.positionBuffer.get() == snapshot.positionBuffer.get()
@@ -94,7 +94,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot MeshRayTracingSnapshotPolicy::ca
         && mesh.solidTriangleWords.get() == snapshot.solidTriangleWords.data()
         && mesh.runtimeLocalBoundsBuffer == snapshot.runtimeLocalBoundsBuffer
         && mesh.runtimeLocalBoundsHeapHandle == snapshot.runtimeLocalBoundsHeapHandle
-        && meshletMatches(mesh, snapshot)
+        && MeshletMatches(mesh, snapshot)
         && mesh.blas.get() == snapshot.blas.get()
         && mesh.swBvhPositionHeapHandle == snapshot.swBvhPositionHeapHandle
         && mesh.swBvhTriangleIndexHeapHandle == snapshot.swBvhTriangleIndexHeapHandle
@@ -121,7 +121,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot MeshRayTracingSnapshotPolicy::ca
     ;
 }
 
-[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::sameIdentity(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs)noexcept{
+[[nodiscard]] b8 MeshRayTracingSnapshotPolicy::SameIdentity(const ECSRenderDetail::MeshRayTracingResourceSnapshot& lhs, const ECSRenderDetail::MeshRayTracingResourceSnapshot& rhs)noexcept{
     return
         lhs.meshName == rhs.meshName
         && lhs.positionBuffer.get() == rhs.positionBuffer.get()

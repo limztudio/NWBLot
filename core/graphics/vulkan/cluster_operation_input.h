@@ -32,14 +32,14 @@ public:
 
 
 public:
-    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV nativeInfo()noexcept;
-    [[nodiscard]] static Expected<ClusterOperationInput> build(const RayTracingClusterOperationParams& params, TStringView operationName);
+    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV NativeInfo()noexcept;
+    [[nodiscard]] static Expected<ClusterOperationInput> Build(const RayTracingClusterOperationParams& params, TStringView operationName);
 };
 
 
 class ClusterOperationQuery final{
 public:
-    [[nodiscard]] static Expected<RayTracingClusterOperationSizeInfo> query(const VulkanContext& context, const RayTracingClusterOperationParams& params);
+    [[nodiscard]] static Expected<RayTracingClusterOperationSizeInfo> Query(const VulkanContext& context, const RayTracingClusterOperationParams& params);
 };
 
 

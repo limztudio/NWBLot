@@ -57,7 +57,7 @@ TEST(CooperativeVectorFeatureQuery, EmptyDriverPropertyListDoesNotReadOrPublishF
     context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation = VK_TRUE;
     context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV = &QueryNoCooperativeVectorProperties;
     s_EmptyPropertyQueryCalls = 0u;
-    const auto result = GraphicsBackend::CooperativeVectorFeatureQuery::query(context, scheduler);
+    const auto result = GraphicsBackend::CooperativeVectorFeatureQuery::Query(context, scheduler);
     ASSERT_TRUE(result);
     EXPECT_EQ(s_EmptyPropertyQueryCalls, 1u);
     EXPECT_TRUE(result->matMulFormats.empty());
@@ -67,15 +67,15 @@ TEST(CooperativeVectorFeatureQuery, EmptyDriverPropertyListDoesNotReadOrPublishF
 
 TEST(CooperativeVectorMatrixPolicy, RejectsTightMisalignedAndOverflowingStrides){
     using Policy = GraphicsBackend::CooperativeVectorMatrixPolicy;
-    const auto layout = Policy::standardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u);
+    const auto layout = Policy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u);
     ASSERT_TRUE(layout);
     EXPECT_EQ(layout->stride, 16u);
     EXPECT_EQ(layout->byteSize, 28u);
-    EXPECT_FALSE(Policy::standardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 12u));
-    EXPECT_FALSE(Policy::standardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 14u));
-    EXPECT_FALSE(Policy::standardLayoutSize(Limit<usize>::s_Max, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u));
-    EXPECT_TRUE(Policy::isTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT32_KHR, VK_COMPONENT_TYPE_FLOAT16_KHR));
-    EXPECT_FALSE(Policy::isTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT_E4M3_NV, VK_COMPONENT_TYPE_BFLOAT16_KHR));
+    EXPECT_FALSE(Policy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 12u));
+    EXPECT_FALSE(Policy::StandardLayoutSize(4u, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 14u));
+    EXPECT_FALSE(Policy::StandardLayoutSize(Limit<usize>::s_Max, 2u, 3u, CooperativeVectorMatrixLayout::RowMajor, 0u));
+    EXPECT_TRUE(Policy::IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT32_KHR, VK_COMPONENT_TYPE_FLOAT16_KHR));
+    EXPECT_FALSE(Policy::IsTypeConversionSupported(VK_COMPONENT_TYPE_FLOAT_E4M3_NV, VK_COMPONENT_TYPE_BFLOAT16_KHR));
 }
 
 TEST(CooperativeVectorMatrixStride, FailsClosedForInvalidOrDriverOptimalInputs){

@@ -16,7 +16,7 @@ NWB_BEGIN
 namespace LoaderDetail{
 
 
-Expected<Path, ResourceMountResolver::Error> ResourceMountResolver::resolve(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
+Expected<Path, ResourceMountResolver::Error> ResourceMountResolver::Resolve(NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
     const auto currentDirectory = GetCurrentPath(scratchArena);
     if(!currentDirectory)
         return MakeUnexpected(Error{ currentDirectory.error(), "current directory", ::Path<NWB::Core::Alloc::ScratchArena>(scratchArena) });

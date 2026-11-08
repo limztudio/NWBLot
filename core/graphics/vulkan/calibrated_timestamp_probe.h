@@ -27,7 +27,7 @@ namespace VulkanDetail{
 
 class CalibratedTimestampProbe final{
 public:
-    [[nodiscard]] static b8 query(
+    [[nodiscard]] static b8 Query(
         VkPhysicalDevice physicalDevice,
         VkDevice device,
         PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR enumerateTimeDomains,

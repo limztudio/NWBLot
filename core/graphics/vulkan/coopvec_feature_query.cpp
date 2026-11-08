@@ -15,7 +15,7 @@
 NWB_VULKAN_BEGIN
 
 
-Expected<CooperativeVectorDeviceFeatures> CooperativeVectorFeatureQuery::query(VulkanContext& context, CpuTaskScheduler& scheduler){
+Expected<CooperativeVectorDeviceFeatures> CooperativeVectorFeatureQuery::Query(VulkanContext& context, CpuTaskScheduler& scheduler){
     VkResult res = VK_SUCCESS;
 
     CooperativeVectorDeviceFeatures output(context.objectArena);

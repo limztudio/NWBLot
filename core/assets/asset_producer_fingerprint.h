@@ -21,7 +21,7 @@ NWB_ASSETS_BEGIN
 
 class AssetProducerFingerprint{
 public:
-    static void resolve(ScratchArena& scratchArena, b8& inOutUseAssetCache, Sha256Digest& outDigest);
+    static void Resolve(ScratchArena& scratchArena, b8& inOutUseAssetCache, Sha256Digest& outDigest);
 };
 
 

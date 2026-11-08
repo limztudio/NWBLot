@@ -25,7 +25,7 @@ namespace CrashDetail{
 
 class CrashAndroidEmergencyCollector{
 public:
-    static void collect(Alloc::ScratchArena& scratchArena, const CrashUploadSnapshot& snapshot);
+    static void Collect(Alloc::ScratchArena& scratchArena, const CrashUploadSnapshot& snapshot);
 };
 
 

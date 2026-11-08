@@ -27,7 +27,7 @@ static void CaptureInitializationFailure(const AStringView operation, const CURL
 };
 
 
-b8 LogHttpTransport::globalInit()noexcept{
+b8 LogHttpTransport::GlobalInit()noexcept{
     CURLcode curlResult;
 
     curlResult = curl_global_init(CURL_GLOBAL_ALL);

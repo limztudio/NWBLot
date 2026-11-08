@@ -147,7 +147,7 @@ static b8 UploadPackageDirectory(
     const ::Path<Alloc::ScratchArena>& uploadingPackageDirectory = *uploading;
     if(!WriteUploadAttemptText(scratchArena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadingState))
         return false;
-    const auto archiveBytes = CrashPackageArchive::build(arena, scratchArena, uploadingPackageDirectory);
+    const auto archiveBytes = CrashPackageArchive::Build(arena, scratchArena, uploadingPackageDirectory);
     if(!archiveBytes){
         CaptureCrashPackageFilesystemFailure("build_upload_archive", archiveBytes.error());
         const auto failed = ::MovePathToDirectory(uploadingPackageDirectory, FailedDirectory(spoolDirectory));
@@ -155,7 +155,7 @@ static b8 UploadPackageDirectory(
             CaptureCrashPackageFilesystemFailure("retain_failed_upload_archive", failed.error());
         return false;
     }
-    const b8 uploaded = CrashUploadTransport::upload(scratchArena, url, *archiveBytes, crashUploadToken);
+    const b8 uploaded = CrashUploadTransport::Upload(scratchArena, url, *archiveBytes, crashUploadToken);
     if(uploaded){
         if(!WriteUploadAttemptText(scratchArena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadedState))
             return false;
@@ -214,7 +214,7 @@ b8 FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapsh
     if(snapshot.spoolDirectory[0] == 0)
         return false;
     Alloc::ScratchArena scratchArena(CrashArenaScope::s_UploadScratch);
-    CrashAndroidEmergencyCollector::collect(scratchArena, snapshot);
+    CrashAndroidEmergencyCollector::Collect(scratchArena, snapshot);
 
     const ::Path<Alloc::ScratchArena> spoolDirectory(scratchArena, snapshot.spoolDirectory.data());
     const b8 recoveryOk = RecoverUploadingPackageDirectories(scratchArena, spoolDirectory);
@@ -229,7 +229,7 @@ b8 FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapsh
     if(url.empty())
         return false;
 
-    if(!CrashUploadTransport::initialize())
+    if(!CrashUploadTransport::Initialize())
         return false;
 
     b8 allUploaded = true;

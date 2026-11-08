@@ -12,13 +12,13 @@
 NWB_ADHD_BEGIN
 
 
-[[nodiscard]] i32 CallableOverloadSelector::scoreCandidateParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
+[[nodiscard]] i32 CallableOverloadSelector::ScoreCandidateParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
     i32 score = (!preferredArgCount || params.size() == *preferredArgCount) ? s_OverloadExactArityScore : 0;
     score += ScoreCallableParams(symbols, params, argTypeNames, argIsMut);
     return score;
 }
 
-[[nodiscard]] b8 CallableOverloadSelector::considerScoredCallableCandidate(
+[[nodiscard]] b8 CallableOverloadSelector::ConsiderScoredCallableCandidate(
     const SymbolTable& symbols,
     const usize* preferredArgCount,
     const Span<const MStringView> argTypeNames,
@@ -36,7 +36,7 @@ NWB_ADHD_BEGIN
             inOutBestMatch = &candidate;
         return false;
     }
-    const i32 score = scoreCandidateParams(symbols, candidate.params, preferredArgCount, argTypeNames, argIsMut);
+    const i32 score = ScoreCandidateParams(symbols, candidate.params, preferredArgCount, argTypeNames, argIsMut);
     if(score > inOutBestScore){
         inOutBestScore = score;
         inOutBestMatch = &candidate;
@@ -44,7 +44,7 @@ NWB_ADHD_BEGIN
     return false;
 }
 
-[[nodiscard]] const MethodDecl* CallableOverloadSelector::findScoredClassCallable(
+[[nodiscard]] const MethodDecl* CallableOverloadSelector::FindScoredClassCallable(
     const SymbolTable& symbols,
     const ClassDecl& classDecl,
     const MStringView name,
@@ -60,7 +60,7 @@ NWB_ADHD_BEGIN
     for(const MethodDecl* m : classDecl.methods){
         if(!m || m->isConstructor || m->isDestructor || m->isOperator != isOperator || m->name != name)
             continue;
-        i32 score = scoreCandidateParams(symbols, m->params, preferredArgCount, argTypeNames, argIsMut);
+        i32 score = ScoreCandidateParams(symbols, m->params, preferredArgCount, argTypeNames, argIsMut);
         if(!requirePublic || m->access == AccessSpecifier::Public)
             score += s_OverloadPublicBonusScore;
         if(m->isConst == preferConst)
@@ -73,7 +73,7 @@ NWB_ADHD_BEGIN
     return bestMatch;
 }
 
-const MethodDecl* CallableOverloadSelector::findClassConstructor(const SymbolTable& symbols, const ClassDecl& classDecl, const usize argCount, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
+const MethodDecl* CallableOverloadSelector::FindClassConstructor(const SymbolTable& symbols, const ClassDecl& classDecl, const usize argCount, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){

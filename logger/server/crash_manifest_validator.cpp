@@ -122,7 +122,7 @@ template<typename ArenaT>
 };
 
 
-Expected<CrashPackageSummary, CrashIngestFailure> CrashManifestValidator::validate(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory){
+Expected<CrashPackageSummary, CrashIngestFailure> CrashManifestValidator::Validate(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory){
     using namespace __hidden_crash_manifest_validator;
     CrashPackageSummary outSummary(arena);
     AString<Core::Alloc::ScratchArena> manifest{scratchArena};

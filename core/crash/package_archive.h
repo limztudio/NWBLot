@@ -26,7 +26,7 @@ namespace CrashDetail{
 class CrashPackageArchive{
 public:
     template<typename ArenaT, typename PathArenaT>
-    [[nodiscard]] static Expected<CrashBytesT<ArenaT>, ErrorCode> build(ArenaT& arena, Alloc::ScratchArena& scratchArena, const ::Path<PathArenaT>& packageDirectory);
+    [[nodiscard]] static Expected<CrashBytesT<ArenaT>, ErrorCode> Build(ArenaT& arena, Alloc::ScratchArena& scratchArena, const ::Path<PathArenaT>& packageDirectory);
 };
 
 

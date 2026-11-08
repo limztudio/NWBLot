@@ -30,8 +30,8 @@ namespace __hidden_gpu_setup_upload_graph_tests{
 
 TEST(SetupUploadGraph, LargeThresholdKeepsQueueRoutingAndSubmissionBoundary){
     using Core::GraphicsModuleDetail::SetupUploadGraph;
-    const auto below = SetupUploadGraph::scheduling(SetupUploadGraph::s_LargeMinimumBytes - 1u, true, true);
-    const auto at = SetupUploadGraph::scheduling(SetupUploadGraph::s_LargeMinimumBytes, true, true);
+    const auto below = SetupUploadGraph::Scheduling(SetupUploadGraph::s_LargeMinimumBytes - 1u, true, true);
+    const auto at = SetupUploadGraph::Scheduling(SetupUploadGraph::s_LargeMinimumBytes, true, true);
     EXPECT_EQ(below.cost, Core::GpuTaskCostHint::Tiny);
     EXPECT_EQ(at.cost, Core::GpuTaskCostHint::Large);
     for(const auto& hint : { below, at }){
@@ -45,11 +45,11 @@ TEST(SetupUploadGraph, LargeThresholdKeepsQueueRoutingAndSubmissionBoundary){
 
 TEST(SetupUploadGraph, UnknownStateAndCrossFamilySharingKeepUploadContract){
     using Core::GraphicsModuleDetail::SetupUploadGraph;
-    EXPECT_EQ(SetupUploadGraph::finalState(Core::ResourceStates::Unknown), Core::ResourceStates::CopyDest);
-    EXPECT_EQ(SetupUploadGraph::finalState(Core::ResourceStates::ShaderResource), Core::ResourceStates::ShaderResource);
-    EXPECT_EQ(SetupUploadGraph::resolveConsumerSharing(Core::ResourceQueueSharing::Exclusive, Core::CommandQueue::Compute, false), Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
-    EXPECT_EQ(SetupUploadGraph::resolveConsumerSharing(Core::ResourceQueueSharing::Exclusive, Core::CommandQueue::Compute, true), Core::ResourceQueueSharing::AsyncCompute);
-    EXPECT_EQ(SetupUploadGraph::resolveConsumerSharing(Core::ResourceQueueSharing::Graphics, Core::CommandQueue::Transfer, false), Core::ResourceQueueSharing::GraphicsAndTransfer);
+    EXPECT_EQ(SetupUploadGraph::FinalState(Core::ResourceStates::Unknown), Core::ResourceStates::CopyDest);
+    EXPECT_EQ(SetupUploadGraph::FinalState(Core::ResourceStates::ShaderResource), Core::ResourceStates::ShaderResource);
+    EXPECT_EQ(SetupUploadGraph::ResolveConsumerSharing(Core::ResourceQueueSharing::Exclusive, Core::CommandQueue::Compute, false), Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    EXPECT_EQ(SetupUploadGraph::ResolveConsumerSharing(Core::ResourceQueueSharing::Exclusive, Core::CommandQueue::Compute, true), Core::ResourceQueueSharing::AsyncCompute);
+    EXPECT_EQ(SetupUploadGraph::ResolveConsumerSharing(Core::ResourceQueueSharing::Graphics, Core::CommandQueue::Transfer, false), Core::ResourceQueueSharing::GraphicsAndTransfer);
 }
 
 

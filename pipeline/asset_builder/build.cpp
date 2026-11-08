@@ -65,7 +65,7 @@ b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchAr
         return false;
     const Assets::ResolvedCookPaths& resolvedPaths = *paths;
 
-    auto discoveredFiles = Assets::AssetFileDiscovery::discover(resolvedPaths.assetRoots, Assets::s_NwbExtension, arena, scratchArena);
+    auto discoveredFiles = Assets::AssetFileDiscovery::Discover(resolvedPaths.assetRoots, Assets::s_NwbExtension, arena, scratchArena);
     if(!discoveredFiles)
         return false;
 

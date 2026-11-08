@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 
 class RendererDeviceDiagnosticsLabel final{
 public:
-    static void append(Core::GraphicsRuntime& graphics, AString<Core::Alloc::GlobalArena>& label);
+    static void Append(Core::GraphicsRuntime& graphics, AString<Core::Alloc::GlobalArena>& label);
 };
 
 

@@ -84,7 +84,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RayTracingOpticalSceneGraphBuffer> OpticalBoundsFinalizeGraph::declare(
+Expected<RayTracingOpticalSceneGraphBuffer> OpticalBoundsFinalizeGraph::Declare(
     const RayTracingOpticalSceneSnapshot& resources,
     const Core::GpuGraphResourceId source,
     const Core::GpuTaskId priorReadersDrained,

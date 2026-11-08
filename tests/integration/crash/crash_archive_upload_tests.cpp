@@ -95,7 +95,7 @@ TEST_F(CrashArchiveUpload, PreservesNativeMissingDirectoryError){
     const auto nativeDirectory = DirectoryIterator<Arena>::Create(missing);
     ASSERT_FALSE(nativeDirectory);
     ScratchArena scratchArena(s_OperationScratch);
-    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(m_arena, scratchArena, missing);
+    const auto archive = NWB::Core::Crash::CrashDetail::CrashPackageArchive::Build(m_arena, scratchArena, missing);
     ASSERT_FALSE(archive);
     EXPECT_EQ(archive.error(), nativeDirectory.error());
 }
@@ -105,7 +105,7 @@ TEST_F(CrashArchiveUpload, ResultOwnsBytesAfterWorkingScratchExpires){
     Optional<NWB::Core::Crash::CrashDetail::CrashBytesT<Arena>> archive;
     {
         ScratchArena scratchArena(s_OperationScratch);
-        auto produced = NWB::Core::Crash::CrashDetail::CrashPackageArchive::build(m_arena, scratchArena, m_root);
+        auto produced = NWB::Core::Crash::CrashDetail::CrashPackageArchive::Build(m_arena, scratchArena, m_root);
         ASSERT_TRUE(produced);
         archive.emplace(Move(*produced));
     }

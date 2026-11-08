@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 
 class VulkanDeviceFeatureSetup final{
 public:
-    static void initialize(VulkanContext& context, const DeviceDesc& desc, b8 gpuCrashDiagnosticsEnabled);
+    static void Initialize(VulkanContext& context, const DeviceDesc& desc, b8 gpuCrashDiagnosticsEnabled);
 };
 
 

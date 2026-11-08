@@ -264,7 +264,7 @@ b8 VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 byt
         return false;
     }
 
-    return FilesystemVolumeDetail::VolumeSegmentTransfer::read(m_volumeName, m_segmentPaths, m_segmentSize, offset, byteCount, static_cast<u8*>(data));
+    return FilesystemVolumeDetail::VolumeSegmentTransfer::Read(m_volumeName, m_segmentPaths, m_segmentSize, offset, byteCount, static_cast<u8*>(data));
 }
 
 b8 VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const u64 byteCount){
@@ -287,7 +287,7 @@ b8 VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, const 
         return false;
     }
 
-    return FilesystemVolumeDetail::VolumeSegmentTransfer::write(m_volumeName, m_segmentPaths, m_segmentSize, offset, byteCount, static_cast<const u8*>(data));
+    return FilesystemVolumeDetail::VolumeSegmentTransfer::Write(m_volumeName, m_segmentPaths, m_segmentSize, offset, byteCount, static_cast<const u8*>(data));
 }
 
 

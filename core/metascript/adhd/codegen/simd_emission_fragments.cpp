@@ -12,7 +12,7 @@
 NWB_ADHD_BEGIN
 
 
-void SimdEmissionFragments::emitSimdMatrixBinaryRowInitSuffix(MString& out, const MStringView matRegType, const MStringView fnPrefix){
+void SimdEmissionFragments::EmitSimdMatrixBinaryRowInitSuffix(MString& out, const MStringView matRegType, const MStringView fnPrefix){
     out.append("; return ");
     out.append(matRegType.data(), matRegType.size());
     out.append("{ .v = { ");
@@ -29,7 +29,7 @@ void SimdEmissionFragments::emitSimdMatrixBinaryRowInitSuffix(MString& out, cons
     out.append(" } }; }())");
 }
 
-void SimdEmissionFragments::emitSimdMatrixUnaryRowInitSuffix(MString& out, const MStringView matRegType, const MStringView fnPrefix, const MStringView fnSuffix){
+void SimdEmissionFragments::EmitSimdMatrixUnaryRowInitSuffix(MString& out, const MStringView matRegType, const MStringView fnPrefix, const MStringView fnSuffix){
     out.append("; return ");
     out.append(matRegType.data(), matRegType.size());
     out.append("{ .v = { ");
@@ -45,11 +45,11 @@ void SimdEmissionFragments::emitSimdMatrixUnaryRowInitSuffix(MString& out, const
     out.append(" } }; }())");
 }
 
-void SimdEmissionFragments::emitSimdIntTwosComplementNegatePrefix(MString& out, const b8 isDouble){
+void SimdEmissionFragments::EmitSimdIntTwosComplementNegatePrefix(MString& out, const b8 isDouble){
     out.append(isDouble ? "::VectorDoubleAddInt(::VectorDoubleXorInt(" : "::VectorAddInt(::VectorXorInt(");
 }
 
-void SimdEmissionFragments::emitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
+void SimdEmissionFragments::EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
     out.append(isDouble ? ", ::VectorDoubleTrueInt()), ::VectorDoubleReplicateInt(1ull))" : ", ::VectorTrueInt()), ::VectorReplicateInt(1u))");
 }
 

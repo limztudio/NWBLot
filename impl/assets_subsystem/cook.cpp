@@ -115,7 +115,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
         }
         outSubsystem.subsystems.reserve(subsystemsValue->asList().size());
         for(const Core::Metascript::Value& itemValue : subsystemsValue->asList()){
-            const auto parsedRef = Core::Assets::ReservedAssetRefParser::parseValue<ISubsystem>(nwbFilePath, s_SubsystemDiagnosticPrefix, s_SubsystemSubsystemsFieldName, itemValue, "must be a string", scratchArena);
+            const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<ISubsystem>(nwbFilePath, s_SubsystemDiagnosticPrefix, s_SubsystemSubsystemsFieldName, itemValue, "must be a string", scratchArena);
             if(!parsedRef)
                 return false;
             if(parsedRef->name() == outSubsystem.virtualPath()){
@@ -154,7 +154,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                 return false;
             }
             for(const Core::Metascript::Value& itemValue : fieldValue->asList()){
-                const auto parsedRef = Core::Assets::ReservedAssetRefParser::parseValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, itemValue, "must be a string", scratchArena);
+                const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, itemValue, "must be a string", scratchArena);
                 if(!parsedRef)
                     return false;
                 const usize existingCount = outSubsystem.fieldValueCount(i);
@@ -174,7 +174,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
             }
         }
         else{
-            const auto parsedRef = Core::Assets::ReservedAssetRefParser::parseValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, *fieldValue, "must be a string", scratchArena);
+            const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, *fieldValue, "must be a string", scratchArena);
             if(!parsedRef)
                 return false;
             outSubsystem.appendFieldValue(i, parsedRef->name());

@@ -18,7 +18,7 @@ class GpuInferredDependencyCollector;
 
 class GpuResourceHazardTracker final{
 public:
-    [[nodiscard]] static b8 append(const GpuTaskGraph::DeclarationReadView& graph, Span<const GpuTaskId> orderedTasks, Alloc::ScratchArena& scratchArena, GpuInferredDependencyCollector& edgeCollector, GpuTaskId& invalidTask, GpuGraphResourceId& invalidResource);
+    [[nodiscard]] static b8 Append(const GpuTaskGraph::DeclarationReadView& graph, Span<const GpuTaskId> orderedTasks, Alloc::ScratchArena& scratchArena, GpuInferredDependencyCollector& edgeCollector, GpuTaskId& invalidTask, GpuGraphResourceId& invalidResource);
 };
 
 

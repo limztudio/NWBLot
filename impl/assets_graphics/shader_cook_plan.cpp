@@ -184,7 +184,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             return MakeUnexpected(Failure{});
         }
 
-        auto includeDirectories = ShaderIncludeDirectories::build(resolvedPaths.repoRoot, resolvedPaths.assetRoots, implicitIncludeRoots, preparedEntry.entry, preparedEntry.includeDirectories.get_allocator().arena(), scratchArena);
+        auto includeDirectories = ShaderIncludeDirectories::Build(resolvedPaths.repoRoot, resolvedPaths.assetRoots, implicitIncludeRoots, preparedEntry.entry, preparedEntry.includeDirectories.get_allocator().arena(), scratchArena);
         if(!includeDirectories)
             return MakeUnexpected(Failure{});
         preparedEntry.includeDirectories = Move(*includeDirectories);

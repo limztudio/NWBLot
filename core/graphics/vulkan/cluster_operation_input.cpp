@@ -23,7 +23,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkClusterAccelerationStructureInputInfoNV ClusterOperationInput::nativeInfo()noexcept{
+VkClusterAccelerationStructureInputInfoNV ClusterOperationInput::NativeInfo()noexcept{
     auto native = info;
     switch(info.opType){
     case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV:
@@ -39,7 +39,7 @@ VkClusterAccelerationStructureInputInfoNV ClusterOperationInput::nativeInfo()noe
     return native;
 }
 
-Expected<ClusterOperationInput> ClusterOperationInput::build(const RayTracingClusterOperationParams& params, TStringView operationName){
+Expected<ClusterOperationInput> ClusterOperationInput::Build(const RayTracingClusterOperationParams& params, TStringView operationName){
     ClusterOperationInput input;
     VkClusterAccelerationStructureOpTypeNV opType;
     switch(params.type){
@@ -139,7 +139,7 @@ Expected<ClusterOperationInput> ClusterOperationInput::build(const RayTracingClu
     return input;
 }
 
-Expected<RayTracingClusterOperationSizeInfo> ClusterOperationQuery::query(const VulkanContext& context, const RayTracingClusterOperationParams& params){
+Expected<RayTracingClusterOperationSizeInfo> ClusterOperationQuery::Query(const VulkanContext& context, const RayTracingClusterOperationParams& params){
     if(!context.extensions.nvClusterAccelerationStructure || !context.clusterAccelerationStructureFeatureEnabled || !context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV)
         return MakeUnexpected(Failure{});
     constexpr u32 s_SupportedOperationFlags =
@@ -158,10 +158,10 @@ Expected<RayTracingClusterOperationSizeInfo> ClusterOperationQuery::query(const 
     if((params.flags & RayTracingClusterOperationFlags::AllowOMM) && (!context.extensions.extOpacityMicromap || !context.opacityMicromapFeatureEnabled))
         return MakeUnexpected(Failure{});
 
-    auto input = ClusterOperationInput::build(params, NWB_TEXT("query cluster operation sizes"));
+    auto input = ClusterOperationInput::Build(params, NWB_TEXT("query cluster operation sizes"));
     if(!input)
         return MakeUnexpected(Failure{});
-    const auto inputInfo = input->nativeInfo();
+    const auto inputInfo = input->NativeInfo();
 
     if(params.type == RayTracingClusterOperationType::ClasBuild || params.type == RayTracingClusterOperationType::ClasBuildTemplates || params.type == RayTracingClusterOperationType::ClasInstantiateTemplates){
         const auto& properties = context.nvClusterAccelerationStructureProperties;

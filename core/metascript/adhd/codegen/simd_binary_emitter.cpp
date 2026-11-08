@@ -43,7 +43,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             out.append(matRegType.data(), matRegType.size());
             out.append(" __b = ");
             m_emitter.emitSimdRegExpr(out, rhs, simdType);
-            SimdEmissionFragments::emitSimdMatrixBinaryRowInitSuffix(
+            SimdEmissionFragments::EmitSimdMatrixBinaryRowInitSuffix(
                 out,
                 matRegType,
                 binaryOp == TokenType::Plus
@@ -66,7 +66,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             out.append(isDouble ? "; const f64 __s = static_cast<f64>(" : "; const f32 __s = static_cast<f32>(");
             m_emitter.emitExpr(out, scalarOperand);
             out.push_back(')');
-            SimdEmissionFragments::emitSimdMatrixUnaryRowInitSuffix(out, matRegType, isDouble ? "::VectorDoubleScale(" : "::VectorScale(", ", __s)");
+            SimdEmissionFragments::EmitSimdMatrixUnaryRowInitSuffix(out, matRegType, isDouble ? "::VectorDoubleScale(" : "::VectorScale(", ", __s)");
             return true;
         }
         if(binaryOp == TokenType::Slash && rhs.resolvedSimdType.empty()){
@@ -77,7 +77,7 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             out.append(isDouble ? "; const ::SIMDVectorDouble __s = ::VectorDoubleReplicate(static_cast<f64>(" : "; const ::SIMDVectorSingle __s = ::VectorReplicate(static_cast<f32>(");
             m_emitter.emitExpr(out, rhs);
             out.append("))");
-            SimdEmissionFragments::emitSimdMatrixUnaryRowInitSuffix(out, matRegType, isDouble ? "::VectorDoubleDivide(" : "::VectorDivide(", ", __s)");
+            SimdEmissionFragments::EmitSimdMatrixUnaryRowInitSuffix(out, matRegType, isDouble ? "::VectorDoubleDivide(" : "::VectorDivide(", ", __s)");
             return true;
         }
     }
@@ -198,9 +198,9 @@ b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, cons
             out.append(isDouble ? "::VectorDoubleAddInt(" : "::VectorAddInt(");
             m_emitter.emitSimdRegExpr(out, lhs, simdType);
             out.append(", ");
-            SimdEmissionFragments::emitSimdIntTwosComplementNegatePrefix(out, isDouble);
+            SimdEmissionFragments::EmitSimdIntTwosComplementNegatePrefix(out, isDouble);
             m_emitter.emitSimdRegExpr(out, rhs, simdType);
-            SimdEmissionFragments::emitSimdIntTwosComplementNegateSuffix(out, isDouble);
+            SimdEmissionFragments::EmitSimdIntTwosComplementNegateSuffix(out, isDouble);
             out.push_back(')');
             return true;
         }

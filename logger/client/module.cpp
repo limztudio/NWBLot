@@ -50,7 +50,7 @@ static constexpr long s_HttpSuccessRangeMax = 300L;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Client::GlobalInit()noexcept{ return LogHttpTransport::globalInit(); }
+b8 Client::GlobalInit()noexcept{ return LogHttpTransport::GlobalInit(); }
 
 Client::Client()
     : ClientBaseType("NWB::Log::Client")
@@ -125,14 +125,14 @@ b8 Client::internalUpdate(){
                     NWB_CERR << "[ERROR] Log client: message exceeded the server upload limit.\n";
                     msg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena()));
                 }
-                const auto builtPayload = MessagePayloadCodec::build(msg, m_pendingPayload);
+                const auto builtPayload = MessagePayloadCodec::Build(msg, m_pendingPayload);
                 if(!builtPayload){
                     const DiagnosticEventText detail = MakeDiagnosticEventText("Message payload admission failed: domain=MessagePayloadError code={}", builtPayload.error());
                     CaptureDiagnosticEvent("logger_client_payload", detail.view(), __FILE__, __LINE__);
                     m_rejectedPayloadCount.fetch_add(1u, MemoryOrder::relaxed);
                     NWB_CERR << "[ERROR] Log client: message payload could not be encoded.\n";
                     const MessageType fallbackMsg = MakeTuple(Timer{}, Core::Common::LogType::Error, LogString(NWB_TEXT("Logger client dropped an invalid message payload"), BaseType::arena()));
-                    if(!MessagePayloadCodec::build(fallbackMsg, m_pendingPayload))
+                    if(!MessagePayloadCodec::Build(fallbackMsg, m_pendingPayload))
                         return true;
                 }
                 m_pendingPayloadKind = ClientPayloadKind::Message;

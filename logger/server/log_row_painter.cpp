@@ -68,7 +68,7 @@ static LogRowColors ResolveLogRowColors(const Core::Common::LogType::Enum type, 
 
 };
 
-void LogRowPainter::measure(const HWND hwnd, const HWND listHwnd, MEASUREITEMSTRUCT& mis, const MessageItem& curStr){
+void LogRowPainter::Measure(const HWND hwnd, const HWND listHwnd, MEASUREITEMSTRUCT& mis, const MessageItem& curStr){
     using namespace __hidden_log_row_painter;
     mis.itemHeight = static_cast<UINT>(s_FontHeight);
     RECT rect = {};
@@ -114,7 +114,7 @@ void LogRowPainter::measure(const HWND hwnd, const HWND listHwnd, MEASUREITEMSTR
     }
 }
 
-void LogRowPainter::draw(DRAWITEMSTRUCT& dis, const MessageItem& curData){
+void LogRowPainter::Draw(DRAWITEMSTRUCT& dis, const MessageItem& curData){
     using namespace __hidden_log_row_painter;
     HDC hdc = dis.hDC;
     RECT rect = dis.rcItem;

@@ -95,10 +95,10 @@ NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& rec
     options.triggerInstructionPointer = record.instructionPointer;
     options.triggerLine = record.line;
     options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;
-    if(!DiagnosticCapturePolicy::reserve(record, options.event, options.triggerCategory))
+    if(!DiagnosticCapturePolicy::Reserve(record, options.event, options.triggerCategory))
         return;
     const CrashDumpResult result = CaptureCrashDumpForReason(CrashDetail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
-    if(record.terminatesProcess && DiagnosticCapturePolicy::canSuppressDuplicate(result))
+    if(record.terminatesProcess && DiagnosticCapturePolicy::CanSuppressDuplicate(result))
         CrashDetail::SuppressNextPlatformCrashCapture();
 }
 

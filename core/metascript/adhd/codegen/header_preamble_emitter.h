@@ -19,7 +19,7 @@ NWB_ADHD_BEGIN
 
 class HeaderPreambleEmitter final{
 public:
-    static void emit(MString& out, const TranslationUnit& unit, MStringView namespacePath);
+    static void Emit(MString& out, const TranslationUnit& unit, MStringView namespacePath);
 };
 
 

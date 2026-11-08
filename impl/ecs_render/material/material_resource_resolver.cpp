@@ -136,7 +136,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererMaterialResourceResolver::resolve(MaterialSurfaceInfo& materialInfo, RendererMaterialResourceState& resources, Core::GraphicsRuntime& graphicsModule, Core::Assets::AssetManager& assetManager){
+b8 RendererMaterialResourceResolver::Resolve(MaterialSurfaceInfo& materialInfo, RendererMaterialResourceState& resources, Core::GraphicsRuntime& graphicsModule, Core::Assets::AssetManager& assetManager){
     if(materialInfo.resourceReferencesResolved)
         return true;
 
@@ -181,7 +181,7 @@ b8 RendererMaterialResourceResolver::resolve(MaterialSurfaceInfo& materialInfo, 
     return true;
 }
 
-void RendererMaterialResourceResolver::release(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
+void RendererMaterialResourceResolver::Release(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
     __hidden_material_surface::ReleaseMaterialResourceState(graphics, resources);
 }
 

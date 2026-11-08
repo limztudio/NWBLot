@@ -14,7 +14,7 @@
 NWB_IMPL_BEGIN
 
 
-void TlasStaticSceneIdentity::append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept{
+void TlasStaticSceneIdentity::Append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept{
     RayTracingSceneIdentityBuilder().updateTlasStaticInput(
         LoadFloat(instance.transform),
         static_cast<u32>(instance.instanceID),
@@ -26,12 +26,12 @@ void TlasStaticSceneIdentity::append(const Core::RayTracingInstanceDesc& instanc
     Fnv64AppendValue(inOutHash, instance.bottomLevelAS);
 }
 
-u64 TlasStaticSceneIdentity::compute(const Span<const Core::RayTracingInstanceDesc> instances)noexcept{
+u64 TlasStaticSceneIdentity::Compute(const Span<const Core::RayTracingInstanceDesc> instances)noexcept{
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
     Fnv64AppendValue(hash, instances.size());
     for(const Core::RayTracingInstanceDesc& instance : instances)
-        append(instance, hash);
+        TlasStaticSceneIdentity::Append(instance, hash);
     return hash;
 }
 

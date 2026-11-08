@@ -25,8 +25,8 @@ namespace CrashDetail{
 
 class CrashUploadTransport{
 public:
-    [[nodiscard]] static b8 initialize();
-    [[nodiscard]] static b8 upload(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, Span<const u8> archiveBytes, AStringView crashUploadToken);
+    [[nodiscard]] static b8 Initialize();
+    [[nodiscard]] static b8 Upload(Alloc::ScratchArena& scratchArena, const CrashStringT<Alloc::ScratchArena>& url, Span<const u8> archiveBytes, AStringView crashUploadToken);
 };
 
 

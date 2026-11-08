@@ -181,7 +181,7 @@ struct TextureUploadBatchSubmissionData{
             return MakeUnexpected(Failure{});
         const GpuUploadBlobId source = *sourceResult;
 
-        GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraph::scheduling(region.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily);
+        GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraph::Scheduling(region.dataSize, submissionData.sameClassRouting.enabled, submissionData.sameClassRouting.crossesQueueFamily);
         scheduling.forceSubmissionBoundary = false;
         scheduling.allowPacketMerge = true;
         scheduling.mergeWithPrevious = previousTask.valid();
@@ -236,7 +236,7 @@ b8 GraphicsStandaloneService::uploadTextureBatch(const TextureUploadBatchDesc& d
     const TextureDesc& textureDesc = desc.destination->getCreationDescription();
     const ResourceStates::Mask graphInitialState = desc.hasPhysicalInitialState ? desc.physicalInitialState : textureDesc.initialState;
     const CommandQueue::Enum consumerQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchConsumerQueue(device, desc.queue, *totalByteCount, textureDesc);
-    GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::SetupUploadGraph::resolveSameClassRouting(device, consumerQueue, *totalByteCount);
+    GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting = GraphicsModuleDetail::SetupUploadGraph::ResolveSameClassRouting(device, consumerQueue, *totalByteCount);
     // Existing batch destinations cannot be recreated with a wider sharing contract.
     // Cross-family producer needs the texture already created for that queue class; same-family offload keeps exclusive sharing.
     if(sameClassRouting.crossesQueueFamily && !ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, consumerQueue))
@@ -250,7 +250,7 @@ b8 GraphicsStandaloneService::uploadTextureBatch(const TextureUploadBatchDesc& d
         .sameClassRouting = sameClassRouting,
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
-    const b8 submitted = GraphicsModuleDetail::SetupUploadGraph::submit(
+    const b8 submitted = GraphicsModuleDetail::SetupUploadGraph::Submit(
         m_graphics,
         textureDesc.queueSharing,
         consumerQueue,

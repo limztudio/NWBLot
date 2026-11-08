@@ -27,9 +27,9 @@ NWB_VULKAN_BEGIN
 
 [[nodiscard]] inline VertexInputBinding GetVertexInputBinding(const InputLayout& layout, const u32 index)noexcept{ return BuildVertexInputBinding(layout.getBindingDescription(index)); }
 
-[[nodiscard]] inline b8 IsViewportValid(const Viewport& viewport, const Device& device)noexcept{ return VulkanViewportPolicy::isViewportValid(viewport, device.getPhysicalDeviceLimits()); }
+[[nodiscard]] inline b8 IsViewportValid(const Viewport& viewport, const Device& device)noexcept{ return VulkanViewportPolicy::IsViewportValid(viewport, device.getPhysicalDeviceLimits()); }
 
-[[nodiscard]] inline b8 IsImplicitScissorValid(const Viewport& viewport)noexcept{ return VulkanViewportPolicy::isImplicitScissorValid(viewport); }
+[[nodiscard]] inline b8 IsImplicitScissorValid(const Viewport& viewport)noexcept{ return VulkanViewportPolicy::IsImplicitScissorValid(viewport); }
 using VulkanDetail::IsFramebufferAttachmentSubresourceSetValid;
 using VulkanDetail::GetIndexElementByteSize;
 using VulkanDetail::IsIndexDrawRangeValid;

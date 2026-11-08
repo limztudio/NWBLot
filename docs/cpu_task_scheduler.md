@@ -78,7 +78,7 @@ A cold span ask notes a fast no when the ripe job sits out of the asked span. It
 
 Each task slot retains its newest canceled generation inline and a sorted vector of older canceled generations. Late dependencies select the slot directly, then check its latest generation or binary-search its older history. Histories survive node reuse. Capacity for a possible older entry is reserved before ordinary or batched publication, so canceled retirement remains allocation-free. The first cancellation of a slot needs no history allocation. Old handles retain their lifetime semantics. Cancellation history is not evicted.
 
-Worker wakeups are separate from task joins. Queue publication and task execution compute which capacity classes have both eligible queued work and parked workers, then notify one worker in each selected class after releasing the queue mutex. Starting a task continues the worker wake chain before entering its callback, allowing dependency fan-out and blocking test callbacks to progress without waking every idle worker for each submission.
+Worker wakeups are separate from task joins. Line post and job run weigh which size sets hold both fit lined work and parked hands. Then they ping one hand in each picked setlass after releasing the queue mutex. A job start keeps the hand wake line first, with no call-in yet. It lets need fan-out and held test calls move on with no wake every idle worker for each submission.
 
 ## Optional profiling
 
@@ -103,7 +103,7 @@ Use the repository launcher and test configuration documented in [the test guide
 
 Cover dependency/capture/descendant lifetimes, late prerequisites, node reuse, cancellation history, nested handle/scope joins, cycle rejection, main-thread targets, cost/priority placement, and concurrent producers. Scope-search coverage includes unrelated ready prefixes, shared continuation chains, sibling frontiers, publication invalidation, repeated/concurrent same-scope waiters, and different-scope controls. Completion coverage includes capture-destructor reentry and notification races at handle, scope, and scheduler joins. Topology coverage uses actual allowed processor identities and restrictions.
 
-Integration checks exercise ECS and Frame ownership, selected-backend recording, worker-storage leases, loader/project shutdown, tools and cook APIs, and native graphics smoke through public contracts. Preserve the distinction between CPU retirement and GPU completion. Exercise zero-worker owner-driven execution and native workers independently. Physical heterogeneous-class placement requires suitable hardware.
+Join checks run ECS and Frame hold, picked-back note, hand-store loans, loader/plan shut, tool and cook APIs, and home graphics smoke through public contracts. Preserve the distinction between CPU retirement and GPU completion. Exercise zero-worker owner-driven execution and native workers independently. Physical heterogeneous-class placement requires suitable hardware.
 
 Profiling checks cover disabled collection, label/frame attribution, bounded buffer overflow, stale epochs, native idle lanes, foreign labels, zero capacity, concurrent capture changes, owner-thread delivery, and bounded adapter draining. Native graphics tests must state which queue/extension capabilities actually executed.
 

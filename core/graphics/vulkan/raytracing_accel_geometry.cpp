@@ -26,10 +26,10 @@ namespace VulkanDetail{
 
 static_assert(sizeof(AffineTransform) == sizeof(VkTransformMatrixKHR), "AffineTransform must match VkTransformMatrixKHR");
 
-inline constexpr u32 s_LssVerticesPerPrimitive = 2u;
-inline constexpr u32 s_LssListIndicesPerPrimitive = 2u;
-inline constexpr u32 s_LssSuccessiveIndicesPerPrimitive = 1u;
-inline constexpr u32 s_AabbStrideAlignment = 8u;
+inline constexpr u32 s_LssVerticesPerPrimitive = VulkanDefaults::s_VulkanDefaultLssVerticesPerPrimitive;
+inline constexpr u32 s_LssListIndicesPerPrimitive = VulkanDefaults::s_VulkanDefaultLssListIndicesPerPrimitive;
+inline constexpr u32 s_LssSuccessiveIndicesPerPrimitive = VulkanDefaults::s_VulkanDefaultLssSuccessiveIndicesPerPrimitive;
+inline constexpr u32 s_AabbStrideAlignment = VulkanDefaults::s_VulkanDefaultAabbStrideAlignment;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,15 +9,14 @@
 #include "backend_forward.h"
 #include "backend_core_context.h"
 #include "descriptor_buffer_manager.h"
-
-#include <core/task/cpu/scheduler.h>
-
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
 #include "native_resource_provenance.h"
 #include "native_queue_state.h"
 #include "submitted_command_buffer_owner_lookup.h"
+
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

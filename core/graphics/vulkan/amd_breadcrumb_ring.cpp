@@ -96,7 +96,7 @@ Expected<AmdBreadcrumbRing::Slot> AmdBreadcrumbRing::ResolveSlot(const Layout& l
     if(resolvedFlatSlot >= layout.totalSlotCount || !resolvedByteOffset || *resolvedByteOffset > static_cast<usize>(Limit<VkDeviceSize>::s_Max))
         return MakeUnexpected(Failure{});
 
-    return Slot{ resolvedFlatSlot, static_cast<VkDeviceSize>(*resolvedByteOffset) };
+    return Slot{ .flatSlot = resolvedFlatSlot, .byteOffset = static_cast<VkDeviceSize>(*resolvedByteOffset) };
 }
 
 Expected<AmdBreadcrumbRing::Reservation> AmdBreadcrumbRing::BuildNextReservation(const u64 currentSerial, const usize slotsPerQueue)noexcept{

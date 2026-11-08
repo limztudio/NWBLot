@@ -23,8 +23,8 @@ PhysicalQueueRegistrationPolicy::Result PhysicalQueueRegistrationPolicy::validat
     const u8 providedCapabilities = static_cast<u8>(desc.capabilities);
     const u8 knownCapabilities = static_cast<u8>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer));
     const u8 graphicsOrComputeCapabilities = static_cast<u8>(static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute));
-    constexpr u32 s_MinTimestampValidBits = 36u;
-    constexpr u32 s_MaxTimestampValidBits = 64u;
+    constexpr u32 s_MinTimestampValidBits = VulkanDefaults::s_VulkanDefaultMinTimestampValidBits;
+    constexpr u32 s_MaxTimestampValidBits = VulkanDefaults::s_VulkanDefaultMaxTimestampValidBits;
     const b8 missingRequiredTransferCapability = (providedCapabilities & graphicsOrComputeCapabilities) != 0u && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u;
     if(
         nativeQueue.queue == VK_NULL_HANDLE
@@ -82,3 +82,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

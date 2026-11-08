@@ -1,0 +1,27 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/graphics/rhi/pipeline_state.h>
+namespace NWB::Core{
+using BlendTargetValue = BlendState::RenderTarget;
+constexpr BlendFactor::Enum s_BlendConstantColor = BlendFactor::ConstantColor;
+constexpr BlendFactor::Enum s_BlendInverseConstantColor = BlendFactor::InvConstantColor;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 BlendTargetUsesConstantColor(in BlendTargetValue target){
+    return target.srcBlend == s_BlendConstantColor || target.srcBlend == s_BlendInverseConstantColor
+        || target.destBlend == s_BlendConstantColor || target.destBlend == s_BlendInverseConstantColor
+        || target.srcBlendAlpha == s_BlendConstantColor || target.srcBlendAlpha == s_BlendInverseConstantColor
+        || target.destBlendAlpha == s_BlendConstantColor || target.destBlendAlpha == s_BlendInverseConstantColor;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

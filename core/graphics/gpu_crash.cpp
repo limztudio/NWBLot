@@ -3,6 +3,7 @@
 
 
 #include "rhi/gpu_crash_diagnostics.h"
+#include <core/graphics/internal_names.adhd.h>
 #include <global/atomic_identity.h>
 
 #include <global/termination.h>
@@ -17,7 +18,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_NotFoundMarkerString = "ERROR: could not resolve marker";
+static constexpr AStringView s_NotFoundMarkerString = GraphicsInternalNames::s_GpuCrashNotFoundMarkerString;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

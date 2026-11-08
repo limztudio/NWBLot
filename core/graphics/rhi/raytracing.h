@@ -20,7 +20,7 @@ NWB_CORE_BEGIN
 
 
 namespace OpacityMicromapFormat{
-    static constexpr u8 s_OpacityMicromapFormatOC1_2_StateBase = 1;
+    static constexpr u8 s_OpacityMicromapFormatOC1_2_StateBase = NWB::Core::HardwareRayTracingPolicy::s_OpacityMicromapFormatOC1_2_StateBase;
     enum Enum : u8{
         OC1_2_State = s_OpacityMicromapFormatOC1_2_StateBase,
         OC1_4_State,
@@ -28,7 +28,7 @@ namespace OpacityMicromapFormat{
 };
 
 namespace RayTracingOpacityMicromapBuildFlags{
-    static constexpr u8 s_RayTracingOpacityMicromapBuildFlagsNoneBase = 0;
+    static constexpr u8 s_RayTracingOpacityMicromapBuildFlagsNoneBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingOpacityMicromapBuildFlagsNoneBase;
     enum Mask : u8{
         None = s_RayTracingOpacityMicromapBuildFlagsNoneBase,
 
@@ -87,7 +87,7 @@ typedef GraphicsBackend::Handle<RayTracingOpacityMicromap> RayTracingOpacityMicr
 
 
 using AffineTransform = Float34;
-inline constexpr usize s_AffineTransformFloatCount = 12u;
+inline constexpr usize s_AffineTransformFloatCount = NWB::Core::HardwareRayTracingPolicy::s_AffineTransformFloatCount;
 
 inline constexpr AffineTransform s_IdentityTransform = []()constexpr noexcept{
     AffineTransform value{};
@@ -100,7 +100,7 @@ static_assert(sizeof(AffineTransform) == sizeof(f32) * s_AffineTransformFloatCou
 static_assert(alignof(AffineTransform) >= alignof(Float4), "AffineTransform must stay SIMD-aligned");
 
 namespace RayTracingGeometryFlags{
-    static constexpr u8 s_RayTracingGeometryFlagsNoneBase = 0;
+    static constexpr u8 s_RayTracingGeometryFlagsNoneBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingGeometryFlagsNoneBase;
     enum Mask : u8{
         None = s_RayTracingGeometryFlagsNoneBase,
 
@@ -112,7 +112,7 @@ namespace RayTracingGeometryFlags{
 };
 
 namespace RayTracingGeometryType{
-    static constexpr u8 s_RayTracingGeometryTypeTrianglesBase = 0;
+    static constexpr u8 s_RayTracingGeometryTypeTrianglesBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingGeometryTypeTrianglesBase;
     enum Enum : u8{
         Triangles = s_RayTracingGeometryTypeTrianglesBase,
         AABBs,
@@ -216,7 +216,7 @@ public:
 };
 
 namespace RayTracingGeometryLssPrimitiveFormat{
-    static constexpr u8 s_RayTracingGeometryLssPrimitiveFormatListBase = 0;
+    static constexpr u8 s_RayTracingGeometryLssPrimitiveFormatListBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingGeometryLssPrimitiveFormatListBase;
     enum Enum : u8{
         List = s_RayTracingGeometryLssPrimitiveFormatListBase,
         SuccessiveImplicit,
@@ -224,7 +224,7 @@ namespace RayTracingGeometryLssPrimitiveFormat{
 };
 
 namespace RayTracingGeometryLssEndcapMode{
-    static constexpr u8 s_RayTracingGeometryLssEndcapModeNoneBase = 0;
+    static constexpr u8 s_RayTracingGeometryLssEndcapModeNoneBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingGeometryLssEndcapModeNoneBase;
     enum Enum : u8{
         None = s_RayTracingGeometryLssEndcapModeNoneBase,
         Chained,
@@ -295,7 +295,7 @@ public:
 };
 
 namespace RayTracingInstanceFlags{
-    static constexpr auto s_RayTracingInstanceFlagsNoneBase = 0;
+    static constexpr auto s_RayTracingInstanceFlagsNoneBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingInstanceFlagsNoneBase;
     enum Mask : u32{
         None = s_RayTracingInstanceFlagsNoneBase,
 
@@ -311,7 +311,7 @@ namespace RayTracingInstanceFlags{
 };
 
 struct RayTracingInstanceDesc{
-    static constexpr usize s_ByteSize = 64u;
+    static constexpr usize s_ByteSize = NWB::Core::HardwareRayTracingPolicy::s_RayTracingInstanceDescByteSize;
 
     AffineTransform transform{};
     u32 instanceID : 24;
@@ -351,7 +351,7 @@ static_assert(sizeof(RayTracingInstanceDesc) == RayTracingInstanceDesc::s_ByteSi
 static_assert(sizeof(IndirectInstanceDesc) == sizeof(RayTracingInstanceDesc));
 
 namespace RayTracingAccelStructBuildFlags{
-    static constexpr u8 s_RayTracingAccelStructBuildFlagsNoneBase = 0;
+    static constexpr u8 s_RayTracingAccelStructBuildFlagsNoneBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingAccelStructBuildFlagsNoneBase;
     enum Mask : u8{
         None = s_RayTracingAccelStructBuildFlagsNoneBase,
 
@@ -444,7 +444,7 @@ namespace RayTracingClusterOperationMode{
 };
 
 namespace RayTracingClusterOperationFlags{
-    static constexpr u8 s_RayTracingClusterOperationFlagsNoneBase = 0;
+    static constexpr u8 s_RayTracingClusterOperationFlagsNoneBase = NWB::Core::HardwareRayTracingPolicy::s_RayTracingClusterOperationFlagsNoneBase;
     enum Mask : u8{
         None = s_RayTracingClusterOperationFlagsNoneBase,
 

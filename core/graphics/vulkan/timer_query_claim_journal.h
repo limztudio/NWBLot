@@ -8,6 +8,8 @@
 #include "module.h"
 #include "backend_forward.h"
 
+#include <core/graphics/vulkan/timer_query_types.adhd.h>
+
 #include <global/span.h>
 
 
@@ -40,11 +42,7 @@ public:
 
 
 private:
-    struct OwnerMatches{
-        b8 resetOwnerMatches = false;
-        b8 beginOwnerMatches = false;
-        b8 endOwnerMatches = false;
-    };
+    using OwnerMatches = VulkanDetail::TimerQueryClaimOwnerMatches;
 
 
 public:
@@ -75,3 +73,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

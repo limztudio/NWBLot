@@ -7,9 +7,6 @@
 
 #include "module.h"
 #include "backend_forward.h"
-
-#include <core/task/cpu/scheduler.h>
-
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -18,6 +15,8 @@
 #include "submitted_command_buffer_owner_lookup.h"
 
 #include <core/common/log.h>
+#include <core/graphics/vulkan/texture_transfer_types.adhd.h>
+#include <core/task/cpu/scheduler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +75,7 @@ namespace VulkanDetail{
 
 
 namespace PipelineStencilFaceMode{
-    static constexpr u8 s_PipelineStencilFaceModeDepthOnlyBase = 0u;
+    static constexpr u8 s_PipelineStencilFaceModeDepthOnlyBase = VulkanDefaults::s_VulkanDefaultPipelineStencilFaceModeDepthOnlyBase;
     enum Enum : u8{
         DepthOnly = s_PipelineStencilFaceModeDepthOnlyBase,
         IncludeStencilFaces,
@@ -84,7 +83,7 @@ namespace PipelineStencilFaceMode{
 };
 
 namespace IndirectDrawIndexMode{
-    static constexpr u8 s_IndirectDrawIndexModeNonIndexedBase = 0u;
+    static constexpr u8 s_IndirectDrawIndexModeNonIndexedBase = VulkanDefaults::s_VulkanDefaultIndirectDrawIndexModeNonIndexedBase;
     enum Enum : u8{
         NonIndexed = s_IndirectDrawIndexModeNonIndexedBase,
         Indexed,
@@ -92,7 +91,7 @@ namespace IndirectDrawIndexMode{
 };
 
 namespace BufferImageCopyRequiredSize{
-    static constexpr u8 s_BufferImageCopyRequiredSizeTouchedBytesBase = 0u;
+    static constexpr u8 s_BufferImageCopyRequiredSizeTouchedBytesBase = VulkanDefaults::s_VulkanDefaultBufferImageCopyRequiredSizeTouchedBytesBase;
     enum Enum : u8{
         TouchedBytes = s_BufferImageCopyRequiredSizeTouchedBytesBase,
         PaddedSlices,
@@ -100,41 +99,14 @@ namespace BufferImageCopyRequiredSize{
 };
 
 namespace BufferImageCopyPitchFields{
-    static constexpr u8 s_BufferImageCopyPitchFieldsOmitImplicitBase = 0u;
+    static constexpr u8 s_BufferImageCopyPitchFieldsOmitImplicitBase = VulkanDefaults::s_VulkanDefaultBufferImageCopyPitchFieldsOmitImplicitBase;
     enum Enum : u8{
         OmitImplicit = s_BufferImageCopyPitchFieldsOmitImplicitBase,
         EmitExplicit,
     };
 };
 
-struct TextureFormatBlockLayout{
-    u32 blockWidth = 0;
-    u32 blockHeight = 0;
-    u32 bytesPerBlock = 0;
-};
-
-struct BufferImageCopyLayout{
-    u64 requiredSize = 0;
-    u32 bufferRowLength = 0;
-    u32 bufferImageHeight = 0;
-};
-
-struct StagingTextureMipLayout{
-    u64 byteOffset = 0;
-    u64 rowPitch = 0;
-    u64 slicePitch = 0;
-    u32 bufferRowLength = 0;
-    u32 bufferImageHeight = 0;
-};
 using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, Alloc::GlobalArena>;
-
-struct StagingTextureRange{
-    u64 byteOffset = 0;
-    u64 byteSize = 0;
-    u64 rowPitch = 0;
-    u32 bufferRowLength = 0;
-    u32 bufferImageHeight = 0;
-};
 using StagingTextureQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 
 struct PipelineRenderingInfo{

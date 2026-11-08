@@ -1,0 +1,26 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u64 s_ContextDataBytesPerMiB = 1024ull * 1024ull;
+const f32 s_ContextDataHdr10MasteringPeakLuminance = 1000.0f;
+const f32 s_ContextDataHdr10MinimumLuminance = 0.005f;
+const f32 s_ContextDataHdr10MaximumFrameAverageLightLevel = 400.0f;
+const u32 s_ContextDataHdr10MetadataSwapChainCount = 1u;
+const StringView s_ContextDataUnknownDebugLabel = "unknown";
+const StringView s_ContextDataDisabledQueueReason = "disabled";
+const StringView s_ContextDataValidationLayerName = "VK_LAYER_KHRONOS_validation";
+const StringView s_PresentationSignalCancellationContext = "presentation signal cancellation";
+const StringView s_AcquireSlotReuseContext = "acquire slot reuse";
+const StringView s_AcquireNextImageContext = "acquire next image";
+const StringView s_QueueSubmitContext = "queue submit";
+const StringView s_NativePresentAdmissionContext = "native present admission";
+const StringView s_AcquiredImageSemaphoreBridgeContext = "acquired image semaphore bridge";
+const StringView s_AbandonedPresentationSignalIdleContext = "abandoned presentation signal idle";
+const StringView s_UnconsumedPresentationSignalIdleContext = "unconsumed presentation signal idle";
+const StringView s_PresentContext = "present";
+const StringView s_QueueTimelineQueryContext = "queue timeline query";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

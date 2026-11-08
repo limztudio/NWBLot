@@ -7,6 +7,8 @@
 
 #include "backend.h"
 
+#include <core/graphics/vulkan/coopvec_types.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,10 +18,10 @@ NWB_VULKAN_BEGIN
 
 class CooperativeVectorMatrixPolicy final{
 public:
-    struct StandardMatrixLayout{
-        usize stride = 0u;
-        usize byteSize = 0u;
-    };
+    using StandardMatrixLayout = ::NWB::Core::VulkanCooperativeStandardMatrixLayout;
+
+
+public:
     struct MatrixLayout{
         VkComponentTypeKHR componentType = VK_COMPONENT_TYPE_FLOAT32_KHR;
         VkCooperativeVectorMatrixLayoutNV layout = VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
@@ -48,3 +50,4 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

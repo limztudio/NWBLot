@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <core/graphics/rhi/shader.h>
+namespace NWB::Core{
+using SpirvShaderMask = ShaderType::Mask;
+constexpr SpirvShaderMask s_SpirvShaderVertex = ShaderType::Vertex;
+constexpr SpirvShaderMask s_SpirvShaderHull = ShaderType::Hull;
+constexpr SpirvShaderMask s_SpirvShaderDomain = ShaderType::Domain;
+constexpr SpirvShaderMask s_SpirvShaderGeometry = ShaderType::Geometry;
+constexpr SpirvShaderMask s_SpirvShaderPixel = ShaderType::Pixel;
+constexpr SpirvShaderMask s_SpirvShaderCompute = ShaderType::Compute;
+constexpr SpirvShaderMask s_SpirvShaderAmplification = ShaderType::Amplification;
+constexpr SpirvShaderMask s_SpirvShaderMesh = ShaderType::Mesh;
+constexpr SpirvShaderMask s_SpirvShaderRayGeneration = ShaderType::RayGeneration;
+constexpr SpirvShaderMask s_SpirvShaderIntersection = ShaderType::Intersection;
+constexpr SpirvShaderMask s_SpirvShaderAnyHit = ShaderType::AnyHit;
+constexpr SpirvShaderMask s_SpirvShaderClosestHit = ShaderType::ClosestHit;
+constexpr SpirvShaderMask s_SpirvShaderMiss = ShaderType::Miss;
+constexpr SpirvShaderMask s_SpirvShaderCallable = ShaderType::Callable;
+constexpr SpirvShaderMask s_SpirvShaderNone = ShaderType::None;
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u16 s_SpirvDataOpEntryPoint = 15u;
+const usize s_SpirvDataSpirvEntryPointExecutionModelWordIndex = 1u;
+const usize s_SpirvDataSpirvEntryPointFixedWordCount = 3u;
+const usize s_SpirvDataSpirvHeaderWords = 5u;
+const u32 s_SpirvDataSpirvInstructionOpcodeBitMask = 0xffffu;
+const u32 s_SpirvDataSpirvInstructionWordCountBitShift = 16u;
+const u32 s_SpirvDataSpirvMagic = 0x07230203u;
+const usize s_SpirvDataSpirvMagicWordIndex = 0u;
+
+const u32 s_SpirvModelVertex = 0u;
+const u32 s_SpirvModelTessellationControl = 1u;
+const u32 s_SpirvModelTessellationEvaluation = 2u;
+const u32 s_SpirvModelGeometry = 3u;
+const u32 s_SpirvModelFragment = 4u;
+const u32 s_SpirvModelGLCompute = 5u;
+const u32 s_SpirvModelTaskNV = 5267u;
+const u32 s_SpirvModelMeshNV = 5268u;
+const u32 s_SpirvModelRayGenerationKHR = 5313u;
+const u32 s_SpirvModelIntersectionKHR = 5314u;
+const u32 s_SpirvModelAnyHitKHR = 5315u;
+const u32 s_SpirvModelClosestHitKHR = 5316u;
+const u32 s_SpirvModelMissKHR = 5317u;
+const u32 s_SpirvModelCallableKHR = 5318u;
+const u32 s_SpirvModelTaskEXT = 5364u;
+const u32 s_SpirvModelMeshEXT = 5365u;
+
+
+SpirvShaderMask ResolveSpirvExecutionModel(in u32 executionModel){
+    switch(executionModel){
+    case s_SpirvModelVertex: return s_SpirvShaderVertex;
+    case s_SpirvModelTessellationControl: return s_SpirvShaderHull;
+    case s_SpirvModelTessellationEvaluation: return s_SpirvShaderDomain;
+    case s_SpirvModelGeometry: return s_SpirvShaderGeometry;
+    case s_SpirvModelFragment: return s_SpirvShaderPixel;
+    case s_SpirvModelGLCompute: return s_SpirvShaderCompute;
+    case s_SpirvModelTaskNV: return s_SpirvShaderAmplification;
+    case s_SpirvModelMeshNV: return s_SpirvShaderMesh;
+    case s_SpirvModelRayGenerationKHR: return s_SpirvShaderRayGeneration;
+    case s_SpirvModelIntersectionKHR: return s_SpirvShaderIntersection;
+    case s_SpirvModelAnyHitKHR: return s_SpirvShaderAnyHit;
+    case s_SpirvModelClosestHitKHR: return s_SpirvShaderClosestHit;
+    case s_SpirvModelMissKHR: return s_SpirvShaderMiss;
+    case s_SpirvModelCallableKHR: return s_SpirvShaderCallable;
+    case s_SpirvModelTaskEXT: return s_SpirvShaderAmplification;
+    case s_SpirvModelMeshEXT: return s_SpirvShaderMesh;
+    default: return s_SpirvShaderNone;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

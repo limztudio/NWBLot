@@ -6,6 +6,7 @@
 
 
 #include "binding.h"
+#include "hardware_ray_tracing_policy.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,11 +32,7 @@ namespace PrimitiveType{
     };
 };
 
-struct SinglePassStereoState{
-    u8 renderTargetIndexOffset = 0;
-    b8 enabled = false;
-    b8 independentViewportMask = false;
-};
+using SinglePassStereoState = NWB::Core::HardwareRayTracingPolicy::SinglePassStereoState;
 inline b8 operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs)noexcept{
     return lhs.enabled == rhs.enabled && lhs.independentViewportMask == rhs.independentViewportMask && lhs.renderTargetIndexOffset == rhs.renderTargetIndexOffset;
 }

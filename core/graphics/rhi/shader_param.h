@@ -13,6 +13,8 @@
 
 #if !defined(__cplusplus)
 #include <core/common/module.h>
+#else
+#include <core/graphics/rhi/hardware_ray_tracing_policy.adhd.h>
 #endif
 
 
@@ -59,7 +61,7 @@ struct IndirectInstanceDesc{
 #if defined(__cplusplus)
 static_assert(IsStandardLayout_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
-static constexpr usize s_IndirectInstanceDescByteSize = 64u;
+static constexpr usize s_IndirectInstanceDescByteSize = NWB::Core::HardwareRayTracingPolicy::s_IndirectInstanceDescByteSize;
 static_assert(sizeof(IndirectInstanceDesc) == s_IndirectInstanceDescByteSize, "IndirectInstanceDesc GPU layout drifted");
 static_assert(alignof(IndirectInstanceDesc) >= alignof(Float4), "IndirectInstanceDesc must stay SIMD-aligned");
 static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == s_AlignRemainderZero, "IndirectInstanceDesc::transform must stay SIMD-aligned");
@@ -77,14 +79,14 @@ struct IndirectArgs{
 #if defined(__cplusplus)
 static_assert(IsStandardLayout_V<IndirectArgs>, "IndirectArgs must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<IndirectArgs>, "IndirectArgs must stay GPU-uploadable");
-static constexpr usize s_IndirectArgsByteSize = 16u;
+static constexpr usize s_IndirectArgsByteSize = NWB::Core::HardwareRayTracingPolicy::s_IndirectArgsByteSize;
 static_assert(sizeof(IndirectArgs) == s_IndirectArgsByteSize, "IndirectArgs GPU layout drifted");
 static_assert(alignof(IndirectArgs) == alignof(GpuVirtualAddress), "IndirectArgs GPU alignment drifted");
-static constexpr usize s_IndirectArgsClusterCountOffset = 0u;
+static constexpr usize s_IndirectArgsClusterCountOffset = NWB::Core::HardwareRayTracingPolicy::s_IndirectArgsClusterCountOffset;
 static_assert(offsetof(IndirectArgs, clusterCount) == s_IndirectArgsClusterCountOffset, "IndirectArgs::clusterCount layout drifted");
-static constexpr usize s_IndirectArgsClusterReferencesStrideOffset = 4u;
+static constexpr usize s_IndirectArgsClusterReferencesStrideOffset = NWB::Core::HardwareRayTracingPolicy::s_IndirectArgsClusterReferencesStrideOffset;
 static_assert(offsetof(IndirectArgs, clusterReferencesStride) == s_IndirectArgsClusterReferencesStrideOffset, "IndirectArgs::clusterReferencesStride layout drifted");
-static constexpr usize s_IndirectArgsClusterAddressesOffset = 8u;
+static constexpr usize s_IndirectArgsClusterAddressesOffset = NWB::Core::HardwareRayTracingPolicy::s_IndirectArgsClusterAddressesOffset;
 static_assert(offsetof(IndirectArgs, clusterAddresses) == s_IndirectArgsClusterAddressesOffset, "IndirectArgs::clusterAddresses layout drifted");
 static_assert(IndirectArgs{}.clusterReferencesStride >= sizeof(GpuVirtualAddress), "IndirectArgs default cluster-reference stride is invalid");
 #endif

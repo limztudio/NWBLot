@@ -5,6 +5,7 @@
 #include "framebuffer.h"
 
 #include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/rhi/framebuffer_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,18 +23,14 @@ namespace __hidden_graphics_framebuffer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct FramebufferAttachmentExtent{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 arraySize = 0u;
-};
+using FramebufferAttachmentExtent = GpuFramebufferAttachmentExtent;
 
 [[nodiscard]] Expected<FramebufferAttachmentExtent> ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment)noexcept{
     const TextureDesc& textureDesc = attachment.texture->getCreationDescription();
     const TextureSubresourceSet subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
     if(subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
         return MakeUnexpected(Failure{});
-    return FramebufferAttachmentExtent{ .width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1)), .height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1)), .arraySize = subresources.numArraySlices, };
+    return FramebufferAttachmentExtent{ .width = FramebufferMipDimension(textureDesc.width, subresources.baseMipLevel), .height = FramebufferMipDimension(textureDesc.height, subresources.baseMipLevel), .arraySize = subresources.numArraySlices, };
 }
 
 

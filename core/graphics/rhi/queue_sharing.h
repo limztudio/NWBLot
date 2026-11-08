@@ -7,6 +7,8 @@
 
 #include "command.h"
 
+#include <core/graphics/rhi/queue_sharing.adhd.h>
+
 #include <global/algorithm.h>
 
 
@@ -24,24 +26,6 @@ namespace ResourceQueueSharing{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] constexpr Mask ForQueueClass(const CommandQueue::Enum queueClass)noexcept{
-    switch(queueClass){
-    case CommandQueue::Graphics:
-        return Graphics;
-    case CommandQueue::Compute:
-        return AsyncCompute;
-    case CommandQueue::Transfer:
-        return Transfer;
-    default:
-        return Exclusive;
-    }
-}
-
-[[nodiscard]] constexpr b8 IncludesQueueClass(const Mask sharing, const CommandQueue::Enum queueClass)noexcept{
-    const Mask queueBit = ForQueueClass(queueClass);
-    return queueBit != Exclusive && (sharing & queueBit) != Exclusive;
-}
 
 [[nodiscard]] constexpr b8 QueueFamilyIndexListContains(const Span<const u32> familyIndices, const u32 expectedFamilyIndex)noexcept{
     if(!familyIndices.data())

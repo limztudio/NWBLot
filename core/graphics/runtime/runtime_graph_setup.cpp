@@ -5,6 +5,8 @@
 #include "runtime_internal.h"
 #include "runtime_standalone_graph.h"
 
+#include <core/graphics/internal_names.adhd.h>
+#include <core/graphics/runtime/runtime_values.adhd.h>
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/compiler.h>
@@ -26,10 +28,10 @@ namespace __hidden_graphics_graph_setup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_StandaloneTaskGraphRecoveryIdentity("graphics.standalone_task_graph.recovery");
-inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_task_graph_scratch");
-inline constexpr u32 s_MinFrameTimingTaskCount = 2u;
-inline constexpr u32 s_MinFrameTimingPacketCount = 2u;
+using GraphicsInternalNames::s_StandaloneTaskGraphRecoveryIdentity;
+using GraphicsInternalNames::s_StandaloneTaskGraphScratchArena;
+inline constexpr u32 s_MinFrameTimingTaskCount = GraphicsRuntimeValues::s_MinFrameTimingTaskCount;
+inline constexpr u32 s_MinFrameTimingPacketCount = GraphicsRuntimeValues::s_MinFrameTimingPacketCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

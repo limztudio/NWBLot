@@ -4,6 +4,8 @@
 
 #include "runtime_setup_upload_graph.h"
 
+#include <core/graphics/internal_names.adhd.h>
+#include <core/graphics/runtime/runtime_values.adhd.h>
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/task_graph.h>
 #include <core/common/log.h>
@@ -25,9 +27,9 @@ namespace __hidden_graphics_texture_upload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_UploadTextureBatchResourceIdentity("graphics.upload_texture_batch.resource");
-inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_texture_batch.upload");
-inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload Batch";
+using GraphicsInternalNames::s_UploadTextureBatchResourceIdentity;
+using GraphicsInternalNames::s_UploadTextureBatchUploadIdentity;
+inline constexpr AStringView s_UploadTextureBatchMarkerLabel = GraphicsRuntimeValues::s_UploadTextureBatchMarkerLabel;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,8 +205,7 @@ struct TextureUploadBatchSubmissionData{
                 .finalState = submissionData.setupDesc.finalState,
                 .aspect = region.aspect,
                 .acceptedToken = regionIndex + 1u == submissionData.setupDesc.regionCount ? &submissionData.uploadToken : nullptr,
-            }
-        );
+            });
         if(!uploadTaskResult)
             return MakeUnexpected(Failure{});
         const GpuTaskId uploadTask = *uploadTaskResult;

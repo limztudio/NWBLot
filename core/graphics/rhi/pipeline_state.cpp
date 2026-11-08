@@ -4,6 +4,8 @@
 
 #include "pipeline_state.h"
 
+#include <core/graphics/rhi/blend_validation.adhd.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,12 +17,7 @@ NWB_CORE_BEGIN
 
 
 b8 BlendState::RenderTarget::usesConstantColor()const noexcept{
-    return
-        srcBlend == BlendFactor::ConstantColor || srcBlend == BlendFactor::InvConstantColor
-        || destBlend == BlendFactor::ConstantColor || destBlend == BlendFactor::InvConstantColor
-        || srcBlendAlpha == BlendFactor::ConstantColor || srcBlendAlpha == BlendFactor::InvConstantColor
-        || destBlendAlpha == BlendFactor::ConstantColor || destBlendAlpha == BlendFactor::InvConstantColor
-        ;
+    return BlendTargetUsesConstantColor(*this);
 }
 
 

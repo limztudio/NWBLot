@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_InstanceCreateArena = "core/graphics/backend_instance_create";
+const Name s_QueueFamilyQueryArena = "core/graphics/backend_queue_family_query";
+const Name s_SwapChainPresentModeArena = "core/graphics/backend_swap_chain_present_mode";
+const Name s_DeviceExtensionSetupArena = "core/graphics/backend_device_extension_setup";
+const Name s_AdapterEnumerateArena = "core/graphics/backend_adapter_enumerate";
+const Name s_ComputePipelineArena = "core/graphics/compute_pipeline";
+const Name s_PipelineCacheSaveArena = "core/graphics/device_pipeline_cache_save";
+const Name s_StateHandoffArena = "core/graphics/command_list_state_handoff";
+const Name s_CooperativeVectorQueryArena = "core/graphics/device_cooperative_vector_query";
+const Name s_CooperativeVectorConvertArena = "core/graphics/extensions_cooperative_vector_convert";
+const Name s_GraphicsPipelineArena = "core/graphics/graphics_pipeline";
+const Name s_MeshletPipelineArena = "core/graphics/meshlet_pipeline";
+const Name s_RayTracingArena = "core/graphics/ray_tracing";
+const Name s_DescriptorBindingArena = "core/graphics/descriptor_binding";
+const Name s_DescriptorHeapStorageArena = "core/graphics/descriptor_heap_storage";
+const Name s_InputLayoutArena = "core/graphics/shader_input_layout";
+const Name s_TextureClearArena = "core/graphics/texture_clear";
+const Name s_TextureResolveArena = "core/graphics/texture_resolve";
+const Name s_GpuCrashReportArena = "core/graphics/gpu_crash_report";
+const Name s_GpuCrashVendorBinaryArena = "core/graphics/gpu_crash_vendor_binary";
+const Name s_AmdBreadcrumbMetadataArena = "core/graphics/amd_breadcrumb_metadata";
+const Name s_AftermathDumpArena = "core/graphics/aftermath_dump";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

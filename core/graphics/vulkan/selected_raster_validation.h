@@ -5,11 +5,11 @@
 #pragma once
 
 
-#include <core/graphics/backend_selection/raster_types.h>
-
 #include "backend.h"
 #include "command_validation.h"
 #include "vulkan_viewport_policy.h"
+
+#include <core/graphics/backend_selection/raster_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +22,7 @@ NWB_VULKAN_BEGIN
 
 
 [[nodiscard]] inline VertexInputBinding BuildVertexInputBinding(const VkVertexInputBindingDescription* binding)noexcept{
-    return binding ? VertexInputBinding{ .slot = binding->binding, .stride = binding->stride, .instanceRate = binding->inputRate == VK_VERTEX_INPUT_RATE_INSTANCE, .valid = true } : VertexInputBinding{};
+    return binding ? VertexInputBinding(binding->binding, binding->stride, binding->inputRate == VK_VERTEX_INPUT_RATE_INSTANCE, true) : VertexInputBinding{};
 }
 
 [[nodiscard]] inline VertexInputBinding GetVertexInputBinding(const InputLayout& layout, const u32 index)noexcept{ return BuildVertexInputBinding(layout.getBindingDescription(index)); }

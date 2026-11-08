@@ -6,8 +6,9 @@
 #include "runtime_internal.h"
 #include "runtime_frame_timing_reset.h"
 #include "runtime_standalone_graph.h"
-#include "profile_names.h"
 
+#include <core/graphics/internal_names.adhd.h>
+#include <core/graphics/runtime/runtime_values.adhd.h>
 #include <core/graphics/backend_selection.h>
 #include <core/common/log.h>
 #include <core/task/gpu/scheduler.h>
@@ -32,17 +33,17 @@ namespace __hidden_graphics_runtime_frame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
-inline constexpr Name s_GraphicsAnimateCpuTimingScope("graphics.animate");
-inline constexpr Name s_GraphicsBeginFrameCpuTimingScope("graphics.begin_frame");
-inline constexpr Name s_GraphicsFramePreambleCpuTimingScope("graphics.frame_preamble");
-inline constexpr Name s_GraphicsRenderCpuTimingScope("graphics.render");
-inline constexpr Name s_GraphicsPrepareResourcesCpuTimingScope("graphics.prepare_resources");
-inline constexpr Name s_GraphicsRenderPassesCpuTimingScope("graphics.render_passes");
-inline constexpr Name s_GraphicsPrepareResourcesFailedCpuTimingScope("graphics.prepare_resources_failed");
-inline constexpr Name s_GraphicsPresentCpuTimingScope("graphics.present");
-inline constexpr Name s_GraphicsGarbageCollectCpuTimingScope("graphics.garbage_collect");
-inline constexpr usize s_MaxBeginFrameResizeAttempts = 3u;
+using GraphicsInternalNames::s_GraphicsFrameCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsAnimateCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsBeginFrameCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsFramePreambleCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsRenderCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsPrepareResourcesCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsRenderPassesCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsPrepareResourcesFailedCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsPresentCpuTimingScope;
+using GraphicsInternalNames::s_GraphicsGarbageCollectCpuTimingScope;
+inline constexpr usize s_MaxBeginFrameResizeAttempts = GraphicsRuntimeValues::s_MaxBeginFrameResizeAttempts;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +62,7 @@ private:
         f64 seconds = 0.0;
     };
 
-    static constexpr u32 s_MaxPhaseCount = 9u;
+    static constexpr u32 s_MaxPhaseCount = GraphicsRuntimeValues::s_MaxPhaseCount;
     Array<PhaseTiming, s_MaxPhaseCount> m_phases = {};
     u32 m_phaseCount = 0u;
 

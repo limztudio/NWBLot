@@ -44,8 +44,8 @@ private:
 
 
 private:
-    static constexpr usize s_LinearSearchThreshold = 8u;
-    static constexpr usize s_MinimumTableCapacity = 16u;
+    static constexpr usize s_LinearSearchThreshold = VulkanDefaults::s_VulkanDefaultOwnerLookupLinearSearchThreshold;
+    static constexpr usize s_MinimumTableCapacity = VulkanDefaults::s_VulkanDefaultOwnerLookupMinimumTableCapacity;
     [[nodiscard]] static usize HashOwner(const TrackedCommandBuffer& owner)noexcept{
         return static_cast<usize>(MixMurmur64Finalizer(static_cast<u64>(reinterpret_cast<usize>(&owner))));
     }
